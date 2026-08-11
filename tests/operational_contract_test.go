@@ -634,6 +634,7 @@ exec "${REAL_AWK_PATH:?}" "$@"
 		"GHTTP_SERVE_NO_MARKDOWN",
 	})
 	assertOperationalEnvironmentKeys(testingInstance, filepath.Join(fixtureRoot, "configs", ".env.api.local"), []string{
+		"DASHSCOPE_BASE_URL",
 		"LLM_PROXY_MANAGEMENT_ENABLED",
 		"LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN",
 		"LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN",
@@ -1361,11 +1362,11 @@ func TestOperationalLiveConfigDisablesManagementAndSafelyLoadsDotenv(testingInst
 	fixtureRoot := testingInstance.TempDir()
 	environmentFile := filepath.Join(fixtureRoot, "live.env")
 	configurationOutput := filepath.Join(fixtureRoot, "live-config.yml")
-	writeOperationalFile(testingInstance, environmentFile, "QWEN_CLOUD_TOKEN_PLAN_API_KEY=test-qwencloud-key\nMINIMAX_API_KEY=test-minimax-key\nLLM_PROXY_MANAGEMENT_ENABLED=true\nLLM_PROXY_MANAGEMENT_UI_DESCRIPTION=LLM Proxy\n", 0o600)
+	writeOperationalFile(testingInstance, environmentFile, "DASHSCOPE_API_KEY=test-dashscope-key\nDASHSCOPE_BASE_URL=https://dashscope.example\nMINIMAX_API_KEY=test-minimax-key\nLLM_PROXY_MANAGEMENT_ENABLED=true\nLLM_PROXY_MANAGEMENT_UI_DESCRIPTION=LLM Proxy\n", 0o600)
 	environment := append(
 		os.Environ(),
 		"LIVE_ENV_FILE="+environmentFile,
-		"LLM_PROXY_LIVE_PROVIDERS=qwencloud,minimax",
+		"LLM_PROXY_LIVE_PROVIDERS=dashscope,minimax",
 		"LLM_PROXY_LIVE_PORT=18181",
 		"GO=/does/not/exist",
 	)
@@ -1387,7 +1388,7 @@ func TestOperationalLiveConfigDisablesManagementAndSafelyLoadsDotenv(testingInst
 	if !strings.Contains(configuration, "management:\n  enabled: false") {
 		testingInstance.Fatalf("generated live config did not disable management: %s", configuration)
 	}
-	for _, expectedFragment := range []string{"api_key: \"${QWEN_CLOUD_TOKEN_PLAN_API_KEY}\"", "api_key: \"${MINIMAX_API_KEY}\""} {
+	for _, expectedFragment := range []string{"base_url: \"${DASHSCOPE_BASE_URL}\"", "api_key: \"${DASHSCOPE_API_KEY}\"", "api_key: \"${MINIMAX_API_KEY}\""} {
 		if !strings.Contains(configuration, expectedFragment) {
 			testingInstance.Fatalf("generated live config missing %q: %s", expectedFragment, configuration)
 		}
@@ -1766,6 +1767,7 @@ LLM_PROXY_MANAGEMENT_DATABASE_PATH=/data/llm-proxy-management.sqlite
 LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=__GENERATE_ON_FIRST_MAKE_UP__
 LLM_PROXY_MANAGEMENT_API_ORIGIN=http://localhost:8080
 LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=http://localhost:8080
+DASHSCOPE_BASE_URL=https://workspace.example.invalid/compatible-mode/v1
 TAUTH_CONFIG_FILE=/config/tauth.local.yml
 TAUTH_LISTEN_ADDR=:8080
 TAUTH_DATABASE_URL=sqlite:///data/tauth.sqlite

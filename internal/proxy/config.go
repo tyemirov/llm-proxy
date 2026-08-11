@@ -47,7 +47,6 @@ type Configuration struct {
 	OpenAIKey                    string
 	DeepSeekKey                  string
 	DashScopeKey                 string
-	QwenCloudKey                 string
 	MoonshotKey                  string
 	MiniMaxKey                   string
 	SiliconFlowKey               string
@@ -60,7 +59,6 @@ type Configuration struct {
 	OpenAITranscriptionsURL      string
 	DeepSeekBaseURL              string
 	DashScopeBaseURL             string
-	QwenCloudBaseURL             string
 	MoonshotBaseURL              string
 	MiniMaxBaseURL               string
 	SiliconFlowBaseURL           string
@@ -205,7 +203,6 @@ func (configuration *Configuration) ApplyTunables() {
 	configuration.OpenAIKey = strings.TrimSpace(configuration.OpenAIKey)
 	configuration.DeepSeekKey = strings.TrimSpace(configuration.DeepSeekKey)
 	configuration.DashScopeKey = strings.TrimSpace(configuration.DashScopeKey)
-	configuration.QwenCloudKey = strings.TrimSpace(configuration.QwenCloudKey)
 	configuration.MoonshotKey = strings.TrimSpace(configuration.MoonshotKey)
 	configuration.MiniMaxKey = strings.TrimSpace(configuration.MiniMaxKey)
 	configuration.SiliconFlowKey = strings.TrimSpace(configuration.SiliconFlowKey)
@@ -247,10 +244,6 @@ func (configuration *Configuration) ApplyTunables() {
 	configuration.DashScopeBaseURL = strings.TrimSpace(configuration.DashScopeBaseURL)
 	if strings.TrimSpace(configuration.DashScopeBaseURL) == constants.EmptyString {
 		configuration.DashScopeBaseURL = defaultDashScopeBaseURL
-	}
-	configuration.QwenCloudBaseURL = strings.TrimSpace(configuration.QwenCloudBaseURL)
-	if strings.TrimSpace(configuration.QwenCloudBaseURL) == constants.EmptyString {
-		configuration.QwenCloudBaseURL = defaultQwenCloudBaseURL
 	}
 	configuration.MoonshotBaseURL = strings.TrimSpace(configuration.MoonshotBaseURL)
 	if strings.TrimSpace(configuration.MoonshotBaseURL) == constants.EmptyString {

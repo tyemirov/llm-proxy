@@ -364,11 +364,13 @@ func TestManagementRejectsInvalidSessionsAndRequests(t *testing.T) {
 		status int
 	}{
 		{method: http.MethodPut, path: tenantPath + "/provider-keys/unknown", body: managementProviderKeyRequestBody(t, "sk", proxy.ModelNameGPT41, ""), status: http.StatusBadRequest},
+		{method: http.MethodPut, path: tenantPath + "/provider-keys/qwencloud", body: managementProviderKeyRequestBody(t, "sk", "qwen3.8-max-preview", "retired"), status: http.StatusBadRequest},
 		{method: http.MethodPut, path: tenantPath + "/provider-keys/openai", body: managementProviderKeyRequestBody(t, "", proxy.ModelNameGPT41, ""), status: http.StatusBadRequest},
 		{method: http.MethodPut, path: tenantPath + "/provider-keys/openai", body: `{"api_key":"sk","text_model":"gpt-4.1","system_prompt":"","extra":true}`, status: http.StatusBadRequest},
 		{method: http.MethodPut, path: tenantPath + "/provider-keys/openai", body: `{"api_key":"sk","system_prompt":""}`, status: http.StatusBadRequest},
 		{method: http.MethodPut, path: tenantPath + "/provider-keys/openai", body: managementProviderKeyRequestBody(t, "sk", "missing-model", ""), status: http.StatusBadRequest},
 		{method: http.MethodDelete, path: tenantPath + "/provider-keys/unknown", body: `{}`, status: http.StatusBadRequest},
+		{method: http.MethodPut, path: tenantPath + "/defaults", body: managementDefaultsRequestBody(t, "qwencloud", "qwen3.8-max-preview", "", "", ""), status: http.StatusBadRequest},
 		{method: http.MethodPut, path: tenantPath + "/defaults", body: `{"provider":"openai","model":"gpt-4.1","extra":true}`, status: http.StatusBadRequest},
 		{method: http.MethodPut, path: tenantPath + "/defaults", body: `{"provider":"openai","model":"gpt-4.1","dictation_provider":"","dictation_model":"","system_prompt":"","reasoning_effort":""}`, status: http.StatusBadRequest},
 	}
@@ -1546,7 +1548,6 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 	expectedModels := map[string][]string{
 		proxy.ProviderNameOpenAI:    {"gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"},
 		proxy.ProviderNameDashScope: {proxy.ModelNameDashScopeQwenPlus},
-		proxy.ProviderNameQwenCloud: {proxy.ModelNameQwenCloudQwen38MaxPreview},
 		proxy.ProviderNameMoonshot:  {proxy.ModelNameMoonshotKimiK26, proxy.ModelNameMoonshotKimiK27Code, proxy.ModelNameMoonshotKimiK27CodeHighSpeed, proxy.ModelNameMoonshotKimiK3},
 		proxy.ProviderNameMiniMax:   {proxy.ModelNameMiniMaxM27},
 		proxy.ProviderNameZhipu:     {"glm-5.2"},

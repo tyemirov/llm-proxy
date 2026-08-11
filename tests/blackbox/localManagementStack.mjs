@@ -370,6 +370,7 @@ function llmProxyEnvironment(frontendOrigin, tAuthOrigin, llmProxyOrigin, tempor
     LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY: providerKeyEncryptionKey,
     LLM_PROXY_MANAGEMENT_API_ORIGIN: llmProxyOrigin,
     LLM_PROXY_MANAGEMENT_PROXY_ORIGIN: llmProxyOrigin,
+    DASHSCOPE_BASE_URL: "https://workspace.example.invalid/compatible-mode/v1",
   };
 }
 

@@ -575,6 +575,13 @@ func TestClientRejectsInvalidOrCompetingModelProfilesBeforeHTTP(testingInstance 
 			errorMessage: "missing provider",
 		},
 		{
+			name: "retired provider",
+			prepare: func(subTest *testing.T, path string) {
+				replaceModelProfile(subTest, path, `{"provider":"qwencloud","model":"qwen3.8-max-preview"}`)
+			},
+			errorMessage: "provider is retired",
+		},
+		{
 			name: "unexpected field",
 			prepare: func(subTest *testing.T, path string) {
 				replaceModelProfile(subTest, path, `{"provider":"gemini","model":"gemini-2.5-flash","secret":"forbidden"}`)

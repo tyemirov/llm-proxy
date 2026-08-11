@@ -413,19 +413,11 @@ providers:
           wire_contract: "openai_chat_completions"
           execution_lifecycle: "synchronous_completion"
   dashscope:
-    base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+    base_url: "${DASHSCOPE_BASE_URL}"
     text:
       default_model: "qwen-plus"
       models:
         - id: "qwen-plus"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-  qwencloud:
-    base_url: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
-    text:
-      default_model: "qwen3.8-max-preview"
-      models:
-        - id: "qwen3.8-max-preview"
           wire_contract: "openai_chat_completions"
           execution_lifecycle: "synchronous_completion"
   moonshot:
@@ -651,8 +643,7 @@ adapters before they are available through `/dictate`.
 | `openai` | none | `openai_responses` | `pollable_resource` | `gpt-4.1` | `providers.openai.api_key` | `https://api.openai.com/v1` | Yes: `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | Yes, on marked OpenAI models |
 | `meta` | none | `openai_chat_completions` | `synchronous_completion` | `muse-spark-1.1` | `providers.meta.api_key` | `https://api.meta.ai/v1` | No | No |
 | `deepseek` | none | `openai_chat_completions` | `synchronous_completion` | `deepseek-v4-flash` | `providers.deepseek.api_key` | `https://api.deepseek.com` | No | No |
-| `dashscope` | `qwen` | `openai_chat_completions` | `synchronous_completion` | `qwen-plus` | `providers.dashscope.api_key` | `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` | No | No |
-| `qwencloud` | none | `openai_chat_completions` | `synchronous_completion` | `qwen3.8-max-preview` | `providers.qwencloud.api_key` | `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1` | No | No |
+| `dashscope` | `qwen` | `openai_chat_completions` | `synchronous_completion` | `qwen-plus` | `providers.dashscope.api_key` | Required `${DASHSCOPE_BASE_URL}` Singapore workspace URL | No | No |
 | `moonshot` | `kimi` | `openai_chat_completions` | `synchronous_completion` | `kimi-k2.6` | `providers.moonshot.api_key` | `https://api.moonshot.ai/v1` | No | No |
 | `minimax` | none | `openai_chat_completions` | `synchronous_completion` | `MiniMax-M2.7` | `providers.minimax.api_key` | `https://api.minimax.io/v1` | No | No |
 | `siliconflow` | none | `openai_chat_completions` | `synchronous_completion` | `deepseek-ai/DeepSeek-R1` | `providers.siliconflow.api_key` | `https://api.siliconflow.com/v1` | Yes: `FunAudioLLM/SenseVoiceSmall` | No |
@@ -696,9 +687,10 @@ proxy's provider-neutral request-level `reasoning_effort` is accepted only when
 the exact resolved route declares a capability mapping. Blank values and
 supplied values for GLM or generic compatible-provider routes fail before an
 upstream call; an omitted field retains the supported tenant default.
-Qwen Cloud Token Plan is separate from DashScope: select `qwencloud` with a
-dedicated `${QWEN_CLOUD_TOKEN_PLAN_API_KEY}` and its token-plan base URL; the
-existing `qwen` alias remains DashScope-only. MiniMax M2.7 uses
+DashScope is the only Alibaba provider. Production binds
+`${DASHSCOPE_BASE_URL}` to the Singapore Model Studio workspace URL associated
+with the `${DASHSCOPE_API_KEY}` region; the `qwen` alias resolves to DashScope.
+MiniMax M2.7 uses
 `max_completion_tokens`, and the proxy rejects `max_tokens` values above the
 documented 2048-token completion maximum before it calls MiniMax.
 
@@ -849,13 +841,6 @@ Provider-specific details:
   missing-suffix loop and accepts the assembled text only after
   `finish_reason=stop`; `content_filter`, `tool_calls`, missing, and
   provider-specific non-stop reasons are upstream failures.
-* Qwen Cloud Token Plan uses selector `qwencloud`, exact model
-  `qwen3.8-max-preview`, `${QWEN_CLOUD_TOKEN_PLAN_API_KEY}`, and
-  `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`.
-  It is deliberately separate from DashScope because their API keys and base
-  URLs are not interchangeable. The proxy exposes text generation only and
-  sends the public `max_tokens` value through the compatible Chat Completions
-  field without adding Qwen-specific thinking, tool, or multimodal controls.
 * MiniMax uses selector `minimax`, exact model `MiniMax-M2.7`,
   `${MINIMAX_API_KEY}`, and `https://api.minimax.io/v1`. The shared compatible
   Chat Completions adapter maps public `max_tokens` to upstream
@@ -1234,11 +1219,13 @@ supported by the resolved provider/model route, otherwise the proxy returns
 Management startup requires every persisted routing field to be canonical and
 catalog-valid and every nonempty provider default to have the tenant's saved
 key. It never infers or repairs a provider, model, or reasoning effort at read
-time. The bounded schema-version-3 migration performs the one-time reconciliation
-of older managed defaults against saved provider keys, preserves tenant
-timestamps, verifies the result, and records the new version in one
-transaction. Invalid keys, models, or routing data stop startup with the owner,
-tenant, endpoint, provider, and model context.
+time. The bounded schema-version-3 migration performs the one-time
+reconciliation of older managed defaults against saved provider keys. The
+bounded schema-version-4 migration then removes retired `qwencloud` provider
+settings and reconciles affected text defaults to the first remaining keyed
+provider. Both preserve tenant timestamps and verify their result before
+recording the version. Invalid keys, models, or routing data stop startup with
+the owner, tenant, endpoint, provider, and model context.
 
 Configured authenticated users land on Usage Overview. An independent `Usage
 tenant` selector sits immediately before the ordered `ALL`, `30 days`, `7
@@ -1387,6 +1374,16 @@ changing tenant timestamps, verifies every row against its decrypted saved
 keys, and records schema version 3 in the same transaction. Reopening a
 version-3 database validates this invariant and rejects drift instead of
 repairing it at read time.
+
+The bounded schema-version-4 migration removes every stored `qwencloud` key,
+selected model, and provider system prompt. Affected text defaults move to the
+first remaining keyed provider by canonical identifier. The default uses that
+provider's stored text model. If no key remains, the migration clears the text
+route and reasoning effort. Settings becomes mandatory. Tenant timestamps and
+historical usage provider/model identifiers remain unchanged. The transaction
+verifies deleted settings, reconciled defaults, decrypted remaining keys,
+timestamps, and usage rows before recording version 4. Current-version startup
+rejects retired provider settings or routing defaults instead of repairing them.
 
 Server/runtime settings, backend auth validation settings, provider base URLs,
 transcription URLs, model catalogs, and browser-facing MPR UI/TAuth bootstrap
@@ -1715,7 +1712,6 @@ an ignored coverage artifact from an earlier run cannot satisfy completion.
 | Meta Muse Spark | `MODEL_API_KEY` | `LLM_PROXY_LIVE_META_MODEL` |
 | DeepSeek | `DEEPSEEK_API_KEY` | `LLM_PROXY_LIVE_DEEPSEEK_MODEL` |
 | DashScope/Qwen | `DASHSCOPE_API_KEY` | `LLM_PROXY_LIVE_DASHSCOPE_MODEL` |
-| Qwen Cloud Token Plan | `QWEN_CLOUD_TOKEN_PLAN_API_KEY` | `LLM_PROXY_LIVE_QWEN_CLOUD_MODEL` |
 | Moonshot/Kimi | `MOONSHOT_API_KEY` | `LLM_PROXY_LIVE_MOONSHOT_MODEL` |
 | MiniMax | `MINIMAX_API_KEY` | `LLM_PROXY_LIVE_MINIMAX_MODEL` |
 | SiliconFlow | `SILICONFLOW_API_KEY` | `LLM_PROXY_LIVE_SILICONFLOW_MODEL` |
@@ -2485,7 +2481,6 @@ and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-mo
 | `deepseek-chat` | DeepSeek | No | - | No |
 | `deepseek-reasoner` | DeepSeek | No | - | No |
 | `qwen-plus` | DashScope/Qwen | Yes | - | No |
-| `qwen3.8-max-preview` | Qwen Cloud Token Plan | Yes | - | No |
 | `kimi-k2.6` | Moonshot/Kimi | Yes | - | No |
 | `kimi-k3` | Moonshot/Kimi | No | - | No |
 | `kimi-k2.7-code` | Moonshot/Kimi | No | - | No |

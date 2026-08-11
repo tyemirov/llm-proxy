@@ -121,6 +121,7 @@ prepare_local_environment() {
     "GHTTP_SERVE_DIRECTORY" \
     "GHTTP_SERVE_NO_MARKDOWN"
   write_scoped_local_environment "${api_environment_path}" \
+    "DASHSCOPE_BASE_URL" \
     "LLM_PROXY_MANAGEMENT_ENABLED" \
     "LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN" \
     "LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN" \

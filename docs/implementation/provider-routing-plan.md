@@ -70,7 +70,6 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 | `meta` | none | `openai_chat_completions` | `synchronous_completion` | Not supported | Not supported |
 | `deepseek` | none | `openai_chat_completions` | `synchronous_completion` | Not supported | Not supported |
 | `dashscope` | `qwen` | `openai_chat_completions` | `synchronous_completion` | Not supported | Not supported |
-| `qwencloud` | none | `openai_chat_completions` | `synchronous_completion` | Not supported | Not supported |
 | `moonshot` | `kimi` | `openai_chat_completions` | `synchronous_completion` | Not supported | Not supported |
 | `minimax` | none | `openai_chat_completions` | `synchronous_completion` | Not supported | Not supported |
 | `siliconflow` | none | `openai_chat_completions` | `synchronous_completion` | OpenAI-compatible audio transcription | Not supported |
@@ -97,14 +96,10 @@ in Meta's [Muse Spark guide](https://developer.meta.com/ai/resources/blog/build-
 [Chat Completions reference](https://dev.meta.ai/docs/features/chat-completion),
 and [pricing and rate-limit documentation](https://dev.meta.ai/docs/getting-started/pricing-rate-limits).
 
-Qwen Cloud Token Plan is a distinct text-only provider: use canonical selector
-`qwencloud`, model `qwen3.8-max-preview`, its Token Plan endpoint
-`https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`, and
-the dedicated `${QWEN_CLOUD_TOKEN_PLAN_API_KEY}` credential. It has no alias;
-the existing `qwen` alias remains DashScope-only because the two services do
-not share API keys or base URLs. Qwen Cloud requests retain the shared
-compatible `max_tokens` field and do not add Qwen-specific thinking, tools, or
-multimodal controls.
+DashScope is the only Alibaba provider. Production requires
+`${DASHSCOPE_BASE_URL}` to identify the Singapore Model Studio workspace paired
+with the regional `${DASHSCOPE_API_KEY}` credential. The `qwen` alias resolves
+to DashScope.
 
 MiniMax is a distinct text-only provider with canonical selector `minimax`,
 model `MiniMax-M2.7`, endpoint `https://api.minimax.io/v1`, and
@@ -170,7 +165,6 @@ Provider credentials and base URLs:
 - `providers.meta.api_key`, `providers.meta.base_url`
 - `providers.deepseek.api_key`, `providers.deepseek.base_url`
 - `providers.dashscope.api_key`, `providers.dashscope.base_url`
-- `providers.qwencloud.api_key`, `providers.qwencloud.base_url`
 - `providers.moonshot.api_key`, `providers.moonshot.base_url`
 - `providers.minimax.api_key`, `providers.minimax.base_url`
 - `providers.siliconflow.api_key`, `providers.siliconflow.base_url`, `providers.siliconflow.transcriptions_url`
@@ -213,8 +207,7 @@ transports. Moonshot's current Kimi Chat Completions route receives
 `max_completion_tokens` when a caller supplies the proxy `max_tokens` value.
 It deliberately omits sampling controls because Kimi K3 fixes those values
 upstream.
-Qwen Cloud Token Plan is separate from DashScope at both the selector and
-credential boundary. MiniMax M2.7 maps public `max_tokens` to
+MiniMax M2.7 maps public `max_tokens` to
 `max_completion_tokens` and carries a configured 2048-token output ceiling.
 GLM-5.2 remains on the existing BigModel/Zhipu Chat Completions endpoint. Its
 128K output maximum is catalog metadata; optional `thinking` and
@@ -368,7 +361,7 @@ non-user-content inference through the provider's canonical text transport:
 
 - OpenAI Responses uses one synchronous, non-stored `POST /responses` with
   `background: false`, `store: false`, and a 16-token output limit.
-- DeepSeek, DashScope, Qwen Cloud, Moonshot, MiniMax, SiliconFlow, Zhipu, Meta,
+- DeepSeek, DashScope, Moonshot, MiniMax, SiliconFlow, Zhipu, Meta,
   and Grok use one authenticated OpenAI-compatible `POST /chat/completions`
   with the provider's declared token-limit parameter.
 - Gemini uses one synchronous, non-stored `POST /interactions` request with
@@ -439,6 +432,16 @@ deterministic reconciliation once, preserves tenant timestamps, verifies every
 row, and records the version atomically. Unknown models, corrupt keys, and
 unknown or dictation-unsupported providers fail with contextual owner, tenant,
 endpoint, provider, and model errors.
+
+The bounded schema-version-4 migration deletes retired `qwencloud` provider
+settings. If an affected tenant still has provider keys, its text default moves
+to the first keyed provider by canonical identifier. The default uses that
+provider's stored text model. Otherwise the migration clears the text pair and
+reasoning effort. Settings is then mandatory. Tenant timestamps and historical
+usage identifiers are preserved. Verification of every changed row and retained
+usage record occurs inside the transaction. The transaction records version 4
+after verification. Current-version startup rejects any retired provider
+setting or default.
 
 `server.workers` limits concurrent upstream provider HTTP operations, not whole
 client request lifecycles. `server.queue_size` limits the number of additional
@@ -562,6 +565,12 @@ provider record, preserves eligible defaults, deterministically replaces
 ineligible pairs, clears text or dictation when no provider is eligible,
 preserves tenant timestamps, verifies the result, and records version 3 in one
 transaction. Current-version startup rejects any later drift.
+
+Schema version 4 removes retired `qwencloud` settings and reconciles affected
+text defaults against remaining keyed providers. It clears text and reasoning
+when no key remains. It preserves tenant timestamps and historical usage
+provider and model identifiers. The same transaction verifies the result and
+records version 4. Current startup rejects retired settings and defaults.
 
 Server/runtime settings, backend auth validation, browser-facing MPR UI/TAuth settings, provider base URLs, transcription URLs, and model catalogs remain config-file-owned. Database access must use GORM model APIs without raw SQL. Generated llm-proxy client secrets are returned once and stored as SHA-256 digests. Managed tenants authenticate the same public proxy endpoints with `key=<generated secret>` and use only their own saved provider credentials.
 

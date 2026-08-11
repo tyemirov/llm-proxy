@@ -27,8 +27,6 @@ func TestRootCommandRunsConfiguredProxyFromConfigFile(t *testing.T) {
 	providerValues.DeepSeekBaseURL = "https://deepseek.example"
 	providerValues.DashScopeAPIKey = ""
 	providerValues.DashScopeBaseURL = "https://dashscope.example"
-	providerValues.QwenCloudAPIKey = ""
-	providerValues.QwenCloudBaseURL = "https://qwencloud.example"
 	providerValues.MoonshotAPIKey = ""
 	providerValues.MoonshotBaseURL = "https://moonshot.example"
 	providerValues.MiniMaxAPIKey = ""
@@ -174,9 +172,6 @@ P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlh
 	if capturedConfiguration.GeminiKey != "" {
 		t.Fatalf("geminiKey=%q", capturedConfiguration.GeminiKey)
 	}
-	if capturedConfiguration.QwenCloudKey != "" || capturedConfiguration.QwenCloudBaseURL != "https://qwencloud.example" {
-		t.Fatalf("qwenCloud key/base URL=%q %q", capturedConfiguration.QwenCloudKey, capturedConfiguration.QwenCloudBaseURL)
-	}
 	if capturedConfiguration.MiniMaxKey != "" || capturedConfiguration.MiniMaxBaseURL != "https://minimax.example" {
 		t.Fatalf("miniMax key/base URL=%q %q", capturedConfiguration.MiniMaxKey, capturedConfiguration.MiniMaxBaseURL)
 	}
@@ -206,9 +201,6 @@ P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlh
 	}
 	if capturedConfiguration.ProviderModels[proxy.ProviderNameDeepSeek].Text.DefaultModel != "deepseek-v4-flash" {
 		t.Fatalf("deepseek default model=%q", capturedConfiguration.ProviderModels[proxy.ProviderNameDeepSeek].Text.DefaultModel)
-	}
-	if capturedConfiguration.ProviderModels[proxy.ProviderNameQwenCloud].Text.DefaultModel != proxy.ModelNameQwenCloudQwen38MaxPreview {
-		t.Fatalf("qwenCloud default model=%q", capturedConfiguration.ProviderModels[proxy.ProviderNameQwenCloud].Text.DefaultModel)
 	}
 	miniMaxModels := capturedConfiguration.ProviderModels[proxy.ProviderNameMiniMax].Text.Models
 	if len(miniMaxModels) != 1 || miniMaxModels[0].ID != proxy.ModelNameMiniMaxM27 || miniMaxModels[0].OutputTokenLimit != 2048 {
@@ -474,6 +466,7 @@ LLM_PROXY_MANAGEMENT_DATABASE_PATH=llm-proxy-management.sqlite
 LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 LLM_PROXY_MANAGEMENT_API_ORIGIN=https://llm-proxy-api.mprlab.com
 LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=https://llm-proxy-api.mprlab.com
+DASHSCOPE_BASE_URL=https://workspace.example.invalid/compatible-mode/v1
 `)
 
 	var capturedConfiguration proxy.Configuration
@@ -555,8 +548,8 @@ management:
 	if capturedConfiguration.Port != 9191 || capturedConfiguration.LogLevel != proxy.LogLevelDebug {
 		t.Fatalf("public API server=%+v", capturedConfiguration)
 	}
-	if len(capturedConfiguration.Catalog.Providers) != 12 {
-		t.Fatalf("provider count=%d want=12", len(capturedConfiguration.Catalog.Providers))
+	if len(capturedConfiguration.Catalog.Providers) != 11 {
+		t.Fatalf("provider count=%d want=11", len(capturedConfiguration.Catalog.Providers))
 	}
 	if capturedConfiguration.Catalog.MaxPromptBytes != 3 || capturedConfiguration.Catalog.MaxInputAudioBytes != 25*1024*1024 {
 		t.Fatalf("public limits=%+v", capturedConfiguration.Catalog)
@@ -648,6 +641,24 @@ providers:
 providers:
   openai:
     future_option: true`)
+			},
+			expectedError: "field=providers",
+		},
+		{
+			name: "retired qwen cloud provider",
+			config: func(subTest *testing.T, tempDir string) string {
+				providerYAML := strings.Replace(completeLiteralProvidersYAML(), "\n  moonshot:", `
+  qwencloud:
+    api_key: "sk-qwencloud"
+    base_url: "https://retired.example.invalid/v1"
+    text:
+      default_model: "qwen3.8-max-preview"
+      models:
+        - id: "qwen3.8-max-preview"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
+  moonshot:`, 1)
+				return writeTestConfig(subTest, tempDir, "server:\n  port: 9191\n"+providerYAML)
 			},
 			expectedError: "field=providers",
 		},
@@ -786,15 +797,6 @@ func TestRootCommandRejectsMissingDefaultTextProviderKeys(t *testing.T) {
 			expectedError: "provider_api_key_required: provider=dashscope field=providers.dashscope.api_key",
 		},
 		{
-			name:     "qwen cloud canonical",
-			provider: proxy.ProviderNameQwenCloud,
-			model:    proxy.ModelNameQwenCloudQwen38MaxPreview,
-			missingKey: func(values *providerYAMLValues) {
-				values.QwenCloudAPIKey = "${P411_MISSING_QWEN_CLOUD_TOKEN_PLAN_KEY}"
-			},
-			expectedError: "provider_api_key_required: provider=qwencloud field=providers.qwencloud.api_key",
-		},
-		{
 			name:     "deepseek canonical",
 			provider: proxy.ProviderNameDeepSeek,
 			model:    proxy.ModelNameDeepSeekV4Flash,
@@ -903,23 +905,23 @@ tenants:
 	}
 }
 
-func TestRootCommandRejectsUnknownDefaultTextProviderAfterCredentialValidation(t *testing.T) {
+func TestRootCommandRejectsRetiredQwenCloudDefaultTextRoute(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := writeTestConfig(t, tempDir, `
 tenants:
   - id: default
     secret: "sekret"
     defaults:
-      provider: unknown
-      model: gpt-4.1
+      provider: qwencloud
+      model: qwen3.8-max-preview
       dictation_provider: openai
       dictation_model: gpt-4o-mini-transcribe
 `+completeLiteralProvidersYAML())
 	withServeProxy(t, failingServeProxy(t))
 
 	executeError := executeRootCommand(t, "--config", configPath)
-	if executeError == nil || !strings.Contains(executeError.Error(), "unknown provider: unknown") {
-		t.Fatalf("error=%v want unknown default text provider", executeError)
+	if executeError == nil || !strings.Contains(executeError.Error(), "unknown provider: qwencloud") {
+		t.Fatalf("error=%v want retired qwen cloud provider rejection", executeError)
 	}
 }
 
@@ -1533,13 +1535,6 @@ tenants:
 }
 
 func withCurrentProviderBaseURLFixtures(providersYAML string) string {
-	if !strings.Contains(providersYAML, "\n  qwencloud:") {
-		providersYAML = strings.Replace(providersYAML, "\n  moonshot:", `
-  qwencloud:
-    api_key: "sk-qwencloud"
-    base_url: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
-  moonshot:`, 1)
-	}
 	if !strings.Contains(providersYAML, "\n  minimax:") {
 		providersYAML = strings.Replace(providersYAML, "\n  siliconflow:", `
   minimax:
@@ -1647,8 +1642,6 @@ type providerYAMLValues struct {
 	DeepSeekBaseURL              string
 	DashScopeAPIKey              string
 	DashScopeBaseURL             string
-	QwenCloudAPIKey              string
-	QwenCloudBaseURL             string
 	MoonshotAPIKey               string
 	MoonshotBaseURL              string
 	MiniMaxAPIKey                string
@@ -1679,8 +1672,6 @@ func defaultProviderYAMLValues() providerYAMLValues {
 		DeepSeekBaseURL:              "https://api.deepseek.com",
 		DashScopeAPIKey:              "sk-dashscope",
 		DashScopeBaseURL:             "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-		QwenCloudAPIKey:              "sk-qwencloud",
-		QwenCloudBaseURL:             "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
 		MoonshotAPIKey:               "sk-moonshot",
 		MoonshotBaseURL:              "https://api.moonshot.ai/v1",
 		MiniMaxAPIKey:                "sk-minimax",
@@ -1783,15 +1774,6 @@ providers:
       default_model: "qwen-plus"
       models:
         - id: "qwen-plus"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-  qwencloud:
-    api_key: "%s"
-    base_url: "%s"
-    text:
-      default_model: "qwen3.8-max-preview"
-      models:
-        - id: "qwen3.8-max-preview"
           wire_contract: "openai_chat_completions"
           execution_lifecycle: "synchronous_completion"
   moonshot:
@@ -1954,8 +1936,6 @@ providers:
 		values.DeepSeekBaseURL,
 		values.DashScopeAPIKey,
 		values.DashScopeBaseURL,
-		values.QwenCloudAPIKey,
-		values.QwenCloudBaseURL,
 		values.MoonshotAPIKey,
 		values.MoonshotBaseURL,
 		proxy.ModelNameMoonshotKimiK26,

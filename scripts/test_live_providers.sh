@@ -17,7 +17,6 @@ Provider key variables:
   OPENAI_API_KEY
   DEEPSEEK_API_KEY
   DASHSCOPE_API_KEY
-  QWEN_CLOUD_TOKEN_PLAN_API_KEY
   MOONSHOT_API_KEY
   MINIMAX_API_KEY
   SILICONFLOW_API_KEY
@@ -28,6 +27,7 @@ Provider key variables:
   XAI_API_KEY
 
 Optional environment:
+  DASHSCOPE_BASE_URL          Required workspace URL when DashScope is selected.
   LIVE_ENV_FILE              Path to a dotenv file to parse before discovery.
   LLM_PROXY_LIVE_PROVIDERS   Comma or space separated provider list. If set,
                              every listed provider must have its key.
@@ -46,7 +46,6 @@ Per-provider model overrides:
   LLM_PROXY_LIVE_OPENAI_MODEL
   LLM_PROXY_LIVE_DEEPSEEK_MODEL
   LLM_PROXY_LIVE_DASHSCOPE_MODEL
-  LLM_PROXY_LIVE_QWEN_CLOUD_MODEL
   LLM_PROXY_LIVE_MOONSHOT_MODEL
   LLM_PROXY_LIVE_MINIMAX_MODEL
   LLM_PROXY_LIVE_SILICONFLOW_MODEL
@@ -132,7 +131,6 @@ provider_key_variable() {
     openai) printf "%s\n" "OPENAI_API_KEY" ;;
     deepseek) printf "%s\n" "DEEPSEEK_API_KEY" ;;
     dashscope) printf "%s\n" "DASHSCOPE_API_KEY" ;;
-    qwencloud) printf "%s\n" "QWEN_CLOUD_TOKEN_PLAN_API_KEY" ;;
     moonshot) printf "%s\n" "MOONSHOT_API_KEY" ;;
     minimax) printf "%s\n" "MINIMAX_API_KEY" ;;
     siliconflow) printf "%s\n" "SILICONFLOW_API_KEY" ;;
@@ -150,7 +148,6 @@ provider_model_override() {
     openai) env_or_default LLM_PROXY_LIVE_OPENAI_MODEL "" ;;
     deepseek) env_or_default LLM_PROXY_LIVE_DEEPSEEK_MODEL "" ;;
     dashscope) env_or_default LLM_PROXY_LIVE_DASHSCOPE_MODEL "" ;;
-    qwencloud) env_or_default LLM_PROXY_LIVE_QWEN_CLOUD_MODEL "" ;;
     moonshot) env_or_default LLM_PROXY_LIVE_MOONSHOT_MODEL "" ;;
     minimax) env_or_default LLM_PROXY_LIVE_MINIMAX_MODEL "" ;;
     siliconflow) env_or_default LLM_PROXY_LIVE_SILICONFLOW_MODEL "" ;;
@@ -235,7 +232,6 @@ export_unused_provider_placeholders() {
     OPENAI_API_KEY \
     DEEPSEEK_API_KEY \
     DASHSCOPE_API_KEY \
-    QWEN_CLOUD_TOKEN_PLAN_API_KEY \
     MOONSHOT_API_KEY \
     MINIMAX_API_KEY \
     SILICONFLOW_API_KEY \
@@ -260,7 +256,6 @@ write_static_live_config() {
       provider_keys["openai"] = "OPENAI_API_KEY"
       provider_keys["deepseek"] = "DEEPSEEK_API_KEY"
       provider_keys["dashscope"] = "DASHSCOPE_API_KEY"
-      provider_keys["qwencloud"] = "QWEN_CLOUD_TOKEN_PLAN_API_KEY"
       provider_keys["moonshot"] = "MOONSHOT_API_KEY"
       provider_keys["minimax"] = "MINIMAX_API_KEY"
       provider_keys["siliconflow"] = "SILICONFLOW_API_KEY"
@@ -613,7 +608,7 @@ if [[ "${PREFLIGHT_ONLY}" == "true" && -n "${WRITE_CONFIG_PATH}" ]]; then
   exit 1
 fi
 
-SUPPORTED_PROVIDERS=(openai deepseek dashscope qwencloud moonshot minimax siliconflow zhipu gemini anthropic meta grok)
+SUPPORTED_PROVIDERS=(openai deepseek dashscope moonshot minimax siliconflow zhipu gemini anthropic meta grok)
 LIVE_PROVIDERS=()
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="$(mktemp -d)"
@@ -646,6 +641,11 @@ if [[ "${PREFLIGHT_ONLY}" != "true" && -z "${WRITE_CONFIG_PATH}" ]]; then
     exit 0
   fi
 fi
+if [[ " ${LIVE_PROVIDERS[*]} " == *" dashscope "* && -z "${DASHSCOPE_BASE_URL:-}" ]]; then
+  echo "error: DASHSCOPE_BASE_URL is required when DashScope is selected" >&2
+  exit 1
+fi
+export DASHSCOPE_BASE_URL="${DASHSCOPE_BASE_URL:-https://dashscope.invalid}"
 
 if [[ -n "${LLM_PROXY_LIVE_PORT:-}" ]]; then
   PORT="${LLM_PROXY_LIVE_PORT}"

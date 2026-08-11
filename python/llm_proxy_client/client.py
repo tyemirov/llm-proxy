@@ -20,6 +20,7 @@ PROVIDER_QUERY_KEY = "provider"
 MODEL_PROFILE_MODEL_KEY = "model"
 MODEL_PROFILE_SUBJECT = "model_profile"
 MODEL_PROFILE_FIELDS = frozenset({PROVIDER_QUERY_KEY, MODEL_PROFILE_MODEL_KEY})
+RETIRED_MODEL_PROFILE_PROVIDERS = frozenset({"qwencloud"})
 POST_BODY_QUERY_KEYS = frozenset(
     {
         "messages",
@@ -240,6 +241,11 @@ def _decode_model_profile(model_profile_path: str, model_profile_document: str) 
         raise LLMProxyModelProfileError(
             f"llm_proxy_client_invalid_model_profile: validate {MODEL_PROFILE_SUBJECT} "
             f"path={model_profile_path!r}: missing provider"
+        )
+    if provider in RETIRED_MODEL_PROFILE_PROVIDERS:
+        raise LLMProxyModelProfileError(
+            f"llm_proxy_client_invalid_model_profile: validate {MODEL_PROFILE_SUBJECT} "
+            f"path={model_profile_path!r}: provider is retired"
         )
     if not model:
         raise LLMProxyModelProfileError(
