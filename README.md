@@ -107,7 +107,7 @@ the client to poll llm-proxy.
 
 ### Request work budgets
 
-Every authenticated operation that can start upstream work accepts one optional
+Every authenticated operation that can run long work accepts one optional
 header:
 
 ```text
@@ -115,9 +115,10 @@ X-LLM-Proxy-Request-Timeout-Seconds: N
 ```
 
 `N` is the positive whole-number wall-clock budget, in seconds, for that
-request. The budget begins before body parsing and covers validation, queue
-admission, every provider call, OpenAI background polling, and response
-construction for `GET /`, `POST /`, `POST /v2`, and `POST /dictate`.
+request. The budget begins before body parsing and covers validation, asset
+upload, queue admission, every provider call, OpenAI background polling, and
+response construction for `GET /`, `POST /`, `POST /v2`,
+`POST /model/v1/assets`, and `POST /dictate`.
 
 If the header is omitted, `server.request_timeout_seconds` is the effective
 budget. A supplied value must be in the inclusive range
@@ -1998,8 +1999,11 @@ canonical padded base64 `data`, and the matching lowercase hexadecimal
 matching lowercase hexadecimal `sha256`. The proxy validates tenant ownership,
 asset state, expiry, MIME type, byte count, and digest before provider dispatch.
 `server.max_prompt_bytes` applies to compatibility `POST /`. Canonical
-`POST /v2` applies the selected provider offering's published media limits and
-transport rules.
+`POST /v2` bounds its encoded JSON envelope with the configured text allowance
+plus the largest bounded inline request in the provider catalog. It applies
+the selected provider offering's published media limits and transport rules.
+Upload larger media through `POST /model/v1/assets` and send its asset
+reference through `/v2`.
 
 Upload an asset with the exact media content type and digest:
 
@@ -2264,8 +2268,9 @@ and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-mo
 * `200 OK` - success
 * `400 Bad Request` - missing/invalid parameters, invalid request timeout, invalid multipart audio form, unknown provider/model, or unsupported provider capability. Invalid timeout headers return `{"error":{"code":"invalid_request_timeout","max_request_timeout_seconds":M}}`.
 * `403 Forbidden` - missing or invalid `key`
-* `413 Payload Too Large` - compatibility JSON exceeds `max_prompt_bytes`,
-  dictation audio exceeds `max_input_audio_bytes`, an asset upload exceeds
+* `413 Payload Too Large` - compatibility JSON exceeds `max_prompt_bytes`, a
+  `/v2` JSON envelope exceeds its catalog-derived ingress bound, dictation
+  audio exceeds `max_input_audio_bytes`, an asset upload exceeds
   `max_asset_bytes`, or media exceeds every transport limit for the selected
   provider offering. Provider media failures use
   `provider_media_limit_exceeded`.
