@@ -326,6 +326,286 @@ func TestManagedKeyedRoutingDefaultsMigrationRejectsStageFailures(t *testing.T) 
 	})
 }
 
+type managedQwenCloudRetirementFixture struct {
+	database          *gorm.DB
+	providerKeyCipher managedProviderKeyCipher
+	providers         *providerRegistry
+	tenant            managedTenantRecord
+	usage             managedUsageEventRecord
+}
+
+func newManagedQwenCloudRetirementFixture(t *testing.T) managedQwenCloudRetirementFixture {
+	t.Helper()
+	database, openError := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "qwen-retirement-stage.db")), &gorm.Config{})
+	if openError != nil {
+		t.Fatalf("open qwen retirement fixture: %v", openError)
+	}
+	if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
+		t.Fatalf("create qwen retirement schema: %v", migrationError)
+	}
+	now := time.Date(2026, 8, 10, 22, 0, 0, 0, time.UTC)
+	user := managedUserRecord{UserID: "qwen-retirement-owner", CreatedAt: now, UpdatedAt: now}
+	if createError := database.Create(&user).Error; createError != nil {
+		t.Fatalf("seed qwen retirement user: %v", createError)
+	}
+	tenantRecord := fakeTenantRecord(user.UserID, "qwen-retirement-tenant", "Default", now)
+	tenantRecord.DefaultProvider = retiredQwenCloudProviderIdentifier
+	tenantRecord.DefaultModel = retiredQwenCloudModelIdentifier
+	tenantRecord.DefaultReasoningEffort = "high"
+	if createError := database.Create(&tenantRecord).Error; createError != nil {
+		t.Fatalf("seed qwen retirement tenant: %v", createError)
+	}
+	providerKeyCipher := internalManagedProviderKeyCipher()
+	encryptedKey, encryptionError := providerKeyCipher.encrypt(
+		strings.NewReader(strings.Repeat("q", providerKeyCipher.aeadCipher.NonceSize())),
+		tenantRecord.TenantID,
+		retiredQwenCloudProviderIdentifier,
+		"sk-retired",
+	)
+	if encryptionError != nil {
+		t.Fatalf("encrypt qwen retirement key: %v", encryptionError)
+	}
+	if createError := database.Create(&managedProviderAPIKeyRecord{
+		TenantID: tenantRecord.TenantID, ProviderID: retiredQwenCloudProviderIdentifier,
+		EncryptedAPIKey: encryptedKey, TextModel: retiredQwenCloudModelIdentifier,
+		SystemPrompt: "retired prompt", CreatedAt: now, UpdatedAt: now,
+	}).Error; createError != nil {
+		t.Fatalf("seed qwen retirement key: %v", createError)
+	}
+	usage := managedUsageEventRecord{
+		ID: 71, TenantID: tenantRecord.TenantID, Endpoint: usageEndpointText,
+		ProviderID: retiredQwenCloudProviderIdentifier, ModelID: retiredQwenCloudModelIdentifier,
+		StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now,
+	}
+	if createError := database.Create(&usage).Error; createError != nil {
+		t.Fatalf("seed qwen retirement usage: %v", createError)
+	}
+	return managedQwenCloudRetirementFixture{
+		database: database, providerKeyCipher: providerKeyCipher,
+		providers: internalManagementProviderRegistry(), tenant: tenantRecord, usage: usage,
+	}
+}
+
+func (fixture managedQwenCloudRetirementFixture) addProvider(t *testing.T, providerIdentifier string, textModel string, encryptedAPIKey string) {
+	t.Helper()
+	if encryptedAPIKey == "" {
+		var encryptionError error
+		encryptedAPIKey, encryptionError = fixture.providerKeyCipher.encrypt(
+			strings.NewReader(strings.Repeat("r", fixture.providerKeyCipher.aeadCipher.NonceSize())),
+			fixture.tenant.TenantID,
+			providerIdentifier,
+			"sk-current",
+		)
+		if encryptionError != nil {
+			t.Fatalf("encrypt qwen retirement provider: %v", encryptionError)
+		}
+	}
+	if createError := fixture.database.Create(&managedProviderAPIKeyRecord{
+		TenantID: fixture.tenant.TenantID, ProviderID: providerIdentifier,
+		EncryptedAPIKey: encryptedAPIKey, TextModel: textModel,
+		CreatedAt: fixture.tenant.CreatedAt, UpdatedAt: fixture.tenant.UpdatedAt,
+	}).Error; createError != nil {
+		t.Fatalf("seed qwen retirement provider: %v", createError)
+	}
+}
+
+func TestManagedQwenCloudRetirementMigrationRejectsStageFailures(t *testing.T) {
+	assertMigrationError := func(t *testing.T, migrationError error, want string) {
+		t.Helper()
+		if !errors.Is(migrationError, errManagedTenantSchemaMigration) || !strings.Contains(migrationError.Error(), want) {
+			t.Fatalf("migration error=%v want=%q", migrationError, want)
+		}
+	}
+	for _, testCase := range []struct {
+		name      string
+		want      string
+		configure func(*testing.T, managedQwenCloudRetirementFixture)
+	}{
+		{
+			name: "read tenants", want: "operation=read",
+			configure: func(t *testing.T, fixture managedQwenCloudRetirementFixture) {
+				registerManagedGORMError(t, fixture.database, "qwen_retirement_read", "query", managedTenantTable, errInternalTestDatabase)
+			},
+		},
+		{
+			name: "decrypt remaining provider", want: "operation=preflight",
+			configure: func(t *testing.T, fixture managedQwenCloudRetirementFixture) {
+				fixture.addProvider(t, ProviderNameDeepSeek, ModelNameDeepSeekV4Flash, "invalid")
+			},
+		},
+		{
+			name: "invalid retired defaults", want: "operation=preflight",
+			configure: func(t *testing.T, fixture managedQwenCloudRetirementFixture) {
+				if updateError := fixture.database.Model(&managedTenantRecord{}).Where(&managedTenantRecord{TenantID: fixture.tenant.TenantID}).Update("default_model", "wrong-model").Error; updateError != nil {
+					t.Fatalf("seed invalid retired defaults: %v", updateError)
+				}
+			},
+		},
+		{
+			name: "invalid retained defaults", want: "operation=preflight",
+			configure: func(t *testing.T, fixture managedQwenCloudRetirementFixture) {
+				if updateError := fixture.database.Model(&managedTenantRecord{}).Where(&managedTenantRecord{TenantID: fixture.tenant.TenantID}).Update("default_dictation_provider", "missing").Error; updateError != nil {
+					t.Fatalf("seed invalid retained defaults: %v", updateError)
+				}
+			},
+		},
+		{
+			name: "invalid remaining provider", want: "operation=preflight",
+			configure: func(t *testing.T, fixture managedQwenCloudRetirementFixture) {
+				fixture.addProvider(t, "missing", "missing-model", "")
+			},
+		},
+		{
+			name: "read historical usage", want: "operation=preflight",
+			configure: func(t *testing.T, fixture managedQwenCloudRetirementFixture) {
+				registerManagedGORMError(t, fixture.database, "qwen_retirement_usage_read", "query", managedUsageEventTable, errInternalTestDatabase)
+			},
+		},
+		{
+			name: "delete retired provider", want: "operation=delete_retired_provider",
+			configure: func(t *testing.T, fixture managedQwenCloudRetirementFixture) {
+				registerManagedGORMError(t, fixture.database, "qwen_retirement_delete", "delete", managedProviderKeyTable, errInternalTestDatabase)
+			},
+		},
+		{
+			name: "backfill", want: "operation=backfill",
+			configure: func(t *testing.T, fixture managedQwenCloudRetirementFixture) {
+				registerManagedGORMError(t, fixture.database, "qwen_retirement_backfill", "update", managedTenantTable, errInternalTestDatabase)
+			},
+		},
+		{
+			name: "verify", want: "operation=verify",
+			configure: func(t *testing.T, fixture managedQwenCloudRetirementFixture) {
+				if callbackError := fixture.database.Callback().Query().Before("gorm:query").Register("qwen_retirement_verify", func(callbackDatabase *gorm.DB) {
+					if callbackDatabase.Statement.Table == managedProviderKeyTable {
+						if _, isCount := callbackDatabase.Statement.Dest.(*int64); isCount {
+							callbackDatabase.AddError(errInternalTestDatabase)
+						}
+					}
+				}); callbackError != nil {
+					t.Fatalf("register qwen verification failure: %v", callbackError)
+				}
+			},
+		},
+		{
+			name: "record version", want: "operation=record_version",
+			configure: func(t *testing.T, fixture managedQwenCloudRetirementFixture) {
+				registerManagedGORMError(t, fixture.database, "qwen_retirement_record_version", "create", managedSchemaMigrationTable, errInternalTestDatabase)
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			fixture := newManagedQwenCloudRetirementFixture(t)
+			testCase.configure(t, fixture)
+			assertMigrationError(t, migrateManagedQwenCloudRetirement(fixture.database, fixture.providerKeyCipher, fixture.providers), testCase.want)
+		})
+	}
+}
+
+func TestManagedQwenCloudRetirementVerificationRejectsDrift(t *testing.T) {
+	assertVerificationError := func(t *testing.T, verificationError error, want string) {
+		t.Helper()
+		if !errors.Is(verificationError, errManagedTenantSchemaMigration) || !strings.Contains(verificationError.Error(), want) {
+			t.Fatalf("verification error=%v want=%q", verificationError, want)
+		}
+	}
+	verifiedFixture := func(t *testing.T) (managedQwenCloudRetirementFixture, managedQwenCloudRetirementDataset) {
+		t.Helper()
+		fixture := newManagedQwenCloudRetirementFixture(t)
+		dataset, preflightError := preflightManagedQwenCloudRetirement(fixture.database, fixture.providerKeyCipher, fixture.providers)
+		if preflightError != nil {
+			t.Fatalf("preflight verification fixture: %v", preflightError)
+		}
+		if deleteError := fixture.database.Where(&managedProviderAPIKeyRecord{ProviderID: retiredQwenCloudProviderIdentifier}).Delete(&managedProviderAPIKeyRecord{}).Error; deleteError != nil {
+			t.Fatalf("delete retired verification fixture key: %v", deleteError)
+		}
+		for _, backfill := range dataset.backfills {
+			if updateError := fixture.database.Model(&managedTenantRecord{}).Where(&managedTenantRecord{TenantID: backfill.tenantID}).Updates(managedRoutingDefaultsDatabaseUpdates(backfill.defaults, backfill.updatedAt)).Error; updateError != nil {
+				t.Fatalf("backfill verification fixture: %v", updateError)
+			}
+		}
+		return fixture, dataset
+	}
+
+	t.Run("retired provider remains", func(t *testing.T) {
+		fixture := newManagedQwenCloudRetirementFixture(t)
+		assertVerificationError(t, verifyManagedQwenCloudRetirement(fixture.database, fixture.providerKeyCipher, fixture.providers, managedQwenCloudRetirementDataset{}), "operation=verify")
+	})
+	t.Run("tenant query", func(t *testing.T) {
+		fixture, dataset := verifiedFixture(t)
+		registerManagedGORMError(t, fixture.database, "qwen_verify_tenant_query", "query", managedTenantTable, errInternalTestDatabase)
+		assertVerificationError(t, verifyManagedQwenCloudRetirement(fixture.database, fixture.providerKeyCipher, fixture.providers, dataset), "operation=verify")
+	})
+	t.Run("tenant values", func(t *testing.T) {
+		fixture, dataset := verifiedFixture(t)
+		dataset.backfills[0].updatedAt = dataset.backfills[0].updatedAt.Add(time.Second)
+		assertVerificationError(t, verifyManagedQwenCloudRetirement(fixture.database, fixture.providerKeyCipher, fixture.providers, dataset), "values")
+	})
+	t.Run("current routing validation", func(t *testing.T) {
+		fixture, dataset := verifiedFixture(t)
+		fixture.addProvider(t, ProviderNameDeepSeek, ModelNameDeepSeekV4Flash, "invalid")
+		assertVerificationError(t, verifyManagedQwenCloudRetirement(fixture.database, fixture.providerKeyCipher, fixture.providers, dataset), "operation=validate")
+	})
+	t.Run("usage query", func(t *testing.T) {
+		fixture, dataset := verifiedFixture(t)
+		registerManagedGORMError(t, fixture.database, "qwen_verify_usage_query", "query", managedUsageEventTable, errInternalTestDatabase)
+		assertVerificationError(t, verifyManagedQwenCloudRetirement(fixture.database, fixture.providerKeyCipher, fixture.providers, dataset), "operation=verify")
+	})
+	t.Run("usage count", func(t *testing.T) {
+		fixture, dataset := verifiedFixture(t)
+		dataset.historicalUsage = nil
+		assertVerificationError(t, verifyManagedQwenCloudRetirement(fixture.database, fixture.providerKeyCipher, fixture.providers, dataset), "expected=0")
+	})
+	t.Run("usage values", func(t *testing.T) {
+		fixture, dataset := verifiedFixture(t)
+		dataset.historicalUsage[0].ModelID = "changed"
+		assertVerificationError(t, verifyManagedQwenCloudRetirement(fixture.database, fixture.providerKeyCipher, fixture.providers, dataset), "id=71")
+	})
+}
+
+func TestManagedTenantInitializationPropagatesPreRetirementMigrationFailures(t *testing.T) {
+	t.Run("schema one keyed routing failure", func(t *testing.T) {
+		database, openError := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "schema-one-keyed-failure.db")), &gorm.Config{})
+		if openError != nil {
+			t.Fatalf("open schema-one fixture: %v", openError)
+		}
+		seedManagedUsageSchemaOne(t, database)
+		registerManagedGORMError(t, database, "schema_one_keyed_failure", "query", managedTenantTable, errInternalTestDatabase)
+		initializeError := initializeManagedTenantSchema(database, internalManagedProviderKeyCipher(), internalManagementProviderRegistry())
+		if !errors.Is(initializeError, errManagedTenantSchemaMigration) || !strings.Contains(initializeError.Error(), "operation=read") {
+			t.Fatalf("schema-one initialize error=%v", initializeError)
+		}
+	})
+
+	t.Run("schema two keyed routing failure", func(t *testing.T) {
+		database, openError := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "schema-two-keyed-failure.db")), &gorm.Config{})
+		if openError != nil {
+			t.Fatalf("open schema-two fixture: %v", openError)
+		}
+		if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
+			t.Fatalf("create schema-two fixture: %v", migrationError)
+		}
+		now := time.Date(2026, 8, 10, 23, 0, 0, 0, time.UTC)
+		user := managedUserRecord{UserID: "schema-two-owner", CreatedAt: now, UpdatedAt: now}
+		if createError := database.Create(&user).Error; createError != nil {
+			t.Fatalf("seed schema-two user: %v", createError)
+		}
+		tenantRecord := fakeTenantRecord(user.UserID, "schema-two-tenant", "Default", now)
+		tenantRecord.DefaultProvider = "missing"
+		tenantRecord.DefaultModel = "missing-model"
+		if createError := database.Create(&tenantRecord).Error; createError != nil {
+			t.Fatalf("seed schema-two tenant: %v", createError)
+		}
+		if createError := database.Create(&managedSchemaMigrationRecord{Version: managedUsageOutcomeSchemaVersion, AppliedAt: now}).Error; createError != nil {
+			t.Fatalf("seed schema-two version: %v", createError)
+		}
+		initializeError := initializeManagedTenantSchema(database, internalManagedProviderKeyCipher(), internalManagementProviderRegistry())
+		if !errors.Is(initializeError, errManagedTenantSchemaMigration) || !strings.Contains(initializeError.Error(), "operation=preflight") {
+			t.Fatalf("schema-two initialize error=%v", initializeError)
+		}
+	})
+}
+
 type failingManagedUsageMigrationDialector struct {
 	gorm.Dialector
 	stage *string

@@ -112,7 +112,6 @@ type providersConfiguration struct {
 	OpenAI      transcribingProviderConfiguration `mapstructure:"openai"`
 	DeepSeek    providerConfiguration             `mapstructure:"deepseek"`
 	DashScope   providerConfiguration             `mapstructure:"dashscope"`
-	QwenCloud   providerConfiguration             `mapstructure:"qwencloud"`
 	Moonshot    providerConfiguration             `mapstructure:"moonshot"`
 	MiniMax     providerConfiguration             `mapstructure:"minimax"`
 	SiliconFlow transcribingProviderConfiguration `mapstructure:"siliconflow"`
@@ -305,7 +304,6 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		OpenAIKey:                    configuration.Providers.OpenAI.APIKey,
 		DeepSeekKey:                  configuration.Providers.DeepSeek.APIKey,
 		DashScopeKey:                 configuration.Providers.DashScope.APIKey,
-		QwenCloudKey:                 configuration.Providers.QwenCloud.APIKey,
 		MoonshotKey:                  configuration.Providers.Moonshot.APIKey,
 		MiniMaxKey:                   configuration.Providers.MiniMax.APIKey,
 		SiliconFlowKey:               configuration.Providers.SiliconFlow.APIKey,
@@ -318,7 +316,6 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		OpenAITranscriptionsURL:      configuration.Providers.OpenAI.TranscriptionsURL,
 		DeepSeekBaseURL:              configuration.Providers.DeepSeek.BaseURL,
 		DashScopeBaseURL:             configuration.Providers.DashScope.BaseURL,
-		QwenCloudBaseURL:             configuration.Providers.QwenCloud.BaseURL,
 		MoonshotBaseURL:              configuration.Providers.Moonshot.BaseURL,
 		MiniMaxBaseURL:               configuration.Providers.MiniMax.BaseURL,
 		SiliconFlowBaseURL:           configuration.Providers.SiliconFlow.BaseURL,
@@ -402,9 +399,6 @@ func (configuration providersConfiguration) providerModelCatalogs() proxy.Provid
 		proxy.ProviderNameDashScope: {
 			Text: configuration.DashScope.Text.proxyCatalog(),
 		},
-		proxy.ProviderNameQwenCloud: {
-			Text: configuration.QwenCloud.Text.proxyCatalog(),
-		},
 		proxy.ProviderNameMoonshot: {
 			Text: configuration.Moonshot.Text.proxyCatalog(),
 		},
@@ -484,7 +478,6 @@ func (configuration providersConfiguration) validateCompleteProviderConfiguratio
 		{providerName: proxy.ProviderNameOpenAI, fieldName: "providers.openai.base_url", baseURL: configuration.OpenAI.BaseURL},
 		{providerName: proxy.ProviderNameDeepSeek, fieldName: "providers.deepseek.base_url", baseURL: configuration.DeepSeek.BaseURL},
 		{providerName: proxy.ProviderNameDashScope, fieldName: "providers.dashscope.base_url", baseURL: configuration.DashScope.BaseURL},
-		{providerName: proxy.ProviderNameQwenCloud, fieldName: "providers.qwencloud.base_url", baseURL: configuration.QwenCloud.BaseURL},
 		{providerName: proxy.ProviderNameMoonshot, fieldName: "providers.moonshot.base_url", baseURL: configuration.Moonshot.BaseURL},
 		{providerName: proxy.ProviderNameMiniMax, fieldName: "providers.minimax.base_url", baseURL: configuration.MiniMax.BaseURL},
 		{providerName: proxy.ProviderNameSiliconFlow, fieldName: "providers.siliconflow.base_url", baseURL: configuration.SiliconFlow.BaseURL},
@@ -559,8 +552,6 @@ func (configuration providersConfiguration) apiKeyRequirement(normalizedProvider
 		return providerAPIKeyRequirement{providerName: proxy.ProviderNameDeepSeek, fieldName: "providers.deepseek.api_key", apiKey: configuration.DeepSeek.APIKey}, true
 	case proxy.ProviderNameDashScope, providerAliasQwen:
 		return providerAPIKeyRequirement{providerName: proxy.ProviderNameDashScope, fieldName: "providers.dashscope.api_key", apiKey: configuration.DashScope.APIKey}, true
-	case proxy.ProviderNameQwenCloud:
-		return providerAPIKeyRequirement{providerName: proxy.ProviderNameQwenCloud, fieldName: "providers.qwencloud.api_key", apiKey: configuration.QwenCloud.APIKey}, true
 	case proxy.ProviderNameMoonshot, providerAliasKimi:
 		return providerAPIKeyRequirement{providerName: proxy.ProviderNameMoonshot, fieldName: "providers.moonshot.api_key", apiKey: configuration.Moonshot.APIKey}, true
 	case proxy.ProviderNameMiniMax:

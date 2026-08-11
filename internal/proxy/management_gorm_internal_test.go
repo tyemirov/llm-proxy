@@ -124,6 +124,29 @@ func TestManagedTenantGORMInitializationEdges(t *testing.T) {
 		t.Fatalf("schema-two missing usage index error=%v", initializeError)
 	}
 
+	schemaThreeMissingUsageIndexDatabase, openError := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "schema-three-missing-usage-index.db")), &gorm.Config{})
+	if openError != nil {
+		t.Fatalf("open schema-three missing-index database: %v", openError)
+	}
+	if migrateError := migrateCurrentManagedSchema(schemaThreeMissingUsageIndexDatabase); migrateError != nil {
+		t.Fatalf("migrate schema-three missing-index schema: %v", migrateError)
+	}
+	if createError := schemaThreeMissingUsageIndexDatabase.Create(&managedSchemaMigrationRecord{
+		Version: managedKeyedRoutingSchemaVersion,
+	}).Error; createError != nil {
+		t.Fatalf("seed schema-three missing-index version: %v", createError)
+	}
+	if dropError := schemaThreeMissingUsageIndexDatabase.Migrator().DropIndex(
+		&managedUsageEventRecord{},
+		managedUsageFailurePageIndex,
+	); dropError != nil {
+		t.Fatalf("drop schema-three usage index: %v", dropError)
+	}
+	if initializeError := initializeManagedTenantSchema(schemaThreeMissingUsageIndexDatabase, cipher, providers); !errors.Is(initializeError, errManagedTenantSchemaMigration) ||
+		!strings.Contains(initializeError.Error(), "validate_current_schema") {
+		t.Fatalf("schema-three missing usage index error=%v", initializeError)
+	}
+
 	if managedTableHasColumn(failingManagedColumnTypesMigrator{Migrator: missingVersionDatabase.Migrator()}, managedTenantTable, "owner_user_id") {
 		t.Fatal("column-types error reported a column")
 	}

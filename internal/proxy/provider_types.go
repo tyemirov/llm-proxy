@@ -11,8 +11,6 @@ const (
 	ProviderNameDeepSeek = "deepseek"
 	// ProviderNameDashScope identifies Alibaba Cloud Model Studio DashScope-compatible routing.
 	ProviderNameDashScope = "dashscope"
-	// ProviderNameQwenCloud identifies Qwen Cloud Token Plan routing.
-	ProviderNameQwenCloud = "qwencloud"
 	// ProviderNameMoonshot identifies Moonshot/Kimi routing.
 	ProviderNameMoonshot = "moonshot"
 	// ProviderNameMiniMax identifies MiniMax routing.
@@ -42,7 +40,6 @@ const (
 const (
 	defaultDeepSeekBaseURL        = "https://api.deepseek.com"
 	defaultDashScopeBaseURL       = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
-	defaultQwenCloudBaseURL       = "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
 	defaultMoonshotBaseURL        = "https://api.moonshot.ai/v1"
 	defaultMiniMaxBaseURL         = "https://api.minimax.io/v1"
 	defaultSiliconFlowBaseURL     = "https://api.siliconflow.com/v1"
@@ -66,8 +63,6 @@ const (
 	ModelNameDeepSeekReasoner = "deepseek-reasoner"
 	// ModelNameDashScopeQwenPlus identifies DashScope Qwen Plus.
 	ModelNameDashScopeQwenPlus = "qwen-plus"
-	// ModelNameQwenCloudQwen38MaxPreview identifies Qwen Cloud Token Plan's Qwen 3.8 Max preview.
-	ModelNameQwenCloudQwen38MaxPreview = "qwen3.8-max-preview"
 	// ModelNameMoonshotKimiK26 identifies Moonshot Kimi K2.6.
 	ModelNameMoonshotKimiK26 = "kimi-k2.6"
 	// ModelNameMoonshotKimiK3 identifies Moonshot Kimi K3.

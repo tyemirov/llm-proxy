@@ -411,16 +411,16 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain('<routing-tree class="routing-tree" data-enhanced="false" aria-label="Interactive LLM routing map">');
   expect(html).toContain("One integration. Choose the exact route.");
   expect(html).toContain('<canvas class="routing-tree__connectors" data-route-canvas aria-hidden="true"></canvas>');
-  expect(html).toContain('<span>12 providers · 53 text models</span>');
-  expect(html).toContain('data-route-provider="deepseek"');
-  expect(html).toContain('data-route-provider="qwencloud"');
-  expect(html).toContain('data-route-provider="moonshot"');
-  expect(html).toContain('data-route-model="kimi-k2.6" data-route-default-model="true"');
-  expect(html).toContain('data-route-model="qwen3.8-max-preview" data-route-default-model="true"');
-  expect(html).not.toContain("llm-proxy-routing-tree");
-  expect(html).toContain('<table class="catalog-table">');
-  expect(html).toContain('<strong>12</strong><span>Providers</span>');
-  expect(html).toContain('<strong>58</strong><span>Models</span>');
+  expect(html).toContain('<span>11 providers · 52 text models</span>');
+	expect(html).toContain('data-route-provider="deepseek"');
+	expect(html).toContain('data-route-provider="dashscope"');
+	expect(html).toContain('data-route-provider="moonshot"');
+	expect(html).toContain('data-route-model="kimi-k2.6" data-route-default-model="true"');
+	expect(html).toContain('data-route-model="qwen-plus" data-route-default-model="true"');
+	expect(html).not.toContain("llm-proxy-routing-tree");
+	expect(html).toContain('<table class="catalog-table">');
+	expect(html).toContain('<strong>11</strong><span>Providers</span>');
+	expect(html).toContain('<strong>57</strong><span>Models</span>');
   expect(html).toContain('<strong>6</strong><span>Filterable capabilities</span>');
   expect(html).toContain('data-catalog-sort-header="provider"');
   expect(html).toContain('data-catalog-sort-header="model"');
@@ -796,8 +796,8 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await expect(page.locator("#routing-overview routing-tree")).toHaveCount(1);
   await expect(page.locator("#models > routing-tree")).toHaveCount(0);
   await expect(routingTree).toHaveAttribute("data-enhanced", "false");
-  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(12);
-  await expect(routingTree.locator("[data-route-model]")).toHaveCount(53);
+  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(11);
+  await expect(routingTree.locator("[data-route-model]")).toHaveCount(52);
   await expect(routingTree.locator('[data-route-provider="anthropic"]')).toHaveAttribute("aria-pressed", "true");
   await expect(routingTree.locator('[data-route-model-group="anthropic"]')).toBeVisible();
   await expect(routingTree.locator('[data-route-model-group="moonshot"]')).toBeHidden();
@@ -809,7 +809,7 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await expect(catalog).toHaveAttribute("data-enhanced", "false");
   await expect(catalog.locator("[data-catalog-toolbar]")).toBeHidden();
   await expect(catalog.getByRole("columnheader")).toHaveText(["Provider", "Model", "Capabilities"]);
-  await expect(catalog.locator("[data-catalog-row]")).toHaveCount(58);
+  await expect(catalog.locator("[data-catalog-row]")).toHaveCount(57);
   await expect(catalog.locator('[data-model="gpt-4o-mini-transcribe"]')).toContainText("Dictation");
 
   const footer = page.locator(".public-site-footer-fallback");
@@ -836,9 +836,9 @@ test("visitors can fan from one proxy connection into exact provider model versi
   const moonshotProvider = routingTree.locator('[data-route-provider="moonshot"]');
   await expect(routingTree).toHaveAttribute("data-enhanced", "true");
   await expect(routingTree).toHaveAttribute("data-route-lines-rendered", "true");
-  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(12);
-  await expect(routingTree.locator("[data-route-provider]:visible")).toHaveCount(12);
-  await expect(routingTree.locator("[data-route-model]")).toHaveCount(53);
+  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(11);
+  await expect(routingTree.locator("[data-route-provider]:visible")).toHaveCount(11);
+  await expect(routingTree.locator("[data-route-model]")).toHaveCount(52);
   await expect(selectedProvider).toHaveText("openai");
   await expect(selectedModel).toHaveText("gpt-4.1");
   const routeCanvasDimensions = await routingTree.locator("[data-route-canvas]").evaluate((canvas) => ({
@@ -974,12 +974,12 @@ test("visitors can fan from one proxy connection into exact provider model versi
   await expect(moonshotModels.locator('[data-route-model="kimi-k3"]')).toHaveAttribute("aria-pressed", "true");
   await expectSelectedRoutingFanEndpoints(routingTree);
 
-  await routingTree.locator('[data-route-provider="qwencloud"]').click();
-  const qwenCloudModels = routingTree.locator('[data-route-model-group="qwencloud"]');
-  await expect(qwenCloudModels).toBeVisible();
-  await expect(qwenCloudModels.locator("[data-route-model]")).toHaveCount(1);
-  await expect(selectedProvider).toHaveText("qwencloud");
-  await expect(selectedModel).toHaveText("qwen3.8-max-preview");
+	await routingTree.locator('[data-route-provider="dashscope"]').click();
+	const dashScopeModels = routingTree.locator('[data-route-model-group="dashscope"]');
+	await expect(dashScopeModels).toBeVisible();
+	await expect(dashScopeModels.locator("[data-route-model]")).toHaveCount(1);
+	await expect(selectedProvider).toHaveText("dashscope");
+	await expect(selectedModel).toHaveText("qwen-plus");
   await expect.poll(() => routingProviderTopPositions(routingTree)).toEqual(providerTopPositions);
   await expectSelectedRoutingFanEndpoints(routingTree);
 
@@ -1011,8 +1011,8 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   const modelHeader = catalog.locator('[data-catalog-sort-header="model"]');
   const capabilitiesHeader = catalog.locator('[data-catalog-sort-header="capabilities"]');
   await expect(catalog).toHaveAttribute("data-enhanced", "true");
-  await expect(rows).toHaveCount(58);
-  await expect(resultCount).toHaveText("58 of 58 models");
+  await expect(rows).toHaveCount(57);
+  await expect(resultCount).toHaveText("57 of 57 models");
   await expect(filterPanel).toBeHidden();
   await expect(searchSubmit).toHaveAttribute("aria-expanded", "false");
 
@@ -1034,20 +1034,20 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   await expect(catalog.locator('[data-catalog-search-text*="synchronous"]')).toHaveCount(0);
   await searchInput.fill("gemini-3.5-flash image_input audio_input");
   await expect(filterPanel).toBeVisible();
-  await expect(resultCount).toHaveText("1 of 58 model");
+  await expect(resultCount).toHaveText("1 of 57 model");
   await expect(visibleRows).toHaveAttribute("data-model", "gemini-3.5-flash");
 
   await searchInput.fill("gpt-5.5-pro openai_responses xhigh");
-  await expect(resultCount).toHaveText("1 of 58 model");
+  await expect(resultCount).toHaveText("1 of 57 model");
   await expect(visibleRows).toHaveAttribute("data-model", "gpt-5.5-pro");
 
   await searchInput.fill("glm-5.2 131072 token");
-  await expect(resultCount).toHaveText("1 of 58 model");
+  await expect(resultCount).toHaveText("1 of 57 model");
   await expect(visibleRows).toHaveAttribute("data-model", "glm-5.2");
 
   await catalog.getByRole("button", { name: "Reset" }).click();
   await searchInput.fill("default dictation");
-  await expect(resultCount).toHaveText("4 of 58 models");
+  await expect(resultCount).toHaveText("4 of 57 models");
   for (const visibleRow of await visibleRows.all()) {
     await expect(visibleRow).toHaveAttribute("data-capabilities", "dictation");
   }
@@ -1055,28 +1055,28 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   await catalog.getByRole("button", { name: "Reset" }).click();
   await catalog.getByRole("checkbox", { name: "Image input" }).check();
   await catalog.getByRole("checkbox", { name: "Audio message input" }).check();
-  await expect(resultCount).toHaveText("2 of 58 models");
+  await expect(resultCount).toHaveText("2 of 57 models");
   await expect(visibleRows).toHaveCount(2);
 
   await searchSubmit.click();
   await expect(filterPanel).toBeHidden();
-  await expect(resultCount).toHaveText("2 of 58 models");
+  await expect(resultCount).toHaveText("2 of 57 models");
   await searchSubmit.click();
   await expect(filterPanel).toBeVisible();
   await expect(catalog.getByRole("checkbox", { name: "Image input" })).toBeChecked();
   await expect(catalog.getByRole("checkbox", { name: "Audio message input" })).toBeChecked();
 
   await catalog.getByRole("checkbox", { name: "Dictation" }).check();
-  await expect(resultCount).toHaveText("0 of 58 models");
+  await expect(resultCount).toHaveText("0 of 57 models");
   await expect(catalog.locator("[data-catalog-empty]")).toBeVisible();
 
   await catalog.getByRole("button", { name: "Reset" }).click();
-  await expect(resultCount).toHaveText("58 of 58 models");
+  await expect(resultCount).toHaveText("57 of 57 models");
   await searchInput.press("Escape");
   await catalog.getByRole("button", { name: "Filter by Dictation" }).first().click();
   await expect(filterPanel).toBeVisible();
   await expect(catalog.getByRole("checkbox", { name: "Dictation" })).toBeChecked();
-  await expect(resultCount).toHaveText("5 of 58 models");
+  await expect(resultCount).toHaveText("5 of 57 models");
 
   await catalog.getByRole("button", { name: "Reset" }).click();
   await expect(providerHeader).toHaveAttribute("aria-sort", "ascending");

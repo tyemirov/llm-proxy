@@ -179,19 +179,11 @@ providers:
           wire_contract: "openai_chat_completions"
           execution_lifecycle: "synchronous_completion"
   dashscope:
-    base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+    base_url: "${DASHSCOPE_BASE_URL}"
     text:
       default_model: "qwen-plus"
       models:
         - id: "qwen-plus"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-  qwencloud:
-    base_url: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
-    text:
-      default_model: "qwen3.8-max-preview"
-      models:
-        - id: "qwen3.8-max-preview"
           wire_contract: "openai_chat_completions"
           execution_lifecycle: "synchronous_completion"
   moonshot:

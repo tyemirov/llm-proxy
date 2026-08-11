@@ -42,8 +42,11 @@ const (
 	managedUsageReadBatchSize           = 256
 	managedTenantOwnershipSchemaVersion = 1
 	managedUsageOutcomeSchemaVersion    = 2
-	managedTenantSchemaVersion          = 3
+	managedKeyedRoutingSchemaVersion    = 3
+	managedTenantSchemaVersion          = 4
 	managedSQLiteRuntimeQuery           = "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)"
+	retiredQwenCloudProviderIdentifier  = "qwencloud"
+	retiredQwenCloudModelIdentifier     = "qwen3.8-max-preview"
 
 	managedUserTable                = "managed_user_records"
 	managedTenantTable              = "managed_tenant_records"
@@ -491,13 +494,25 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 		if migrationError := migrateManagedUsageOutcomeSchema(database); migrationError != nil {
 			return migrationError
 		}
-		return migrateManagedKeyedRoutingDefaults(database, providerKeyCipher, providers)
+		if migrationError := migrateManagedKeyedRoutingDefaults(database, providerKeyCipher, providers); migrationError != nil {
+			return migrationError
+		}
+		return migrateManagedQwenCloudRetirement(database, providerKeyCipher, providers)
 	case managedUsageOutcomeSchemaVersion:
 		if !managedTableHasColumn(migrator, managedUsageEventTable, managedUsageOutcomeCodeColumn) ||
 			!migrator.HasIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex) {
 			return fmt.Errorf("%w: operation=validate_current_schema table=%s", errManagedTenantSchemaMigration, managedUsageEventTable)
 		}
-		return migrateManagedKeyedRoutingDefaults(database, providerKeyCipher, providers)
+		if migrationError := migrateManagedKeyedRoutingDefaults(database, providerKeyCipher, providers); migrationError != nil {
+			return migrationError
+		}
+		return migrateManagedQwenCloudRetirement(database, providerKeyCipher, providers)
+	case managedKeyedRoutingSchemaVersion:
+		if !managedTableHasColumn(migrator, managedUsageEventTable, managedUsageOutcomeCodeColumn) ||
+			!migrator.HasIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex) {
+			return fmt.Errorf("%w: operation=validate_current_schema table=%s", errManagedTenantSchemaMigration, managedUsageEventTable)
+		}
+		return migrateManagedQwenCloudRetirement(database, providerKeyCipher, providers)
 	case managedTenantSchemaVersion:
 		if !managedTableHasColumn(migrator, managedUsageEventTable, managedUsageOutcomeCodeColumn) ||
 			!migrator.HasIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex) {
@@ -631,11 +646,174 @@ func migrateManagedKeyedRoutingDefaults(database *gorm.DB, providerKeyCipher man
 		if validationError := validateManagedKeyedRoutingDefaults(transaction, providerKeyCipher, providers); validationError != nil {
 			return validationError
 		}
+		if createError := transaction.Create(&managedSchemaMigrationRecord{Version: managedKeyedRoutingSchemaVersion, AppliedAt: time.Now().UTC()}).Error; createError != nil {
+			return fmt.Errorf("%w: operation=record_version table=%s: %v", errManagedTenantSchemaMigration, managedSchemaMigrationTable, createError)
+		}
+		return nil
+	})
+}
+
+type managedQwenCloudRetirementBackfill struct {
+	tenantID  string
+	defaults  managedRoutingDefaults
+	updatedAt time.Time
+}
+
+type managedQwenCloudRetirementDataset struct {
+	backfills               []managedQwenCloudRetirementBackfill
+	retiredProviderKeyCount int64
+	historicalUsage         []managedUsageEventRecord
+}
+
+func migrateManagedQwenCloudRetirement(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry) error {
+	dataset, preflightError := preflightManagedQwenCloudRetirement(database, providerKeyCipher, providers)
+	if preflightError != nil {
+		return preflightError
+	}
+	return database.Transaction(func(transaction *gorm.DB) error {
+		deleteResult := transaction.
+			Where(&managedProviderAPIKeyRecord{ProviderID: retiredQwenCloudProviderIdentifier}).
+			Delete(&managedProviderAPIKeyRecord{})
+		if deleteResult.Error != nil || deleteResult.RowsAffected != dataset.retiredProviderKeyCount {
+			return fmt.Errorf(
+				"%w: operation=delete_retired_provider table=%s provider=%s rows=%d expected=%d: %v",
+				errManagedTenantSchemaMigration,
+				managedProviderKeyTable,
+				retiredQwenCloudProviderIdentifier,
+				deleteResult.RowsAffected,
+				dataset.retiredProviderKeyCount,
+				deleteResult.Error,
+			)
+		}
+		for _, backfill := range dataset.backfills {
+			result := transaction.Model(&managedTenantRecord{}).
+				Where(&managedTenantRecord{TenantID: backfill.tenantID}).
+				Updates(managedRoutingDefaultsDatabaseUpdates(backfill.defaults, backfill.updatedAt))
+			if result.Error != nil || result.RowsAffected != 1 {
+				return fmt.Errorf(
+					"%w: operation=backfill table=%s tenant=%s rows=%d: %v",
+					errManagedTenantSchemaMigration,
+					managedTenantTable,
+					backfill.tenantID,
+					result.RowsAffected,
+					result.Error,
+				)
+			}
+		}
+		if verifyError := verifyManagedQwenCloudRetirement(transaction, providerKeyCipher, providers, dataset); verifyError != nil {
+			return verifyError
+		}
 		if createError := transaction.Create(&managedSchemaMigrationRecord{Version: managedTenantSchemaVersion, AppliedAt: time.Now().UTC()}).Error; createError != nil {
 			return fmt.Errorf("%w: operation=record_version table=%s: %v", errManagedTenantSchemaMigration, managedSchemaMigrationTable, createError)
 		}
 		return nil
 	})
+}
+
+func preflightManagedQwenCloudRetirement(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry) (managedQwenCloudRetirementDataset, error) {
+	records, queryError := managedTenantRecordsForRoutingValidation(database)
+	if queryError != nil {
+		return managedQwenCloudRetirementDataset{}, queryError
+	}
+	dataset := managedQwenCloudRetirementDataset{
+		backfills: make([]managedQwenCloudRetirementBackfill, 0, len(records)),
+	}
+	for _, record := range records {
+		remainingProviderKeys := make([]managedProviderAPIKeyRecord, 0, len(record.ProviderAPIKeys))
+		for _, providerKeyRecord := range record.ProviderAPIKeys {
+			if providerKeyRecord.ProviderID == retiredQwenCloudProviderIdentifier {
+				dataset.retiredProviderKeyCount++
+				continue
+			}
+			remainingProviderKeys = append(remainingProviderKeys, providerKeyRecord)
+		}
+		providerSettings, providerSettingsError := managedProviderSettingsFromRecords(providerKeyCipher, remainingProviderKeys)
+		if providerSettingsError != nil {
+			return managedQwenCloudRetirementDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedProviderKeyTable, record.OwnerUserID, record.TenantID, providerSettingsError)
+		}
+		currentDefaults, defaultsError := validateManagedQwenCloudRetirementDefaults(providers, record.defaults())
+		if defaultsError != nil {
+			return managedQwenCloudRetirementDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, record.OwnerUserID, record.TenantID, defaultsError)
+		}
+		reconciledDefaults, reconciliationError := reconcileManagedRoutingDefaults(providers, providerSettings, currentDefaults)
+		if reconciliationError != nil {
+			return managedQwenCloudRetirementDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, record.OwnerUserID, record.TenantID, reconciliationError)
+		}
+		dataset.backfills = append(dataset.backfills, managedQwenCloudRetirementBackfill{
+			tenantID:  record.TenantID,
+			defaults:  reconciledDefaults,
+			updatedAt: record.UpdatedAt,
+		})
+	}
+	if usageQueryError := database.
+		Where(&managedUsageEventRecord{ProviderID: retiredQwenCloudProviderIdentifier}).
+		Order("id").
+		Find(&dataset.historicalUsage).
+		Error; usageQueryError != nil {
+		return managedQwenCloudRetirementDataset{}, fmt.Errorf("%w: operation=preflight table=%s provider=%s: %v", errManagedTenantSchemaMigration, managedUsageEventTable, retiredQwenCloudProviderIdentifier, usageQueryError)
+	}
+	return dataset, nil
+}
+
+func validateManagedQwenCloudRetirementDefaults(providers *providerRegistry, rawDefaults TenantDefaults) (managedRoutingDefaults, error) {
+	if strings.TrimSpace(rawDefaults.Provider) != retiredQwenCloudProviderIdentifier {
+		return validateCanonicalManagedRoutingDefaults(providers, rawDefaults)
+	}
+	if rawDefaults.Provider != retiredQwenCloudProviderIdentifier || strings.TrimSpace(rawDefaults.Model) != retiredQwenCloudModelIdentifier || rawDefaults.Model != retiredQwenCloudModelIdentifier {
+		return managedRoutingDefaults{}, managedRoutingDefaultsCanonicalError(endpointKindText, rawDefaults.Provider, rawDefaults.Model)
+	}
+	currentWithoutRetiredTextRoute := rawDefaults
+	currentWithoutRetiredTextRoute.Provider = constants.EmptyString
+	currentWithoutRetiredTextRoute.Model = constants.EmptyString
+	currentWithoutRetiredTextRoute.ReasoningEffort = constants.EmptyString
+	validatedCurrent, validationError := validateCanonicalManagedRoutingDefaults(providers, currentWithoutRetiredTextRoute)
+	if validationError != nil {
+		return managedRoutingDefaults{}, validationError
+	}
+	validatedDefaults := validatedCurrent.value()
+	validatedDefaults.Provider = retiredQwenCloudProviderIdentifier
+	validatedDefaults.Model = retiredQwenCloudModelIdentifier
+	validatedDefaults.ReasoningEffort = rawDefaults.ReasoningEffort
+	return managedRoutingDefaults{tenantDefaults: validatedDefaults}, nil
+}
+
+func verifyManagedQwenCloudRetirement(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry, dataset managedQwenCloudRetirementDataset) error {
+	var retiredProviderKeyCount int64
+	if countError := database.Model(&managedProviderAPIKeyRecord{}).
+		Where(&managedProviderAPIKeyRecord{ProviderID: retiredQwenCloudProviderIdentifier}).
+		Count(&retiredProviderKeyCount).
+		Error; countError != nil || retiredProviderKeyCount != 0 {
+		return fmt.Errorf("%w: operation=verify table=%s provider=%s count=%d: %v", errManagedTenantSchemaMigration, managedProviderKeyTable, retiredQwenCloudProviderIdentifier, retiredProviderKeyCount, countError)
+	}
+	for _, backfill := range dataset.backfills {
+		var record managedTenantRecord
+		if queryError := database.Where(&managedTenantRecord{TenantID: backfill.tenantID}).First(&record).Error; queryError != nil {
+			return fmt.Errorf("%w: operation=verify table=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, backfill.tenantID, queryError)
+		}
+		if record.defaults() != backfill.defaults.value() || !record.UpdatedAt.Equal(backfill.updatedAt) {
+			return fmt.Errorf("%w: operation=verify table=%s tenant=%s values", errManagedTenantSchemaMigration, managedTenantTable, backfill.tenantID)
+		}
+	}
+	if validationError := validateManagedKeyedRoutingDefaults(database, providerKeyCipher, providers); validationError != nil {
+		return validationError
+	}
+	var historicalUsage []managedUsageEventRecord
+	if queryError := database.
+		Where(&managedUsageEventRecord{ProviderID: retiredQwenCloudProviderIdentifier}).
+		Order("id").
+		Find(&historicalUsage).
+		Error; queryError != nil {
+		return fmt.Errorf("%w: operation=verify table=%s provider=%s: %v", errManagedTenantSchemaMigration, managedUsageEventTable, retiredQwenCloudProviderIdentifier, queryError)
+	}
+	if len(historicalUsage) != len(dataset.historicalUsage) {
+		return fmt.Errorf("%w: operation=verify table=%s provider=%s count=%d expected=%d", errManagedTenantSchemaMigration, managedUsageEventTable, retiredQwenCloudProviderIdentifier, len(historicalUsage), len(dataset.historicalUsage))
+	}
+	for usageIndex, expectedUsage := range dataset.historicalUsage {
+		if historicalUsage[usageIndex] != expectedUsage {
+			return fmt.Errorf("%w: operation=verify table=%s provider=%s id=%d", errManagedTenantSchemaMigration, managedUsageEventTable, retiredQwenCloudProviderIdentifier, expectedUsage.ID)
+		}
+	}
+	return nil
 }
 
 func validateManagedKeyedRoutingDefaults(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry) error {

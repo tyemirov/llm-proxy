@@ -9,6 +9,7 @@ mprlab_resources:
       id: private
       bindings:
         admin-emails: LLM_PROXY_MANAGEMENT_ADMIN_EMAILS
+        dashscope-base-url: DASHSCOPE_BASE_URL
         google-web-client-id: LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID
         jwt-signing-key: LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY
         provider-key-encryption-key: LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY
@@ -33,6 +34,9 @@ mprlab_resources:
             group: gateway
             cardinality: one
           environment:
+            DASHSCOPE_BASE_URL:
+              resource: private
+              output: dashscope-base-url
             LLM_PROXY_MANAGEMENT_ADMIN_EMAILS:
               resource: private
               output: admin-emails

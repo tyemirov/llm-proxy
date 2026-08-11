@@ -9,7 +9,10 @@ import (
 	"unicode/utf8"
 )
 
-const modelProfileSubject = "model_profile"
+const (
+	modelProfileSubject             = "model_profile"
+	retiredQwenCloudProviderProfile = "qwencloud"
+)
 
 // ModelProfileReader reads the current JSON model-profile document from a configured path.
 type ModelProfileReader func(path string) ([]byte, error)
@@ -93,6 +96,9 @@ func newModelProfile(profilePath string, provider string, model string) (modelPr
 	trimmedProvider := strings.TrimSpace(provider)
 	if trimmedProvider == "" {
 		return modelProfile{}, modelProfileSchemaError(profilePath, "missing provider")
+	}
+	if trimmedProvider == retiredQwenCloudProviderProfile {
+		return modelProfile{}, modelProfileSchemaError(profilePath, "provider is retired")
 	}
 	trimmedModel := strings.TrimSpace(model)
 	if trimmedModel == "" {

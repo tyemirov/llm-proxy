@@ -7,12 +7,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/glebarez/sqlite"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -245,6 +247,228 @@ func TestManagedTenantKeyedRoutingDefaultsMigrationReconcilesExistingTenants(t *
 	}
 	if validationError := initializeManagedTenantSchema(database, providerKeyCipher, providers); validationError != nil {
 		t.Fatalf("reopen keyed defaults schema: %v", validationError)
+	}
+}
+
+func TestManagedTenantQwenCloudRetirementMigrationReconcilesCurrentTenants(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "qwen-cloud-retirement.db")
+	database, openError := gorm.Open(sqlite.Open(databasePath), &gorm.Config{})
+	if openError != nil {
+		t.Fatalf("open SQLite fixture: %v", openError)
+	}
+	if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
+		t.Fatalf("create schema three fixture: %v", migrationError)
+	}
+	providers := internalManagementProviderRegistry()
+	providerKeyCipher := internalManagedProviderKeyCipher()
+	now := time.Date(2026, 8, 10, 20, 0, 0, 0, time.UTC)
+	qwenOnlySecret := "llmp_qwen_only"
+	qwenOnlySecretDigest := sha256.Sum256([]byte(qwenOnlySecret))
+	qwenOnlySecretDigestText := hex.EncodeToString(qwenOnlySecretDigest[:])
+	users := []managedUserRecord{
+		{UserID: "qwen-only-owner", CreatedAt: now, UpdatedAt: now},
+		{UserID: "mixed-owner", CreatedAt: now.Add(time.Minute), UpdatedAt: now.Add(time.Minute)},
+	}
+	if createError := database.Create(&users).Error; createError != nil {
+		t.Fatalf("seed users: %v", createError)
+	}
+	qwenOnlyTenant := managedTenantRecord{
+		TenantID:     "qwen-only-tenant",
+		OwnerUserID:  users[0].UserID,
+		Name:         "Default",
+		NameKey:      "default",
+		SecretDigest: &qwenOnlySecretDigestText,
+		CreatedAt:    now,
+		UpdatedAt:    now.Add(2 * time.Minute),
+	}
+	qwenOnlyTenant.applyRoutingDefaults(managedRoutingDefaults{tenantDefaults: TenantDefaults{
+		Provider:          retiredQwenCloudProviderIdentifier,
+		Model:             retiredQwenCloudModelIdentifier,
+		SystemPrompt:      "retain tenant prompt",
+		ReasoningEffort:   "high",
+		DictationProvider: "",
+		DictationModel:    "",
+	}})
+	mixedTenant := managedTenantRecord{
+		TenantID:    "mixed-tenant",
+		OwnerUserID: users[1].UserID,
+		Name:        "Default",
+		NameKey:     "default",
+		CreatedAt:   now.Add(time.Minute),
+		UpdatedAt:   now.Add(3 * time.Minute),
+	}
+	mixedTenant.applyRoutingDefaults(managedRoutingDefaults{tenantDefaults: TenantDefaults{
+		Provider:        retiredQwenCloudProviderIdentifier,
+		Model:           retiredQwenCloudModelIdentifier,
+		SystemPrompt:    "retain mixed tenant prompt",
+		ReasoningEffort: "high",
+	}})
+	tenants := []managedTenantRecord{qwenOnlyTenant, mixedTenant}
+	if createError := database.Create(&tenants).Error; createError != nil {
+		t.Fatalf("seed tenants: %v", createError)
+	}
+	encryptProviderKey := func(tenantID string, providerIdentifier string, rawAPIKey string, nonceByte byte) string {
+		t.Helper()
+		encryptedKey, encryptionError := providerKeyCipher.encrypt(
+			bytes.NewReader(bytes.Repeat([]byte{nonceByte}, providerKeyCipher.aeadCipher.NonceSize())),
+			tenantID,
+			providerIdentifier,
+			rawAPIKey,
+		)
+		if encryptionError != nil {
+			t.Fatalf("encrypt tenant=%s provider=%s: %v", tenantID, providerIdentifier, encryptionError)
+		}
+		return encryptedKey
+	}
+	providerKeys := []managedProviderAPIKeyRecord{
+		{TenantID: qwenOnlyTenant.TenantID, ProviderID: retiredQwenCloudProviderIdentifier, EncryptedAPIKey: encryptProviderKey(qwenOnlyTenant.TenantID, retiredQwenCloudProviderIdentifier, "sk-qwen-only", 1), TextModel: retiredQwenCloudModelIdentifier, SystemPrompt: "delete qwen-only provider prompt", CreatedAt: now, UpdatedAt: now},
+		{TenantID: mixedTenant.TenantID, ProviderID: retiredQwenCloudProviderIdentifier, EncryptedAPIKey: encryptProviderKey(mixedTenant.TenantID, retiredQwenCloudProviderIdentifier, "sk-qwen-mixed", 2), TextModel: retiredQwenCloudModelIdentifier, SystemPrompt: "delete mixed provider prompt", CreatedAt: now, UpdatedAt: now},
+		{TenantID: mixedTenant.TenantID, ProviderID: ProviderNameDeepSeek, EncryptedAPIKey: encryptProviderKey(mixedTenant.TenantID, ProviderNameDeepSeek, "sk-deepseek", 3), TextModel: ModelNameDeepSeekV4Flash, SystemPrompt: "retain deepseek prompt", CreatedAt: now, UpdatedAt: now},
+		{TenantID: mixedTenant.TenantID, ProviderID: ProviderNameDashScope, EncryptedAPIKey: encryptProviderKey(mixedTenant.TenantID, ProviderNameDashScope, "sk-dashscope", 4), TextModel: ModelNameDashScopeQwenPlus, SystemPrompt: "retain dashscope prompt", CreatedAt: now, UpdatedAt: now},
+	}
+	if createError := database.Create(&providerKeys).Error; createError != nil {
+		t.Fatalf("seed provider keys: %v", createError)
+	}
+	historicalUsage := managedUsageEventRecord{
+		ID: 41, TenantID: qwenOnlyTenant.TenantID, Endpoint: usageEndpointText,
+		ProviderID: retiredQwenCloudProviderIdentifier, ModelID: retiredQwenCloudModelIdentifier,
+		StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess,
+		LatencyMilliseconds: 19, RequestTokens: 2, ResponseTokens: 3, TotalTokens: 5, CreatedAt: now.Add(4 * time.Minute),
+	}
+	if createError := database.Create(&historicalUsage).Error; createError != nil {
+		t.Fatalf("seed historical usage: %v", createError)
+	}
+	if createError := database.Create(&managedSchemaMigrationRecord{Version: managedKeyedRoutingSchemaVersion, AppliedAt: now}).Error; createError != nil {
+		t.Fatalf("seed schema version: %v", createError)
+	}
+
+	if migrationError := initializeManagedTenantSchema(database, providerKeyCipher, providers); migrationError != nil {
+		t.Fatalf("migrate qwen cloud retirement: %v", migrationError)
+	}
+	var migratedTenants []managedTenantRecord
+	if queryError := database.Preload("ProviderAPIKeys").Order("tenant_id").Find(&migratedTenants).Error; queryError != nil {
+		t.Fatalf("load migrated tenants: %v", queryError)
+	}
+	if len(migratedTenants) != 2 {
+		t.Fatalf("migrated tenants=%+v", migratedTenants)
+	}
+	migratedMixed := migratedTenants[0]
+	migratedQwenOnly := migratedTenants[1]
+	expectedMixedDefaults := TenantDefaults{
+		Provider: ProviderNameDashScope, Model: ModelNameDashScopeQwenPlus,
+		SystemPrompt: "retain mixed tenant prompt",
+	}
+	if migratedMixed.defaults() != expectedMixedDefaults || !migratedMixed.UpdatedAt.Equal(mixedTenant.UpdatedAt) || len(migratedMixed.ProviderAPIKeys) != 2 {
+		t.Fatalf("migrated mixed tenant=%+v keys=%+v", migratedMixed, migratedMixed.ProviderAPIKeys)
+	}
+	expectedQwenOnlyDefaults := TenantDefaults{SystemPrompt: "retain tenant prompt"}
+	if migratedQwenOnly.defaults() != expectedQwenOnlyDefaults || !migratedQwenOnly.UpdatedAt.Equal(qwenOnlyTenant.UpdatedAt) || len(migratedQwenOnly.ProviderAPIKeys) != 0 {
+		t.Fatalf("migrated qwen-only tenant=%+v keys=%+v", migratedQwenOnly, migratedQwenOnly.ProviderAPIKeys)
+	}
+	var migratedUsage managedUsageEventRecord
+	if queryError := database.First(&migratedUsage, historicalUsage.ID).Error; queryError != nil || migratedUsage != historicalUsage {
+		t.Fatalf("historical usage=%+v error=%v", migratedUsage, queryError)
+	}
+	var latest managedSchemaMigrationRecord
+	if queryError := database.Order("version DESC").First(&latest).Error; queryError != nil || latest.Version != managedTenantSchemaVersion {
+		t.Fatalf("latest version=%+v error=%v", latest, queryError)
+	}
+	if validationError := initializeManagedTenantSchema(database, providerKeyCipher, providers); validationError != nil {
+		t.Fatalf("reopen retired qwen schema: %v", validationError)
+	}
+
+	upstreamRequestCount := 0
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		upstreamRequestCount++
+	}))
+	defer upstreamServer.Close()
+	managedDatabase := &gormManagedTenantDatabase{database: database}
+	store := newManagedTenantStoreWithDatabaseAndCipher(managedDatabase, providerKeyCipher)
+	timeoutPolicy, timeoutPolicyError := newRequestTimeoutPolicy(5, 5)
+	if timeoutPolicyError != nil {
+		t.Fatalf("request timeout policy: %v", timeoutPolicyError)
+	}
+	endpoints := NewEndpoints()
+	endpoints.SetResponsesURL(upstreamServer.URL)
+	configuration := Configuration{
+		Management:  ManagementConfiguration{Enabled: true},
+		WorkerCount: 1, QueueSize: 1, MaxPromptBytes: 1024,
+		Endpoints: endpoints, ProviderModels: internalManagedUsageWriterProviderModels(),
+		upstreamRateLimits:   upstreamRateLimits{rules: map[string]upstreamRateLimitRule{}},
+		requestTimeoutPolicy: timeoutPolicy, validated: true,
+	}
+	router, buildError := buildRouter(configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
+		store.routingDefaults = newProviderRegistry(configuration)
+		return store, nil
+	})
+	if buildError != nil {
+		t.Fatalf("build migrated router: %v", buildError)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/?key="+qwenOnlySecret+"&provider=openai&model="+ModelNameGPT41+"&prompt=hello", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable || upstreamRequestCount != 0 || !strings.Contains(response.Body.String(), ErrProviderNotConfigured.Error()) {
+		t.Fatalf("migrated qwen-only route status=%d body=%q upstream_requests=%d", response.Code, response.Body.String(), upstreamRequestCount)
+	}
+}
+
+func TestManagedTenantCurrentSchemaRejectsRetiredQwenCloudShapes(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		seed func(*testing.T, *gorm.DB, managedProviderKeyCipher, managedTenantRecord)
+	}{
+		{
+			name: "managed provider settings",
+			seed: func(t *testing.T, database *gorm.DB, providerKeyCipher managedProviderKeyCipher, tenantRecord managedTenantRecord) {
+				encryptedKey, encryptionError := providerKeyCipher.encrypt(bytes.NewReader(bytes.Repeat([]byte{9}, providerKeyCipher.aeadCipher.NonceSize())), tenantRecord.TenantID, retiredQwenCloudProviderIdentifier, "sk-retired")
+				if encryptionError != nil {
+					t.Fatalf("encrypt retired key: %v", encryptionError)
+				}
+				if createError := database.Create(&managedProviderAPIKeyRecord{TenantID: tenantRecord.TenantID, ProviderID: retiredQwenCloudProviderIdentifier, EncryptedAPIKey: encryptedKey, TextModel: retiredQwenCloudModelIdentifier, SystemPrompt: "retired prompt", CreatedAt: tenantRecord.CreatedAt, UpdatedAt: tenantRecord.UpdatedAt}).Error; createError != nil {
+					t.Fatalf("seed retired provider settings: %v", createError)
+				}
+			},
+		},
+		{
+			name: "routing defaults",
+			seed: func(t *testing.T, database *gorm.DB, _ managedProviderKeyCipher, tenantRecord managedTenantRecord) {
+				if updateError := database.Model(&managedTenantRecord{}).Where(&managedTenantRecord{TenantID: tenantRecord.TenantID}).Updates(map[string]interface{}{
+					"default_provider": retiredQwenCloudProviderIdentifier,
+					"default_model":    retiredQwenCloudModelIdentifier,
+				}).Error; updateError != nil {
+					t.Fatalf("seed retired defaults: %v", updateError)
+				}
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			databasePath := filepath.Join(t.TempDir(), "current-schema.db")
+			database, openError := gorm.Open(sqlite.Open(databasePath), &gorm.Config{})
+			if openError != nil {
+				t.Fatalf("open current schema fixture: %v", openError)
+			}
+			providers := internalManagementProviderRegistry()
+			providerKeyCipher := internalManagedProviderKeyCipher()
+			if initializeError := initializeManagedTenantSchema(database, providerKeyCipher, providers); initializeError != nil {
+				t.Fatalf("create current schema: %v", initializeError)
+			}
+			now := time.Date(2026, 8, 10, 21, 0, 0, 0, time.UTC)
+			userRecord := managedUserRecord{UserID: "current-owner", CreatedAt: now, UpdatedAt: now}
+			if createError := database.Create(&userRecord).Error; createError != nil {
+				t.Fatalf("seed current user: %v", createError)
+			}
+			tenantRecord := managedTenantRecord{TenantID: "current-tenant", OwnerUserID: userRecord.UserID, Name: "Default", NameKey: "default", CreatedAt: now, UpdatedAt: now}
+			tenantRecord.applyRoutingDefaults(defaultManagedRoutingDefaults())
+			if createError := database.Create(&tenantRecord).Error; createError != nil {
+				t.Fatalf("seed current tenant: %v", createError)
+			}
+			testCase.seed(t, database, providerKeyCipher, tenantRecord)
+
+			reopenError := initializeManagedTenantSchema(database, providerKeyCipher, providers)
+			if !errors.Is(reopenError, errManagedTenantSchemaMigration) || !strings.Contains(reopenError.Error(), "operation=validate") {
+				t.Fatalf("reopen error=%v want retired-shape rejection", reopenError)
+			}
+		})
 	}
 }
 

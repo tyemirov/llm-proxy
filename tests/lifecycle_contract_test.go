@@ -129,6 +129,7 @@ func TestOperationalRepositoryOwnsSchemaV4Lifecycle(testingInstance *testing.T) 
 	privateBindings := resourcesByIdentity["private_values/private"]["bindings"]
 	expectedPrivateBindings := map[string]any{
 		"admin-emails":                "LLM_PROXY_MANAGEMENT_ADMIN_EMAILS",
+		"dashscope-base-url":          "DASHSCOPE_BASE_URL",
 		"google-web-client-id":        "LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID",
 		"jwt-signing-key":             "LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY",
 		"provider-key-encryption-key": "LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY",
@@ -158,6 +159,7 @@ func TestOperationalRepositoryOwnsSchemaV4Lifecycle(testingInstance *testing.T) 
 	}
 	slices.Sort(runtimeEnvironmentNames)
 	expectedRuntimeEnvironmentNames := []string{
+		"DASHSCOPE_BASE_URL",
 		"LLM_PROXY_MANAGEMENT_ADMIN_EMAILS",
 		"LLM_PROXY_MANAGEMENT_API_ORIGIN",
 		"LLM_PROXY_MANAGEMENT_DATABASE_PATH",
@@ -183,6 +185,7 @@ func TestOperationalRepositoryOwnsSchemaV4Lifecycle(testingInstance *testing.T) 
 		testingInstance.Fatalf("unexpected runtime environment keys: %#v", runtimeEnvironmentNames)
 	}
 	for environmentName, expectedBinding := range map[string]map[string]any{
+		"DASHSCOPE_BASE_URL":                               {"resource": "private", "output": "dashscope-base-url"},
 		"LLM_PROXY_MANAGEMENT_ADMIN_EMAILS":                {"resource": "private", "output": "admin-emails"},
 		"LLM_PROXY_MANAGEMENT_API_ORIGIN":                  {"resource": "public-api", "output": "origin"},
 		"LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID":            {"resource": "authentication", "output": "google-web-client-id"},

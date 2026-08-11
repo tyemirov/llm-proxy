@@ -33,7 +33,6 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 	openAIProviderID := providerID(ProviderNameOpenAI)
 	deepSeekProviderID := providerID(ProviderNameDeepSeek)
 	dashScopeProviderID := providerID(ProviderNameDashScope)
-	qwenCloudProviderID := providerID(ProviderNameQwenCloud)
 	moonshotProviderID := providerID(ProviderNameMoonshot)
 	miniMaxProviderID := providerID(ProviderNameMiniMax)
 	siliconFlowProviderID := providerID(ProviderNameSiliconFlow)
@@ -45,7 +44,6 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 	openAIModels := configuration.ProviderModels[ProviderNameOpenAI]
 	deepSeekModels := configuration.ProviderModels[ProviderNameDeepSeek]
 	dashScopeModels := configuration.ProviderModels[ProviderNameDashScope]
-	qwenCloudModels := configuration.ProviderModels[ProviderNameQwenCloud]
 	moonshotModels := configuration.ProviderModels[ProviderNameMoonshot]
 	miniMaxModels := configuration.ProviderModels[ProviderNameMiniMax]
 	siliconFlowModels := configuration.ProviderModels[ProviderNameSiliconFlow]
@@ -84,15 +82,6 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			textBaseURL:             configuration.DashScopeBaseURL,
 			defaultTextModel:        modelID(dashScopeModels.Text.DefaultModel),
 			textModels:              textModelSet(dashScopeModels.Text),
-			transcriptionModels:     map[string]modelID{},
-			chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
-		},
-		qwenCloudProviderID: {
-			identifier:              qwenCloudProviderID,
-			textAPIKey:              configuration.QwenCloudKey,
-			textBaseURL:             configuration.QwenCloudBaseURL,
-			defaultTextModel:        modelID(qwenCloudModels.Text.DefaultModel),
-			textModels:              textModelSet(qwenCloudModels.Text),
 			transcriptionModels:     map[string]modelID{},
 			chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
 		},
@@ -208,7 +197,6 @@ func configuredProviderAPIKeys(configuration Configuration) map[providerID]strin
 	configuredProviderAPIKey(configuration.OpenAIKey, ProviderNameOpenAI, providerAPIKeys)
 	configuredProviderAPIKey(configuration.DeepSeekKey, ProviderNameDeepSeek, providerAPIKeys)
 	configuredProviderAPIKey(configuration.DashScopeKey, ProviderNameDashScope, providerAPIKeys)
-	configuredProviderAPIKey(configuration.QwenCloudKey, ProviderNameQwenCloud, providerAPIKeys)
 	configuredProviderAPIKey(configuration.MoonshotKey, ProviderNameMoonshot, providerAPIKeys)
 	configuredProviderAPIKey(configuration.MiniMaxKey, ProviderNameMiniMax, providerAPIKeys)
 	configuredProviderAPIKey(configuration.SiliconFlowKey, ProviderNameSiliconFlow, providerAPIKeys)
@@ -443,8 +431,6 @@ func providerLabel(identifier providerID) string {
 		return "DeepSeek"
 	case ProviderNameDashScope:
 		return "DashScope"
-	case ProviderNameQwenCloud:
-		return "Qwen Cloud"
 	case ProviderNameMoonshot:
 		return "Moonshot"
 	case ProviderNameMiniMax:

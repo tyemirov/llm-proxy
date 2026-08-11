@@ -44,9 +44,6 @@ var providerTextRouteCapabilities = map[string]map[textRouteCapabilities]struct{
 	ProviderNameDashScope: {
 		openAIChatCompletionsSynchronousRouteCapabilities: {},
 	},
-	ProviderNameQwenCloud: {
-		openAIChatCompletionsSynchronousRouteCapabilities: {},
-	},
 	ProviderNameMoonshot: {
 		openAIChatCompletionsSynchronousRouteCapabilities: {},
 	},
@@ -86,7 +83,6 @@ func validateProviderModelCatalogs(catalogs ProviderModelCatalogs) error {
 		ProviderNameOpenAI,
 		ProviderNameDeepSeek,
 		ProviderNameDashScope,
-		ProviderNameQwenCloud,
 		ProviderNameMoonshot,
 		ProviderNameMiniMax,
 		ProviderNameSiliconFlow,

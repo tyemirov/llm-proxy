@@ -361,6 +361,7 @@ def test_client_rejects_invalid_or_competing_model_profiles_before_http(
     invalid_profiles = [
         ('{"provider":"gemini"', "decode model_profile"),
         ('{"provider":"gemini"}', "missing model"),
+        ('{"provider":"qwencloud","model":"qwen3.8-max-preview"}', "provider is retired"),
         ('{"provider":"gemini","model":"gemini-2.5-flash","secret":"forbidden"}', "unsupported field"),
         ('{"provider":"gemini","provider":"openai","model":"gpt-5-mini"}', "duplicate field"),
     ]

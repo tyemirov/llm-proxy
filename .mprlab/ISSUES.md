@@ -173,78 +173,11 @@ retain satisfied historical dependencies.
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 ## Improvements
 
-- [ ] [I039] (P0) Retire Qwen Cloud Token Plan and keep DashScope.
-  Goal:
-  Keep `dashscope` as the only Alibaba provider for application API traffic.
-  Remove the interactive `qwencloud` plan from the runtime.
-  Evidence:
-  - The canonical `qwencloud` provider points at
-    `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`.
-  - Alibaba restricts Token Plan to interactive coding and agent tools. Alibaba
-    prohibits its use for automated scripts and application backends:
-    https://www.alibabacloud.com/help/en/model-studio/base-url
-    https://www.alibabacloud.com/help/en/model-studio/token-plan-overview
-    https://www.alibabacloud.com/help/en/model-studio/more-tools
-  - Alibaba identifies Model Studio pay-as-you-go as the service for custom
-    applications. Its production guidance recommends a workspace domain.
-  Decision:
-  - P007 selects Alibaba Cloud Model Studio pay-as-you-go under canonical
-    provider `dashscope`.
-  - Use a Model Studio API key from the same region as its base URL.
-  - Use the Singapore workspace URL in production:
-    `https://{workspace-id}.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`.
-  - Keep `qwen-plus` and synchronous Chat Completions until I038 or I221 changes
-    that exact provider offering.
-  Requirements:
-  - Remove the `qwencloud` selector, provider registry entry, Token Plan domain,
-    configuration fields, environment placeholders, UI option, docs, and tests.
-  - Remove `qwencloud` from the live-provider harness and the public provider
-    catalog.
-  - Configure production `dashscope` with the selected workspace URL. Keep the
-    workspace and credential in the same Alibaba region.
-  - Replace the tracked DashScope base URL with a required
-    `${DASHSCOPE_BASE_URL}` placeholder in production configuration.
-  - Bind that value from the private deployment input. Do not store the
-    workspace URL in the tracked manifest.
-  - Add a bounded schema-version-4 migration for managed `qwencloud` records.
-  - Delete each stored `qwencloud` key, selected model, and provider system
-    prompt. Do not copy these values to `dashscope`.
-  - If a tenant routes text through `qwencloud`, select the first remaining
-    keyed provider by canonical provider identifier.
-  - Use that provider's stored text model. Clear the route when no provider key
-    remains.
-  - If migration removes a tenant's only provider key, make Settings mandatory
-    again.
-  - To continue Alibaba traffic, require affected users to add a Model Studio
-    pay-as-you-go key through `dashscope`.
-  - Clear an incompatible reasoning effort during the same transaction.
-  - Preserve tenant timestamps and historical usage records. Keep each usage
-    record's observed provider and model identifiers unchanged.
-  - Verify all changed rows before the migration records schema version 4.
-  - After migration, reject `qwencloud` in static configuration, managed
-    settings, routing defaults, and application model profiles.
-  - Do not create a `qwencloud` alias, shared credential, dual route, or runtime
-    fallback to `dashscope`.
-  - Keep Alibaba console and interactive-tool integration out of scope.
-  Validation:
-  - Prove through public black-box tests that no Token Plan domain can receive
-    an inference request.
-  - Prove the schema-version-4 migration with disposable databases for
-    `qwencloud`-only and mixed-provider tenants.
-  - Prove current-schema startup rejects each obsolete `qwencloud` shape.
-  - Prove historical usage keeps its original provider and model identifiers.
-  - Prove a `qwencloud`-only tenant cannot route traffic until it saves a valid
-    provider key.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
-- [ ] [I221] (P0) {I039} Make model identity independent from provider offerings.
+- [ ] [I221] (P0) Make model identity independent from provider offerings.
   Goal:
   Make models the primary public discovery items. Keep each selected model's
   publisher and provider offerings explicit.
   Requirements:
-  - Complete I039's `qwencloud` retirement and bounded data migration before
-    catalog migration.
   - Replace `ProviderModelCatalogs` and public `providers[].models` with one
     normalized catalog for model publishers, model families, exact models,
     providers, and provider offerings.
