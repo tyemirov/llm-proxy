@@ -298,6 +298,9 @@ write_static_live_config() {
         sub(/:$/, "", provider)
         if (provider in provider_keys) {
           print "    api_key: \"${" provider_keys[provider] "}\""
+          if (provider == "dashscope") {
+            print "    base_url: \"${DASHSCOPE_BASE_URL}\""
+          }
         }
       }
     }
@@ -496,15 +499,17 @@ import os
 import pathlib
 import sys
 
+base_url = os.environ["DASHSCOPE_BASE_URL"] if sys.argv[4] == "dashscope" else ""
 pathlib.Path(sys.argv[3]).write_text(
     json.dumps({
         "api_key": os.environ[sys.argv[1]],
+        "base_url": base_url,
         "text_model": sys.argv[2],
         "system_prompt": "",
     }, separators=(",", ":")),
     encoding="utf-8",
 )
-' "${key_variable}" "${model}" "${request_path}"
+' "${key_variable}" "${model}" "${request_path}" "${provider}"
   chmod 600 "${request_path}"
 
   http_status="$(
