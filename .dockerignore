@@ -19,5 +19,5 @@ playwright-report
 test-results
 output
 tmp
-PLAN.md
+.mprlab/*-PLAN.md
 .DS_Store
