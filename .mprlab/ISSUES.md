@@ -1026,11 +1026,11 @@ retain satisfied historical dependencies.
 
 ## Features
 
-- [ ] [F033] (P0) {F022} Support large media in canonical message requests.
+- [ ] [F033] (P0) {F022} Pass canonical message media to selected providers.
   Goal:
-  Let `/v2` callers reference tenant assets when inline media would exceed
-  `max_prompt_bytes`. Keep the JSON request limit. Preserve exact media bytes,
-  order, MIME type, and SHA-256.
+  Let `/v2` accept provider-neutral media without a smaller LLM Proxy media
+  limit. Translate each attachment into the selected provider's supported
+  transport. Preserve exact media bytes, order, MIME type, and SHA-256.
 
   Observed failure:
   - Creative Director sends `master-character-sheet.png` through
@@ -1040,74 +1040,105 @@ retain satisfied historical dependencies.
   - The deployed capability resource reports `max_prompt_bytes: 4194304`.
   - LLM Proxy returns HTTP 413 `prompt payload too large` before Gemini
     receives the image.
+  - Gemini permits this request under its documented inline request limit.
   - Creative Director receives no QA result. It cannot produce the next
     MediaOps operation.
-  - The current Go client accepts the PNG. It cannot compare the serialized
-    request with the deployed request limit.
+
+  Provider limit evidence:
+  - The following provider limits were verified on 2026-08-10.
+  - Gemini Interactions permits 20 MB for a request with inline image data.
+    This total includes text, system instructions, and inline bytes. Gemini
+    permits 3,600 image files per request. Gemini directs larger requests to
+    its Files API:
+    https://ai.google.dev/gemini-api/docs/image-understanding
+  - OpenAI vision permits a 512 MB total request payload. It permits 1,500
+    image inputs per request:
+    https://developers.openai.com/api/docs/guides/images-vision
+  - Anthropic Messages permits a 32 MB request. The direct Claude API permits
+    10 MB for each base64 image:
+    https://platform.claude.com/docs/en/api/errors
+    https://platform.claude.com/docs/en/build-with-claude/vision
+  - Anthropic permits 100 images for models with a 200,000-token context.
+    Anthropic permits 600 images for other models.
+  - xAI permits 20 MiB for each image. xAI publishes no image-count limit:
+    https://docs.x.ai/developers/model-capabilities/images/understanding
+  - These values are provider facts. They do not define one proxy limit.
+  - LLM Proxy currently routes message media only to Gemini. Other values
+    define contracts for future provider adapters.
 
   Contract gap:
-  - The current `/v2` contract supports only inline base64 media.
-  - F022 defines streaming asset upload. It does not connect uploaded assets
-    to blocking message attachments.
-  - A configured model can support an image that the public request transport
-    cannot carry.
+  - The current `/v2` contract applies one 4 MiB limit before provider
+    dispatch.
+  - The selected Gemini provider permits the rejected request.
+  - One proxy limit cannot represent different provider limits or transports.
+  - F022 defines asset upload. It does not connect assets to `/v2` attachments.
 
   Requirements:
-  - Use the F022 tenant asset store as the large-media input boundary.
+  - Use the F022 tenant asset store for asset-backed attachments.
   - Add an asset-reference variant to the canonical user-message attachment
     union.
   - Require `type`, `asset_id`, `mime_type`, and `sha256` in each asset
     reference.
   - Reject an attachment that contains both `data` and `asset_id`.
-  - Keep inline base64 attachments for requests that satisfy
-    `max_prompt_bytes`.
-  - Apply `max_prompt_bytes` only to the JSON body. Apply separate limits to
-    resolved asset bytes.
-  - Publish the attachment count, per-asset byte limit, and aggregate media
-    byte limit in public capabilities.
+  - Remove `server.max_prompt_bytes` as a provider-independent `/v2` media
+    admission rule.
+  - Do not define a smaller proxy-owned media limit.
+  - Apply the selected provider offering limits before provider dispatch.
+  - Count bytes with the selected provider's documented unit and scope.
+  - Include base64 expansion only when the provider counts encoded request
+    bytes.
+  - Send inline media when the selected provider accepts that transport and
+    size.
+  - Use provider file upload when the selected provider requires that
+    transport for the media size.
+  - Return a stable provider-limit error when no provider transport accepts
+    the media.
+  - Send the request when the provider publishes no applicable limit.
+  - Map a provider limit response into the stable LLM Proxy error contract.
+  - Keep provider limits in provider offering data, not one server setting.
+  - Add media limits only to provider offerings that declare the media input.
+  - Publish each limit's value, unit, scope, source, and verification date.
+  - Represent an explicit provider no-limit value as `unbounded`.
+  - Represent an unpublished provider limit as `unknown`.
+  - Reverify provider limits during implementation.
   - Validate tenant ownership, asset state, expiry, MIME type, size, and
     SHA-256 before provider dispatch.
   - Preserve message order and attachment order after asset resolution.
-  - Translate each resolved asset into the selected provider's exact media
-    input shape.
   - Preserve caller bytes without resize, compression, or format conversion.
   - Keep caller filesystem paths outside the HTTP contract.
-  - Return stable errors for missing, foreign, expired, oversized, mismatched,
-    and unsupported assets.
   - Exclude asset bytes and authenticated asset URLs from logs, responses, and
     usage records.
   - Add official-client constructors for asset-backed image and audio
     attachments.
-  - Expose the serialized JSON byte count before an official client submits a
-    request.
 
   Deliverables:
-  - Add the OpenAPI asset-reference schemas and canonical message request
-    union.
-  - Add tenant asset resolution and provider adapter integration.
-  - Add public capability limits and official-client support.
+  - Add the OpenAPI asset-reference schema and provider limit schema.
+  - Add tenant asset resolution and provider transport selection.
+  - Add provider offering limits to the public capability resource.
+  - Add official-client support for asset-backed attachments and provider
+    limits.
   - Update the root README, API reference, provider routing guide, and release
     notes.
 
   Validation:
-  - Use a 3,326,724-byte image fixture with a 4,194,304-byte JSON limit.
-  - Upload the fixture through F022. Send one `/v2` asset reference.
-  - Prove the JSON stays below the limit. Prove the fake Gemini adapter
-    receives the exact original bytes, MIME type, SHA-256, and order.
-  - Send the same bytes as inline base64. Require HTTP 413 before provider
-    dispatch.
-  - Send a JSON-only request above the limit. Require the same bounded HTTP
-    413 result.
-  - Cover missing, foreign, expired, deleted, oversized, wrong-MIME, and
-    wrong-digest assets.
-  - Cover one image, ordered images, audio, mixed media, count limits, and
-    aggregate byte limits.
+  - Send the 3,326,724-byte image inline through `/v2` to fake Gemini.
+  - Require provider dispatch without a proxy 413 response.
+  - Upload the same fixture through F022. Send one `/v2` asset reference.
+  - Require fake Gemini to receive the exact bytes, MIME type, SHA-256, and
+    order.
+  - Do a test of each provider boundary at the limit and one unit above it.
+  - Do a test of Gemini inline and Files API transport selection.
+  - Do a test of each documented provider limit record.
+  - Prove no provider-valid request fails because of a smaller proxy limit.
+  - Cover missing, foreign, expired, deleted, wrong-MIME, and wrong-digest
+    assets.
+  - Cover one image, ordered images, audio, and mixed media.
   - Prove asset cleanup cannot change an admitted request or expose another
     tenant's asset.
   - Prove logs, errors, responses, and usage records contain no asset bytes or
     authenticated asset URLs.
-  - Exercise the public router and every released official client against a
-    fake provider.
+  - Exercise the public router and every released official client against fake
+    providers.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
