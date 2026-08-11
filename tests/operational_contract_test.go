@@ -634,7 +634,6 @@ exec "${REAL_AWK_PATH:?}" "$@"
 		"GHTTP_SERVE_NO_MARKDOWN",
 	})
 	assertOperationalEnvironmentKeys(testingInstance, filepath.Join(fixtureRoot, "configs", ".env.api.local"), []string{
-		"DASHSCOPE_BASE_URL",
 		"LLM_PROXY_MANAGEMENT_ENABLED",
 		"LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN",
 		"LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN",
@@ -732,6 +731,9 @@ exec "${REAL_AWK_PATH:?}" "$@"
 	composeConfiguration, readComposeConfigurationError := os.ReadFile(filepath.Join(fixtureRoot, "docker-compose.local.yml"))
 	if readComposeConfigurationError != nil {
 		testingInstance.Fatalf("read local Compose configuration: %v", readComposeConfigurationError)
+	}
+	if strings.Contains(string(composeConfiguration), "DASHSCOPE_BASE_URL") {
+		testingInstance.Fatalf("local Compose retains a DashScope URL input: %s", composeConfiguration)
 	}
 	for _, forbiddenEnvFile := range []string{"- ./configs/.env\n", "- ./configs/.env.local\n"} {
 		if strings.Contains(string(composeConfiguration), forbiddenEnvFile) {
@@ -1492,7 +1494,7 @@ func TestOperationalLiveHarnessVerifiesEachKeyBeforeItsSmokeRequest(testingInsta
 	if verificationOffset < 0 || smokeOffset <= verificationOffset {
 		testingInstance.Fatalf("live operations were not verification then smoke: %s", capture)
 	}
-	expectedPayload := `payload {"api_key":"` + providerKey + `","text_model":"gpt-4.1","system_prompt":""}`
+	expectedPayload := `payload {"api_key":"` + providerKey + `","base_url":"","text_model":"gpt-4.1","system_prompt":""}`
 	if !strings.Contains(capture, expectedPayload) {
 		testingInstance.Fatalf("live verification payload mismatch: %s", capture)
 	}
@@ -1767,7 +1769,6 @@ LLM_PROXY_MANAGEMENT_DATABASE_PATH=/data/llm-proxy-management.sqlite
 LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=__GENERATE_ON_FIRST_MAKE_UP__
 LLM_PROXY_MANAGEMENT_API_ORIGIN=http://localhost:8080
 LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=http://localhost:8080
-DASHSCOPE_BASE_URL=https://workspace.example.invalid/compatible-mode/v1
 TAUTH_CONFIG_FILE=/config/tauth.local.yml
 TAUTH_LISTEN_ADDR=:8080
 TAUTH_DATABASE_URL=sqlite:///data/tauth.sqlite
