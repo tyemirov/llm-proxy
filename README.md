@@ -11,9 +11,10 @@ that input capability.
 
 The public [LLM Proxy landing page](https://llm-proxy.mprlab.com/) explains the
 current provider, model, dictation, web-search, request-limit, and integration
-surface. Its route explorer selects a model family, an exact model, and a
-provider offering. Its model matrix has one row for each exact model and shows
-all current provider offerings for that model. Both interfaces use the
+surface. Its route explorer filters model families by weight access and
+provider-offering capabilities. It then selects a model family, an exact model,
+and a provider offering. Its model matrix has one row for each exact model and
+shows all current provider offerings for that model. Both interfaces use the
 validated runtime catalog. A catalog change appears on the landing page without
 a second inventory. The authenticated
 management app opens at [`/app/`](https://llm-proxy.mprlab.com/app/) only after
@@ -572,8 +573,10 @@ replaces the public landing's capability marker with the returned model-centric
 catalog. It replaces the routing marker with a five-stage route from the
 product through LLM Proxy, model family, exact model, and provider offering.
 Every route item remains in semantic HTML without JavaScript. Browser
-enhancement supplies family, model, and provider selection and the final route
-display. The capability catalog also supplies
+enhancement supplies a multi-choice weight-access filter and a single-choice
+capability filter in the route title row. Proprietary and Text are the default
+filters. Browser enhancement also supplies family, model, and provider
+selection and the final route display. The capability catalog supplies
 one all-characteristics search surface, disclosed match-all capability filters,
 sortable table headers, a live result count, and reset. Node exists only in the
 Pages build stage; the published artifact is static and has no runtime renderer
@@ -1475,8 +1478,8 @@ removing only its old container. The retained
 The Pages declaration uses `docker/pages/Dockerfile`. A compiled Go backend
 serves the secret-free `/api/public/capabilities` resource during the build.
 The Node frontend renderer fetches that resource. It renders model families,
-exact models, and provider offerings in the route explorer. It keeps publishers
-in the capability matrix. It also renders
+exact models, provider offerings, and route filters in the route explorer. It
+keeps publishers in the capability matrix. It also renders
 request limits and injects the browser configuration URL into
 every generated auth-aware HTML page. The final Pages image contains only the
 static artifact. Application runtime code has no Caddy deployment knowledge, and
