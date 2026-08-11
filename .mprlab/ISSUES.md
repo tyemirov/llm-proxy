@@ -1098,6 +1098,50 @@ retain satisfied historical dependencies.
 
 ## Features
 
+- [x] [F034] (P1) Filter the route explorer by weight access and capability.
+  Goal:
+  Reduce the model family fan with compact route filters in the diagram title.
+  Requirements:
+  - Add one explicit `weight_access` value to each model family.
+  - Accept only `proprietary` and `open_weights` values.
+  - Publish weight access through the public capability resource and OpenAPI.
+  - Reuse the canonical capability definitions and compact capability pills.
+  - Keep the title and filters in one header row.
+  - Keep filtered counts in that row when the available width permits it.
+  - Select one or more weight access values. Select `Proprietary` by default.
+  - Select exactly one capability. Select `Text generation` by default.
+  - Show a family when its weight access and one provider offering match the
+    active filters.
+  - Show only exact models and provider offerings that match the active
+    filters.
+  - Keep the current route when it remains valid. Otherwise, select the first
+    valid route in catalog order.
+  - Update the visible family, exact model, and provider offering counts.
+  - Show an explicit empty result when no route matches the active filters.
+  - Preserve complete semantic HTML without JavaScript.
+  - Preserve the five-stage route and responsive page containment.
+  Validation:
+  - Prove the default `Proprietary` and `Text generation` selections.
+  - Prove each access selection and each canonical capability selection.
+  - Prove that weight access keeps one or more selections.
+  - Prove that capability keeps exactly one selection.
+  - Prove the empty result for a valid filter combination without a route.
+  - Prove filtered connector endpoints and deterministic route selection.
+  - Inspect the single header row at 1280, 900, and 390 pixels.
+  - Run `make ci` after the last application change.
+  Resolution:
+  - The model catalog classifies each family as proprietary or open weights.
+  - The public capability resource and OpenAPI publish this classification.
+  - The title row contains a multi-choice weight access group. It also contains
+    a single-choice capability group.
+  - Weight access keeps at least one selection. Capability keeps exactly one
+    selection.
+  - `Proprietary` and `Text generation` are the default selections.
+  - The route fan, counts, empty result, selection, and connectors follow all
+    selected values.
+  - Visual checks passed at 1280, 900, and 390 pixels.
+  - `make ci` passed all 11 gates with 93 browser tests and 100.0% Go statement
+    coverage.
 - [x] [F033] (P0) {F022} Pass canonical message media to selected providers.
   Goal:
   Let `/v2` accept provider-neutral media without a smaller LLM Proxy media
