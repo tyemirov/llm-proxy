@@ -1235,6 +1235,16 @@ providers:
 			expectedError: "provider_base_url_required: provider=xai field=providers.xai.base_url",
 		},
 		{
+			name: "missing DashScope workspace URL in static mode",
+			providersYAML: strings.Replace(
+				completeLiteralProvidersYAML(),
+				"base_url: \"https://dashscope-intl.aliyuncs.com/compatible-mode/v1\"",
+				"base_url: \"\"",
+				1,
+			),
+			expectedError: "provider_base_url_required: provider=dashscope field=providers.dashscope.base_url",
+		},
+		{
 			name: "missing openai transcriptions url",
 			providersYAML: `
 providers:
