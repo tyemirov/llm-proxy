@@ -459,7 +459,7 @@ paths:
     put:
       operationId: putManagementProviderKey
       summary: Verify and save provider settings and a provider credential
-      description: A nonempty api_key performs exactly one provider-authenticated verification operation for the selected provider, text model, and provider base URL under the management request context and shared upstream admission/rate-limit boundary. Changing a saved DashScope base_url also verifies the retained key against the new URL. Only a successful verification atomically persists the credential and submitted settings, reconciles routing defaults, and returns a keyed profile. Rejection and unconfirmed transient outcomes never mutate the provider key, settings, defaults, or managed usage. An empty api_key retains the existing verified credential.
+      description: A nonempty api_key performs exactly one provider-authenticated verification operation for the selected provider, text model, and provider base URL under the management request context and shared upstream admission/rate-limit boundary. Changing a saved DashScope base_url also verifies the retained key against the new URL. Only a successful verification atomically persists the credential and submitted settings, reconciles routing defaults, and returns a keyed profile. Rejection and unconfirmed transient outcomes never mutate the provider key, settings, defaults, or managed usage. An empty api_key retains the existing verified credential. The operation returns 409 without a mutation if that retained credential changes before the verified update can persist.
       tags:
         - Management
       security:
@@ -482,6 +482,8 @@ paths:
           $ref: '#/components/responses/ManagementForbidden'
         '404':
           $ref: '#/components/responses/ManagementNotFound'
+        '409':
+          $ref: '#/components/responses/ManagementConflict'
         '415':
           $ref: '#/components/responses/ManagementUnsupportedMediaType'
         '422':
@@ -1020,7 +1022,7 @@ components:
     ManagementNotFound:
       description: The tenant or provider credential does not exist within the authenticated ownership boundary.
     ManagementConflict:
-      description: The requested tenant name conflicts or the final owned tenant cannot be deleted.
+      description: The requested tenant name conflicts, the final owned tenant cannot be deleted, or a retained provider credential changed after verification began.
       content:
         text/plain:
           schema:
