@@ -43,10 +43,11 @@ test("public site rendering writes the normalized exact model catalog", async ()
     try {
       await renderFixture(fixture, capabilitiesURL);
       const renderedLanding = await readFile(path.join(fixture.output, "index.html"), "utf8");
-      expect(renderedLanding).toContain("1 publisher · 1 exact model · 1 offering");
-      expect(renderedLanding).toContain('data-route-publisher="example-publisher"');
-      expect(renderedLanding).toContain('data-route-model="example-model"');
+      expect(renderedLanding).toContain("1 family · 1 exact model · 1 offering");
+      expect(renderedLanding).toContain('data-route-family="example-family"');
+      expect(renderedLanding).toContain('data-route-model="example-model" data-route-model-family="example-family"');
       expect(renderedLanding).toContain('data-route-provider="example-provider"');
+      expect(renderedLanding).not.toContain("data-route-publisher");
       expect(renderedLanding).toContain('<strong>1</strong><span>Exact models</span>');
       expect(renderedLanding).not.toContain("provider_model");
       expect(renderedLanding).not.toContain("default_operations");
