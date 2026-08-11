@@ -45,7 +45,7 @@ const apiDocumentationPath = "/docs/";
 const openAPIPath = "/openapi.yaml";
 const openAPISchemaViewerPath = `${apiDocumentationPath}#openapi-schema`;
 const openAPIDownloadFilename = "llm-proxy-openapi.yaml";
-const applicationModuleRevision = "20260811b130";
+const applicationModuleRevision = "20260811c131";
 const applicationModuleFiles = Object.freeze([
   "alpineRuntime.js",
   "app.js",
@@ -2608,7 +2608,7 @@ test("a newer pasted key cancels the stale verification and applies only the new
   expect(submittedKeys).toEqual([staleProviderKey, currentProviderKey]);
 });
 
-test("DashScope saves its tenant workspace URL with the provider key", async ({ page }) => {
+test("DashScope waits for its tenant workspace URL before saving the provider key", async ({ page }) => {
 	const workspaceURL = "https://tenant-workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1";
 	const providerSettingsRequests = [];
 	await installAssetRoutes(page);
@@ -2629,10 +2629,13 @@ test("DashScope saves its tenant workspace URL with the provider key", async ({ 
 	const workspaceInput = providerEditor.getByRole("textbox", { name: "DashScope API URL" });
 	await expect(workspaceInput).toBeVisible();
 	await expect(providerEditor).toContainText("Use the Singapore Model Studio URL paired with this API key.");
-	await workspaceInput.fill(workspaceURL);
 	const providerKeyInput = providerEditor.getByRole("textbox", { name: "DashScope API key" });
-	await providerKeyInput.fill("sk-tenant-dashscope");
-	await page.keyboard.press("Tab");
+	await expect(providerEditor.locator("provider-base-url-field + provider-key-field")).toBeVisible();
+	await pasteProviderKey(providerKeyInput, "sk-tenant-dashscope");
+	await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+	expect(providerSettingsRequests).toEqual([]);
+	await workspaceInput.fill(workspaceURL);
+	await workspaceInput.press("Tab");
 
 	await expect.poll(() => providerSettingsRequests).toEqual([{
 		api_key: "sk-tenant-dashscope",
@@ -3767,6 +3770,17 @@ test("reasoning effort is exact to the selected text route and the controls rema
 test("malformed routing-default profiles become app data integrity errors", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page, { malformedRoutingDefaults: true });
+
+  await page.goto(`${baseURL}${applicationPath}`);
+
+  await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+  await expect(page.getByText("App data integrity error")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Settings" })).toBeHidden();
+});
+
+test("malformed provider base URLs become app data integrity errors", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { malformedProviderBaseURL: true });
 
   await page.goto(`${baseURL}${applicationPath}`);
 
@@ -5644,7 +5658,7 @@ async function installMultiTenantRoutes(page, options = {}) {
 
 /**
  * @param {import("@playwright/test").Page} page
- * @param {{ usageStatus?: number, admin?: boolean, hasSecret?: boolean, generatedSecret?: string, profileStatus?: number, profileStatuses?: number[], profileError?: string, malformedRoutingDefaults?: boolean, maskedKeys?: Record<string, string>, providerKeys?: Record<string, string>, savedProviderIDs?: string[] }} options
+ * @param {{ usageStatus?: number, admin?: boolean, hasSecret?: boolean, generatedSecret?: string, profileStatus?: number, profileStatuses?: number[], profileError?: string, malformedProviderBaseURL?: boolean, malformedRoutingDefaults?: boolean, maskedKeys?: Record<string, string>, providerKeys?: Record<string, string>, savedProviderIDs?: string[] }} options
  * @returns {Promise<void>}
  */
 async function installManagementRoutes(page, options = {}) {
@@ -5689,6 +5703,13 @@ async function installManagementRoutes(page, options = {}) {
       dictation_models: [],
     });
     profile.tenant.defaults.provider = "anthropic";
+  }
+  if (options.malformedProviderBaseURL) {
+    const dashScopeProvider = profile.providers.find((provider) => provider.id === "dashscope");
+    if (!dashScopeProvider) {
+      throw new Error("management_fixture_provider_missing:dashscope");
+    }
+    Reflect.deleteProperty(dashScopeProvider, "base_url");
   }
   await page.route(`${baseURL}/api/management/account`, async (route) => {
     await route.fulfill({
