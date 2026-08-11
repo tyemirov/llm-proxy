@@ -10,6 +10,9 @@ Archive passes:
   `git show v0.2.43:.mprlab/ISSUES.md`.
 - 2026-08-10: Moved 84 resolved or retired entries from the active tracker
   after the durable-documentation and open-issue audits.
+- 2026-08-10: Archived P007 after approval of the Alibaba backend provider
+  decision.
+- 2026-08-10: Archived I222 after validation of the CalVer release decision.
 
 `CHANGELOG.md` remains the release-level history. This index keeps completed
 issue titles discoverable without making the active tracker noisy.
@@ -2885,6 +2888,24 @@ issue titles discoverable without making the active tracker noisy.
 
 ### Complete entries archived 2026-08-10
 
+- [x] [I222] (P0) Adopt CalVer for product releases.
+  Goal:
+  Use the canonical UTC CalVer decision for every new llm-proxy release.
+  Requirements:
+  - Declare CalVer as the single current Gix release scheme.
+  - Align current release documentation with the declaration.
+  - Preserve the zero-argument release, publication, and deployment lifecycle.
+  Validation:
+  - Prove Gix selects CalVer for a fixed UTC release timestamp.
+  - Prove current repository guidance contains no obsolete release claim.
+  - Run the Governor check and `git diff --check` for the `.mprlab/` change.
+  Resolved 2026-08-10:
+  - `.mprlab/release.yml` now selects CalVer. Current release documentation
+    describes the same lifecycle.
+  - Gix selected `26.810.235959` for the fixed UTC validation timestamp.
+  - The changed documentation passed the scoped STE check. The Governor check
+    reported only the existing M012 and M013 governance drift.
+
 - [x] [I220] (P1) {I215,I219} Distribute routing columns across the graph canvas.
   Goal:
   Use the routing tree's connector lanes to distribute its four node columns
@@ -4529,3 +4550,43 @@ issue titles discoverable without making the active tracker noisy.
     legal profile; shared footer links and sitemap discovery stay synchronized.
   - Static, hydrated, narrow-screen, link, generation, and TAuth browser
     coverage passed in B111's final 11-gate CI run in 100 seconds.
+
+- [x] [P007] (P1) Select Alibaba Model Studio for backend API access.
+  Goal:
+  Select one Alibaba service that supports LLM Proxy application traffic.
+  Decision:
+  - Keep `dashscope` as the only Alibaba backend provider.
+  - Use Alibaba Cloud Model Studio pay-as-you-go billing.
+  - Use a Model Studio API key and base URL from the same region.
+  - Use the Singapore workspace URL in production:
+    `https://{workspace-id}.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`.
+  - Keep `qwen-plus` and synchronous Chat Completions until I038 or I221 changes
+    that exact provider offering.
+  - Use only the provider HTTP API. Alibaba console and interactive-tool
+    integration are out of scope.
+  - Retire `qwencloud` because Alibaba prohibits Token Plan use by application
+    backends and automated scripts.
+  Consequences:
+  - I039 removes `qwencloud` from runtime, configuration, management, public
+    discovery, tests, documentation, and live-provider tooling.
+  - I039 binds the production workspace URL from the private deployment input.
+  - I039 deletes stored `qwencloud` credentials and provider settings through a
+    bounded schema-version-4 migration.
+  - The migration reconciles affected text routes with remaining keyed
+    providers. It clears the route when no provider key remains.
+  - The migration preserves tenant timestamps and historical usage records.
+  - No `qwencloud` value becomes a `dashscope` credential, alias, route, model,
+    or provider setting.
+  Validation:
+  - The product owner approved the backend-only selection rule on 2026-08-10.
+  - Alibaba identifies Model Studio pay-as-you-go as its custom-application
+    service:
+    https://www.alibabacloud.com/help/en/model-studio/more-tools
+  - Alibaba prohibits Token Plan use for automated scripts and application
+    backends:
+    https://www.alibabacloud.com/help/en/model-studio/token-plan-overview
+  - Alibaba recommends a workspace domain for production pay-as-you-go traffic:
+    https://www.alibabacloud.com/help/en/model-studio/base-url
+  Resolved 2026-08-10:
+  - Selected `dashscope` with Model Studio pay-as-you-go billing.
+  - Assigned provider removal and bounded data migration to I039.

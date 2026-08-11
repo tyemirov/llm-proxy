@@ -173,30 +173,78 @@ retain satisfied historical dependencies.
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 ## Improvements
 
-- [x] [I222] (P0) Adopt CalVer for product releases.
+- [ ] [I039] (P0) Retire Qwen Cloud Token Plan and keep DashScope.
   Goal:
-  Use the canonical UTC CalVer decision for every new llm-proxy release.
+  Keep `dashscope` as the only Alibaba provider for application API traffic.
+  Remove the interactive `qwencloud` plan from the runtime.
+  Evidence:
+  - The canonical `qwencloud` provider points at
+    `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`.
+  - Alibaba restricts Token Plan to interactive coding and agent tools. Alibaba
+    prohibits its use for automated scripts and application backends:
+    https://www.alibabacloud.com/help/en/model-studio/base-url
+    https://www.alibabacloud.com/help/en/model-studio/token-plan-overview
+    https://www.alibabacloud.com/help/en/model-studio/more-tools
+  - Alibaba identifies Model Studio pay-as-you-go as the service for custom
+    applications. Its production guidance recommends a workspace domain.
+  Decision:
+  - P007 selects Alibaba Cloud Model Studio pay-as-you-go under canonical
+    provider `dashscope`.
+  - Use a Model Studio API key from the same region as its base URL.
+  - Use the Singapore workspace URL in production:
+    `https://{workspace-id}.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`.
+  - Keep `qwen-plus` and synchronous Chat Completions until I038 or I221 changes
+    that exact provider offering.
   Requirements:
-  - Declare CalVer as the single current Gix release scheme.
-  - Align current release documentation with the declaration.
-  - Preserve the zero-argument release, publication, and deployment lifecycle.
+  - Remove the `qwencloud` selector, provider registry entry, Token Plan domain,
+    configuration fields, environment placeholders, UI option, docs, and tests.
+  - Remove `qwencloud` from the live-provider harness and the public provider
+    catalog.
+  - Configure production `dashscope` with the selected workspace URL. Keep the
+    workspace and credential in the same Alibaba region.
+  - Replace the tracked DashScope base URL with a required
+    `${DASHSCOPE_BASE_URL}` placeholder in production configuration.
+  - Bind that value from the private deployment input. Do not store the
+    workspace URL in the tracked manifest.
+  - Add a bounded schema-version-4 migration for managed `qwencloud` records.
+  - Delete each stored `qwencloud` key, selected model, and provider system
+    prompt. Do not copy these values to `dashscope`.
+  - If a tenant routes text through `qwencloud`, select the first remaining
+    keyed provider by canonical provider identifier.
+  - Use that provider's stored text model. Clear the route when no provider key
+    remains.
+  - If migration removes a tenant's only provider key, make Settings mandatory
+    again.
+  - To continue Alibaba traffic, require affected users to add a Model Studio
+    pay-as-you-go key through `dashscope`.
+  - Clear an incompatible reasoning effort during the same transaction.
+  - Preserve tenant timestamps and historical usage records. Keep each usage
+    record's observed provider and model identifiers unchanged.
+  - Verify all changed rows before the migration records schema version 4.
+  - After migration, reject `qwencloud` in static configuration, managed
+    settings, routing defaults, and application model profiles.
+  - Do not create a `qwencloud` alias, shared credential, dual route, or runtime
+    fallback to `dashscope`.
+  - Keep Alibaba console and interactive-tool integration out of scope.
   Validation:
-  - Prove Gix selects CalVer for a fixed UTC release timestamp.
-  - Prove current repository guidance contains no obsolete release claim.
-  - Run the Governor check and `git diff --check` for the `.mprlab/` change.
-  Resolved 2026-08-10:
-  - `.mprlab/release.yml` now selects CalVer. Current release documentation
-    describes the same lifecycle.
-  - Gix selected `26.810.235959` for the fixed UTC validation timestamp.
-  - The changed documentation passed the scoped STE check. The Governor check
-    reported only the existing M012 and M013 governance drift.
+  - Prove through public black-box tests that no Token Plan domain can receive
+    an inference request.
+  - Prove the schema-version-4 migration with disposable databases for
+    `qwencloud`-only and mixed-provider tenants.
+  - Prove current-schema startup rejects each obsolete `qwencloud` shape.
+  - Prove historical usage keeps its original provider and model identifiers.
+  - Prove a `qwencloud`-only tenant cannot route traffic until it saves a valid
+    provider key.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
-- [ ] [I221] (P1) {I039} Make model identity independent from provider offerings.
+- [ ] [I221] (P0) {I039} Make model identity independent from provider offerings.
   Goal:
   Make models the primary public discovery items. Keep each selected model's
   publisher and provider offerings explicit.
   Requirements:
-  - Complete I039's selected Alibaba provider outcome before catalog migration.
+  - Complete I039's `qwencloud` retirement and bounded data migration before
+    catalog migration.
   - Replace `ProviderModelCatalogs` and public `providers[].models` with one
     normalized catalog for model publishers, model families, exact models,
     providers, and provider offerings.
@@ -211,6 +259,9 @@ retain satisfied historical dependencies.
     boundary.
   - Migrate configured catalogs, public REST data, OpenAPI, management data,
     and stored routing defaults in one forward-only change.
+  - Preserve I039's historical `qwencloud` usage as observed execution
+    evidence. Do not expose it as a current provider offering.
+  - Do not relabel historical `qwencloud` usage as `dashscope` usage.
   - Add one bounded migration that maps each stored provider/model route to its
     canonical provider offering. Remove the obsolete shape after migration.
   - Reject duplicate identifiers, dangling references, route conflicts,
@@ -271,45 +322,11 @@ retain satisfied historical dependencies.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
-- [ ] [I218] (P1) {I221} Expand the product node into integration routes.
+- [ ] [I216] (P0) {I221} Make one model-operation capability and pricing catalog authoritative.
   Goal:
-  Make the product-to-proxy side of the public routing tree as actionable as
-  its model-to-provider-offering side. Expand `Your product` into exact
-  supported integration routes and route-specific instructions.
-  Requirements:
-  - Make the complete `Your product` box toggle the integration fan through
-    pointer activation. The plus/minus is a visual element inside that box, not
-    a separate control.
-  - Expand HTTP, Go, Python, and CLI nodes to the left of `Your product`, draw
-    measured Bezier connectors into the product node, and expose one selected
-    integration at a time.
-  - Show exactly one instruction panel for the selected integration and keep
-    integration labels, links, commands, and instruction copy in one
-    frontend-owned definition consumed by the graph and existing integration
-    surface.
-  - Extend the single routing graph positioned by F031 without duplicating the
-    graph or restoring a second landing-page copy.
-  - Preserve model publisher, exact model, and provider offering selection,
-    semantic no-JavaScript access, reduced-motion behavior, and responsive
-    containment without horizontal page overflow.
-  Deliverables:
-  - Add the product disclosure, four integration nodes, selected-route state,
-    instruction panel, connector drawing, and current module revision.
-  - Document the integration-fan interaction and accessibility contract.
-  Validation:
-  - Prove exactly four generated integration routes, whole-box pointer
-    disclosure including the visual plus/minus, one selected instruction panel,
-    and selected connector endpoints through the public entry point.
-  - Prove model and provider offering interactions remain unchanged. Inspect
-    connector geometry and containment at 1280-, 900-, and 390-pixel widths.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
-- [ ] [I216] (P1) {I221} Make one model-operation capability and pricing catalog authoritative.
-  Goal:
-  Publish one tenant-safe catalog for every provider-backed model operation so
-  planning, routing, validation, pricing, public discovery, and official
-  clients use the same provider and model facts.
+  Publish one tenant-safe catalog for every provider-backed model operation.
+  Use it for planning, routing, validation, pricing, public discovery, and
+  official clients.
   Cross-repository source:
   - Completed MediaOps I068 supplies exact condition matching and reviewed
     pricing records for the bounded import into LLM Proxy.
@@ -344,6 +361,40 @@ retain satisfied historical dependencies.
     pairs, and ambiguous prices fail startup.
   - Prove the public projection excludes credentials, private account state,
     provider handles, and tenant defaults.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+- [ ] [I218] (P1) {I221} Expand the product node into integration routes.
+  Goal:
+  Make the product-to-proxy side of the public routing tree as actionable as
+  its model-to-provider-offering side. Expand `Your product` into exact
+  supported integration routes and route-specific instructions.
+  Requirements:
+  - Make the complete `Your product` box toggle the integration fan through
+    pointer activation. The plus/minus is a visual element inside that box, not
+    a separate control.
+  - Expand HTTP, Go, Python, and CLI nodes to the left of `Your product`, draw
+    measured Bezier connectors into the product node, and expose one selected
+    integration at a time.
+  - Show exactly one instruction panel for the selected integration and keep
+    integration labels, links, commands, and instruction copy in one
+    frontend-owned definition consumed by the graph and existing integration
+    surface.
+  - Extend the single routing graph positioned by F031 without duplicating the
+    graph or restoring a second landing-page copy.
+  - Preserve model publisher, exact model, and provider offering selection,
+    semantic no-JavaScript access, reduced-motion behavior, and responsive
+    containment without horizontal page overflow.
+  Deliverables:
+  - Add the product disclosure, four integration nodes, selected-route state,
+    instruction panel, connector drawing, and current module revision.
+  - Document the integration-fan interaction and accessibility contract.
+  Validation:
+  - Prove exactly four generated integration routes, whole-box pointer
+    disclosure including the visual plus/minus, one selected instruction panel,
+    and selected connector endpoints through the public entry point.
+  - Prove model and provider offering interactions remain unchanged. Inspect
+    connector geometry and containment at 1280-, 900-, and 390-pixel widths.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
@@ -504,39 +555,6 @@ retain satisfied historical dependencies.
   - Public black-box tests prove the eligible-model request shape, typed text
     extraction, synchronous incomplete continuation, usage, safe errors, and
     rejection of accidental `background` or unsupported OpenAI-only fields.
-- [ ] [I039] (P1) {P007} Replace or retire the backend-ineligible Qwen Cloud Token Plan provider.
-  Goal:
-  Stop treating an interactive-tool subscription as an application-backend
-  provider before considering any Responses API refactor.
-  Evidence:
-  - The canonical `qwencloud` provider points at
-    `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`.
-  - Alibaba's current base-URL and integration documentation says Token Plan is
-    for interactive AI coding tools and is not for custom applications,
-    automated scripts, or application backends:
-    https://www.alibabacloud.com/help/en/model-studio/base-url
-    https://www.alibabacloud.com/help/en/model-studio/more-tools
-  - Token Plan documentation mentions Responses-powered harness tools, but that
-    does not authorize LLM Proxy production traffic or establish an interactive
-    background-resource contract.
-  Planning prerequisite:
-  - P007 selects one backend-authorized Alibaba provider contract or removes
-    the redundant provider.
-  Requirements:
-  - Send no LLM Proxy backend traffic to the Token Plan endpoint after this
-    issue is resolved. Do not probe newer API shapes with production tenant
-    requests while eligibility is unresolved.
-  - If a distinct backend-authorized service is selected, document its exact
-    credential, base URL, models, wire API, lifecycle, and billing identity,
-    then migrate persisted provider settings once into that canonical contract.
-  - If no distinct service exists, reject new `qwencloud` settings, migrate or
-    explicitly invalidate existing persisted selections, and delete the
-    provider, environment placeholders, docs, and tests. Do not alias it to
-    DashScope or silently fall back to DashScope credentials.
-  Validation:
-  - Runtime configuration and public routing tests prove that no Token Plan
-    domain can receive backend inference requests and that obsolete persisted
-    provider selections are handled by the chosen bounded migration.
 - [ ] [I207] (P1) {I221} Add Gemini 3.6 Flash with route-bound Interactions thinking levels.
   Goal:
   Add Google's current stable Flash model to the Gemini Interactions catalog
@@ -1991,33 +2009,6 @@ retain satisfied historical dependencies.
 ## Planning
 *do not implement yet*
 
-- [ ] [P007] (P1) Select the canonical Alibaba backend provider contract.
-  Goal:
-  Decide whether LLM Proxy keeps one Alibaba provider in addition to DashScope
-  or removes the backend-ineligible Qwen Cloud Token Plan provider.
-  Evidence:
-  - The current `qwencloud` route uses a Token Plan endpoint that Alibaba
-    documents for interactive coding tools instead of application backends.
-  - The current `dashscope` provider already owns Alibaba Model Studio backend
-    credentials and text routes.
-  Requirements:
-  - Confirm whether Alibaba offers a distinct international backend service
-    that requires a separate credential, base URL, model catalog, lifecycle,
-    and billing identity from DashScope.
-  - Select exactly one outcome: define that distinct provider contract or
-    remove `qwencloud` and keep DashScope as the only Alibaba backend provider.
-  - Define the one-time outcome for stored `qwencloud` settings and routes.
-    Require explicit migration or explicit invalidation. Do not select an alias,
-    shared credential, dual route, or runtime fallback.
-  Deliverables:
-  - Add an approved decision record with the exact provider identity,
-    credential boundary, endpoint, model scope, lifecycle, billing boundary,
-    and persisted-data outcome.
-  - Update I039 and I221 if the selected facts change their implementation
-    scope.
-  Validation:
-  - Product and service owners approve one outcome that is supported by current
-    official Alibaba documentation and can be implemented without inference.
 - [ ] [P006] (P2) Define provider lifecycle, model onboarding, and hosted service SLA terms.
   Goal:
   Turn the proposed long-term provider support, model-addition timing, and
