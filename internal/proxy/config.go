@@ -242,9 +242,6 @@ func (configuration *Configuration) ApplyTunables() {
 		configuration.DeepSeekBaseURL = defaultDeepSeekBaseURL
 	}
 	configuration.DashScopeBaseURL = strings.TrimSpace(configuration.DashScopeBaseURL)
-	if strings.TrimSpace(configuration.DashScopeBaseURL) == constants.EmptyString {
-		configuration.DashScopeBaseURL = defaultDashScopeBaseURL
-	}
 	configuration.MoonshotBaseURL = strings.TrimSpace(configuration.MoonshotBaseURL)
 	if strings.TrimSpace(configuration.MoonshotBaseURL) == constants.EmptyString {
 		configuration.MoonshotBaseURL = defaultMoonshotBaseURL

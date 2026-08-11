@@ -103,6 +103,7 @@ type managementProviderResponse struct {
 	Aliases               []string                      `json:"aliases"`
 	HasKey                bool                          `json:"has_key"`
 	MaskedKey             string                        `json:"masked_key,omitempty"`
+	BaseURL               string                        `json:"base_url"`
 	TextModel             string                        `json:"text_model"`
 	SystemPrompt          string                        `json:"system_prompt"`
 	TextDefaultModel      string                        `json:"text_default_model"`
@@ -248,6 +249,7 @@ type managementTenantNameRequest struct {
 
 type managementProviderKeyRequest struct {
 	APIKey       string `json:"api_key"`
+	BaseURL      string `json:"base_url"`
 	TextModel    string `json:"text_model"`
 	SystemPrompt string `json:"system_prompt"`
 }
@@ -614,17 +616,24 @@ func (service *managementService) saveProviderKeyHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusBadRequest, providerSettingsError.Error())
 			return
 		}
-		if _, storeError := service.store.tenantProfile(principal, tenantIdentifier); storeError != nil {
+		currentSnapshot, storeError := service.store.tenantProfile(principal, tenantIdentifier)
+		if storeError != nil {
 			writeManagementStoreError(ginContext, storeError)
 			return
 		}
-		if strings.TrimSpace(request.APIKey) != constants.EmptyString {
-			if verificationError := service.keyVerifier.verify(ginContext.Request.Context(), provider, textModel, request.APIKey); verificationError != nil {
+		verificationAPIKey := strings.TrimSpace(request.APIKey)
+		var verifiedAPIKeyVersion *managedProviderKeyVersion
+		if currentSettings, configured := currentSnapshot.providerSettings[providerIdentifier]; verificationAPIKey == constants.EmptyString && configured && providerIdentifier.string() == ProviderNameDashScope && currentSettings.baseURL != provider.textBaseURL {
+			verificationAPIKey = currentSettings.apiKey
+			verifiedAPIKeyVersion = &currentSettings.apiKeyVersion
+		}
+		if verificationAPIKey != constants.EmptyString {
+			if verificationError := service.keyVerifier.verify(ginContext.Request.Context(), provider, textModel, verificationAPIKey); verificationError != nil {
 				writeProviderKeyVerificationError(ginContext, verificationError)
 				return
 			}
 		}
-		snapshot, storeError := service.store.saveProviderKey(ginContext.Request.Context(), principal, tenantIdentifier, providerIdentifier, request.APIKey, request.TextModel, request.SystemPrompt)
+		snapshot, storeError := service.store.saveProviderKeyWithVerifiedVersion(ginContext.Request.Context(), principal, tenantIdentifier, providerIdentifier, request.APIKey, request.BaseURL, request.TextModel, request.SystemPrompt, verifiedAPIKeyVersion)
 		if storeError != nil {
 			writeManagementStoreError(ginContext, storeError)
 			return
@@ -790,9 +799,9 @@ func writeManagementStoreError(ginContext *gin.Context, storeError error) {
 	switch {
 	case errors.Is(storeError, errManagedTenantNotFound):
 		ginContext.AbortWithStatus(http.StatusNotFound)
-	case errors.Is(storeError, errManagedTenantNameConflict), errors.Is(storeError, errManagedFinalTenantDeletion):
+	case errors.Is(storeError, errManagedTenantNameConflict), errors.Is(storeError, errManagedFinalTenantDeletion), errors.Is(storeError, errManagedProviderKeyConflict):
 		ginContext.String(http.StatusConflict, storeError.Error())
-	case errors.Is(storeError, errManagedTenantNameInvalid), errors.Is(storeError, errManagedProviderKeyInvalid):
+	case errors.Is(storeError, errManagedTenantNameInvalid), errors.Is(storeError, errManagedProviderKeyInvalid), errors.Is(storeError, errManagedProviderBaseURLInvalid):
 		ginContext.String(http.StatusBadRequest, storeError.Error())
 	default:
 		ginContext.String(http.StatusInternalServerError, storeError.Error())
@@ -830,6 +839,7 @@ func (service *managementService) providerResponses(providerSettings map[provide
 			Label:                 summary.label,
 			Aliases:               append([]string{}, summary.aliases...),
 			HasKey:                hasKey,
+			BaseURL:               constants.EmptyString,
 			TextModel:             summary.textDefaultModel,
 			SystemPrompt:          constants.EmptyString,
 			TextDefaultModel:      summary.textDefaultModel,
@@ -840,6 +850,7 @@ func (service *managementService) providerResponses(providerSettings map[provide
 		}
 		if hasKey {
 			response.MaskedKey = maskedAPIKey(settings.apiKey)
+			response.BaseURL = settings.baseURL
 			response.TextModel = settings.textModel
 			response.SystemPrompt = settings.systemPrompt
 		}
@@ -873,6 +884,10 @@ func managementReasoningEffortCapabilityResponseFor(capability *reasoningEffortC
 }
 
 func (service *managementService) resolveManagedProviderSettings(providerIdentifier providerID, request managementProviderKeyRequest) (providerDefinition, textModelDefinition, error) {
+	baseURL, baseURLError := managedProviderBaseURL(providerIdentifier, request.BaseURL)
+	if baseURLError != nil {
+		return providerDefinition{}, textModelDefinition{}, fmt.Errorf("%w: provider=%s field=base_url", errManagementBadRequest, providerIdentifier.string())
+	}
 	textModel := strings.TrimSpace(request.TextModel)
 	if textModel == constants.EmptyString {
 		return providerDefinition{}, textModelDefinition{}, fmt.Errorf("%w: provider=%s field=text_model", errManagementBadRequest, providerIdentifier.string())
@@ -880,6 +895,9 @@ func (service *managementService) resolveManagedProviderSettings(providerIdentif
 	provider, resolvedTextModel, validationError := service.providers.resolveTextModel(providerIdentifier.string(), textModel, providerIdentifier.string(), textModel, false)
 	if validationError != nil {
 		return providerDefinition{}, textModelDefinition{}, fmt.Errorf("%w: %v", errManagementDefaults, validationError)
+	}
+	if baseURL != constants.EmptyString {
+		provider.textBaseURL = baseURL
 	}
 	return provider, resolvedTextModel, nil
 }

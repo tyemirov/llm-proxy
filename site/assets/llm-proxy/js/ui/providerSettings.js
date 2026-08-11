@@ -5,14 +5,15 @@ import {
   COPY,
   NOTICE_KINDS,
   PROVIDER_KEY_VERIFICATION_ERRORS,
-} from "../constants.js?v=20260809i217";
-import { saveProviderKey as requestSaveProviderKey } from "../core/backendClient.js?v=20260809i217";
+} from "../constants.js?v=20260811c131";
+import { saveProviderKey as requestSaveProviderKey } from "../core/backendClient.js?v=20260811c131";
 import {
   isAbortError,
   profileFailureMessage,
-} from "../core/managementProfile.js?v=20260809i217";
+} from "../core/managementProfile.js?v=20260811c131";
 
 const EMPTY_STRING = "";
+const DASH_SCOPE_PROVIDER_ID = "dashscope";
 
 /** @typedef {ReturnType<typeof import("./managementApplicationState.js").createManagementApplicationState>} ManagementApplicationState */
 /** @typedef {ManagementApplicationState & {
@@ -68,6 +69,9 @@ export function createProviderSettingsResponsibility() {
           editorSession.dirty = false;
           return true;
         }
+        if (provider.id === DASH_SCOPE_PROVIDER_ID && editorSession.baseURL.trim() === EMPTY_STRING) {
+          return false;
+        }
         const providerID = provider.id;
         const revealVersion = editorSession.revealVersion;
         const editVersion = editorSession.editVersion;
@@ -77,7 +81,7 @@ export function createProviderSettingsResponsibility() {
         if (!lifetimeController) {
           return false;
         }
-        const verifiesCandidate = apiKey !== EMPTY_STRING;
+        const verifiesCandidate = apiKey !== EMPTY_STRING || editorSession.baseURL.trim() !== provider.base_url;
         let requestSignal = lifetimeController.signal;
         /** @type {AbortController | null} */
         let verificationController = null;
@@ -110,6 +114,7 @@ export function createProviderSettingsResponsibility() {
               tenantID,
               providerID,
               apiKey,
+              editorSession.baseURL.trim(),
               editorSession.textModel,
               editorSession.systemPrompt,
               requestSignal,

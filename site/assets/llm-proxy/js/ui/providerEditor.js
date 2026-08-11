@@ -1,7 +1,7 @@
 // @ts-check
 
-import { AUTH_STATES } from "../constants.js?v=20260809i217";
-import { profileProvider } from "../core/managementProfile.js?v=20260809i217";
+import { AUTH_STATES } from "../constants.js?v=20260811c131";
+import { profileProvider } from "../core/managementProfile.js?v=20260811c131";
 
 const EMPTY_STRING = "";
 
@@ -71,6 +71,15 @@ export function createProviderEditorResponsibility() {
     },
 
     /** @param {Event} event */
+    handleSelectedProviderBaseURLInput(event) {
+      this.abortProviderKeyVerification();
+      this.providerKeyVerificationFailure = EMPTY_STRING;
+      const baseURLInput = /** @type {HTMLInputElement} */ (event.target);
+      this.providerEditorSession.baseURL = baseURLInput.value;
+      this.markSelectedProviderDirty();
+    },
+
+    /** @param {Event} event */
     handleSelectedProviderSystemPromptInput(event) {
       const systemPromptInput = /** @type {HTMLTextAreaElement} */ (event.target);
       this.providerEditorSession.systemPrompt = systemPromptInput.value;
@@ -91,6 +100,7 @@ export function createProviderEditorResponsibility() {
       this.providerEditorSession = createProviderEditorSession(
         providerID,
         this.providerEditorSession.revealVersion + 1,
+        provider ? provider.base_url : EMPTY_STRING,
         provider ? provider.text_model : EMPTY_STRING,
         provider ? provider.system_prompt : EMPTY_STRING,
       );
@@ -106,16 +116,18 @@ export function createProviderEditorResponsibility() {
  *
  * @param {string} providerID
  * @param {number} revealVersion
+ * @param {string} [baseURL]
  * @param {string} [textModel]
  * @param {string} [systemPrompt]
  * @returns {import("../types.d.js").ProviderEditorSession}
  */
-export function createProviderEditorSession(providerID, revealVersion, textModel = EMPTY_STRING, systemPrompt = EMPTY_STRING) {
+export function createProviderEditorSession(providerID, revealVersion, baseURL = EMPTY_STRING, textModel = EMPTY_STRING, systemPrompt = EMPTY_STRING) {
   return {
     providerID,
     keyInput: EMPTY_STRING,
     keyVisible: false,
     keyDirty: false,
+    baseURL,
     textModel,
     systemPrompt,
     dirty: false,

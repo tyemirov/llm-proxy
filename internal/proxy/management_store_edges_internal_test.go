@@ -170,6 +170,15 @@ func TestManagedTenantStoreCipherAndSnapshotEdges(t *testing.T) {
 	}}); !errors.Is(settingsError, errManagedProviderKeyDecryption) {
 		t.Fatalf("settings decrypt error=%v", settingsError)
 	}
+	dashScopeEncrypted, encryptionError := cipher.encrypt(bytes.NewReader(bytes.Repeat([]byte{3}, 64)), "tenant", ProviderNameDashScope, "sk-dashscope")
+	if encryptionError != nil {
+		t.Fatalf("encrypt DashScope settings: %v", encryptionError)
+	}
+	if _, settingsError := store.providerSettingsMap([]managedProviderAPIKeyRecord{{
+		TenantID: "tenant", ProviderID: ProviderNameDashScope, EncryptedAPIKey: dashScopeEncrypted, TextModel: ModelNameDashScopeQwenPlus,
+	}}); !errors.Is(settingsError, errManagedProviderBaseURLInvalid) {
+		t.Fatalf("incomplete DashScope settings error=%v", settingsError)
+	}
 
 	now := time.Date(2026, 7, 25, 12, 0, 0, 0, time.UTC)
 	brokenRecord := fakeTenantRecord("owner", "tenant", "Default", now)
@@ -210,6 +219,41 @@ func TestManagedTenantStoreCipherAndSnapshotEdges(t *testing.T) {
 	assertManagedError(t, managedTenantMutationError("owner", "tenant", errInternalTestDatabase), errManagedTenantStorePersist)
 	if !errors.Is(managedRoutingDefaultsTenantError("tenant", errManagedRoutingDefaultsInvalid), errManagedRoutingDefaultsInvalid) {
 		t.Fatal("routing defaults tenant error lost cause")
+	}
+}
+
+func TestManagedProviderBaseURLRequiresCanonicalTenantWorkspace(t *testing.T) {
+	canonicalURL := "https://workspace-7.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+	for _, testCase := range []struct {
+		name     string
+		provider string
+		baseURL  string
+		want     string
+		wantErr  bool
+	}{
+		{name: "fixed provider empty", provider: ProviderNameOpenAI},
+		{name: "fixed provider override", provider: ProviderNameOpenAI, baseURL: canonicalURL, wantErr: true},
+		{name: "parse error", provider: ProviderNameDashScope, baseURL: "%", wantErr: true},
+		{name: "wrong scheme", provider: ProviderNameDashScope, baseURL: strings.Replace(canonicalURL, "https://", "http://", 1), wantErr: true},
+		{name: "wrong host", provider: ProviderNameDashScope, baseURL: "https://workspace-7.example.com/compatible-mode/v1", wantErr: true},
+		{name: "empty workspace", provider: ProviderNameDashScope, baseURL: "https://ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1", wantErr: true},
+		{name: "leading hyphen", provider: ProviderNameDashScope, baseURL: "https://-workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1", wantErr: true},
+		{name: "trailing hyphen", provider: ProviderNameDashScope, baseURL: "https://workspace-.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1", wantErr: true},
+		{name: "invalid workspace character", provider: ProviderNameDashScope, baseURL: "https://workspace_.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1", wantErr: true},
+		{name: "canonical workspace", provider: ProviderNameDashScope, baseURL: "  " + canonicalURL + "  ", want: canonicalURL},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			actual, validationError := managedProviderBaseURL(newProviderID(testCase.provider), testCase.baseURL)
+			if testCase.wantErr {
+				if !errors.Is(validationError, errManagedProviderBaseURLInvalid) {
+					t.Fatalf("base URL error=%v", validationError)
+				}
+				return
+			}
+			if validationError != nil || actual != testCase.want {
+				t.Fatalf("base URL=%q want=%q error=%v", actual, testCase.want, validationError)
+			}
+		})
 	}
 }
 
@@ -490,33 +534,36 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 	store := newManagedTenantStoreWithDatabase(database)
 	store.routingDefaults = internalManagementProviderRegistry()
 	store.now = func() time.Time { return now }
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameDashScope), "sk-key", "https://invalid.example/v1", ModelNameDashScopeQwenPlus, ""); !errors.Is(saveError, errManagedProviderBaseURLInvalid) {
+		t.Fatalf("provider base URL error=%v", saveError)
+	}
 
-	if _, saveError := store.saveProviderKey(context.Background(), principal, "missing", newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantNotFound) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, "missing", newProviderID(ProviderNameOpenAI), "sk-key", "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantNotFound) {
 		t.Fatalf("provider tenant error=%v", saveError)
 	}
-	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), " ", ModelNameGPT41, ""); !errors.Is(saveError, errManagedProviderKeyInvalid) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), " ", "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedProviderKeyInvalid) {
 		t.Fatalf("blank provider error=%v", saveError)
 	}
 	store.randomReader = strings.NewReader("")
-	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, ""); !errors.Is(saveError, errManagedProviderKeyEncryption) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedProviderKeyEncryption) {
 		t.Fatalf("provider encryption error=%v", saveError)
 	}
 	store.randomReader = bytes.NewReader(bytes.Repeat([]byte{1}, 256))
 	database.saveProviderKeyErrors = []error{errInternalTestDatabase}
-	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantStorePersist) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantStorePersist) {
 		t.Fatalf("provider persistence error=%v", saveError)
 	}
-	snapshot, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, "provider system")
+	snapshot, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", "", ModelNameGPT41, "provider system")
 	if saveError != nil || snapshot.providerSettings[newProviderID(ProviderNameOpenAI)].apiKey != "sk-key" {
 		t.Fatalf("provider snapshot=%+v error=%v", snapshot, saveError)
 	}
 	originalCiphertext := database.tenantsByID[identifier.string()].ProviderAPIKeys[0].EncryptedAPIKey
-	snapshot, saveError = store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "", ModelNameGPT55, "updated system")
+	snapshot, saveError = store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "", "", ModelNameGPT55, "updated system")
 	if saveError != nil || snapshot.providerSettings[newProviderID(ProviderNameOpenAI)].textModel != ModelNameGPT55 || database.tenantsByID[identifier.string()].ProviderAPIKeys[0].EncryptedAPIKey != originalCiphertext {
 		t.Fatalf("updated snapshot=%+v error=%v", snapshot, saveError)
 	}
 	database.tenantByOwnerAndIDErrors = []error{nil, errInternalTestDatabase}
-	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantStorePersist) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "", "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantStorePersist) {
 		t.Fatalf("provider reload error=%v", saveError)
 	}
 
@@ -781,7 +828,7 @@ func TestManagedTenantStoreProviderRoutingReconciliationErrors(t *testing.T) {
 		TextModel:       ModelNameGPT41,
 	}}
 	database.tenantsByID[identifier.string()] = record
-	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameDeepSeek), "sk-deepseek", ModelNameDeepSeekV4Flash, ""); !errors.Is(saveError, errManagedProviderKeyDecryption) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameDeepSeek), "sk-deepseek", "", ModelNameDeepSeekV4Flash, ""); !errors.Is(saveError, errManagedProviderKeyDecryption) {
 		t.Fatalf("save provider decryption error=%v", saveError)
 	}
 	if _, removeError := store.removeProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI)); !errors.Is(removeError, errManagedProviderKeyDecryption) {
@@ -792,7 +839,7 @@ func TestManagedTenantStoreProviderRoutingReconciliationErrors(t *testing.T) {
 	record.DefaultProvider = "missing"
 	record.DefaultModel = ""
 	database.tenantsByID[identifier.string()] = record
-	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-openai", ModelNameGPT41, ""); !errors.Is(saveError, errManagedRoutingDefaultsInvalid) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-openai", "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedRoutingDefaultsInvalid) {
 		t.Fatalf("save invalid defaults error=%v", saveError)
 	}
 	if _, removeError := store.removeProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI)); !errors.Is(removeError, errManagedRoutingDefaultsInvalid) {
@@ -816,7 +863,7 @@ func TestManagedTenantStoreProviderRoutingReconciliationErrors(t *testing.T) {
 		TextModel:       "missing-model",
 	}}
 	database.tenantsByID[identifier.string()] = record
-	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-openai", ModelNameGPT41, ""); !errors.Is(saveError, errManagedRoutingDefaultsInvalid) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-openai", "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedRoutingDefaultsInvalid) {
 		t.Fatalf("save reconciliation error=%v", saveError)
 	}
 	if _, removeError := store.removeProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI)); !errors.Is(removeError, errManagedRoutingDefaultsInvalid) {

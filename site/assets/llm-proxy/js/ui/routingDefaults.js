@@ -5,12 +5,12 @@ import {
   AUTH_STATES,
   COPY,
   NOTICE_KINDS,
-} from "../constants.js?v=20260809i217";
-import { updateDefaults as requestUpdateDefaults } from "../core/backendClient.js?v=20260809i217";
+} from "../constants.js?v=20260811c131";
+import { updateDefaults as requestUpdateDefaults } from "../core/backendClient.js?v=20260811c131";
 import {
   profileFailureMessage,
   profileProvider,
-} from "../core/managementProfile.js?v=20260809i217";
+} from "../core/managementProfile.js?v=20260811c131";
 
 const EMPTY_STRING = "";
 

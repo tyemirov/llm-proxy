@@ -133,7 +133,7 @@ export const MPR_UI = Object.freeze({
 });
 
 export const RUNTIME_UI = Object.freeze({
-  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20260809i217",
+  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20260811c131",
   APPLICATION_MODULE_ID: "llm-proxy-application-module",
   APPLICATION_MODULE_MISSING: "llm_proxy_application_module_missing",
   APPLICATION_READY_ATTRIBUTE: "data-llm-proxy-application",
@@ -272,6 +272,8 @@ export const COPY = Object.freeze({
   providersEyebrow: "Providers",
   providerSelector: "Provider",
   providerKeySuffix: " API key",
+  providerBaseURL: "DashScope API URL",
+  providerBaseURLHint: "Use the Singapore Model Studio URL paired with this API key.",
   showProviderKey: "Show key",
   hideProviderKey: "Hide key",
   providerTextModel: "Provider default model",

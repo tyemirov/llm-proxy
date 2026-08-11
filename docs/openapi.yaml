@@ -459,7 +459,7 @@ paths:
     put:
       operationId: putManagementProviderKey
       summary: Verify and save provider settings and a provider credential
-      description: A nonempty api_key performs exactly one provider-authenticated verification operation for the selected provider and text model under the management request context and shared upstream admission/rate-limit boundary. Only a successful verification atomically persists the credential and submitted settings, reconciles routing defaults, and returns a keyed profile. Rejection and unconfirmed transient outcomes never mutate the provider key, settings, defaults, or managed usage. An empty api_key retains the existing verified credential while updating settings without reverification.
+      description: A nonempty api_key performs exactly one provider-authenticated verification operation for the selected provider, text model, and provider base URL under the management request context and shared upstream admission/rate-limit boundary. Changing a saved DashScope base_url also verifies the retained key against the new URL. Only a successful verification atomically persists the credential and submitted settings, reconciles routing defaults, and returns a keyed profile. Rejection and unconfirmed transient outcomes never mutate the provider key, settings, defaults, or managed usage. An empty api_key retains the existing verified credential. The operation returns 409 without a mutation if that retained credential changes before the verified update can persist.
       tags:
         - Management
       security:
@@ -482,6 +482,8 @@ paths:
           $ref: '#/components/responses/ManagementForbidden'
         '404':
           $ref: '#/components/responses/ManagementNotFound'
+        '409':
+          $ref: '#/components/responses/ManagementConflict'
         '415':
           $ref: '#/components/responses/ManagementUnsupportedMediaType'
         '422':
@@ -1020,7 +1022,7 @@ components:
     ManagementNotFound:
       description: The tenant or provider credential does not exist within the authenticated ownership boundary.
     ManagementConflict:
-      description: The requested tenant name conflicts or the final owned tenant cannot be deleted.
+      description: The requested tenant name conflicts, the final owned tenant cannot be deleted, or a retained provider credential changed after verification began.
       content:
         text/plain:
           schema:
@@ -1937,12 +1939,16 @@ components:
       additionalProperties: false
       required:
         - api_key
+        - base_url
         - text_model
         - system_prompt
       properties:
         api_key:
           type: string
-          description: An unverified new or replacement provider key. A nonempty value is verified against the exact path provider and selected text_model before any persistence. Send an empty string to retain the tenant's existing verified credential while updating its provider model or system prompt; an empty value is rejected when no credential exists.
+          description: An unverified new or replacement provider key. A nonempty value is verified against the exact path provider, selected text_model, and submitted base_url before any persistence. Send an empty string to retain the tenant's existing verified credential; an empty value is rejected when no credential exists.
+        base_url:
+          type: string
+          description: Exact tenant-owned Singapore Model Studio URL for dashscope. It must use https://{resource-id}.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1. It must be empty for every other provider.
         text_model:
           type: string
           minLength: 1
@@ -2108,6 +2114,7 @@ components:
         - label
         - aliases
         - has_key
+        - base_url
         - text_model
         - system_prompt
         - text_default_model
@@ -2127,6 +2134,9 @@ components:
           type: boolean
         masked_key:
           type: string
+        base_url:
+          type: string
+          description: Saved tenant-owned DashScope API URL, or empty for an unconfigured DashScope provider and every other provider.
         text_model:
           type: string
         system_prompt:

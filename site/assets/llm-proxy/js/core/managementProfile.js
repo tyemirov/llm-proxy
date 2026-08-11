@@ -4,7 +4,7 @@ import {
   APP_INTEGRITY_ERROR,
   COPY,
   ROUTING_DEFAULTS_INVALID_ERROR,
-} from "../constants.js?v=20260809i217";
+} from "../constants.js?v=20260811c131";
 
 const EMPTY_STRING = "";
 const TENANT_NAME_MAXIMUM_CHARACTERS = 80;
@@ -233,6 +233,7 @@ function assertProviderCatalog(provider) {
     typeof provider.id !== "string" ||
     !provider.id ||
     typeof provider.has_key !== "boolean" ||
+    typeof provider.base_url !== "string" ||
     !Array.isArray(provider.text_models) ||
     !provider.text_models.some((model) => model && model.id === provider.text_default_model) ||
     !provider.text_models.some((model) => model && model.id === provider.text_model)

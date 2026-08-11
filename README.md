@@ -319,7 +319,7 @@ adapters before they are available through `/dictate`.
 | `openai` | none | `openai_responses` | `pollable_resource` | `gpt-4.1` | `providers.openai.api_key` | `https://api.openai.com/v1` | Yes: `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | Yes, on marked OpenAI models |
 | `meta` | none | `openai_chat_completions` | `synchronous_completion` | `muse-spark-1.1` | `providers.meta.api_key` | `https://api.meta.ai/v1` | No | No |
 | `deepseek` | none | `openai_chat_completions` | `synchronous_completion` | `deepseek-v4-flash` | `providers.deepseek.api_key` | `https://api.deepseek.com` | No | No |
-| `dashscope` | `qwen` | `openai_chat_completions` | `synchronous_completion` | `qwen-plus` | `providers.dashscope.api_key` | Required `${DASHSCOPE_BASE_URL}` Singapore workspace URL | No | No |
+| `dashscope` | `qwen` | `openai_chat_completions` | `synchronous_completion` | `qwen-plus` | Tenant-managed API key | Tenant-managed Singapore workspace URL | No | No |
 | `moonshot` | `kimi` | `openai_chat_completions` | `synchronous_completion` | `kimi-k2.6` | `providers.moonshot.api_key` | `https://api.moonshot.ai/v1` | No | No |
 | `minimax` | none | `openai_chat_completions` | `synchronous_completion` | `minimax-m2.7` | `providers.minimax.api_key` | `https://api.minimax.io/v1` | No | No |
 | `siliconflow` | none | `openai_chat_completions` | `synchronous_completion` | `deepseek-reasoner` | `providers.siliconflow.api_key` | `https://api.siliconflow.com/v1` | Yes: `sensevoice-small` | No |
@@ -515,9 +515,8 @@ continues and explicit requests for that provider return `503 provider not
 configured`. Missing placeholders in other fields, or embedded inside a longer
 `api_key` value, fail startup. If a static tenant's default text or dictation
 provider lacks its API key, startup fails before the server listens. Provider
-`base_url` values are explicit config values; leave them at
-the documented URLs unless routing through a test server, proxy, or compatible
-gateway. Dictation-capable provider
+`base_url` values are explicit config values. A static DashScope API key
+requires its matching `providers.dashscope.base_url`. Dictation-capable provider
 `transcriptions_url` values are also explicit config values and are required for
 OpenAI, SiliconFlow, Zhipu, and Grok/xAI. The normalized catalog must contain
 all supported providers and each supported text or dictation route. When
@@ -677,12 +676,13 @@ Settings opens automatically and cannot be dismissed until the profile has both
 that client key and at least one persisted managed provider key. Only
 `tenant.has_secret` and `providers[].has_key` satisfy this setup gate; a typed
 provider-key draft or a credential in local dotenv configuration does not.
-Pasting into the selected provider's API-key field immediately starts one
-server-side operational verification against that exact provider and selected
-text model; it does not wait for blur, provider switching, Settings close, or a
-separate action. While the attempt is active, Settings announces `Verifying
-key`, keeps the key input available for a newer paste, and locks tenant,
-provider, model, reveal, remove, routing, and close actions. A newer paste or a
+DashScope also requires the tenant's exact Singapore Model Studio workspace
+URL. Pasting into the selected provider's API-key field immediately starts one
+server-side operational verification. The operation uses the exact provider,
+selected text model, and base URL. It does not wait for blur, provider
+switching, Settings close, or a separate action. While the attempt is active,
+Settings announces `Verifying key` and keeps the key input available. It locks
+tenant, provider, model, reveal, remove, routing, and close actions. A newer paste or a
 tenant, provider, model, editor, or authentication context change cancels or
 invalidates the prior request. Other provider-key edits still autosave through
 the same verify-before-persist operation when the user leaves the field,
@@ -692,8 +692,9 @@ The verifier makes exactly one provider-authenticated, non-user-content
 operation through the selected transport and the shared upstream worker,
 queue, origin-rate-limit, and request-context boundaries. It does not retry,
 fall back, poll, continue in the background, or record managed usage. Only an
-accepted credential/model pair enters the provider-key transaction. That
-transaction encrypts the key, saves its submitted model and system prompt,
+accepted credential, model, and base URL combination enters the provider-key
+transaction. That transaction encrypts the key and saves its submitted base
+URL, model, and system prompt,
 reconciles routing defaults, and returns the complete keyed profile. When the
 saved provider text model changes and the same provider owns the active text
 route, that transaction also updates the active routing model and clears a
@@ -710,8 +711,9 @@ failed replacement leaves the previously verified encrypted key, provider
 settings, and routing defaults active. The current editor retains only the
 rejected draft for correction or explicit retry and states which of those two
 outcomes applies. An empty `api_key` remains the exact retain-existing-key
-settings update and does not reverify the stored credential. Settings remains
-open until the user closes it explicitly.
+settings update. A DashScope workspace URL change verifies the retained key
+against the new URL before persistence. Settings remains open until the user
+closes it explicitly.
 Text and dictation provider/model defaults plus reasoning effort autosave on
 selection, while the tenant system prompt autosaves when the user leaves the
 changed field. Settings serializes every mutation that returns a complete
@@ -762,8 +764,9 @@ raw-key response is the explicit
 owner-authenticated
 `POST /api/management/tenants/:tenant_id/provider-keys/:provider/reveal`
 management action, which requires the configured management origin and returns
-`Cache-Control: no-store`. Provider-key records also store the selected text model and
-provider-specific system prompt for that provider. Managed text requests that
+`Cache-Control: no-store`. Provider-key records also store the selected text
+model, provider-specific system prompt, and tenant-owned DashScope workspace
+URL. Managed text requests that
 select a provider and omit `model` use the saved provider text model; when
 request-level system instructions are omitted, the provider-specific system
 prompt is injected before routing upstream. The F014 ownership migration accepts
@@ -1001,11 +1004,23 @@ settings and tenant defaults in one transaction. It preserves tenant timestamps
 and all historical usage records. Current-version startup rejects an invalid
 or dangling canonical route.
 
-Server/runtime settings, backend auth validation settings, provider base URLs,
-transcription URLs, model catalogs, and browser-facing MPR UI/TAuth bootstrap
-settings remain config-file-owned. The GitHub Pages artifact is only the static
-shell; API-served browser config endpoints are projections of backend
-`config.yml`, not independent configuration sources.
+The bounded schema-version-6 migration replaces the retired `grok` provider
+identity with `xai`. The bounded schema-version-7 migration adds the provider
+base URL field to managed provider settings. Existing DashScope records do not
+contain a workspace URL. The migration removes those incomplete records and
+reconciles affected text defaults. It preserves tenant timestamps and
+historical usage. The owner must then save the complete DashScope key and URL
+pair.
+
+Server/runtime settings, backend auth validation settings, fixed provider base
+URLs, transcription URLs, model catalogs, and browser-facing MPR UI/TAuth
+bootstrap settings remain config-file-owned. Each managed DashScope workspace
+URL is tenant-owned and is stored with that tenant's encrypted provider key,
+selected model, and system prompt. Static mode requires
+`providers.dashscope.base_url` when it configures a DashScope API key. The
+GitHub Pages artifact is only the static shell. API-served browser config
+endpoints are projections of backend `config.yml`, not independent
+configuration sources.
 
 ### Hosted split-origin setup
 
@@ -1144,10 +1159,11 @@ make down
 
 Before the first run, explicitly create the ignored private
 `configs/.env.local`, populate it with real local values, and set mode `0600`.
-The tracked `configs/.env.local.example` and `configs/.env.sample` files are
-field-name documentation with deliberately unrealistic values; never copy or
-source them as runtime configuration. `make up` fails before contacting Docker
-when the private file is absent. When the real file uses the explicit
+The tracked `configs/.env.local.example` file documents local fields.
+The tracked `configs/.env.sample` file documents direct runtime fields.
+Both files contain deliberately unrealistic values. Never copy or source them
+as runtime configuration. `make up` fails before contacting Docker when the
+private file is absent. When the real file uses the explicit
 `__GENERATE_ON_FIRST_MAKE_UP__` marker for its local TAuth signing key or
 provider-key encryption key, `make up` generates that value once. It then
 writes ignored, service-scoped environment projections for ghttp, llm-proxy,
@@ -1158,8 +1174,12 @@ tenant inputs, including the signing key it shares with the API. Only llm-proxy
 receives the provider-key encryption configuration; aggregate dotenv files and
 live provider smoke-test credentials are not injected into auxiliary
 containers. The API image is built from the current source and runs the
-canonical `configs/config.yml` configuration. The stack has these explicit
-browser-facing endpoints:
+canonical `configs/config.yml` configuration.
+
+Local and production orchestration do not bind a DashScope URL. Each tenant
+supplies its Singapore Model Studio workspace URL with its DashScope API key in
+Settings.
+The stack has these explicit browser-facing endpoints:
 
 - Public landing: `http://localhost:4179/`, served by ghttp from the rendered
   local site artifact.

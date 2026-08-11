@@ -370,6 +370,9 @@ func (configuration fileConfiguration) validateCompleteConfiguration() error {
 	if configuration.Management.Enabled {
 		return nil
 	}
+	if strings.TrimSpace(configuration.Providers.DashScope.APIKey) != constants.EmptyString && strings.TrimSpace(configuration.Providers.DashScope.BaseURL) == constants.EmptyString {
+		return fmt.Errorf("%w: provider=%s field=%s", errProviderBaseURLRequired, proxy.ProviderNameDashScope, "providers.dashscope.base_url")
+	}
 	return configuration.validateTenantDefaultProviderCredentials()
 }
 
@@ -381,7 +384,6 @@ func (configuration providersConfiguration) validateCompleteProviderConfiguratio
 	}{
 		{providerName: proxy.ProviderNameOpenAI, fieldName: "providers.openai.base_url", baseURL: configuration.OpenAI.BaseURL},
 		{providerName: proxy.ProviderNameDeepSeek, fieldName: "providers.deepseek.base_url", baseURL: configuration.DeepSeek.BaseURL},
-		{providerName: proxy.ProviderNameDashScope, fieldName: "providers.dashscope.base_url", baseURL: configuration.DashScope.BaseURL},
 		{providerName: proxy.ProviderNameMoonshot, fieldName: "providers.moonshot.base_url", baseURL: configuration.Moonshot.BaseURL},
 		{providerName: proxy.ProviderNameMiniMax, fieldName: "providers.minimax.base_url", baseURL: configuration.MiniMax.BaseURL},
 		{providerName: proxy.ProviderNameSiliconFlow, fieldName: "providers.siliconflow.base_url", baseURL: configuration.SiliconFlow.BaseURL},

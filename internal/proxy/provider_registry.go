@@ -178,6 +178,9 @@ func (registry *providerRegistry) forTenant(requestTenant tenant) *providerRegis
 		definition.transcriptionAPIKey = constants.EmptyString
 		if providerSettings, configured := requestTenant.providerSettings[identifier]; configured {
 			definition.textAPIKey = providerSettings.apiKey
+			if providerSettings.baseURL != constants.EmptyString {
+				definition.textBaseURL = providerSettings.baseURL
+			}
 			if definition.supportsDictation {
 				definition.transcriptionAPIKey = providerSettings.apiKey
 			}

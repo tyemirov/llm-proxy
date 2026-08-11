@@ -1,21 +1,21 @@
 // @ts-check
 
-import { APP_INTEGRITY_ERROR } from "../constants.js?v=20260809i217";
-import { createAdminDashboardResponsibility } from "./adminDashboard.js?v=20260809i217";
-import { createAuthenticationLifecycleResponsibility } from "./authenticationLifecycle.js?v=20260809i217";
-import { createClientAccessResponsibility } from "./clientAccess.js?v=20260809i217";
-import { createManagementApplicationPresentationResponsibility } from "./managementApplicationPresentation.js?v=20260809i217";
-import { createManagementApplicationState } from "./managementApplicationState.js?v=20260809i217";
-import { createNotificationsResponsibility } from "./notifications.js?v=20260809i217";
-import { createProfileMutationsResponsibility } from "./profileMutations.js?v=20260809i217";
-import { createProviderCredentialsResponsibility } from "./providerCredentials.js?v=20260809i217";
-import { createProviderEditorResponsibility } from "./providerEditor.js?v=20260809i217";
-import { createProviderSettingsResponsibility } from "./providerSettings.js?v=20260809i217";
-import { createRequestExamplesResponsibility } from "./requestExamples.js?v=20260809i217";
-import { createRoutingDefaultsResponsibility } from "./routingDefaults.js?v=20260809i217";
-import { createSettingsDialogResponsibility } from "./settingsDialog.js?v=20260809i217";
-import { createTenantSettingsResponsibility } from "./tenantSettings.js?v=20260809i217";
-import { createUsageDashboardResponsibility } from "./usageDashboard.js?v=20260809i217";
+import { APP_INTEGRITY_ERROR } from "../constants.js?v=20260811c131";
+import { createAdminDashboardResponsibility } from "./adminDashboard.js?v=20260811c131";
+import { createAuthenticationLifecycleResponsibility } from "./authenticationLifecycle.js?v=20260811c131";
+import { createClientAccessResponsibility } from "./clientAccess.js?v=20260811c131";
+import { createManagementApplicationPresentationResponsibility } from "./managementApplicationPresentation.js?v=20260811c131";
+import { createManagementApplicationState } from "./managementApplicationState.js?v=20260811c131";
+import { createNotificationsResponsibility } from "./notifications.js?v=20260811c131";
+import { createProfileMutationsResponsibility } from "./profileMutations.js?v=20260811c131";
+import { createProviderCredentialsResponsibility } from "./providerCredentials.js?v=20260811c131";
+import { createProviderEditorResponsibility } from "./providerEditor.js?v=20260811c131";
+import { createProviderSettingsResponsibility } from "./providerSettings.js?v=20260811c131";
+import { createRequestExamplesResponsibility } from "./requestExamples.js?v=20260811c131";
+import { createRoutingDefaultsResponsibility } from "./routingDefaults.js?v=20260811c131";
+import { createSettingsDialogResponsibility } from "./settingsDialog.js?v=20260811c131";
+import { createTenantSettingsResponsibility } from "./tenantSettings.js?v=20260811c131";
+import { createUsageDashboardResponsibility } from "./usageDashboard.js?v=20260811c131";
 
 /**
  * Compose the authenticated management application from non-overlapping UI responsibilities.

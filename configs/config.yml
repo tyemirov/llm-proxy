@@ -39,7 +39,6 @@ providers:
   deepseek:
     base_url: https://api.deepseek.com
   dashscope:
-    base_url: "${DASHSCOPE_BASE_URL}"
   moonshot:
     base_url: https://api.moonshot.ai/v1
   minimax:

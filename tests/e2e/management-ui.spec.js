@@ -45,7 +45,7 @@ const apiDocumentationPath = "/docs/";
 const openAPIPath = "/openapi.yaml";
 const openAPISchemaViewerPath = `${apiDocumentationPath}#openapi-schema`;
 const openAPIDownloadFilename = "llm-proxy-openapi.yaml";
-const applicationModuleRevision = "20260809i217";
+const applicationModuleRevision = "20260811c131";
 const applicationModuleFiles = Object.freeze([
   "alpineRuntime.js",
   "app.js",
@@ -2608,6 +2608,45 @@ test("a newer pasted key cancels the stale verification and applies only the new
   expect(submittedKeys).toEqual([staleProviderKey, currentProviderKey]);
 });
 
+test("DashScope waits for its tenant workspace URL before saving the provider key", async ({ page }) => {
+	const workspaceURL = "https://tenant-workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1";
+	const providerSettingsRequests = [];
+	await installAssetRoutes(page);
+	await installManagementRoutes(page);
+	page.on("request", (request) => {
+		if (request.url() === providerKeyEndpointURL("dashscope") && request.method() === "PUT") {
+			providerSettingsRequests.push(request.postDataJSON());
+		}
+	});
+
+	await page.goto(`${baseURL}${applicationPath}`);
+	await page.getByTestId("avatar-menu").click();
+	await page.getByTestId("avatar-menu-item").nth(0).click();
+	const providerEditor = page.getByRole("dialog", { name: "Settings" }).locator("provider-editor");
+	const providerSelector = providerEditor.getByRole("combobox", { name: "Provider", exact: true });
+	await expect(providerEditor.getByRole("textbox", { name: "DashScope API URL" })).toBeHidden();
+	await providerSelector.selectOption("dashscope");
+	const workspaceInput = providerEditor.getByRole("textbox", { name: "DashScope API URL" });
+	await expect(workspaceInput).toBeVisible();
+	await expect(providerEditor).toContainText("Use the Singapore Model Studio URL paired with this API key.");
+	const providerKeyInput = providerEditor.getByRole("textbox", { name: "DashScope API key" });
+	await expect(providerEditor.locator("provider-base-url-field + provider-key-field")).toBeVisible();
+	await pasteProviderKey(providerKeyInput, "sk-tenant-dashscope");
+	await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+	expect(providerSettingsRequests).toEqual([]);
+	await workspaceInput.fill(workspaceURL);
+	await workspaceInput.press("Tab");
+
+	await expect.poll(() => providerSettingsRequests).toEqual([{
+		api_key: "sk-tenant-dashscope",
+		base_url: workspaceURL,
+		text_model: "qwen-plus",
+		system_prompt: "",
+	}]);
+	await expect(workspaceInput).toHaveValue(workspaceURL);
+	await expect(providerKeyInput).toHaveValue("****aved");
+});
+
 for (const verificationContextChange of [
   { id: "tenant", label: "tenant switch", article: "a", multiTenant: true },
   { id: "provider", label: "provider switch", article: "a", multiTenant: false },
@@ -2748,7 +2787,7 @@ test("provider selection autosaves its exact editor while transient removal stay
   expect(providerMutations.at(-1)).toMatchObject({
     method: "PUT",
     url: providerKeyEndpointURL("xai"),
-    payload: { api_key: firstGrokKey, text_model: "grok-4.3", system_prompt: "" },
+    payload: { api_key: firstGrokKey, base_url: "", text_model: "grok-4.3", system_prompt: "" },
   });
   const metaKeyInput = providerEditor.getByRole("textbox", { name: "Meta API key" });
   await expect(metaKeyInput).toHaveValue("****meta");
@@ -2768,7 +2807,7 @@ test("provider selection autosaves its exact editor while transient removal stay
   expect(providerMutations.at(-1)).toMatchObject({
     method: "PUT",
     url: providerKeyEndpointURL("xai"),
-    payload: { api_key: secondGrokKey, text_model: "grok-4.3", system_prompt: "" },
+    payload: { api_key: secondGrokKey, base_url: "", text_model: "grok-4.3", system_prompt: "" },
   });
   const deepSeekKeyInput = providerEditor.getByRole("textbox", { name: "DeepSeek API key" });
   await expect(deepSeekKeyInput).toHaveValue("****5678");
@@ -3016,6 +3055,7 @@ test("saved provider keys reveal, edit, and clear without browser persistence", 
   await expect(providerEditor.getByRole("button", { name: "Show key" })).toBeVisible();
   expect(savedProviderSettingsPayloads.at(-1)).toEqual({
     api_key: editedProviderKey,
+    base_url: "",
     text_model: "gpt-4.1",
     system_prompt: "Use concise answers.",
   });
@@ -3027,6 +3067,7 @@ test("saved provider keys reveal, edit, and clear without browser persistence", 
   await expect.poll(() => savedProviderSettingsPayloads.length).toBe(2);
   expect(savedProviderSettingsPayloads.at(-1)).toEqual({
     api_key: "",
+    base_url: "",
     text_model: "gpt-4o-mini",
     system_prompt: "Use concise answers.",
   });
@@ -3050,6 +3091,7 @@ test("saved provider keys reveal, edit, and clear without browser persistence", 
   await expect.poll(() => savedProviderSettingsPayloads.length).toBe(3);
   expect(savedProviderSettingsPayloads.at(-1)).toEqual({
     api_key: "",
+    base_url: "",
     text_model: "gpt-4o-mini",
     system_prompt: "Use autosaved provider guidance.",
   });
@@ -3736,6 +3778,17 @@ test("malformed routing-default profiles become app data integrity errors", asyn
   await expect(page.getByRole("dialog", { name: "Settings" })).toBeHidden();
 });
 
+test("malformed provider base URLs become app data integrity errors", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { malformedProviderBaseURL: true });
+
+  await page.goto(`${baseURL}${applicationPath}`);
+
+  await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+  await expect(page.getByText("App data integrity error")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Settings" })).toBeHidden();
+});
+
 test("invalid persisted routing-default profiles become app data integrity errors", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page, { profileStatus: 500, profileError: "managed_routing_defaults_invalid" });
@@ -3984,6 +4037,7 @@ test("fresh authenticated users receive one client key and must add a provider k
   expect(providerMutations).toEqual([
     {
       api_key: "sk-fresh-openai",
+      base_url: "",
       text_model: "gpt-4.1",
       system_prompt: "Use concise answers.",
     },
@@ -5509,6 +5563,7 @@ async function installMultiTenantRoutes(page, options = {}) {
         }
         provider.has_key = true;
         provider.masked_key = "saved";
+        provider.base_url = settings.base_url;
         provider.text_model = settings.text_model;
         provider.system_prompt = settings.system_prompt;
         reconcileManagementProfileRoutingDefaults(profile);
@@ -5519,6 +5574,7 @@ async function installMultiTenantRoutes(page, options = {}) {
         delete providerKeys[providerID];
         provider.has_key = false;
         delete provider.masked_key;
+        provider.base_url = "";
         reconcileManagementProfileRoutingDefaults(profile);
         await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
         return;
@@ -5602,7 +5658,7 @@ async function installMultiTenantRoutes(page, options = {}) {
 
 /**
  * @param {import("@playwright/test").Page} page
- * @param {{ usageStatus?: number, admin?: boolean, hasSecret?: boolean, generatedSecret?: string, profileStatus?: number, profileStatuses?: number[], profileError?: string, malformedRoutingDefaults?: boolean, maskedKeys?: Record<string, string>, providerKeys?: Record<string, string>, savedProviderIDs?: string[] }} options
+ * @param {{ usageStatus?: number, admin?: boolean, hasSecret?: boolean, generatedSecret?: string, profileStatus?: number, profileStatuses?: number[], profileError?: string, malformedProviderBaseURL?: boolean, malformedRoutingDefaults?: boolean, maskedKeys?: Record<string, string>, providerKeys?: Record<string, string>, savedProviderIDs?: string[] }} options
  * @returns {Promise<void>}
  */
 async function installManagementRoutes(page, options = {}) {
@@ -5638,6 +5694,7 @@ async function installManagementRoutes(page, options = {}) {
       label: "Anthropic",
       aliases: [],
       has_key: false,
+      base_url: "",
       text_model: "claude-sonnet-5",
       system_prompt: "",
       text_default_model: "claude-sonnet-5",
@@ -5646,6 +5703,13 @@ async function installManagementRoutes(page, options = {}) {
       dictation_models: [],
     });
     profile.tenant.defaults.provider = "anthropic";
+  }
+  if (options.malformedProviderBaseURL) {
+    const dashScopeProvider = profile.providers.find((provider) => provider.id === "dashscope");
+    if (!dashScopeProvider) {
+      throw new Error("management_fixture_provider_missing:dashscope");
+    }
+    Reflect.deleteProperty(dashScopeProvider, "base_url");
   }
   await page.route(`${baseURL}/api/management/account`, async (route) => {
     await route.fulfill({
@@ -5732,6 +5796,7 @@ async function installManagementRoutes(page, options = {}) {
       }
       provider.has_key = true;
       provider.masked_key = "sk-...saved";
+      provider.base_url = providerSettings.base_url;
       provider.text_model = providerSettings.text_model;
       provider.system_prompt = providerSettings.system_prompt;
       reconcileManagementProfileRoutingDefaults(profile);
@@ -5745,6 +5810,7 @@ async function installManagementRoutes(page, options = {}) {
       delete providerKeys[providerID];
       provider.has_key = false;
       delete provider.masked_key;
+      provider.base_url = "";
       reconcileManagementProfileRoutingDefaults(profile);
       await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
       return;
@@ -5928,6 +5994,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         label: "Anthropic",
         aliases: ["claude"],
         has_key: false,
+        base_url: "",
         text_model: "claude-sonnet-4-6",
         system_prompt: "",
         text_default_model: "claude-sonnet-4-6",
@@ -5941,6 +6008,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         aliases: [],
         has_key: true,
         masked_key: "sk-...1234",
+        base_url: "",
         text_model: "gpt-4.1",
         system_prompt: "Use concise answers.",
         text_default_model: "gpt-4.1",
@@ -5993,10 +6061,24 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         aliases: [],
         has_key: true,
         masked_key: "sk-...5678",
+        base_url: "",
         text_model: "deepseek-chat",
         system_prompt: "",
         text_default_model: "deepseek-chat",
         text_models: [{ id: "deepseek-chat" }],
+        supports_dictation: false,
+        dictation_models: [],
+      },
+      {
+        id: "dashscope",
+        label: "DashScope",
+        aliases: ["qwen"],
+        has_key: false,
+        base_url: "",
+        text_model: "qwen-plus",
+        system_prompt: "",
+        text_default_model: "qwen-plus",
+        text_models: [{ id: "qwen-plus" }],
         supports_dictation: false,
         dictation_models: [],
       },
@@ -6006,6 +6088,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         aliases: [],
         has_key: true,
         masked_key: "sk-...meta",
+        base_url: "",
         text_model: "muse-spark-1.1",
         system_prompt: "",
         text_default_model: "muse-spark-1.1",
@@ -6018,6 +6101,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         label: "xAI",
         aliases: ["xai"],
         has_key: false,
+        base_url: "",
         text_model: "grok-4.3",
         system_prompt: "",
         text_default_model: "grok-4.3",

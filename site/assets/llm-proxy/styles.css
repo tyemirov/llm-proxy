@@ -79,6 +79,7 @@ request-example,
 provider-editor,
 provider-settings-fields,
 provider-model-field,
+provider-base-url-field,
 provider-key-field,
 provider-key-input,
 provider-key-verification-error,
@@ -957,6 +958,23 @@ provider-model-field {
   color: var(--llm-muted);
   font-size: 0.76rem;
   font-weight: 600;
+}
+
+provider-base-url-field {
+  display: grid;
+  grid-column: 1 / -1;
+  min-width: 0;
+  gap: 0.25rem;
+  color: var(--llm-muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+provider-base-url-field input {
+  min-width: 0;
+  width: 100%;
+  min-height: 30px;
+  block-size: 30px;
 }
 
 .field-label-with-help > label {
