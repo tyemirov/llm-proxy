@@ -53,7 +53,7 @@ export const DEFAULT_USAGE_INTERVAL = "30d";
 export const USAGE_FAILURE_PAGE_LIMIT = 25;
 
 export const CAPABILITY_CATALOG_SORTS = Object.freeze({
-  PROVIDER: "provider",
+  PUBLISHER: "publisher",
   MODEL: "model",
   CAPABILITIES: "capabilities",
 });

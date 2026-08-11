@@ -11,12 +11,11 @@ that input capability.
 
 The public [LLM Proxy landing page](https://llm-proxy.mprlab.com/) explains the
 current provider, model, dictation, web-search, request-limit, and integration
-surface. Its interactive routing tree separates provider selection from exact
-model selection, while its filterable model matrix projects text, dictation,
-media, search, reasoning, default, contract, and output-limit metadata. Both
-are generated from the same validated runtime catalog used by request routing,
-so a catalog provider or model addition appears on the landing page without a
-second maintained inventory. The authenticated
+surface. Its route explorer selects a model publisher, an exact model, and a
+provider offering. Its model matrix has one row for each exact model and shows
+all current provider offerings for that model. Both interfaces use the
+validated runtime catalog. A catalog change appears on the landing page without
+a second inventory. The authenticated
 management app opens at [`/app/`](https://llm-proxy.mprlab.com/app/) only after
 the public **Log In** action authenticates the user through MPR UI and TAuth.
 
@@ -223,377 +222,54 @@ string so non-default providers can stay disabled. The loader does not mutate
 process environment, and all runtime code receives only the validated config
 value.
 
+The complete default configuration is in
+[configs/config.yml](configs/config.yml). The following excerpt shows the
+normalized catalog relationships. It omits unrelated providers and models.
+
 ```yaml
-server:
-  port: 8080
-  log_level: info
-  workers: 4
-  queue_size: 100
-  request_timeout_seconds: 360
-  max_request_timeout_seconds: 3600
-  max_prompt_bytes: 4194304
-  max_input_audio_bytes: 26214400
-  upstream_rate_limits: []
-management:
-  enabled: ${LLM_PROXY_MANAGEMENT_ENABLED}
-  public_origin: "${LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN}"
-  ui_description: "${LLM_PROXY_MANAGEMENT_UI_DESCRIPTION}"
-  ui_origins:
-    - "${LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN}"
-    - "${LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN}"
-    - "${LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN}"
-  admin_emails: ${LLM_PROXY_MANAGEMENT_ADMIN_EMAILS}
-  tauth_url: "${LLM_PROXY_MANAGEMENT_TAUTH_URL}"
-  tauth_tenant_id: "${LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID}"
-  google_client_id: "${LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID}"
-  login_path: "${LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH}"
-  logout_path: "${LLM_PROXY_MANAGEMENT_TAUTH_LOGOUT_PATH}"
-  nonce_path: "${LLM_PROXY_MANAGEMENT_TAUTH_NONCE_PATH}"
-  session_path: "${LLM_PROXY_MANAGEMENT_TAUTH_SESSION_PATH}"
-  jwt_signing_key: "${LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY}"
-  jwt_issuer: "${LLM_PROXY_MANAGEMENT_JWT_ISSUER}"
-  session_cookie_name: "${LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME}"
-  database_path: "${LLM_PROXY_MANAGEMENT_DATABASE_PATH}"
-  usage_queue_size: 1024
-  provider_key_encryption_key: "${LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY}"
-  management_api_origin: "${LLM_PROXY_MANAGEMENT_API_ORIGIN}"
-  proxy_origin: "${LLM_PROXY_MANAGEMENT_PROXY_ORIGIN}"
 providers:
-  openai:
-    base_url: "https://api.openai.com/v1"
-    transcriptions_url: "https://api.openai.com/v1/audio/transcriptions"
-    text:
-      default_model: "gpt-4.1"
-      models:
-        - id: "gpt-4o-mini"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_temperature"
-        - id: "gpt-4o"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_temperature_tools"
-          web_search: true
-        - id: "gpt-4.1"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_temperature_tools"
-          web_search: true
-        - id: "gpt-5-mini"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_reasoning_tools"
-          reasoning_effort:
-            adapter: "openai_responses"
-            efforts:
-              - minimal
-              - low
-              - medium
-              - high
-        - id: "gpt-5"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_reasoning_tools"
-          web_search: true
-          reasoning_effort:
-            adapter: "openai_responses"
-            efforts:
-              - minimal
-              - low
-              - medium
-              - high
-        - id: "gpt-5.5"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_reasoning_tools"
-          web_search: true
-          reasoning_effort:
-            adapter: "openai_responses"
-            efforts:
-              - none
-              - low
-              - medium
-              - high
-              - xhigh
-        - id: "gpt-5.5-pro"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_reasoning_tools"
-          web_search: true
-          reasoning_effort:
-            adapter: "openai_responses"
-            efforts:
-              - medium
-              - high
-              - xhigh
-        - id: "gpt-5.6"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_reasoning_tools"
-          web_search: true
-          reasoning_effort:
-            adapter: "openai_responses"
-            efforts:
-              - none
-              - low
-              - medium
-              - high
-              - xhigh
-              - max
-        - id: "gpt-5.6-sol"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_reasoning_tools"
-          web_search: true
-          reasoning_effort:
-            adapter: "openai_responses"
-            efforts:
-              - none
-              - low
-              - medium
-              - high
-              - xhigh
-              - max
-        - id: "gpt-5.6-terra"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_reasoning_tools"
-          web_search: true
-          reasoning_effort:
-            adapter: "openai_responses"
-            efforts:
-              - none
-              - low
-              - medium
-              - high
-              - xhigh
-              - max
-        - id: "gpt-5.6-luna"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_reasoning_tools"
-          web_search: true
-          reasoning_effort:
-            adapter: "openai_responses"
-            efforts:
-              - none
-              - low
-              - medium
-              - high
-              - xhigh
-              - max
-    dictation:
-      default_model: "gpt-4o-mini-transcribe"
-      models:
-        - id: "gpt-4o-mini-transcribe"
-        - id: "gpt-4o-transcribe"
-  meta:
-    base_url: "https://api.meta.ai/v1"
-    text:
-      default_model: "muse-spark-1.1"
-      models:
-        - id: "muse-spark-1.1"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
   deepseek:
     base_url: "https://api.deepseek.com"
-    text:
-      default_model: "deepseek-v4-flash"
-      models:
-        - id: "deepseek-v4-flash"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "deepseek-v4-pro"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "deepseek-chat"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "deepseek-reasoner"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-  dashscope:
-    base_url: "${DASHSCOPE_BASE_URL}"
-    text:
-      default_model: "qwen-plus"
-      models:
-        - id: "qwen-plus"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-  moonshot:
-    base_url: "https://api.moonshot.ai/v1"
-    text:
-      default_model: "kimi-k2.6"
-      models:
-        - id: "kimi-k2.6"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "kimi-k3"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "kimi-k2.7-code"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "kimi-k2.7-code-highspeed"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-  minimax:
-    base_url: "https://api.minimax.io/v1"
-    text:
-      default_model: "MiniMax-M2.7"
-      models:
-        - id: "MiniMax-M2.7"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 2048
   siliconflow:
     base_url: "https://api.siliconflow.com/v1"
     transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
-    text:
-      default_model: "deepseek-ai/DeepSeek-R1"
-      models:
-        - id: "deepseek-ai/DeepSeek-R1"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-    dictation:
-      default_model: "FunAudioLLM/SenseVoiceSmall"
-      models:
-        - id: "FunAudioLLM/SenseVoiceSmall"
-  zhipu:
-    base_url: "https://open.bigmodel.cn/api/paas/v4"
-    transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
-    text:
-      default_model: "glm-5.1"
-      models:
-        - id: "glm-5.1"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "glm-5.2"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 131072
-    dictation:
-      default_model: "glm-asr-2512"
-      models:
-        - id: "glm-asr-2512"
-  gemini:
-    base_url: "https://generativelanguage.googleapis.com/v1beta"
-    text:
-      default_model: "gemini-2.5-flash"
-      models:
-        - id: "gemini-3.5-flash"
-          wire_contract: "gemini_interactions"
-          execution_lifecycle: "pollable_resource"
-          output_token_limit: 65536
-        - id: "gemini-3.1-pro-preview"
-          wire_contract: "gemini_interactions"
-          execution_lifecycle: "pollable_resource"
-          output_token_limit: 65536
-        - id: "gemini-3-flash-preview"
-          wire_contract: "gemini_interactions"
-          execution_lifecycle: "pollable_resource"
-          output_token_limit: 65536
-        - id: "gemini-3.1-flash-lite"
-          wire_contract: "gemini_interactions"
-          execution_lifecycle: "pollable_resource"
-          output_token_limit: 65536
-        - id: "gemini-2.5-flash"
-          wire_contract: "gemini_interactions"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 65536
-        - id: "gemini-2.5-flash-lite"
-          wire_contract: "gemini_interactions"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 65536
-        - id: "gemini-2.5-pro"
-          wire_contract: "gemini_interactions"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 65536
-  anthropic:
-    base_url: "https://api.anthropic.com"
-    text:
-      default_model: "claude-sonnet-4-6"
-      models:
-        - id: "claude-fable-5"
-          wire_contract: "anthropic_messages"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 128000
-        - id: "claude-sonnet-5"
-          wire_contract: "anthropic_messages"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 128000
-        - id: "claude-opus-4-8"
-          wire_contract: "anthropic_messages"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 128000
-        - id: "claude-sonnet-4-6"
-          wire_contract: "anthropic_messages"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 64000
-        - id: "claude-haiku-4-5-20251001"
-          wire_contract: "anthropic_messages"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 64000
-        - id: "claude-haiku-4-5"
-          wire_contract: "anthropic_messages"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 64000
-        - id: "claude-sonnet-4-5-20250929"
-          wire_contract: "anthropic_messages"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 64000
-        - id: "claude-sonnet-4-5"
-          wire_contract: "anthropic_messages"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 64000
-        - id: "claude-opus-4-1-20250805"
-          wire_contract: "anthropic_messages"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 32000
-        - id: "claude-opus-4-1"
-          wire_contract: "anthropic_messages"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 32000
-  grok:
-    base_url: "https://api.x.ai/v1"
-    transcriptions_url: "https://api.x.ai/v1/stt"
-    text:
-      default_model: "grok-4.3"
-      models:
-        - id: "grok-4.3"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "grok-4.3-latest"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "grok-4.5"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "grok-4.20-0309-reasoning"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "grok-4.20-0309-non-reasoning"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "grok-latest"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "grok-build-0.1"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "grok-code-fast"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "grok-code-fast-1"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "grok-code-fast-1-0825"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-    dictation:
-      default_model: "xai-stt"
-      models:
-        - id: "xai-stt"
+catalog:
+  providers:
+    - id: deepseek
+      label: DeepSeek
+    - id: siliconflow
+      label: SiliconFlow
+  publishers:
+    - id: deepseek
+      label: DeepSeek
+  families:
+    - id: deepseek-r1
+      publisher: deepseek
+      label: DeepSeek R1
+  models:
+    - id: deepseek-reasoner
+      publisher: deepseek
+      family: deepseek-r1
+      version: deepseek-reasoner
+      operations:
+        - text
+  offerings:
+    - provider: deepseek
+      model: deepseek-reasoner
+      provider_model: deepseek-reasoner
+      operations:
+        - text
+      wire_contract: openai_chat_completions
+      execution_lifecycle: synchronous_completion
+    - provider: siliconflow
+      model: deepseek-reasoner
+      provider_model: deepseek-ai/DeepSeek-R1
+      operations:
+        - text
+      default_operations:
+        - text
+      wire_contract: openai_chat_completions
+      execution_lifecycle: synchronous_completion
 ```
 
 `server.workers` is not the number of client requests that may be connected at
@@ -632,9 +308,9 @@ keeps the existing request-timeout error mapping.
 
 Provider selectors and aliases are accepted anywhere the public API accepts
 `provider`. Omitted text models use the authenticated tenant default when
-`provider` is omitted; otherwise they use the selected provider's configured
-default text model. This table describes capabilities currently wired through
-`llm-proxy` and the defaults shipped in [configs/config.yml](configs/config.yml).
+`provider` is omitted. Otherwise, they use the selected provider offering that
+declares the text default. This table describes current runtime capabilities
+through `llm-proxy` and the defaults in [configs/config.yml](configs/config.yml).
 Upstream providers may expose additional speech APIs that need separate proxy
 adapters before they are available through `/dictate`.
 
@@ -645,8 +321,8 @@ adapters before they are available through `/dictate`.
 | `deepseek` | none | `openai_chat_completions` | `synchronous_completion` | `deepseek-v4-flash` | `providers.deepseek.api_key` | `https://api.deepseek.com` | No | No |
 | `dashscope` | `qwen` | `openai_chat_completions` | `synchronous_completion` | `qwen-plus` | `providers.dashscope.api_key` | Required `${DASHSCOPE_BASE_URL}` Singapore workspace URL | No | No |
 | `moonshot` | `kimi` | `openai_chat_completions` | `synchronous_completion` | `kimi-k2.6` | `providers.moonshot.api_key` | `https://api.moonshot.ai/v1` | No | No |
-| `minimax` | none | `openai_chat_completions` | `synchronous_completion` | `MiniMax-M2.7` | `providers.minimax.api_key` | `https://api.minimax.io/v1` | No | No |
-| `siliconflow` | none | `openai_chat_completions` | `synchronous_completion` | `deepseek-ai/DeepSeek-R1` | `providers.siliconflow.api_key` | `https://api.siliconflow.com/v1` | Yes: `FunAudioLLM/SenseVoiceSmall` | No |
+| `minimax` | none | `openai_chat_completions` | `synchronous_completion` | `minimax-m2.7` | `providers.minimax.api_key` | `https://api.minimax.io/v1` | No | No |
+| `siliconflow` | none | `openai_chat_completions` | `synchronous_completion` | `deepseek-reasoner` | `providers.siliconflow.api_key` | `https://api.siliconflow.com/v1` | Yes: `sensevoice-small` | No |
 | `zhipu` | `glm` | `openai_chat_completions` | `synchronous_completion` | `glm-5.1` | `providers.zhipu.api_key` | `https://open.bigmodel.cn/api/paas/v4` | Yes: `glm-asr-2512` | No |
 | `gemini` | none | `gemini_interactions` | Model-specific: Gemini 3.x `pollable_resource`; Gemini 2.5 `synchronous_completion` | `gemini-2.5-flash` | `providers.gemini.api_key` | `https://generativelanguage.googleapis.com/v1beta` | No | No |
 | `anthropic` | `claude` | `anthropic_messages` | `synchronous_completion` | `claude-sonnet-4-6` | `providers.anthropic.api_key` | `https://api.anthropic.com` | No | No |
@@ -667,134 +343,54 @@ declares `image` and `audio` only for `gemini-3.5-flash` and
 
 ### Model catalog schema
 
-Model ids and per-model metadata are runtime config data. To add, remove, or
-replace provider models, update the selected `config.yml` and restart the
-service. Every text model explicitly owns one validated `wire_contract` and
-`execution_lifecycle`; adapter codecs and allowed provider capability pairs
-stay code-owned.
+The normalized `catalog` has five related lists:
 
-The model-capability table below mirrors the checked-in catalog. Refresh that
-table and `config.yml` together; no capability is inferred from the provider,
-base URL, request profile, or upstream response identifier.
-Moonshot's current Kimi route receives Chat Completions
-`max_completion_tokens` when callers set the proxy `max_tokens` value.
-The transport deliberately omits sampling controls because Kimi K3 fixes those
-values upstream.
-GLM-5.2 uses the existing BigModel/Zhipu Chat Completions endpoint with a
-configured 131072-token output cap; its optional `thinking` and
-provider-native `reasoning_effort` controls are not exposed directly. The
-proxy's provider-neutral request-level `reasoning_effort` is accepted only when
-the exact resolved route declares a capability mapping. Blank values and
-supplied values for GLM or generic compatible-provider routes fail before an
-upstream call; an omitted field retains the supported tenant default.
-DashScope is the only Alibaba provider. Production binds
-`${DASHSCOPE_BASE_URL}` to the Singapore Model Studio workspace URL associated
-with the `${DASHSCOPE_API_KEY}` region; the `qwen` alias resolves to DashScope.
-MiniMax M2.7 uses
-`max_completion_tokens`, and the proxy rejects `max_tokens` values above the
-documented 2048-token completion maximum before it calls MiniMax.
+- `providers` identifies each provider that can own an offering.
+- `publishers` identifies each organization or community that publishes models.
+- `families` groups exact models under one publisher.
+- `models` defines each provider-independent exact model.
+- `offerings` defines each provider route for one exact model.
 
-Each provider must declare a text catalog. A provider with an `api_key`
-configured must have a valid text `default_model`; that default is used when a
-request selects the provider and omits `model`.
+An exact model owns its canonical identifier, publisher, family, version,
+operations, and media inputs. A provider offering owns its provider-native
+model identifier, operations, defaults, wire contract, lifecycle, limits, and
+route-specific capabilities.
 
-```yaml
-providers:
-  provider_name:
-    text:
-      default_model: "provider-default-model"
-      models:
-        - id: "provider-model-id"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_temperature_tools"
-          web_search: true
-          output_token_limit: 65536
-          reasoning_effort:
-            adapter: "openai_responses"
-            efforts:
-              - minimal
-              - low
-              - medium
-              - high
-```
+A request route contains a canonical provider identifier and exact model
+identifier. The registry resolves that pair to one provider offering. The
+provider adapter receives `provider_model` only after this lookup. Public REST
+data and management profiles do not expose `provider_model` or offering
+defaults.
 
-`server.request_timeout_seconds` and `server.max_request_timeout_seconds` must
-both be positive, and the default must not exceed the maximum. Invalid explicit
-values fail startup, including YAML `null` and an explicitly empty YAML value;
-omitting either field selects its compiled default. The maximum is
-operator-owned service capacity and must remain strictly below the
-response-header and read deadlines of the outer gateway.
+Each provider must have one catalog provider record. Each exact model must have
+one valid publisher and family. Each offering must reference one catalog
+provider and one exact model. Startup rejects duplicate identifiers, dangling
+references, duplicate route pairs, unsupported operations, and incompatible
+provider capabilities.
 
-Dictation-capable providers must also declare a dictation catalog:
+One provider operation default is required for each supported provider
+operation. Defaults belong to provider offerings through
+`default_operations`. Managed tenant defaults remain canonical provider and
+exact model pairs.
 
-```yaml
-providers:
-  provider_name:
-    dictation:
-      default_model: "provider-default-dictation-model"
-      models:
-        - id: "provider-dictation-model-id"
-```
+`wire_contract` is required for each text offering. Its current values are
+`openai_responses`, `openai_chat_completions`,
+`gemini_interactions`, and `anthropic_messages`.
+`execution_lifecycle` is also required for each text offering. Its current
+values are `synchronous_completion` and `pollable_resource`.
 
-`wire_contract` is required on every text model and currently accepts
-`openai_responses`, `openai_chat_completions`, `gemini_interactions`, or
-`anthropic_messages`. `execution_lifecycle` is also required and accepts
-`synchronous_completion` or `pollable_resource`. Startup rejects missing,
-unknown, provider-incompatible, or contradictory pairs and rejects either
-field on dictation models. OpenAI Responses is pollable; Gemini Interactions is
-pollable for the registered 3.x models and synchronous for the registered 2.5
-models. The registered Chat Completions and Anthropic Messages pairs complete
-synchronously. A future one-read deferred result requires a new exact
-lifecycle value rather than reusing `pollable_resource`.
+`output_token_limit`, `web_search`, `request_profile`,
+`reasoning_effort`, and offering `media_inputs` are route-specific
+capabilities. The exact model `media_inputs` value must equal the combined
+media input set of its offerings.
 
-Catalog validation also fails startup when a provider text catalog is missing, a
-dictation-capable provider dictation catalog is missing, a model id is blank or
-duplicated, `default_model` is not present in the corresponding `models` list,
-or `web_search: true` appears outside an OpenAI text model entry.
-`output_token_limit` is optional for most providers; when set, it is used as a
-proxy-side maximum for `max_tokens`. Anthropic text models require
-`output_token_limit` because Anthropic Messages requires `max_tokens` even when
-the client omits it.
-
-`media_inputs` is an optional exact-model capability list. Its only values are
-`image` and `audio`; values must be canonical and duplicate-free. Startup
-rejects declarations on an endpoint or provider adapter that does not implement
-the corresponding standard-message translation. Omission means that model is
-text-only.
-
-```yaml
-providers:
-  gemini:
-    text:
-      default_model: "gemini-2.5-flash"
-      models:
-        - id: "gemini-2.5-flash"
-          wire_contract: "gemini_interactions"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 65536
-          media_inputs:
-            - image
-            - audio
-```
-
-`reasoning_effort` is an optional text-model capability declaration. It appears
-only under `providers.<provider>.text.models[]` and belongs to that exact
-provider/model route; provider-level and catalog-wide declarations are rejected.
-Each declaration uses the `openai_responses` adapter and a nonempty,
-duplicate-free ordered list of values that adapter supports, and only an OpenAI
-`openai_responses_reasoning_tools` route may declare it. The capability limits
-the tenant default that can be persisted for that route and validates any
-supplied public request value.
-
-`request_profile` is currently required only for OpenAI text models. It selects
-the stable proxy payload shape for that OpenAI model and must be one of:
+OpenAI offerings use `request_profile` to select a stable payload shape:
 
 | Request profile | Payload behavior |
 |-----------------|------------------|
 | `openai_responses_temperature` | Adds `temperature`. |
-| `openai_responses_temperature_tools` | Adds `temperature`; includes web-search tools only when both the request and model catalog enable web search. |
-| `openai_responses_reasoning_tools` | Adds reasoning/text controls; includes web-search tools only when both the request and model catalog enable web search. The resolved request-level reasoning effort is sent only when this route declares the capability. |
+| `openai_responses_temperature_tools` | Adds `temperature` and enabled web-search tools. |
+| `openai_responses_reasoning_tools` | Adds reasoning controls and enabled web-search tools. |
 
 All OpenAI Responses text requests also send `background: true` and
 `store: true`. llm-proxy polls the stored OpenAI response server-side until it
@@ -841,7 +437,7 @@ Provider-specific details:
   missing-suffix loop and accepts the assembled text only after
   `finish_reason=stop`; `content_filter`, `tool_calls`, missing, and
   provider-specific non-stop reasons are upstream failures.
-* MiniMax uses selector `minimax`, exact model `MiniMax-M2.7`,
+* MiniMax uses selector `minimax`, exact model `minimax-m2.7`,
   `${MINIMAX_API_KEY}`, and `https://api.minimax.io/v1`. The shared compatible
   Chat Completions adapter maps public `max_tokens` to upstream
   `max_completion_tokens`; the catalog enforces MiniMax's documented 2048-token
@@ -911,9 +507,9 @@ provider lacks its API key, startup fails before the server listens. Provider
 the documented URLs unless routing through a test server, proxy, or compatible
 gateway. Dictation-capable provider
 `transcriptions_url` values are also explicit config values and are required for
-OpenAI, SiliconFlow, Zhipu, and Grok/xAI. Text model catalogs are required for
-every supported provider, and dictation model catalogs are required for OpenAI,
-SiliconFlow, Zhipu, and Grok/xAI. When `management.enabled` is false, startup
+OpenAI, SiliconFlow, Zhipu, and Grok/xAI. The normalized catalog must contain
+all supported providers and each supported text or dictation route. When
+`management.enabled` is false, startup
 validates that `tenants` includes at least one unique `id` and unique `secret`.
 When management is enabled, `tenants` and nonblank provider `api_key` fields are
 invalid: all client tokens and provider credentials are user-owned database
@@ -955,10 +551,10 @@ backend's public-capabilities-only REST surface, then the frontend-owned Node
 renderer fetches `/api/public/capabilities`. The renderer writes
 `https://llm-proxy-api.mprlab.com/config-ui.yaml` into every auth-aware header,
 replaces the public landing's capability marker with the returned model-centric
-catalog, and replaces the routing marker with its provider-to-text-model tree.
-Every provider and model remains present in server-rendered HTML without
-JavaScript; browser enhancement supplies selectable provider and model leaves,
-provider-default selection, and the final route display, plus
+catalog. It replaces the routing marker with the publisher, exact model, and
+provider offering explorer. Every catalog item remains in semantic HTML without
+JavaScript. Browser enhancement supplies exact-model filters, route selection,
+and the final route display. It also supplies
 one all-characteristics search surface, disclosed match-all capability filters,
 sortable table headers, a live result count, and reset. Node exists only in the
 Pages build stage; the published artifact is static and has no runtime renderer
@@ -1223,8 +819,10 @@ time. The bounded schema-version-3 migration performs the one-time
 reconciliation of older managed defaults against saved provider keys. The
 bounded schema-version-4 migration then removes retired `qwencloud` provider
 settings and reconciles affected text defaults to the first remaining keyed
-provider. Both preserve tenant timestamps and verify their result before
-recording the version. Invalid keys, models, or routing data stop startup with
+provider. The schema-version-5 migration converts affected provider-native
+model values to canonical exact model identifiers. These migrations preserve
+tenant timestamps and verify their result before recording the version.
+Invalid keys, models, or routing data stop startup with
 the owner, tenant, endpoint, provider, and model context.
 
 Configured authenticated users land on Usage Overview. An independent `Usage
@@ -1384,6 +982,12 @@ historical usage provider/model identifiers remain unchanged. The transaction
 verifies deleted settings, reconciled defaults, decrypted remaining keys,
 timestamps, and usage rows before recording version 4. Current-version startup
 rejects retired provider settings or routing defaults instead of repairing them.
+
+The bounded schema-version-5 migration converts stored provider-native model
+values to canonical exact model identifiers. It updates affected provider
+settings and tenant defaults in one transaction. It preserves tenant timestamps
+and all historical usage records. Current-version startup rejects an invalid
+or dangling canonical route.
 
 Server/runtime settings, backend auth validation settings, provider base URLs,
 transcription URLs, model catalogs, and browser-facing MPR UI/TAuth bootstrap
@@ -1831,7 +1435,8 @@ removing only its old container. The retained
 The Pages declaration uses `docker/pages/Dockerfile`. A compiled Go backend
 serves the secret-free `/api/public/capabilities` resource during the build;
 the Node frontend renderer fetches that resource, renders the provider/model
-catalog and request limits, and injects the browser configuration URL into
+catalog as publishers, exact models, and provider offerings. It also renders
+request limits and injects the browser configuration URL into
 every generated auth-aware HTML page. The final Pages image contains only the
 static artifact. Application runtime code has no Caddy deployment knowledge, and
 its TAuth knowledge remains limited to the published client/session
@@ -2005,9 +1610,9 @@ the saved default without an application code or deployment change. An explicit
 `--model` or request `model` pins that one request and does not follow a tenant
 default.
 
-Changing `providers.<provider>.text.default_model` in the service config affects
-only requests that resolve through that provider catalog default. It does not
-rewrite a managed tenant's saved routing default or a saved provider text model.
+Changing an offering's `default_operations` in service configuration affects
+only requests that resolve through that provider default. It does not rewrite
+a managed tenant's saved routing default or saved provider setting.
 
 #### Application-user model profiles
 
@@ -2479,14 +2084,13 @@ and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-mo
 | `deepseek-v4-flash` | DeepSeek | Yes | - | No |
 | `deepseek-v4-pro` | DeepSeek | No | - | No |
 | `deepseek-chat` | DeepSeek | No | - | No |
-| `deepseek-reasoner` | DeepSeek | No | - | No |
+| `deepseek-reasoner` | DeepSeek, SiliconFlow | SiliconFlow | - | No |
 | `qwen-plus` | DashScope/Qwen | Yes | - | No |
 | `kimi-k2.6` | Moonshot/Kimi | Yes | - | No |
 | `kimi-k3` | Moonshot/Kimi | No | - | No |
 | `kimi-k2.7-code` | Moonshot/Kimi | No | - | No |
 | `kimi-k2.7-code-highspeed` | Moonshot/Kimi | No | - | No |
-| `MiniMax-M2.7` | MiniMax | Yes | `2048` | No |
-| `deepseek-ai/DeepSeek-R1` | SiliconFlow | Yes | - | No |
+| `minimax-m2.7` | MiniMax | Yes | `2048` | No |
 | `glm-5.1` | Zhipu/GLM | Yes | - | No |
 | `glm-5.2` | Zhipu/GLM | No | `131072` | No |
 | `gemini-3.5-flash` | Gemini | No | `65536` | No |
@@ -2522,7 +2126,7 @@ and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-mo
 | Provider selector | Models | Credential field | Transcription URL field | Notes |
 |-------------------|--------|------------------|-------------------------|-------|
 | `openai` | `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | `providers.openai.api_key` | `providers.openai.transcriptions_url` | Default dictation provider and default model `gpt-4o-mini-transcribe`. |
-| `siliconflow` | `FunAudioLLM/SenseVoiceSmall` | `providers.siliconflow.api_key` | `providers.siliconflow.transcriptions_url` | OpenAI-compatible audio transcription. |
+| `siliconflow` | `sensevoice-small` | `providers.siliconflow.api_key` | `providers.siliconflow.transcriptions_url` | OpenAI-compatible audio transcription. |
 | `zhipu` / `glm` | `glm-asr-2512` | `providers.zhipu.api_key` | `providers.zhipu.transcriptions_url` | Z.AI GLM-ASR; sends `model=glm-asr-2512`. |
 | `grok` / `xai` | `xai-stt` | `providers.grok.api_key` | `providers.grok.transcriptions_url` | xAI STT; the proxy model name selects the provider but is not sent as a multipart `model` field. |
 

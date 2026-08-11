@@ -24,7 +24,7 @@ const SELECTORS = Object.freeze({
 /**
  * @typedef {{
  *   element: HTMLTableRowElement,
- *   provider: string,
+ *   publisher: string,
  *   model: string,
  *   capabilities: Set<string>,
  *   capabilityCount: number,
@@ -62,7 +62,7 @@ class CapabilityCatalogElement extends HTMLElement {
     /** @type {CapabilityCatalogRow[]} */
     this.rows = [];
     /** @type {CapabilityCatalogSort} */
-    this.sortColumn = CAPABILITY_CATALOG_SORTS.PROVIDER;
+    this.sortColumn = CAPABILITY_CATALOG_SORTS.PUBLISHER;
     /** @type {CapabilityCatalogSortDirection} */
     this.sortDirection = CAPABILITY_CATALOG_SORT_DIRECTIONS.ASCENDING;
     this.updateFrameIdentifier = 0;
@@ -164,7 +164,7 @@ class CapabilityCatalogElement extends HTMLElement {
   }
 
   resetCatalog() {
-    this.sortColumn = CAPABILITY_CATALOG_SORTS.PROVIDER;
+    this.sortColumn = CAPABILITY_CATALOG_SORTS.PUBLISHER;
     this.sortDirection = CAPABILITY_CATALOG_SORT_DIRECTIONS.ASCENDING;
     this.updateSortControls();
     this.scheduleUpdate();
@@ -275,16 +275,16 @@ class CapabilityCatalogElement extends HTMLElement {
  */
 function createCapabilityCatalogRow(rowElement) {
   const tableRow = /** @type {HTMLTableRowElement} */ (rowElement);
-  const provider = requiredDatasetValue(tableRow, "provider");
+  const publisher = requiredDatasetValue(tableRow, "publisher");
   const model = requiredDatasetValue(tableRow, "model");
   const capabilities = new Set(requiredDatasetValue(tableRow, "capabilities").split(" "));
   const capabilityCount = Number(requiredDatasetValue(tableRow, "capabilityCount"));
   if (!Number.isSafeInteger(capabilityCount) || capabilityCount < 1) {
-    throw new Error(`capability_catalog_capability_count_invalid: provider=${provider} model=${model}`);
+    throw new Error(`capability_catalog_capability_count_invalid: publisher=${publisher} model=${model}`);
   }
   return {
     element: tableRow,
-    provider,
+    publisher,
     model,
     capabilities,
     capabilityCount,
@@ -315,14 +315,14 @@ function sortCapabilityCatalogRows(sort, direction) {
   const directionMultiplier = direction === CAPABILITY_CATALOG_SORT_DIRECTIONS.ASCENDING ? 1 : -1;
   if (sort === CAPABILITY_CATALOG_SORTS.MODEL) {
     return (firstRow, secondRow) => directionMultiplier * (
-      compareText(firstRow.model, secondRow.model) || compareText(firstRow.provider, secondRow.provider)
+      compareText(firstRow.model, secondRow.model) || compareText(firstRow.publisher, secondRow.publisher)
     );
   }
   if (sort === CAPABILITY_CATALOG_SORTS.CAPABILITIES) {
     return (firstRow, secondRow) =>
-      directionMultiplier * (firstRow.capabilityCount - secondRow.capabilityCount) || compareProviderAndModel(firstRow, secondRow);
+      directionMultiplier * (firstRow.capabilityCount - secondRow.capabilityCount) || comparePublisherAndModel(firstRow, secondRow);
   }
-  return (firstRow, secondRow) => directionMultiplier * compareProviderAndModel(firstRow, secondRow);
+  return (firstRow, secondRow) => directionMultiplier * comparePublisherAndModel(firstRow, secondRow);
 }
 
 /**
@@ -330,7 +330,7 @@ function sortCapabilityCatalogRows(sort, direction) {
  * @returns {value is CapabilityCatalogSort}
  */
 function isCapabilityCatalogSort(value) {
-  return value === CAPABILITY_CATALOG_SORTS.PROVIDER ||
+  return value === CAPABILITY_CATALOG_SORTS.PUBLISHER ||
     value === CAPABILITY_CATALOG_SORTS.MODEL ||
     value === CAPABILITY_CATALOG_SORTS.CAPABILITIES;
 }
@@ -340,8 +340,8 @@ function isCapabilityCatalogSort(value) {
  * @param {CapabilityCatalogRow} secondRow
  * @returns {number}
  */
-function compareProviderAndModel(firstRow, secondRow) {
-  return compareText(firstRow.provider, secondRow.provider) || compareText(firstRow.model, secondRow.model);
+function comparePublisherAndModel(firstRow, secondRow) {
+  return compareText(firstRow.publisher, secondRow.publisher) || compareText(firstRow.model, secondRow.model);
 }
 
 /**

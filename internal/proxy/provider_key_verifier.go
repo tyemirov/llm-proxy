@@ -120,7 +120,7 @@ func (verifier *operationalProviderKeyVerifier) verify(parentContext context.Con
 func buildOpenAIProviderKeyVerificationRequest(requestContext context.Context, endpoints *Endpoints, _ providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {
 	maxTokens := providerKeyVerificationMaxTokens
 	payload := buildRequestPayload(
-		model.string(),
+		model.providerString(),
 		model.requestProfile.string(),
 		providerKeyVerificationPrompt,
 		false,
@@ -136,7 +136,7 @@ func buildOpenAIProviderKeyVerificationRequest(requestContext context.Context, e
 func buildChatProviderKeyVerificationRequest(requestContext context.Context, _ *Endpoints, provider providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {
 	maxTokens := providerKeyVerificationMaxTokens
 	payload := chatCompletionRequest{
-		Model: model.string(),
+		Model: model.providerString(),
 		Messages: []chatCompletionMessage{{
 			Role:    string(chatRoleUser),
 			Content: providerKeyVerificationPrompt,
@@ -155,7 +155,7 @@ func buildChatProviderKeyVerificationRequest(requestContext context.Context, _ *
 
 func buildGeminiProviderKeyVerificationRequest(requestContext context.Context, _ *Endpoints, provider providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {
 	payload := geminiInteractionRequest{
-		Model: model.string(),
+		Model: model.providerString(),
 		Input: []geminiInteractionStep{{
 			Type: geminiInteractionStepUserInput,
 			Content: []geminiInteractionContent{{
@@ -182,7 +182,7 @@ func buildGeminiProviderKeyVerificationRequest(requestContext context.Context, _
 
 func buildAnthropicProviderKeyVerificationRequest(requestContext context.Context, _ *Endpoints, provider providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {
 	payload := anthropicMessagesRequest{
-		Model:     model.string(),
+		Model:     model.providerString(),
 		MaxTokens: providerKeyVerificationMaxTokens,
 		Messages: []anthropicMessage{{
 			Role:    string(chatRoleUser),

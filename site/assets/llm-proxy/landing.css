@@ -223,7 +223,6 @@ routing-tree {
   display: block;
   position: relative;
   min-width: 0;
-  min-height: 670px;
   overflow: hidden;
   border: 1px solid var(--border-strong);
   border-radius: 18px;
@@ -234,132 +233,80 @@ routing-tree {
 .routing-tree__header {
   display: flex;
   min-height: 58px;
-  padding: 1.15rem 1.25rem 0.55rem;
+  padding: 1.15rem 1.25rem 0.65rem;
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
 }
 
-.routing-tree__header h2 {
+.routing-tree__header h2,
+.routing-tree__stage h3 {
   margin: 0;
   color: var(--text);
-  font-size: 1.02rem;
   font-weight: 560;
   letter-spacing: -0.015em;
+}
+
+.routing-tree__header h2 {
+  font-size: 1.02rem;
 }
 
 .routing-tree__header > span {
   color: var(--text-muted);
   font-family: var(--mono);
   font-size: 0.53rem;
-  letter-spacing: 0;
   white-space: nowrap;
 }
 
-.routing-tree__map {
-  position: relative;
+.routing-tree__filters {
   display: grid;
-  min-height: 610px;
-  padding: 0.75rem 1.25rem 0.95rem;
-  grid-template-columns: minmax(355px, 480px) minmax(190px, 220px) minmax(200px, 220px);
-  grid-template-areas:
-    "ingress providers models"
-    "selection selection selection";
-  grid-template-rows: 1fr auto;
-  align-items: center;
-  justify-content: space-between;
-  column-gap: 0;
-  row-gap: 0.75rem;
+  padding: 0 1.25rem 0.85rem;
+  grid-template-columns: minmax(220px, 1fr) minmax(150px, 0.35fr) minmax(145px, 0.3fr) auto;
+  gap: 0.45rem;
 }
 
-.routing-tree__connectors {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-
-.routing-tree__ingress {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-area: ingress;
-  grid-template-columns: minmax(160px, 180px) minmax(175px, 200px);
-  align-items: center;
-  justify-content: space-between;
-  gap: 0;
-}
-
-.routing-tree__node {
-  display: flex;
-  width: min(240px, 100%);
-  min-height: 94px;
-  padding: 0.85rem 1rem;
+.routing-tree__filters input,
+.routing-tree__filters select,
+.routing-tree__filters button {
+  min-width: 0;
+  min-height: 34px;
+  padding: 0.42rem 0.58rem;
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  border-radius: 6px;
   background: #181b20;
-  text-align: center;
+  color: var(--text-support);
+  font: inherit;
+  font-size: 0.62rem;
 }
 
-.routing-tree__node > strong {
-  margin-bottom: 0.22rem;
-  color: var(--text);
-  font-size: 0.84rem;
-  font-weight: 560;
+.routing-tree__filters button {
+  cursor: pointer;
 }
 
-.routing-tree__node > span {
-  color: var(--text-muted);
-  font-size: 0.58rem;
-  overflow-wrap: anywhere;
-}
-
-.routing-tree__node--proxy {
-  position: relative;
+.routing-tree__filters :focus-visible,
+.routing-tree__branch:focus-visible {
   border-color: var(--routing-tree-accent);
-  background: #142622;
+  outline: 2px solid rgba(74, 211, 181, 0.2);
+  outline-offset: 1px;
 }
 
-.routing-tree__node--proxy::before {
-  width: 8px;
-  height: 8px;
-  margin-bottom: 0.55rem;
-  border-radius: 50%;
-  background: var(--routing-tree-accent);
-  box-shadow: 0 0 0 5px rgba(74, 211, 181, 0.1);
-  content: "";
+.routing-tree__catalog {
+  display: grid;
+  min-height: 300px;
+  padding: 0.9rem 1.25rem;
+  border-block: 1px solid var(--border);
+  grid-template-columns: minmax(170px, 220px) minmax(0, 1fr);
+  gap: 1rem;
+  background: #14171c;
 }
 
 .routing-tree__stage {
-  position: relative;
-  z-index: 1;
   min-width: 0;
 }
 
-.routing-tree__stage--providers {
-  grid-area: providers;
-}
-
-.routing-tree__stage--models {
-  display: flex;
-  grid-area: models;
-  justify-content: flex-end;
-}
-
-.routing-tree__stage-title {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
+.routing-tree__stage h3 {
+  margin-bottom: 0.55rem;
+  font-size: 0.64rem;
 }
 
 .routing-tree__branches {
@@ -368,8 +315,10 @@ routing-tree {
   gap: 0.35rem;
 }
 
-.routing-tree__provider-branches {
-  width: 100%;
+.routing-tree__publisher-branches {
+  max-height: 254px;
+  padding-right: 0.25rem;
+  overflow-y: auto;
 }
 
 .routing-tree__branch {
@@ -412,6 +361,14 @@ routing-tree {
   opacity: 1;
 }
 
+.routing-tree__branch[hidden],
+.routing-tree__model-group[hidden],
+.routing-tree__provider-group[hidden],
+.routing-tree__empty[hidden] {
+  display: none;
+}
+
+.routing-tree__publisher strong,
 .routing-tree__provider strong {
   min-width: 0;
   font-size: 0.65rem;
@@ -419,49 +376,47 @@ routing-tree {
   line-height: 1.2;
 }
 
-.routing-tree__provider > small {
+.routing-tree__branch small {
   flex: 0 0 auto;
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 0.5rem;
+  font-size: 0.48rem;
+  text-align: right;
 }
 
-.routing-tree__model-group[hidden] {
-  display: none;
-}
-
-.routing-tree__model-group {
-  width: min(100%, 220px);
-}
-
-.routing-tree__model-group > p {
+.routing-tree__model-group > p,
+.routing-tree__provider-group > p {
   display: flex;
-  min-height: 28px;
+  min-height: 24px;
   margin: 0 0 0.45rem;
   align-items: baseline;
   justify-content: space-between;
   gap: 0.5rem;
 }
 
-.routing-tree__model-group > p strong {
+.routing-tree__model-group > p strong,
+.routing-tree__provider-group > p strong {
   color: var(--text);
   font-size: 0.66rem;
   font-weight: 560;
 }
 
-.routing-tree__model-group > p span {
+.routing-tree__model-group > p span,
+.routing-tree__provider-group > p span {
   color: var(--text-muted);
   font-size: 0.51rem;
-  text-align: right;
 }
 
 .routing-tree__model-branches {
-  grid-template-columns: minmax(0, 1fr);
+  max-height: 230px;
+  padding-right: 0.25rem;
+  overflow-y: auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.42rem;
 }
 
 .routing-tree__model {
-  min-height: 40px;
+  min-height: 44px;
   align-items: baseline;
 }
 
@@ -473,13 +428,114 @@ routing-tree {
   overflow-wrap: anywhere;
 }
 
-.routing-tree__model small {
-  flex: 0 0 auto;
-  color: var(--warning);
-  font-size: 0.4rem;
-  font-weight: 700;
-  letter-spacing: 0.035em;
-  text-transform: uppercase;
+.routing-tree__empty {
+  margin: 1rem 0;
+  color: var(--text-muted);
+  font-size: 0.62rem;
+}
+
+.routing-tree__map {
+  position: relative;
+  display: grid;
+  min-height: 230px;
+  padding: 1rem 1.25rem 0.8rem;
+  grid-template-columns: minmax(360px, 1fr) minmax(180px, 220px) minmax(200px, 1fr);
+  grid-template-areas:
+    "ingress selected providers"
+    "route route route";
+  grid-template-rows: 1fr auto;
+  align-items: center;
+  gap: 0.8rem 4rem;
+}
+
+.routing-tree__connectors {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.routing-tree__ingress {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-area: ingress;
+  grid-template-columns: repeat(2, minmax(160px, 1fr));
+  align-items: center;
+  gap: 4rem;
+}
+
+.routing-tree__node {
+  display: flex;
+  width: 100%;
+  min-height: 86px;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #181b20;
+  text-align: center;
+}
+
+.routing-tree__node > strong {
+  margin-bottom: 0.22rem;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 560;
+}
+
+.routing-tree__node > span,
+.routing-tree__node > small {
+  color: var(--text-muted);
+  font-size: 0.54rem;
+  overflow-wrap: anywhere;
+}
+
+.routing-tree__node--proxy {
+  border-color: var(--routing-tree-accent);
+  background: #142622;
+}
+
+.routing-tree__node--proxy::before {
+  width: 8px;
+  height: 8px;
+  margin-bottom: 0.45rem;
+  border-radius: 50%;
+  background: var(--routing-tree-accent);
+  box-shadow: 0 0 0 5px rgba(74, 211, 181, 0.1);
+  content: "";
+}
+
+.routing-tree__node--selection {
+  position: relative;
+  z-index: 1;
+  grid-area: selected;
+  border-color: rgba(74, 211, 181, 0.55);
+  background: #171f1e;
+}
+
+.routing-tree__node--selection code {
+  color: inherit;
+  font-size: 0.66rem;
+  overflow-wrap: anywhere;
+}
+
+.routing-tree__stage--providers {
+  position: relative;
+  z-index: 1;
+  grid-area: providers;
+}
+
+.routing-tree__provider-branches {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.routing-tree__provider {
+  min-height: 42px;
 }
 
 .routing-tree__selection {
@@ -487,8 +543,7 @@ routing-tree {
   z-index: 1;
   display: flex;
   min-height: 28px;
-  margin: 0;
-  grid-area: selection;
+  grid-area: route;
   align-items: center;
   justify-content: center;
   gap: 0.22rem;
@@ -518,7 +573,6 @@ routing-tree {
   color: var(--text-muted);
   font-style: normal;
 }
-
 .section.route-overview {
   --content: 1180px;
   padding-block: clamp(3rem, 6vw, 5rem);
@@ -793,7 +847,7 @@ capability-catalog {
 .catalog-summary {
   display: grid;
   margin-bottom: 0.65rem;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 0.45rem;
 }
 
@@ -1143,16 +1197,16 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
   width: 54%;
 }
 
-.catalog-provider {
+.catalog-publisher {
   min-width: 105px;
 }
 
-.catalog-provider strong,
-.catalog-provider code {
+.catalog-publisher strong,
+.catalog-publisher code {
   display: block;
 }
 
-.catalog-provider code {
+.catalog-publisher code {
   margin-top: 0.1rem;
   color: var(--text-muted);
   font-size: 0.61rem;
@@ -1165,24 +1219,17 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
 .catalog-model__content {
   display: flex;
   min-width: 0;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 0.28rem 0.5rem;
+  flex-direction: column;
+  gap: 0.28rem;
 }
 
 .catalog-model code {
   overflow-wrap: anywhere;
 }
 
-.catalog-model__default {
-  display: inline-flex;
-  margin: 0;
-  align-items: center;
-  color: var(--warning);
-  font-size: 0.55rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.catalog-model small {
+  color: var(--text-muted);
+  font-size: 0.56rem;
 }
 
 .catalog-capabilities {
@@ -1220,6 +1267,43 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
 .catalog-technical code {
   overflow-wrap: anywhere;
   color: #8b91a0;
+}
+
+.catalog-offerings {
+  display: grid;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  gap: 0.4rem;
+  list-style: none;
+}
+
+.catalog-offerings li {
+  display: grid;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--border);
+  grid-template-columns: minmax(95px, 0.3fr) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.65rem;
+}
+
+.catalog-offering__provider strong,
+.catalog-offering__provider code {
+  display: block;
+}
+
+.catalog-offering__provider strong {
+  color: var(--text-support);
+  font-size: 0.62rem;
+}
+
+.catalog-offering__provider code {
+  margin-top: 0.1rem;
+  color: var(--text-muted);
+  font-size: 0.55rem;
+}
+
+.catalog-offerings .catalog-technical {
+  margin-top: 0;
 }
 
 .capability-badge--primary {
@@ -1347,27 +1431,28 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
     width: min(100%, 720px);
   }
 
+  .routing-tree__filters {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .routing-tree__map {
-    min-height: 690px;
-    grid-template-columns: minmax(220px, 0.74fr) minmax(0, 1.26fr);
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
     grid-template-areas:
       "ingress ingress"
-      "providers models"
-      "selection selection";
-    grid-template-rows: auto 1fr auto;
+      "selected providers"
+      "route route";
+    grid-template-rows: auto auto auto;
     align-items: stretch;
-    column-gap: 1.75rem;
-    row-gap: 1.35rem;
+    gap: 1rem 2rem;
   }
 
   .routing-tree__ingress {
-    min-height: 108px;
-    grid-template-columns: minmax(220px, 0.74fr) minmax(0, 1.26fr);
-    gap: 1.75rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2rem;
   }
 
-  .routing-tree__provider-branches {
-    width: min(100%, 220px);
+  .catalog-summary {
+    grid-template-columns: repeat(3, 1fr);
   }
 
   .integration-layout,
@@ -1409,7 +1494,6 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
   }
 
   routing-tree {
-    min-height: 0;
     border-radius: 12px;
   }
 
@@ -1420,15 +1504,40 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
     gap: 0.35rem;
   }
 
+  .routing-tree__header > span {
+    white-space: normal;
+  }
+
+  .routing-tree__filters {
+    padding-inline: 0.85rem;
+    grid-template-columns: 1fr;
+  }
+
+  .routing-tree__catalog {
+    min-height: 0;
+    padding-inline: 0.85rem;
+    grid-template-columns: 1fr;
+  }
+
+  .routing-tree__publisher-branches {
+    max-height: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .routing-tree__model-branches {
+    max-height: 260px;
+    grid-template-columns: 1fr;
+  }
+
   .routing-tree__map {
     min-height: 0;
     padding-inline: 0.85rem;
     grid-template-columns: 1fr;
     grid-template-areas:
       "ingress"
+      "selected"
       "providers"
-      "models"
-      "selection";
+      "route";
     grid-template-rows: auto;
     gap: 1.25rem;
   }
@@ -1449,15 +1558,6 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
   }
 
   .routing-tree__provider-branches {
-    width: 100%;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .routing-tree__model-group {
-    width: 100%;
-  }
-
-  .routing-tree__model-branches {
     grid-template-columns: 1fr;
   }
 
@@ -1472,6 +1572,10 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
     grid-template-columns: 1fr;
   }
 
+  .catalog-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
   .catalog-filter-panel {
     align-items: stretch;
     flex-direction: column;
@@ -1482,7 +1586,7 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
   }
 
   .catalog-table {
-    min-width: 680px;
+    min-width: 820px;
   }
 
   .value-strip__grid p,

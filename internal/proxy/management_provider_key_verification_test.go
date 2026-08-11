@@ -29,6 +29,7 @@ const (
 type providerKeyVerificationTransportCase struct {
 	provider        string
 	model           string
+	providerModel   string
 	transport       string
 	tokenLimitField string
 }
@@ -62,8 +63,8 @@ func TestManagementProviderKeyVerificationUsesEveryCanonicalTransportBeforePersi
 		{provider: proxy.ProviderNameDeepSeek, model: proxy.ModelNameDeepSeekV4Flash, transport: verificationTransportChat, tokenLimitField: "max_tokens"},
 		{provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwenPlus, transport: verificationTransportChat, tokenLimitField: "max_tokens"},
 		{provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK26, transport: verificationTransportChat, tokenLimitField: "max_completion_tokens"},
-		{provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM27, transport: verificationTransportChat, tokenLimitField: "max_completion_tokens"},
-		{provider: proxy.ProviderNameSiliconFlow, model: proxy.ModelNameSiliconFlowDeepSeek, transport: verificationTransportChat, tokenLimitField: "max_tokens"},
+		{provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM27, providerModel: "MiniMax-M2.7", transport: verificationTransportChat, tokenLimitField: "max_completion_tokens"},
+		{provider: proxy.ProviderNameSiliconFlow, model: proxy.ModelNameSiliconFlowDeepSeek, providerModel: "deepseek-ai/DeepSeek-R1", transport: verificationTransportChat, tokenLimitField: "max_tokens"},
 		{provider: proxy.ProviderNameZhipu, model: proxy.ModelNameZhipuGLM, transport: verificationTransportChat, tokenLimitField: "max_tokens"},
 		{provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, transport: verificationTransportGemini},
 		{provider: proxy.ProviderNameAnthropic, model: proxy.ModelNameClaudeSonnet46, transport: verificationTransportAnthropic},
@@ -594,11 +595,15 @@ func assertProviderKeyVerificationRequest(t *testing.T, request *http.Request, t
 		t.Errorf("decode verification request: %v", decodeError)
 		return
 	}
+	expectedProviderModel := transportCase.providerModel
+	if expectedProviderModel == "" {
+		expectedProviderModel = transportCase.model
+	}
 	switch transportCase.transport {
 	case verificationTransportOpenAI:
 		if request.URL.Path != "/responses" ||
 			request.Header.Get("Authorization") != "Bearer "+candidateKey ||
-			payload["model"] != transportCase.model ||
+			payload["model"] != expectedProviderModel ||
 			payload["background"] != false ||
 			payload["store"] != false ||
 			payload["max_output_tokens"] != float64(16) {
@@ -607,7 +612,7 @@ func assertProviderKeyVerificationRequest(t *testing.T, request *http.Request, t
 	case verificationTransportChat:
 		if request.URL.Path != "/chat/completions" ||
 			request.Header.Get("Authorization") != "Bearer "+candidateKey ||
-			payload["model"] != transportCase.model ||
+			payload["model"] != expectedProviderModel ||
 			payload[transportCase.tokenLimitField] != float64(16) {
 			t.Errorf("chat verification path=%q headers=%v payload=%v", request.URL.Path, request.Header, payload)
 		}
@@ -617,7 +622,7 @@ func assertProviderKeyVerificationRequest(t *testing.T, request *http.Request, t
 		if request.URL.Path != testGeminiInteractionsPath ||
 			request.Header.Get("x-goog-api-key") != candidateKey ||
 			request.Header.Get(testGeminiAPIRevisionHeader) != testGeminiAPIRevisionValue ||
-			payload["model"] != transportCase.model ||
+			payload["model"] != expectedProviderModel ||
 			payload["background"] != false ||
 			payload["store"] != false ||
 			!generationConfigOK || generationConfig["max_output_tokens"] != float64(16) ||
@@ -628,7 +633,7 @@ func assertProviderKeyVerificationRequest(t *testing.T, request *http.Request, t
 		if request.URL.Path != "/v1/messages" ||
 			request.Header.Get("x-api-key") != candidateKey ||
 			request.Header.Get("anthropic-version") != "2023-06-01" ||
-			payload["model"] != transportCase.model ||
+			payload["model"] != expectedProviderModel ||
 			payload["max_tokens"] != float64(16) {
 			t.Errorf("Anthropic verification path=%q headers=%v payload=%v", request.URL.Path, request.Header, payload)
 		}

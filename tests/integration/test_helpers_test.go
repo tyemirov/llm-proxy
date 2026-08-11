@@ -171,8 +171,8 @@ func newIntegrationServerWithDefaults(testingInstance *testing.T, openAIServer *
 
 func integrationConfiguration(testingInstance testing.TB, configuration proxy.Configuration) proxy.Configuration {
 	testingInstance.Helper()
-	if len(configuration.ProviderModels) == 0 {
-		configuration.ProviderModels = testfixtures.ProviderModelCatalogs(testingInstance)
+	if len(configuration.ModelCatalog.Offerings) == 0 {
+		configuration.ModelCatalog = testfixtures.ModelCatalog(testingInstance)
 	}
 	return configuration
 }

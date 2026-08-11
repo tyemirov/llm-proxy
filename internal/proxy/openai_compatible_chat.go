@@ -53,7 +53,7 @@ func newOpenAICompatibleChatClient(httpClient HTTPDoer) *openAICompatibleChatCli
 
 func (client *openAICompatibleChatClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, tokenLimitParameter chatCompletionTokenLimitParameter, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	payload := chatCompletionRequest{
-		Model:    modelIdentifier.string(),
+		Model:    modelIdentifier.providerString(),
 		Messages: messages.chatCompletionMessages(),
 	}
 	if maxTokens != nil {

@@ -105,14 +105,9 @@ func TestManagedTenantStoreCipherAndSnapshotEdges(t *testing.T) {
 		t.Fatalf("invalid encryption key error=%v", storeError)
 	}
 	invalidDefaultsProviders := newProviderRegistry(Configuration{
-		ProviderModels: ProviderModelCatalogs{
-			ProviderNameDeepSeek: {
-				Text: ModelEndpointCatalog{
-					DefaultModel: ModelNameDeepSeekV4Flash,
-					Models:       []ModelConfiguration{{ID: ModelNameDeepSeekV4Flash}},
-				},
-			},
-		},
+		ModelCatalog: internalTestModelCatalog(
+			internalTestOffering(ProviderNameDeepSeek, ModelNameDeepSeekV4Flash, []string{ModelOperationText}, []string{ModelOperationText}),
+		),
 	})
 	if _, storeError := newManagedTenantStore(ManagementConfiguration{
 		ProviderKeyEncryptionKey: testManagedProviderKeyEncryptionKey,

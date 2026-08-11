@@ -80,7 +80,7 @@ func TestIntegration_OmitsDisallowedParameters(testingInstance *testing.T) {
 			logger, _ := zap.NewDevelopment()
 			defer logger.Sync()
 
-			router, buildRouterError := proxy.BuildRouter(testfixtures.WithProviderModelCatalogs(subTestInstance, proxy.Configuration{
+			router, buildRouterError := proxy.BuildRouter(testfixtures.WithModelCatalog(subTestInstance, proxy.Configuration{
 				Tenants:     proxy.SingleTenantConfigurations("capabilities", serviceSecret),
 				OpenAIKey:   openAIKey,
 				LogLevel:    logLevel,
@@ -122,40 +122,41 @@ func TestIntegration_OmitsDisallowedParameters(testingInstance *testing.T) {
 
 func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance *testing.T) {
 	catalog, catalogError := proxy.NewPublicCapabilityCatalog(proxy.Configuration{
-		ProviderModels: testfixtures.ProviderModelCatalogs(testingInstance),
+		ModelCatalog: testfixtures.ModelCatalog(testingInstance),
 	})
 	if catalogError != nil {
 		testingInstance.Fatalf("NewPublicCapabilityCatalog error: %v", catalogError)
 	}
-	if len(catalog.Providers) != 11 || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
+	if catalog.Counts.Providers != 11 || catalog.Counts.ModelPublishers != 11 || catalog.Counts.ExactModels != len(catalog.Models) || catalog.Counts.ProviderOfferings != len(catalog.Offerings) || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
 		testingInstance.Fatalf("catalog summary=%+v", catalog)
 	}
 	geminiCapabilityFound := false
 	openAIDictationCapabilityFound := false
-	for _, provider := range catalog.Providers {
-		for _, model := range provider.Models {
-			for _, capability := range model.Capabilities {
-				if capability == "background" || capability == "synchronous" {
-					testingInstance.Fatalf("public capability catalog exposed execution lifecycle provider=%s model=%s capability=%s", provider.Identifier, model.Identifier, capability)
-				}
+	for _, model := range catalog.Models {
+		for _, capability := range model.Capabilities {
+			if capability == "background" || capability == "synchronous" {
+				testingInstance.Fatalf("public capability catalog exposed execution lifecycle model=%s capability=%s", model.Identifier, capability)
 			}
-			switch {
-			case provider.Identifier == proxy.ProviderNameGemini && model.Identifier == proxy.ModelNameGemini35Flash:
-				geminiCapabilityFound = true
-				if !slices.Equal(model.Capabilities, []string{
-					proxy.PublicModelCapabilityText,
-					proxy.PublicModelCapabilityAudioInput,
-					proxy.PublicModelCapabilityImageInput,
-				}) {
-					testingInstance.Fatalf("Gemini capabilities=%v", model.Capabilities)
-				}
-			case provider.Identifier == proxy.ProviderNameOpenAI && model.Identifier == proxy.DefaultDictationModel:
-				openAIDictationCapabilityFound = true
-				if !slices.Equal(model.Capabilities, []string{proxy.PublicModelCapabilityDictation}) ||
-					!slices.Equal(model.DefaultEndpoints, []string{proxy.PublicModelCapabilityDictation}) {
-					testingInstance.Fatalf("OpenAI dictation capability=%+v", model)
-				}
+		}
+		switch model.Identifier {
+		case proxy.ModelNameGemini35Flash:
+			geminiCapabilityFound = true
+			if !slices.Equal(model.Capabilities, []string{
+				proxy.PublicModelCapabilityAudioInput,
+				proxy.PublicModelCapabilityImageInput,
+				proxy.PublicModelCapabilityText,
+			}) {
+				testingInstance.Fatalf("Gemini capabilities=%v", model.Capabilities)
 			}
+		case proxy.DefaultDictationModel:
+			if !slices.Equal(model.Capabilities, []string{proxy.PublicModelCapabilityDictation}) {
+				testingInstance.Fatalf("OpenAI dictation capability=%+v", model)
+			}
+		}
+	}
+	for _, offering := range catalog.Offerings {
+		if offering.Provider == proxy.ProviderNameOpenAI && offering.Model == proxy.DefaultDictationModel {
+			openAIDictationCapabilityFound = true
 		}
 	}
 	if !geminiCapabilityFound || !openAIDictationCapabilityFound {
@@ -170,17 +171,33 @@ func TestPublicCapabilityRESTResourceProjectsChangedCatalogWithoutPrivateConfig(
 		privateBaseURL = "https://private-provider-origin.invalid/v1"
 		privateSecret  = "private-tenant-secret-sentinel"
 	)
-	catalogs := testfixtures.ProviderModelCatalogs(testingInstance)
-	moonshotCatalog := catalogs[proxy.ProviderNameMoonshot]
-	changedModel := moonshotCatalog.Text.Models[0]
+	catalogs := testfixtures.ModelCatalog(testingInstance)
+	var changedModel proxy.ExactModel
+	var changedOffering proxy.ProviderOffering
+	for _, offering := range catalogs.Offerings {
+		if offering.Provider == proxy.ProviderNameMoonshot {
+			changedOffering = offering
+			break
+		}
+	}
+	for _, model := range catalogs.Models {
+		if model.ID == changedOffering.Model {
+			changedModel = model
+			break
+		}
+	}
 	changedModel.ID = changedModelID
-	moonshotCatalog.Text.Models = append(moonshotCatalog.Text.Models, changedModel)
-	catalogs[proxy.ProviderNameMoonshot] = moonshotCatalog
+	changedModel.Version = "rest-contract"
+	changedOffering.Model = changedModelID
+	changedOffering.ProviderModel = "private-native-model-sentinel"
+	changedOffering.DefaultOperations = nil
+	catalogs.Models = append(catalogs.Models, changedModel)
+	catalogs.Offerings = append(catalogs.Offerings, changedOffering)
 	router, buildError := proxy.BuildRouter(proxy.Configuration{
-		Tenants:        proxy.SingleTenantConfigurations("private-tenant", privateSecret),
-		OpenAIKey:      privateAPIKey,
-		OpenAIBaseURL:  privateBaseURL,
-		ProviderModels: catalogs,
+		Tenants:       proxy.SingleTenantConfigurations("private-tenant", privateSecret),
+		OpenAIKey:     privateAPIKey,
+		OpenAIBaseURL: privateBaseURL,
+		ModelCatalog:  catalogs,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
 		testingInstance.Fatalf("BuildRouter error: %v", buildError)
@@ -196,7 +213,7 @@ func TestPublicCapabilityRESTResourceProjectsChangedCatalogWithoutPrivateConfig(
 		testingInstance.Fatalf("cache control=%q", response.Header().Get("Cache-Control"))
 	}
 	responseBody := response.Body.String()
-	for _, privateValue := range []string{privateAPIKey, privateBaseURL, privateSecret, "api_key", "base_url"} {
+	for _, privateValue := range []string{privateAPIKey, privateBaseURL, privateSecret, changedOffering.ProviderModel, "api_key", "base_url", "provider_model", "default_operations"} {
 		if strings.Contains(responseBody, privateValue) {
 			testingInstance.Fatalf("public capability response exposed %q: %s", privateValue, responseBody)
 		}
@@ -206,14 +223,9 @@ func TestPublicCapabilityRESTResourceProjectsChangedCatalogWithoutPrivateConfig(
 		testingInstance.Fatalf("decode public capability response: %v", decodeError)
 	}
 	changedModelFound := false
-	for _, provider := range catalog.Providers {
-		if provider.Identifier != proxy.ProviderNameMoonshot {
-			continue
-		}
-		for _, model := range provider.Models {
-			if model.Identifier == changedModelID {
-				changedModelFound = true
-			}
+	for _, model := range catalog.Models {
+		if model.Identifier == changedModelID && slices.Contains(model.ProviderOfferings, proxy.ProviderNameMoonshot+":"+changedModelID) {
+			changedModelFound = true
 		}
 	}
 	if !changedModelFound {
@@ -224,46 +236,44 @@ func TestPublicCapabilityRESTResourceProjectsChangedCatalogWithoutPrivateConfig(
 func TestPublicCapabilityCatalogRejectsNoncanonicalRuntimeRegistries(testingInstance *testing.T) {
 	testCases := []struct {
 		name          string
-		mutate        func(proxy.ProviderModelCatalogs)
+		mutate        func(*proxy.ModelCatalog)
 		expectedError string
 	}{
 		{
 			name: "noncanonical provider identifier",
-			mutate: func(catalogs proxy.ProviderModelCatalogs) {
-				catalogs["OpenAI"] = catalogs[proxy.ProviderNameOpenAI]
+			mutate: func(catalogs *proxy.ModelCatalog) {
+				catalogs.Providers[0].ID = "OpenAI"
 			},
 			expectedError: "reason=not_canonical",
 		},
 		{
 			name: "unknown provider identifier",
-			mutate: func(catalogs proxy.ProviderModelCatalogs) {
-				catalogs["future"] = catalogs[proxy.ProviderNameOpenAI]
+			mutate: func(catalogs *proxy.ModelCatalog) {
+				catalogs.Providers[0].ID = "future"
 			},
 			expectedError: "reason=unknown",
 		},
 		{
 			name: "incomplete provider registry",
-			mutate: func(catalogs proxy.ProviderModelCatalogs) {
-				delete(catalogs, proxy.ProviderNameMeta)
+			mutate: func(catalogs *proxy.ModelCatalog) {
+				catalogs.Providers = slices.Delete(catalogs.Providers, 9, 10)
 			},
-			expectedError: "provider=meta field=providers.meta.text",
+			expectedError: "field=catalog.providers provider=meta reason=missing",
 		},
 		{
 			name: "invalid model catalog",
-			mutate: func(catalogs proxy.ProviderModelCatalogs) {
-				openAICatalog := catalogs[proxy.ProviderNameOpenAI]
-				openAICatalog.Text.DefaultModel = "missing-model"
-				catalogs[proxy.ProviderNameOpenAI] = openAICatalog
+			mutate: func(catalogs *proxy.ModelCatalog) {
+				catalogs.Offerings[0].Model = "missing-model"
 			},
-			expectedError: "invalid_model_catalog",
+			expectedError: "reason=dangling_reference",
 		},
 	}
 
 	for _, testCase := range testCases {
 		testingInstance.Run(testCase.name, func(subTestInstance *testing.T) {
-			catalogs := testfixtures.ProviderModelCatalogs(subTestInstance)
-			testCase.mutate(catalogs)
-			_, catalogError := proxy.NewPublicCapabilityCatalog(proxy.Configuration{ProviderModels: catalogs})
+			catalogs := testfixtures.ModelCatalog(subTestInstance)
+			testCase.mutate(&catalogs)
+			_, catalogError := proxy.NewPublicCapabilityCatalog(proxy.Configuration{ModelCatalog: catalogs})
 			if catalogError == nil || !strings.Contains(catalogError.Error(), testCase.expectedError) {
 				subTestInstance.Fatalf("error=%v want contains %q", catalogError, testCase.expectedError)
 			}

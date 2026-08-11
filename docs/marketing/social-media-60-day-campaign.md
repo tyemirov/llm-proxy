@@ -32,7 +32,7 @@ Constraint: every post in the `Post` column is under 300 characters.
 | 11 | 2026-07-16 | PM | Static sites should not carry live environment secrets. LLM Proxy keeps the management frontend static while the backend owns runtime config and API calls. |
 | 12 | 2026-07-17 | AM | Some providers support web search and others do not. LLM Proxy exposes web search per request only when the selected OpenAI model is configured for it. |
 | 12 | 2026-07-17 | PM | A provider without a configured key should fail clearly. LLM Proxy returns a service-level error when a selected non-default provider is unavailable. |
-| 13 | 2026-07-18 | AM | Teams waste time debugging unknown model names after upstream calls. LLM Proxy validates provider model catalogs before routing requests. |
+| 13 | 2026-07-18 | AM | Teams waste time debugging unknown model names after upstream calls. LLM Proxy validates exact models and provider offerings before routing requests. |
 | 13 | 2026-07-18 | PM | Max-token mistakes can become expensive upstream calls. LLM Proxy rejects known provider-specific output limits at the request edge. |
 | 14 | 2026-07-19 | AM | Claude, Gemini, and OpenAI-compatible APIs do not speak the same dialect. LLM Proxy maps a shared request into each provider's native or compatible contract. |
 | 14 | 2026-07-19 | PM | A simple REST client should not stream, poll, or resume provider jobs. LLM Proxy owns provider polling and returns the final answer in one blocking response. |
@@ -102,7 +102,7 @@ Constraint: every post in the `Post` column is under 300 characters.
 | 46 | 2026-08-20 | PM | Management persistence should stay portable across environments without exposing SQL. LLM Proxy opens SQLite through GORM at the configured database path. |
 | 47 | 2026-08-21 | AM | AI platform work gets brittle when config comes from flags, env, and files at once. LLM Proxy uses YAML as the service config and env only for placeholder expansion. |
 | 47 | 2026-08-21 | PM | Operators need strict config loading, not surprise defaults. LLM Proxy rejects unknown YAML keys and missing required placeholders before serving traffic. |
-| 48 | 2026-08-22 | AM | A provider model list is business data, not client code. LLM Proxy keeps provider model catalogs in config so apps can stay unchanged. |
+| 48 | 2026-08-22 | AM | A model catalog is business data, not client code. LLM Proxy keeps exact models and provider offerings in config so apps can stay unchanged. |
 | 48 | 2026-08-22 | PM | OpenAI web search should be model-aware. LLM Proxy enables the tool only for catalog entries marked with web-search support. |
 | 49 | 2026-08-23 | AM | Teams need to cap outputs per request. LLM Proxy maps `max_tokens` to each provider's expected field and validates known limits. |
 | 49 | 2026-08-23 | PM | Provider output limits should not surprise clients late. LLM Proxy checks configured Gemini and Claude token ceilings before the upstream call. |

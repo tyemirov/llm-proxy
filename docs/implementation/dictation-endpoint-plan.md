@@ -25,7 +25,7 @@ The endpoint returns `400`, `403`, `413`, `429`, `499`, `502`, `503`, or `504` w
 | Provider selector | Models | Configuration URL |
 |---|---|---|
 | `openai` | `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | `providers.openai.transcriptions_url` |
-| `siliconflow` | `FunAudioLLM/SenseVoiceSmall` | `providers.siliconflow.transcriptions_url` |
+| `siliconflow` | `sensevoice-small` | `providers.siliconflow.transcriptions_url` |
 | `zhipu` or `glm` | `glm-asr-2512` | `providers.zhipu.transcriptions_url` |
 | `grok` or `xai` | `xai-stt` | `providers.grok.transcriptions_url` |
 

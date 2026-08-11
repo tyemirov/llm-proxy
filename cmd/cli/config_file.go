@@ -46,10 +46,11 @@ var (
 )
 
 type fileConfiguration struct {
-	Server     serverConfiguration     `mapstructure:"server"`
-	Management managementConfiguration `mapstructure:"management"`
-	Tenants    []tenantConfiguration   `mapstructure:"tenants"`
-	Providers  providersConfiguration  `mapstructure:"providers"`
+	Server     serverConfiguration       `mapstructure:"server"`
+	Management managementConfiguration   `mapstructure:"management"`
+	Tenants    []tenantConfiguration     `mapstructure:"tenants"`
+	Providers  providersConfiguration    `mapstructure:"providers"`
+	Catalog    modelCatalogConfiguration `mapstructure:"catalog"`
 }
 
 type serverConfiguration struct {
@@ -123,26 +124,55 @@ type providersConfiguration struct {
 }
 
 type providerConfiguration struct {
-	APIKey  string                     `mapstructure:"api_key"`
-	BaseURL string                     `mapstructure:"base_url"`
-	Text    modelEndpointConfiguration `mapstructure:"text"`
+	APIKey  string `mapstructure:"api_key"`
+	BaseURL string `mapstructure:"base_url"`
 }
 
 type transcribingProviderConfiguration struct {
-	APIKey            string                     `mapstructure:"api_key"`
-	BaseURL           string                     `mapstructure:"base_url"`
-	TranscriptionsURL string                     `mapstructure:"transcriptions_url"`
-	Text              modelEndpointConfiguration `mapstructure:"text"`
-	Dictation         modelEndpointConfiguration `mapstructure:"dictation"`
+	APIKey            string `mapstructure:"api_key"`
+	BaseURL           string `mapstructure:"base_url"`
+	TranscriptionsURL string `mapstructure:"transcriptions_url"`
 }
 
-type modelEndpointConfiguration struct {
-	DefaultModel string               `mapstructure:"default_model"`
-	Models       []modelConfiguration `mapstructure:"models"`
+type modelCatalogConfiguration struct {
+	Providers  []catalogProviderConfiguration  `mapstructure:"providers"`
+	Publishers []modelPublisherConfiguration   `mapstructure:"publishers"`
+	Families   []modelFamilyConfiguration      `mapstructure:"families"`
+	Models     []exactModelConfiguration       `mapstructure:"models"`
+	Offerings  []providerOfferingConfiguration `mapstructure:"offerings"`
 }
 
-type modelConfiguration struct {
-	ID                 string                           `mapstructure:"id"`
+type catalogProviderConfiguration struct {
+	ID    string `mapstructure:"id"`
+	Label string `mapstructure:"label"`
+}
+
+type modelPublisherConfiguration struct {
+	ID    string `mapstructure:"id"`
+	Label string `mapstructure:"label"`
+}
+
+type modelFamilyConfiguration struct {
+	ID        string `mapstructure:"id"`
+	Publisher string `mapstructure:"publisher"`
+	Label     string `mapstructure:"label"`
+}
+
+type exactModelConfiguration struct {
+	ID          string   `mapstructure:"id"`
+	Publisher   string   `mapstructure:"publisher"`
+	Family      string   `mapstructure:"family"`
+	Version     string   `mapstructure:"version"`
+	Operations  []string `mapstructure:"operations"`
+	MediaInputs []string `mapstructure:"media_inputs"`
+}
+
+type providerOfferingConfiguration struct {
+	Provider           string                           `mapstructure:"provider"`
+	Model              string                           `mapstructure:"model"`
+	ProviderModel      string                           `mapstructure:"provider_model"`
+	Operations         []string                         `mapstructure:"operations"`
+	DefaultOperations  []string                         `mapstructure:"default_operations"`
 	WireContract       string                           `mapstructure:"wire_contract"`
 	ExecutionLifecycle string                           `mapstructure:"execution_lifecycle"`
 	RequestProfile     string                           `mapstructure:"request_profile"`
@@ -336,7 +366,7 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		MaxPromptBytes:               configuration.Server.MaxPromptBytes,
 		MaxInputAudioBytes:           configuration.Server.MaxInputAudioBytes,
 		UpstreamRateLimits:           proxyUpstreamRateLimitConfigurations(configuration.Server.UpstreamRateLimits),
-		ProviderModels:               configuration.Providers.providerModelCatalogs(),
+		ModelCatalog:                 configuration.Catalog.proxyCatalog(),
 	})
 }
 
@@ -387,46 +417,37 @@ func managementProxyConfiguration(configuration managementConfiguration, usageQu
 	}
 }
 
-func (configuration providersConfiguration) providerModelCatalogs() proxy.ProviderModelCatalogs {
-	return proxy.ProviderModelCatalogs{
-		proxy.ProviderNameOpenAI: {
-			Text:      configuration.OpenAI.Text.proxyCatalog(),
-			Dictation: configuration.OpenAI.Dictation.proxyCatalog(),
-		},
-		proxy.ProviderNameDeepSeek: {
-			Text: configuration.DeepSeek.Text.proxyCatalog(),
-		},
-		proxy.ProviderNameDashScope: {
-			Text: configuration.DashScope.Text.proxyCatalog(),
-		},
-		proxy.ProviderNameMoonshot: {
-			Text: configuration.Moonshot.Text.proxyCatalog(),
-		},
-		proxy.ProviderNameMiniMax: {
-			Text: configuration.MiniMax.Text.proxyCatalog(),
-		},
-		proxy.ProviderNameSiliconFlow: {
-			Text:      configuration.SiliconFlow.Text.proxyCatalog(),
-			Dictation: configuration.SiliconFlow.Dictation.proxyCatalog(),
-		},
-		proxy.ProviderNameZhipu: {
-			Text:      configuration.Zhipu.Text.proxyCatalog(),
-			Dictation: configuration.Zhipu.Dictation.proxyCatalog(),
-		},
-		proxy.ProviderNameGemini: {
-			Text: configuration.Gemini.Text.proxyCatalog(),
-		},
-		proxy.ProviderNameAnthropic: {
-			Text: configuration.Anthropic.Text.proxyCatalog(),
-		},
-		proxy.ProviderNameMeta: {
-			Text: configuration.Meta.Text.proxyCatalog(),
-		},
-		proxy.ProviderNameGrok: {
-			Text:      configuration.Grok.Text.proxyCatalog(),
-			Dictation: configuration.Grok.Dictation.proxyCatalog(),
-		},
+func (configuration modelCatalogConfiguration) proxyCatalog() proxy.ModelCatalog {
+	providers := make([]proxy.CatalogProvider, 0, len(configuration.Providers))
+	for _, provider := range configuration.Providers {
+		providers = append(providers, proxy.CatalogProvider{ID: provider.ID, Label: provider.Label})
 	}
+	publishers := make([]proxy.ModelPublisher, 0, len(configuration.Publishers))
+	for _, publisher := range configuration.Publishers {
+		publishers = append(publishers, proxy.ModelPublisher{ID: publisher.ID, Label: publisher.Label})
+	}
+	families := make([]proxy.ModelFamily, 0, len(configuration.Families))
+	for _, family := range configuration.Families {
+		families = append(families, proxy.ModelFamily{ID: family.ID, Publisher: family.Publisher, Label: family.Label})
+	}
+	models := make([]proxy.ExactModel, 0, len(configuration.Models))
+	for _, model := range configuration.Models {
+		models = append(models, proxy.ExactModel{
+			ID: model.ID, Publisher: model.Publisher, Family: model.Family, Version: model.Version,
+			Operations: append([]string(nil), model.Operations...), MediaInputs: append([]string(nil), model.MediaInputs...),
+		})
+	}
+	offerings := make([]proxy.ProviderOffering, 0, len(configuration.Offerings))
+	for _, offering := range configuration.Offerings {
+		offerings = append(offerings, proxy.ProviderOffering{
+			Provider: offering.Provider, Model: offering.Model, ProviderModel: offering.ProviderModel,
+			Operations: append([]string(nil), offering.Operations...), DefaultOperations: append([]string(nil), offering.DefaultOperations...),
+			WireContract: offering.WireContract, ExecutionLifecycle: offering.ExecutionLifecycle, RequestProfile: offering.RequestProfile,
+			WebSearch: offering.WebSearch, OutputTokenLimit: offering.OutputTokenLimit,
+			ReasoningEffort: proxyReasoningEffortCapability(offering.ReasoningEffort), MediaInputs: append([]string(nil), offering.MediaInputs...),
+		})
+	}
+	return proxy.ModelCatalog{Providers: providers, Publishers: publishers, Families: families, Models: models, Offerings: offerings}
 }
 
 func (configuration fileConfiguration) validateCompleteConfiguration() error {
@@ -437,26 +458,6 @@ func (configuration fileConfiguration) validateCompleteConfiguration() error {
 		return nil
 	}
 	return configuration.validateTenantDefaultProviderCredentials()
-}
-
-func (configuration modelEndpointConfiguration) proxyCatalog() proxy.ModelEndpointCatalog {
-	models := make([]proxy.ModelConfiguration, 0, len(configuration.Models))
-	for _, currentModel := range configuration.Models {
-		models = append(models, proxy.ModelConfiguration{
-			ID:                 currentModel.ID,
-			WireContract:       currentModel.WireContract,
-			ExecutionLifecycle: currentModel.ExecutionLifecycle,
-			RequestProfile:     currentModel.RequestProfile,
-			WebSearch:          currentModel.WebSearch,
-			OutputTokenLimit:   currentModel.OutputTokenLimit,
-			ReasoningEffort:    proxyReasoningEffortCapability(currentModel.ReasoningEffort),
-			MediaInputs:        append([]string(nil), currentModel.MediaInputs...),
-		})
-	}
-	return proxy.ModelEndpointCatalog{
-		DefaultModel: configuration.DefaultModel,
-		Models:       models,
-	}
 }
 
 func proxyReasoningEffortCapability(configuration *reasoningEffortCapabilityConfig) *proxy.ReasoningEffortCapability {

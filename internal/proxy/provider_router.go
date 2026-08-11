@@ -150,12 +150,13 @@ func (router *providerRouter) transcribeAudio(requestContext context.Context, re
 	if request.provider.identifier == providerID(ProviderNameOpenAI) {
 		transcriptionsURL = router.openAIClient.endpoints.GetTranscriptionsURL()
 	}
+	providerModel := request.provider.transcriptionModels[strings.ToLower(request.model.string())].providerIdentifier
 	return router.openAIClient.transcribeAudioWithURL(
 		requestContext,
 		request.provider.credentialFor(endpointKindDictation),
 		transcriptionsURL,
 		request.provider.transcriptionModelField,
-		request.model.string(),
+		providerModel.string(),
 		request.fileName,
 		request.audioReader,
 		structuredLogger,

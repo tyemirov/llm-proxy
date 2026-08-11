@@ -87,7 +87,7 @@
           <section>
             <h2>How it works</h2>
             <ol class="resource-steps">
-              <li>Configure providers.gemini.api_key, base_url, and text model catalog.</li>
+              <li>Configure providers.gemini.api_key, base_url, and Gemini provider offerings.</li>
 <li>Select provider=gemini or set Gemini as a tenant default.</li>
 <li>Send canonical messages through /v2 or compatibility text requests.</li>
 <li>Keep max_tokens within configured Gemini output limits.</li>
@@ -123,7 +123,7 @@
 
                         <tr>
                           <td>Configured defaults</td>
-                          <td>Omitted model uses the Gemini text default_model.</td>
+                          <td>Omitted model uses the Gemini offering marked as the text default.</td>
                           <td>The default currently comes from config, not client code.</td>
                         </tr>
 

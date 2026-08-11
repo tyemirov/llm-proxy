@@ -72,9 +72,9 @@ const (
 	// ModelNameMoonshotKimiK27CodeHighSpeed identifies Moonshot Kimi K2.7 Code Highspeed.
 	ModelNameMoonshotKimiK27CodeHighSpeed = "kimi-k2.7-code-highspeed"
 	// ModelNameMiniMaxM27 identifies MiniMax M2.7.
-	ModelNameMiniMaxM27 = "MiniMax-M2.7"
+	ModelNameMiniMaxM27 = "minimax-m2.7"
 	// ModelNameSiliconFlowDeepSeek identifies SiliconFlow-hosted DeepSeek R1.
-	ModelNameSiliconFlowDeepSeek = "deepseek-ai/DeepSeek-R1"
+	ModelNameSiliconFlowDeepSeek = ModelNameDeepSeekReasoner
 	// ModelNameZhipuGLM identifies the GLM 5.1 model.
 	ModelNameZhipuGLM = "glm-5.1"
 	// ModelNameGemini35Flash identifies Gemini 3.5 Flash.
@@ -259,6 +259,7 @@ func (capability *reasoningEffortCapability) supports(effort string) bool {
 
 type textModelDefinition struct {
 	identifier          modelID
+	providerIdentifier  modelID
 	wireContract        textWireContract
 	executionLifecycle  textExecutionLifecycle
 	routeAdapter        textRouteAdapter
@@ -274,6 +275,10 @@ func (definition textModelDefinition) string() string {
 	return definition.identifier.string()
 }
 
+func (definition textModelDefinition) providerString() string {
+	return definition.providerIdentifier.string()
+}
+
 func (definition textModelDefinition) supportsMediaInput(mediaInput messageMediaType) bool {
 	_, supported := definition.mediaInputs[mediaInput]
 	return supported
@@ -281,6 +286,7 @@ func (definition textModelDefinition) supportsMediaInput(mediaInput messageMedia
 
 type providerDefinition struct {
 	identifier                providerID
+	label                     string
 	aliases                   []string
 	textAPIKey                string
 	textBaseURL               string
@@ -290,9 +296,14 @@ type providerDefinition struct {
 	defaultTranscriptionModel modelID
 	transcriptionModelField   string
 	textModels                map[string]textModelDefinition
-	transcriptionModels       map[string]modelID
+	transcriptionModels       map[string]dictationModelDefinition
 	supportsDictation         bool
 	chatTokenLimitParameter   chatCompletionTokenLimitParameter
+}
+
+type dictationModelDefinition struct {
+	identifier         modelID
+	providerIdentifier modelID
 }
 
 func (definition providerDefinition) credentialFor(endpoint endpointKind) string {

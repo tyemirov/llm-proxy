@@ -74,8 +74,8 @@ export async function startLocalManagementStack() {
     }
     const portConfiguredLLMProxyConfig = llmProxyConfig;
     llmProxyConfig = llmProxyConfig.replace(
-      '    base_url: "https://api.openai.com/v1"\n',
-      `    base_url: "${frontendOrigin}/v1"\n`,
+      "    base_url: https://api.openai.com/v1\n",
+      `    base_url: ${frontendOrigin}/v1\n`,
     );
     if (llmProxyConfig === portConfiguredLLMProxyConfig) {
       throw new Error("llm_proxy_blackbox_openai_base_url_contract_missing");

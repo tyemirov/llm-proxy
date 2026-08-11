@@ -265,7 +265,7 @@ func TestManagedUsageWriterKeepsPublicResponsesIndependentFromPersistence(t *tes
 		QueueSize:                  1,
 		MaxPromptBytes:             1024,
 		Endpoints:                  endpoints,
-		ProviderModels:             internalManagedUsageWriterProviderModels(),
+		ModelCatalog:               internalManagedUsageWriterProviderModels(),
 		upstreamRateLimits:         upstreamRateLimits{rules: map[string]upstreamRateLimitRule{}},
 		managementSessionValidator: sessionValidator,
 		requestTimeoutPolicy:       timeoutPolicy,
@@ -366,23 +366,9 @@ func waitForObservedLogCount(t *testing.T, observedLogs *observer.ObservedLogs, 
 	}
 }
 
-func internalManagedUsageWriterProviderModels() ProviderModelCatalogs {
-	textModel := ModelEndpointCatalog{
-		DefaultModel: ModelNameGPT41,
-		Models: []ModelConfiguration{{
-			ID:                 ModelNameGPT41,
-			WireContract:       string(textWireContractOpenAIResponses),
-			ExecutionLifecycle: string(textExecutionLifecyclePollableResource),
-			RequestProfile:     string(requestProfileOpenAIResponsesTemperatureTools),
-		}},
-	}
-	return ProviderModelCatalogs{
-		ProviderNameOpenAI: {
-			Text: textModel,
-			Dictation: ModelEndpointCatalog{
-				DefaultModel: DefaultDictationModel,
-				Models:       []ModelConfiguration{{ID: DefaultDictationModel}},
-			},
-		},
-	}
+func internalManagedUsageWriterProviderModels() ModelCatalog {
+	return internalTestModelCatalog(
+		internalTestOffering(ProviderNameOpenAI, ModelNameGPT41, []string{ModelOperationText}, []string{ModelOperationText}),
+		internalTestOffering(ProviderNameOpenAI, DefaultDictationModel, []string{ModelOperationDictation}, []string{ModelOperationDictation}),
+	)
 }

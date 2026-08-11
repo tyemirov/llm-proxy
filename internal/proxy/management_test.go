@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1080,13 +1081,13 @@ func TestManagementRoutingDefaultsRequireExplicitReasoningEffort(t *testing.T) {
 }
 
 func TestManagementProfileOmitsReasoningCapabilitiesWithoutModelDeclarations(t *testing.T) {
-	catalogs := testfixtures.ProviderModelCatalogs(t)
-	openAIModels := catalogs[proxy.ProviderNameOpenAI]
-	for modelIndex := range openAIModels.Text.Models {
-		openAIModels.Text.Models[modelIndex].ReasoningEffort = nil
+	catalogs := testfixtures.ModelCatalog(t)
+	for offeringIndex := range catalogs.Offerings {
+		if catalogs.Offerings[offeringIndex].Provider == proxy.ProviderNameOpenAI && slices.Contains(catalogs.Offerings[offeringIndex].Operations, proxy.ModelOperationText) {
+			catalogs.Offerings[offeringIndex].ReasoningEffort = nil
+		}
 	}
-	catalogs[proxy.ProviderNameOpenAI] = openAIModels
-	router := newManagementRouter(t, proxy.Configuration{ProviderModels: catalogs})
+	router := newManagementRouter(t, proxy.Configuration{ModelCatalog: catalogs})
 	sessionCookie := managementSessionCookie(t, "tauth-profile-no-reasoning-effort")
 	request := httptest.NewRequest(http.MethodGet, managementDefaultTenantTestPath(t, router, sessionCookie, ""), nil)
 	request.AddCookie(sessionCookie)
@@ -1141,16 +1142,17 @@ func TestManagementRoutingDefaultsRequireSavedProviderKeys(t *testing.T) {
 }
 
 func TestManagementRoutingDefaultsDoNotRequireConfiguredStaticDefault(t *testing.T) {
-	configuration := withProviderModelCatalogs(t, managementConfigurationWithDatabasePath(proxy.Configuration{}, filepath.Join(t.TempDir(), "managed-tenants.db")))
-	openAIModels := configuration.ProviderModels[proxy.ProviderNameOpenAI]
-	configuredModel := openAIModels.Text.Models[0]
-	configuredModel.ID = "gpt-4o-mini"
-	configuredModel.RequestProfile = "openai_responses_temperature"
-	openAIModels.Text = proxy.ModelEndpointCatalog{
-		DefaultModel: "gpt-4o-mini",
-		Models:       []proxy.ModelConfiguration{configuredModel},
+	configuration := withModelCatalog(t, managementConfigurationWithDatabasePath(proxy.Configuration{}, filepath.Join(t.TempDir(), "managed-tenants.db")))
+	for offeringIndex := range configuration.ModelCatalog.Offerings {
+		offering := &configuration.ModelCatalog.Offerings[offeringIndex]
+		if offering.Provider != proxy.ProviderNameOpenAI || !slices.Contains(offering.Operations, proxy.ModelOperationText) {
+			continue
+		}
+		offering.DefaultOperations = nil
+		if offering.Model == proxy.ModelNameGPT4oMini {
+			offering.DefaultOperations = []string{proxy.ModelOperationText}
+		}
 	}
-	configuration.ProviderModels[proxy.ProviderNameOpenAI] = openAIModels
 	if _, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar()); buildError != nil {
 		t.Fatalf("BuildRouter error=%v", buildError)
 	}

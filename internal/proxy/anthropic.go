@@ -58,7 +58,7 @@ func newAnthropicMessagesClient(httpClient HTTPDoer) *anthropicMessagesClient {
 func (client *anthropicMessagesClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	providerMessages, systemPrompt := messages.anthropicMessages()
 	payload := anthropicMessagesRequest{
-		Model:     modelIdentifier.string(),
+		Model:     modelIdentifier.providerString(),
 		MaxTokens: anthropicMaxTokens(modelIdentifier, maxTokens),
 		System:    systemPrompt,
 		Messages:  providerMessages,

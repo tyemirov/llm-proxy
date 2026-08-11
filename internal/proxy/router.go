@@ -93,7 +93,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	}
 
 	providers := newProviderRegistry(configuration)
-	capabilityCatalog := newPublicCapabilityCatalog(configuration, providers)
+	capabilityCatalog := newPublicCapabilityCatalog(configuration)
 
 	if strings.ToLower(configuration.LogLevel) == LogLevelDebug {
 		gin.SetMode(gin.DebugMode)

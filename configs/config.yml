@@ -13,9 +13,9 @@ management:
   public_origin: "${LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN}"
   ui_description: "${LLM_PROXY_MANAGEMENT_UI_DESCRIPTION}"
   ui_origins:
-    - "${LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN}"
-    - "${LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN}"
-    - "${LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN}"
+  - "${LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN}"
+  - "${LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN}"
+  - "${LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN}"
   admin_emails: ${LLM_PROXY_MANAGEMENT_ADMIN_EMAILS}
   tauth_url: "${LLM_PROXY_MANAGEMENT_TAUTH_URL}"
   tauth_tenant_id: "${LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID}"
@@ -34,343 +34,1017 @@ management:
   proxy_origin: "${LLM_PROXY_MANAGEMENT_PROXY_ORIGIN}"
 providers:
   openai:
-    base_url: "https://api.openai.com/v1"
-    transcriptions_url: "https://api.openai.com/v1/audio/transcriptions"
-    text:
-      default_model: "gpt-4.1"
-      models:
-        - id: "gpt-4o-mini"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_temperature"
-        - id: "gpt-4o"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_temperature_tools"
-          web_search: true
-        - id: "gpt-4.1"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_temperature_tools"
-          web_search: true
-        - id: "gpt-5-mini"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_reasoning_tools"
-          reasoning_effort:
-            adapter: "openai_responses"
-            efforts:
-              - minimal
-              - low
-              - medium
-              - high
-        - id: "gpt-5"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_reasoning_tools"
-          web_search: true
-          reasoning_effort:
-            adapter: "openai_responses"
-            efforts:
-              - minimal
-              - low
-              - medium
-              - high
-        - id: "gpt-5.5"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_reasoning_tools"
-          web_search: true
-          reasoning_effort:
-            adapter: "openai_responses"
-            efforts:
-              - none
-              - low
-              - medium
-              - high
-              - xhigh
-        - id: "gpt-5.5-pro"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_reasoning_tools"
-          web_search: true
-          reasoning_effort:
-            adapter: "openai_responses"
-            efforts:
-              - medium
-              - high
-              - xhigh
-        - id: "gpt-5.6"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_reasoning_tools"
-          web_search: true
-          reasoning_effort:
-            adapter: "openai_responses"
-            efforts:
-              - none
-              - low
-              - medium
-              - high
-              - xhigh
-              - max
-        - id: "gpt-5.6-sol"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_reasoning_tools"
-          web_search: true
-          reasoning_effort:
-            adapter: "openai_responses"
-            efforts:
-              - none
-              - low
-              - medium
-              - high
-              - xhigh
-              - max
-        - id: "gpt-5.6-terra"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_reasoning_tools"
-          web_search: true
-          reasoning_effort:
-            adapter: "openai_responses"
-            efforts:
-              - none
-              - low
-              - medium
-              - high
-              - xhigh
-              - max
-        - id: "gpt-5.6-luna"
-          wire_contract: "openai_responses"
-          execution_lifecycle: "pollable_resource"
-          request_profile: "openai_responses_reasoning_tools"
-          web_search: true
-          reasoning_effort:
-            adapter: "openai_responses"
-            efforts:
-              - none
-              - low
-              - medium
-              - high
-              - xhigh
-              - max
-    dictation:
-      default_model: "gpt-4o-mini-transcribe"
-      models:
-        - id: "gpt-4o-mini-transcribe"
-        - id: "gpt-4o-transcribe"
+    base_url: https://api.openai.com/v1
+    transcriptions_url: https://api.openai.com/v1/audio/transcriptions
   deepseek:
-    base_url: "https://api.deepseek.com"
-    text:
-      default_model: "deepseek-v4-flash"
-      models:
-        - id: "deepseek-v4-flash"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "deepseek-v4-pro"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "deepseek-chat"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "deepseek-reasoner"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
+    base_url: https://api.deepseek.com
   dashscope:
     base_url: "${DASHSCOPE_BASE_URL}"
-    text:
-      default_model: "qwen-plus"
-      models:
-        - id: "qwen-plus"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
   moonshot:
-    base_url: "https://api.moonshot.ai/v1"
-    text:
-      default_model: "kimi-k2.6"
-      models:
-        - id: "kimi-k2.6"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "kimi-k3"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "kimi-k2.7-code"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "kimi-k2.7-code-highspeed"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
+    base_url: https://api.moonshot.ai/v1
   minimax:
-    base_url: "https://api.minimax.io/v1"
-    text:
-      default_model: "MiniMax-M2.7"
-      models:
-        - id: "MiniMax-M2.7"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 2048
+    base_url: https://api.minimax.io/v1
   siliconflow:
-    base_url: "https://api.siliconflow.com/v1"
-    transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
-    text:
-      default_model: "deepseek-ai/DeepSeek-R1"
-      models:
-        - id: "deepseek-ai/DeepSeek-R1"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-    dictation:
-      default_model: "FunAudioLLM/SenseVoiceSmall"
-      models:
-        - id: "FunAudioLLM/SenseVoiceSmall"
+    base_url: https://api.siliconflow.com/v1
+    transcriptions_url: https://api.siliconflow.com/v1/audio/transcriptions
   zhipu:
-    base_url: "https://open.bigmodel.cn/api/paas/v4"
-    transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
-    text:
-      default_model: "glm-5.1"
-      models:
-        - id: "glm-5.1"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "glm-5.2"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 131072
-    dictation:
-      default_model: "glm-asr-2512"
-      models:
-        - id: "glm-asr-2512"
+    base_url: https://open.bigmodel.cn/api/paas/v4
+    transcriptions_url: https://api.z.ai/api/paas/v4/audio/transcriptions
   gemini:
-    base_url: "https://generativelanguage.googleapis.com/v1beta"
-    text:
-      default_model: "gemini-2.5-flash"
-      models:
-        - id: "gemini-3.5-flash"
-          wire_contract: "gemini_interactions"
-          execution_lifecycle: "pollable_resource"
-          output_token_limit: 65536
-          media_inputs:
-            - image
-            - audio
-        - id: "gemini-3.1-pro-preview"
-          wire_contract: "gemini_interactions"
-          execution_lifecycle: "pollable_resource"
-          output_token_limit: 65536
-        - id: "gemini-3-flash-preview"
-          wire_contract: "gemini_interactions"
-          execution_lifecycle: "pollable_resource"
-          output_token_limit: 65536
-        - id: "gemini-3.1-flash-lite"
-          wire_contract: "gemini_interactions"
-          execution_lifecycle: "pollable_resource"
-          output_token_limit: 65536
-        - id: "gemini-2.5-flash"
-          wire_contract: "gemini_interactions"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 65536
-          media_inputs:
-            - image
-            - audio
-        - id: "gemini-2.5-flash-lite"
-          wire_contract: "gemini_interactions"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 65536
-        - id: "gemini-2.5-pro"
-          wire_contract: "gemini_interactions"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 65536
+    base_url: https://generativelanguage.googleapis.com/v1beta
   anthropic:
-    base_url: "https://api.anthropic.com"
-    text:
-      default_model: "claude-sonnet-4-6"
-      models:
-        - id: "claude-fable-5"
-          wire_contract: "anthropic_messages"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 128000
-        - id: "claude-sonnet-5"
-          wire_contract: "anthropic_messages"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 128000
-        - id: "claude-opus-4-8"
-          wire_contract: "anthropic_messages"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 128000
-        - id: "claude-sonnet-4-6"
-          wire_contract: "anthropic_messages"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 64000
-        - id: "claude-haiku-4-5-20251001"
-          wire_contract: "anthropic_messages"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 64000
-        - id: "claude-haiku-4-5"
-          wire_contract: "anthropic_messages"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 64000
-        - id: "claude-sonnet-4-5-20250929"
-          wire_contract: "anthropic_messages"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 64000
-        - id: "claude-sonnet-4-5"
-          wire_contract: "anthropic_messages"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 64000
-        - id: "claude-opus-4-1-20250805"
-          wire_contract: "anthropic_messages"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 32000
-        - id: "claude-opus-4-1"
-          wire_contract: "anthropic_messages"
-          execution_lifecycle: "synchronous_completion"
-          output_token_limit: 32000
+    base_url: https://api.anthropic.com
   meta:
-    base_url: "https://api.meta.ai/v1"
-    text:
-      default_model: "muse-spark-1.1"
-      models:
-        - id: "muse-spark-1.1"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
+    base_url: https://api.meta.ai/v1
   grok:
-    base_url: "https://api.x.ai/v1"
-    transcriptions_url: "https://api.x.ai/v1/stt"
-    text:
-      default_model: "grok-4.3"
-      models:
-        - id: "grok-4.3"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "grok-4.3-latest"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "grok-4.5"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "grok-4.20-0309-reasoning"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "grok-4.20-0309-non-reasoning"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "grok-latest"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "grok-build-0.1"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "grok-code-fast"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "grok-code-fast-1"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-        - id: "grok-code-fast-1-0825"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-    dictation:
-      default_model: "xai-stt"
-      models:
-        - id: "xai-stt"
+    base_url: https://api.x.ai/v1
+    transcriptions_url: https://api.x.ai/v1/stt
+catalog:
+  providers:
+  - id: openai
+    label: OpenAI
+  - id: deepseek
+    label: DeepSeek
+  - id: dashscope
+    label: DashScope
+  - id: moonshot
+    label: Moonshot
+  - id: minimax
+    label: MiniMax
+  - id: siliconflow
+    label: SiliconFlow
+  - id: zhipu
+    label: Zhipu
+  - id: gemini
+    label: Gemini
+  - id: anthropic
+    label: Anthropic
+  - id: meta
+    label: Meta
+  - id: grok
+    label: Grok
+  publishers:
+  - id: openai
+    label: OpenAI
+  - id: deepseek
+    label: DeepSeek
+  - id: alibaba
+    label: Alibaba
+  - id: moonshot
+    label: Moonshot AI
+  - id: minimax
+    label: MiniMax
+  - id: funaudio
+    label: FunAudioLLM
+  - id: zhipu
+    label: Zhipu AI
+  - id: google
+    label: Google
+  - id: anthropic
+    label: Anthropic
+  - id: meta
+    label: Meta
+  - id: xai
+    label: xAI
+  families:
+  - id: gpt-4
+    publisher: openai
+    label: GPT-4
+  - id: gpt-5
+    publisher: openai
+    label: GPT-5
+  - id: gpt-transcribe
+    publisher: openai
+    label: GPT Transcribe
+  - id: deepseek-v4
+    publisher: deepseek
+    label: DeepSeek V4
+  - id: deepseek-v3
+    publisher: deepseek
+    label: DeepSeek V3
+  - id: deepseek-r1
+    publisher: deepseek
+    label: DeepSeek R1
+  - id: qwen
+    publisher: alibaba
+    label: Qwen
+  - id: kimi-k2
+    publisher: moonshot
+    label: Kimi K2
+  - id: kimi-k3
+    publisher: moonshot
+    label: Kimi K3
+  - id: minimax-m2
+    publisher: minimax
+    label: MiniMax M2
+  - id: sensevoice
+    publisher: funaudio
+    label: SenseVoice
+  - id: glm-5
+    publisher: zhipu
+    label: GLM-5
+  - id: glm-asr
+    publisher: zhipu
+    label: GLM ASR
+  - id: gemini
+    publisher: google
+    label: Gemini
+  - id: claude-fable
+    publisher: anthropic
+    label: Claude Fable
+  - id: claude-sonnet
+    publisher: anthropic
+    label: Claude Sonnet
+  - id: claude-opus
+    publisher: anthropic
+    label: Claude Opus
+  - id: claude-haiku
+    publisher: anthropic
+    label: Claude Haiku
+  - id: muse-spark
+    publisher: meta
+    label: Muse Spark
+  - id: grok
+    publisher: xai
+    label: Grok
+  - id: grok-build
+    publisher: xai
+    label: Grok Build
+  - id: grok-code
+    publisher: xai
+    label: Grok Code
+  - id: xai-stt
+    publisher: xai
+    label: xAI STT
+  models:
+  - id: gpt-4o-mini
+    publisher: openai
+    family: gpt-4
+    version: gpt-4o-mini
+    operations:
+    - text
+  - id: gpt-4o
+    publisher: openai
+    family: gpt-4
+    version: gpt-4o
+    operations:
+    - text
+  - id: gpt-4.1
+    publisher: openai
+    family: gpt-4
+    version: gpt-4.1
+    operations:
+    - text
+  - id: gpt-5-mini
+    publisher: openai
+    family: gpt-5
+    version: gpt-5-mini
+    operations:
+    - text
+  - id: gpt-5
+    publisher: openai
+    family: gpt-5
+    version: gpt-5
+    operations:
+    - text
+  - id: gpt-5.5
+    publisher: openai
+    family: gpt-5
+    version: gpt-5.5
+    operations:
+    - text
+  - id: gpt-5.5-pro
+    publisher: openai
+    family: gpt-5
+    version: gpt-5.5-pro
+    operations:
+    - text
+  - id: gpt-5.6
+    publisher: openai
+    family: gpt-5
+    version: gpt-5.6
+    operations:
+    - text
+  - id: gpt-5.6-sol
+    publisher: openai
+    family: gpt-5
+    version: gpt-5.6-sol
+    operations:
+    - text
+  - id: gpt-5.6-terra
+    publisher: openai
+    family: gpt-5
+    version: gpt-5.6-terra
+    operations:
+    - text
+  - id: gpt-5.6-luna
+    publisher: openai
+    family: gpt-5
+    version: gpt-5.6-luna
+    operations:
+    - text
+  - id: gpt-4o-mini-transcribe
+    publisher: openai
+    family: gpt-transcribe
+    version: gpt-4o-mini-transcribe
+    operations:
+    - dictation
+  - id: gpt-4o-transcribe
+    publisher: openai
+    family: gpt-transcribe
+    version: gpt-4o-transcribe
+    operations:
+    - dictation
+  - id: deepseek-v4-flash
+    publisher: deepseek
+    family: deepseek-v4
+    version: deepseek-v4-flash
+    operations:
+    - text
+  - id: deepseek-v4-pro
+    publisher: deepseek
+    family: deepseek-v4
+    version: deepseek-v4-pro
+    operations:
+    - text
+  - id: deepseek-chat
+    publisher: deepseek
+    family: deepseek-v3
+    version: deepseek-chat
+    operations:
+    - text
+  - id: deepseek-reasoner
+    publisher: deepseek
+    family: deepseek-r1
+    version: deepseek-reasoner
+    operations:
+    - text
+  - id: qwen-plus
+    publisher: alibaba
+    family: qwen
+    version: qwen-plus
+    operations:
+    - text
+  - id: kimi-k2.6
+    publisher: moonshot
+    family: kimi-k2
+    version: kimi-k2.6
+    operations:
+    - text
+  - id: kimi-k3
+    publisher: moonshot
+    family: kimi-k3
+    version: kimi-k3
+    operations:
+    - text
+  - id: kimi-k2.7-code
+    publisher: moonshot
+    family: kimi-k2
+    version: kimi-k2.7-code
+    operations:
+    - text
+  - id: kimi-k2.7-code-highspeed
+    publisher: moonshot
+    family: kimi-k2
+    version: kimi-k2.7-code-highspeed
+    operations:
+    - text
+  - id: minimax-m2.7
+    publisher: minimax
+    family: minimax-m2
+    version: minimax-m2.7
+    operations:
+    - text
+  - id: sensevoice-small
+    publisher: funaudio
+    family: sensevoice
+    version: sensevoice-small
+    operations:
+    - dictation
+  - id: glm-5.1
+    publisher: zhipu
+    family: glm-5
+    version: glm-5.1
+    operations:
+    - text
+  - id: glm-5.2
+    publisher: zhipu
+    family: glm-5
+    version: glm-5.2
+    operations:
+    - text
+  - id: glm-asr-2512
+    publisher: zhipu
+    family: glm-asr
+    version: glm-asr-2512
+    operations:
+    - dictation
+  - id: gemini-3.5-flash
+    publisher: google
+    family: gemini
+    version: gemini-3.5-flash
+    operations:
+    - text
+    media_inputs:
+    - image
+    - audio
+  - id: gemini-3.1-pro-preview
+    publisher: google
+    family: gemini
+    version: gemini-3.1-pro-preview
+    operations:
+    - text
+  - id: gemini-3-flash-preview
+    publisher: google
+    family: gemini
+    version: gemini-3-flash-preview
+    operations:
+    - text
+  - id: gemini-3.1-flash-lite
+    publisher: google
+    family: gemini
+    version: gemini-3.1-flash-lite
+    operations:
+    - text
+  - id: gemini-2.5-flash
+    publisher: google
+    family: gemini
+    version: gemini-2.5-flash
+    operations:
+    - text
+    media_inputs:
+    - image
+    - audio
+  - id: gemini-2.5-flash-lite
+    publisher: google
+    family: gemini
+    version: gemini-2.5-flash-lite
+    operations:
+    - text
+  - id: gemini-2.5-pro
+    publisher: google
+    family: gemini
+    version: gemini-2.5-pro
+    operations:
+    - text
+  - id: claude-fable-5
+    publisher: anthropic
+    family: claude-fable
+    version: claude-fable-5
+    operations:
+    - text
+  - id: claude-sonnet-5
+    publisher: anthropic
+    family: claude-sonnet
+    version: claude-sonnet-5
+    operations:
+    - text
+  - id: claude-opus-4-8
+    publisher: anthropic
+    family: claude-opus
+    version: claude-opus-4-8
+    operations:
+    - text
+  - id: claude-sonnet-4-6
+    publisher: anthropic
+    family: claude-sonnet
+    version: claude-sonnet-4-6
+    operations:
+    - text
+  - id: claude-haiku-4-5-20251001
+    publisher: anthropic
+    family: claude-haiku
+    version: claude-haiku-4-5-20251001
+    operations:
+    - text
+  - id: claude-haiku-4-5
+    publisher: anthropic
+    family: claude-haiku
+    version: claude-haiku-4-5
+    operations:
+    - text
+  - id: claude-sonnet-4-5-20250929
+    publisher: anthropic
+    family: claude-sonnet
+    version: claude-sonnet-4-5-20250929
+    operations:
+    - text
+  - id: claude-sonnet-4-5
+    publisher: anthropic
+    family: claude-sonnet
+    version: claude-sonnet-4-5
+    operations:
+    - text
+  - id: claude-opus-4-1-20250805
+    publisher: anthropic
+    family: claude-opus
+    version: claude-opus-4-1-20250805
+    operations:
+    - text
+  - id: claude-opus-4-1
+    publisher: anthropic
+    family: claude-opus
+    version: claude-opus-4-1
+    operations:
+    - text
+  - id: muse-spark-1.1
+    publisher: meta
+    family: muse-spark
+    version: muse-spark-1.1
+    operations:
+    - text
+  - id: grok-4.3
+    publisher: xai
+    family: grok
+    version: grok-4.3
+    operations:
+    - text
+  - id: grok-4.3-latest
+    publisher: xai
+    family: grok
+    version: grok-4.3-latest
+    operations:
+    - text
+  - id: grok-4.5
+    publisher: xai
+    family: grok
+    version: grok-4.5
+    operations:
+    - text
+  - id: grok-4.20-0309-reasoning
+    publisher: xai
+    family: grok
+    version: grok-4.20-0309-reasoning
+    operations:
+    - text
+  - id: grok-4.20-0309-non-reasoning
+    publisher: xai
+    family: grok
+    version: grok-4.20-0309-non-reasoning
+    operations:
+    - text
+  - id: grok-latest
+    publisher: xai
+    family: grok
+    version: grok-latest
+    operations:
+    - text
+  - id: grok-build-0.1
+    publisher: xai
+    family: grok-build
+    version: grok-build-0.1
+    operations:
+    - text
+  - id: grok-code-fast
+    publisher: xai
+    family: grok-code
+    version: grok-code-fast
+    operations:
+    - text
+  - id: grok-code-fast-1
+    publisher: xai
+    family: grok-code
+    version: grok-code-fast-1
+    operations:
+    - text
+  - id: grok-code-fast-1-0825
+    publisher: xai
+    family: grok-code
+    version: grok-code-fast-1-0825
+    operations:
+    - text
+  - id: xai-stt
+    publisher: xai
+    family: xai-stt
+    version: xai-stt
+    operations:
+    - dictation
+  offerings:
+  - provider: openai
+    model: gpt-4o-mini
+    provider_model: gpt-4o-mini
+    operations:
+    - text
+    wire_contract: openai_responses
+    execution_lifecycle: pollable_resource
+    request_profile: openai_responses_temperature
+  - provider: openai
+    model: gpt-4o
+    provider_model: gpt-4o
+    operations:
+    - text
+    wire_contract: openai_responses
+    execution_lifecycle: pollable_resource
+    request_profile: openai_responses_temperature_tools
+    web_search: true
+  - provider: openai
+    model: gpt-4.1
+    provider_model: gpt-4.1
+    operations:
+    - text
+    default_operations:
+    - text
+    wire_contract: openai_responses
+    execution_lifecycle: pollable_resource
+    request_profile: openai_responses_temperature_tools
+    web_search: true
+  - provider: openai
+    model: gpt-5-mini
+    provider_model: gpt-5-mini
+    operations:
+    - text
+    wire_contract: openai_responses
+    execution_lifecycle: pollable_resource
+    request_profile: openai_responses_reasoning_tools
+    reasoning_effort:
+      adapter: openai_responses
+      efforts:
+      - minimal
+      - low
+      - medium
+      - high
+  - provider: openai
+    model: gpt-5
+    provider_model: gpt-5
+    operations:
+    - text
+    wire_contract: openai_responses
+    execution_lifecycle: pollable_resource
+    request_profile: openai_responses_reasoning_tools
+    web_search: true
+    reasoning_effort:
+      adapter: openai_responses
+      efforts:
+      - minimal
+      - low
+      - medium
+      - high
+  - provider: openai
+    model: gpt-5.5
+    provider_model: gpt-5.5
+    operations:
+    - text
+    wire_contract: openai_responses
+    execution_lifecycle: pollable_resource
+    request_profile: openai_responses_reasoning_tools
+    web_search: true
+    reasoning_effort:
+      adapter: openai_responses
+      efforts:
+      - none
+      - low
+      - medium
+      - high
+      - xhigh
+  - provider: openai
+    model: gpt-5.5-pro
+    provider_model: gpt-5.5-pro
+    operations:
+    - text
+    wire_contract: openai_responses
+    execution_lifecycle: pollable_resource
+    request_profile: openai_responses_reasoning_tools
+    web_search: true
+    reasoning_effort:
+      adapter: openai_responses
+      efforts:
+      - medium
+      - high
+      - xhigh
+  - provider: openai
+    model: gpt-5.6
+    provider_model: gpt-5.6
+    operations:
+    - text
+    wire_contract: openai_responses
+    execution_lifecycle: pollable_resource
+    request_profile: openai_responses_reasoning_tools
+    web_search: true
+    reasoning_effort:
+      adapter: openai_responses
+      efforts:
+      - none
+      - low
+      - medium
+      - high
+      - xhigh
+      - max
+  - provider: openai
+    model: gpt-5.6-sol
+    provider_model: gpt-5.6-sol
+    operations:
+    - text
+    wire_contract: openai_responses
+    execution_lifecycle: pollable_resource
+    request_profile: openai_responses_reasoning_tools
+    web_search: true
+    reasoning_effort:
+      adapter: openai_responses
+      efforts:
+      - none
+      - low
+      - medium
+      - high
+      - xhigh
+      - max
+  - provider: openai
+    model: gpt-5.6-terra
+    provider_model: gpt-5.6-terra
+    operations:
+    - text
+    wire_contract: openai_responses
+    execution_lifecycle: pollable_resource
+    request_profile: openai_responses_reasoning_tools
+    web_search: true
+    reasoning_effort:
+      adapter: openai_responses
+      efforts:
+      - none
+      - low
+      - medium
+      - high
+      - xhigh
+      - max
+  - provider: openai
+    model: gpt-5.6-luna
+    provider_model: gpt-5.6-luna
+    operations:
+    - text
+    wire_contract: openai_responses
+    execution_lifecycle: pollable_resource
+    request_profile: openai_responses_reasoning_tools
+    web_search: true
+    reasoning_effort:
+      adapter: openai_responses
+      efforts:
+      - none
+      - low
+      - medium
+      - high
+      - xhigh
+      - max
+  - provider: openai
+    model: gpt-4o-mini-transcribe
+    provider_model: gpt-4o-mini-transcribe
+    operations:
+    - dictation
+    default_operations:
+    - dictation
+  - provider: openai
+    model: gpt-4o-transcribe
+    provider_model: gpt-4o-transcribe
+    operations:
+    - dictation
+  - provider: deepseek
+    model: deepseek-v4-flash
+    provider_model: deepseek-v4-flash
+    operations:
+    - text
+    default_operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: deepseek
+    model: deepseek-v4-pro
+    provider_model: deepseek-v4-pro
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: deepseek
+    model: deepseek-chat
+    provider_model: deepseek-chat
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: deepseek
+    model: deepseek-reasoner
+    provider_model: deepseek-reasoner
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: dashscope
+    model: qwen-plus
+    provider_model: qwen-plus
+    operations:
+    - text
+    default_operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: moonshot
+    model: kimi-k2.6
+    provider_model: kimi-k2.6
+    operations:
+    - text
+    default_operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: moonshot
+    model: kimi-k3
+    provider_model: kimi-k3
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: moonshot
+    model: kimi-k2.7-code
+    provider_model: kimi-k2.7-code
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: moonshot
+    model: kimi-k2.7-code-highspeed
+    provider_model: kimi-k2.7-code-highspeed
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: minimax
+    model: minimax-m2.7
+    provider_model: MiniMax-M2.7
+    operations:
+    - text
+    default_operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 2048
+  - provider: siliconflow
+    model: deepseek-reasoner
+    provider_model: deepseek-ai/DeepSeek-R1
+    operations:
+    - text
+    default_operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: siliconflow
+    model: sensevoice-small
+    provider_model: FunAudioLLM/SenseVoiceSmall
+    operations:
+    - dictation
+    default_operations:
+    - dictation
+  - provider: zhipu
+    model: glm-5.1
+    provider_model: glm-5.1
+    operations:
+    - text
+    default_operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: zhipu
+    model: glm-5.2
+    provider_model: glm-5.2
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 131072
+  - provider: zhipu
+    model: glm-asr-2512
+    provider_model: glm-asr-2512
+    operations:
+    - dictation
+    default_operations:
+    - dictation
+  - provider: gemini
+    model: gemini-3.5-flash
+    provider_model: gemini-3.5-flash
+    operations:
+    - text
+    wire_contract: gemini_interactions
+    execution_lifecycle: pollable_resource
+    output_token_limit: 65536
+    media_inputs:
+    - image
+    - audio
+  - provider: gemini
+    model: gemini-3.1-pro-preview
+    provider_model: gemini-3.1-pro-preview
+    operations:
+    - text
+    wire_contract: gemini_interactions
+    execution_lifecycle: pollable_resource
+    output_token_limit: 65536
+  - provider: gemini
+    model: gemini-3-flash-preview
+    provider_model: gemini-3-flash-preview
+    operations:
+    - text
+    wire_contract: gemini_interactions
+    execution_lifecycle: pollable_resource
+    output_token_limit: 65536
+  - provider: gemini
+    model: gemini-3.1-flash-lite
+    provider_model: gemini-3.1-flash-lite
+    operations:
+    - text
+    wire_contract: gemini_interactions
+    execution_lifecycle: pollable_resource
+    output_token_limit: 65536
+  - provider: gemini
+    model: gemini-2.5-flash
+    provider_model: gemini-2.5-flash
+    operations:
+    - text
+    default_operations:
+    - text
+    wire_contract: gemini_interactions
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 65536
+    media_inputs:
+    - image
+    - audio
+  - provider: gemini
+    model: gemini-2.5-flash-lite
+    provider_model: gemini-2.5-flash-lite
+    operations:
+    - text
+    wire_contract: gemini_interactions
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 65536
+  - provider: gemini
+    model: gemini-2.5-pro
+    provider_model: gemini-2.5-pro
+    operations:
+    - text
+    wire_contract: gemini_interactions
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 65536
+  - provider: anthropic
+    model: claude-fable-5
+    provider_model: claude-fable-5
+    operations:
+    - text
+    wire_contract: anthropic_messages
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 128000
+  - provider: anthropic
+    model: claude-sonnet-5
+    provider_model: claude-sonnet-5
+    operations:
+    - text
+    wire_contract: anthropic_messages
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 128000
+  - provider: anthropic
+    model: claude-opus-4-8
+    provider_model: claude-opus-4-8
+    operations:
+    - text
+    wire_contract: anthropic_messages
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 128000
+  - provider: anthropic
+    model: claude-sonnet-4-6
+    provider_model: claude-sonnet-4-6
+    operations:
+    - text
+    default_operations:
+    - text
+    wire_contract: anthropic_messages
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 64000
+  - provider: anthropic
+    model: claude-haiku-4-5-20251001
+    provider_model: claude-haiku-4-5-20251001
+    operations:
+    - text
+    wire_contract: anthropic_messages
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 64000
+  - provider: anthropic
+    model: claude-haiku-4-5
+    provider_model: claude-haiku-4-5
+    operations:
+    - text
+    wire_contract: anthropic_messages
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 64000
+  - provider: anthropic
+    model: claude-sonnet-4-5-20250929
+    provider_model: claude-sonnet-4-5-20250929
+    operations:
+    - text
+    wire_contract: anthropic_messages
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 64000
+  - provider: anthropic
+    model: claude-sonnet-4-5
+    provider_model: claude-sonnet-4-5
+    operations:
+    - text
+    wire_contract: anthropic_messages
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 64000
+  - provider: anthropic
+    model: claude-opus-4-1-20250805
+    provider_model: claude-opus-4-1-20250805
+    operations:
+    - text
+    wire_contract: anthropic_messages
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 32000
+  - provider: anthropic
+    model: claude-opus-4-1
+    provider_model: claude-opus-4-1
+    operations:
+    - text
+    wire_contract: anthropic_messages
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 32000
+  - provider: meta
+    model: muse-spark-1.1
+    provider_model: muse-spark-1.1
+    operations:
+    - text
+    default_operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: grok
+    model: grok-4.3
+    provider_model: grok-4.3
+    operations:
+    - text
+    default_operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: grok
+    model: grok-4.3-latest
+    provider_model: grok-4.3-latest
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: grok
+    model: grok-4.5
+    provider_model: grok-4.5
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: grok
+    model: grok-4.20-0309-reasoning
+    provider_model: grok-4.20-0309-reasoning
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: grok
+    model: grok-4.20-0309-non-reasoning
+    provider_model: grok-4.20-0309-non-reasoning
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: grok
+    model: grok-latest
+    provider_model: grok-latest
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: grok
+    model: grok-build-0.1
+    provider_model: grok-build-0.1
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: grok
+    model: grok-code-fast
+    provider_model: grok-code-fast
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: grok
+    model: grok-code-fast-1
+    provider_model: grok-code-fast-1
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: grok
+    model: grok-code-fast-1-0825
+    provider_model: grok-code-fast-1-0825
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+  - provider: grok
+    model: xai-stt
+    provider_model: xai-stt
+    operations:
+    - dictation
+    default_operations:
+    - dictation

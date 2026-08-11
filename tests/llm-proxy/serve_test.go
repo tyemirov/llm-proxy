@@ -66,7 +66,7 @@ func newRouterWithStubbedOpenAI(testingInstance *testing.T, modelsBody, response
 
 	logger, _ := zap.NewDevelopment()
 	defer logger.Sync()
-	router, buildError := proxy.BuildRouter(testfixtures.WithProviderModelCatalogs(testingInstance, proxy.Configuration{
+	router, buildError := proxy.BuildRouter(testfixtures.WithModelCatalog(testingInstance, proxy.Configuration{
 		Tenants:               proxy.SingleTenantConfigurations("test", "sekret"),
 		OpenAIKey:             "sk-test",
 		LogLevel:              "debug",
@@ -187,7 +187,7 @@ func TestEndpoint_ReturnsServiceUnavailableWhenQueueFull(testingInstance *testin
 
 	logger, _ := zap.NewDevelopment()
 	defer logger.Sync()
-	router, buildError := proxy.BuildRouter(testfixtures.WithProviderModelCatalogs(testingInstance, proxy.Configuration{
+	router, buildError := proxy.BuildRouter(testfixtures.WithModelCatalog(testingInstance, proxy.Configuration{
 		Tenants:               proxy.SingleTenantConfigurations("test", "sekret"),
 		OpenAIKey:             "sk-test",
 		LogLevel:              "debug",
@@ -292,7 +292,7 @@ func TestEndpoint_ReturnsGatewayTimeoutWhenWaitingForUpstreamWorker(testingInsta
 
 	logger, _ := zap.NewDevelopment()
 	defer logger.Sync()
-	router, buildError := proxy.BuildRouter(testfixtures.WithProviderModelCatalogs(testingInstance, proxy.Configuration{
+	router, buildError := proxy.BuildRouter(testfixtures.WithModelCatalog(testingInstance, proxy.Configuration{
 		Tenants:               proxy.SingleTenantConfigurations("test", "sekret"),
 		OpenAIKey:             "sk-test",
 		LogLevel:              "debug",

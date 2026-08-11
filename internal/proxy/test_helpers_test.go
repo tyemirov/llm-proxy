@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -71,18 +72,46 @@ func NewTestRouter(t *testing.T, serverURL string) *gin.Engine {
 
 func buildRouterWithCatalogs(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger) (*gin.Engine, error) {
 	testingInstance.Helper()
-	return proxy.BuildRouter(withProviderModelCatalogs(testingInstance, configuration), structuredLogger)
+	return proxy.BuildRouter(withModelCatalog(testingInstance, configuration), structuredLogger)
 }
 
 func newConfigurationWithCatalogs(testingInstance testing.TB, configuration proxy.Configuration) (proxy.Configuration, error) {
 	testingInstance.Helper()
-	return proxy.NewConfiguration(withProviderModelCatalogs(testingInstance, configuration))
+	return proxy.NewConfiguration(withModelCatalog(testingInstance, configuration))
 }
 
-func withProviderModelCatalogs(testingInstance testing.TB, configuration proxy.Configuration) proxy.Configuration {
+func withModelCatalog(testingInstance testing.TB, configuration proxy.Configuration) proxy.Configuration {
 	testingInstance.Helper()
-	if len(configuration.ProviderModels) == 0 {
-		configuration.ProviderModels = testfixtures.ProviderModelCatalogs(testingInstance)
+	if len(configuration.ModelCatalog.Offerings) == 0 {
+		configuration.ModelCatalog = testfixtures.ModelCatalog(testingInstance)
 	}
 	return configuration
+}
+
+func catalogOfferingsForProvider(catalog proxy.ModelCatalog, provider string, operation string) []proxy.ProviderOffering {
+	offerings := []proxy.ProviderOffering{}
+	for _, offering := range catalog.Offerings {
+		if offering.Provider == provider && slices.Contains(offering.Operations, operation) {
+			offerings = append(offerings, offering)
+		}
+	}
+	return offerings
+}
+
+func catalogOfferingIndex(catalog proxy.ModelCatalog, provider string, model string) int {
+	for index, offering := range catalog.Offerings {
+		if offering.Provider == provider && offering.Model == model {
+			return index
+		}
+	}
+	return -1
+}
+
+func catalogExactModelIndex(catalog proxy.ModelCatalog, model string) int {
+	for index, exactModel := range catalog.Models {
+		if exactModel.ID == model {
+			return index
+		}
+	}
+	return -1
 }

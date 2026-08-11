@@ -11,6 +11,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type managedUsageEventSchemaOneFixtureRecord struct {
@@ -326,6 +327,187 @@ func TestManagedKeyedRoutingDefaultsMigrationRejectsStageFailures(t *testing.T) 
 	})
 }
 
+type managedModelIdentityMigrationFixture struct {
+	database          *gorm.DB
+	providerKeyCipher managedProviderKeyCipher
+	providers         *providerRegistry
+	tenant            managedTenantRecord
+	usage             managedUsageEventRecord
+}
+
+func newManagedModelIdentityMigrationFixture(t *testing.T) managedModelIdentityMigrationFixture {
+	t.Helper()
+	database, openError := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "model-identity-stage.db")), &gorm.Config{})
+	if openError != nil {
+		t.Fatalf("open model identity fixture: %v", openError)
+	}
+	if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
+		t.Fatalf("create model identity schema: %v", migrationError)
+	}
+	now := time.Date(2026, 8, 10, 23, 30, 0, 0, time.UTC)
+	user := managedUserRecord{UserID: "model-identity-owner", CreatedAt: now, UpdatedAt: now}
+	if createError := database.Create(&user).Error; createError != nil {
+		t.Fatalf("seed model identity user: %v", createError)
+	}
+	tenantRecord := fakeTenantRecord(user.UserID, "model-identity-tenant", "Default", now)
+	tenantRecord.DefaultProvider = ProviderNameMiniMax
+	tenantRecord.DefaultModel = managedMiniMaxNativeModel
+	tenantRecord.DefaultDictationProvider = ProviderNameSiliconFlow
+	tenantRecord.DefaultDictationModel = managedSenseVoiceNativeModel
+	if createError := database.Create(&tenantRecord).Error; createError != nil {
+		t.Fatalf("seed model identity tenant: %v", createError)
+	}
+	providerKeyCipher := internalManagedProviderKeyCipher()
+	encryptProviderKey := func(providerIdentifier string, rawAPIKey string, nonceByte string) string {
+		t.Helper()
+		encryptedKey, encryptionError := providerKeyCipher.encrypt(
+			strings.NewReader(strings.Repeat(nonceByte, providerKeyCipher.aeadCipher.NonceSize())),
+			tenantRecord.TenantID,
+			providerIdentifier,
+			rawAPIKey,
+		)
+		if encryptionError != nil {
+			t.Fatalf("encrypt model identity provider=%s: %v", providerIdentifier, encryptionError)
+		}
+		return encryptedKey
+	}
+	providerKeys := []managedProviderAPIKeyRecord{
+		{TenantID: tenantRecord.TenantID, ProviderID: ProviderNameMiniMax, EncryptedAPIKey: encryptProviderKey(ProviderNameMiniMax, "sk-minimax", "m"), TextModel: managedMiniMaxNativeModel, CreatedAt: now, UpdatedAt: now},
+		{TenantID: tenantRecord.TenantID, ProviderID: ProviderNameSiliconFlow, EncryptedAPIKey: encryptProviderKey(ProviderNameSiliconFlow, "sk-siliconflow", "s"), TextModel: managedSiliconFlowDeepSeekNativeModel, CreatedAt: now, UpdatedAt: now},
+	}
+	if createError := database.Create(&providerKeys).Error; createError != nil {
+		t.Fatalf("seed model identity provider keys: %v", createError)
+	}
+	usage := managedUsageEventRecord{
+		ID: 91, TenantID: tenantRecord.TenantID, Endpoint: usageEndpointText,
+		ProviderID: ProviderNameMiniMax, ModelID: managedMiniMaxNativeModel,
+		StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now,
+	}
+	if createError := database.Create(&usage).Error; createError != nil {
+		t.Fatalf("seed model identity usage: %v", createError)
+	}
+	return managedModelIdentityMigrationFixture{
+		database: database, providerKeyCipher: providerKeyCipher,
+		providers: internalManagementProviderRegistry(), tenant: tenantRecord, usage: usage,
+	}
+}
+
+func TestManagedModelIdentityMigrationRejectsStageFailures(t *testing.T) {
+	for _, testCase := range []struct {
+		name      string
+		want      string
+		configure func(*testing.T, managedModelIdentityMigrationFixture)
+	}{
+		{
+			name: "read tenants", want: "operation=read",
+			configure: func(t *testing.T, fixture managedModelIdentityMigrationFixture) {
+				registerManagedGORMError(t, fixture.database, "model_identity_read", "query", managedTenantTable, errInternalTestDatabase)
+			},
+		},
+		{
+			name: "decrypt provider", want: "operation=preflight",
+			configure: func(t *testing.T, fixture managedModelIdentityMigrationFixture) {
+				if updateError := fixture.database.Model(&managedProviderAPIKeyRecord{}).
+					Where(&managedProviderAPIKeyRecord{TenantID: fixture.tenant.TenantID, ProviderID: ProviderNameMiniMax}).
+					Update("encrypted_api_key", "invalid").Error; updateError != nil {
+					t.Fatalf("seed invalid model identity provider: %v", updateError)
+				}
+			},
+		},
+		{
+			name: "invalid defaults", want: "operation=preflight",
+			configure: func(t *testing.T, fixture managedModelIdentityMigrationFixture) {
+				if updateError := fixture.database.Model(&managedTenantRecord{}).
+					Where(&managedTenantRecord{TenantID: fixture.tenant.TenantID}).
+					Update("default_model", "missing-model").Error; updateError != nil {
+					t.Fatalf("seed invalid model identity defaults: %v", updateError)
+				}
+			},
+		},
+		{
+			name: "read historical usage", want: "historical_model_identity",
+			configure: func(t *testing.T, fixture managedModelIdentityMigrationFixture) {
+				registerManagedGORMError(t, fixture.database, "model_identity_usage_read", "query", managedUsageEventTable, errInternalTestDatabase)
+			},
+		},
+		{
+			name: "backfill provider key", want: "operation=backfill table=" + managedProviderKeyTable,
+			configure: func(t *testing.T, fixture managedModelIdentityMigrationFixture) {
+				registerManagedGORMError(t, fixture.database, "model_identity_provider_backfill", "update", managedProviderKeyTable, errInternalTestDatabase)
+			},
+		},
+		{
+			name: "backfill tenant", want: "operation=backfill table=" + managedTenantTable,
+			configure: func(t *testing.T, fixture managedModelIdentityMigrationFixture) {
+				registerManagedGORMError(t, fixture.database, "model_identity_tenant_backfill", "update", managedTenantTable, errInternalTestDatabase)
+			},
+		},
+		{
+			name: "validate migrated routes", want: "operation=read",
+			configure: func(t *testing.T, fixture managedModelIdentityMigrationFixture) {
+				queryCount := 0
+				if callbackError := fixture.database.Callback().Query().Before("gorm:query").Register("model_identity_validate", func(callbackDatabase *gorm.DB) {
+					if callbackDatabase.Statement.Table == managedTenantTable {
+						queryCount++
+						if queryCount == 2 {
+							callbackDatabase.AddError(errInternalTestDatabase)
+						}
+					}
+				}); callbackError != nil {
+					t.Fatalf("register model identity validation failure: %v", callbackError)
+				}
+			},
+		},
+		{
+			name: "verify historical usage read", want: "historical_model_identity",
+			configure: func(t *testing.T, fixture managedModelIdentityMigrationFixture) {
+				queryCount := 0
+				if callbackError := fixture.database.Callback().Query().Before("gorm:query").Register("model_identity_usage_verify", func(callbackDatabase *gorm.DB) {
+					if callbackDatabase.Statement.Table == managedUsageEventTable {
+						queryCount++
+						if queryCount == 2 {
+							callbackDatabase.AddError(errInternalTestDatabase)
+						}
+					}
+				}); callbackError != nil {
+					t.Fatalf("register model identity usage verification failure: %v", callbackError)
+				}
+			},
+		},
+		{
+			name: "verify historical usage drift", want: "historical_usage_changed",
+			configure: func(t *testing.T, fixture managedModelIdentityMigrationFixture) {
+				queryCount := 0
+				if callbackError := fixture.database.Callback().Query().Before("gorm:query").Register("model_identity_usage_drift", func(callbackDatabase *gorm.DB) {
+					if callbackDatabase.Statement.Table == managedUsageEventTable {
+						queryCount++
+						if queryCount == 2 {
+							callbackDatabase.Statement.AddClause(clause.Where{Exprs: []clause.Expression{clause.Expr{SQL: "1 = 0"}}})
+						}
+					}
+				}); callbackError != nil {
+					t.Fatalf("register model identity usage drift: %v", callbackError)
+				}
+			},
+		},
+		{
+			name: "record version", want: "operation=record_version",
+			configure: func(t *testing.T, fixture managedModelIdentityMigrationFixture) {
+				registerManagedGORMError(t, fixture.database, "model_identity_record_version", "create", managedSchemaMigrationTable, errInternalTestDatabase)
+			},
+		},
+	} {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			fixture := newManagedModelIdentityMigrationFixture(subTest)
+			testCase.configure(subTest, fixture)
+			migrationError := migrateManagedModelIdentity(fixture.database, fixture.providerKeyCipher, fixture.providers)
+			if !errors.Is(migrationError, errManagedTenantSchemaMigration) || !strings.Contains(migrationError.Error(), testCase.want) {
+				subTest.Fatalf("migration error=%v want=%q", migrationError, testCase.want)
+			}
+		})
+	}
+}
+
 type managedQwenCloudRetirementFixture struct {
 	database          *gorm.DB
 	providerKeyCipher managedProviderKeyCipher
@@ -499,6 +681,22 @@ func TestManagedQwenCloudRetirementMigrationRejectsStageFailures(t *testing.T) {
 			testCase.configure(t, fixture)
 			assertMigrationError(t, migrateManagedQwenCloudRetirement(fixture.database, fixture.providerKeyCipher, fixture.providers), testCase.want)
 		})
+	}
+}
+
+func TestManagedTenantSchemaStopsBeforeModelIdentityWhenQwenRetirementFails(t *testing.T) {
+	fixture := newManagedQwenCloudRetirementFixture(t)
+	if createError := fixture.database.Create(&managedSchemaMigrationRecord{Version: managedKeyedRoutingSchemaVersion, AppliedAt: fixture.tenant.CreatedAt}).Error; createError != nil {
+		t.Fatalf("seed schema version: %v", createError)
+	}
+	if updateError := fixture.database.Model(&managedTenantRecord{}).
+		Where(&managedTenantRecord{TenantID: fixture.tenant.TenantID}).
+		Update("default_model", "wrong-model").Error; updateError != nil {
+		t.Fatalf("seed invalid retired defaults: %v", updateError)
+	}
+	initializeError := initializeManagedTenantSchema(fixture.database, fixture.providerKeyCipher, fixture.providers)
+	if !errors.Is(initializeError, errManagedTenantSchemaMigration) || !strings.Contains(initializeError.Error(), "operation=preflight") {
+		t.Fatalf("initialize error=%v", initializeError)
 	}
 }
 

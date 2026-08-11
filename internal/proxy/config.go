@@ -80,7 +80,7 @@ type Configuration struct {
 	MaxInputAudioBytes           int64
 	UpstreamRateLimits           []UpstreamRateLimitConfiguration
 	Endpoints                    *Endpoints
-	ProviderModels               ProviderModelCatalogs
+	ModelCatalog                 ModelCatalog
 	upstreamRateLimits           upstreamRateLimits
 	tenants                      tenantRegistry
 	managementSessionValidator   *managementSessionValidator
@@ -167,7 +167,7 @@ func validateConfig(configuration Configuration) (tenantRegistry, error) {
 	if tenantError != nil {
 		return tenantRegistry{}, tenantError
 	}
-	if modelCatalogError := validateProviderModelCatalogs(configuration.ProviderModels); modelCatalogError != nil {
+	if _, modelCatalogError := validateModelCatalog(configuration.ModelCatalog); modelCatalogError != nil {
 		return tenantRegistry{}, modelCatalogError
 	}
 	providers := newProviderRegistry(configuration)
