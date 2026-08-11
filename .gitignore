@@ -1,5 +1,4 @@
 # Local planning scratch
-PLAN.md
 
 # OS and editor metadata
 .DS_Store
@@ -49,3 +48,7 @@ python/.mypy_cache/
 coverage.out
 *.coverprofile
 *.prof
+
+# BEGIN MPRLAB-GOVERNANCE
+/.mprlab/*-PLAN.md
+# END MPRLAB-GOVERNANCE
