@@ -28,7 +28,7 @@ the public **Log In** action authenticates the user through MPR UI and TAuth.
 - Set optional nonblank `reasoning_effort=...` on `GET /`, or in a JSON body for `POST /` and `POST /v2`, to select a capability-supported reasoning level for that exact resolved route. An explicit value overrides the tenant default; an omitted value retains it. Blank or unsupported values fail before an upstream call.
 - Choose the dictation model per request via `model=...` on `/dictate`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider's configured default
 - Optional per-request web search via exact `web_search=true`; `false` or omission keeps it disabled
-- Optional exact image and audio attachments on canonical `POST /v2` user messages when the selected model declares the corresponding `media_inputs`
+- Optional exact inline or tenant-asset-backed image and audio attachments on canonical `POST /v2` user messages
 - Optional logging at `debug` or `info` levels
 - Forwards requests using server-side provider API keys, loaded from the database in management mode
 - Optional TAuth-protected self-service UI where signed-in users automatically receive an llm-proxy client key and their provider settings plus routing defaults autosave
@@ -488,8 +488,14 @@ Provider-specific details:
   totals map from `total_input_tokens`, `total_output_tokens`, and
   `total_tokens`, preserving provider-counted thought tokens. For exact models
   whose catalog declares `media_inputs`, ordered image and audio attachments
-  become native typed interaction content after the message text. See Google's
+  become native typed interaction content after the message text. The adapter
+  sends an inline request when the complete encoded request is at most the
+  offering's inline limit. It streams exact media bytes through the Gemini
+  Files API when the encoded request is larger, then deletes each provider
+  file after the interaction ends. See Google's
   [Interactions overview](https://ai.google.dev/gemini-api/docs/interactions-overview),
+  [file input methods](https://ai.google.dev/gemini-api/docs/file-input-methods),
+  [Files API guide](https://ai.google.dev/gemini-api/docs/files),
   [background execution guide](https://ai.google.dev/gemini-api/docs/background-execution),
   and [Interactions API reference](https://ai.google.dev/api/interactions-api).
 * Anthropic text requests use `POST /v1/messages` with `x-api-key` and
@@ -1607,6 +1613,31 @@ representations at the HTTP edge, preserves attachment order, rejects media on
 non-user messages or unsupported model routes before upstream work, and never
 echoes media bytes in response metadata.
 
+Use `UploadAsset` when the application needs a reusable tenant asset. The
+returned record contains the opaque asset id, MIME type, byte count, SHA-256,
+state, and expiry. Construct the attachment from that exact record:
+
+```go
+asset, err := client.UploadAsset(ctx, llmproxyclient.AssetUploadInput{
+    MIMEType: "image/png",
+    Data:     frameBytes,
+})
+if err != nil {
+    return err
+}
+frame, err := llmproxyclient.NewImageAssetAttachment(
+    llmproxyclient.ImageAssetAttachmentInput{
+        AssetID:  asset.AssetID,
+        MIMEType: asset.MIMEType,
+        SHA256:   asset.SHA256,
+    },
+)
+```
+
+`NewAudioAssetAttachment` provides the corresponding audio constructor. Both
+asset constructors serialize `asset_id` instead of `data` and preserve the
+same hash-bound attachment union.
+
 The request value controls only the proxy budget header. `ctx` remains the Go
 caller's independent cancellation authority, and the injected `HTTPDoer` may
 have its own explicitly selected transport policy. The package does not add a
@@ -1721,7 +1752,13 @@ For reproducible application builds, replace `master` with the desired released
 repository tag.
 
 ```python
-from llm_proxy_client import Client, ClientConfig, ClientMessagesRequest, ClientMessage
+from llm_proxy_client import (
+    Client,
+    ClientConfig,
+    ClientMessage,
+    ClientMessagesRequest,
+    image_asset_attachment,
+)
 
 client = Client(
     ClientConfig(
@@ -1735,6 +1772,25 @@ text = client.post_messages(
         messages=(ClientMessage(role="user", content="Summarize this"),),
         max_tokens=512,
         request_timeout_seconds=900,
+    )
+)
+```
+
+The Python client has the same asset contract:
+
+```python
+asset = client.upload_asset(frame_bytes, "image/png")
+frame = image_asset_attachment(asset.asset_id, asset.mime_type, asset.sha256)
+text = client.post_messages(
+    ClientMessagesRequest(
+        messages=(
+            ClientMessage(
+                role="user",
+                content="Inspect this exact frame.",
+                attachments=(frame,),
+            ),
+        ),
+        model="gemini-2.5-flash",
     )
 )
 ```
@@ -1936,9 +1992,50 @@ the OpenAPI schema, including the omission-versus-explicit-value contract for
 prepended when the submitted messages do not include a system message.
 Only `POST /v2` user messages may include `attachments`; compatibility
 `POST /`, `GET /`, and `/dictate` do not accept that field. Each attachment
-contains exactly `type`, `mime_type`, canonical padded base64 `data`, and the
-matching lowercase hexadecimal `sha256`. The request body remains bounded by
-`server.max_prompt_bytes`.
+is one exact union variant. An inline attachment contains `type`, `mime_type`,
+canonical padded base64 `data`, and the matching lowercase hexadecimal
+`sha256`. An asset attachment contains `type`, `asset_id`, `mime_type`, and the
+matching lowercase hexadecimal `sha256`. The proxy validates tenant ownership,
+asset state, expiry, MIME type, byte count, and digest before provider dispatch.
+`server.max_prompt_bytes` applies to compatibility `POST /`. Canonical
+`POST /v2` applies the selected provider offering's published media limits and
+transport rules.
+
+Upload an asset with the exact media content type and digest:
+
+```shell
+asset_sha256="$(shasum -a 256 ./frame.png | awk '{print $1}')"
+curl -X POST \
+  -H "Content-Type: image/png" \
+  -H "X-LLM-Proxy-Asset-SHA256: ${asset_sha256}" \
+  --data-binary @./frame.png \
+  "http://localhost:8080/model/v1/assets?key=mysecret"
+```
+
+Use the returned asset record in the canonical message:
+
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Inspect this exact frame.",
+      "attachments": [
+        {
+          "type": "image",
+          "asset_id": "ast_0123456789abcdef0123456789abcdef",
+          "mime_type": "image/png",
+          "sha256": "RETURNED_SHA256"
+        }
+      ]
+    }
+  ],
+  "model": "gemini-2.5-flash"
+}
+```
+
+`DELETE /model/v1/assets/{asset_id}?key=...` deletes the tenant asset. The
+default store retains an available asset for 48 hours.
 
 ### Choose an OpenAI model
 
@@ -2167,8 +2264,11 @@ and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-mo
 * `200 OK` - success
 * `400 Bad Request` - missing/invalid parameters, invalid request timeout, invalid multipart audio form, unknown provider/model, or unsupported provider capability. Invalid timeout headers return `{"error":{"code":"invalid_request_timeout","max_request_timeout_seconds":M}}`.
 * `403 Forbidden` - missing or invalid `key`
-* `413 Payload Too Large` - JSON prompt body exceeds `max_prompt_bytes`, or
-  dictation audio exceeds `max_input_audio_bytes`
+* `413 Payload Too Large` - compatibility JSON exceeds `max_prompt_bytes`,
+  dictation audio exceeds `max_input_audio_bytes`, an asset upload exceeds
+  `max_asset_bytes`, or media exceeds every transport limit for the selected
+  provider offering. Provider media failures use
+  `provider_media_limit_exceeded`.
 * `429 Too Many Requests` - upstream provider rate limit; returns the sanitized `provider_rate_limited` JSON contract
 * `503 Service Unavailable` - selected provider credential is unavailable because that non-default provider is disabled or missing its API key
 * `504 Gateway Timeout` - the accepted proxy work budget expired; the response is `{"error":{"code":"request_timeout","request_timeout_seconds":N}}`
