@@ -37,6 +37,19 @@ test("public site rendering rejects an invalid capability REST representation", 
   });
 });
 
+test("public site rendering rejects an invalid model family weight access", async () => {
+  const capabilities = normalizedCapabilityFixture();
+  capabilities.families[0].weight_access = "restricted";
+  await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+    const fixture = await siteFixture();
+    try {
+      await expect(renderFixture(fixture, capabilitiesURL)).rejects.toThrow(/catalog\.families\[0\]\.weight_access value=restricted/u);
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+});
+
 test("public site rendering writes the normalized exact model catalog", async () => {
   await withCapabilityServer(200, normalizedCapabilityFixture(), async (capabilitiesURL) => {
     const fixture = await siteFixture();
@@ -44,6 +57,13 @@ test("public site rendering writes the normalized exact model catalog", async ()
       await renderFixture(fixture, capabilitiesURL);
       const renderedLanding = await readFile(path.join(fixture.output, "index.html"), "utf8");
       expect(renderedLanding).toContain("1 family · 1 exact model · 1 offering");
+      expect(renderedLanding).toContain('data-route-weight-access="proprietary" aria-pressed="true"');
+      expect(renderedLanding).toContain('data-route-weight-access="open_weights" aria-pressed="false"');
+      expect(renderedLanding).toContain('role="group" aria-label="Choose one or both weight access types"');
+      expect(renderedLanding).toContain('role="group" aria-label="Choose one capability"');
+      expect(renderedLanding).toContain('data-route-capability="text" aria-label="Text generation" title="Text generation" aria-pressed="true"');
+      expect(renderedLanding).toContain('data-route-family-weight-access="proprietary"');
+      expect(renderedLanding).toContain('data-route-provider-capabilities="text"');
       expect(renderedLanding).toContain('data-route-family="example-family"');
       expect(renderedLanding).toContain('data-route-model="example-model" data-route-model-family="example-family"');
       expect(renderedLanding).toContain('data-route-provider="example-provider"');
@@ -67,7 +87,12 @@ function normalizedCapabilityFixture() {
     ],
     providers: [{ identifier: "example-provider", label: "Example Provider", credential_kinds: ["api_key"] }],
     publishers: [{ identifier: "example-publisher", label: "Example Publisher", model_count: 1 }],
-    families: [{ identifier: "example-family", publisher: "example-publisher", label: "Example Family" }],
+    families: [{
+      identifier: "example-family",
+      publisher: "example-publisher",
+      label: "Example Family",
+      weight_access: "proprietary",
+    }],
     models: [{
       identifier: "example-model",
       publisher: "example-publisher",
