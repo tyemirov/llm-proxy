@@ -6,6 +6,9 @@ server:
   request_timeout_seconds: 360
   max_request_timeout_seconds: 3600
   max_prompt_bytes: 4194304
+  max_asset_bytes: 2000000000
+  asset_retention_seconds: 172800
+  asset_store_path: /data/assets
   max_input_audio_bytes: 26214400
   upstream_rate_limits: []
 management:
@@ -59,7 +62,7 @@ providers:
     base_url: https://api.x.ai/v1
     transcriptions_url: https://api.x.ai/v1/stt
 catalog:
-  revision: 2026-08-10.i216.1
+  revision: 2026-08-11.f033.1
   operations:
   - id: text
     input_artifacts:
@@ -883,6 +886,51 @@ catalog:
     media_inputs:
     - image
     - audio
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 20000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://ai.google.dev/gemini-api/docs/file-input-methods
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 3600
+      unit: files
+      scope: request
+      source: https://ai.google.dev/gemini-api/docs/image-understanding
+      last_verified: "2026-08-11"
+    - id: audio_count
+      media_type: audio
+      transport: any
+      status: unknown
+      unit: files
+      scope: request
+      source: https://ai.google.dev/gemini-api/docs/audio
+      last_verified: "2026-08-11"
+    - id: image_file_bytes
+      media_type: image
+      transport: file
+      status: bounded
+      value: 2000000000
+      unit: bytes
+      scope: attachment
+      source: https://ai.google.dev/gemini-api/docs/files
+      last_verified: "2026-08-11"
+    - id: audio_file_bytes
+      media_type: audio
+      transport: file
+      status: bounded
+      value: 2000000000
+      unit: bytes
+      scope: attachment
+      source: https://ai.google.dev/gemini-api/docs/files
+      last_verified: "2026-08-11"
   - provider: gemini
     model: gemini-3.1-pro-preview
     provider_model: gemini-3.1-pro-preview
@@ -920,6 +968,51 @@ catalog:
     media_inputs:
     - image
     - audio
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 20000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://ai.google.dev/gemini-api/docs/file-input-methods
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 3600
+      unit: files
+      scope: request
+      source: https://ai.google.dev/gemini-api/docs/image-understanding
+      last_verified: "2026-08-11"
+    - id: audio_count
+      media_type: audio
+      transport: any
+      status: unknown
+      unit: files
+      scope: request
+      source: https://ai.google.dev/gemini-api/docs/audio
+      last_verified: "2026-08-11"
+    - id: image_file_bytes
+      media_type: image
+      transport: file
+      status: bounded
+      value: 2000000000
+      unit: bytes
+      scope: attachment
+      source: https://ai.google.dev/gemini-api/docs/files
+      last_verified: "2026-08-11"
+    - id: audio_file_bytes
+      media_type: audio
+      transport: file
+      status: bounded
+      value: 2000000000
+      unit: bytes
+      scope: attachment
+      source: https://ai.google.dev/gemini-api/docs/files
+      last_verified: "2026-08-11"
   - provider: gemini
     model: gemini-2.5-flash-lite
     provider_model: gemini-2.5-flash-lite
