@@ -245,6 +245,39 @@ retain satisfied historical dependencies.
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 ## Improvements
 
+- [x] [I224] (P0) {F035} Add a paid live matrix for provider image routes.
+  Goal:
+  Add one repository command that proves each current provider image route
+  accepts a canonical image request through LLM Proxy.
+  Requirements:
+  - Add an explicit image mode to the disposable live-provider harness.
+  - Run the image matrix for OpenAI, Anthropic, Gemini, and xAI by default.
+  - Verify each provider key before its image request.
+  - Select each image model from the validated public provider catalog.
+  - Use the configured provider default when that model supports image input.
+  - Otherwise, require one exact image model for that provider.
+  - Send one deterministic inline PNG through canonical `POST /v2`.
+  - Require HTTP `200` and the exact expected response marker.
+  - Keep provider keys, tenant secrets, image data, and response bodies private.
+  - Keep paid provider requests outside `make ci`.
+  Deliverables:
+  - Add a Make target for the four-provider image matrix.
+  - Add fake-boundary coverage for model selection, request order, and payload.
+  - Document the paid command and its environment requirements.
+  Validation:
+  - Run the focused live-harness contract tests.
+  - Run the non-paid live-provider harness preflight.
+  - Run `make ci` after the last application change.
+  Resolution:
+  - Added one catalog-selected image mode and its Make target.
+  - Added exact payload, request order, redaction, and rejection tests.
+  - On 2026-08-11, the paid OpenAI, Anthropic, and Gemini image cases returned
+    HTTP `200`.
+  - The xAI credential was found in the private MediaOps environment, but xAI
+    rejected `grok-4.5` verification with HTTP `422`. No image request ran.
+  - `make ci` passed all 11 gates with 93 browser tests and 100.0% Go statement
+    coverage.
+
 - [ ] [I223] (P0) {I216,I221} Load all supported providers and models from one catalog file.
   Goal:
   Make `configs/providers.yml` the only source that defines supported providers,
@@ -1212,7 +1245,7 @@ retain satisfied historical dependencies.
 
 ## Features
 
-- [ ] [F035] (P0) {F033} Add verified provider image routes.
+- [x] [F035] (P0) {F033} Add verified provider image routes.
   Goal:
   LLM Proxy routes canonical image and audio attachments only through Gemini.
   As a result, the Image input filter shows only the Gemini family. Provider
@@ -1252,6 +1285,16 @@ retain satisfied historical dependencies.
   - Prove the Image input and Audio input route filters in a browser.
   - Prove complete semantic route content without JavaScript.
   - Run `make ci` after the last application change.
+  Resolution:
+  - Added image transport for all verified OpenAI and Anthropic text models.
+  - Added synchronous xAI Responses image transport for `grok-4.5`.
+  - Declared image and conversational audio input for all seven Gemini text models.
+  - Added provider MIME checks and offering-owned request, count, and attachment limits.
+  - The Image input filter now shows 8 proprietary families and 29 exact models.
+  - The Audio message input filter now shows 1 family and 7 exact models.
+  - Public `POST /v2`, capability, browser, and no-JavaScript tests passed.
+  - `make ci` passed all 11 gates with 93 browser tests and 100.0% Go statement
+    coverage.
 - [x] [F034] (P1) Filter the route explorer by weight access and capability.
   Goal:
   Reduce the model family fan with compact route filters in the diagram title.
