@@ -328,19 +328,19 @@ adapters before they are available through `/dictate`.
 | `zhipu` | `glm` | `openai_chat_completions` | `synchronous_completion` | `glm-5.1` | `providers.zhipu.api_key` | `https://open.bigmodel.cn/api/paas/v4` | Yes: `glm-asr-2512` | No |
 | `gemini` | none | `gemini_interactions` | Model-specific: Gemini 3.x `pollable_resource`; Gemini 2.5 `synchronous_completion` | `gemini-2.5-flash` | `providers.gemini.api_key` | `https://generativelanguage.googleapis.com/v1beta` | No | No |
 | `anthropic` | `claude` | `anthropic_messages` | `synchronous_completion` | `claude-sonnet-4-6` | `providers.anthropic.api_key` | `https://api.anthropic.com` | No | No |
-| `xai` | none | `openai_chat_completions` | `synchronous_completion` | `grok-4.3` | `providers.xai.api_key` | `https://api.x.ai/v1` | Yes: `xai-stt` | No |
+| `xai` | none | Model-specific: `grok-4.5` uses `openai_responses`, and other text models use `openai_chat_completions` | `synchronous_completion` | `grok-4.3` | `providers.xai.api_key` | `https://api.x.ai/v1` | Yes: `xai-stt` | No |
 
 All upstream provider credentials are server-side only. Client requests must
 never send OpenAI, Meta, Anthropic, xAI, Gemini, or other upstream API keys.
-Media input is independently model-scoped: the checked-in catalog currently
-declares `image` and `audio` only for `gemini-3.5-flash` and
-`gemini-2.5-flash`. Every other configured model remains text-only on
-`POST /v2`, regardless of capabilities its upstream provider may expose.
+Media input is model-scoped. The checked-in catalog declares media input only
+when the provider offering has a code-owned transport.
 
-| Model | Provider | Standard-message media inputs |
-|-------|----------|-------------------------------|
-| `gemini-3.5-flash` | Gemini | `image`, `audio` |
-| `gemini-2.5-flash` | Gemini | `image`, `audio` |
+| Exact model set | Provider | Standard-message media inputs |
+|-----------------|----------|-------------------------------|
+| All 11 OpenAI text models in the GPT-4 and GPT-5 families | OpenAI | `image` |
+| All 10 Claude text models in the Fable, Sonnet, Opus, and Haiku families | Anthropic | `image` |
+| All 7 Gemini text models | Gemini | `image`, `audio` |
+| `grok-4.5` | xAI | `image` |
 | Every other configured model | Its configured provider | None |
 
 ### Model catalog schema
@@ -440,11 +440,12 @@ treats an arbitrary upstream identifier as pollable state.
 
 Provider-specific details:
 
-* OpenAI is the only provider currently exposed with `web_search` support, and
-  only for OpenAI model catalog entries with `web_search: true`. OpenAI
-  dictation uses the same `providers.openai.api_key` value. OpenAI Responses
-  and Models endpoint URLs are derived from `providers.openai.base_url`;
-  dictation uses `providers.openai.transcriptions_url`.
+* OpenAI is the only provider currently exposed with `web_search` support.
+  This support applies only to catalog entries with `web_search: true`.
+  OpenAI derives Responses and Models endpoint URLs from `providers.openai.base_url`.
+  Dictation uses `providers.openai.transcriptions_url` and the same API key.
+  Each catalog model with image input sends ordered Data URLs through OpenAI Responses.
+  The adapter uses `detail: auto` for each image.
 * OpenAI-compatible text providers send chat completion requests with
   `Authorization: Bearer <api_key>` and the selected provider base URL. The
   shared adapter normalizes `finish_reason=length` into the common
@@ -501,20 +502,21 @@ Provider-specific details:
   [background execution guide](https://ai.google.dev/gemini-api/docs/background-execution),
   and [Interactions API reference](https://ai.google.dev/api/interactions-api).
 * Anthropic text requests use `POST /v1/messages` with `x-api-key` and
-  `anthropic-version: 2023-06-01`. System messages are translated to
-  Anthropic's top-level `system` field. Anthropic requires `max_tokens`, so
-  when the client omits it the proxy sends the selected Claude model's
-  configured output limit. `stop_reason=max_tokens` enters the common
-  missing-suffix loop; `end_turn` or `stop_sequence` completes the assembled
-  answer. Tool use, paused turns, refusals, and unknown reasons remain upstream
-  failures because this adapter exposes no tool loop.
+  `anthropic-version: 2023-06-01`. The proxy maps system messages to Anthropic's
+  top-level `system` field. Anthropic requires `max_tokens`.
+  When the client omits it, the proxy sends the selected model output limit.
+  `stop_reason=max_tokens` starts the common missing-suffix loop.
+  `end_turn` or `stop_sequence` completes the assembled answer.
+  Tool use, paused turns, refusals, and unknown reasons remain upstream failures.
+  Each catalog model with image input sends ordered base64 image blocks before the message text.
 * Zhipu dictation uses Z.AI GLM-ASR through
   `providers.zhipu.transcriptions_url` with the selected configured dictation
   model.
-* xAI text requests use xAI's OpenAI-compatible `/chat/completions` API at
-  `https://api.x.ai/v1`. Grok/xAI dictation uses xAI STT through
-  `providers.xai.transcriptions_url`. The upstream STT endpoint does not
-  receive a `model` multipart field.
+* Most xAI text models use xAI's OpenAI-compatible `/chat/completions` API at
+  `https://api.x.ai/v1`. The `grok-4.5` route uses synchronous `/responses`
+  with `store: false`. Its image blocks use `detail: high`. Grok/xAI dictation
+  uses xAI STT through `providers.xai.transcriptions_url`. The upstream STT
+  endpoint does not receive a `model` multipart field.
 
 When management is disabled, provider API keys are optional until a configured
 static tenant uses that provider as a default. If a non-default provider key is
@@ -1333,6 +1335,7 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make ci` | Prepare pinned frontend dependencies, then run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, frontend syntax checks, the 100% coverage-gated Go test suite, Python pytest, Playwright browser tests, the app lifecycle contract test, and the non-paid live-harness preflight. A successful run ends with a per-gate table, current-run coverage, and an explicit `CI PASSED` receipt. |
 | `make test-live-provider-harness` | Generate the temporary static-mode live-test config and verify authenticated routing without an upstream call. |
 | `make test-live-providers` | Start a disposable managed tenant, verify every available provider key through the canonical management operation, and run that provider's live text smoke only after verification succeeds; use `LIVE_ENV_FILE=/path/to/env` to load key values. |
+| `make test-live-provider-media` | Verify OpenAI, Anthropic, Gemini, and xAI keys, then send one paid canonical image request through each provider. |
 | `make test-live-gemini` | Compatibility wrapper for `make test-live-providers` with `LLM_PROXY_LIVE_PROVIDERS=gemini`. |
 | `make live-test` | Send paid production `POST /v2` requests through the Default tenant using only `LLM_PROXY_SECRET`: echo checks for OpenAI, Anthropic, Meta, Gemini, and Moonshot, plus large completion cases for OpenAI, Anthropic, Meta, and Gemini. |
 | `make release` | Delegate this clean checkout and its schema-v4 resource declaration to the exact sibling `../mprlab-gateway` release transaction. |
@@ -1389,6 +1392,31 @@ directory. It submits each candidate once to
 safe `200` keyed-profile result, and only then sends that provider's smoke
 request. Candidate payloads, session material, provider responses, and proxy
 responses are never printed, and the temporary state is removed at exit.
+
+The paid image matrix uses OpenAI, Anthropic, Gemini, and xAI by default. It
+requires all four provider keys. Set `LLM_PROXY_LIVE_PROVIDERS` to run a
+selected subset. The harness selects each image model from the validated public
+provider catalog. It uses the configured default when that model supports image
+input. Otherwise, it requires one exact image model for that provider. The key
+verification uses the selected image model.
+
+Each image case creates the same deterministic 256 by 256 red PNG. The request
+sends canonical padded base64 data and its matching SHA-256 through `POST /v2`.
+The case requires HTTP `200`, an exact `RED` response, and a valid proxy request
+identifier. The harness does not print the image, response body, or credentials.
+
+Run the complete paid image matrix:
+
+```shell
+make test-live-provider-media LIVE_ENV_FILE=configs/.env
+```
+
+Run a selected paid image subset:
+
+```shell
+LLM_PROXY_LIVE_PROVIDERS=openai,gemini \
+  make test-live-provider-media LIVE_ENV_FILE=configs/.env
+```
 
 The non-paid `--preflight` and `--write-config` modes retain the isolated
 static-mode contract with management disabled, a temporary tenant, and
