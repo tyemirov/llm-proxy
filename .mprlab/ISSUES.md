@@ -97,6 +97,86 @@ retain satisfied historical dependencies.
     selection updates, complete semantic HTML, and responsive layouts.
   - `make ci` passed all 11 gates with 92 browser tests and 100.0% Go statement
     coverage.
+- [x] [B132] (P1) Route xAI Responses verification to xAI.
+  Goal:
+  Verify an xAI Responses model through the selected xAI provider endpoint.
+  Requirements:
+  - Use the exact protocol adapter and execution lifecycle for verification.
+  - Send synchronous Responses verification to the selected provider base URL.
+  - Keep OpenAI Responses verification on the configured OpenAI endpoint.
+  Validation:
+  - Prove management saves a verified `grok-4.5` key after an xAI request.
+  Resolution:
+  - Keyed verification request builders by wire contract and execution
+    lifecycle.
+  - Added management proof that `grok-4.5` verification calls xAI and saves
+    the key.
+- [x] [B133] (P1) Reject large media before provider serialization.
+  Goal:
+  Reject media that exceeds a provider limit before the proxy reads an asset.
+  Requirements:
+  - Check media counts and attachment sizes from validated metadata.
+  - Check a bounded encoded request minimum before media serialization.
+  - Preserve the exact serialized request-size check.
+  Validation:
+  - Prove each inline-only adapter rejects an oversized closed asset.
+  - Require a media limit error for each rejection.
+  Resolution:
+  - Split metadata admission from the exact serialized request-size check.
+  - Proved OpenAI, xAI, and Anthropic reject an oversized closed asset before
+    an asset read.
+- [x] [B134] (P1) Bound buffered canonical request bodies.
+  Goal:
+  Keep each buffered `POST /v2` body within a safe service limit.
+  Requirements:
+  - Apply one service body limit below large provider request limits.
+  - Keep tenant assets as the transport for larger media.
+  - Return HTTP `413` before JSON decoding for a body above the limit.
+  Validation:
+  - Prove the service limit overrides a larger provider catalog limit.
+  Resolution:
+  - Limited buffered `/v2` bodies to 8 MiB or the smaller catalog-derived
+    value.
+  - Removed the JSON body string copy and added public HTTP `413` proof.
+- [x] [B135] (P2) Bind media declarations to exact protocol adapters.
+  Goal:
+  Accept a media declaration only when the exact route adapter serializes it.
+  Requirements:
+  - Validate media input against the wire contract and execution lifecycle.
+  - Reject media on every Chat Completions route during startup.
+  Validation:
+  - Prove an xAI Chat Completions media declaration stops catalog startup.
+  Resolution:
+  - Keyed media support by wire contract and execution lifecycle.
+  - Proved an xAI Chat Completions media declaration stops catalog startup.
+- [x] [B136] (P2) Require each adapter media transport limit.
+  Goal:
+  Require the media limit for the transport that each exact adapter uses.
+  Requirements:
+  - Require inline attachment limits for inline-only adapters.
+  - Require file attachment limits for Gemini Interactions adapters.
+  - Reject limits that declare only an unused transport.
+  Validation:
+  - Prove startup rejects file-only limits for an inline adapter.
+  - Prove startup rejects a Gemini adapter without file limits.
+  Resolution:
+  - Required inline attachment limits for inline adapters and file attachment
+    limits for Gemini adapters.
+  - Added startup rejection proofs for each wrong transport declaration.
+- [x] [B137] (P2) Close assets after route media rejection.
+  Goal:
+  Close each resolved asset when exact route media validation rejects a request.
+  Requirements:
+  - Close all constructed message media before the handler returns an error.
+  - Preserve the provider-specific MIME rejection response.
+  Validation:
+  - Prove xAI WebP asset rejection closes the opened asset reader.
+  Resolution:
+  - Closed constructed message media before an exact route MIME rejection
+    returns.
+  - Proved xAI WebP asset rejection closes the asset reader.
+  - `make ci` passed all 11 gates with 93 browser tests and 100.0% Go statement
+    coverage.
 - [!] [B126] (P1) Activate the current v0.4.0 release on every public surface.
   Goal:
   Make the production API, container, and Pages site serve the immutable
