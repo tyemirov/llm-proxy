@@ -751,6 +751,18 @@ func TestMediaLimitAndMessageMediaEdgeContracts(t *testing.T) {
 	if validationError := validateCatalogMediaLimits([]CatalogMediaLimit{base}, []string{"image"}, "limits"); validationError == nil {
 		t.Fatal("expected missing required limit rejection")
 	}
+	inlineLimit := CatalogMediaLimit{ID: CatalogMediaLimitIDImageInlineBytes, MediaType: "image", Transport: CatalogMediaTransportInline, Status: CatalogMediaLimitStatusUnknown, Unit: CatalogMediaLimitUnitBytes, Scope: CatalogMediaLimitScopeAttachment, Source: validSource, LastVerified: validDate}
+	wrongCountScope := CatalogMediaLimit{ID: CatalogMediaLimitIDImageCount, MediaType: "image", Transport: CatalogMediaTransportAny, Status: CatalogMediaLimitStatusUnbounded, Unit: CatalogMediaLimitUnitFiles, Scope: CatalogMediaLimitScopeAttachment, Source: validSource, LastVerified: validDate}
+	if validationError := validateCatalogMediaLimits([]CatalogMediaLimit{base, inlineLimit, wrongCountScope}, []string{"image"}, "limits"); validationError == nil {
+		t.Fatal("expected mismatched required limit rejection")
+	}
+	wrongInlineScope := inlineLimit
+	wrongInlineScope.Scope = CatalogMediaLimitScopeRequest
+	validCount := wrongCountScope
+	validCount.Scope = CatalogMediaLimitScopeRequest
+	if validationError := validateCatalogMediaLimits([]CatalogMediaLimit{base, wrongInlineScope, validCount}, []string{"image"}, "limits"); validationError == nil {
+		t.Fatal("expected request-scoped inline attachment limit rejection")
+	}
 
 	assetID := " ast_0123456789abcdef0123456789abcdef"
 	if _, mediaError := newMessageMedia(chatMessageAttachmentPayload{Type: "image", MIMEType: "image/png", AssetID: &assetID, SHA256: strings.Repeat("0", 64)}, tenant{}, newTenantAssetStore(t.TempDir(), 10, 60)); mediaError == nil {

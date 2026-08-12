@@ -137,7 +137,10 @@ var providerTextRouteCapabilities = map[string]map[textRouteCapabilities]struct{
 	},
 	ProviderNameAnthropic: {anthropicMessagesSynchronousRouteCapabilities: {}},
 	ProviderNameMeta:      {openAIChatCompletionsSynchronousRouteCapabilities: {}},
-	ProviderNameXAI:       {openAIChatCompletionsSynchronousRouteCapabilities: {}},
+	ProviderNameXAI: {
+		openAIChatCompletionsSynchronousRouteCapabilities: {},
+		openAIResponsesSynchronousRouteCapabilities:       {},
+	},
 }
 
 func validateModelCatalog(catalog ModelCatalog) (validatedModelCatalog, error) {

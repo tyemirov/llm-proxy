@@ -22,7 +22,7 @@ type Reasoning struct {
 // requestPayloadBase contains fields common to all requests.
 type requestPayloadBase struct {
 	Model           string `json:"model"`
-	Input           string `json:"input"`
+	Input           any    `json:"input"`
 	MaxOutputTokens *int   `json:"max_output_tokens,omitempty"`
 	Background      bool   `json:"background"`
 	Store           bool   `json:"store"`
@@ -56,11 +56,11 @@ type Tool struct {
 }
 
 // BuildRequestPayload selects the correct OpenAI Responses payload shape for the configured request profile.
-func BuildRequestPayload(modelIdentifier string, rawRequestProfile string, combinedPrompt string, webSearchEnabled bool, maxTokens *int, reasoningEffort string) any {
+func BuildRequestPayload(modelIdentifier string, rawRequestProfile string, combinedPrompt any, webSearchEnabled bool, maxTokens *int, reasoningEffort string) any {
 	return buildRequestPayload(modelIdentifier, rawRequestProfile, combinedPrompt, webSearchEnabled, maxTokens, reasoningEffort, true, true)
 }
 
-func buildRequestPayload(modelIdentifier string, rawRequestProfile string, combinedPrompt string, webSearchEnabled bool, maxTokens *int, reasoningEffort string, background bool, store bool) any {
+func buildRequestPayload(modelIdentifier string, rawRequestProfile string, combinedPrompt any, webSearchEnabled bool, maxTokens *int, reasoningEffort string, background bool, store bool) any {
 	base := requestPayloadBase{
 		Model:           modelIdentifier,
 		Input:           combinedPrompt,

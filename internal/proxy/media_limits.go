@@ -20,15 +20,18 @@ const (
 	CatalogMediaLimitUnitBytes = "bytes"
 	CatalogMediaLimitUnitFiles = "files"
 
-	CatalogMediaLimitScopeAttachment          = "attachment"
-	CatalogMediaLimitScopeRequest             = "request"
-	CatalogMediaLimitScopeRequestEncodedBytes = "request_encoded_bytes"
+	CatalogMediaLimitScopeAttachment             = "attachment"
+	CatalogMediaLimitScopeAttachmentEncodedBytes = "attachment_encoded_bytes"
+	CatalogMediaLimitScopeRequest                = "request"
+	CatalogMediaLimitScopeRequestEncodedBytes    = "request_encoded_bytes"
 
 	CatalogMediaLimitTypeAll = "all"
 
 	CatalogMediaLimitIDInlineRequestBytes = "inline_request_bytes"
 	CatalogMediaLimitIDImageCount         = "image_count"
 	CatalogMediaLimitIDAudioCount         = "audio_count"
+	CatalogMediaLimitIDImageInlineBytes   = "image_inline_bytes"
+	CatalogMediaLimitIDAudioInlineBytes   = "audio_inline_bytes"
 	CatalogMediaLimitIDImageFileBytes     = "image_file_bytes"
 	CatalogMediaLimitIDAudioFileBytes     = "audio_file_bytes"
 )
@@ -93,7 +96,7 @@ func validateCatalogMediaLimits(limits []CatalogMediaLimit, mediaInputs []string
 		if limit.Unit != CatalogMediaLimitUnitBytes && limit.Unit != CatalogMediaLimitUnitFiles {
 			return fmt.Errorf("%w: field=%s.unit unit=%s", ErrInvalidModelCatalog, limitField, limit.Unit)
 		}
-		if limit.Scope != CatalogMediaLimitScopeAttachment && limit.Scope != CatalogMediaLimitScopeRequest && limit.Scope != CatalogMediaLimitScopeRequestEncodedBytes {
+		if limit.Scope != CatalogMediaLimitScopeAttachment && limit.Scope != CatalogMediaLimitScopeAttachmentEncodedBytes && limit.Scope != CatalogMediaLimitScopeRequest && limit.Scope != CatalogMediaLimitScopeRequestEncodedBytes {
 			return fmt.Errorf("%w: field=%s.scope scope=%s", ErrInvalidModelCatalog, limitField, limit.Scope)
 		}
 		switch limit.Status {
@@ -120,26 +123,41 @@ func validateCatalogMediaLimits(limits []CatalogMediaLimit, mediaInputs []string
 		{ID: CatalogMediaLimitIDInlineRequestBytes, MediaType: CatalogMediaLimitTypeAll, Transport: CatalogMediaTransportInline, Unit: CatalogMediaLimitUnitBytes, Scope: CatalogMediaLimitScopeRequestEncodedBytes},
 	}
 	for _, mediaInput := range mediaInputs {
+		var inlineLimit CatalogMediaLimit
+		var fileLimit CatalogMediaLimit
 		switch messageMediaType(mediaInput) {
 		case messageMediaTypeImage:
 			requiredLimits = append(requiredLimits,
 				CatalogMediaLimit{ID: CatalogMediaLimitIDImageCount, MediaType: mediaInput, Transport: CatalogMediaTransportAny, Unit: CatalogMediaLimitUnitFiles, Scope: CatalogMediaLimitScopeRequest},
-				CatalogMediaLimit{ID: CatalogMediaLimitIDImageFileBytes, MediaType: mediaInput, Transport: CatalogMediaTransportFile, Unit: CatalogMediaLimitUnitBytes, Scope: CatalogMediaLimitScopeAttachment},
 			)
+			inlineLimit = CatalogMediaLimit{ID: CatalogMediaLimitIDImageInlineBytes, MediaType: mediaInput, Transport: CatalogMediaTransportInline, Unit: CatalogMediaLimitUnitBytes}
+			fileLimit = CatalogMediaLimit{ID: CatalogMediaLimitIDImageFileBytes, MediaType: mediaInput, Transport: CatalogMediaTransportFile, Unit: CatalogMediaLimitUnitBytes, Scope: CatalogMediaLimitScopeAttachment}
 		case messageMediaTypeAudio:
 			requiredLimits = append(requiredLimits,
 				CatalogMediaLimit{ID: CatalogMediaLimitIDAudioCount, MediaType: mediaInput, Transport: CatalogMediaTransportAny, Unit: CatalogMediaLimitUnitFiles, Scope: CatalogMediaLimitScopeRequest},
-				CatalogMediaLimit{ID: CatalogMediaLimitIDAudioFileBytes, MediaType: mediaInput, Transport: CatalogMediaTransportFile, Unit: CatalogMediaLimitUnitBytes, Scope: CatalogMediaLimitScopeAttachment},
 			)
+			inlineLimit = CatalogMediaLimit{ID: CatalogMediaLimitIDAudioInlineBytes, MediaType: mediaInput, Transport: CatalogMediaTransportInline, Unit: CatalogMediaLimitUnitBytes}
+			fileLimit = CatalogMediaLimit{ID: CatalogMediaLimitIDAudioFileBytes, MediaType: mediaInput, Transport: CatalogMediaTransportFile, Unit: CatalogMediaLimitUnitBytes, Scope: CatalogMediaLimitScopeAttachment}
+		}
+		if !matchesCatalogInlineAttachmentLimit(configured[inlineLimit.ID], inlineLimit) && !matchesCatalogMediaLimit(configured[fileLimit.ID], fileLimit) {
+			return fmt.Errorf("%w: field=%s required_media_transport_limit=%s|%s", ErrInvalidModelCatalog, field, inlineLimit.ID, fileLimit.ID)
 		}
 	}
 	for _, requiredLimit := range requiredLimits {
 		limit, exists := configured[requiredLimit.ID]
-		if !exists || limit.MediaType != requiredLimit.MediaType || limit.Transport != requiredLimit.Transport || limit.Unit != requiredLimit.Unit || limit.Scope != requiredLimit.Scope {
+		if !exists || !matchesCatalogMediaLimit(limit, requiredLimit) {
 			return fmt.Errorf("%w: field=%s required_limit=%s", ErrInvalidModelCatalog, field, requiredLimit.ID)
 		}
 	}
 	return nil
+}
+
+func matchesCatalogMediaLimit(configured CatalogMediaLimit, required CatalogMediaLimit) bool {
+	return configured.ID == required.ID && configured.MediaType == required.MediaType && configured.Transport == required.Transport && configured.Unit == required.Unit && (required.Scope == "" || configured.Scope == required.Scope)
+}
+
+func matchesCatalogInlineAttachmentLimit(configured CatalogMediaLimit, required CatalogMediaLimit) bool {
+	return matchesCatalogMediaLimit(configured, required) && (configured.Scope == CatalogMediaLimitScopeAttachment || configured.Scope == CatalogMediaLimitScopeAttachmentEncodedBytes)
 }
 
 func boundedCatalogMediaLimit(limits []CatalogMediaLimit, identifier string, mediaType messageMediaType) (int64, bool) {

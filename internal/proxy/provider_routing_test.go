@@ -258,6 +258,10 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 					expected.executionLifecycle = "synchronous_completion"
 				}
 			}
+			if providerName == proxy.ProviderNameXAI && offering.Model == proxy.ModelNameGrok45 {
+				expected.wireContract = "openai_responses"
+				expected.executionLifecycle = "synchronous_completion"
+			}
 			if offering.WireContract != expected.wireContract || offering.ExecutionLifecycle != expected.executionLifecycle {
 				t.Fatalf("provider=%s model=%s capabilities=%s/%s want=%s/%s", providerName, offering.Model, offering.WireContract, offering.ExecutionLifecycle, expected.wireContract, expected.executionLifecycle)
 			}
@@ -376,7 +380,6 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 		{name: "MiniMax M2.7", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM27, providerModel: "MiniMax-M2.7", tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
 		{name: "SiliconFlow DeepSeek R1", provider: proxy.ProviderNameSiliconFlow, model: proxy.ModelNameSiliconFlowDeepSeek, providerModel: "deepseek-ai/DeepSeek-R1", tokenParameterField: "max_tokens", expectedAPIKey: testSiliconFlowKey},
 		{name: "Zhipu GLM 5.2", provider: proxy.ProviderNameZhipu, model: "glm-5.2", tokenParameterField: "max_tokens", forbiddenFields: []string{"thinking", "reasoning_effort"}},
-		{name: "Grok 4.5", provider: proxy.ProviderNameXAI, model: "grok-4.5", tokenParameterField: "max_tokens"},
 		{name: "Grok 4.20 reasoning", provider: proxy.ProviderNameXAI, model: "grok-4.20-0309-reasoning", tokenParameterField: "max_tokens"},
 	}
 	for _, testCase := range testCases {

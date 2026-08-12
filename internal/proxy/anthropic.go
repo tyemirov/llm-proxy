@@ -3,6 +3,7 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -35,7 +36,19 @@ type anthropicMessagesRequest struct {
 
 type anthropicMessage struct {
 	Role    string `json:"role"`
-	Content string `json:"content"`
+	Content any    `json:"content"`
+}
+
+type anthropicInputContentBlock struct {
+	Type   string                `json:"type"`
+	Text   string                `json:"text,omitempty"`
+	Source *anthropicImageSource `json:"source,omitempty"`
+}
+
+type anthropicImageSource struct {
+	Type      string `json:"type"`
+	MediaType string `json:"media_type"`
+	Data      string `json:"data"`
 }
 
 type anthropicMessagesResponse struct {
@@ -56,7 +69,10 @@ func newAnthropicMessagesClient(httpClient HTTPDoer) *anthropicMessagesClient {
 }
 
 func (client *anthropicMessagesClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	providerMessages, systemPrompt := messages.anthropicMessages()
+	providerMessages, systemPrompt, messagesError := messages.anthropicMessages()
+	if messagesError != nil {
+		return textGenerationResult{}, messagesError
+	}
 	payload := anthropicMessagesRequest{
 		Model:     modelIdentifier.providerString(),
 		MaxTokens: anthropicMaxTokens(modelIdentifier, maxTokens),
@@ -64,6 +80,9 @@ func (client *anthropicMessagesClient) generateText(parentContext context.Contex
 		Messages:  providerMessages,
 	}
 	payloadBytes, _ := json.Marshal(payload)
+	if mediaLimitError := validateInlineMessageMediaLimits(modelIdentifier, messages, payloadBytes); mediaLimitError != nil {
+		return textGenerationResult{}, mediaLimitError
+	}
 
 	requestURL := strings.TrimRight(baseURL, "/") + "/v1/messages"
 	httpRequest, buildError := http.NewRequestWithContext(parentContext, http.MethodPost, requestURL, bytes.NewReader(payloadBytes))
@@ -86,17 +105,39 @@ func (client *anthropicMessagesClient) generateText(parentContext context.Contex
 	return generation, nil
 }
 
-func (messages chatMessages) anthropicMessages() ([]anthropicMessage, string) {
+func (messages chatMessages) anthropicMessages() ([]anthropicMessage, string, error) {
 	providerMessages := make([]anthropicMessage, 0, len(messages))
 	systemPrompts := []string{}
-	for _, message := range messages {
+	for messageIndex := range messages {
+		message := &messages[messageIndex]
 		if message.role == chatRoleSystem {
 			systemPrompts = append(systemPrompts, message.content)
 			continue
 		}
-		providerMessages = append(providerMessages, anthropicMessage{Role: string(message.role), Content: message.content})
+		if len(message.attachments) == 0 {
+			providerMessages = append(providerMessages, anthropicMessage{Role: string(message.role), Content: message.content})
+			continue
+		}
+		content := make([]anthropicInputContentBlock, 0, len(message.attachments)+1)
+		for attachmentIndex := range message.attachments {
+			attachment := &message.attachments[attachmentIndex]
+			data, dataError := attachment.bytes()
+			if dataError != nil {
+				return nil, constants.EmptyString, dataError
+			}
+			content = append(content, anthropicInputContentBlock{
+				Type: "image",
+				Source: &anthropicImageSource{
+					Type:      "base64",
+					MediaType: attachment.mimeType,
+					Data:      base64.StdEncoding.EncodeToString(data),
+				},
+			})
+		}
+		content = append(content, anthropicInputContentBlock{Type: "text", Text: message.content})
+		providerMessages = append(providerMessages, anthropicMessage{Role: string(message.role), Content: content})
 	}
-	return providerMessages, strings.Join(systemPrompts, "\n\n")
+	return providerMessages, strings.Join(systemPrompts, "\n\n"), nil
 }
 
 func anthropicMaxTokens(modelIdentifier textModelDefinition, maxTokens *int) int {

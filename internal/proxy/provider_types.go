@@ -107,6 +107,8 @@ const (
 	ModelNameGrok43 = "grok-4.3"
 	// ModelNameGrok43Latest identifies the Grok 4.3 latest alias.
 	ModelNameGrok43Latest = "grok-4.3-latest"
+	// ModelNameGrok45 identifies the Grok 4.5 model.
+	ModelNameGrok45 = "grok-4.5"
 	// ModelNameGrokLatest identifies the current Grok latest alias.
 	ModelNameGrokLatest = "grok-latest"
 	// ModelNameGrokBuild01 identifies the Grok Build coding model.
@@ -151,6 +153,10 @@ var (
 	openAIResponsesPollableRouteCapabilities = textRouteCapabilities{
 		wireContract:       textWireContractOpenAIResponses,
 		executionLifecycle: textExecutionLifecyclePollableResource,
+	}
+	openAIResponsesSynchronousRouteCapabilities = textRouteCapabilities{
+		wireContract:       textWireContractOpenAIResponses,
+		executionLifecycle: textExecutionLifecycleSynchronousCompletion,
 	}
 	openAIChatCompletionsSynchronousRouteCapabilities = textRouteCapabilities{
 		wireContract:       textWireContractOpenAIChatCompletions,

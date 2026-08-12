@@ -12,6 +12,7 @@ import (
 
 	"github.com/tyemirov/llm-proxy/internal/proxy"
 	"github.com/tyemirov/llm-proxy/internal/testfixtures"
+	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 	"go.uber.org/zap"
 )
 
@@ -38,6 +39,8 @@ func TestV2RoutesExactOrderedImageAndAudioAttachmentsThroughGemini(testingInstan
 		OpenAIKey:             TestAPIKey,
 		GeminiKey:             testGeminiKey,
 		GeminiBaseURL:         upstreamServer.URL,
+		XAIKey:                testXAIKey,
+		XAIBaseURL:            upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -104,6 +107,248 @@ func TestV2RoutesExactOrderedImageAndAudioAttachmentsThroughGemini(testingInstan
 	}
 }
 
+func TestV2RoutesExactOrderedImagesThroughProviderAdapters(testingInstance *testing.T) {
+	firstImage := []byte("first-image")
+	secondImage := []byte("second-image")
+	for _, testCase := range []struct {
+		name       string
+		provider   string
+		model      string
+		path       string
+		assertBody func(*testing.T, map[string]any)
+	}{
+		{
+			name: "OpenAI Responses", provider: proxy.ProviderNameOpenAI, model: proxy.ModelNameGPT4oMini, path: "/responses",
+			assertBody: func(subTest *testing.T, payload map[string]any) {
+				assertOpenAIImageInput(subTest, payload, "auto", firstImage, secondImage)
+				if payload["background"] != true || payload["store"] != true {
+					subTest.Fatalf("OpenAI persistence fields=%v", payload)
+				}
+			},
+		},
+		{
+			name: "Anthropic Messages", provider: proxy.ProviderNameAnthropic, model: "claude-fable-5", path: "/v1/messages",
+			assertBody: func(subTest *testing.T, payload map[string]any) {
+				messages := payload["messages"].([]any)
+				content := messages[0].(map[string]any)["content"].([]any)
+				if len(content) != 3 {
+					subTest.Fatalf("Anthropic content=%v", content)
+				}
+				assertAnthropicImageBlock(subTest, content[0], "image/png", firstImage)
+				assertAnthropicImageBlock(subTest, content[1], "image/jpeg", secondImage)
+				if textBlock := content[2].(map[string]any); textBlock["type"] != "text" || textBlock["text"] != "Inspect in exact order." {
+					subTest.Fatalf("Anthropic text=%v", textBlock)
+				}
+			},
+		},
+		{
+			name: "xAI Responses", provider: proxy.ProviderNameXAI, model: proxy.ModelNameGrok45, path: "/responses",
+			assertBody: func(subTest *testing.T, payload map[string]any) {
+				assertOpenAIImageInput(subTest, payload, "high", firstImage, secondImage)
+				if payload["store"] != false {
+					subTest.Fatalf("xAI store=%v", payload["store"])
+				}
+				if _, found := payload["background"]; found {
+					subTest.Fatalf("xAI payload includes background=%v", payload)
+				}
+			},
+		},
+	} {
+		testingInstance.Run(testCase.name, func(subTest *testing.T) {
+			var capturedPayload map[string]any
+			upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+				if httpRequest.Method != http.MethodPost || httpRequest.URL.Path != testCase.path {
+					subTest.Fatalf("upstream request=%s %s", httpRequest.Method, httpRequest.URL.Path)
+				}
+				if decodeError := json.NewDecoder(httpRequest.Body).Decode(&capturedPayload); decodeError != nil {
+					subTest.Fatalf("decode upstream request: %v", decodeError)
+				}
+				responseWriter.Header().Set("Content-Type", "application/json")
+				if testCase.provider == proxy.ProviderNameAnthropic {
+					_, _ = responseWriter.Write([]byte(`{"content":[{"type":"text","text":"media accepted"}],"stop_reason":"end_turn"}`))
+					return
+				}
+				_, _ = responseWriter.Write([]byte(`{"id":"media-input","status":"completed","output_text":"media accepted"}`))
+			}))
+			defer upstreamServer.Close()
+
+			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
+				Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+				OpenAIKey:             TestAPIKey,
+				OpenAIBaseURL:         upstreamServer.URL,
+				AnthropicKey:          testAnthropicKey,
+				AnthropicBaseURL:      upstreamServer.URL,
+				XAIKey:                testXAIKey,
+				XAIBaseURL:            upstreamServer.URL,
+				LogLevel:              proxy.LogLevelInfo,
+				WorkerCount:           1,
+				QueueSize:             1,
+				RequestTimeoutSeconds: TestTimeout,
+			}, zap.NewNop().Sugar())
+			if buildError != nil {
+				subTest.Fatalf(messageBuildRouterError, buildError)
+			}
+
+			requestBody := mediaV2RequestBody(subTest, testCase.model, "Inspect in exact order.", []map[string]any{
+				messageMediaPayload("image", "image/png", firstImage),
+				messageMediaPayload("image", "image/jpeg", secondImage),
+			})
+			request := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret+"&provider="+testCase.provider+"&format=application/json", strings.NewReader(requestBody))
+			request.Header.Set("Content-Type", "application/json")
+			responseRecorder := httptest.NewRecorder()
+			router.ServeHTTP(responseRecorder, request)
+
+			if responseRecorder.Code != http.StatusOK {
+				subTest.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
+			}
+			testCase.assertBody(subTest, capturedPayload)
+		})
+	}
+}
+
+func TestV2AppliesNewProviderMediaLimitsAtTheBoundary(testingInstance *testing.T) {
+	for _, testCase := range []struct {
+		name                string
+		provider            string
+		model               string
+		limitID             string
+		limitValue          int64
+		boundaryAttachments []map[string]any
+		aboveAttachments    []map[string]any
+	}{
+		{
+			name:                "OpenAI image count",
+			provider:            proxy.ProviderNameOpenAI,
+			model:               proxy.ModelNameGPT4oMini,
+			limitID:             proxy.CatalogMediaLimitIDImageCount,
+			limitValue:          1,
+			boundaryAttachments: []map[string]any{messageMediaPayload("image", "image/png", []byte("x"))},
+			aboveAttachments:    []map[string]any{messageMediaPayload("image", "image/png", []byte("x")), messageMediaPayload("image", "image/png", []byte("y"))},
+		},
+		{
+			name:                "Anthropic encoded image bytes",
+			provider:            proxy.ProviderNameAnthropic,
+			model:               "claude-fable-5",
+			limitID:             proxy.CatalogMediaLimitIDImageInlineBytes,
+			limitValue:          4,
+			boundaryAttachments: []map[string]any{messageMediaPayload("image", "image/png", []byte("x"))},
+			aboveAttachments:    []map[string]any{messageMediaPayload("image", "image/png", []byte("xxxx"))},
+		},
+		{
+			name:                "xAI raw image bytes",
+			provider:            proxy.ProviderNameXAI,
+			model:               proxy.ModelNameGrok45,
+			limitID:             proxy.CatalogMediaLimitIDImageInlineBytes,
+			limitValue:          1,
+			boundaryAttachments: []map[string]any{messageMediaPayload("image", "image/png", []byte("x"))},
+			aboveAttachments:    []map[string]any{messageMediaPayload("image", "image/png", []byte("xx"))},
+		},
+	} {
+		testingInstance.Run(testCase.name, func(subTest *testing.T) {
+			upstreamCalls := 0
+			upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, _ *http.Request) {
+				upstreamCalls++
+				responseWriter.Header().Set("Content-Type", "application/json")
+				if testCase.provider == proxy.ProviderNameAnthropic {
+					_, _ = responseWriter.Write([]byte(`{"content":[{"type":"text","text":"accepted"}],"stop_reason":"end_turn"}`))
+					return
+				}
+				_, _ = responseWriter.Write([]byte(`{"id":"media-limit","status":"completed","output_text":"accepted"}`))
+			}))
+			defer upstreamServer.Close()
+
+			catalog := testfixtures.ModelCatalog(subTest)
+			setProviderMediaLimit(subTest, &catalog, testCase.provider, testCase.model, testCase.limitID, testCase.limitValue)
+			router, buildError := proxy.BuildRouter(proxy.Configuration{
+				Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+				OpenAIKey:             TestAPIKey,
+				OpenAIBaseURL:         upstreamServer.URL,
+				AnthropicKey:          testAnthropicKey,
+				AnthropicBaseURL:      upstreamServer.URL,
+				XAIKey:                testXAIKey,
+				XAIBaseURL:            upstreamServer.URL,
+				ModelCatalog:          catalog,
+				LogLevel:              proxy.LogLevelInfo,
+				WorkerCount:           1,
+				QueueSize:             1,
+				RequestTimeoutSeconds: TestTimeout,
+			}, zap.NewNop().Sugar())
+			if buildError != nil {
+				subTest.Fatalf(messageBuildRouterError, buildError)
+			}
+
+			perform := func(attachments []map[string]any) *httptest.ResponseRecorder {
+				request := httptest.NewRequest(
+					http.MethodPost,
+					"/v2?key="+TestSecret+"&provider="+testCase.provider+"&format=text/plain",
+					strings.NewReader(mediaV2RequestBody(subTest, testCase.model, "inspect", attachments)),
+				)
+				request.Header.Set("Content-Type", "application/json")
+				responseRecorder := httptest.NewRecorder()
+				router.ServeHTTP(responseRecorder, request)
+				return responseRecorder
+			}
+
+			boundaryResponse := perform(testCase.boundaryAttachments)
+			if boundaryResponse.Code != http.StatusOK || upstreamCalls != 1 {
+				subTest.Fatalf("boundary status=%d calls=%d body=%s", boundaryResponse.Code, upstreamCalls, boundaryResponse.Body.String())
+			}
+			aboveResponse := perform(testCase.aboveAttachments)
+			if aboveResponse.Code != http.StatusRequestEntityTooLarge || upstreamCalls != 1 || !strings.Contains(aboveResponse.Body.String(), llmproxycontract.ErrorCodeProviderMediaLimitExceeded) {
+				subTest.Fatalf("above status=%d calls=%d body=%s", aboveResponse.Code, upstreamCalls, aboveResponse.Body.String())
+			}
+		})
+	}
+}
+
+func setProviderMediaLimit(testingInstance *testing.T, catalog *proxy.ModelCatalog, provider string, model string, limitID string, value int64) {
+	testingInstance.Helper()
+	offeringIndex := catalogOfferingIndex(*catalog, provider, model)
+	if offeringIndex < 0 {
+		testingInstance.Fatalf("missing offering provider=%s model=%s", provider, model)
+	}
+	for limitIndex := range catalog.Offerings[offeringIndex].MediaLimits {
+		limit := &catalog.Offerings[offeringIndex].MediaLimits[limitIndex]
+		if limit.ID == limitID {
+			limit.Status = proxy.CatalogMediaLimitStatusBounded
+			limit.Value = &value
+			return
+		}
+	}
+	testingInstance.Fatalf("missing media limit provider=%s model=%s limit=%s", provider, model, limitID)
+}
+
+func assertOpenAIImageInput(testingInstance *testing.T, payload map[string]any, detail string, firstImage []byte, secondImage []byte) {
+	testingInstance.Helper()
+	input := payload["input"].([]any)
+	content := input[0].(map[string]any)["content"].([]any)
+	if len(content) != 3 {
+		testingInstance.Fatalf("Responses content=%v", content)
+	}
+	for index, expected := range []struct {
+		mimeType string
+		data     []byte
+	}{{"image/png", firstImage}, {"image/jpeg", secondImage}} {
+		imageBlock := content[index].(map[string]any)
+		expectedURL := "data:" + expected.mimeType + ";base64," + base64.StdEncoding.EncodeToString(expected.data)
+		if imageBlock["type"] != "input_image" || imageBlock["image_url"] != expectedURL || imageBlock["detail"] != detail {
+			testingInstance.Fatalf("Responses image[%d]=%v", index, imageBlock)
+		}
+	}
+	if textBlock := content[2].(map[string]any); textBlock["type"] != "input_text" || textBlock["text"] != "Inspect in exact order." {
+		testingInstance.Fatalf("Responses text=%v", textBlock)
+	}
+}
+
+func assertAnthropicImageBlock(testingInstance *testing.T, rawBlock any, mimeType string, data []byte) {
+	testingInstance.Helper()
+	block := rawBlock.(map[string]any)
+	source := block["source"].(map[string]any)
+	if block["type"] != "image" || source["type"] != "base64" || source["media_type"] != mimeType || source["data"] != base64.StdEncoding.EncodeToString(data) {
+		testingInstance.Fatalf("Anthropic image=%v", block)
+	}
+}
+
 func TestV2RejectsInvalidOrUnsupportedMediaBeforeUpstreamWork(testingInstance *testing.T) {
 	upstreamCalls := 0
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
@@ -119,6 +364,8 @@ func TestV2RejectsInvalidOrUnsupportedMediaBeforeUpstreamWork(testingInstance *t
 		DeepSeekBaseURL:       upstreamServer.URL,
 		GeminiKey:             testGeminiKey,
 		GeminiBaseURL:         upstreamServer.URL,
+		XAIKey:                testXAIKey,
+		XAIBaseURL:            upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -151,7 +398,8 @@ func TestV2RejectsInvalidOrUnsupportedMediaBeforeUpstreamWork(testingInstance *t
 		{name: "uppercase digest", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, role: "user", attachments: []any{map[string]any{"type": "image", "mime_type": "image/png", "data": validImage["data"], "sha256": strings.ToUpper(validImage["sha256"].(string))}}},
 		{name: "mismatched digest", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, role: "user", attachments: []any{map[string]any{"type": "image", "mime_type": "image/png", "data": validImage["data"], "sha256": messageMediaPayload("image", "image/png", []byte("other"))["sha256"]}}},
 		{name: "system attachment", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, role: "system", attachments: []any{validImage}},
-		{name: "text-only model", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Pro, role: "user", attachments: []any{validImage}},
+		{name: "text-only model", provider: proxy.ProviderNameXAI, model: proxy.ModelNameGrok43, role: "user", attachments: []any{validImage}},
+		{name: "provider MIME", provider: proxy.ProviderNameXAI, model: proxy.ModelNameGrok45, role: "user", attachments: []any{messageMediaPayload("image", "image/webp", []byte("webp"))}},
 		{name: "text-only provider", provider: proxy.ProviderNameDeepSeek, model: proxy.ModelNameDeepSeekV4Flash, role: "user", attachments: []any{validImage}},
 	} {
 		testingInstance.Run(testCase.name, func(subTest *testing.T) {

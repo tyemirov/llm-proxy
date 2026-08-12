@@ -45,10 +45,38 @@ type messageMedia struct {
 	asset     *tenantAssetReader
 }
 
-var providerMessageMediaInputs = map[string]map[messageMediaType]struct{}{
+var providerMessageMediaMIMEs = map[string]map[messageMediaType]map[string]struct{}{
+	ProviderNameOpenAI: {
+		messageMediaTypeImage: {
+			messageImageMIMEJPEG: {},
+			messageImageMIMEPNG:  {},
+			messageImageMIMEWebP: {},
+		},
+	},
+	ProviderNameAnthropic: {
+		messageMediaTypeImage: {
+			messageImageMIMEJPEG: {},
+			messageImageMIMEPNG:  {},
+			messageImageMIMEWebP: {},
+		},
+	},
 	ProviderNameGemini: {
-		messageMediaTypeAudio: {},
-		messageMediaTypeImage: {},
+		messageMediaTypeAudio: {
+			messageAudioMIMEM4A:  {},
+			messageAudioMIMEMPEG: {},
+			messageAudioMIMEWAV:  {},
+		},
+		messageMediaTypeImage: {
+			messageImageMIMEJPEG: {},
+			messageImageMIMEPNG:  {},
+			messageImageMIMEWebP: {},
+		},
+	},
+	ProviderNameXAI: {
+		messageMediaTypeImage: {
+			messageImageMIMEJPEG: {},
+			messageImageMIMEPNG:  {},
+		},
 	},
 }
 
@@ -156,21 +184,63 @@ func decodeHashBoundMessageMedia(rawData string, rawDigest string) ([]byte, erro
 }
 
 func providerSupportsMessageMedia(providerName string, mediaInput messageMediaType) bool {
-	_, supported := providerMessageMediaInputs[providerName][mediaInput]
+	_, supported := providerMessageMediaMIMEs[providerName][mediaInput]
+	return supported
+}
+
+func providerSupportsMessageMediaMIME(providerName string, mediaInput messageMediaType, mimeType string) bool {
+	_, supported := providerMessageMediaMIMEs[providerName][mediaInput][mimeType]
 	return supported
 }
 
 func validateMessageMediaForResolvedTextRoute(provider providerDefinition, model textModelDefinition, messages chatMessages) error {
 	for _, message := range messages {
 		for _, attachment := range message.attachments {
-			if !model.supportsMediaInput(attachment.mediaType) {
+			if !model.supportsMediaInput(attachment.mediaType) || !providerSupportsMessageMediaMIME(provider.identifier.string(), attachment.mediaType, attachment.mimeType) {
 				return fmt.Errorf(
-					"%w: provider=%s model=%s capability=media_input type=%s",
+					"%w: provider=%s model=%s capability=media_input type=%s mime_type=%s",
 					ErrUnsupportedCapability,
 					provider.identifier.string(),
 					model.string(),
 					attachment.mediaType,
+					attachment.mimeType,
 				)
+			}
+		}
+	}
+	return nil
+}
+
+func validateInlineMessageMediaLimits(model textModelDefinition, messages chatMessages, payloadBytes []byte) error {
+	if messages.mediaCount() == 0 {
+		return nil
+	}
+	if inlineRequestBytes, bounded := boundedCatalogMediaLimit(model.mediaLimits, CatalogMediaLimitIDInlineRequestBytes, messageMediaTypeImage); bounded && int64(len(payloadBytes)) > inlineRequestBytes {
+		return ErrProviderMediaLimit
+	}
+	for _, mediaType := range []messageMediaType{messageMediaTypeImage, messageMediaTypeAudio} {
+		countLimitID := CatalogMediaLimitIDImageCount
+		inlineLimitID := CatalogMediaLimitIDImageInlineBytes
+		if mediaType == messageMediaTypeAudio {
+			countLimitID = CatalogMediaLimitIDAudioCount
+			inlineLimitID = CatalogMediaLimitIDAudioInlineBytes
+		}
+		if countLimit, bounded := boundedCatalogMediaLimit(model.mediaLimits, countLimitID, mediaType); bounded && messages.mediaTypeCount(mediaType) > countLimit {
+			return ErrProviderMediaLimit
+		}
+		inlineLimit, bounded := boundedCatalogMediaLimit(model.mediaLimits, inlineLimitID, mediaType)
+		if !bounded {
+			continue
+		}
+		for _, message := range messages {
+			for _, attachment := range message.attachments {
+				attachmentBytes := attachment.sizeBytes
+				if configuredLimit, found := catalogMediaLimit(model.mediaLimits, inlineLimitID, mediaType); found && configuredLimit.Scope == CatalogMediaLimitScopeAttachmentEncodedBytes {
+					attachmentBytes = ((attachment.sizeBytes + 2) / 3) * 4
+				}
+				if attachment.mediaType == mediaType && attachmentBytes > inlineLimit {
+					return ErrProviderMediaLimit
+				}
 			}
 		}
 	}
