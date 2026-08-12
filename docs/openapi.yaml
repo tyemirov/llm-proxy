@@ -118,7 +118,9 @@ paths:
         the tenant or route default. A supplied value must be non-blank and
         supported by the resolved route. The selected provider offering owns
         media admission and transport limits. Unsupported media or route
-        capabilities return HTTP 400 before an upstream call.
+        capabilities return HTTP 400 before an upstream call. The service
+        rejects an encoded request body above 8 MiB before JSON decoding. A
+        smaller catalog-derived body limit applies when configured.
       tags:
         - Proxy
       security:

@@ -38,12 +38,12 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
   hash-bound metadata. `DELETE /model/v1/assets/{asset_id}` marks the asset as
   deleted and removes its stored bytes.
 - `server.max_prompt_bytes` limits compatibility `POST /`. Canonical
-  `POST /v2` bounds the encoded JSON envelope with the configured text
-  allowance plus the largest bounded inline request in the provider catalog.
-  Larger media uses the asset endpoint and an asset reference. The proxy uses
-  the resolved provider offering's media limits and validates asset ownership,
-  state, expiry, MIME type, size, and SHA-256 before it dispatches provider
-  work.
+  `POST /v2` accepts an encoded JSON envelope of 8 MiB or less. A smaller
+  catalog-derived limit applies when its text and inline media limits have a
+  smaller sum. Larger media uses the asset endpoint and an asset reference.
+  The proxy uses the resolved provider offering's media limits. It validates
+  asset ownership, state, expiry, MIME type, size, and SHA-256 before provider
+  dispatch.
 - `messages[].order` is optional. When any submitted message includes `order`, every submitted message must include a unique non-negative integer `order`; the proxy sorts submitted messages by ascending `order` before adding a request or tenant system prompt and before routing upstream.
 - With `messages[]` on `POST /`, body `system_prompt` is prepended as a system message only when the transcript does not already contain a `system` message. A body containing both `system_prompt` and a system message is invalid. With `POST /v2`, callers send system instructions as `system` role messages.
 - `max_tokens` is an optional positive integer on `GET /` query strings and JSON `POST /` bodies. It is the initial per-attempt output budget and is reused for missing-suffix attempts.
@@ -400,9 +400,11 @@ non-user-content inference through the provider's canonical text transport:
 
 - OpenAI Responses uses one synchronous, non-stored `POST /responses` with
   `background: false`, `store: false`, and a 16-token output limit.
-- DeepSeek, DashScope, Moonshot, MiniMax, SiliconFlow, Zhipu, Meta,
-  and Grok use one authenticated OpenAI-compatible `POST /chat/completions`
-  with the provider's declared token-limit parameter.
+- xAI synchronous Responses uses one `POST /responses` at the selected xAI
+  base URL. It sends `store: false` and a 16-token output limit.
+- DeepSeek, DashScope, Moonshot, MiniMax, SiliconFlow, Zhipu, Meta, and xAI
+  Chat Completions models use one authenticated `POST /chat/completions`.
+  The request uses the provider's declared token-limit parameter.
 - Gemini uses one synchronous, non-stored `POST /interactions` request with
   `x-goog-api-key`, `Api-Revision: 2026-05-20`, `background: false`,
   `store: false`, and `generation_config.max_output_tokens: 16`.
