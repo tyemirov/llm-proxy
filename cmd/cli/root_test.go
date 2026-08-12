@@ -1587,8 +1587,8 @@ providers:
 		},
 		{
 			name: "offering media unsupported by exact model",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralProvidersYAML(), proxy.ProviderNameGemini, "gemini-3.1-pro-preview", func(block string) string {
-				return strings.Replace(block, "    operations:", "    media_inputs:\n    - image\n    operations:", 1)
+			providersYAML: mutateExactModelYAML(completeLiteralProvidersYAML(), proxy.ModelNameGemini35Flash, func(block string) string {
+				return strings.Replace(block, "    - image\n", "", 1)
 			}),
 			expectedError: "media_input=image reason=unsupported_by_model",
 		},
