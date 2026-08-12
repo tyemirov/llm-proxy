@@ -2032,9 +2032,10 @@ canonical padded base64 `data`, and the matching lowercase hexadecimal
 matching lowercase hexadecimal `sha256`. The proxy validates tenant ownership,
 asset state, expiry, MIME type, byte count, and digest before provider dispatch.
 `server.max_prompt_bytes` applies to compatibility `POST /`. Canonical
-`POST /v2` bounds its encoded JSON envelope with the configured text allowance
-plus the largest bounded inline request in the provider catalog. It applies
-the selected provider offering's published media limits and transport rules.
+`POST /v2` accepts an encoded JSON envelope of 8 MiB or less. A smaller
+catalog-derived limit applies when its configured text and inline media limits
+have a smaller sum. The proxy applies the selected provider offering's
+published media limits and transport rules.
 Upload larger media through `POST /model/v1/assets` and send its asset
 reference through `/v2`.
 
@@ -2302,10 +2303,10 @@ and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-mo
 * `400 Bad Request` - missing/invalid parameters, invalid request timeout, invalid multipart audio form, unknown provider/model, or unsupported provider capability. Invalid timeout headers return `{"error":{"code":"invalid_request_timeout","max_request_timeout_seconds":M}}`.
 * `403 Forbidden` - missing or invalid `key`
 * `413 Payload Too Large` - compatibility JSON exceeds `max_prompt_bytes`, a
-  `/v2` JSON envelope exceeds its catalog-derived ingress bound, dictation
-  audio exceeds `max_input_audio_bytes`, an asset upload exceeds
-  `max_asset_bytes`, or media exceeds every transport limit for the selected
-  provider offering. Provider media failures use
+  `/v2` JSON envelope exceeds its service or catalog-derived ingress limit,
+  dictation audio exceeds `max_input_audio_bytes`, an asset upload exceeds
+  `max_asset_bytes`, or media exceeds the selected provider offering's
+  transport limit. Provider media failures use
   `provider_media_limit_exceeded`.
 * `429 Too Many Requests` - upstream provider rate limit; returns the sanitized `provider_rate_limited` JSON contract
 * `503 Service Unavailable` - selected provider credential is unavailable because that non-default provider is disabled or missing its API key
