@@ -254,66 +254,88 @@ catalog:
     version: gpt-4o-mini
     operations:
     - text
+    media_inputs:
+    - image
   - id: gpt-4o
     publisher: openai
     family: gpt-4
     version: gpt-4o
     operations:
     - text
+    media_inputs:
+    - image
   - id: gpt-4.1
     publisher: openai
     family: gpt-4
     version: gpt-4.1
     operations:
     - text
+    media_inputs:
+    - image
   - id: gpt-5-mini
     publisher: openai
     family: gpt-5
     version: gpt-5-mini
     operations:
     - text
+    media_inputs:
+    - image
   - id: gpt-5
     publisher: openai
     family: gpt-5
     version: gpt-5
     operations:
     - text
+    media_inputs:
+    - image
   - id: gpt-5.5
     publisher: openai
     family: gpt-5
     version: gpt-5.5
     operations:
     - text
+    media_inputs:
+    - image
   - id: gpt-5.5-pro
     publisher: openai
     family: gpt-5
     version: gpt-5.5-pro
     operations:
     - text
+    media_inputs:
+    - image
   - id: gpt-5.6
     publisher: openai
     family: gpt-5
     version: gpt-5.6
     operations:
     - text
+    media_inputs:
+    - image
   - id: gpt-5.6-sol
     publisher: openai
     family: gpt-5
     version: gpt-5.6-sol
     operations:
     - text
+    media_inputs:
+    - image
   - id: gpt-5.6-terra
     publisher: openai
     family: gpt-5
     version: gpt-5.6-terra
     operations:
     - text
+    media_inputs:
+    - image
   - id: gpt-5.6-luna
     publisher: openai
     family: gpt-5
     version: gpt-5.6-luna
     operations:
     - text
+    media_inputs:
+    - image
   - id: gpt-4o-mini-transcribe
     publisher: openai
     family: gpt-transcribe
@@ -425,18 +447,27 @@ catalog:
     version: gemini-3.1-pro-preview
     operations:
     - text
+    media_inputs:
+    - image
+    - audio
   - id: gemini-3-flash-preview
     publisher: google
     family: gemini
     version: gemini-3-flash-preview
     operations:
     - text
+    media_inputs:
+    - image
+    - audio
   - id: gemini-3.1-flash-lite
     publisher: google
     family: gemini
     version: gemini-3.1-flash-lite
     operations:
     - text
+    media_inputs:
+    - image
+    - audio
   - id: gemini-2.5-flash
     publisher: google
     family: gemini
@@ -452,72 +483,98 @@ catalog:
     version: gemini-2.5-flash-lite
     operations:
     - text
+    media_inputs:
+    - image
+    - audio
   - id: gemini-2.5-pro
     publisher: google
     family: gemini
     version: gemini-2.5-pro
     operations:
     - text
+    media_inputs:
+    - image
+    - audio
   - id: claude-fable-5
     publisher: anthropic
     family: claude-fable
     version: claude-fable-5
     operations:
     - text
+    media_inputs:
+    - image
   - id: claude-sonnet-5
     publisher: anthropic
     family: claude-sonnet
     version: claude-sonnet-5
     operations:
     - text
+    media_inputs:
+    - image
   - id: claude-opus-4-8
     publisher: anthropic
     family: claude-opus
     version: claude-opus-4-8
     operations:
     - text
+    media_inputs:
+    - image
   - id: claude-sonnet-4-6
     publisher: anthropic
     family: claude-sonnet
     version: claude-sonnet-4-6
     operations:
     - text
+    media_inputs:
+    - image
   - id: claude-haiku-4-5-20251001
     publisher: anthropic
     family: claude-haiku
     version: claude-haiku-4-5-20251001
     operations:
     - text
+    media_inputs:
+    - image
   - id: claude-haiku-4-5
     publisher: anthropic
     family: claude-haiku
     version: claude-haiku-4-5
     operations:
     - text
+    media_inputs:
+    - image
   - id: claude-sonnet-4-5-20250929
     publisher: anthropic
     family: claude-sonnet
     version: claude-sonnet-4-5-20250929
     operations:
     - text
+    media_inputs:
+    - image
   - id: claude-sonnet-4-5
     publisher: anthropic
     family: claude-sonnet
     version: claude-sonnet-4-5
     operations:
     - text
+    media_inputs:
+    - image
   - id: claude-opus-4-1-20250805
     publisher: anthropic
     family: claude-opus
     version: claude-opus-4-1-20250805
     operations:
     - text
+    media_inputs:
+    - image
   - id: claude-opus-4-1
     publisher: anthropic
     family: claude-opus
     version: claude-opus-4-1
     operations:
     - text
+    media_inputs:
+    - image
   - id: muse-spark-1.1
     publisher: meta
     family: muse-spark
@@ -542,6 +599,8 @@ catalog:
     version: grok-4.5
     operations:
     - text
+    media_inputs:
+    - image
   - id: grok-4.20-0309-reasoning
     publisher: xai
     family: grok
@@ -604,6 +663,35 @@ catalog:
     - text
     wire_contract: openai_responses
     execution_lifecycle: pollable_resource
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 512000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 1500
+      unit: files
+      scope: request
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: unknown
+      unit: bytes
+      scope: attachment
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
     request_profile: openai_responses_temperature
   - provider: openai
     model: gpt-4o
@@ -612,6 +700,35 @@ catalog:
     - text
     wire_contract: openai_responses
     execution_lifecycle: pollable_resource
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 512000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 1500
+      unit: files
+      scope: request
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: unknown
+      unit: bytes
+      scope: attachment
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
     request_profile: openai_responses_temperature_tools
     web_search: true
   - provider: openai
@@ -623,6 +740,35 @@ catalog:
     - text
     wire_contract: openai_responses
     execution_lifecycle: pollable_resource
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 512000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 1500
+      unit: files
+      scope: request
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: unknown
+      unit: bytes
+      scope: attachment
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
     request_profile: openai_responses_temperature_tools
     web_search: true
   - provider: openai
@@ -632,6 +778,35 @@ catalog:
     - text
     wire_contract: openai_responses
     execution_lifecycle: pollable_resource
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 512000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 1500
+      unit: files
+      scope: request
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: unknown
+      unit: bytes
+      scope: attachment
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
     request_profile: openai_responses_reasoning_tools
     reasoning_effort:
       adapter: openai_responses
@@ -647,6 +822,35 @@ catalog:
     - text
     wire_contract: openai_responses
     execution_lifecycle: pollable_resource
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 512000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 1500
+      unit: files
+      scope: request
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: unknown
+      unit: bytes
+      scope: attachment
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
     request_profile: openai_responses_reasoning_tools
     web_search: true
     reasoning_effort:
@@ -663,6 +867,35 @@ catalog:
     - text
     wire_contract: openai_responses
     execution_lifecycle: pollable_resource
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 512000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 1500
+      unit: files
+      scope: request
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: unknown
+      unit: bytes
+      scope: attachment
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
     request_profile: openai_responses_reasoning_tools
     web_search: true
     reasoning_effort:
@@ -680,6 +913,35 @@ catalog:
     - text
     wire_contract: openai_responses
     execution_lifecycle: pollable_resource
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 512000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 1500
+      unit: files
+      scope: request
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: unknown
+      unit: bytes
+      scope: attachment
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
     request_profile: openai_responses_reasoning_tools
     web_search: true
     reasoning_effort:
@@ -695,6 +957,35 @@ catalog:
     - text
     wire_contract: openai_responses
     execution_lifecycle: pollable_resource
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 512000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 1500
+      unit: files
+      scope: request
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: unknown
+      unit: bytes
+      scope: attachment
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
     request_profile: openai_responses_reasoning_tools
     web_search: true
     reasoning_effort:
@@ -713,6 +1004,35 @@ catalog:
     - text
     wire_contract: openai_responses
     execution_lifecycle: pollable_resource
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 512000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 1500
+      unit: files
+      scope: request
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: unknown
+      unit: bytes
+      scope: attachment
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
     request_profile: openai_responses_reasoning_tools
     web_search: true
     reasoning_effort:
@@ -731,6 +1051,35 @@ catalog:
     - text
     wire_contract: openai_responses
     execution_lifecycle: pollable_resource
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 512000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 1500
+      unit: files
+      scope: request
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: unknown
+      unit: bytes
+      scope: attachment
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
     request_profile: openai_responses_reasoning_tools
     web_search: true
     reasoning_effort:
@@ -749,6 +1098,35 @@ catalog:
     - text
     wire_contract: openai_responses
     execution_lifecycle: pollable_resource
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 512000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 1500
+      unit: files
+      scope: request
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: unknown
+      unit: bytes
+      scope: attachment
+      source: https://developers.openai.com/api/docs/guides/images-vision
+      last_verified: "2026-08-11"
     request_profile: openai_responses_reasoning_tools
     web_search: true
     reasoning_effort:
@@ -963,6 +1341,54 @@ catalog:
     wire_contract: gemini_interactions
     execution_lifecycle: pollable_resource
     output_token_limit: 65536
+    media_inputs:
+    - image
+    - audio
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 20000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://ai.google.dev/gemini-api/docs/file-input-methods
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 3600
+      unit: files
+      scope: request
+      source: https://ai.google.dev/gemini-api/docs/image-understanding
+      last_verified: "2026-08-11"
+    - id: audio_count
+      media_type: audio
+      transport: any
+      status: unknown
+      unit: files
+      scope: request
+      source: https://ai.google.dev/gemini-api/docs/audio
+      last_verified: "2026-08-11"
+    - id: image_file_bytes
+      media_type: image
+      transport: file
+      status: bounded
+      value: 2000000000
+      unit: bytes
+      scope: attachment
+      source: https://ai.google.dev/gemini-api/docs/files
+      last_verified: "2026-08-11"
+    - id: audio_file_bytes
+      media_type: audio
+      transport: file
+      status: bounded
+      value: 2000000000
+      unit: bytes
+      scope: attachment
+      source: https://ai.google.dev/gemini-api/docs/files
+      last_verified: "2026-08-11"
   - provider: gemini
     model: gemini-3-flash-preview
     provider_model: gemini-3-flash-preview
@@ -971,6 +1397,54 @@ catalog:
     wire_contract: gemini_interactions
     execution_lifecycle: pollable_resource
     output_token_limit: 65536
+    media_inputs:
+    - image
+    - audio
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 20000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://ai.google.dev/gemini-api/docs/file-input-methods
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 3600
+      unit: files
+      scope: request
+      source: https://ai.google.dev/gemini-api/docs/image-understanding
+      last_verified: "2026-08-11"
+    - id: audio_count
+      media_type: audio
+      transport: any
+      status: unknown
+      unit: files
+      scope: request
+      source: https://ai.google.dev/gemini-api/docs/audio
+      last_verified: "2026-08-11"
+    - id: image_file_bytes
+      media_type: image
+      transport: file
+      status: bounded
+      value: 2000000000
+      unit: bytes
+      scope: attachment
+      source: https://ai.google.dev/gemini-api/docs/files
+      last_verified: "2026-08-11"
+    - id: audio_file_bytes
+      media_type: audio
+      transport: file
+      status: bounded
+      value: 2000000000
+      unit: bytes
+      scope: attachment
+      source: https://ai.google.dev/gemini-api/docs/files
+      last_verified: "2026-08-11"
   - provider: gemini
     model: gemini-3.1-flash-lite
     provider_model: gemini-3.1-flash-lite
@@ -979,6 +1453,54 @@ catalog:
     wire_contract: gemini_interactions
     execution_lifecycle: pollable_resource
     output_token_limit: 65536
+    media_inputs:
+    - image
+    - audio
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 20000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://ai.google.dev/gemini-api/docs/file-input-methods
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 3600
+      unit: files
+      scope: request
+      source: https://ai.google.dev/gemini-api/docs/image-understanding
+      last_verified: "2026-08-11"
+    - id: audio_count
+      media_type: audio
+      transport: any
+      status: unknown
+      unit: files
+      scope: request
+      source: https://ai.google.dev/gemini-api/docs/audio
+      last_verified: "2026-08-11"
+    - id: image_file_bytes
+      media_type: image
+      transport: file
+      status: bounded
+      value: 2000000000
+      unit: bytes
+      scope: attachment
+      source: https://ai.google.dev/gemini-api/docs/files
+      last_verified: "2026-08-11"
+    - id: audio_file_bytes
+      media_type: audio
+      transport: file
+      status: bounded
+      value: 2000000000
+      unit: bytes
+      scope: attachment
+      source: https://ai.google.dev/gemini-api/docs/files
+      last_verified: "2026-08-11"
   - provider: gemini
     model: gemini-2.5-flash
     provider_model: gemini-2.5-flash
@@ -1045,6 +1567,54 @@ catalog:
     wire_contract: gemini_interactions
     execution_lifecycle: synchronous_completion
     output_token_limit: 65536
+    media_inputs:
+    - image
+    - audio
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 20000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://ai.google.dev/gemini-api/docs/file-input-methods
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 3600
+      unit: files
+      scope: request
+      source: https://ai.google.dev/gemini-api/docs/image-understanding
+      last_verified: "2026-08-11"
+    - id: audio_count
+      media_type: audio
+      transport: any
+      status: unknown
+      unit: files
+      scope: request
+      source: https://ai.google.dev/gemini-api/docs/audio
+      last_verified: "2026-08-11"
+    - id: image_file_bytes
+      media_type: image
+      transport: file
+      status: bounded
+      value: 2000000000
+      unit: bytes
+      scope: attachment
+      source: https://ai.google.dev/gemini-api/docs/files
+      last_verified: "2026-08-11"
+    - id: audio_file_bytes
+      media_type: audio
+      transport: file
+      status: bounded
+      value: 2000000000
+      unit: bytes
+      scope: attachment
+      source: https://ai.google.dev/gemini-api/docs/files
+      last_verified: "2026-08-11"
   - provider: gemini
     model: gemini-2.5-pro
     provider_model: gemini-2.5-pro
@@ -1053,6 +1623,54 @@ catalog:
     wire_contract: gemini_interactions
     execution_lifecycle: synchronous_completion
     output_token_limit: 65536
+    media_inputs:
+    - image
+    - audio
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 20000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://ai.google.dev/gemini-api/docs/file-input-methods
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 3600
+      unit: files
+      scope: request
+      source: https://ai.google.dev/gemini-api/docs/image-understanding
+      last_verified: "2026-08-11"
+    - id: audio_count
+      media_type: audio
+      transport: any
+      status: unknown
+      unit: files
+      scope: request
+      source: https://ai.google.dev/gemini-api/docs/audio
+      last_verified: "2026-08-11"
+    - id: image_file_bytes
+      media_type: image
+      transport: file
+      status: bounded
+      value: 2000000000
+      unit: bytes
+      scope: attachment
+      source: https://ai.google.dev/gemini-api/docs/files
+      last_verified: "2026-08-11"
+    - id: audio_file_bytes
+      media_type: audio
+      transport: file
+      status: bounded
+      value: 2000000000
+      unit: bytes
+      scope: attachment
+      source: https://ai.google.dev/gemini-api/docs/files
+      last_verified: "2026-08-11"
   - provider: anthropic
     model: claude-fable-5
     provider_model: claude-fable-5
@@ -1061,6 +1679,36 @@ catalog:
     wire_contract: anthropic_messages
     execution_lifecycle: synchronous_completion
     output_token_limit: 128000
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 32000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 600
+      unit: files
+      scope: request
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: bounded
+      value: 10000000
+      unit: bytes
+      scope: attachment_encoded_bytes
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
   - provider: anthropic
     model: claude-sonnet-5
     provider_model: claude-sonnet-5
@@ -1069,6 +1717,36 @@ catalog:
     wire_contract: anthropic_messages
     execution_lifecycle: synchronous_completion
     output_token_limit: 128000
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 32000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 600
+      unit: files
+      scope: request
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: bounded
+      value: 10000000
+      unit: bytes
+      scope: attachment_encoded_bytes
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
   - provider: anthropic
     model: claude-opus-4-8
     provider_model: claude-opus-4-8
@@ -1077,6 +1755,36 @@ catalog:
     wire_contract: anthropic_messages
     execution_lifecycle: synchronous_completion
     output_token_limit: 128000
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 32000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 600
+      unit: files
+      scope: request
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: bounded
+      value: 10000000
+      unit: bytes
+      scope: attachment_encoded_bytes
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
   - provider: anthropic
     model: claude-sonnet-4-6
     provider_model: claude-sonnet-4-6
@@ -1087,6 +1795,36 @@ catalog:
     wire_contract: anthropic_messages
     execution_lifecycle: synchronous_completion
     output_token_limit: 64000
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 32000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 600
+      unit: files
+      scope: request
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: bounded
+      value: 10000000
+      unit: bytes
+      scope: attachment_encoded_bytes
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
   - provider: anthropic
     model: claude-haiku-4-5-20251001
     provider_model: claude-haiku-4-5-20251001
@@ -1095,6 +1833,36 @@ catalog:
     wire_contract: anthropic_messages
     execution_lifecycle: synchronous_completion
     output_token_limit: 64000
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 32000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 100
+      unit: files
+      scope: request
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: bounded
+      value: 10000000
+      unit: bytes
+      scope: attachment_encoded_bytes
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
   - provider: anthropic
     model: claude-haiku-4-5
     provider_model: claude-haiku-4-5
@@ -1103,6 +1871,36 @@ catalog:
     wire_contract: anthropic_messages
     execution_lifecycle: synchronous_completion
     output_token_limit: 64000
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 32000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 100
+      unit: files
+      scope: request
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: bounded
+      value: 10000000
+      unit: bytes
+      scope: attachment_encoded_bytes
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
   - provider: anthropic
     model: claude-sonnet-4-5-20250929
     provider_model: claude-sonnet-4-5-20250929
@@ -1111,6 +1909,36 @@ catalog:
     wire_contract: anthropic_messages
     execution_lifecycle: synchronous_completion
     output_token_limit: 64000
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 32000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 100
+      unit: files
+      scope: request
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: bounded
+      value: 10000000
+      unit: bytes
+      scope: attachment_encoded_bytes
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
   - provider: anthropic
     model: claude-sonnet-4-5
     provider_model: claude-sonnet-4-5
@@ -1119,6 +1947,36 @@ catalog:
     wire_contract: anthropic_messages
     execution_lifecycle: synchronous_completion
     output_token_limit: 64000
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 32000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 100
+      unit: files
+      scope: request
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: bounded
+      value: 10000000
+      unit: bytes
+      scope: attachment_encoded_bytes
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
   - provider: anthropic
     model: claude-opus-4-1-20250805
     provider_model: claude-opus-4-1-20250805
@@ -1127,6 +1985,36 @@ catalog:
     wire_contract: anthropic_messages
     execution_lifecycle: synchronous_completion
     output_token_limit: 32000
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 32000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 100
+      unit: files
+      scope: request
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: bounded
+      value: 10000000
+      unit: bytes
+      scope: attachment_encoded_bytes
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
   - provider: anthropic
     model: claude-opus-4-1
     provider_model: claude-opus-4-1
@@ -1135,6 +2023,36 @@ catalog:
     wire_contract: anthropic_messages
     execution_lifecycle: synchronous_completion
     output_token_limit: 32000
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 32000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: bounded
+      value: 100
+      unit: files
+      scope: request
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: bounded
+      value: 10000000
+      unit: bytes
+      scope: attachment_encoded_bytes
+      source: https://platform.claude.com/docs/en/build-with-claude/vision
+      last_verified: "2026-08-11"
   - provider: meta
     model: muse-spark-1.1
     provider_model: muse-spark-1.1
@@ -1165,8 +2083,36 @@ catalog:
     provider_model: grok-4.5
     operations:
     - text
-    wire_contract: openai_chat_completions
+    wire_contract: openai_responses
     execution_lifecycle: synchronous_completion
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: unknown
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://docs.x.ai/developers/model-capabilities/images/understanding
+      last_verified: "2026-08-11"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: unbounded
+      unit: files
+      scope: request
+      source: https://docs.x.ai/developers/model-capabilities/images/understanding
+      last_verified: "2026-08-11"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: bounded
+      value: 20971520
+      unit: bytes
+      scope: attachment
+      source: https://docs.x.ai/developers/model-capabilities/images/understanding
+      last_verified: "2026-08-11"
   - provider: xai
     model: grok-4.20-0309-reasoning
     provider_model: grok-4.20-0309-reasoning
