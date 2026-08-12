@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -196,7 +197,7 @@ func chatJSONHandler(upstreamProviders *providerRouter, providers *providerRegis
 			return
 		}
 		var payload chatRequestPayload
-		jsonDecoder := json.NewDecoder(strings.NewReader(string(bodyBytes)))
+		jsonDecoder := json.NewDecoder(bytes.NewReader(bodyBytes))
 		jsonDecoder.DisallowUnknownFields()
 		if decodeError := jsonDecoder.Decode(&payload); decodeError != nil {
 			ginContext.String(http.StatusBadRequest, errorInvalidJSONRequest)
@@ -234,7 +235,7 @@ func chatV2JSONHandler(upstreamProviders *providerRouter, providers *providerReg
 			return
 		}
 		var payload chatV2RequestPayload
-		jsonDecoder := json.NewDecoder(strings.NewReader(string(bodyBytes)))
+		jsonDecoder := json.NewDecoder(bytes.NewReader(bodyBytes))
 		jsonDecoder.DisallowUnknownFields()
 		if decodeError := jsonDecoder.Decode(&payload); decodeError != nil {
 			ginContext.String(http.StatusBadRequest, errorInvalidJSONRequest)
@@ -478,6 +479,7 @@ func chatRequestFromV2Payload(ginContext *gin.Context, payload chatV2RequestPayl
 		return chatRequestParameters{}, false
 	}
 	if mediaCapabilityError := validateMessageMediaForResolvedTextRoute(providerDefinition, resolvedModel, messages); mediaCapabilityError != nil {
+		messages.closeMedia()
 		ginContext.String(statusCodeForError(mediaCapabilityError), responseMessageForError(mediaCapabilityError))
 		return chatRequestParameters{}, false
 	}

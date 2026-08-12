@@ -45,37 +45,69 @@ type messageMedia struct {
 	asset     *tenantAssetReader
 }
 
-var providerMessageMediaMIMEs = map[string]map[messageMediaType]map[string]struct{}{
-	ProviderNameOpenAI: {
-		messageMediaTypeImage: {
-			messageImageMIMEJPEG: {},
-			messageImageMIMEPNG:  {},
-			messageImageMIMEWebP: {},
+type textRouteMessageMediaContract struct {
+	mimeTypes                map[messageMediaType]map[string]struct{}
+	attachmentLimitTransport string
+}
+
+var textRouteMessageMediaContracts = map[textRouteCapabilities]textRouteMessageMediaContract{
+	openAIResponsesPollableRouteCapabilities: {
+		attachmentLimitTransport: CatalogMediaTransportInline,
+		mimeTypes: map[messageMediaType]map[string]struct{}{
+			messageMediaTypeImage: {
+				messageImageMIMEJPEG: {},
+				messageImageMIMEPNG:  {},
+				messageImageMIMEWebP: {},
+			},
 		},
 	},
-	ProviderNameAnthropic: {
-		messageMediaTypeImage: {
-			messageImageMIMEJPEG: {},
-			messageImageMIMEPNG:  {},
-			messageImageMIMEWebP: {},
+	openAIResponsesSynchronousRouteCapabilities: {
+		attachmentLimitTransport: CatalogMediaTransportInline,
+		mimeTypes: map[messageMediaType]map[string]struct{}{
+			messageMediaTypeImage: {
+				messageImageMIMEJPEG: {},
+				messageImageMIMEPNG:  {},
+			},
 		},
 	},
-	ProviderNameGemini: {
-		messageMediaTypeAudio: {
-			messageAudioMIMEM4A:  {},
-			messageAudioMIMEMPEG: {},
-			messageAudioMIMEWAV:  {},
-		},
-		messageMediaTypeImage: {
-			messageImageMIMEJPEG: {},
-			messageImageMIMEPNG:  {},
-			messageImageMIMEWebP: {},
+	geminiInteractionsPollableRouteCapabilities: {
+		attachmentLimitTransport: CatalogMediaTransportFile,
+		mimeTypes: map[messageMediaType]map[string]struct{}{
+			messageMediaTypeAudio: {
+				messageAudioMIMEM4A:  {},
+				messageAudioMIMEMPEG: {},
+				messageAudioMIMEWAV:  {},
+			},
+			messageMediaTypeImage: {
+				messageImageMIMEJPEG: {},
+				messageImageMIMEPNG:  {},
+				messageImageMIMEWebP: {},
+			},
 		},
 	},
-	ProviderNameXAI: {
-		messageMediaTypeImage: {
-			messageImageMIMEJPEG: {},
-			messageImageMIMEPNG:  {},
+	geminiInteractionsSynchronousRouteCapabilities: {
+		attachmentLimitTransport: CatalogMediaTransportFile,
+		mimeTypes: map[messageMediaType]map[string]struct{}{
+			messageMediaTypeAudio: {
+				messageAudioMIMEM4A:  {},
+				messageAudioMIMEMPEG: {},
+				messageAudioMIMEWAV:  {},
+			},
+			messageMediaTypeImage: {
+				messageImageMIMEJPEG: {},
+				messageImageMIMEPNG:  {},
+				messageImageMIMEWebP: {},
+			},
+		},
+	},
+	anthropicMessagesSynchronousRouteCapabilities: {
+		attachmentLimitTransport: CatalogMediaTransportInline,
+		mimeTypes: map[messageMediaType]map[string]struct{}{
+			messageMediaTypeImage: {
+				messageImageMIMEJPEG: {},
+				messageImageMIMEPNG:  {},
+				messageImageMIMEWebP: {},
+			},
 		},
 	},
 }
@@ -183,20 +215,25 @@ func decodeHashBoundMessageMedia(rawData string, rawDigest string) ([]byte, erro
 	return decodedData, nil
 }
 
-func providerSupportsMessageMedia(providerName string, mediaInput messageMediaType) bool {
-	_, supported := providerMessageMediaMIMEs[providerName][mediaInput]
+func textRouteSupportsMessageMedia(routeCapabilities textRouteCapabilities, mediaInput messageMediaType) bool {
+	_, supported := textRouteMessageMediaContracts[routeCapabilities].mimeTypes[mediaInput]
 	return supported
 }
 
-func providerSupportsMessageMediaMIME(providerName string, mediaInput messageMediaType, mimeType string) bool {
-	_, supported := providerMessageMediaMIMEs[providerName][mediaInput][mimeType]
+func textRouteSupportsMessageMediaMIME(routeCapabilities textRouteCapabilities, mediaInput messageMediaType, mimeType string) bool {
+	_, supported := textRouteMessageMediaContracts[routeCapabilities].mimeTypes[mediaInput][mimeType]
 	return supported
+}
+
+func textRouteMessageMediaLimitTransport(routeCapabilities textRouteCapabilities) string {
+	return textRouteMessageMediaContracts[routeCapabilities].attachmentLimitTransport
 }
 
 func validateMessageMediaForResolvedTextRoute(provider providerDefinition, model textModelDefinition, messages chatMessages) error {
+	routeCapabilities := textRouteCapabilities{wireContract: model.wireContract, executionLifecycle: model.executionLifecycle}
 	for _, message := range messages {
 		for _, attachment := range message.attachments {
-			if !model.supportsMediaInput(attachment.mediaType) || !providerSupportsMessageMediaMIME(provider.identifier.string(), attachment.mediaType, attachment.mimeType) {
+			if !model.supportsMediaInput(attachment.mediaType) || !textRouteSupportsMessageMediaMIME(routeCapabilities, attachment.mediaType, attachment.mimeType) {
 				return fmt.Errorf(
 					"%w: provider=%s model=%s capability=media_input type=%s mime_type=%s",
 					ErrUnsupportedCapability,
@@ -211,11 +248,11 @@ func validateMessageMediaForResolvedTextRoute(provider providerDefinition, model
 	return nil
 }
 
-func validateInlineMessageMediaLimits(model textModelDefinition, messages chatMessages, payloadBytes []byte) error {
+func validateInlineMessageMediaBeforeSerialization(model textModelDefinition, messages chatMessages) error {
 	if messages.mediaCount() == 0 {
 		return nil
 	}
-	if inlineRequestBytes, bounded := boundedCatalogMediaLimit(model.mediaLimits, CatalogMediaLimitIDInlineRequestBytes, messageMediaTypeImage); bounded && int64(len(payloadBytes)) > inlineRequestBytes {
+	if inlineRequestBytes, bounded := boundedCatalogMediaLimit(model.mediaLimits, CatalogMediaLimitIDInlineRequestBytes, messageMediaTypeImage); bounded && messages.base64MediaBytes() > inlineRequestBytes {
 		return ErrProviderMediaLimit
 	}
 	for _, mediaType := range []messageMediaType{messageMediaTypeImage, messageMediaTypeAudio} {
@@ -243,6 +280,16 @@ func validateInlineMessageMediaLimits(model textModelDefinition, messages chatMe
 				}
 			}
 		}
+	}
+	return nil
+}
+
+func validateInlineMessageMediaRequestLimit(model textModelDefinition, messages chatMessages, payloadBytes []byte) error {
+	if messages.mediaCount() == 0 {
+		return nil
+	}
+	if inlineRequestBytes, bounded := boundedCatalogMediaLimit(model.mediaLimits, CatalogMediaLimitIDInlineRequestBytes, messageMediaTypeImage); bounded && int64(len(payloadBytes)) > inlineRequestBytes {
+		return ErrProviderMediaLimit
 	}
 	return nil
 }

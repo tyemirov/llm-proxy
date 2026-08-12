@@ -515,6 +515,12 @@ func TestModelCatalogRejectsInvalidMediaInputDeclarations(testingInstance *testi
 			},
 		},
 		{
+			name: "unsupported xAI Chat Completions adapter",
+			configure: func(catalogs proxy.ModelCatalog) {
+				setModelMediaInputs(catalogs, proxy.ProviderNameXAI, proxy.ModelNameGrok43, []string{"image"})
+			},
+		},
+		{
 			name: "unsupported endpoint",
 			configure: func(catalogs proxy.ModelCatalog) {
 				offeringIndex := catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, proxy.DefaultDictationModel)

@@ -34,11 +34,13 @@ var (
 		statusCompleted:  {},
 		statusIncomplete: {},
 	}
-	providerKeyVerificationRequestBuilders = map[textWireContract]providerKeyVerificationRequestBuilder{
-		textWireContractOpenAIResponses:       buildOpenAIProviderKeyVerificationRequest,
-		textWireContractOpenAIChatCompletions: buildChatProviderKeyVerificationRequest,
-		textWireContractGeminiInteractions:    buildGeminiProviderKeyVerificationRequest,
-		textWireContractAnthropicMessages:     buildAnthropicProviderKeyVerificationRequest,
+	providerKeyVerificationRequestBuilders = map[textRouteCapabilities]providerKeyVerificationRequestBuilder{
+		openAIResponsesPollableRouteCapabilities:          buildOpenAIProviderKeyVerificationRequest,
+		openAIResponsesSynchronousRouteCapabilities:       buildSynchronousResponsesProviderKeyVerificationRequest,
+		openAIChatCompletionsSynchronousRouteCapabilities: buildChatProviderKeyVerificationRequest,
+		geminiInteractionsPollableRouteCapabilities:       buildGeminiProviderKeyVerificationRequest,
+		geminiInteractionsSynchronousRouteCapabilities:    buildGeminiProviderKeyVerificationRequest,
+		anthropicMessagesSynchronousRouteCapabilities:     buildAnthropicProviderKeyVerificationRequest,
 	}
 	providerKeyVerificationResponseValidators = map[textWireContract]providerKeyVerificationResponseValidator{
 		textWireContractOpenAIResponses:       validOpenAIProviderKeyVerificationResponse,
@@ -92,7 +94,10 @@ func (verifier *operationalProviderKeyVerifier) verify(parentContext context.Con
 	verificationContext, cancelVerification := context.WithTimeout(parentContext, verifier.timeout)
 	defer cancelVerification()
 
-	requestBuilder := providerKeyVerificationRequestBuilders[model.wireContract]
+	requestBuilder := providerKeyVerificationRequestBuilders[textRouteCapabilities{
+		wireContract:       model.wireContract,
+		executionLifecycle: model.executionLifecycle,
+	}]
 	httpRequest, buildError := requestBuilder(verificationContext, verifier.endpoints, provider, model, strings.TrimSpace(apiKey))
 	if buildError != nil {
 		return errProviderKeyVerificationUnavailable
@@ -131,6 +136,23 @@ func buildOpenAIProviderKeyVerificationRequest(requestContext context.Context, e
 	)
 	payloadBytes, _ := json.Marshal(payload)
 	return buildAuthorizedJSONRequest(requestContext, http.MethodPost, endpoints.GetResponsesURL(), apiKey, bytes.NewReader(payloadBytes))
+}
+
+func buildSynchronousResponsesProviderKeyVerificationRequest(requestContext context.Context, _ *Endpoints, provider providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {
+	payload := struct {
+		Model           string `json:"model"`
+		Input           string `json:"input"`
+		MaxOutputTokens int    `json:"max_output_tokens"`
+		Store           bool   `json:"store"`
+	}{
+		Model:           model.providerString(),
+		Input:           providerKeyVerificationPrompt,
+		MaxOutputTokens: providerKeyVerificationMaxTokens,
+		Store:           false,
+	}
+	payloadBytes, _ := json.Marshal(payload)
+	requestURL := strings.TrimRight(provider.textBaseURL, "/") + "/responses"
+	return buildAuthorizedJSONRequest(requestContext, http.MethodPost, requestURL, apiKey, bytes.NewReader(payloadBytes))
 }
 
 func buildChatProviderKeyVerificationRequest(requestContext context.Context, _ *Endpoints, provider providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {

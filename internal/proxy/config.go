@@ -32,6 +32,8 @@ const (
 	DefaultMaxRequestTimeoutSeconds = 60 * 60
 	// DefaultMaxPromptBytes limits JSON LLM request bodies accepted by POST /.
 	DefaultMaxPromptBytes = 4 * 1024 * 1024
+	// MaxV2RequestBytes limits each buffered canonical message request.
+	MaxV2RequestBytes = 8 * 1024 * 1024
 	// DefaultMaxAssetBytes bounds one tenant asset upload at the largest supported provider file size.
 	DefaultMaxAssetBytes int64 = 2_000_000_000
 	// DefaultAssetRetentionSeconds keeps uploaded tenant assets for 48 hours.

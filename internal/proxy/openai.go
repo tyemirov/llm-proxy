@@ -76,13 +76,16 @@ func hasFinalMessage(rawPayload []byte) bool {
 
 // openAIRequest sends messages to the OpenAI responses API and returns the resulting text.
 func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, messages chatMessages, webSearchEnabled bool, maxTokens *int, reasoningEffort string, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+	if mediaLimitError := validateInlineMessageMediaBeforeSerialization(modelIdentifier, messages); mediaLimitError != nil {
+		return textGenerationResult{}, mediaLimitError
+	}
 	input, inputError := messages.openAIResponsesInput("auto", false)
 	if inputError != nil {
 		return textGenerationResult{}, inputError
 	}
 	payload := BuildRequestPayload(modelIdentifier.providerString(), modelIdentifier.requestProfile.string(), input, webSearchEnabled, maxTokens, reasoningEffort)
 	payloadBytes, _ := json.Marshal(payload)
-	if mediaLimitError := validateInlineMessageMediaLimits(modelIdentifier, messages, payloadBytes); mediaLimitError != nil {
+	if mediaLimitError := validateInlineMessageMediaRequestLimit(modelIdentifier, messages, payloadBytes); mediaLimitError != nil {
 		return textGenerationResult{}, mediaLimitError
 	}
 
@@ -117,6 +120,9 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 }
 
 func (client *OpenAIClient) xAIResponsesRequest(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+	if mediaLimitError := validateInlineMessageMediaBeforeSerialization(modelIdentifier, messages); mediaLimitError != nil {
+		return textGenerationResult{}, mediaLimitError
+	}
 	input, inputError := messages.openAIResponsesInput("high", true)
 	if inputError != nil {
 		return textGenerationResult{}, inputError
@@ -133,7 +139,7 @@ func (client *OpenAIClient) xAIResponsesRequest(parentContext context.Context, a
 		Store:           false,
 	}
 	payloadBytes, _ := json.Marshal(payload)
-	if mediaLimitError := validateInlineMessageMediaLimits(modelIdentifier, messages, payloadBytes); mediaLimitError != nil {
+	if mediaLimitError := validateInlineMessageMediaRequestLimit(modelIdentifier, messages, payloadBytes); mediaLimitError != nil {
 		return textGenerationResult{}, mediaLimitError
 	}
 	requestURL := strings.TrimRight(baseURL, "/") + "/responses"

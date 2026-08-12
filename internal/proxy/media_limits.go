@@ -61,7 +61,7 @@ func cloneCatalogMediaLimits(limits []CatalogMediaLimit) []CatalogMediaLimit {
 	return cloned
 }
 
-func validateCatalogMediaLimits(limits []CatalogMediaLimit, mediaInputs []string, field string) error {
+func validateCatalogMediaLimits(limits []CatalogMediaLimit, mediaInputs []string, routeCapabilities textRouteCapabilities, field string) error {
 	if len(mediaInputs) == 0 {
 		if len(limits) != 0 {
 			return fmt.Errorf("%w: field=%s reason=media_limits_without_media_inputs", ErrInvalidModelCatalog, field)
@@ -139,8 +139,15 @@ func validateCatalogMediaLimits(limits []CatalogMediaLimit, mediaInputs []string
 			inlineLimit = CatalogMediaLimit{ID: CatalogMediaLimitIDAudioInlineBytes, MediaType: mediaInput, Transport: CatalogMediaTransportInline, Unit: CatalogMediaLimitUnitBytes}
 			fileLimit = CatalogMediaLimit{ID: CatalogMediaLimitIDAudioFileBytes, MediaType: mediaInput, Transport: CatalogMediaTransportFile, Unit: CatalogMediaLimitUnitBytes, Scope: CatalogMediaLimitScopeAttachment}
 		}
-		if !matchesCatalogInlineAttachmentLimit(configured[inlineLimit.ID], inlineLimit) && !matchesCatalogMediaLimit(configured[fileLimit.ID], fileLimit) {
-			return fmt.Errorf("%w: field=%s required_media_transport_limit=%s|%s", ErrInvalidModelCatalog, field, inlineLimit.ID, fileLimit.ID)
+		switch textRouteMessageMediaLimitTransport(routeCapabilities) {
+		case CatalogMediaTransportInline:
+			if !matchesCatalogInlineAttachmentLimit(configured[inlineLimit.ID], inlineLimit) {
+				return fmt.Errorf("%w: field=%s required_media_transport_limit=%s", ErrInvalidModelCatalog, field, inlineLimit.ID)
+			}
+		case CatalogMediaTransportFile:
+			if !matchesCatalogMediaLimit(configured[fileLimit.ID], fileLimit) {
+				return fmt.Errorf("%w: field=%s required_media_transport_limit=%s", ErrInvalidModelCatalog, field, fileLimit.ID)
+			}
 		}
 	}
 	for _, requiredLimit := range requiredLimits {
@@ -188,7 +195,11 @@ func maximumV2RequestBytes(maxPromptBytes int64, catalog ModelCatalog) int64 {
 		}
 	}
 	if maximumInlineBytes > math.MaxInt64-maxPromptBytes {
-		return math.MaxInt64
+		return MaxV2RequestBytes
 	}
-	return maxPromptBytes + maximumInlineBytes
+	derivedLimit := maxPromptBytes + maximumInlineBytes
+	if derivedLimit > MaxV2RequestBytes {
+		return MaxV2RequestBytes
+	}
+	return derivedLimit
 }

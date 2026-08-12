@@ -21,6 +21,7 @@ import (
 
 const (
 	verificationTransportOpenAI    = "openai"
+	verificationTransportResponses = "responses"
 	verificationTransportChat      = "chat"
 	verificationTransportGemini    = "gemini"
 	verificationTransportAnthropic = "anthropic"
@@ -72,6 +73,7 @@ func TestManagementProviderKeyVerificationUsesEveryCanonicalTransportBeforePersi
 		{provider: proxy.ProviderNameAnthropic, model: proxy.ModelNameClaudeSonnet46, transport: verificationTransportAnthropic},
 		{provider: proxy.ProviderNameMeta, model: proxy.ModelNameMuseSpark11, transport: verificationTransportChat, tokenLimitField: "max_completion_tokens"},
 		{provider: proxy.ProviderNameXAI, model: proxy.ModelNameGrok43, transport: verificationTransportChat, tokenLimitField: "max_tokens"},
+		{provider: proxy.ProviderNameXAI, model: proxy.ModelNameGrok45, transport: verificationTransportResponses},
 	}
 
 	for _, transportCase := range transportCases {
@@ -150,6 +152,53 @@ func TestManagementProviderKeyVerificationUsesEveryCanonicalTransportBeforePersi
 				subTest.Fatalf("verification usage requests=%d want=0", usage.Totals.Requests)
 			}
 		})
+	}
+}
+
+func TestManagementXAIResponsesVerificationUsesTheXAIEndpoint(t *testing.T) {
+	openAIRequests := atomic.Int32{}
+	openAIServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, _ *http.Request) {
+		openAIRequests.Add(1)
+		http.Error(responseWriter, "unexpected OpenAI request", http.StatusBadGateway)
+	}))
+	t.Cleanup(openAIServer.Close)
+
+	xAIRequests := atomic.Int32{}
+	xAIServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		xAIRequests.Add(1)
+		assertProviderKeyVerificationRequest(t, request, providerKeyVerificationTransportCase{
+			provider:  proxy.ProviderNameXAI,
+			model:     proxy.ModelNameGrok45,
+			transport: verificationTransportResponses,
+		}, "candidate-xai-responses")
+		writeProviderKeyVerificationSuccess(responseWriter, verificationTransportResponses)
+	}))
+	t.Cleanup(xAIServer.Close)
+
+	configuration := providerKeyVerificationConfiguration(openAIServer.URL)
+	configuration.XAIBaseURL = xAIServer.URL
+	router := newOperationalProviderKeyVerificationRouter(
+		t,
+		configuration,
+		zap.NewNop().Sugar(),
+		t.TempDir()+"/managed-tenants.db",
+		TestTimeout,
+	)
+	sessionCookie := managementSessionCookie(t, "xai-responses-verification")
+	tenantID := managementDefaultTenantTestID(t, router, sessionCookie)
+	response := putManagementProviderKey(
+		t,
+		router,
+		sessionCookie,
+		tenantID,
+		proxy.ProviderNameXAI,
+		"candidate-xai-responses",
+		proxy.ModelNameGrok45,
+		"",
+		context.Background(),
+	)
+	if response.Code != http.StatusOK || xAIRequests.Load() != 1 || openAIRequests.Load() != 0 {
+		t.Fatalf("status=%d xai=%d openai=%d body=%q", response.Code, xAIRequests.Load(), openAIRequests.Load(), response.Body.String())
 	}
 }
 
@@ -720,6 +769,17 @@ func assertProviderKeyVerificationRequest(t *testing.T, request *http.Request, t
 			payload["max_output_tokens"] != float64(16) {
 			t.Errorf("OpenAI verification path=%q headers=%v payload=%v", request.URL.Path, request.Header, payload)
 		}
+	case verificationTransportResponses:
+		if request.URL.Path != "/responses" ||
+			request.Header.Get("Authorization") != "Bearer "+candidateKey ||
+			payload["model"] != expectedProviderModel ||
+			payload["store"] != false ||
+			payload["max_output_tokens"] != float64(16) {
+			t.Errorf("synchronous Responses verification path=%q headers=%v payload=%v", request.URL.Path, request.Header, payload)
+		}
+		if _, hasBackground := payload["background"]; hasBackground {
+			t.Errorf("synchronous Responses verification includes background: %v", payload)
+		}
 	case verificationTransportChat:
 		expectedPath := "/chat/completions"
 		if transportCase.provider == proxy.ProviderNameDashScope {
@@ -759,7 +819,7 @@ func writeProviderKeyVerificationSuccess(responseWriter http.ResponseWriter, tra
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseBody := `{"choices":[{}]}`
 	switch transport {
-	case verificationTransportOpenAI:
+	case verificationTransportOpenAI, verificationTransportResponses:
 		responseBody = `{"id":"verification-response","status":"queued"}`
 	case verificationTransportGemini:
 		responseBody = `{"status":"incomplete"}`

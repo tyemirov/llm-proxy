@@ -69,6 +69,9 @@ func newAnthropicMessagesClient(httpClient HTTPDoer) *anthropicMessagesClient {
 }
 
 func (client *anthropicMessagesClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+	if mediaLimitError := validateInlineMessageMediaBeforeSerialization(modelIdentifier, messages); mediaLimitError != nil {
+		return textGenerationResult{}, mediaLimitError
+	}
 	providerMessages, systemPrompt, messagesError := messages.anthropicMessages()
 	if messagesError != nil {
 		return textGenerationResult{}, messagesError
@@ -80,7 +83,7 @@ func (client *anthropicMessagesClient) generateText(parentContext context.Contex
 		Messages:  providerMessages,
 	}
 	payloadBytes, _ := json.Marshal(payload)
-	if mediaLimitError := validateInlineMessageMediaLimits(modelIdentifier, messages, payloadBytes); mediaLimitError != nil {
+	if mediaLimitError := validateInlineMessageMediaRequestLimit(modelIdentifier, messages, payloadBytes); mediaLimitError != nil {
 		return textGenerationResult{}, mediaLimitError
 	}
 

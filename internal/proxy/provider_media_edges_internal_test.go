@@ -54,6 +54,24 @@ func TestProviderImageSerializationAndLimitFailureContracts(t *testing.T) {
 		t.Fatalf("Anthropic serialization error=%v", requestError)
 	}
 
+	closedMessages[0].attachments[0].sizeBytes = 2
+	model.mediaLimits = []CatalogMediaLimit{{
+		ID:        CatalogMediaLimitIDImageInlineBytes,
+		MediaType: string(messageMediaTypeImage),
+		Status:    CatalogMediaLimitStatusBounded,
+		Value:     int64Pointer(1),
+		Scope:     CatalogMediaLimitScopeAttachment,
+	}}
+	if _, requestError := openAIClient.openAIRequest(context.Background(), "key", model, closedMessages, false, nil, "", logger); !errors.Is(requestError, ErrProviderMediaLimit) {
+		t.Fatalf("OpenAI pre-serialization media limit error=%v", requestError)
+	}
+	if _, requestError := openAIClient.xAIResponsesRequest(context.Background(), "key", "https://provider.test", model, closedMessages, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
+		t.Fatalf("xAI pre-serialization media limit error=%v", requestError)
+	}
+	if _, requestError := anthropicClient.generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
+		t.Fatalf("Anthropic pre-serialization media limit error=%v", requestError)
+	}
+
 	inlineMessages := chatMessages{{
 		role:    chatRoleUser,
 		content: "inspect",
@@ -68,7 +86,7 @@ func TestProviderImageSerializationAndLimitFailureContracts(t *testing.T) {
 		ID:        CatalogMediaLimitIDInlineRequestBytes,
 		MediaType: CatalogMediaLimitTypeAll,
 		Status:    CatalogMediaLimitStatusBounded,
-		Value:     int64Pointer(1),
+		Value:     int64Pointer(4),
 	}}
 	if _, requestError := openAIClient.openAIRequest(context.Background(), "key", model, inlineMessages, false, nil, "", logger); !errors.Is(requestError, ErrProviderMediaLimit) {
 		t.Fatalf("OpenAI media limit error=%v", requestError)
@@ -139,27 +157,34 @@ func TestInlineProviderMediaLimitEdges(t *testing.T) {
 	twoImages := chatMessages{{role: chatRoleUser, content: "inspect", attachments: []messageMedia{image, image}}}
 
 	requestLimit := CatalogMediaLimit{ID: CatalogMediaLimitIDInlineRequestBytes, MediaType: CatalogMediaLimitTypeAll, Status: CatalogMediaLimitStatusBounded, Value: int64Pointer(4)}
-	if limitError := validateInlineMessageMediaLimits(textModelDefinition{mediaLimits: []CatalogMediaLimit{requestLimit}}, oneImage, []byte("1234")); limitError != nil {
+	if limitError := validateInlineMessageMediaBeforeSerialization(textModelDefinition{mediaLimits: []CatalogMediaLimit{requestLimit}}, oneImage); limitError != nil {
+		t.Fatalf("request pre-serialization boundary error=%v", limitError)
+	}
+	if limitError := validateInlineMessageMediaRequestLimit(textModelDefinition{mediaLimits: []CatalogMediaLimit{requestLimit}}, oneImage, []byte("1234")); limitError != nil {
 		t.Fatalf("request boundary error=%v", limitError)
 	}
-	if limitError := validateInlineMessageMediaLimits(textModelDefinition{mediaLimits: []CatalogMediaLimit{requestLimit}}, oneImage, []byte("12345")); !errors.Is(limitError, ErrProviderMediaLimit) {
+	if limitError := validateInlineMessageMediaRequestLimit(textModelDefinition{mediaLimits: []CatalogMediaLimit{requestLimit}}, oneImage, []byte("12345")); !errors.Is(limitError, ErrProviderMediaLimit) {
 		t.Fatalf("request above error=%v", limitError)
+	}
+	requestLimit.Value = int64Pointer(3)
+	if limitError := validateInlineMessageMediaBeforeSerialization(textModelDefinition{mediaLimits: []CatalogMediaLimit{requestLimit}}, oneImage); !errors.Is(limitError, ErrProviderMediaLimit) {
+		t.Fatalf("encoded request minimum above error=%v", limitError)
 	}
 
 	countLimit := CatalogMediaLimit{ID: CatalogMediaLimitIDImageCount, MediaType: string(messageMediaTypeImage), Status: CatalogMediaLimitStatusBounded, Value: int64Pointer(1)}
-	if limitError := validateInlineMessageMediaLimits(textModelDefinition{mediaLimits: []CatalogMediaLimit{countLimit}}, oneImage, nil); limitError != nil {
+	if limitError := validateInlineMessageMediaBeforeSerialization(textModelDefinition{mediaLimits: []CatalogMediaLimit{countLimit}}, oneImage); limitError != nil {
 		t.Fatalf("count boundary error=%v", limitError)
 	}
-	if limitError := validateInlineMessageMediaLimits(textModelDefinition{mediaLimits: []CatalogMediaLimit{countLimit}}, twoImages, nil); !errors.Is(limitError, ErrProviderMediaLimit) {
+	if limitError := validateInlineMessageMediaBeforeSerialization(textModelDefinition{mediaLimits: []CatalogMediaLimit{countLimit}}, twoImages); !errors.Is(limitError, ErrProviderMediaLimit) {
 		t.Fatalf("count above error=%v", limitError)
 	}
 
 	encodedLimit := CatalogMediaLimit{ID: CatalogMediaLimitIDImageInlineBytes, MediaType: string(messageMediaTypeImage), Status: CatalogMediaLimitStatusBounded, Value: int64Pointer(4), Scope: CatalogMediaLimitScopeAttachmentEncodedBytes}
-	if limitError := validateInlineMessageMediaLimits(textModelDefinition{mediaLimits: []CatalogMediaLimit{encodedLimit}}, oneImage, nil); limitError != nil {
+	if limitError := validateInlineMessageMediaBeforeSerialization(textModelDefinition{mediaLimits: []CatalogMediaLimit{encodedLimit}}, oneImage); limitError != nil {
 		t.Fatalf("encoded boundary error=%v", limitError)
 	}
 	encodedLimit.Value = int64Pointer(3)
-	if limitError := validateInlineMessageMediaLimits(textModelDefinition{mediaLimits: []CatalogMediaLimit{encodedLimit}}, oneImage, nil); !errors.Is(limitError, ErrProviderMediaLimit) {
+	if limitError := validateInlineMessageMediaBeforeSerialization(textModelDefinition{mediaLimits: []CatalogMediaLimit{encodedLimit}}, oneImage); !errors.Is(limitError, ErrProviderMediaLimit) {
 		t.Fatalf("encoded above error=%v", limitError)
 	}
 
@@ -167,7 +192,7 @@ func TestInlineProviderMediaLimitEdges(t *testing.T) {
 	rawImage.sizeBytes = 2
 	rawImage.data = []byte("xx")
 	rawLimit := CatalogMediaLimit{ID: CatalogMediaLimitIDImageInlineBytes, MediaType: string(messageMediaTypeImage), Status: CatalogMediaLimitStatusBounded, Value: int64Pointer(1), Scope: CatalogMediaLimitScopeAttachment}
-	if limitError := validateInlineMessageMediaLimits(textModelDefinition{mediaLimits: []CatalogMediaLimit{rawLimit}}, chatMessages{{role: chatRoleUser, attachments: []messageMedia{rawImage}}}, nil); !errors.Is(limitError, ErrProviderMediaLimit) {
+	if limitError := validateInlineMessageMediaBeforeSerialization(textModelDefinition{mediaLimits: []CatalogMediaLimit{rawLimit}}, chatMessages{{role: chatRoleUser, attachments: []messageMedia{rawImage}}}); !errors.Is(limitError, ErrProviderMediaLimit) {
 		t.Fatalf("raw above error=%v", limitError)
 	}
 }

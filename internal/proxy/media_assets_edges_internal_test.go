@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"math"
@@ -714,7 +715,7 @@ func TestTenantAssetDeletionAndHTTPErrorContracts(t *testing.T) {
 func TestMediaLimitAndMessageMediaEdgeContracts(t *testing.T) {
 	maximumValue := int64(math.MaxInt64)
 	overflowCatalog := ModelCatalog{Offerings: []ProviderOffering{{MediaLimits: []CatalogMediaLimit{{ID: CatalogMediaLimitIDInlineRequestBytes, Status: CatalogMediaLimitStatusBounded, Value: &maximumValue}}}}}
-	if maximumV2RequestBytes(1, overflowCatalog) != math.MaxInt64 || maximumV2RequestBytes(7, ModelCatalog{}) != 7 {
+	if maximumV2RequestBytes(1, overflowCatalog) != MaxV2RequestBytes || maximumV2RequestBytes(7, ModelCatalog{}) != 7 {
 		t.Fatal("v2 request bound mismatch")
 	}
 	if _, configError := validateConfig(Configuration{AssetStorePath: "relative"}); configError == nil {
@@ -724,7 +725,7 @@ func TestMediaLimitAndMessageMediaEdgeContracts(t *testing.T) {
 	validSource := "https://example.com/limits"
 	validDate := "2026-08-11"
 	base := CatalogMediaLimit{ID: CatalogMediaLimitIDInlineRequestBytes, MediaType: CatalogMediaLimitTypeAll, Transport: CatalogMediaTransportInline, Status: CatalogMediaLimitStatusBounded, Value: &value, Unit: CatalogMediaLimitUnitBytes, Scope: CatalogMediaLimitScopeRequestEncodedBytes, Source: validSource, LastVerified: validDate}
-	if validationError := validateCatalogMediaLimits([]CatalogMediaLimit{base}, nil, "limits"); validationError == nil {
+	if validationError := validateCatalogMediaLimits([]CatalogMediaLimit{base}, nil, openAIResponsesPollableRouteCapabilities, "limits"); validationError == nil {
 		t.Fatal("expected limits without inputs rejection")
 	}
 	invalidLimits := []CatalogMediaLimit{
@@ -744,24 +745,31 @@ func TestMediaLimitAndMessageMediaEdgeContracts(t *testing.T) {
 		if limitIndex == 1 {
 			limits = []CatalogMediaLimit{base, base}
 		}
-		if validationError := validateCatalogMediaLimits(limits, []string{"image"}, "limits"); validationError == nil {
+		if validationError := validateCatalogMediaLimits(limits, []string{"image"}, openAIResponsesPollableRouteCapabilities, "limits"); validationError == nil {
 			t.Fatalf("invalid limit index=%d accepted", limitIndex)
 		}
 	}
-	if validationError := validateCatalogMediaLimits([]CatalogMediaLimit{base}, []string{"image"}, "limits"); validationError == nil {
+	if validationError := validateCatalogMediaLimits([]CatalogMediaLimit{base}, []string{"image"}, openAIResponsesPollableRouteCapabilities, "limits"); validationError == nil {
 		t.Fatal("expected missing required limit rejection")
 	}
 	inlineLimit := CatalogMediaLimit{ID: CatalogMediaLimitIDImageInlineBytes, MediaType: "image", Transport: CatalogMediaTransportInline, Status: CatalogMediaLimitStatusUnknown, Unit: CatalogMediaLimitUnitBytes, Scope: CatalogMediaLimitScopeAttachment, Source: validSource, LastVerified: validDate}
 	wrongCountScope := CatalogMediaLimit{ID: CatalogMediaLimitIDImageCount, MediaType: "image", Transport: CatalogMediaTransportAny, Status: CatalogMediaLimitStatusUnbounded, Unit: CatalogMediaLimitUnitFiles, Scope: CatalogMediaLimitScopeAttachment, Source: validSource, LastVerified: validDate}
-	if validationError := validateCatalogMediaLimits([]CatalogMediaLimit{base, inlineLimit, wrongCountScope}, []string{"image"}, "limits"); validationError == nil {
+	if validationError := validateCatalogMediaLimits([]CatalogMediaLimit{base, inlineLimit, wrongCountScope}, []string{"image"}, openAIResponsesPollableRouteCapabilities, "limits"); validationError == nil {
 		t.Fatal("expected mismatched required limit rejection")
 	}
 	wrongInlineScope := inlineLimit
 	wrongInlineScope.Scope = CatalogMediaLimitScopeRequest
 	validCount := wrongCountScope
 	validCount.Scope = CatalogMediaLimitScopeRequest
-	if validationError := validateCatalogMediaLimits([]CatalogMediaLimit{base, wrongInlineScope, validCount}, []string{"image"}, "limits"); validationError == nil {
+	if validationError := validateCatalogMediaLimits([]CatalogMediaLimit{base, wrongInlineScope, validCount}, []string{"image"}, openAIResponsesPollableRouteCapabilities, "limits"); validationError == nil {
 		t.Fatal("expected request-scoped inline attachment limit rejection")
+	}
+	fileLimit := CatalogMediaLimit{ID: CatalogMediaLimitIDImageFileBytes, MediaType: "image", Transport: CatalogMediaTransportFile, Status: CatalogMediaLimitStatusBounded, Value: &value, Unit: CatalogMediaLimitUnitBytes, Scope: CatalogMediaLimitScopeAttachment, Source: validSource, LastVerified: validDate}
+	if validationError := validateCatalogMediaLimits([]CatalogMediaLimit{base, fileLimit, validCount}, []string{"image"}, openAIResponsesPollableRouteCapabilities, "limits"); validationError == nil {
+		t.Fatal("expected inline adapter file-only limit rejection")
+	}
+	if validationError := validateCatalogMediaLimits([]CatalogMediaLimit{base, inlineLimit, validCount}, []string{"image"}, geminiInteractionsSynchronousRouteCapabilities, "limits"); validationError == nil {
+		t.Fatal("expected Gemini missing file limit rejection")
 	}
 
 	assetID := " ast_0123456789abcdef0123456789abcdef"
@@ -788,5 +796,64 @@ func TestMediaLimitAndMessageMediaEdgeContracts(t *testing.T) {
 	media = messageMedia{asset: &tenantAssetReader{file: shortFile}, sizeBytes: 1}
 	if _, bytesError := media.bytes(); bytesError == nil {
 		t.Fatal("expected short asset byte rejection")
+	}
+}
+
+func TestV2RouteMIMERejectionClosesTheResolvedAsset(t *testing.T) {
+	tenantIdentifier, tenantError := newTenantID("media-owner")
+	if tenantError != nil {
+		t.Fatalf("tenant identifier: %v", tenantError)
+	}
+	requestTenant := tenant{identifier: tenantIdentifier}
+	assetStore := newTenantAssetStore(t.TempDir(), 1024, 60)
+	mediaBytes := []byte("webp-asset")
+	digest := sha256.Sum256(mediaBytes)
+	assetMetadata, uploadError := assetStore.upload(requestTenant, messageImageMIMEWebP, hex.EncodeToString(digest[:]), bytes.NewReader(mediaBytes))
+	if uploadError != nil {
+		t.Fatalf("upload asset: %v", uploadError)
+	}
+
+	previousAssetOpen := assetOpen
+	var openedAsset *os.File
+	assetOpen = func(path string) (*os.File, error) {
+		file, openError := previousAssetOpen(path)
+		openedAsset = file
+		return file, openError
+	}
+	t.Cleanup(func() { assetOpen = previousAssetOpen })
+
+	offering := ProviderOffering{
+		Provider: ProviderNameXAI, Model: ModelNameGrok45, ProviderModel: ModelNameGrok45,
+		Operations: []string{ModelOperationText}, DefaultOperations: []string{ModelOperationText},
+		WireContract: string(textWireContractOpenAIResponses), ExecutionLifecycle: string(textExecutionLifecycleSynchronousCompletion),
+		MediaInputs: []string{string(messageMediaTypeImage)},
+	}
+	providers := newProviderRegistry(Configuration{
+		XAIKey: "xai-key", XAIBaseURL: "https://provider.test",
+		ModelCatalog: ModelCatalog{Offerings: []ProviderOffering{offering}},
+	})
+	validator := newModelValidator(providers)
+	attachmentBytes, _ := json.Marshal([]chatMessageAttachmentPayload{{
+		Type: string(messageMediaTypeImage), MIMEType: messageImageMIMEWebP,
+		AssetID: &assetMetadata.AssetID, SHA256: assetMetadata.SHA256,
+	}})
+	messages := []chatV2MessagePayload{{Role: string(chatRoleUser), Content: "inspect", Attachments: attachmentBytes}}
+	payload := chatV2RequestPayload{Messages: &messages, Model: ModelNameGrok45}
+	response := httptest.NewRecorder()
+	ginContext, _ := gin.CreateTestContext(response)
+	ginContext.Request = httptest.NewRequest(http.MethodPost, "/v2?provider="+ProviderNameXAI, nil)
+	_, accepted := chatRequestFromV2Payload(
+		ginContext,
+		payload,
+		textRequestDefaults{provider: ProviderNameXAI, model: ModelNameGrok45},
+		validator,
+		requestTenant,
+		assetStore,
+	)
+	if accepted || response.Code != http.StatusBadRequest || openedAsset == nil {
+		t.Fatalf("accepted=%v status=%d opened=%v body=%q", accepted, response.Code, openedAsset != nil, response.Body.String())
+	}
+	if _, statError := openedAsset.Stat(); statError == nil {
+		t.Fatal("route MIME rejection left the asset reader open")
 	}
 }

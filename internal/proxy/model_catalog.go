@@ -389,7 +389,7 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 			}
 		}
 		modelMediaInputs, _ := validatedExactModelMediaInputs(exactModel.MediaInputs, "catalog.models.media_inputs")
-		offeringMediaInputs, mediaError := validatedMediaInputSet(offering.Provider, offering.MediaInputs, fieldPrefix+".media_inputs")
+		offeringMediaInputs, mediaError := validatedMediaInputSet(offering, fieldPrefix+".media_inputs")
 		if mediaError != nil {
 			return mediaError
 		}
@@ -398,7 +398,11 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 				return fmt.Errorf("%w: field=%s.media_inputs media_input=%s reason=unsupported_by_model", ErrInvalidModelCatalog, fieldPrefix, mediaInput)
 			}
 		}
-		if mediaLimitError := validateCatalogMediaLimits(offering.MediaLimits, offering.MediaInputs, fieldPrefix+".media_limits"); mediaLimitError != nil {
+		routeCapabilities := textRouteCapabilities{
+			wireContract:       textWireContract(offering.WireContract),
+			executionLifecycle: textExecutionLifecycle(offering.ExecutionLifecycle),
+		}
+		if mediaLimitError := validateCatalogMediaLimits(offering.MediaLimits, offering.MediaInputs, routeCapabilities, fieldPrefix+".media_limits"); mediaLimitError != nil {
 			return mediaLimitError
 		}
 		catalog.offerings[offeringIdentifier] = offering
@@ -592,12 +596,16 @@ func knownModelRequestProfile(requestProfile modelRequestProfile) bool {
 	}
 }
 
-func validatedMediaInputSet(providerName string, rawMediaInputs []string, fieldPrefix string) (map[messageMediaType]struct{}, error) {
-	mediaInputs := make(map[messageMediaType]struct{}, len(rawMediaInputs))
-	for mediaInputIndex, rawMediaInput := range rawMediaInputs {
+func validatedMediaInputSet(offering ProviderOffering, fieldPrefix string) (map[messageMediaType]struct{}, error) {
+	routeCapabilities := textRouteCapabilities{
+		wireContract:       textWireContract(offering.WireContract),
+		executionLifecycle: textExecutionLifecycle(offering.ExecutionLifecycle),
+	}
+	mediaInputs := make(map[messageMediaType]struct{}, len(offering.MediaInputs))
+	for mediaInputIndex, rawMediaInput := range offering.MediaInputs {
 		mediaInput := messageMediaType(rawMediaInput)
-		if rawMediaInput == constants.EmptyString || rawMediaInput != strings.TrimSpace(rawMediaInput) || !providerSupportsMessageMedia(providerName, mediaInput) {
-			return nil, fmt.Errorf("%w: field=%s[%d] provider=%s media_input=%s", ErrInvalidModelCatalog, fieldPrefix, mediaInputIndex, providerName, rawMediaInput)
+		if rawMediaInput == constants.EmptyString || rawMediaInput != strings.TrimSpace(rawMediaInput) || !textRouteSupportsMessageMedia(routeCapabilities, mediaInput) {
+			return nil, fmt.Errorf("%w: field=%s[%d] provider=%s wire_contract=%s execution_lifecycle=%s media_input=%s", ErrInvalidModelCatalog, fieldPrefix, mediaInputIndex, offering.Provider, offering.WireContract, offering.ExecutionLifecycle, rawMediaInput)
 		}
 		if _, duplicate := mediaInputs[mediaInput]; duplicate {
 			return nil, fmt.Errorf("%w: field=%s[%d] duplicate=%s", ErrInvalidModelCatalog, fieldPrefix, mediaInputIndex, rawMediaInput)
