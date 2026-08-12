@@ -1648,6 +1648,7 @@ components:
           type: string
           enum:
             - attachment
+            - attachment_encoded_bytes
             - request
             - request_encoded_bytes
         source:
