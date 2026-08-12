@@ -76,8 +76,18 @@ func hasFinalMessage(rawPayload []byte) bool {
 
 // openAIRequest sends messages to the OpenAI responses API and returns the resulting text.
 func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, messages chatMessages, webSearchEnabled bool, maxTokens *int, reasoningEffort string, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	payload := BuildRequestPayload(modelIdentifier.providerString(), modelIdentifier.requestProfile.string(), messages.openAIResponsesInput(), webSearchEnabled, maxTokens, reasoningEffort)
+	if mediaLimitError := validateInlineMessageMediaBeforeSerialization(modelIdentifier, messages); mediaLimitError != nil {
+		return textGenerationResult{}, mediaLimitError
+	}
+	input, inputError := messages.openAIResponsesInput("auto", false)
+	if inputError != nil {
+		return textGenerationResult{}, inputError
+	}
+	payload := BuildRequestPayload(modelIdentifier.providerString(), modelIdentifier.requestProfile.string(), input, webSearchEnabled, maxTokens, reasoningEffort)
 	payloadBytes, _ := json.Marshal(payload)
+	if mediaLimitError := validateInlineMessageMediaRequestLimit(modelIdentifier, messages, payloadBytes); mediaLimitError != nil {
+		return textGenerationResult{}, mediaLimitError
+	}
 
 	httpRequest, buildError := buildAuthorizedJSONRequest(parentContext, http.MethodPost, client.endpoints.GetResponsesURL(), openAIKey, bytes.NewReader(payloadBytes))
 	if buildError != nil {
@@ -107,6 +117,66 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 	}
 
 	return client.resolveOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
+}
+
+func (client *OpenAIClient) xAIResponsesRequest(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+	if mediaLimitError := validateInlineMessageMediaBeforeSerialization(modelIdentifier, messages); mediaLimitError != nil {
+		return textGenerationResult{}, mediaLimitError
+	}
+	input, inputError := messages.openAIResponsesInput("high", true)
+	if inputError != nil {
+		return textGenerationResult{}, inputError
+	}
+	payload := struct {
+		Model           string `json:"model"`
+		Input           any    `json:"input"`
+		MaxOutputTokens *int   `json:"max_output_tokens,omitempty"`
+		Store           bool   `json:"store"`
+	}{
+		Model:           modelIdentifier.providerString(),
+		Input:           input,
+		MaxOutputTokens: maxTokens,
+		Store:           false,
+	}
+	payloadBytes, _ := json.Marshal(payload)
+	if mediaLimitError := validateInlineMessageMediaRequestLimit(modelIdentifier, messages, payloadBytes); mediaLimitError != nil {
+		return textGenerationResult{}, mediaLimitError
+	}
+	requestURL := strings.TrimRight(baseURL, "/") + "/responses"
+	httpRequest, buildError := buildAuthorizedJSONRequest(parentContext, http.MethodPost, requestURL, apiKey, bytes.NewReader(payloadBytes))
+	if buildError != nil {
+		structuredLogger.Errorw(logEventBuildHTTPRequest, constants.LogFieldError, buildError)
+		return textGenerationResult{}, buildError
+	}
+	statusCode, responseBytes, _, latencyMillis, requestError := client.performResponsesRequest(httpRequest, structuredLogger, logEventProviderRequestError)
+	if requestError != nil {
+		return textGenerationResult{}, requestError
+	}
+	responseSnapshot, snapshotError := newOpenAIResponseSnapshot(responseBytes)
+	structuredLogger.Infow(logEventOpenAIResponse, logFieldHTTPStatus, statusCode, logFieldAPIStatus, responseSnapshot.status, constants.LogFieldLatencyMilliseconds, latencyMillis)
+	if snapshotError != nil {
+		return textGenerationResult{}, errors.New(errorOpenAIAPI)
+	}
+	return resolveSynchronousResponsesSnapshot(responseSnapshot)
+}
+
+func resolveSynchronousResponsesSnapshot(responseSnapshot openAIResponseSnapshot) (textGenerationResult, error) {
+	switch responseSnapshot.status {
+	case statusCompleted:
+		if utils.IsBlank(responseSnapshot.text) {
+			return textGenerationResult{usage: responseSnapshot.usage}, errors.New(errorOpenAIAPI)
+		}
+		return responseSnapshot.generation(), nil
+	case statusIncomplete:
+		if responseSnapshot.incompleteReason == "max_output_tokens" {
+			return responseSnapshot.generation(), errProviderOutputLimitReached
+		}
+		return textGenerationResult{usage: responseSnapshot.usage}, fmt.Errorf("%w: Responses incomplete reason=%s", ErrProviderAPI, responseSnapshot.incompleteReason)
+	case statusCancelled, statusFailed:
+		return textGenerationResult{usage: responseSnapshot.usage}, errors.New(errorOpenAIFailedStatus)
+	default:
+		return textGenerationResult{usage: responseSnapshot.usage}, errors.New(errorOpenAIAPI)
+	}
 }
 
 type openAIResponseSnapshot struct {

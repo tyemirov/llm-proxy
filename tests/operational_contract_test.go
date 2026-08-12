@@ -3,6 +3,9 @@ package tests_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"net"
 	"net/url"
@@ -36,7 +39,7 @@ func TestOperationalHelpCommandsUseBuiltinOutput(testingInstance *testing.T) {
 		path             string
 		expectedFragment string
 	}{
-		{name: "live-providers", path: filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"), expectedFragment: "scripts/test_live_providers.sh [--preflight | --write-config <path>]"},
+		{name: "live-providers", path: filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"), expectedFragment: "scripts/test_live_providers.sh [--media | --preflight | --write-config <path>]"},
 		{name: "production-live-test", path: filepath.Join(repositoryRoot, operationalScriptsDirectory, "live_test.sh"), expectedFragment: "Usage: make live-test"},
 	}
 	for _, helpCommand := range helpCommands {
@@ -1501,6 +1504,154 @@ func TestOperationalLiveHarnessVerifiesEachKeyBeforeItsSmokeRequest(testingInsta
 	assertOperationalProxyChildStopped(testingInstance, fixture.proxyPIDPath)
 }
 
+func TestOperationalLiveHarnessRunsCatalogSelectedImageMatrixAfterVerification(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixture := newOperationalLiveHarnessFixture(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	environmentFile := filepath.Join(fixtureRoot, "live.env")
+	operationCapture := filepath.Join(fixtureRoot, "operations.log")
+	providerKeys := map[string]string{
+		"OPENAI_API_KEY":    "test-live-openai-key",
+		"ANTHROPIC_API_KEY": "test-live-anthropic-key",
+		"GEMINI_API_KEY":    "test-live-gemini-key",
+		"XAI_API_KEY":       "test-live-xai-key",
+	}
+	environmentContents := ""
+	for variableName, variableValue := range providerKeys {
+		environmentContents += variableName + "=" + variableValue + "\n"
+	}
+	writeOperationalFile(testingInstance, environmentFile, environmentContents, 0o600)
+	environment := []string{
+		"PATH=" + fixture.toolDirectory + string(os.PathListSeparator) + os.Getenv("PATH"),
+		"GO=" + filepath.Join(fixture.toolDirectory, "go"),
+		"LLM_PROXY_LIVE_PORT=" + strconv.Itoa(operationalLoopbackPort(testingInstance)),
+		"PROXY_PID_CAPTURE=" + fixture.proxyPIDPath,
+		"LIVE_ENV_FILE=" + environmentFile,
+		"LIVE_OPERATION_CAPTURE=" + operationCapture,
+	}
+	command := exec.Command(filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"), "--media")
+	command.Dir = repositoryRoot
+	command.Env = environment
+	output, commandError := command.CombinedOutput()
+	if commandError != nil {
+		testingInstance.Fatalf("live provider image matrix failed: %v\n%s", commandError, output)
+	}
+	outputText := string(output)
+	expectedModels := []string{"gpt-4.1", "claude-sonnet-4-6", "gemini-2.5-flash", "grok-4.5"}
+	expectedProviders := []string{"openai", "anthropic", "gemini", "xai"}
+	for index, provider := range expectedProviders {
+		expectedVerification := "live provider verification passed: provider=" + provider + " model=" + expectedModels[index] + " status=200"
+		expectedSuccess := "live provider image smoke passed: provider=" + provider + " model=" + expectedModels[index] + " status=200"
+		if !strings.Contains(outputText, expectedVerification) || !strings.Contains(outputText, expectedSuccess) {
+			testingInstance.Fatalf("live provider image matrix omitted provider=%s proof: %s", provider, output)
+		}
+	}
+	for _, forbiddenValue := range append([]string{"live-generated-secret", "iVBOR"}, mapValues(providerKeys)...) {
+		if strings.Contains(outputText, forbiddenValue) {
+			testingInstance.Fatalf("live provider image matrix output exposed credential or image material: %s", output)
+		}
+	}
+	captureBytes, readError := os.ReadFile(operationCapture)
+	if readError != nil {
+		testingInstance.Fatalf("read live image operation capture: %v", readError)
+	}
+	capture := string(captureBytes)
+	lastVerificationOffset := strings.LastIndex(capture, "verify PUT ")
+	firstImageOffset := strings.Index(capture, "image POST ")
+	if strings.Count(capture, "verify PUT ") != 4 || strings.Count(capture, "image POST ") != 4 || firstImageOffset <= lastVerificationOffset {
+		testingInstance.Fatalf("live image operations were not four verifications followed by four images: %s", capture)
+	}
+	imagePayloadLines := []string{}
+	for _, line := range strings.Split(capture, "\n") {
+		if strings.HasPrefix(line, "image-payload ") {
+			imagePayloadLines = append(imagePayloadLines, strings.TrimPrefix(line, "image-payload "))
+		}
+	}
+	if len(imagePayloadLines) != len(expectedModels) {
+		testingInstance.Fatalf("live image payload count=%d capture=%s", len(imagePayloadLines), capture)
+	}
+	for index, payloadLine := range imagePayloadLines {
+		assertOperationalImageSmokePayload(testingInstance, payloadLine, expectedModels[index])
+	}
+	assertOperationalProxyChildStopped(testingInstance, fixture.proxyPIDPath)
+}
+
+func TestOperationalLiveHarnessRejectsProviderWithoutCatalogImageBeforeVerification(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixture := newOperationalLiveHarnessFixture(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	environmentFile := filepath.Join(fixtureRoot, "live.env")
+	operationCapture := filepath.Join(fixtureRoot, "operations.log")
+	const providerKey = "test-live-deepseek-key"
+	writeOperationalFile(testingInstance, environmentFile, "DEEPSEEK_API_KEY="+providerKey+"\n", 0o600)
+	command := exec.Command(filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"), "--media")
+	command.Dir = repositoryRoot
+	command.Env = []string{
+		"PATH=" + fixture.toolDirectory + string(os.PathListSeparator) + os.Getenv("PATH"),
+		"GO=" + filepath.Join(fixture.toolDirectory, "go"),
+		"LLM_PROXY_LIVE_PORT=" + strconv.Itoa(operationalLoopbackPort(testingInstance)),
+		"PROXY_PID_CAPTURE=" + fixture.proxyPIDPath,
+		"LIVE_ENV_FILE=" + environmentFile,
+		"LLM_PROXY_LIVE_PROVIDERS=deepseek",
+		"LIVE_OPERATION_CAPTURE=" + operationCapture,
+	}
+	output, commandError := command.CombinedOutput()
+	if commandError == nil {
+		testingInstance.Fatalf("live provider image matrix accepted a provider without an image route: %s", output)
+	}
+	outputText := string(output)
+	if !strings.Contains(outputText, "live provider image model is unavailable or ambiguous: provider=deepseek") || strings.Contains(outputText, providerKey) {
+		testingInstance.Fatalf("live provider image rejection was not safe: %s", output)
+	}
+	if captureBytes, readError := os.ReadFile(operationCapture); readError == nil && len(captureBytes) != 0 {
+		testingInstance.Fatalf("live provider image rejection performed paid work: %s", captureBytes)
+	} else if readError != nil && !os.IsNotExist(readError) {
+		testingInstance.Fatalf("inspect rejected image operations: %v", readError)
+	}
+	assertOperationalProxyChildStopped(testingInstance, fixture.proxyPIDPath)
+}
+
+func assertOperationalImageSmokePayload(testingInstance *testing.T, payloadText string, expectedModel string) {
+	testingInstance.Helper()
+	var payload struct {
+		Messages []struct {
+			Role        string `json:"role"`
+			Content     string `json:"content"`
+			Attachments []struct {
+				Type     string `json:"type"`
+				MIMEType string `json:"mime_type"`
+				Data     string `json:"data"`
+				SHA256   string `json:"sha256"`
+			} `json:"attachments"`
+		} `json:"messages"`
+		Model     string `json:"model"`
+		WebSearch bool   `json:"web_search"`
+	}
+	if decodeError := json.Unmarshal([]byte(payloadText), &payload); decodeError != nil {
+		testingInstance.Fatalf("decode live image payload: %v", decodeError)
+	}
+	if payload.Model != expectedModel || payload.WebSearch || len(payload.Messages) != 1 || payload.Messages[0].Role != "user" || len(payload.Messages[0].Attachments) != 1 {
+		testingInstance.Fatalf("live image payload shape=%+v", payload)
+	}
+	attachment := payload.Messages[0].Attachments[0]
+	imageBytes, decodeError := base64.StdEncoding.DecodeString(attachment.Data)
+	if decodeError != nil {
+		testingInstance.Fatalf("decode live image data: %v", decodeError)
+	}
+	imageDigest := sha256.Sum256(imageBytes)
+	if attachment.Type != "image" || attachment.MIMEType != "image/png" || !bytes.HasPrefix(imageBytes, []byte("\x89PNG\r\n\x1a\n")) || attachment.SHA256 != hex.EncodeToString(imageDigest[:]) {
+		testingInstance.Fatalf("live image attachment=%+v bytes=%d", attachment, len(imageBytes))
+	}
+}
+
+func mapValues(values map[string]string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		result = append(result, value)
+	}
+	return result
+}
+
 func TestOperationalLiveHarnessReapsOwnedProxyChild(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	reservedPort := operationalLoopbackPort(testingInstance)
@@ -1596,6 +1747,7 @@ if [[ ! -f "${PROXY_PID_CAPTURE:?}" ]]; then
 fi
 
 output_path=""
+response_headers_path=""
 request_body_path=""
 request_method="GET"
 request_url=""
@@ -1607,6 +1759,10 @@ while [[ "$#" -gt 0 ]]; do
       ;;
     -X)
       request_method="$2"
+      shift 2
+      ;;
+    -D)
+      response_headers_path="$2"
       shift 2
       ;;
     --data-binary)
@@ -1623,13 +1779,23 @@ while [[ "$#" -gt 0 ]]; do
   esac
 done
 
+write_response_headers() {
+  if [[ -n "${response_headers_path}" ]]; then
+    builtin printf '%s\r\n' 'HTTP/1.1 200 OK' 'X-LLM-Proxy-Request-ID: ABCDEFGHIJKLMNOPQRSTUVWXYZ234567' '' >"${response_headers_path}"
+  fi
+}
+
 case "${request_url}" in
+  */api/public/capabilities)
+    builtin printf '%s' '{"offerings":[{"provider":"openai","model":"gpt-4.1","capabilities":["image_input","text"]},{"provider":"anthropic","model":"claude-sonnet-4-6","capabilities":["image_input","text"]},{"provider":"gemini","model":"gemini-2.5-flash","capabilities":["audio_input","image_input","text"]},{"provider":"xai","model":"grok-4.5","capabilities":["image_input","text"]}]}' >"${output_path}"
+    builtin printf '%s' 200
+    ;;
   */api/management/account)
     builtin printf '%s' '{"tenants":[{"id":"tenant-live"}]}' >"${output_path}"
     builtin printf '%s' 200
     ;;
   */api/management/tenants/tenant-live/secrets)
-    builtin printf '%s' '{"secret":"live-generated-secret","profile":{"providers":[{"id":"openai","text_default_model":"gpt-4.1"}]}}' >"${output_path}"
+    builtin printf '%s' '{"secret":"live-generated-secret","profile":{"providers":[{"id":"openai","text_default_model":"gpt-4.1"},{"id":"anthropic","text_default_model":"claude-sonnet-4-6"},{"id":"gemini","text_default_model":"gemini-2.5-flash"},{"id":"xai","text_default_model":"grok-4.3"},{"id":"deepseek","text_default_model":"deepseek-v4-flash"}]}}' >"${output_path}"
     builtin printf '%s' 200
     ;;
   */api/management/tenants/tenant-live/provider-keys/*)
@@ -1648,6 +1814,17 @@ case "${request_url}" in
       sleep "${CURL_PREFLIGHT_BLOCK_SECONDS:-1}"
     fi
     builtin printf '%s' 400
+    ;;
+  */v2?provider=*)
+    if [[ -n "${LIVE_OPERATION_CAPTURE:-}" ]]; then
+      builtin printf 'image %s %s\n' "${request_method}" "${request_url}" >>"${LIVE_OPERATION_CAPTURE}"
+      builtin printf 'image-payload ' >>"${LIVE_OPERATION_CAPTURE}"
+      command cat "${request_body_path}" >>"${LIVE_OPERATION_CAPTURE}"
+      builtin printf '\n' >>"${LIVE_OPERATION_CAPTURE}"
+    fi
+    write_response_headers
+    builtin printf '%s' RED >"${output_path}"
+    builtin printf '%s' 200
     ;;
   *provider=*)
     if [[ -n "${LIVE_OPERATION_CAPTURE:-}" ]]; then

@@ -3,12 +3,14 @@ set -euo pipefail
 
 usage() {
   builtin printf '%s\n' 'Usage:
-  scripts/test_live_providers.sh [--preflight | --write-config <path>]
+  scripts/test_live_providers.sh [--media | --preflight | --write-config <path>]
 
 Builds the current llm-proxy binary, verifies each available provider key
 through the authenticated management operation, and only then runs its live
-text smoke test. The preflight mode builds a temporary static configuration and
-verifies authenticated routing without making an upstream provider call.
+text smoke test. Media mode verifies the four current image providers and then
+runs one canonical image request for each. The preflight mode builds a temporary
+static configuration and verifies authenticated routing without an upstream
+provider call.
 
 Required environment:
   At least one provider API key, unless no-op skip behavior is desired.
@@ -37,6 +39,8 @@ Optional environment:
   GO                         Go binary. Default: go.
 
 Options:
+  --media                  Run the paid OpenAI, Anthropic, Gemini, and xAI image
+                           matrix. LLM_PROXY_LIVE_PROVIDERS can select a subset.
   --preflight                Verify the disposable static config without an
                              upstream provider call.
   --write-config <path>      Write the disposable static config and exit
@@ -188,6 +192,34 @@ provider_model() {
     return
   fi
   provider_default_model "${provider}"
+}
+
+provider_image_model() {
+  local provider="$1"
+  local verified_model
+  verified_model="$(provider_model "${provider}")"
+  python3 -c '
+import json
+import pathlib
+import sys
+
+catalog = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+offerings = catalog.get("offerings", [])
+candidates = sorted({
+    offering.get("model")
+    for offering in offerings
+    if offering.get("provider") == sys.argv[2]
+    and "image_input" in offering.get("capabilities", [])
+    and isinstance(offering.get("model"), str)
+    and offering.get("model")
+})
+if sys.argv[3] in candidates:
+    print(sys.argv[3])
+elif len(candidates) == 1:
+    print(candidates[0])
+else:
+    raise SystemExit(1)
+' "${PUBLIC_CAPABILITIES_RESPONSE_PATH}" "${provider}" "${verified_model}"
 }
 
 validate_provider_name() {
@@ -484,13 +516,18 @@ verification_failure_code() {
 
 verify_provider_key() {
   local provider="$1"
+  local requested_model="${2:-}"
   local key_variable
   local model
   local request_path
   local response_path
   local http_status
   key_variable="$(provider_key_variable "${provider}")"
-  model="$(provider_model "${provider}")"
+  if [[ -n "${requested_model}" ]]; then
+    model="${requested_model}"
+  else
+    model="$(provider_model "${provider}")"
+  fi
   request_path="${TMP_DIR}/${provider}-verification-request.json"
   response_path="${TMP_DIR}/${provider}-verification-response.json"
   python3 -c '
@@ -567,6 +604,124 @@ run_text_smoke() {
   echo "live provider smoke passed: provider=${provider} model=${request_model_label} status=${http_status}"
 }
 
+fetch_public_capabilities() {
+  local http_status
+  http_status="$(
+    curl -sS --max-time 5 \
+      -o "${PUBLIC_CAPABILITIES_RESPONSE_PATH}" \
+      -w "%{http_code}" \
+      "http://127.0.0.1:${PORT}/api/public/capabilities"
+  )"
+  if [[ "${http_status}" != "200" ]] || ! python3 -c '
+import json
+import pathlib
+import sys
+
+catalog = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+if not isinstance(catalog.get("offerings"), list):
+    raise SystemExit(1)
+' "${PUBLIC_CAPABILITIES_RESPONSE_PATH}"; then
+    echo "error: live provider capability discovery failed: status=${http_status}" >&2
+    redact_log
+    exit 1
+  fi
+}
+
+write_image_smoke_request() {
+  local model="$1"
+  local request_path="$2"
+  python3 -c '
+import base64
+import binascii
+import hashlib
+import json
+import pathlib
+import struct
+import sys
+import zlib
+
+def png_chunk(chunk_type, payload):
+    return struct.pack(">I", len(payload)) + chunk_type + payload + struct.pack(
+        ">I", binascii.crc32(chunk_type + payload) & 0xFFFFFFFF
+    )
+
+width = 256
+height = 256
+scanlines = b"".join(b"\x00" + (b"\xff\x00\x00" * width) for _ in range(height))
+image = (
+    b"\x89PNG\r\n\x1a\n"
+    + png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+    + png_chunk(b"IDAT", zlib.compress(scanlines, level=9))
+    + png_chunk(b"IEND", b"")
+)
+payload = {
+    "messages": [{
+        "role": "user",
+        "content": "Identify the solid color in this image. Reply with exactly RED and no punctuation.",
+        "attachments": [{
+            "type": "image",
+            "mime_type": "image/png",
+            "data": base64.b64encode(image).decode("ascii"),
+            "sha256": hashlib.sha256(image).hexdigest(),
+        }],
+    }],
+    "model": sys.argv[1],
+    "web_search": False,
+}
+pathlib.Path(sys.argv[2]).write_text(
+    json.dumps(payload, separators=(",", ":")),
+    encoding="utf-8",
+)
+' "${model}" "${request_path}"
+}
+
+validated_response_request_id() {
+  local headers_path="$1"
+  python3 -c '
+import re
+import sys
+
+with open(sys.argv[1], encoding="utf-8", errors="strict") as header_file:
+    values = [
+        line.split(":", 1)[1].strip()
+        for line in header_file
+        if line.lower().startswith("x-llm-proxy-request-id:")
+    ]
+if len(values) != 1 or re.fullmatch(r"[A-Z2-7]{26,}", values[0]) is None:
+    raise SystemExit(1)
+' "${headers_path}"
+}
+
+run_image_smoke() {
+  local provider="$1"
+  local model="$2"
+  local request_path="${TMP_DIR}/${provider}-image-request.json"
+  local headers_path="${TMP_DIR}/${provider}-image-headers.txt"
+  local response_path="${TMP_DIR}/${provider}-image-response.txt"
+  local http_status
+  local response_text
+  write_image_smoke_request "${model}" "${request_path}"
+
+  http_status="$(
+    curl -sS --max-time "${LIVE_TIMEOUT}" \
+      -X POST \
+      -D "${headers_path}" \
+      -H "Content-Type: application/json" \
+      --data-binary "@${request_path}" \
+      -o "${response_path}" \
+      -w "%{http_code}" \
+      "http://127.0.0.1:${PORT}/v2?provider=${provider}&format=text/plain&key=${SERVICE_SECRET}"
+  )"
+
+  response_text="$(tr -d '\r\n' <"${response_path}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+  if [[ "${http_status}" != "200" || "${response_text}" != "RED" ]] || ! validated_response_request_id "${headers_path}"; then
+    echo "error: live provider image smoke failed: provider=${provider} model=${model} status=${http_status}" >&2
+    redact_log
+    exit 1
+  fi
+  echo "live provider image smoke passed: provider=${provider} model=${model} status=${http_status}"
+}
+
 run_static_config_preflight() {
   local response_path="${TMP_DIR}/preflight-response.txt"
   local http_status
@@ -585,9 +740,14 @@ run_static_config_preflight() {
 }
 
 PREFLIGHT_ONLY=false
+MEDIA_ONLY=false
 WRITE_CONFIG_PATH=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --media)
+      MEDIA_ONLY=true
+      shift
+      ;;
     --preflight)
       PREFLIGHT_ONLY=true
       shift
@@ -608,13 +768,16 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
-if [[ "${PREFLIGHT_ONLY}" == "true" && -n "${WRITE_CONFIG_PATH}" ]]; then
-  echo "error: --preflight and --write-config are mutually exclusive" >&2
+if [[ "${MEDIA_ONLY}" == "true" && ( "${PREFLIGHT_ONLY}" == "true" || -n "${WRITE_CONFIG_PATH}" ) ]] ||
+  [[ "${PREFLIGHT_ONLY}" == "true" && -n "${WRITE_CONFIG_PATH}" ]]; then
+  echo "error: --media, --preflight, and --write-config are mutually exclusive" >&2
   exit 1
 fi
 
 SUPPORTED_PROVIDERS=(openai deepseek dashscope moonshot minimax siliconflow zhipu gemini anthropic meta xai)
+MEDIA_PROVIDERS=(openai anthropic gemini xai)
 LIVE_PROVIDERS=()
+IMAGE_MODELS=()
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="$(mktemp -d)"
 PROXY_PID=""
@@ -640,6 +803,9 @@ if [[ -n "${LIVE_ENV_FILE:-}" ]]; then
 fi
 
 if [[ "${PREFLIGHT_ONLY}" != "true" && -z "${WRITE_CONFIG_PATH}" ]]; then
+  if [[ "${MEDIA_ONLY}" == "true" && -z "${LLM_PROXY_LIVE_PROVIDERS:-}" ]]; then
+    LLM_PROXY_LIVE_PROVIDERS="$(IFS=,; builtin printf '%s' "${MEDIA_PROVIDERS[*]}")"
+  fi
   discover_live_providers
   if [[ "${#LIVE_PROVIDERS[@]}" -eq 0 ]]; then
     echo "live provider smoke skipped: no provider API keys found"
@@ -665,6 +831,7 @@ else
   CONFIG_PATH="${TMP_DIR}/config.yml"
 fi
 LOG_PATH="${TMP_DIR}/llm-proxy.log"
+PUBLIC_CAPABILITIES_RESPONSE_PATH="${TMP_DIR}/public-capabilities.json"
 export LLM_PROXY_LIVE_PORT="${PORT}"
 if [[ "${PREFLIGHT_ONLY}" == "true" || -n "${WRITE_CONFIG_PATH}" ]]; then
   export SERVICE_SECRET="${SERVICE_SECRET:-live-service-secret}"
@@ -701,7 +868,24 @@ if [[ "${PREFLIGHT_ONLY}" == "true" ]]; then
 fi
 
 initialize_live_management
-for live_provider in "${LIVE_PROVIDERS[@]}"; do
-  verify_provider_key "${live_provider}"
-  run_text_smoke "${live_provider}"
-done
+if [[ "${MEDIA_ONLY}" == "true" ]]; then
+  fetch_public_capabilities
+  for live_provider in "${LIVE_PROVIDERS[@]}"; do
+    if ! image_model="$(provider_image_model "${live_provider}")"; then
+      echo "error: live provider image model is unavailable or ambiguous: provider=${live_provider}" >&2
+      exit 1
+    fi
+    IMAGE_MODELS+=("${image_model}")
+  done
+  for live_provider_index in "${!LIVE_PROVIDERS[@]}"; do
+    verify_provider_key "${LIVE_PROVIDERS[${live_provider_index}]}" "${IMAGE_MODELS[${live_provider_index}]}"
+  done
+  for live_provider_index in "${!LIVE_PROVIDERS[@]}"; do
+    run_image_smoke "${LIVE_PROVIDERS[${live_provider_index}]}" "${IMAGE_MODELS[${live_provider_index}]}"
+  done
+else
+  for live_provider in "${LIVE_PROVIDERS[@]}"; do
+    verify_provider_key "${live_provider}"
+    run_text_smoke "${live_provider}"
+  done
+fi

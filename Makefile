@@ -14,7 +14,7 @@ export PLAYWRIGHT_BROWSERS_PATH
 
 GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 
-.PHONY: fmt check-format lint go-lint python-lint frontend-dependencies frontend-lint test go-test python-test python-package-install-test frontend-test test-frontend-dependency-contract test-openapi-pages-artifact test-management-auth-blackbox test-live-provider-harness test-live-providers test-live-gemini live-test build clean ci up down
+.PHONY: fmt check-format lint go-lint python-lint frontend-dependencies frontend-lint test go-test python-test python-package-install-test frontend-test test-frontend-dependency-contract test-openapi-pages-artifact test-management-auth-blackbox test-live-provider-harness test-live-providers test-live-provider-media test-live-gemini live-test build clean ci up down
 
 fmt:
 	$(GOFMT) -w $(GO_SOURCES)
@@ -76,6 +76,9 @@ test-live-provider-harness:
 
 test-live-providers:
 	@GO="$(GO)" ./scripts/test_live_providers.sh
+
+test-live-provider-media:
+	@GO="$(GO)" ./scripts/test_live_providers.sh --media
 
 test-live-gemini:
 	@GO="$(GO)" ./scripts/test_live_gemini.sh

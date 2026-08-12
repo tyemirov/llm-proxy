@@ -23,12 +23,14 @@ type textRouteAdapter interface {
 }
 
 type openAIResponsesTextRouteAdapter struct{}
+type openAIResponsesSynchronousTextRouteAdapter struct{}
 type openAIChatCompletionsTextRouteAdapter struct{}
 type geminiInteractionsTextRouteAdapter struct{}
 type anthropicMessagesTextRouteAdapter struct{}
 
 var textRouteAdapters = map[textRouteCapabilities]textRouteAdapter{
 	openAIResponsesPollableRouteCapabilities:          openAIResponsesTextRouteAdapter{},
+	openAIResponsesSynchronousRouteCapabilities:       openAIResponsesSynchronousTextRouteAdapter{},
 	openAIChatCompletionsSynchronousRouteCapabilities: openAIChatCompletionsTextRouteAdapter{},
 	geminiInteractionsPollableRouteCapabilities:       geminiInteractionsTextRouteAdapter{},
 	geminiInteractionsSynchronousRouteCapabilities:    geminiInteractionsTextRouteAdapter{},
@@ -84,6 +86,18 @@ func (openAIResponsesTextRouteAdapter) generateText(requestContext context.Conte
 		request.webSearchEnabled,
 		request.maxTokens,
 		request.reasoningEffort,
+		structuredLogger,
+	)
+}
+
+func (openAIResponsesSynchronousTextRouteAdapter) generateText(requestContext context.Context, router *providerRouter, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+	return router.openAIClient.xAIResponsesRequest(
+		requestContext,
+		request.provider.credentialFor(endpointKindText),
+		request.provider.textBaseURL,
+		request.model,
+		request.messages,
+		request.maxTokens,
 		structuredLogger,
 	)
 }

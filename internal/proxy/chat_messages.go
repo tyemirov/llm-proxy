@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -235,7 +236,7 @@ func newChatRole(rawRole string) (chatRole, error) {
 	}
 }
 
-func (messages chatMessages) openAIResponsesInput() string {
+func (messages chatMessages) openAIResponsesTextInput() string {
 	if len(messages) == 1 && messages[0].role == chatRoleUser {
 		return messages[0].content
 	}
@@ -254,8 +255,38 @@ func (messages chatMessages) openAIResponsesInput() string {
 	return transcriptBuilder.String()
 }
 
+func (messages chatMessages) openAIResponsesInput(imageDetail string, preserveRoles bool) (any, error) {
+	if messages.mediaCount() == 0 && !preserveRoles {
+		return messages.openAIResponsesTextInput(), nil
+	}
+	providerMessages := make([]map[string]any, 0, len(messages))
+	for messageIndex := range messages {
+		message := &messages[messageIndex]
+		if len(message.attachments) == 0 {
+			providerMessages = append(providerMessages, map[string]any{"role": string(message.role), "content": message.content})
+			continue
+		}
+		content := make([]map[string]any, 0, len(message.attachments)+1)
+		for attachmentIndex := range message.attachments {
+			attachment := &message.attachments[attachmentIndex]
+			data, dataError := attachment.bytes()
+			if dataError != nil {
+				return nil, dataError
+			}
+			content = append(content, map[string]any{
+				"type":      "input_image",
+				"image_url": "data:" + attachment.mimeType + ";base64," + base64.StdEncoding.EncodeToString(data),
+				"detail":    imageDetail,
+			})
+		}
+		content = append(content, map[string]any{"type": "input_text", "text": message.content})
+		providerMessages = append(providerMessages, map[string]any{"role": string(message.role), "content": content})
+	}
+	return providerMessages, nil
+}
+
 func (messages chatMessages) requestDisplayText() string {
-	return messages.responseVisibleMessages().openAIResponsesInput()
+	return messages.responseVisibleMessages().openAIResponsesTextInput()
 }
 
 func (messages chatMessages) responseRequestMessages() []map[string]any {

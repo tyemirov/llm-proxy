@@ -513,7 +513,7 @@ function parseCatalogMediaLimit(rawLimit, field) {
       || !new Set(["any", "inline", "file"]).has(transport)
       || !new Set(["bounded", "unbounded", "unknown"]).has(status)
       || !new Set(["bytes", "files"]).has(unit)
-      || !new Set(["attachment", "request", "request_encoded_bytes"]).has(scope)
+      || !new Set(["attachment", "attachment_encoded_bytes", "request", "request_encoded_bytes"]).has(scope)
       || (status === "bounded" ? value === null || value === 0 : value !== null)) {
     throw new Error(`public_capabilities_invalid: ${field} media limit`);
   }

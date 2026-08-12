@@ -855,6 +855,11 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await expect(catalog.getByRole("columnheader")).toHaveText(["Publisher", "Model", "Provider offerings and capabilities"]);
   await expect(catalog.locator("[data-catalog-row]")).toHaveCount(57);
   await expect(catalog.locator('[data-model="gpt-4o-mini-transcribe"]')).toContainText("Dictation");
+  await expect(catalog.locator('[data-model="gpt-4o-mini"]')).toContainText("Image input");
+  await expect(catalog.locator('[data-model="claude-fable-5"]')).toContainText("Image input");
+  await expect(catalog.locator('[data-model="grok-4.5"]')).toContainText("Image input");
+  await expect(catalog.locator('[data-model="gemini-3.5-flash"]')).toContainText("Image input");
+  await expect(catalog.locator('[data-model="gemini-3.5-flash"]')).toContainText("Audio message input");
 
   const footer = page.locator(".public-site-footer-fallback");
   await expect(footer).toBeVisible();
@@ -881,6 +886,8 @@ test("visitors can filter and choose a model family, exact model, and provider o
   const proprietaryFilter = routingTree.locator('[data-route-weight-access="proprietary"]');
   const openWeightsFilter = routingTree.locator('[data-route-weight-access="open_weights"]');
   const textFilter = routingTree.locator('[data-route-capability="text"]');
+  const imageInputFilter = routingTree.locator('[data-route-capability="image_input"]');
+  const audioInputFilter = routingTree.locator('[data-route-capability="audio_input"]');
   const webSearchFilter = routingTree.locator('[data-route-capability="web_search"]');
   await expect(routingTree).toHaveAttribute("data-enhanced", "true");
   await expect(routingTree).toHaveAttribute("data-route-lines-rendered", "true");
@@ -910,6 +917,33 @@ test("visitors can filter and choose a model family, exact model, and provider o
   expect(routeCanvasDimensions.width).toBeGreaterThan(0);
   await expectFiveStageRouteOrder(routingTree);
   await expectSelectedRoutingFanEndpoints(routingTree);
+
+  await imageInputFilter.click();
+  await expect(imageInputFilter).toHaveAttribute("aria-pressed", "true");
+  await expect(textFilter).toHaveAttribute("aria-pressed", "false");
+  await expect(counts).toHaveText("8 families · 29 exact models · 29 offerings");
+  await expect(routingTree.locator("[data-route-family]:visible")).toHaveCount(8);
+  await routingTree.locator('[data-route-family="grok"]').click();
+  await expect(routingTree.locator('[data-route-model-group="grok"] [data-route-model]:visible')).toHaveCount(1);
+  await expect(routingTree.locator('[data-route-model="grok-4.5"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(routingTree.locator('[data-route-provider-group="grok-4.5"] [data-route-provider="xai"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(selectedModel).toHaveText("grok-4.5");
+  await expect(selectedProvider).toHaveText("xai");
+
+  await audioInputFilter.click();
+  await expect(audioInputFilter).toHaveAttribute("aria-pressed", "true");
+  await expect(imageInputFilter).toHaveAttribute("aria-pressed", "false");
+  await expect(counts).toHaveText("1 family · 7 exact models · 7 offerings");
+  await expect(routingTree.locator("[data-route-family]:visible")).toHaveCount(1);
+  await expect(routingTree.locator('[data-route-family="gemini"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(routingTree.locator('[data-route-model-group="gemini"] [data-route-model]')).toHaveCount(7);
+  await expect(selectedProvider).toHaveText("gemini");
+
+  await textFilter.click();
+  await routingTree.locator('[data-route-family="claude-fable"]').click();
+  await expect(counts).toHaveText("12 families · 40 exact models · 40 offerings");
+  await expect(selectedModel).toHaveText("claude-fable-5");
+  await expect(selectedProvider).toHaveText("anthropic");
 
   await openWeightsFilter.click();
   await expect(openWeightsFilter).toHaveAttribute("aria-pressed", "true");
@@ -1127,12 +1161,12 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   await catalog.getByRole("button", { name: "Reset" }).click();
   await catalog.getByRole("checkbox", { name: "Image input" }).check();
   await catalog.getByRole("checkbox", { name: "Audio message input" }).check();
-  await expect(resultCount).toHaveText("2 of 57 models");
-  await expect(visibleRows).toHaveCount(2);
+  await expect(resultCount).toHaveText("7 of 57 models");
+  await expect(visibleRows).toHaveCount(7);
 
   await searchSubmit.click();
   await expect(filterPanel).toBeHidden();
-  await expect(resultCount).toHaveText("2 of 57 models");
+  await expect(resultCount).toHaveText("7 of 57 models");
   await searchSubmit.click();
   await expect(filterPanel).toBeVisible();
   await expect(catalog.getByRole("checkbox", { name: "Image input" })).toBeChecked();

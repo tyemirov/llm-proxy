@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="9f75f00a49eefffc9d8c53ce99fc48a8c52cf95ab3975b07fbaaf693841338ef">
+    <meta name="openapi-source-sha256" content="f7906ac6ef227ecff8defca0bfcf83863b2b16d835679e55f0ea2ea1fc4995c1">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="9f75f00a49eefffc9d8c53ce99fc48a8c52cf95ab3975b07fbaaf693841338ef">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="f7906ac6ef227ecff8defca0bfcf83863b2b16d835679e55f0ea2ea1fc4995c1">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -49,7 +49,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>9f75f00a49eefffc9d8c53ce99fc48a8c52cf95ab3975b07fbaaf693841338ef</code></span>
+          <span>Source SHA-256 <code>f7906ac6ef227ecff8defca0bfcf83863b2b16d835679e55f0ea2ea1fc4995c1</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -180,7 +180,9 @@ paths:
         the tenant or route default. A supplied value must be non-blank and
         supported by the resolved route. The selected provider offering owns
         media admission and transport limits. Unsupported media or route
-        capabilities return HTTP 400 before an upstream call.
+        capabilities return HTTP 400 before an upstream call. The service
+        rejects an encoded request body above 8 MiB before JSON decoding. A
+        smaller catalog-derived body limit applies when configured.
       tags:
         - Proxy
       security:
@@ -1710,6 +1712,7 @@ components:
           type: string
           enum:
             - attachment
+            - attachment_encoded_bytes
             - request
             - request_encoded_bytes
         source:
@@ -3929,7 +3932,7 @@ components:
           <span class="api-operation-id">postV2Messages</span>
         </header>
         <h2>Generate text from canonical messages</h2>
-        <p>The current messages-only operation. `messages` is required. User messages may include ordered inline or tenant-asset-backed image and audio attachments. `model`, `web_search`, `max_tokens`, and `reasoning_effort` are optional. Omitting `reasoning_effort` selects the tenant or route default. A supplied value must be non-blank and supported by the resolved route. The selected provider offering owns media admission and transport limits. Unsupported media or route capabilities return HTTP 400 before an upstream call.</p>
+        <p>The current messages-only operation. `messages` is required. User messages may include ordered inline or tenant-asset-backed image and audio attachments. `model`, `web_search`, `max_tokens`, and `reasoning_effort` are optional. Omitting `reasoning_effort` selects the tenant or route default. A supplied value must be non-blank and supported by the resolved route. The selected provider offering owns media admission and transport limits. Unsupported media or route capabilities return HTTP 400 before an upstream call. The service rejects an encoded request body above 8 MiB before JSON decoding. A smaller catalog-derived body limit applies when configured.</p>
         <p class="api-security"><strong>Authentication:</strong> TenantClientKey (query key)</p>
         <div class="api-contract-block">
           <h3>Parameters</h3>

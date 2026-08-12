@@ -100,6 +100,14 @@ func TestV2RejectsJSONAboveCatalogDerivedIngressBound(t *testing.T) {
 	}
 }
 
+func TestV2RejectsJSONAboveTheBufferedServiceLimit(t *testing.T) {
+	router := mediaAssetRouter(t, "https://provider.invalid", t.TempDir(), testfixtures.ModelCatalog(t), 60)
+	response := postV2MediaRequest(t, router, "secret-a", bytes.Repeat([]byte("x"), proxy.MaxV2RequestBytes+1))
+	if response.Code != http.StatusRequestEntityTooLarge || !strings.Contains(response.Body.String(), "prompt payload too large") {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestGeminiImageCountLimitAdmitsBoundaryAndRejectsOneAbove(t *testing.T) {
 	upstreamCalls := 0
 	upstream := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {

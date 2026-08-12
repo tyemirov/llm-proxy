@@ -45,10 +45,70 @@ type messageMedia struct {
 	asset     *tenantAssetReader
 }
 
-var providerMessageMediaInputs = map[string]map[messageMediaType]struct{}{
-	ProviderNameGemini: {
-		messageMediaTypeAudio: {},
-		messageMediaTypeImage: {},
+type textRouteMessageMediaContract struct {
+	mimeTypes                map[messageMediaType]map[string]struct{}
+	attachmentLimitTransport string
+}
+
+var textRouteMessageMediaContracts = map[textRouteCapabilities]textRouteMessageMediaContract{
+	openAIResponsesPollableRouteCapabilities: {
+		attachmentLimitTransport: CatalogMediaTransportInline,
+		mimeTypes: map[messageMediaType]map[string]struct{}{
+			messageMediaTypeImage: {
+				messageImageMIMEJPEG: {},
+				messageImageMIMEPNG:  {},
+				messageImageMIMEWebP: {},
+			},
+		},
+	},
+	openAIResponsesSynchronousRouteCapabilities: {
+		attachmentLimitTransport: CatalogMediaTransportInline,
+		mimeTypes: map[messageMediaType]map[string]struct{}{
+			messageMediaTypeImage: {
+				messageImageMIMEJPEG: {},
+				messageImageMIMEPNG:  {},
+			},
+		},
+	},
+	geminiInteractionsPollableRouteCapabilities: {
+		attachmentLimitTransport: CatalogMediaTransportFile,
+		mimeTypes: map[messageMediaType]map[string]struct{}{
+			messageMediaTypeAudio: {
+				messageAudioMIMEM4A:  {},
+				messageAudioMIMEMPEG: {},
+				messageAudioMIMEWAV:  {},
+			},
+			messageMediaTypeImage: {
+				messageImageMIMEJPEG: {},
+				messageImageMIMEPNG:  {},
+				messageImageMIMEWebP: {},
+			},
+		},
+	},
+	geminiInteractionsSynchronousRouteCapabilities: {
+		attachmentLimitTransport: CatalogMediaTransportFile,
+		mimeTypes: map[messageMediaType]map[string]struct{}{
+			messageMediaTypeAudio: {
+				messageAudioMIMEM4A:  {},
+				messageAudioMIMEMPEG: {},
+				messageAudioMIMEWAV:  {},
+			},
+			messageMediaTypeImage: {
+				messageImageMIMEJPEG: {},
+				messageImageMIMEPNG:  {},
+				messageImageMIMEWebP: {},
+			},
+		},
+	},
+	anthropicMessagesSynchronousRouteCapabilities: {
+		attachmentLimitTransport: CatalogMediaTransportInline,
+		mimeTypes: map[messageMediaType]map[string]struct{}{
+			messageMediaTypeImage: {
+				messageImageMIMEJPEG: {},
+				messageImageMIMEPNG:  {},
+				messageImageMIMEWebP: {},
+			},
+		},
 	},
 }
 
@@ -155,24 +215,81 @@ func decodeHashBoundMessageMedia(rawData string, rawDigest string) ([]byte, erro
 	return decodedData, nil
 }
 
-func providerSupportsMessageMedia(providerName string, mediaInput messageMediaType) bool {
-	_, supported := providerMessageMediaInputs[providerName][mediaInput]
+func textRouteSupportsMessageMedia(routeCapabilities textRouteCapabilities, mediaInput messageMediaType) bool {
+	_, supported := textRouteMessageMediaContracts[routeCapabilities].mimeTypes[mediaInput]
 	return supported
 }
 
+func textRouteSupportsMessageMediaMIME(routeCapabilities textRouteCapabilities, mediaInput messageMediaType, mimeType string) bool {
+	_, supported := textRouteMessageMediaContracts[routeCapabilities].mimeTypes[mediaInput][mimeType]
+	return supported
+}
+
+func textRouteMessageMediaLimitTransport(routeCapabilities textRouteCapabilities) string {
+	return textRouteMessageMediaContracts[routeCapabilities].attachmentLimitTransport
+}
+
 func validateMessageMediaForResolvedTextRoute(provider providerDefinition, model textModelDefinition, messages chatMessages) error {
+	routeCapabilities := textRouteCapabilities{wireContract: model.wireContract, executionLifecycle: model.executionLifecycle}
 	for _, message := range messages {
 		for _, attachment := range message.attachments {
-			if !model.supportsMediaInput(attachment.mediaType) {
+			if !model.supportsMediaInput(attachment.mediaType) || !textRouteSupportsMessageMediaMIME(routeCapabilities, attachment.mediaType, attachment.mimeType) {
 				return fmt.Errorf(
-					"%w: provider=%s model=%s capability=media_input type=%s",
+					"%w: provider=%s model=%s capability=media_input type=%s mime_type=%s",
 					ErrUnsupportedCapability,
 					provider.identifier.string(),
 					model.string(),
 					attachment.mediaType,
+					attachment.mimeType,
 				)
 			}
 		}
+	}
+	return nil
+}
+
+func validateInlineMessageMediaBeforeSerialization(model textModelDefinition, messages chatMessages) error {
+	if messages.mediaCount() == 0 {
+		return nil
+	}
+	if inlineRequestBytes, bounded := boundedCatalogMediaLimit(model.mediaLimits, CatalogMediaLimitIDInlineRequestBytes, messageMediaTypeImage); bounded && messages.base64MediaBytes() > inlineRequestBytes {
+		return ErrProviderMediaLimit
+	}
+	for _, mediaType := range []messageMediaType{messageMediaTypeImage, messageMediaTypeAudio} {
+		countLimitID := CatalogMediaLimitIDImageCount
+		inlineLimitID := CatalogMediaLimitIDImageInlineBytes
+		if mediaType == messageMediaTypeAudio {
+			countLimitID = CatalogMediaLimitIDAudioCount
+			inlineLimitID = CatalogMediaLimitIDAudioInlineBytes
+		}
+		if countLimit, bounded := boundedCatalogMediaLimit(model.mediaLimits, countLimitID, mediaType); bounded && messages.mediaTypeCount(mediaType) > countLimit {
+			return ErrProviderMediaLimit
+		}
+		inlineLimit, bounded := boundedCatalogMediaLimit(model.mediaLimits, inlineLimitID, mediaType)
+		if !bounded {
+			continue
+		}
+		for _, message := range messages {
+			for _, attachment := range message.attachments {
+				attachmentBytes := attachment.sizeBytes
+				if configuredLimit, found := catalogMediaLimit(model.mediaLimits, inlineLimitID, mediaType); found && configuredLimit.Scope == CatalogMediaLimitScopeAttachmentEncodedBytes {
+					attachmentBytes = ((attachment.sizeBytes + 2) / 3) * 4
+				}
+				if attachment.mediaType == mediaType && attachmentBytes > inlineLimit {
+					return ErrProviderMediaLimit
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func validateInlineMessageMediaRequestLimit(model textModelDefinition, messages chatMessages, payloadBytes []byte) error {
+	if messages.mediaCount() == 0 {
+		return nil
+	}
+	if inlineRequestBytes, bounded := boundedCatalogMediaLimit(model.mediaLimits, CatalogMediaLimitIDInlineRequestBytes, messageMediaTypeImage); bounded && int64(len(payloadBytes)) > inlineRequestBytes {
+		return ErrProviderMediaLimit
 	}
 	return nil
 }
