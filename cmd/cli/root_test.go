@@ -36,9 +36,9 @@ func TestRootCommandRunsConfiguredProxyFromConfigFile(t *testing.T) {
 	providerValues.SiliconFlowAPIKey = ""
 	providerValues.SiliconFlowBaseURL = "https://siliconflow.example"
 	providerValues.SiliconFlowTranscriptionsURL = "https://siliconflow.example/audio/transcriptions"
-	providerValues.ZhipuAPIKey = ""
-	providerValues.ZhipuBaseURL = "https://zhipu.example"
-	providerValues.ZhipuTranscriptionsURL = "https://zhipu.example/audio/transcriptions"
+	providerValues.ZAIAPIKey = ""
+	providerValues.ZAIBaseURL = "https://zai.example"
+	providerValues.ZAITranscriptionsURL = "https://zai.example/audio/transcriptions"
 	providerValues.GeminiAPIKey = ""
 	providerValues.GeminiBaseURL = "https://gemini.example"
 	providerValues.AnthropicAPIKey = ""
@@ -189,8 +189,8 @@ P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlh
 	if capturedConfiguration.MetaKey != "" || capturedConfiguration.MetaBaseURL != "https://meta.example/v1" {
 		t.Fatalf("meta key/base URL=%q %q", capturedConfiguration.MetaKey, capturedConfiguration.MetaBaseURL)
 	}
-	if capturedConfiguration.ZhipuTranscriptionsURL != "https://zhipu.example/audio/transcriptions" {
-		t.Fatalf("zhipuTranscriptionsURL=%q", capturedConfiguration.ZhipuTranscriptionsURL)
+	if capturedConfiguration.ZAITranscriptionsURL != "https://zai.example/audio/transcriptions" {
+		t.Fatalf("zaiTranscriptionsURL=%q", capturedConfiguration.ZAITranscriptionsURL)
 	}
 	if capturedConfiguration.XAIKey != "" {
 		t.Fatalf("grokKey=%q", capturedConfiguration.XAIKey)
@@ -680,6 +680,19 @@ func TestRootCommandRejectsInvalidPublicCapabilityConfig(t *testing.T) {
 			expectedError: "field=providers",
 		},
 		{
+			name: "retired zhipu provider",
+			config: func(subTest *testing.T, tempDir string) string {
+				providerYAML := strings.Replace(completeLiteralProvidersYAML(), "\n  gemini:", `
+  zhipu:
+    api_key: "sk-zhipu"
+    base_url: "https://open.bigmodel.cn/api/paas/v4"
+    transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
+  gemini:`, 1)
+				return writeTestConfig(subTest, tempDir, "server:\n  port: 9191\n"+providerYAML)
+			},
+			expectedError: "field=providers",
+		},
+		{
 			name: "nonpositive timeout",
 			config: func(subTest *testing.T, tempDir string) string {
 				return writeTestConfig(subTest, tempDir, `server:
@@ -841,13 +854,13 @@ func TestRootCommandRejectsMissingDefaultTextProviderKeys(t *testing.T) {
 			expectedError: "provider_api_key_required: provider=minimax field=providers.minimax.api_key",
 		},
 		{
-			name:     "zhipu alias",
-			provider: providerAliasGLM,
-			model:    proxy.ModelNameZhipuGLM,
+			name:     "zai canonical",
+			provider: proxy.ProviderNameZAI,
+			model:    proxy.ModelNameZAIGLM,
 			missingKey: func(values *providerYAMLValues) {
-				values.ZhipuAPIKey = "${P411_MISSING_ZHIPU_KEY}"
+				values.ZAIAPIKey = "${P411_MISSING_ZAI_KEY}"
 			},
-			expectedError: "provider_api_key_required: provider=zhipu field=providers.zhipu.api_key",
+			expectedError: "provider_api_key_required: provider=zai field=providers.zai.api_key",
 		},
 		{
 			name:     "anthropic alias",
@@ -1174,9 +1187,9 @@ providers:
     api_key: "sk-siliconflow"
     base_url: "https://api.siliconflow.com/v1"
     transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
-  zhipu:
-    api_key: "sk-zhipu"
-    base_url: "https://open.bigmodel.cn/api/paas/v4"
+  zai:
+    api_key: "sk-zai"
+    base_url: "https://api.z.ai/api/paas/v4"
     transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
   gemini:
     api_key: ""
@@ -1215,9 +1228,9 @@ providers:
     api_key: "sk-siliconflow"
     base_url: "https://api.siliconflow.com/v1"
     transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
-  zhipu:
-    api_key: "sk-zhipu"
-    base_url: "https://open.bigmodel.cn/api/paas/v4"
+  zai:
+    api_key: "sk-zai"
+    base_url: "https://api.z.ai/api/paas/v4"
   gemini:
     api_key: "sk-gemini"
     base_url: "https://generativelanguage.googleapis.com/v1beta"
@@ -1265,9 +1278,9 @@ providers:
     api_key: "sk-siliconflow"
     base_url: "https://api.siliconflow.com/v1"
     transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
-  zhipu:
-    api_key: "sk-zhipu"
-    base_url: "https://open.bigmodel.cn/api/paas/v4"
+  zai:
+    api_key: "sk-zai"
+    base_url: "https://api.z.ai/api/paas/v4"
     transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
   gemini:
     api_key: "sk-gemini"
@@ -1306,9 +1319,9 @@ providers:
     api_key: "sk-siliconflow"
     base_url: "https://api.siliconflow.com/v1"
     transcriptions_url: ""
-  zhipu:
-    api_key: "sk-zhipu"
-    base_url: "https://open.bigmodel.cn/api/paas/v4"
+  zai:
+    api_key: "sk-zai"
+    base_url: "https://api.z.ai/api/paas/v4"
     transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
   gemini:
     api_key: "sk-gemini"
@@ -1327,7 +1340,7 @@ providers:
 			expectedError: "provider_transcriptions_url_required: provider=siliconflow field=providers.siliconflow.transcriptions_url",
 		},
 		{
-			name: "missing zhipu transcriptions url",
+			name: "missing zai transcriptions url",
 			providersYAML: `
 providers:
   openai:
@@ -1347,9 +1360,9 @@ providers:
     api_key: "sk-siliconflow"
     base_url: "https://api.siliconflow.com/v1"
     transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
-  zhipu:
-    api_key: "sk-zhipu"
-    base_url: "https://open.bigmodel.cn/api/paas/v4"
+  zai:
+    api_key: "sk-zai"
+    base_url: "https://api.z.ai/api/paas/v4"
     transcriptions_url: ""
   gemini:
     api_key: "sk-gemini"
@@ -1365,7 +1378,7 @@ providers:
     base_url: "https://api.x.ai/v1"
     transcriptions_url: "https://api.x.ai/v1/stt"
 `,
-			expectedError: "provider_transcriptions_url_required: provider=zhipu field=providers.zhipu.transcriptions_url",
+			expectedError: "provider_transcriptions_url_required: provider=zai field=providers.zai.transcriptions_url",
 		},
 		{
 			name: "missing xai transcriptions url",
@@ -1388,9 +1401,9 @@ providers:
     api_key: "sk-siliconflow"
     base_url: "https://api.siliconflow.com/v1"
     transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
-  zhipu:
-    api_key: "sk-zhipu"
-    base_url: "https://open.bigmodel.cn/api/paas/v4"
+  zai:
+    api_key: "sk-zai"
+    base_url: "https://api.z.ai/api/paas/v4"
     transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
   gemini:
     api_key: "sk-gemini"
@@ -1901,9 +1914,9 @@ type providerYAMLValues struct {
 	SiliconFlowAPIKey            string
 	SiliconFlowBaseURL           string
 	SiliconFlowTranscriptionsURL string
-	ZhipuAPIKey                  string
-	ZhipuBaseURL                 string
-	ZhipuTranscriptionsURL       string
+	ZAIAPIKey                    string
+	ZAIBaseURL                   string
+	ZAITranscriptionsURL         string
 	GeminiAPIKey                 string
 	GeminiBaseURL                string
 	AnthropicAPIKey              string
@@ -1931,9 +1944,9 @@ func defaultProviderYAMLValues() providerYAMLValues {
 		SiliconFlowAPIKey:            "sk-siliconflow",
 		SiliconFlowBaseURL:           "https://api.siliconflow.com/v1",
 		SiliconFlowTranscriptionsURL: "https://api.siliconflow.com/v1/audio/transcriptions",
-		ZhipuAPIKey:                  "sk-zhipu",
-		ZhipuBaseURL:                 "https://open.bigmodel.cn/api/paas/v4",
-		ZhipuTranscriptionsURL:       "https://api.z.ai/api/paas/v4/audio/transcriptions",
+		ZAIAPIKey:                    "sk-zai",
+		ZAIBaseURL:                   "https://api.z.ai/api/paas/v4",
+		ZAITranscriptionsURL:         "https://api.z.ai/api/paas/v4/audio/transcriptions",
 		GeminiAPIKey:                 "sk-gemini",
 		GeminiBaseURL:                "https://generativelanguage.googleapis.com/v1beta",
 		AnthropicAPIKey:              "sk-anthropic",
@@ -1969,7 +1982,7 @@ providers:
     api_key: "%s"
     base_url: "%s"
     transcriptions_url: "%s"
-  zhipu:
+  zai:
     api_key: "%s"
     base_url: "%s"
     transcriptions_url: "%s"
@@ -2001,9 +2014,9 @@ providers:
 		values.SiliconFlowAPIKey,
 		values.SiliconFlowBaseURL,
 		values.SiliconFlowTranscriptionsURL,
-		values.ZhipuAPIKey,
-		values.ZhipuBaseURL,
-		values.ZhipuTranscriptionsURL,
+		values.ZAIAPIKey,
+		values.ZAIBaseURL,
+		values.ZAITranscriptionsURL,
 		values.GeminiAPIKey,
 		values.GeminiBaseURL,
 		values.AnthropicAPIKey,

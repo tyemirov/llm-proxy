@@ -350,7 +350,7 @@ if (!this.hasSecret) {
     ],
     features: [
       ["/dictate endpoint", "Audio transcription has a public contract separate from text but shares authentication.", "The success response is JSON with a text field."],
-      ["Dictation model catalogs", "OpenAI, SiliconFlow, Zhipu, and Grok/xAI dictation models are configured explicitly.", "Unknown dictation models fail at the edge."],
+      ["Dictation model catalogs", "OpenAI, SiliconFlow, Z.AI, and Grok/xAI dictation models are configured explicitly.", "Unknown dictation models fail at the edge."],
       ["Audio size limit", "max_input_audio_bytes protects the upstream call boundary.", "Oversized audio returns a client error before routing."],
     ],
     examples: [
@@ -1334,13 +1334,13 @@ text = client.post_messages(
     slug: "dictation-provider-routing",
     category: "Dictation",
     primaryKeyword: "dictation provider routing",
-    title: "Dictation provider routing for OpenAI, Zhipu, Grok, and SiliconFlow",
+    title: "Dictation provider routing for OpenAI, Z.AI, Grok, and SiliconFlow",
     description: "Select dictation-capable providers through /dictate while keeping transcription URLs server-side.",
     audience: "Teams testing transcription providers behind one proxy endpoint.",
     problem: "Speech providers use different URLs, models, and multipart details. Client apps should not carry those differences.",
     solution: "LLM Proxy exposes dictation-capable providers through configured catalogs and provider-specific transcription URLs while preserving one /dictate endpoint.",
     steps: [
-      "Configure dictation catalogs for OpenAI, SiliconFlow, Zhipu, or xAI as needed.",
+      "Configure dictation catalogs for OpenAI, SiliconFlow, Z.AI, or xAI as needed.",
       "Send multipart audio to /dictate with key=<tenant secret>.",
       "Omit provider/model for tenant defaults or select a dictation-capable provider and model.",
       "Receive JSON text output from the proxy.",
@@ -1352,7 +1352,7 @@ text = client.post_messages(
     ],
     examples: [
       ["OpenAI default dictation", "A caller omits provider and model to use tenant dictation defaults."],
-      ["Zhipu transcription", "A caller chooses provider=zhipu when that tenant has GLM-ASR configured."],
+      ["Z.AI transcription", "A caller chooses provider=zai when that tenant has GLM-ASR configured."],
       ["xAI STT", "The proxy routes provider=xai to the configured xAI STT endpoint."],
     ],
     limitations: [
@@ -1366,19 +1366,19 @@ text = client.post_messages(
     category: "Provider routing",
     primaryKeyword: "OpenAI-compatible provider gateway",
     title: "OpenAI-compatible provider gateway",
-    description: "Route Meta Muse Spark, DeepSeek, DashScope Qwen, Kimi, MiniMax, SiliconFlow, Zhipu, and Grok text calls through one compatible adapter.",
+    description: "Route Meta Muse Spark, DeepSeek, DashScope Qwen, Kimi, MiniMax, SiliconFlow, Z.AI, and Grok text calls through one compatible adapter.",
     audience: "Teams adopting OpenAI-compatible chat providers without rewriting every caller.",
     problem: "OpenAI-compatible providers share a broad shape but still need different base URLs, keys, defaults, and availability rules.",
     solution: "LLM Proxy uses a shared compatible chat adapter for configured providers while keeping provider URLs, keys, and model catalogs in config.",
     steps: [
       "Configure provider base_url, api_key, and normalized provider offerings.",
-      "Use provider selectors such as meta, deepseek, dashscope, moonshot, minimax, siliconflow, zhipu, or xai.",
+      "Use provider selectors such as meta, deepseek, dashscope, moonshot, minimax, siliconflow, zai, or xai.",
       "Send GET, compatibility POST, or canonical /v2 requests.",
       "Let omitted model use the selected provider's configured default.",
     ],
     features: [
       ["Shared adapter", "Compatible chat providers use one proxy integration pattern.", "Provider-specific logic stays centralized."],
-      ["Provider aliases", "Some providers expose aliases such as qwen, kimi, or glm.", "Callers can use documented selectors."],
+      ["Provider aliases", "Some providers expose aliases such as qwen or kimi.", "Callers can use documented selectors."],
       ["Disabled-provider behavior", "Blank non-default provider keys keep startup working and return 503 when selected.", "Operators can stage provider support before credentials exist."],
     ],
     examples: [
@@ -2575,7 +2575,7 @@ Generated: ${currentResourceModifiedDate}
 - Direct HTTP, the official Go package, the official Python package, and the installable CLI converge on canonical POST /v2 messages for text.
 - Provider and model selection can change the supported route without replacing the application's canonical messages integration.
 - It routes text to OpenAI, Meta Muse Spark 1.1 and other OpenAI-compatible providers, Anthropic, Gemini, and Grok/xAI as documented in the provider matrix.
-- It routes dictation through /dictate for OpenAI, SiliconFlow, Zhipu, and Grok/xAI as documented.
+- It routes dictation through /dictate for OpenAI, SiliconFlow, Z.AI, and Grok/xAI as documented.
 - It keeps upstream provider API keys server-side and rejects provider-key-like fields on public proxy requests.
 - It can run a TAuth-protected self-service management UI that automatically creates a missing client key, autosaves selected-provider settings, and requires one persisted provider key before Settings can close.
 - Managed provider keys are encrypted at rest with AES-GCM; this protects storage/backups/dumps and is not a zero-knowledge guarantee.

@@ -88,7 +88,7 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 | `moonshot` | `kimi` | `openai_chat_completions` | `synchronous_completion` | Not supported | Not supported |
 | `minimax` | none | `openai_chat_completions` | `synchronous_completion` | Not supported | Not supported |
 | `siliconflow` | none | `openai_chat_completions` | `synchronous_completion` | OpenAI-compatible audio transcription | Not supported |
-| `zhipu` | `glm` | `openai_chat_completions` | `synchronous_completion` | Z.AI GLM-ASR transcription | Not supported |
+| `zai` | none | `openai_chat_completions` | `synchronous_completion` | Z.AI GLM-ASR transcription | Not supported |
 | `gemini` | none | `gemini_interactions` | Model-specific: Gemini 3.x `pollable_resource`; Gemini 2.5 `synchronous_completion` | Not supported | Not supported |
 | `anthropic` | `claude` | `anthropic_messages` | `synchronous_completion` | Not supported | Not supported |
 | `xai` | none | Model-specific: `grok-4.5` uses `openai_responses`, and other text models use `openai_chat_completions` | `synchronous_completion` | xAI STT | Not supported |
@@ -186,7 +186,7 @@ Provider credentials and base URLs:
 - `providers.moonshot.api_key`, `providers.moonshot.base_url`
 - `providers.minimax.api_key`, `providers.minimax.base_url`
 - `providers.siliconflow.api_key`, `providers.siliconflow.base_url`, `providers.siliconflow.transcriptions_url`
-- `providers.zhipu.api_key`, `providers.zhipu.base_url`, `providers.zhipu.transcriptions_url`
+- `providers.zai.api_key`, `providers.zai.base_url`, `providers.zai.transcriptions_url`
 - `providers.gemini.api_key`, `providers.gemini.base_url`
 - `providers.anthropic.api_key`, `providers.anthropic.base_url`
 - `providers.xai.api_key`, `providers.xai.base_url`, `providers.xai.transcriptions_url`
@@ -226,7 +226,7 @@ It deliberately omits sampling controls because Kimi K3 fixes those values
 upstream.
 MiniMax M2.7 maps public `max_tokens` to
 `max_completion_tokens` and carries a configured 2048-token output ceiling.
-GLM-5.2 remains on the existing BigModel/Zhipu Chat Completions endpoint. Its
+GLM-5.2 uses the international Z.AI Chat Completions endpoint. Its
 128K output maximum is catalog metadata; optional `thinking` and
 provider-native `reasoning_effort` controls are not exposed directly. The
 canonical proxy `reasoning_effort` request field is validated against the exact
@@ -402,7 +402,7 @@ non-user-content inference through the provider's canonical text transport:
   `background: false`, `store: false`, and a 16-token output limit.
 - xAI synchronous Responses uses one `POST /responses` at the selected xAI
   base URL. It sends `store: false` and a 16-token output limit.
-- DeepSeek, DashScope, Moonshot, MiniMax, SiliconFlow, Zhipu, Meta, and xAI
+- DeepSeek, DashScope, Moonshot, MiniMax, SiliconFlow, Z.AI, Meta, and xAI
   Chat Completions models use one authenticated `POST /chat/completions`.
   The request uses the provider's declared token-limit parameter.
 - Gemini uses one synchronous, non-stored `POST /interactions` request with
@@ -488,6 +488,22 @@ The bounded schema-version-5 migration converts stored provider-native model
 values to canonical exact model identifiers. It updates affected provider
 settings and tenant defaults. It preserves tenant timestamps and historical
 usage records. Current-version startup rejects invalid canonical routes.
+
+The bounded schema-version-6 migration replaces the retired `grok` provider
+identity with `xai`. The bounded schema-version-7 migration adds the managed
+provider base URL field and removes incomplete DashScope settings that have no
+tenant-owned Singapore workspace URL. Each transaction preserves tenant
+timestamps and historical usage records.
+
+The bounded schema-version-8 migration replaces the retired `zhipu` provider
+identity with `zai`. Preflight decrypts every affected key with its existing
+tenant and `zhipu` identity. It validates the projected canonical routes. It
+rejects conflicts, corrupt ciphertext, noncanonical identifiers, and retired
+base URLs. One transaction re-encrypts each key with the same tenant and `zai`
+identity. The transaction updates provider settings and current routing
+defaults. It verifies timestamps and historical usage records before it records
+the new schema version.
+Current-version startup rejects `zhipu`, `glm`, and other noncanonical routes.
 
 `server.workers` limits concurrent upstream provider HTTP operations, not whole
 client request lifecycles. `server.queue_size` limits the number of additional
@@ -701,7 +717,7 @@ that response or structured provider-failure logs.
   `model_output` steps, and system messages as `system_instruction`.
 - OpenAI-compatible Chat Completions adapters remain text-only and reject media declarations at startup.
 - OpenAI Responses receives text-only single prompts unchanged. Requests with images use role-preserving typed content blocks.
-- Dictation routing reuses the multipart transcription adapter with provider-specific URLs. OpenAI, SiliconFlow, and Zhipu send a multipart `model` field. xAI STT omits the multipart `model` field. Only providers that support `/dictate` expose transcription URL config fields.
+- Dictation routing reuses the multipart transcription adapter with provider-specific URLs. OpenAI, SiliconFlow, and Z.AI send a multipart `model` field. xAI STT omits the multipart `model` field. Only providers that support `/dictate` expose transcription URL config fields.
 - Response formatting keeps existing text/XML/CSV bodies and existing JSON `request`, `response`, and normalized `usage` fields. JSON responses also include OpenRouter-style `object`, `model`, and `choices[].message.content` metadata, plus caller-visible request `messages` with provided `order` values. Server-injected tenant default system prompts are sent upstream but not echoed in response metadata.
 
 ## Test Strategy

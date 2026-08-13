@@ -1532,8 +1532,10 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 
 	var profilePayload struct {
 		Providers []struct {
-			ID               string `json:"id"`
-			TextDefaultModel string `json:"text_default_model"`
+			ID               string   `json:"id"`
+			Label            string   `json:"label"`
+			Aliases          []string `json:"aliases"`
+			TextDefaultModel string   `json:"text_default_model"`
 			TextModels       []struct {
 				ID string `json:"id"`
 			} `json:"text_models"`
@@ -1544,6 +1546,8 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 	}
 	modelsByProvider := map[string][]string{}
 	textDefaultsByProvider := map[string]string{}
+	labelsByProvider := map[string]string{}
+	aliasesByProvider := map[string][]string{}
 	for _, provider := range profilePayload.Providers {
 		models := make([]string, 0, len(provider.TextModels))
 		for _, model := range provider.TextModels {
@@ -1551,13 +1555,23 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 		}
 		modelsByProvider[provider.ID] = models
 		textDefaultsByProvider[provider.ID] = provider.TextDefaultModel
+		labelsByProvider[provider.ID] = provider.Label
+		aliasesByProvider[provider.ID] = provider.Aliases
+	}
+	if labelsByProvider[proxy.ProviderNameZAI] != "Z.AI" || len(aliasesByProvider[proxy.ProviderNameZAI]) != 0 {
+		t.Fatalf("Z.AI profile label=%q aliases=%v", labelsByProvider[proxy.ProviderNameZAI], aliasesByProvider[proxy.ProviderNameZAI])
+	}
+	for _, retiredProvider := range []string{"zhipu", "glm"} {
+		if _, found := modelsByProvider[retiredProvider]; found {
+			t.Fatalf("profile exposes retired provider=%s", retiredProvider)
+		}
 	}
 	expectedModels := map[string][]string{
 		proxy.ProviderNameOpenAI:    {"gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"},
 		proxy.ProviderNameDashScope: {proxy.ModelNameDashScopeQwenPlus},
 		proxy.ProviderNameMoonshot:  {proxy.ModelNameMoonshotKimiK26, proxy.ModelNameMoonshotKimiK27Code, proxy.ModelNameMoonshotKimiK27CodeHighSpeed, proxy.ModelNameMoonshotKimiK3},
 		proxy.ProviderNameMiniMax:   {proxy.ModelNameMiniMaxM27},
-		proxy.ProviderNameZhipu:     {"glm-5.2"},
+		proxy.ProviderNameZAI:       {"glm-5.2"},
 		proxy.ProviderNameGemini:    {"gemini-3.1-pro-preview", "gemini-3-flash-preview"},
 		proxy.ProviderNameAnthropic: {"claude-fable-5", "claude-sonnet-5"},
 		proxy.ProviderNameXAI:       {"grok-4.5", "grok-4.20-0309-reasoning", "grok-4.20-0309-non-reasoning"},

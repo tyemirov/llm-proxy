@@ -23,7 +23,6 @@ const (
 const (
 	providerAliasQwen   = "qwen"
 	providerAliasKimi   = "kimi"
-	providerAliasGLM    = "glm"
 	providerAliasClaude = "claude"
 )
 
@@ -118,7 +117,7 @@ type providersConfiguration struct {
 	Moonshot    providerConfiguration             `mapstructure:"moonshot"`
 	MiniMax     providerConfiguration             `mapstructure:"minimax"`
 	SiliconFlow transcribingProviderConfiguration `mapstructure:"siliconflow"`
-	Zhipu       transcribingProviderConfiguration `mapstructure:"zhipu"`
+	ZAI         transcribingProviderConfiguration `mapstructure:"zai"`
 	Gemini      providerConfiguration             `mapstructure:"gemini"`
 	Anthropic   providerConfiguration             `mapstructure:"anthropic"`
 	Meta        providerConfiguration             `mapstructure:"meta"`
@@ -286,7 +285,7 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		MoonshotKey:                  configuration.Providers.Moonshot.APIKey,
 		MiniMaxKey:                   configuration.Providers.MiniMax.APIKey,
 		SiliconFlowKey:               configuration.Providers.SiliconFlow.APIKey,
-		ZhipuKey:                     configuration.Providers.Zhipu.APIKey,
+		ZAIKey:                       configuration.Providers.ZAI.APIKey,
 		GeminiKey:                    configuration.Providers.Gemini.APIKey,
 		AnthropicKey:                 configuration.Providers.Anthropic.APIKey,
 		MetaKey:                      configuration.Providers.Meta.APIKey,
@@ -299,8 +298,8 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		MiniMaxBaseURL:               configuration.Providers.MiniMax.BaseURL,
 		SiliconFlowBaseURL:           configuration.Providers.SiliconFlow.BaseURL,
 		SiliconFlowTranscriptionsURL: configuration.Providers.SiliconFlow.TranscriptionsURL,
-		ZhipuBaseURL:                 configuration.Providers.Zhipu.BaseURL,
-		ZhipuTranscriptionsURL:       configuration.Providers.Zhipu.TranscriptionsURL,
+		ZAIBaseURL:                   configuration.Providers.ZAI.BaseURL,
+		ZAITranscriptionsURL:         configuration.Providers.ZAI.TranscriptionsURL,
 		GeminiBaseURL:                configuration.Providers.Gemini.BaseURL,
 		AnthropicBaseURL:             configuration.Providers.Anthropic.BaseURL,
 		MetaBaseURL:                  configuration.Providers.Meta.BaseURL,
@@ -393,7 +392,7 @@ func (configuration providersConfiguration) validateCompleteProviderConfiguratio
 		{providerName: proxy.ProviderNameMoonshot, fieldName: "providers.moonshot.base_url", baseURL: configuration.Moonshot.BaseURL},
 		{providerName: proxy.ProviderNameMiniMax, fieldName: "providers.minimax.base_url", baseURL: configuration.MiniMax.BaseURL},
 		{providerName: proxy.ProviderNameSiliconFlow, fieldName: "providers.siliconflow.base_url", baseURL: configuration.SiliconFlow.BaseURL},
-		{providerName: proxy.ProviderNameZhipu, fieldName: "providers.zhipu.base_url", baseURL: configuration.Zhipu.BaseURL},
+		{providerName: proxy.ProviderNameZAI, fieldName: "providers.zai.base_url", baseURL: configuration.ZAI.BaseURL},
 		{providerName: proxy.ProviderNameGemini, fieldName: "providers.gemini.base_url", baseURL: configuration.Gemini.BaseURL},
 		{providerName: proxy.ProviderNameAnthropic, fieldName: "providers.anthropic.base_url", baseURL: configuration.Anthropic.BaseURL},
 		{providerName: proxy.ProviderNameMeta, fieldName: "providers.meta.base_url", baseURL: configuration.Meta.BaseURL},
@@ -412,7 +411,7 @@ func (configuration providersConfiguration) validateCompleteProviderConfiguratio
 	}{
 		{providerName: proxy.ProviderNameOpenAI, fieldName: "providers.openai.transcriptions_url", transcriptionsURL: configuration.OpenAI.TranscriptionsURL},
 		{providerName: proxy.ProviderNameSiliconFlow, fieldName: "providers.siliconflow.transcriptions_url", transcriptionsURL: configuration.SiliconFlow.TranscriptionsURL},
-		{providerName: proxy.ProviderNameZhipu, fieldName: "providers.zhipu.transcriptions_url", transcriptionsURL: configuration.Zhipu.TranscriptionsURL},
+		{providerName: proxy.ProviderNameZAI, fieldName: "providers.zai.transcriptions_url", transcriptionsURL: configuration.ZAI.TranscriptionsURL},
 		{providerName: proxy.ProviderNameXAI, fieldName: "providers.xai.transcriptions_url", transcriptionsURL: configuration.XAI.TranscriptionsURL},
 	}
 	for _, requiredTranscriptionsURL := range requiredTranscriptionsURLs {
@@ -449,7 +448,7 @@ func (configuration providersConfiguration) dictationAPIKeyRequirement(rawProvid
 		normalizedProvider = proxy.ProviderNameOpenAI
 	}
 	switch normalizedProvider {
-	case proxy.ProviderNameOpenAI, proxy.ProviderNameSiliconFlow, proxy.ProviderNameZhipu, providerAliasGLM, proxy.ProviderNameXAI:
+	case proxy.ProviderNameOpenAI, proxy.ProviderNameSiliconFlow, proxy.ProviderNameZAI, proxy.ProviderNameXAI:
 		return configuration.apiKeyRequirement(normalizedProvider)
 	default:
 		return providerAPIKeyRequirement{}, false
@@ -470,8 +469,8 @@ func (configuration providersConfiguration) apiKeyRequirement(normalizedProvider
 		return providerAPIKeyRequirement{providerName: proxy.ProviderNameMiniMax, fieldName: "providers.minimax.api_key", apiKey: configuration.MiniMax.APIKey}, true
 	case proxy.ProviderNameSiliconFlow:
 		return providerAPIKeyRequirement{providerName: proxy.ProviderNameSiliconFlow, fieldName: "providers.siliconflow.api_key", apiKey: configuration.SiliconFlow.APIKey}, true
-	case proxy.ProviderNameZhipu, providerAliasGLM:
-		return providerAPIKeyRequirement{providerName: proxy.ProviderNameZhipu, fieldName: "providers.zhipu.api_key", apiKey: configuration.Zhipu.APIKey}, true
+	case proxy.ProviderNameZAI:
+		return providerAPIKeyRequirement{providerName: proxy.ProviderNameZAI, fieldName: "providers.zai.api_key", apiKey: configuration.ZAI.APIKey}, true
 	case proxy.ProviderNameGemini:
 		return providerAPIKeyRequirement{providerName: proxy.ProviderNameGemini, fieldName: "providers.gemini.api_key", apiKey: configuration.Gemini.APIKey}, true
 	case proxy.ProviderNameAnthropic, providerAliasClaude:

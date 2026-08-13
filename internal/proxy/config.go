@@ -59,7 +59,7 @@ type Configuration struct {
 	MoonshotKey                  string
 	MiniMaxKey                   string
 	SiliconFlowKey               string
-	ZhipuKey                     string
+	ZAIKey                       string
 	GeminiKey                    string
 	AnthropicKey                 string
 	MetaKey                      string
@@ -72,8 +72,8 @@ type Configuration struct {
 	MiniMaxBaseURL               string
 	SiliconFlowBaseURL           string
 	SiliconFlowTranscriptionsURL string
-	ZhipuBaseURL                 string
-	ZhipuTranscriptionsURL       string
+	ZAIBaseURL                   string
+	ZAITranscriptionsURL         string
 	GeminiBaseURL                string
 	AnthropicBaseURL             string
 	MetaBaseURL                  string
@@ -221,7 +221,7 @@ func (configuration *Configuration) ApplyTunables() {
 	configuration.MoonshotKey = strings.TrimSpace(configuration.MoonshotKey)
 	configuration.MiniMaxKey = strings.TrimSpace(configuration.MiniMaxKey)
 	configuration.SiliconFlowKey = strings.TrimSpace(configuration.SiliconFlowKey)
-	configuration.ZhipuKey = strings.TrimSpace(configuration.ZhipuKey)
+	configuration.ZAIKey = strings.TrimSpace(configuration.ZAIKey)
 	configuration.GeminiKey = strings.TrimSpace(configuration.GeminiKey)
 	configuration.AnthropicKey = strings.TrimSpace(configuration.AnthropicKey)
 	configuration.MetaKey = strings.TrimSpace(configuration.MetaKey)
@@ -283,13 +283,13 @@ func (configuration *Configuration) ApplyTunables() {
 	if strings.TrimSpace(configuration.SiliconFlowTranscriptionsURL) == constants.EmptyString {
 		configuration.SiliconFlowTranscriptionsURL = strings.TrimRight(configuration.SiliconFlowBaseURL, "/") + "/audio/transcriptions"
 	}
-	configuration.ZhipuBaseURL = strings.TrimSpace(configuration.ZhipuBaseURL)
-	if strings.TrimSpace(configuration.ZhipuBaseURL) == constants.EmptyString {
-		configuration.ZhipuBaseURL = defaultZhipuBaseURL
+	configuration.ZAIBaseURL = strings.TrimSpace(configuration.ZAIBaseURL)
+	if strings.TrimSpace(configuration.ZAIBaseURL) == constants.EmptyString {
+		configuration.ZAIBaseURL = defaultZAIBaseURL
 	}
-	configuration.ZhipuTranscriptionsURL = strings.TrimSpace(configuration.ZhipuTranscriptionsURL)
-	if strings.TrimSpace(configuration.ZhipuTranscriptionsURL) == constants.EmptyString {
-		configuration.ZhipuTranscriptionsURL = defaultZhipuTranscriptionsURL
+	configuration.ZAITranscriptionsURL = strings.TrimSpace(configuration.ZAITranscriptionsURL)
+	if strings.TrimSpace(configuration.ZAITranscriptionsURL) == constants.EmptyString {
+		configuration.ZAITranscriptionsURL = defaultZAITranscriptionsURL
 	}
 	configuration.GeminiBaseURL = strings.TrimSpace(configuration.GeminiBaseURL)
 	if strings.TrimSpace(configuration.GeminiBaseURL) == constants.EmptyString {

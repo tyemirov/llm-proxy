@@ -10,7 +10,7 @@ func internalTestModelCatalog(offerings ...ProviderOffering) ModelCatalog {
 		{ID: ProviderNameMoonshot, Label: "Moonshot", CredentialKinds: []string{CatalogCredentialAPIKey}},
 		{ID: ProviderNameMiniMax, Label: "MiniMax", CredentialKinds: []string{CatalogCredentialAPIKey}},
 		{ID: ProviderNameSiliconFlow, Label: "SiliconFlow", CredentialKinds: []string{CatalogCredentialAPIKey}},
-		{ID: ProviderNameZhipu, Label: "Zhipu", CredentialKinds: []string{CatalogCredentialAPIKey}},
+		{ID: ProviderNameZAI, Label: "Z.AI", CredentialKinds: []string{CatalogCredentialAPIKey}},
 		{ID: ProviderNameGemini, Label: "Gemini", CredentialKinds: []string{CatalogCredentialAPIKey}},
 		{ID: ProviderNameAnthropic, Label: "Anthropic", CredentialKinds: []string{CatalogCredentialAPIKey}},
 		{ID: ProviderNameMeta, Label: "Meta", CredentialKinds: []string{CatalogCredentialAPIKey}},

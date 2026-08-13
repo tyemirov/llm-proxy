@@ -26,13 +26,13 @@ The endpoint returns `400`, `403`, `413`, `429`, `499`, `502`, `503`, or `504` w
 |---|---|---|
 | `openai` | `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | `providers.openai.transcriptions_url` |
 | `siliconflow` | `sensevoice-small` | `providers.siliconflow.transcriptions_url` |
-| `zhipu` or `glm` | `glm-asr-2512` | `providers.zhipu.transcriptions_url` |
+| `zai` | `glm-asr-2512` | `providers.zai.transcriptions_url` |
 | `xai` | `xai-stt` | `providers.xai.transcriptions_url` |
 
 OpenAI is the default dictation provider. Its default model is `gpt-4o-mini-transcribe`.
 The selected provider supplies its configured transcription URL and server-side API key.
 
-OpenAI, SiliconFlow, and Zhipu receive the selected model in the upstream multipart request.
+OpenAI, SiliconFlow, and Z.AI receive the selected model in the upstream multipart request.
 xAI uses its configured STT endpoint and does not receive an upstream multipart model field.
 
 The adapter accepts nonblank upstream `text`, `transcript`, or `output_text` JSON fields.

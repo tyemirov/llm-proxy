@@ -48,11 +48,14 @@ const (
 	managedQwenCloudRetirementVersion     = 4
 	managedModelIdentitySchemaVersion     = 5
 	managedXAIProviderSchemaVersion       = 6
-	managedTenantSchemaVersion            = 7
+	managedDashScopeSettingsSchemaVersion = 7
+	managedZAIProviderSchemaVersion       = 8
+	managedTenantSchemaVersion            = managedZAIProviderSchemaVersion
 	managedSQLiteRuntimeQuery             = "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)"
 	retiredQwenCloudProviderIdentifier    = "qwencloud"
 	retiredQwenCloudModelIdentifier       = "qwen3.8-max-preview"
 	retiredGrokProviderIdentifier         = "grok"
+	retiredZhipuProviderIdentifier        = "zhipu"
 	managedMiniMaxNativeModel             = "MiniMax-M2.7"
 	managedSiliconFlowDeepSeekNativeModel = "deepseek-ai/DeepSeek-R1"
 	managedSenseVoiceNativeModel          = "FunAudioLLM/SenseVoiceSmall"
@@ -582,8 +585,18 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 			!migrator.HasIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex) {
 			return fmt.Errorf("%w: operation=validate_current_schema table=%s", errManagedTenantSchemaMigration, managedUsageEventTable)
 		}
-		return migrateManagedDashScopeSettings(database, providerKeyCipher, providers)
-	case managedTenantSchemaVersion:
+		if migrationError := migrateManagedDashScopeSettings(database, providerKeyCipher, providers); migrationError != nil {
+			return migrationError
+		}
+		return migrateManagedZAIProvider(database, providerKeyCipher, providers)
+	case managedDashScopeSettingsSchemaVersion:
+		if !managedTableHasColumn(migrator, managedUsageEventTable, managedUsageOutcomeCodeColumn) ||
+			!migrator.HasIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex) ||
+			!managedTableHasColumn(migrator, managedProviderKeyTable, managedProviderBaseURLColumn) {
+			return fmt.Errorf("%w: operation=validate_current_schema table=%s", errManagedTenantSchemaMigration, managedProviderKeyTable)
+		}
+		return migrateManagedZAIProvider(database, providerKeyCipher, providers)
+	case managedZAIProviderSchemaVersion:
 		if !managedTableHasColumn(migrator, managedUsageEventTable, managedUsageOutcomeCodeColumn) ||
 			!migrator.HasIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex) ||
 			!managedTableHasColumn(migrator, managedProviderKeyTable, managedProviderBaseURLColumn) {
@@ -606,7 +619,10 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 	if migrationError := migrateManagedXAIProvider(database, providerKeyCipher, providers); migrationError != nil {
 		return migrationError
 	}
-	return migrateManagedDashScopeSettings(database, providerKeyCipher, providers)
+	if migrationError := migrateManagedDashScopeSettings(database, providerKeyCipher, providers); migrationError != nil {
+		return migrationError
+	}
+	return migrateManagedZAIProvider(database, providerKeyCipher, providers)
 }
 
 type managedUsageOutcomeBackfill struct {
@@ -993,7 +1009,7 @@ func preflightManagedModelIdentity(database *gorm.DB, providerKeyCipher managedP
 			return managedModelIdentityDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedProviderKeyTable, record.OwnerUserID, record.TenantID, providerSettingsError)
 		}
 		modelIdentityDefaults, defaultsChanged := canonicalManagedTenantDefaults(record.defaults())
-		projectedDefaults, _ := canonicalManagedXAIProviderDefaults(modelIdentityDefaults)
+		projectedDefaults, _ := canonicalManagedPredecessorDefaults(modelIdentityDefaults)
 		_, defaultsError := validatePersistedManagedRoutingDefaults(providers, providerSettings, projectedDefaults)
 		if defaultsError != nil {
 			return managedModelIdentityDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, record.OwnerUserID, record.TenantID, defaultsError)
@@ -1038,8 +1054,9 @@ func canonicalManagedTenantDefaults(defaults TenantDefaults) (TenantDefaults, bo
 
 func canonicalManagedPredecessorDefaults(defaults TenantDefaults) (TenantDefaults, bool) {
 	modelIdentityDefaults, modelIdentityChanged := canonicalManagedTenantDefaults(defaults)
-	currentDefaults, providerChanged := canonicalManagedXAIProviderDefaults(modelIdentityDefaults)
-	return currentDefaults, modelIdentityChanged || providerChanged
+	xaiDefaults, xaiProviderChanged := canonicalManagedXAIProviderDefaults(modelIdentityDefaults)
+	currentDefaults, zaiProviderChanged := canonicalManagedZAIProviderDefaults(xaiDefaults)
+	return currentDefaults, modelIdentityChanged || xaiProviderChanged || zaiProviderChanged
 }
 
 func managedModelIdentityHistoricalUsage(database *gorm.DB) ([]managedUsageEventRecord, error) {
@@ -1153,13 +1170,14 @@ func preflightManagedXAIProviderWithReader(database *gorm.DB, providerKeyCipher 
 			return managedXAIProviderDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedProviderKeyTable, record.OwnerUserID, record.TenantID, providerSettingsError)
 		}
 		defaults, defaultsChanged := canonicalManagedXAIProviderDefaults(record.defaults())
-		validatedDefaults, defaultsError := validatePersistedManagedRoutingDefaults(providers, providerSettings, defaults)
+		projectedDefaults, _ := canonicalManagedZAIProviderDefaults(defaults)
+		_, defaultsError := validatePersistedManagedRoutingDefaults(providers, providerSettings, projectedDefaults)
 		if defaultsError != nil {
 			return managedXAIProviderDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, record.OwnerUserID, record.TenantID, defaultsError)
 		}
 		if defaultsChanged {
 			dataset.tenants = append(dataset.tenants, managedXAITenantBackfill{
-				tenantID: record.TenantID, defaults: validatedDefaults, updatedAt: record.UpdatedAt,
+				tenantID: record.TenantID, defaults: managedRoutingDefaults{tenantDefaults: defaults}, updatedAt: record.UpdatedAt,
 			})
 		}
 	}
@@ -1270,7 +1288,7 @@ func migrateManagedDashScopeSettings(database *gorm.DB, providerKeyCipher manage
 		if verifyError := verifyManagedDashScopeSettingsMigration(transaction, providerKeyCipher, providers, dataset); verifyError != nil {
 			return verifyError
 		}
-		if createError := transaction.Create(&managedSchemaMigrationRecord{Version: managedTenantSchemaVersion, AppliedAt: time.Now().UTC()}).Error; createError != nil {
+		if createError := transaction.Create(&managedSchemaMigrationRecord{Version: managedDashScopeSettingsSchemaVersion, AppliedAt: time.Now().UTC()}).Error; createError != nil {
 			return fmt.Errorf("%w: operation=record_version table=%s: %v", errManagedTenantSchemaMigration, managedSchemaMigrationTable, createError)
 		}
 		return nil
@@ -1292,11 +1310,12 @@ func preflightManagedDashScopeSettings(database *gorm.DB, providerKeyCipher mana
 			}
 			remainingProviderKeys = append(remainingProviderKeys, providerKeyRecord)
 		}
-		providerSettings, providerSettingsError := managedProviderSettingsFromRecords(providerKeyCipher, remainingProviderKeys)
+		providerSettings, providerSettingsError := managedProviderSettingsFromPredecessorRecords(providerKeyCipher, remainingProviderKeys)
 		if providerSettingsError != nil {
 			return managedDashScopeSettingsMigrationDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedProviderKeyTable, record.OwnerUserID, record.TenantID, providerSettingsError)
 		}
-		currentDefaults, defaultsError := validateCanonicalManagedRoutingDefaults(providers, record.defaults())
+		projectedDefaults, _ := canonicalManagedZAIProviderDefaults(record.defaults())
+		currentDefaults, defaultsError := validateCanonicalManagedRoutingDefaults(providers, projectedDefaults)
 		if defaultsError != nil {
 			return managedDashScopeSettingsMigrationDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, record.OwnerUserID, record.TenantID, defaultsError)
 		}
@@ -1337,7 +1356,7 @@ func verifyManagedDashScopeSettingsMigration(database *gorm.DB, providerKeyCiphe
 			return fmt.Errorf("%w: operation=verify table=%s tenant=%s values", errManagedTenantSchemaMigration, managedTenantTable, backfill.tenantID)
 		}
 	}
-	if validationError := validateManagedKeyedRoutingDefaults(database, providerKeyCipher, providers); validationError != nil {
+	if validationError := validateManagedPendingRouteIdentities(database, providerKeyCipher, providers); validationError != nil {
 		return validationError
 	}
 	historicalUsage, usageError := managedDashScopeHistoricalUsage(database)
@@ -1354,6 +1373,194 @@ func managedDashScopeHistoricalUsage(database *gorm.DB) ([]managedUsageEventReco
 	var historicalUsage []managedUsageEventRecord
 	if queryError := database.Where(&managedUsageEventRecord{ProviderID: ProviderNameDashScope}).Order("id").Find(&historicalUsage).Error; queryError != nil {
 		return nil, fmt.Errorf("%w: operation=read table=%s provider=%s: %v", errManagedTenantSchemaMigration, managedUsageEventTable, ProviderNameDashScope, queryError)
+	}
+	return historicalUsage, nil
+}
+
+type managedZAIProviderKeyBackfill struct {
+	record managedProviderAPIKeyRecord
+	apiKey string
+}
+
+type managedZAITenantBackfill struct {
+	tenantID  string
+	defaults  managedRoutingDefaults
+	updatedAt time.Time
+}
+
+type managedZAIProviderDataset struct {
+	providerKeys    []managedZAIProviderKeyBackfill
+	tenants         []managedZAITenantBackfill
+	historicalUsage []managedUsageEventRecord
+}
+
+func migrateManagedZAIProvider(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry) error {
+	dataset, preflightError := preflightManagedZAIProvider(database, providerKeyCipher, providers)
+	if preflightError != nil {
+		return preflightError
+	}
+	return database.Transaction(func(transaction *gorm.DB) error {
+		for _, backfill := range dataset.providerKeys {
+			result := transaction.Model(&managedProviderAPIKeyRecord{}).
+				Where(&managedProviderAPIKeyRecord{TenantID: backfill.record.TenantID, ProviderID: retiredZhipuProviderIdentifier}).
+				UpdateColumns(map[string]any{
+					"provider_id":       backfill.record.ProviderID,
+					"encrypted_api_key": backfill.record.EncryptedAPIKey,
+				})
+			if result.Error != nil || result.RowsAffected != 1 {
+				return fmt.Errorf("%w: operation=backfill table=%s tenant=%s provider=%s rows=%d: %v", errManagedTenantSchemaMigration, managedProviderKeyTable, backfill.record.TenantID, retiredZhipuProviderIdentifier, result.RowsAffected, result.Error)
+			}
+		}
+		for _, backfill := range dataset.tenants {
+			result := transaction.Model(&managedTenantRecord{}).
+				Where(&managedTenantRecord{TenantID: backfill.tenantID}).
+				Updates(managedRoutingDefaultsDatabaseUpdates(backfill.defaults, backfill.updatedAt))
+			if result.Error != nil || result.RowsAffected != 1 {
+				return fmt.Errorf("%w: operation=backfill table=%s tenant=%s rows=%d: %v", errManagedTenantSchemaMigration, managedTenantTable, backfill.tenantID, result.RowsAffected, result.Error)
+			}
+		}
+		if verifyError := verifyManagedZAIProviderMigration(transaction, providerKeyCipher, providers, dataset); verifyError != nil {
+			return verifyError
+		}
+		if createError := transaction.Create(&managedSchemaMigrationRecord{Version: managedZAIProviderSchemaVersion, AppliedAt: time.Now().UTC()}).Error; createError != nil {
+			return fmt.Errorf("%w: operation=record_version table=%s: %v", errManagedTenantSchemaMigration, managedSchemaMigrationTable, createError)
+		}
+		return nil
+	})
+}
+
+func preflightManagedZAIProvider(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry) (managedZAIProviderDataset, error) {
+	return preflightManagedZAIProviderWithReader(database, providerKeyCipher, providers, rand.Reader)
+}
+
+func preflightManagedZAIProviderWithReader(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry, randomReader io.Reader) (managedZAIProviderDataset, error) {
+	records, queryError := managedTenantRecordsForRoutingValidation(database)
+	if queryError != nil {
+		return managedZAIProviderDataset{}, queryError
+	}
+	dataset := managedZAIProviderDataset{
+		providerKeys: make([]managedZAIProviderKeyBackfill, 0),
+		tenants:      make([]managedZAITenantBackfill, 0),
+	}
+	for recordIndex := range records {
+		record := &records[recordIndex]
+		hasRetiredProvider := false
+		hasCanonicalProvider := false
+		for _, providerKey := range record.ProviderAPIKeys {
+			normalizedProvider := newProviderID(providerKey.ProviderID).string()
+			if (normalizedProvider == retiredZhipuProviderIdentifier || normalizedProvider == ProviderNameZAI) && providerKey.ProviderID != normalizedProvider {
+				return managedZAIProviderDataset{}, fmt.Errorf("%w: operation=preflight table=%s tenant=%s provider=%s reason=not_canonical", errManagedTenantSchemaMigration, managedProviderKeyTable, record.TenantID, providerKey.ProviderID)
+			}
+			hasRetiredProvider = hasRetiredProvider || providerKey.ProviderID == retiredZhipuProviderIdentifier
+			hasCanonicalProvider = hasCanonicalProvider || providerKey.ProviderID == ProviderNameZAI
+		}
+		if hasRetiredProvider && hasCanonicalProvider {
+			return managedZAIProviderDataset{}, fmt.Errorf("%w: operation=preflight table=%s tenant=%s provider_conflict=%s:%s", errManagedTenantSchemaMigration, managedProviderKeyTable, record.TenantID, retiredZhipuProviderIdentifier, ProviderNameZAI)
+		}
+		for providerKeyIndex := range record.ProviderAPIKeys {
+			providerKey := &record.ProviderAPIKeys[providerKeyIndex]
+			if providerKey.ProviderID != retiredZhipuProviderIdentifier {
+				continue
+			}
+			if strings.TrimSpace(providerKey.BaseURL) != constants.EmptyString {
+				return managedZAIProviderDataset{}, fmt.Errorf("%w: operation=preflight table=%s tenant=%s provider=%s field=base_url reason=not_canonical", errManagedTenantSchemaMigration, managedProviderKeyTable, record.TenantID, retiredZhipuProviderIdentifier)
+			}
+			apiKey, decryptError := providerKeyCipher.decrypt(*providerKey)
+			if decryptError != nil {
+				return managedZAIProviderDataset{}, fmt.Errorf("%w: operation=preflight table=%s tenant=%s provider=%s: %v", errManagedTenantSchemaMigration, managedProviderKeyTable, record.TenantID, retiredZhipuProviderIdentifier, decryptError)
+			}
+			encryptedAPIKey, encryptionError := providerKeyCipher.encrypt(randomReader, record.TenantID, ProviderNameZAI, apiKey)
+			if encryptionError != nil {
+				return managedZAIProviderDataset{}, fmt.Errorf("%w: operation=preflight table=%s tenant=%s provider=%s: %v", errManagedTenantSchemaMigration, managedProviderKeyTable, record.TenantID, retiredZhipuProviderIdentifier, encryptionError)
+			}
+			providerKey.ProviderID = ProviderNameZAI
+			providerKey.EncryptedAPIKey = encryptedAPIKey
+			dataset.providerKeys = append(dataset.providerKeys, managedZAIProviderKeyBackfill{record: *providerKey, apiKey: apiKey})
+		}
+		providerSettings, providerSettingsError := managedProviderSettingsFromRecords(providerKeyCipher, record.ProviderAPIKeys)
+		if providerSettingsError != nil {
+			return managedZAIProviderDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedProviderKeyTable, record.OwnerUserID, record.TenantID, providerSettingsError)
+		}
+		defaults, defaultsChanged := canonicalManagedZAIProviderDefaults(record.defaults())
+		validatedDefaults, defaultsError := validatePersistedManagedRoutingDefaults(providers, providerSettings, defaults)
+		if defaultsError != nil {
+			return managedZAIProviderDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, record.OwnerUserID, record.TenantID, defaultsError)
+		}
+		if defaultsChanged {
+			dataset.tenants = append(dataset.tenants, managedZAITenantBackfill{
+				tenantID: record.TenantID, defaults: validatedDefaults, updatedAt: record.UpdatedAt,
+			})
+		}
+	}
+	historicalUsage, usageError := managedZAIHistoricalUsage(database)
+	if usageError != nil {
+		return managedZAIProviderDataset{}, usageError
+	}
+	dataset.historicalUsage = historicalUsage
+	return dataset, nil
+}
+
+func canonicalManagedZAIProviderDefaults(defaults TenantDefaults) (TenantDefaults, bool) {
+	changed := false
+	if defaults.Provider == retiredZhipuProviderIdentifier {
+		defaults.Provider = ProviderNameZAI
+		changed = true
+	}
+	if defaults.DictationProvider == retiredZhipuProviderIdentifier {
+		defaults.DictationProvider = ProviderNameZAI
+		changed = true
+	}
+	return defaults, changed
+}
+
+func verifyManagedZAIProviderMigration(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry, dataset managedZAIProviderDataset) error {
+	var retiredProviderKeyCount int64
+	if countError := database.Model(&managedProviderAPIKeyRecord{}).
+		Where(&managedProviderAPIKeyRecord{ProviderID: retiredZhipuProviderIdentifier}).
+		Count(&retiredProviderKeyCount).
+		Error; countError != nil || retiredProviderKeyCount != 0 {
+		return fmt.Errorf("%w: operation=verify table=%s provider=%s count=%d: %v", errManagedTenantSchemaMigration, managedProviderKeyTable, retiredZhipuProviderIdentifier, retiredProviderKeyCount, countError)
+	}
+	for _, expected := range dataset.providerKeys {
+		var actual managedProviderAPIKeyRecord
+		if queryError := database.Where(&managedProviderAPIKeyRecord{TenantID: expected.record.TenantID, ProviderID: ProviderNameZAI}).First(&actual).Error; queryError != nil {
+			return fmt.Errorf("%w: operation=verify table=%s tenant=%s provider=%s: %v", errManagedTenantSchemaMigration, managedProviderKeyTable, expected.record.TenantID, ProviderNameZAI, queryError)
+		}
+		apiKey, decryptError := providerKeyCipher.decrypt(actual)
+		if decryptError != nil || apiKey != expected.apiKey || actual.BaseURL != expected.record.BaseURL || actual.TextModel != expected.record.TextModel || actual.SystemPrompt != expected.record.SystemPrompt || !actual.CreatedAt.Equal(expected.record.CreatedAt) || !actual.UpdatedAt.Equal(expected.record.UpdatedAt) {
+			return fmt.Errorf("%w: operation=verify table=%s tenant=%s provider=%s", errManagedTenantSchemaMigration, managedProviderKeyTable, expected.record.TenantID, ProviderNameZAI)
+		}
+	}
+	for _, expected := range dataset.tenants {
+		var actual managedTenantRecord
+		if queryError := database.Where(&managedTenantRecord{TenantID: expected.tenantID}).First(&actual).Error; queryError != nil {
+			return fmt.Errorf("%w: operation=verify table=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, expected.tenantID, queryError)
+		}
+		if actual.defaults() != expected.defaults.value() || !actual.UpdatedAt.Equal(expected.updatedAt) {
+			return fmt.Errorf("%w: operation=verify table=%s tenant=%s values", errManagedTenantSchemaMigration, managedTenantTable, expected.tenantID)
+		}
+	}
+	if validationError := validateManagedKeyedRoutingDefaults(database, providerKeyCipher, providers); validationError != nil {
+		return validationError
+	}
+	historicalUsage, usageError := managedZAIHistoricalUsage(database)
+	if usageError != nil {
+		return usageError
+	}
+	if !slices.Equal(historicalUsage, dataset.historicalUsage) {
+		return fmt.Errorf("%w: operation=verify table=%s historical_usage_changed provider=%s", errManagedTenantSchemaMigration, managedUsageEventTable, retiredZhipuProviderIdentifier)
+	}
+	return nil
+}
+
+func managedZAIHistoricalUsage(database *gorm.DB) ([]managedUsageEventRecord, error) {
+	var historicalUsage []managedUsageEventRecord
+	if queryError := database.
+		Where(&managedUsageEventRecord{ProviderID: retiredZhipuProviderIdentifier}).
+		Order("id").
+		Find(&historicalUsage).
+		Error; queryError != nil {
+		return nil, fmt.Errorf("%w: operation=read table=%s provider=%s: %v", errManagedTenantSchemaMigration, managedUsageEventTable, retiredZhipuProviderIdentifier, queryError)
 	}
 	return historicalUsage, nil
 }
@@ -1620,6 +1827,7 @@ func preflightLegacyManagedTenantSchema(database *gorm.DB, providerKeyCipher man
 	routingDefaultsByTenant := make(map[string]managedRoutingDefaults, len(legacyTenants))
 	routingProvidersByTenant := make(map[string][]managedRoutingProvider, len(legacyTenants))
 	tenantByUserID := make(map[string]legacyManagedTenantRecord, len(legacyTenants))
+	seenCanonicalProviderKeys := make(map[string]struct{}, len(legacyProviderKeys))
 	seenTenantIDs := make(map[string]struct{}, len(legacyTenants))
 	seenSecretDigests := make(map[string]struct{}, len(legacyTenants))
 	defaultName, _ := newManagedTenantName("Default")
@@ -1692,9 +1900,17 @@ func preflightLegacyManagedTenantSchema(database *gorm.DB, providerKeyCipher man
 		if providerIdentifier == retiredGrokProviderIdentifier {
 			providerIdentifier = ProviderNameXAI
 		}
+		if providerIdentifier == retiredZhipuProviderIdentifier {
+			providerIdentifier = ProviderNameZAI
+		}
 		if providerIdentifier == ProviderNameDashScope {
 			continue
 		}
+		canonicalProviderKey := ownerTenant.TenantID + "\x00" + providerIdentifier
+		if _, duplicate := seenCanonicalProviderKeys[canonicalProviderKey]; duplicate {
+			return managedTenantMigrationDataset{}, fmt.Errorf("%w: operation=preflight table=%s user=%s tenant=%s provider_conflict=%s", errManagedTenantSchemaMigration, managedProviderKeyTable, legacyProviderKey.UserID, ownerTenant.TenantID, providerIdentifier)
+		}
+		seenCanonicalProviderKeys[canonicalProviderKey] = struct{}{}
 		textModel, _ := canonicalManagedTextModel(providerIdentifier, legacyProviderKey.TextModel)
 		providerDefinition, textModelDefinition, modelError := providers.resolveTextModel(
 			providerIdentifier,
@@ -2779,6 +2995,9 @@ func managedProviderSettingsFromPredecessorRecords(providerKeyCipher managedProv
 		providerIdentifier := predecessorProviderIdentifier.string()
 		if providerIdentifier == retiredGrokProviderIdentifier {
 			providerIdentifier = ProviderNameXAI
+		}
+		if providerIdentifier == retiredZhipuProviderIdentifier {
+			providerIdentifier = ProviderNameZAI
 		}
 		textModel, _ := canonicalManagedTextModel(providerIdentifier, settings.textModel)
 		canonicalProviderIdentifier := newProviderID(providerIdentifier)

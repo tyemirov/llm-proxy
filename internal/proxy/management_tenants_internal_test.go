@@ -834,6 +834,8 @@ func internalManagementProviderRegistry() *providerRegistry {
 			internalTestOffering(ProviderNameMiniMax, ModelNameMiniMaxM27, []string{ModelOperationText}, []string{ModelOperationText}),
 			internalTestOffering(ProviderNameSiliconFlow, ModelNameSiliconFlowDeepSeek, []string{ModelOperationText}, []string{ModelOperationText}),
 			internalTestOffering(ProviderNameSiliconFlow, "sensevoice-small", []string{ModelOperationDictation}, []string{ModelOperationDictation}),
+			internalTestOffering(ProviderNameZAI, ModelNameZAIGLM, []string{ModelOperationText}, []string{ModelOperationText}),
+			internalTestOffering(ProviderNameZAI, "glm-asr-2512", []string{ModelOperationDictation}, []string{ModelOperationDictation}),
 			internalTestOffering(ProviderNameXAI, ModelNameGrok43, []string{ModelOperationText}, []string{ModelOperationText}),
 			internalTestOffering(ProviderNameXAI, "xai-stt", []string{ModelOperationDictation}, []string{ModelOperationDictation}),
 		),

@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="f7906ac6ef227ecff8defca0bfcf83863b2b16d835679e55f0ea2ea1fc4995c1">
+    <meta name="openapi-source-sha256" content="0bcfb8f3698a6d574409b469c6694a8469590cfac754da3644c9371f397780ef">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="f7906ac6ef227ecff8defca0bfcf83863b2b16d835679e55f0ea2ea1fc4995c1">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="0bcfb8f3698a6d574409b469c6694a8469590cfac754da3644c9371f397780ef">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -49,7 +49,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>f7906ac6ef227ecff8defca0bfcf83863b2b16d835679e55f0ea2ea1fc4995c1</code></span>
+          <span>Source SHA-256 <code>0bcfb8f3698a6d574409b469c6694a8469590cfac754da3644c9371f397780ef</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -776,7 +776,7 @@ components:
       name: provider
       in: query
       required: false
-      description: Canonical provider identifier. Omission uses the tenant default.
+      description: Canonical provider identifier from the public capability catalog, such as zai. Retired zhipu and glm values are invalid. Omission uses the tenant default.
       schema:
         type: string
         minLength: 1
@@ -873,7 +873,7 @@ components:
       name: provider
       in: path
       required: true
-      description: Canonical provider identifier.
+      description: Canonical provider identifier from the public capability catalog, such as zai. Retired zhipu and glm values are invalid.
       schema:
         type: string
         minLength: 1
@@ -3008,7 +3008,7 @@ components:
               <tbody>
                 <tr><td><code>key</code></td><td>query</td><td>Yes</td><td>string</td><td>Tenant client secret.</td></tr>
 <tr><td><code>prompt</code></td><td>query</td><td>Yes</td><td>string</td><td>User prompt.</td></tr>
-<tr><td><code>provider</code></td><td>query</td><td>No</td><td>string</td><td>Canonical provider identifier. Omission uses the tenant default.</td></tr>
+<tr><td><code>provider</code></td><td>query</td><td>No</td><td>string</td><td>Canonical provider identifier from the public capability catalog, such as zai. Retired zhipu and glm values are invalid. Omission uses the tenant default.</td></tr>
 <tr><td><code>model</code></td><td>query</td><td>No</td><td>string</td><td>Model identifier. Omission uses the resolved provider default.</td></tr>
 <tr><td><code>web_search</code></td><td>query</td><td>No</td><td>boolean</td><td>Exact boolean query parameter. Use true or false; omission disables web search. Any other supplied spelling is invalid and returns HTTP 400.</td></tr>
 <tr><td><code>system_prompt</code></td><td>query</td><td>No</td><td>string</td><td></td></tr>
@@ -3056,7 +3056,7 @@ components:
               <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>key</code></td><td>query</td><td>Yes</td><td>string</td><td>Tenant client secret.</td></tr>
-<tr><td><code>provider</code></td><td>query</td><td>No</td><td>string</td><td>Canonical provider identifier. Omission uses the tenant default.</td></tr>
+<tr><td><code>provider</code></td><td>query</td><td>No</td><td>string</td><td>Canonical provider identifier from the public capability catalog, such as zai. Retired zhipu and glm values are invalid. Omission uses the tenant default.</td></tr>
 <tr><td><code>model</code></td><td>query</td><td>No</td><td>string</td><td>Model identifier. Omission uses the resolved provider default.</td></tr>
 <tr><td><code>format</code></td><td>query</td><td>No</td><td>string</td><td>Preferred response media type. Unknown values select text/plain.</td></tr>
 <tr><td><code>Accept</code></td><td>header</td><td>No</td><td>string</td><td>Response media preference used when format is omitted.</td></tr>
@@ -3419,7 +3419,7 @@ components:
               <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>tenant_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant identifier from the authenticated account response.</td></tr>
-<tr><td><code>provider</code></td><td>path</td><td>Yes</td><td>string</td><td>Canonical provider identifier.</td></tr>
+<tr><td><code>provider</code></td><td>path</td><td>Yes</td><td>string</td><td>Canonical provider identifier from the public capability catalog, such as zai. Retired zhipu and glm values are invalid.</td></tr>
 <tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
               </tbody>
             </table>
@@ -3461,7 +3461,7 @@ components:
               <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>tenant_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant identifier from the authenticated account response.</td></tr>
-<tr><td><code>provider</code></td><td>path</td><td>Yes</td><td>string</td><td>Canonical provider identifier.</td></tr>
+<tr><td><code>provider</code></td><td>path</td><td>Yes</td><td>string</td><td>Canonical provider identifier from the public capability catalog, such as zai. Retired zhipu and glm values are invalid.</td></tr>
 <tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
               </tbody>
             </table>
@@ -3521,7 +3521,7 @@ components:
               <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>tenant_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant identifier from the authenticated account response.</td></tr>
-<tr><td><code>provider</code></td><td>path</td><td>Yes</td><td>string</td><td>Canonical provider identifier.</td></tr>
+<tr><td><code>provider</code></td><td>path</td><td>Yes</td><td>string</td><td>Canonical provider identifier from the public capability catalog, such as zai. Retired zhipu and glm values are invalid.</td></tr>
 <tr><td><code>Origin</code></td><td>header</td><td>Yes</td><td>string</td><td>Must exactly match the configured public origin.</td></tr>
               </tbody>
             </table>
@@ -3809,7 +3809,7 @@ components:
               <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>key</code></td><td>query</td><td>Yes</td><td>string</td><td>Tenant client secret.</td></tr>
-<tr><td><code>provider</code></td><td>query</td><td>No</td><td>string</td><td>Canonical provider identifier. Omission uses the tenant default.</td></tr>
+<tr><td><code>provider</code></td><td>query</td><td>No</td><td>string</td><td>Canonical provider identifier from the public capability catalog, such as zai. Retired zhipu and glm values are invalid. Omission uses the tenant default.</td></tr>
 <tr><td><code>model</code></td><td>query</td><td>No</td><td>string</td><td>Model identifier. Omission uses the resolved provider default.</td></tr>
 <tr><td><code>X-LLM-Proxy-Request-Timeout-Seconds</code></td><td>header</td><td>No</td><td>integer</td><td>A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.</td></tr>
               </tbody>
@@ -3941,7 +3941,7 @@ components:
               <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>key</code></td><td>query</td><td>Yes</td><td>string</td><td>Tenant client secret.</td></tr>
-<tr><td><code>provider</code></td><td>query</td><td>No</td><td>string</td><td>Canonical provider identifier. Omission uses the tenant default.</td></tr>
+<tr><td><code>provider</code></td><td>query</td><td>No</td><td>string</td><td>Canonical provider identifier from the public capability catalog, such as zai. Retired zhipu and glm values are invalid. Omission uses the tenant default.</td></tr>
 <tr><td><code>format</code></td><td>query</td><td>No</td><td>string</td><td>Preferred response media type. Unknown values select text/plain.</td></tr>
 <tr><td><code>Accept</code></td><td>header</td><td>No</td><td>string</td><td>Response media preference used when format is omitted.</td></tr>
 <tr><td><code>X-LLM-Proxy-Request-Timeout-Seconds</code></td><td>header</td><td>No</td><td>integer</td><td>A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.</td></tr>
