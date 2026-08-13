@@ -1422,9 +1422,14 @@ providers:
 			expectedError: "provider_transcriptions_url_required: provider=xai field=providers.xai.transcriptions_url",
 		},
 		{
-			name:          "missing provider text models",
+			name:          "missing provider text default",
 			providersYAML: mutateCatalogOfferingYAML(completeLiteralProvidersYAML(), proxy.ProviderNameDashScope, proxy.ModelNameDashScopeQwenPlus, func(string) string { return "" }),
-			expectedError: "model=qwen-plus operation=text reason=missing_provider_offering",
+			expectedError: "provider=dashscope operation=text default_count=0",
+		},
+		{
+			name:          "missing non-default provider text offering",
+			providersYAML: mutateCatalogOfferingYAML(completeLiteralProvidersYAML(), proxy.ProviderNameDashScope, proxy.ModelNameDashScopeQwen37Max, func(string) string { return "" }),
+			expectedError: "model=qwen3.7-max operation=text reason=missing_provider_offering",
 		},
 		{
 			name:          "empty catalog providers",

@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Added Qwen 3.7 Max, Qwen 3.7 Plus, and Qwen 3.6 Flash text routes for Singapore DashScope workspaces.
 - Added the canonical public landing page and model-centered capability catalog from the validated runtime registry.
 - Added the generated provider-to-model routing graph below the landing hero.
 - Moved public-page rendering to the frontend-owned renderer and backend public-capability REST resource.

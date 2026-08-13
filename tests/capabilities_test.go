@@ -173,6 +173,49 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 	if !geminiCapabilityFound || !openAIDictationCapabilityFound {
 		testingInstance.Fatalf("public capability catalog projections missing gemini=%t openai_dictation=%t", geminiCapabilityFound, openAIDictationCapabilityFound)
 	}
+
+	expectedQwenModels := map[string]struct{}{
+		proxy.ModelNameDashScopeQwen37Max:   {},
+		proxy.ModelNameDashScopeQwen37Plus:  {},
+		proxy.ModelNameDashScopeQwen36Flash: {},
+	}
+	for _, offering := range catalog.Offerings {
+		if _, expected := expectedQwenModels[offering.Model]; !expected || offering.Provider != proxy.ProviderNameDashScope {
+			continue
+		}
+		if offering.WireContract != "openai_chat_completions" || offering.ExecutionLifecycle != "synchronous_completion" || offering.OutputTokenLimit != 65536 {
+			testingInstance.Fatalf("Qwen offering route=%+v", offering)
+		}
+		if len(offering.Controls) != 1 || offering.Controls[0].ID != "max_tokens" || offering.Controls[0].Minimum == nil || *offering.Controls[0].Minimum != 1 || offering.Controls[0].Maximum == nil || *offering.Controls[0].Maximum != 65536 {
+			testingInstance.Fatalf("Qwen offering controls=%+v", offering.Controls)
+		}
+		if len(offering.Limits) != 1 || offering.Limits[0].ID != "context_tokens" || offering.Limits[0].Value == nil || *offering.Limits[0].Value != 1000000 || offering.Limits[0].Unit != "tokens" {
+			testingInstance.Fatalf("Qwen offering limits=%+v", offering.Limits)
+		}
+		delete(expectedQwenModels, offering.Model)
+	}
+	if len(expectedQwenModels) != 0 {
+		testingInstance.Fatalf("public capability catalog omitted Qwen models=%v", expectedQwenModels)
+	}
+
+	expectedQwenRates := map[string][]float64{
+		proxy.ModelNameDashScopeQwen37Max:   {2.5, 7.5},
+		proxy.ModelNameDashScopeQwen37Plus:  {0.4, 1.6},
+		proxy.ModelNameDashScopeQwen36Flash: {0.25, 1.5},
+	}
+	for _, price := range catalog.Prices {
+		expectedRates, expected := expectedQwenRates[price.Model]
+		if !expected || price.Provider != proxy.ProviderNameDashScope {
+			continue
+		}
+		if !price.Available || price.Source != "https://www.alibabacloud.com/help/en/model-studio/model-pricing" || price.LastVerified != "2026-08-13" || len(price.Rates) != 2 || price.Rates[0].Rate != expectedRates[0] || price.Rates[1].Rate != expectedRates[1] {
+			testingInstance.Fatalf("Qwen price=%+v", price)
+		}
+		delete(expectedQwenRates, price.Model)
+	}
+	if len(expectedQwenRates) != 0 {
+		testingInstance.Fatalf("public capability catalog omitted Qwen prices=%v", expectedQwenRates)
+	}
 }
 
 func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstance *testing.T) {

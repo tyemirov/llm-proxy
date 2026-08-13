@@ -445,7 +445,7 @@ retain satisfied historical dependencies.
   - Keep credentials, image data, and response bodies out of test output.
   - Run `make ci` after the last application change.
 
-- [ ] [I226] (P1) {I038,I223} Add current Qwen text models to DashScope.
+- [!] [I226] (P1) {I038,I223} Add current Qwen text models to DashScope.
   Goal:
   Let managed tenants select current Qwen flagship and cost-efficient models
   through their existing Alibaba Model Studio workspace connection.
@@ -488,6 +488,9 @@ retain satisfied historical dependencies.
   - Run one paid verification and text request for each new model.
   - Keep credentials, prompts, and response bodies out of test output.
   - Run `make ci` after the last application change.
+  Blocked: A DashScope credential and tenant Singapore workspace URL are not
+  available in this workspace. The operator must supply `DASHSCOPE_API_KEY`
+  and `DASHSCOPE_BASE_URL` and authorize the six paid live calls.
 
 - [!] [I225] (P1) {I223} Move GLM routes to the international Z.AI API.
   Goal:

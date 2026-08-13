@@ -1504,6 +1504,61 @@ func TestOperationalLiveHarnessVerifiesEachKeyBeforeItsSmokeRequest(testingInsta
 	assertOperationalProxyChildStopped(testingInstance, fixture.proxyPIDPath)
 }
 
+func TestOperationalLiveHarnessDiscoversEverySelectedProviderTextModel(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixture := newOperationalLiveHarnessFixture(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	environmentFile := filepath.Join(fixtureRoot, "live.env")
+	operationCapture := filepath.Join(fixtureRoot, "operations.log")
+	const providerKey = "test-live-dashscope-key"
+	writeOperationalFile(testingInstance, environmentFile, "DASHSCOPE_API_KEY="+providerKey+"\nDASHSCOPE_BASE_URL=https://tenant-workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1\n", 0o600)
+	command := exec.Command(filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"))
+	command.Dir = repositoryRoot
+	command.Env = []string{
+		"PATH=" + fixture.toolDirectory + string(os.PathListSeparator) + os.Getenv("PATH"),
+		"GO=" + filepath.Join(fixture.toolDirectory, "go"),
+		"LLM_PROXY_LIVE_PORT=" + strconv.Itoa(operationalLoopbackPort(testingInstance)),
+		"PROXY_PID_CAPTURE=" + fixture.proxyPIDPath,
+		"LIVE_ENV_FILE=" + environmentFile,
+		"LLM_PROXY_LIVE_PROVIDERS=dashscope",
+		"LLM_PROXY_LIVE_ALL_MODELS=true",
+		"LIVE_OPERATION_CAPTURE=" + operationCapture,
+	}
+	output, commandError := command.CombinedOutput()
+	if commandError != nil {
+		testingInstance.Fatalf("live provider all-model harness failed: %v\n%s", commandError, output)
+	}
+	outputText := string(output)
+	models := []string{"qwen-plus", "qwen3.6-flash", "qwen3.7-max", "qwen3.7-plus"}
+	for _, model := range models {
+		for _, expected := range []string{
+			"live provider verification passed: provider=dashscope model=" + model + " status=200",
+			"live provider smoke passed: provider=dashscope model=" + model + " status=200",
+		} {
+			if !strings.Contains(outputText, expected) {
+				testingInstance.Fatalf("live all-model output missing %q: %s", expected, output)
+			}
+		}
+	}
+	if strings.Contains(outputText, providerKey) || strings.Contains(outputText, "live-generated-secret") {
+		testingInstance.Fatalf("live all-model output exposed credential material: %s", output)
+	}
+	captureBytes, readError := os.ReadFile(operationCapture)
+	if readError != nil {
+		testingInstance.Fatalf("read live all-model capture: %v", readError)
+	}
+	capture := string(captureBytes)
+	if strings.Count(capture, "verify PUT ") != len(models) || strings.Count(capture, "smoke POST ") != len(models) {
+		testingInstance.Fatalf("live all-model operation count mismatch: %s", capture)
+	}
+	for _, model := range models {
+		if !strings.Contains(capture, `"text_model":"`+model+`"`) || !strings.Contains(capture, `"model":"`+model+`"`) {
+			testingInstance.Fatalf("live all-model capture missing model=%s: %s", model, capture)
+		}
+	}
+	assertOperationalProxyChildStopped(testingInstance, fixture.proxyPIDPath)
+}
+
 func TestOperationalLiveHarnessRunsCatalogSelectedImageMatrixAfterVerification(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	fixture := newOperationalLiveHarnessFixture(testingInstance)
@@ -1749,6 +1804,7 @@ fi
 output_path=""
 response_headers_path=""
 request_body_path=""
+request_body=""
 request_method="GET"
 request_url=""
 while [[ "$#" -gt 0 ]]; do
@@ -1769,6 +1825,10 @@ while [[ "$#" -gt 0 ]]; do
       request_body_path="${2#@}"
       shift 2
       ;;
+    --data)
+      request_body="$2"
+      shift 2
+      ;;
     http://*)
       request_url="$1"
       shift
@@ -1787,7 +1847,7 @@ write_response_headers() {
 
 case "${request_url}" in
   */api/public/capabilities)
-    builtin printf '%s' '{"offerings":[{"provider":"openai","model":"gpt-4.1","capabilities":["image_input","text"]},{"provider":"anthropic","model":"claude-sonnet-4-6","capabilities":["image_input","text"]},{"provider":"gemini","model":"gemini-2.5-flash","capabilities":["audio_input","image_input","text"]},{"provider":"xai","model":"grok-4.5","capabilities":["image_input","text"]}]}' >"${output_path}"
+    builtin printf '%s' '{"offerings":[{"provider":"openai","model":"gpt-4.1","capabilities":["image_input","text"]},{"provider":"anthropic","model":"claude-sonnet-4-6","capabilities":["image_input","text"]},{"provider":"gemini","model":"gemini-2.5-flash","capabilities":["audio_input","image_input","text"]},{"provider":"xai","model":"grok-4.5","capabilities":["image_input","text"]},{"provider":"dashscope","model":"qwen-plus","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.6-flash","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.7-max","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.7-plus","capabilities":["text"]}]}' >"${output_path}"
     builtin printf '%s' 200
     ;;
   */api/management/account)
@@ -1829,6 +1889,7 @@ case "${request_url}" in
   *provider=*)
     if [[ -n "${LIVE_OPERATION_CAPTURE:-}" ]]; then
       builtin printf 'smoke %s %s\n' "${request_method}" "${request_url}" >>"${LIVE_OPERATION_CAPTURE}"
+      builtin printf 'smoke-payload %s\n' "${request_body}" >>"${LIVE_OPERATION_CAPTURE}"
     fi
     builtin printf '%s' OK >"${output_path}"
     builtin printf '%s' 200

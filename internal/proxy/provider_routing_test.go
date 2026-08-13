@@ -374,6 +374,9 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 		forbiddenFields     []string
 	}{
 		{name: "DashScope Qwen Plus", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwenPlus, tokenParameterField: "max_tokens"},
+		{name: "DashScope Qwen 3.7 Max", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen37Max, tokenParameterField: "max_tokens", expectedAPIKey: "sk-dashscope"},
+		{name: "DashScope Qwen 3.7 Plus", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen37Plus, tokenParameterField: "max_tokens", expectedAPIKey: "sk-dashscope"},
+		{name: "DashScope Qwen 3.6 Flash", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen36Flash, tokenParameterField: "max_tokens", expectedAPIKey: "sk-dashscope"},
 		{name: "Moonshot Kimi K2.6", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK26, tokenParameterField: "max_completion_tokens"},
 		{name: "Moonshot Kimi K3", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK3, tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty"}},
 		{name: "Moonshot Kimi K2.7 Code", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK27Code, tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty"}},
@@ -514,6 +517,49 @@ func TestProviderRoutingRejectsGLM52MaxTokensAboveModelLimit(t *testing.T) {
 	}
 	if !strings.Contains(responseRecorder.Body.String(), "invalid max_tokens parameter") {
 		t.Fatalf("body=%q want invalid max_tokens parameter", responseRecorder.Body.String())
+	}
+}
+
+func TestProviderRoutingRejectsCurrentQwenMaxTokensAboveModelLimit(t *testing.T) {
+	for _, model := range []string{
+		proxy.ModelNameDashScopeQwen37Max,
+		proxy.ModelNameDashScopeQwen37Plus,
+		proxy.ModelNameDashScopeQwen36Flash,
+	} {
+		t.Run(model, func(subTest *testing.T) {
+			upstreamServer := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				subTest.Fatal("upstream must not be called for max_tokens above the Qwen model limit")
+			}))
+			defer upstreamServer.Close()
+
+			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
+				Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+				OpenAIKey:             TestAPIKey,
+				DashScopeKey:          "sk-dashscope",
+				DashScopeBaseURL:      upstreamServer.URL,
+				LogLevel:              proxy.LogLevelInfo,
+				WorkerCount:           1,
+				QueueSize:             1,
+				RequestTimeoutSeconds: TestTimeout,
+			}, zap.NewNop().Sugar())
+			if buildError != nil {
+				subTest.Fatalf(messageBuildRouterError, buildError)
+			}
+
+			queryParameters := url.Values{}
+			queryParameters.Set("key", TestSecret)
+			queryParameters.Set("prompt", TestPrompt)
+			queryParameters.Set("provider", proxy.ProviderNameDashScope)
+			queryParameters.Set("model", model)
+			queryParameters.Set("max_tokens", "65537")
+			request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+			responseRecorder := httptest.NewRecorder()
+			router.ServeHTTP(responseRecorder, request)
+
+			if responseRecorder.Code != http.StatusBadRequest || !strings.Contains(responseRecorder.Body.String(), "invalid max_tokens parameter") {
+				subTest.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
+			}
+		})
 	}
 }
 

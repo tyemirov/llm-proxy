@@ -62,7 +62,7 @@ providers:
     base_url: https://api.x.ai/v1
     transcriptions_url: https://api.x.ai/v1/stt
 catalog:
-  revision: 2026-08-13.i225.1
+  revision: 2026-08-13.i226.1
   operations:
   - id: text
     input_artifacts:
@@ -376,6 +376,24 @@ catalog:
     publisher: alibaba
     family: qwen
     version: qwen-plus
+    operations:
+    - text
+  - id: qwen3.7-max
+    publisher: alibaba
+    family: qwen
+    version: qwen3.7-max
+    operations:
+    - text
+  - id: qwen3.7-plus
+    publisher: alibaba
+    family: qwen
+    version: qwen3.7-plus
+    operations:
+    - text
+  - id: qwen3.6-flash
+    publisher: alibaba
+    family: qwen
+    version: qwen3.6-flash
     operations:
     - text
   - id: kimi-k2.6
@@ -1193,6 +1211,57 @@ catalog:
     - text
     wire_contract: openai_chat_completions
     execution_lifecycle: synchronous_completion
+  - provider: dashscope
+    model: qwen3.7-max
+    provider_model: qwen3.7-max
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 65536
+    controls:
+    - id: max_tokens
+      kind: integer
+      minimum: 1
+      maximum: 65536
+    limits:
+    - id: context_tokens
+      value: 1000000
+      unit: tokens
+  - provider: dashscope
+    model: qwen3.7-plus
+    provider_model: qwen3.7-plus
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 65536
+    controls:
+    - id: max_tokens
+      kind: integer
+      minimum: 1
+      maximum: 65536
+    limits:
+    - id: context_tokens
+      value: 1000000
+      unit: tokens
+  - provider: dashscope
+    model: qwen3.6-flash
+    provider_model: qwen3.6-flash
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 65536
+    controls:
+    - id: max_tokens
+      kind: integer
+      minimum: 1
+      maximum: 65536
+    limits:
+    - id: context_tokens
+      value: 1000000
+      unit: tokens
   - provider: moonshot
     model: kimi-k2.6
     provider_model: kimi-k2.6
@@ -2334,6 +2403,69 @@ catalog:
     source: https://www.alibabacloud.com/help/en/model-studio/model-pricing
     last_verified: "2026-08-10"
     unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: dashscope
+    model: qwen3.7-max
+    operation: text
+    available: true
+    rates:
+    - component: input_tokens
+      currency: USD
+      rate: 2.5
+      unit: USD/1M tokens
+      conditions:
+        mode: thinking_or_non_thinking;input_tokens_0_to_1000000
+        billing_mode: pay_as_you_go_list
+    - component: output_tokens
+      currency: USD
+      rate: 7.5
+      unit: USD/1M tokens
+      conditions:
+        mode: thinking_or_non_thinking;input_tokens_0_to_1000000
+        billing_mode: pay_as_you_go_list
+    source: https://www.alibabacloud.com/help/en/model-studio/model-pricing
+    last_verified: "2026-08-13"
+  - provider: dashscope
+    model: qwen3.7-plus
+    operation: text
+    available: true
+    rates:
+    - component: input_tokens
+      currency: USD
+      rate: 0.4
+      unit: USD/1M tokens
+      conditions:
+        mode: thinking_or_non_thinking;input_tokens_0_to_256000
+        billing_mode: pay_as_you_go_list
+    - component: output_tokens
+      currency: USD
+      rate: 1.6
+      unit: USD/1M tokens
+      conditions:
+        mode: thinking_or_non_thinking;input_tokens_0_to_256000
+        billing_mode: pay_as_you_go_list
+    source: https://www.alibabacloud.com/help/en/model-studio/model-pricing
+    last_verified: "2026-08-13"
+  - provider: dashscope
+    model: qwen3.6-flash
+    operation: text
+    available: true
+    rates:
+    - component: input_tokens
+      currency: USD
+      rate: 0.25
+      unit: USD/1M tokens
+      conditions:
+        mode: thinking_or_non_thinking;input_tokens_0_to_256000
+        billing_mode: pay_as_you_go_list
+    - component: output_tokens
+      currency: USD
+      rate: 1.5
+      unit: USD/1M tokens
+      conditions:
+        mode: thinking_or_non_thinking;input_tokens_0_to_256000
+        billing_mode: pay_as_you_go_list
+    source: https://www.alibabacloud.com/help/en/model-studio/model-pricing
+    last_verified: "2026-08-13"
   - provider: moonshot
     model: kimi-k2.6
     operation: text

@@ -1568,7 +1568,7 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 	}
 	expectedModels := map[string][]string{
 		proxy.ProviderNameOpenAI:    {"gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"},
-		proxy.ProviderNameDashScope: {proxy.ModelNameDashScopeQwenPlus},
+		proxy.ProviderNameDashScope: {proxy.ModelNameDashScopeQwenPlus, proxy.ModelNameDashScopeQwen36Flash, proxy.ModelNameDashScopeQwen37Max, proxy.ModelNameDashScopeQwen37Plus},
 		proxy.ProviderNameMoonshot:  {proxy.ModelNameMoonshotKimiK26, proxy.ModelNameMoonshotKimiK27Code, proxy.ModelNameMoonshotKimiK27CodeHighSpeed, proxy.ModelNameMoonshotKimiK3},
 		proxy.ProviderNameMiniMax:   {proxy.ModelNameMiniMaxM27},
 		proxy.ProviderNameZAI:       {"glm-5.2"},
@@ -1601,17 +1601,11 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 	if textDefaultsByProvider[proxy.ProviderNameMoonshot] != proxy.ModelNameMoonshotKimiK26 {
 		t.Fatalf("profile provider=%s default=%s want=%s", proxy.ProviderNameMoonshot, textDefaultsByProvider[proxy.ProviderNameMoonshot], proxy.ModelNameMoonshotKimiK26)
 	}
-	unsupportedDashScopeModels := []string{"qwen3.7-max", "qwen3.7-plus"}
-	configuredDashScopeModels, configured := modelsByProvider[proxy.ProviderNameDashScope]
-	if !configured {
-		t.Fatalf("profile missing provider=%s", proxy.ProviderNameDashScope)
+	if configuredDashScopeModels := modelsByProvider[proxy.ProviderNameDashScope]; !reflect.DeepEqual(configuredDashScopeModels, expectedModels[proxy.ProviderNameDashScope]) {
+		t.Fatalf("profile provider=%s models=%v want=%v", proxy.ProviderNameDashScope, configuredDashScopeModels, expectedModels[proxy.ProviderNameDashScope])
 	}
-	for _, unsupportedModel := range unsupportedDashScopeModels {
-		for _, configuredModel := range configuredDashScopeModels {
-			if configuredModel == unsupportedModel {
-				t.Fatalf("profile provider=%s must not expose model=%s", proxy.ProviderNameDashScope, unsupportedModel)
-			}
-		}
+	if textDefaultsByProvider[proxy.ProviderNameDashScope] != proxy.ModelNameDashScopeQwenPlus {
+		t.Fatalf("profile provider=%s default=%s want=%s", proxy.ProviderNameDashScope, textDefaultsByProvider[proxy.ProviderNameDashScope], proxy.ModelNameDashScopeQwenPlus)
 	}
 }
 
