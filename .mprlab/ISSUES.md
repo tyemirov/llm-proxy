@@ -358,6 +358,188 @@ retain satisfied historical dependencies.
   - `make ci` passed all 11 gates with 93 browser tests and 100.0% Go statement
     coverage.
 
+- [ ] [I228] (P1) {I223} Add current MiniMax text model offerings.
+  Goal:
+  Give managed tenants access to the current MiniMax M2 text models through
+  the existing direct MiniMax provider connection.
+  Evidence:
+  - The current catalog contains only exact model `minimax-m2.7`.
+  - MiniMax documents these OpenAI-compatible model identifiers:
+    `MiniMax-M2.7`, `MiniMax-M2.7-highspeed`, `MiniMax-M2.5`,
+    `MiniMax-M2.5-highspeed`, `MiniMax-M2.1`, `MiniMax-M2.1-highspeed`, and
+    `MiniMax-M2`:
+    https://platform.minimax.io/docs/api-reference/text-openai-api
+  - MiniMax documents `https://api.minimax.io/v1/chat/completions` as the
+    OpenAI-compatible text endpoint:
+    https://platform.minimax.io/docs/api-reference/text-chat-openai
+  Requirements:
+  - Keep `minimax-m2.7` as the MiniMax default text model.
+  - Add canonical exact models for the six other documented identifiers.
+  - Keep each canonical identifier lowercase and provider independent.
+  - Store each exact MiniMax identifier in its provider offering.
+  - Use `openai_chat_completions` and `synchronous_completion` for each route.
+  - Map the public `max_tokens` value to `max_completion_tokens`.
+  - Apply the documented 2048-token limit to each compatible route.
+  - Record one current price for each new text offering.
+  - Record the official price source and verification date.
+  - Preserve existing tenant defaults and saved `minimax-m2.7` selections.
+  - Expose each new model through management profiles and routing selectors.
+  - Expose each new model through public capabilities and the route explorer.
+  - Derive live-test discovery from the provider catalog.
+  - Update constants, configuration, examples, documentation, and fixtures.
+  Deliverables:
+  - Add six exact MiniMax models and six direct provider offerings.
+  - Add complete capability, limit, and price records for each offering.
+  - Add management, public catalog, browser, and live-test coverage.
+  Validation:
+  - Prove each exact model selects the documented upstream identifier.
+  - Prove each route sends `max_completion_tokens` when the caller supplies a limit.
+  - Prove each route rejects a value above 2048 before provider dispatch.
+  - Prove existing `minimax-m2.7` defaults remain unchanged.
+  - Prove each model appears once in every generated model surface.
+  - Run one paid key verification and text request with a selected new model.
+  - Keep credentials, prompts, and response bodies out of test output.
+  - Run `make ci` after the last application change.
+
+- [ ] [I227] (P1) {I223} Add Kimi reasoning and image route capabilities.
+  Goal:
+  Expose verified Kimi reasoning and image capabilities through the current
+  Moonshot provider and canonical message contract.
+  Evidence:
+  - The current Kimi offerings declare text generation only.
+  - Kimi documents image input for Kimi K3, K2.7 Code, and K2.6:
+    https://platform.kimi.ai/docs/overview
+  - Kimi K3 accepts exact `reasoning_effort` values `low`, `high`, and `max`.
+  - Kimi K2.6 uses a separate binary `thinking` object:
+    https://platform.kimi.ai/docs/api/models-overview
+  Requirements:
+  - Add a Moonshot K3 reasoning adapter for the public `reasoning_effort` field.
+  - Accept only `low`, `high`, and `max` on the K3 route.
+  - Send each explicit value unchanged in the top-level provider field.
+  - Omit the provider field when the public value is absent.
+  - Keep K2.6 binary thinking under its documented provider default.
+  - Add image input to K3, K2.7 Code, K2.7 Code Highspeed, and K2.6.
+  - Serialize ordered canonical images as documented Chat Completions content blocks.
+  - Preserve image bytes, MIME type, order, and SHA-256.
+  - Record each verified image limit with its source and verification date.
+  - Use `unknown` for an official limit that the provider does not publish.
+  - Return only visible answer text through the canonical response.
+  - Keep provider reasoning content out of responses, logs, and usage records.
+  - Publish route-specific reasoning and image capabilities through public data.
+  - Render the capabilities in management and public browser surfaces.
+  - Extend the paid provider image matrix with Moonshot.
+  - Keep video input in a separate typed attachment issue.
+  - Update OpenAPI, official clients, configuration, documentation, and fixtures.
+  Deliverables:
+  - Add one exact K3 reasoning adapter and four Kimi image routes.
+  - Add provider serialization, route validation, limits, and safe output handling.
+  - Add management, public catalog, client, browser, and paid-harness coverage.
+  Validation:
+  - Prove each K3 reasoning value reaches the exact provider field.
+  - Prove an omitted value leaves the provider field absent.
+  - Prove unsupported values fail before provider dispatch.
+  - Prove each image route preserves exact ordered image data.
+  - Prove unsupported MIME types and provider limits fail before dispatch.
+  - Prove public capability data matches the implemented routes.
+  - Run one paid image request through each enabled Moonshot image model.
+  - Keep credentials, image data, and response bodies out of test output.
+  - Run `make ci` after the last application change.
+
+- [ ] [I226] (P1) {I038,I223} Add current Qwen text models to DashScope.
+  Goal:
+  Let managed tenants select current Qwen flagship and cost-efficient models
+  through their existing Alibaba Model Studio workspace connection.
+  Evidence:
+  - The current DashScope catalog contains only exact model `qwen-plus`.
+  - Alibaba lists `qwen3.7-max`, `qwen3.7-plus`, and `qwen3.6-flash` as current
+    recommended text models:
+    https://www.alibabacloud.com/help/en/model-studio/text-generation-model
+  - Alibaba lists the three models for the Singapore deployment scope:
+    https://www.alibabacloud.com/help/en/model-studio/models
+  - Alibaba documents workspace-specific Singapore endpoints for production:
+    https://www.alibabacloud.com/help/en/model-studio/base-url
+  Requirements:
+  - Add exact models `qwen3.7-max`, `qwen3.7-plus`, and `qwen3.6-flash`.
+  - Keep `qwen-plus` as the DashScope default text model.
+  - Preserve existing saved `qwen-plus` settings and tenant defaults.
+  - Use each tenant's saved Singapore workspace URL and matching API key.
+  - Verify each exact model in the Singapore deployment scope before registration.
+  - Select each route protocol from Alibaba's current documented contract.
+  - Use I038's synchronous Responses adapter when a model requires Responses.
+  - Keep each route on `synchronous_completion` unless Alibaba documents another lifecycle.
+  - Record each verified context limit, output limit, and request control.
+  - Record one current price for each new text offering.
+  - Record each official source and verification date.
+  - Keep this issue on text input and text output.
+  - Expose each model through key verification and provider settings.
+  - Expose each model through public capabilities and the route explorer.
+  - Derive live-test discovery from the provider catalog.
+  - Update constants, configuration, documentation, examples, and fixtures.
+  Deliverables:
+  - Add three exact Qwen models and three direct DashScope offerings.
+  - Add protocol, lifecycle, control, limit, and price records.
+  - Add management, public catalog, browser, and live-test coverage.
+  Validation:
+  - Prove each model uses the tenant's exact workspace URL.
+  - Prove each route sends the documented request and parses the documented response.
+  - Prove each configured limit fails at the public boundary.
+  - Prove existing `qwen-plus` selections remain valid and unchanged.
+  - Prove each new model appears once in every generated model surface.
+  - Run one paid verification and text request for each new model.
+  - Keep credentials, prompts, and response bodies out of test output.
+  - Run `make ci` after the last application change.
+
+- [ ] [I225] (P1) {I223} Move GLM routes to the international Z.AI API.
+  Goal:
+  Use one canonical `zai` provider for international Z.AI text and dictation
+  routes. Accept API keys from the international Z.AI platform.
+  Evidence:
+  - The current `zhipu` text route uses
+    `https://open.bigmodel.cn/api/paas/v4`.
+  - The current dictation route uses
+    `https://api.z.ai/api/paas/v4/audio/transcriptions`.
+  - Z.AI documents `https://api.z.ai/api/paas/v4` as its general API endpoint:
+    https://docs.z.ai/api-reference/introduction
+  - Z.AI documents GLM Chat Completions with bearer API-key authentication.
+  Requirements:
+  - Replace provider identifier `zhipu` and alias `glm` with canonical `zai`.
+  - Use label `Z.AI` and declare no provider aliases.
+  - Use `https://api.z.ai/api/paas/v4` for text requests.
+  - Use `https://api.z.ai/api/paas/v4/audio/transcriptions` for dictation.
+  - Keep GLM-5.1, GLM-5.2, and GLM-ASR-2512 as exact models.
+  - Keep Chat Completions and multipart transcription as the protocol adapters.
+  - Keep each current route on `synchronous_completion`.
+  - Rename runtime configuration to `providers.zai`.
+  - Rename the live credential binding to `ZAI_API_KEY`.
+  - Remove current `zhipu` and `glm` request, profile, and configuration values.
+  - Preflight each stored `zhipu` provider key before database mutation.
+  - Decrypt each valid key with its existing tenant and provider identity.
+  - Re-encrypt each key with the same tenant and canonical `zai` identity.
+  - Update provider settings and routing defaults in the same transaction.
+  - Reject conflicting, corrupt, or noncanonical migration input.
+  - Preserve tenant timestamps and historical usage records.
+  - Reject retired provider values after the migration.
+  - Use the general API endpoint for application traffic.
+  - Keep the Coding Plan endpoint in tool-specific integrations.
+  - Update the catalog, constants, management API, UI, OpenAPI, and clients.
+  - Update environment examples, provider documentation, and live-test discovery.
+  Deliverables:
+  - Add one canonical international `zai` provider definition.
+  - Add one bounded provider-identity and encrypted-key migration.
+  - Remove all current `zhipu` and `glm` integration surfaces.
+  - Add complete static, managed, public, browser, and live-test coverage.
+  Validation:
+  - Prove text requests use the documented Z.AI general endpoint.
+  - Prove dictation requests use the documented Z.AI transcription endpoint.
+  - Prove managed key verification succeeds only through Z.AI.
+  - Prove migration re-encrypts keys and updates each current routing field.
+  - Prove migration preserves timestamps and historical usage values.
+  - Prove current-schema startup rejects each retired provider shape.
+  - Prove profiles, public data, examples, and clients expose only `zai`.
+  - Run one paid Z.AI key verification and one small text request.
+  - Keep the API key, prompt, and response body out of test output.
+  - Run `make ci` after the last application change.
+
 - [ ] [I223] (P0) {I216,I221} Load all supported providers and models from one catalog file.
   Goal:
   Make `configs/providers.yml` the only source that defines supported providers,
