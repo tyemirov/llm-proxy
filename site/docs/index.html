@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="0bcfb8f3698a6d574409b469c6694a8469590cfac754da3644c9371f397780ef">
+    <meta name="openapi-source-sha256" content="8267e6ad74609a11074e56f2a604986e22bf29bb8ba150504f53f417f5f68026">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="0bcfb8f3698a6d574409b469c6694a8469590cfac754da3644c9371f397780ef">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="8267e6ad74609a11074e56f2a604986e22bf29bb8ba150504f53f417f5f68026">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -49,7 +49,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>0bcfb8f3698a6d574409b469c6694a8469590cfac754da3644c9371f397780ef</code></span>
+          <span>Source SHA-256 <code>8267e6ad74609a11074e56f2a604986e22bf29bb8ba150504f53f417f5f68026</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -182,7 +182,9 @@ paths:
         media admission and transport limits. Unsupported media or route
         capabilities return HTTP 400 before an upstream call. The service
         rejects an encoded request body above 8 MiB before JSON decoding. A
-        smaller catalog-derived body limit applies when configured.
+        smaller catalog-derived body limit applies when configured. Current
+        Moonshot Kimi image routes preserve attachment order and exact bytes
+        through Chat Completions Data URL blocks.
       tags:
         - Proxy
       security:
@@ -1882,7 +1884,7 @@ components:
           type: integer
           minimum: 0
     MessageAttachment:
-      description: One provider-neutral image or audio input with a MIME type that matches its declared media type.
+      description: One provider-neutral image or audio input with a MIME type that matches its declared media type. The resolved catalog route determines support. Current Moonshot Kimi image routes accept the image variants.
       oneOf:
         - $ref: &#39;#/components/schemas/ImageMessageAttachment&#39;
         - $ref: &#39;#/components/schemas/AudioMessageAttachment&#39;
@@ -2148,7 +2150,7 @@ components:
         reasoning_effort:
           type: string
           minLength: 1
-          description: Omission selects the tenant or route default. An explicit value must be non-blank and supported by the resolved provider/model route.
+          description: Omission selects the tenant or route default. An explicit value must be non-blank and supported by the resolved provider/model route. Kimi K3 accepts low, high, or max.
     DictationRequest:
       type: object
       additionalProperties: false
@@ -3932,7 +3934,7 @@ components:
           <span class="api-operation-id">postV2Messages</span>
         </header>
         <h2>Generate text from canonical messages</h2>
-        <p>The current messages-only operation. `messages` is required. User messages may include ordered inline or tenant-asset-backed image and audio attachments. `model`, `web_search`, `max_tokens`, and `reasoning_effort` are optional. Omitting `reasoning_effort` selects the tenant or route default. A supplied value must be non-blank and supported by the resolved route. The selected provider offering owns media admission and transport limits. Unsupported media or route capabilities return HTTP 400 before an upstream call. The service rejects an encoded request body above 8 MiB before JSON decoding. A smaller catalog-derived body limit applies when configured.</p>
+        <p>The current messages-only operation. `messages` is required. User messages may include ordered inline or tenant-asset-backed image and audio attachments. `model`, `web_search`, `max_tokens`, and `reasoning_effort` are optional. Omitting `reasoning_effort` selects the tenant or route default. A supplied value must be non-blank and supported by the resolved route. The selected provider offering owns media admission and transport limits. Unsupported media or route capabilities return HTTP 400 before an upstream call. The service rejects an encoded request body above 8 MiB before JSON decoding. A smaller catalog-derived body limit applies when configured. Current Moonshot Kimi image routes preserve attachment order and exact bytes through Chat Completions Data URL blocks.</p>
         <p class="api-security"><strong>Authentication:</strong> TenantClientKey (query key)</p>
         <div class="api-contract-block">
           <h3>Parameters</h3>
@@ -3959,7 +3961,7 @@ components:
 <tr><td><code>model</code></td><td>No</td><td>string</td><td>Omission selects the resolved provider default.</td></tr>
 <tr><td><code>web_search</code></td><td>No</td><td>boolean</td><td>The resolved route must declare web-search capability when true.</td></tr>
 <tr><td><code>max_tokens</code></td><td>No</td><td>integer</td><td>Initial per-attempt output budget. Reused for missing-suffix attempts, with any zero-progress increase bounded by the configured model output limit.</td></tr>
-<tr><td><code>reasoning_effort</code></td><td>No</td><td>string</td><td>Omission selects the tenant or route default. An explicit value must be non-blank and supported by the resolved provider/model route.</td></tr>
+<tr><td><code>reasoning_effort</code></td><td>No</td><td>string</td><td>Omission selects the tenant or route default. An explicit value must be non-blank and supported by the resolved provider/model route. Kimi K3 accepts low, high, or max.</td></tr>
               </tbody>
             </table>
           </div>

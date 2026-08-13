@@ -37,6 +37,13 @@ func openAIResponsesReasoningEffortCapability() *proxy.ReasoningEffortCapability
 	}
 }
 
+func moonshotChatReasoningEffortCapability() *proxy.ReasoningEffortCapability {
+	return &proxy.ReasoningEffortCapability{
+		Adapter: "moonshot_chat_completions",
+		Efforts: []string{"low", "high", "max"},
+	}
+}
+
 func TestProviderRoutingUsesConfiguredOpenAIURLsForTextAndDictation(t *testing.T) {
 	var capturedPaths []string
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
@@ -377,9 +384,10 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 		{name: "DashScope Qwen 3.7 Max", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen37Max, tokenParameterField: "max_tokens", expectedAPIKey: "sk-dashscope"},
 		{name: "DashScope Qwen 3.7 Plus", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen37Plus, tokenParameterField: "max_tokens", expectedAPIKey: "sk-dashscope"},
 		{name: "DashScope Qwen 3.6 Flash", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen36Flash, tokenParameterField: "max_tokens", expectedAPIKey: "sk-dashscope"},
-		{name: "Moonshot Kimi K2.6", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK26, tokenParameterField: "max_completion_tokens"},
-		{name: "Moonshot Kimi K3", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK3, tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty"}},
-		{name: "Moonshot Kimi K2.7 Code", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK27Code, tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty"}},
+		{name: "Moonshot Kimi K2.6", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK26, tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"thinking", "reasoning_effort"}},
+		{name: "Moonshot Kimi K3", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK3, tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty", "thinking", "reasoning_effort"}},
+		{name: "Moonshot Kimi K2.7 Code", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK27Code, tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty", "thinking", "reasoning_effort"}},
+		{name: "Moonshot Kimi K2.7 Code Highspeed", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK27CodeHighSpeed, tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"thinking", "reasoning_effort"}},
 		{name: "MiniMax M2.7", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM27, providerModel: "MiniMax-M2.7", tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
 		{name: "SiliconFlow DeepSeek R1", provider: proxy.ProviderNameSiliconFlow, model: proxy.ModelNameSiliconFlowDeepSeek, providerModel: "deepseek-ai/DeepSeek-R1", tokenParameterField: "max_tokens", expectedAPIKey: testSiliconFlowKey},
 		{name: "ZAI GLM 5.2", provider: proxy.ProviderNameZAI, model: "glm-5.2", tokenParameterField: "max_tokens", forbiddenFields: []string{"thinking", "reasoning_effort"}},
@@ -479,6 +487,70 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 				subTest.Fatalf("continuation messages=%v", capturedPayload["messages"])
 			}
 		})
+	}
+}
+
+func TestProviderRoutingMapsKimiK3ReasoningEffortWithoutExposingReasoningContent(t *testing.T) {
+	capturedPayloads := make([]map[string]any, 0, 4)
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		var payload map[string]any
+		if decodeError := json.NewDecoder(request.Body).Decode(&payload); decodeError != nil {
+			t.Fatalf("decode upstream request: %v", decodeError)
+		}
+		capturedPayloads = append(capturedPayloads, payload)
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"reasoning_content":"private reasoning","content":"visible answer"},"finish_reason":"stop"}]}`))
+	}))
+	defer upstreamServer.Close()
+
+	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		MoonshotKey:           "sk-moonshot",
+		MoonshotBaseURL:       upstreamServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	for _, effort := range []string{"low", "high", "max", ""} {
+		queryParameters := url.Values{
+			"key":      {TestSecret},
+			"prompt":   {TestPrompt},
+			"provider": {proxy.ProviderNameMoonshot},
+			"model":    {proxy.ModelNameMoonshotKimiK3},
+		}
+		if effort != "" {
+			queryParameters.Set("reasoning_effort", effort)
+		}
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil))
+		if responseRecorder.Code != http.StatusOK || responseRecorder.Body.String() != "visible answer" {
+			t.Fatalf("effort=%q status=%d body=%q", effort, responseRecorder.Code, responseRecorder.Body.String())
+		}
+		payload := capturedPayloads[len(capturedPayloads)-1]
+		mappedEffort, present := payload["reasoning_effort"]
+		if effort == "" && present {
+			t.Fatalf("omitted reasoning_effort was serialized: %v", payload)
+		}
+		if effort != "" && mappedEffort != effort {
+			t.Fatalf("reasoning_effort=%v want=%s payload=%v", mappedEffort, effort, payload)
+		}
+		if _, present := payload["thinking"]; present {
+			t.Fatalf("Kimi payload includes thinking=%v", payload)
+		}
+	}
+
+	requestCount := len(capturedPayloads)
+	invalidRequest := httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=review&provider=moonshot&model=kimi-k3&reasoning_effort=medium", nil)
+	invalidResponse := httptest.NewRecorder()
+	router.ServeHTTP(invalidResponse, invalidRequest)
+	if invalidResponse.Code != http.StatusBadRequest || len(capturedPayloads) != requestCount || !strings.Contains(invalidResponse.Body.String(), "invalid reasoning_effort parameter") {
+		t.Fatalf("unsupported effort status=%d upstream=%d body=%s", invalidResponse.Code, len(capturedPayloads)-requestCount, invalidResponse.Body.String())
 	}
 }
 
@@ -951,6 +1023,27 @@ func TestProviderRoutingRejectsInvalidReasoningEffortCatalogCapabilities(t *test
 			name: "dictation capability is forbidden",
 			configure: func(catalogs proxy.ModelCatalog) {
 				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, proxy.DefaultDictationModel)].ReasoningEffort = openAIResponsesReasoningEffortCapability()
+			},
+		},
+		{
+			name: "Moonshot adapter is exact to Kimi K3",
+			configure: func(catalogs proxy.ModelCatalog) {
+				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameMoonshot, proxy.ModelNameMoonshotKimiK3)].ReasoningEffort = nil
+				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameMoonshot, proxy.ModelNameMoonshotKimiK26)].ReasoningEffort = moonshotChatReasoningEffortCapability()
+			},
+		},
+		{
+			name: "Moonshot adapter is provider exact",
+			configure: func(catalogs proxy.ModelCatalog) {
+				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameDeepSeek, proxy.ModelNameDeepSeekV4Flash)].ReasoningEffort = moonshotChatReasoningEffortCapability()
+			},
+		},
+		{
+			name: "Moonshot adapter rejects unsupported effort",
+			configure: func(catalogs proxy.ModelCatalog) {
+				capability := moonshotChatReasoningEffortCapability()
+				capability.Efforts = []string{"medium"}
+				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameMoonshot, proxy.ModelNameMoonshotKimiK3)].ReasoningEffort = capability
 			},
 		},
 	}

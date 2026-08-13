@@ -221,8 +221,9 @@ const (
 type reasoningEffortAdapter string
 
 const (
-	reasoningEffortAdapterNone            reasoningEffortAdapter = ""
-	reasoningEffortAdapterOpenAIResponses reasoningEffortAdapter = "openai_responses"
+	reasoningEffortAdapterNone                    reasoningEffortAdapter = ""
+	reasoningEffortAdapterOpenAIResponses         reasoningEffortAdapter = "openai_responses"
+	reasoningEffortAdapterMoonshotChatCompletions reasoningEffortAdapter = "moonshot_chat_completions"
 )
 
 type reasoningEffortCapability struct {
@@ -241,6 +242,11 @@ var reasoningEffortAdapterSupportedValues = map[reasoningEffortAdapter]map[strin
 		"high":    {},
 		"xhigh":   {},
 		"max":     {},
+	},
+	reasoningEffortAdapterMoonshotChatCompletions: {
+		"low":  {},
+		"high": {},
+		"max":  {},
 	},
 }
 

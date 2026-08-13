@@ -1569,6 +1569,7 @@ func TestOperationalLiveHarnessRunsCatalogSelectedImageMatrixAfterVerification(t
 		"OPENAI_API_KEY":    "test-live-openai-key",
 		"ANTHROPIC_API_KEY": "test-live-anthropic-key",
 		"GEMINI_API_KEY":    "test-live-gemini-key",
+		"MOONSHOT_API_KEY":  "test-live-moonshot-key",
 		"XAI_API_KEY":       "test-live-xai-key",
 	}
 	environmentContents := ""
@@ -1583,6 +1584,7 @@ func TestOperationalLiveHarnessRunsCatalogSelectedImageMatrixAfterVerification(t
 		"PROXY_PID_CAPTURE=" + fixture.proxyPIDPath,
 		"LIVE_ENV_FILE=" + environmentFile,
 		"LIVE_OPERATION_CAPTURE=" + operationCapture,
+		"LLM_PROXY_LIVE_ALL_MODELS=true",
 	}
 	command := exec.Command(filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"), "--media")
 	command.Dir = repositoryRoot
@@ -1592,8 +1594,8 @@ func TestOperationalLiveHarnessRunsCatalogSelectedImageMatrixAfterVerification(t
 		testingInstance.Fatalf("live provider image matrix failed: %v\n%s", commandError, output)
 	}
 	outputText := string(output)
-	expectedModels := []string{"gpt-4.1", "claude-sonnet-4-6", "gemini-2.5-flash", "grok-4.5"}
-	expectedProviders := []string{"openai", "anthropic", "gemini", "xai"}
+	expectedModels := []string{"gpt-4.1", "claude-sonnet-4-6", "gemini-2.5-flash", "kimi-k2.6", "kimi-k2.7-code", "kimi-k2.7-code-highspeed", "kimi-k3", "grok-4.5"}
+	expectedProviders := []string{"openai", "anthropic", "gemini", "moonshot", "moonshot", "moonshot", "moonshot", "xai"}
 	for index, provider := range expectedProviders {
 		expectedVerification := "live provider verification passed: provider=" + provider + " model=" + expectedModels[index] + " status=200"
 		expectedSuccess := "live provider image smoke passed: provider=" + provider + " model=" + expectedModels[index] + " status=200"
@@ -1613,8 +1615,8 @@ func TestOperationalLiveHarnessRunsCatalogSelectedImageMatrixAfterVerification(t
 	capture := string(captureBytes)
 	lastVerificationOffset := strings.LastIndex(capture, "verify PUT ")
 	firstImageOffset := strings.Index(capture, "image POST ")
-	if strings.Count(capture, "verify PUT ") != 4 || strings.Count(capture, "image POST ") != 4 || firstImageOffset <= lastVerificationOffset {
-		testingInstance.Fatalf("live image operations were not four verifications followed by four images: %s", capture)
+	if strings.Count(capture, "verify PUT ") != 8 || strings.Count(capture, "image POST ") != 8 || firstImageOffset <= lastVerificationOffset {
+		testingInstance.Fatalf("live image operations were not eight verifications followed by eight images: %s", capture)
 	}
 	imagePayloadLines := []string{}
 	for _, line := range strings.Split(capture, "\n") {
@@ -1847,7 +1849,7 @@ write_response_headers() {
 
 case "${request_url}" in
   */api/public/capabilities)
-    builtin printf '%s' '{"offerings":[{"provider":"openai","model":"gpt-4.1","capabilities":["image_input","text"]},{"provider":"anthropic","model":"claude-sonnet-4-6","capabilities":["image_input","text"]},{"provider":"gemini","model":"gemini-2.5-flash","capabilities":["audio_input","image_input","text"]},{"provider":"xai","model":"grok-4.5","capabilities":["image_input","text"]},{"provider":"dashscope","model":"qwen-plus","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.6-flash","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.7-max","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.7-plus","capabilities":["text"]}]}' >"${output_path}"
+    builtin printf '%s' '{"offerings":[{"provider":"openai","model":"gpt-4.1","capabilities":["image_input","text"]},{"provider":"anthropic","model":"claude-sonnet-4-6","capabilities":["image_input","text"]},{"provider":"gemini","model":"gemini-2.5-flash","capabilities":["audio_input","image_input","text"]},{"provider":"moonshot","model":"kimi-k2.6","capabilities":["image_input","text"]},{"provider":"moonshot","model":"kimi-k2.7-code","capabilities":["image_input","text"]},{"provider":"moonshot","model":"kimi-k2.7-code-highspeed","capabilities":["image_input","text"]},{"provider":"moonshot","model":"kimi-k3","capabilities":["image_input","text"]},{"provider":"xai","model":"grok-4.5","capabilities":["image_input","text"]},{"provider":"dashscope","model":"qwen-plus","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.6-flash","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.7-max","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.7-plus","capabilities":["text"]}]}' >"${output_path}"
     builtin printf '%s' 200
     ;;
   */api/management/account)
@@ -1855,7 +1857,7 @@ case "${request_url}" in
     builtin printf '%s' 200
     ;;
   */api/management/tenants/tenant-live/secrets)
-    builtin printf '%s' '{"secret":"live-generated-secret","profile":{"providers":[{"id":"openai","text_default_model":"gpt-4.1"},{"id":"anthropic","text_default_model":"claude-sonnet-4-6"},{"id":"gemini","text_default_model":"gemini-2.5-flash"},{"id":"xai","text_default_model":"grok-4.3"},{"id":"deepseek","text_default_model":"deepseek-v4-flash"}]}}' >"${output_path}"
+    builtin printf '%s' '{"secret":"live-generated-secret","profile":{"providers":[{"id":"openai","text_default_model":"gpt-4.1"},{"id":"anthropic","text_default_model":"claude-sonnet-4-6"},{"id":"gemini","text_default_model":"gemini-2.5-flash"},{"id":"moonshot","text_default_model":"kimi-k2.6"},{"id":"xai","text_default_model":"grok-4.3"},{"id":"deepseek","text_default_model":"deepseek-v4-flash"}]}}' >"${output_path}"
     builtin printf '%s' 200
     ;;
   */api/management/tenants/tenant-live/provider-keys/*)

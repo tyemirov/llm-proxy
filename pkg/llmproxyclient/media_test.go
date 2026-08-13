@@ -118,6 +118,47 @@ func TestClientPostMessagesSerializesImmutableOrderedMediaAttachments(testingIns
 	}
 }
 
+func TestClientSerializesKimiK3ImageAndReasoningSelection(testingInstance *testing.T) {
+	var capturedBody map[string]any
+	var capturedProvider string
+	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		capturedProvider = httpRequest.URL.Query().Get("provider")
+		if decodeError := json.NewDecoder(httpRequest.Body).Decode(&capturedBody); decodeError != nil {
+			testingInstance.Fatalf("decode request body: %v", decodeError)
+		}
+		_, _ = responseWriter.Write([]byte("kimi ok"))
+	}))
+	defer server.Close()
+
+	imageAttachment, imageError := llmproxyclient.NewImageAttachment(llmproxyclient.ImageAttachmentInput{MIMEType: "image/webp", Data: []byte("kimi-image")})
+	if imageError != nil {
+		testingInstance.Fatalf("image attachment: %v", imageError)
+	}
+	reasoningEffort := "max"
+	request, requestError := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequestInput{
+		Messages:        []llmproxyclient.MessageInput{{Role: "user", Content: "Inspect.", Attachments: []llmproxyclient.MessageAttachment{imageAttachment}}},
+		Model:           "kimi-k3",
+		ReasoningEffort: &reasoningEffort,
+	})
+	if requestError != nil {
+		testingInstance.Fatalf("messages request: %v", requestError)
+	}
+	config, configError := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{BaseURL: server.URL, Secret: "sekret", Provider: "moonshot"})
+	if configError != nil {
+		testingInstance.Fatalf("client config: %v", configError)
+	}
+	client, clientError := llmproxyclient.NewClient(config, server.Client())
+	if clientError != nil {
+		testingInstance.Fatalf("client: %v", clientError)
+	}
+	if response, postError := client.PostMessages(context.Background(), request); postError != nil || response != "kimi ok" {
+		testingInstance.Fatalf("response=%q error=%v", response, postError)
+	}
+	if capturedProvider != "moonshot" || capturedBody["model"] != "kimi-k3" || capturedBody["reasoning_effort"] != "max" {
+		testingInstance.Fatalf("provider=%s payload=%v", capturedProvider, capturedBody)
+	}
+}
+
 func TestClientUploadsAssetAndSerializesImageAndAudioAssetReferences(testingInstance *testing.T) {
 	imageBytes := []byte("uploaded-image")
 	imageDigest := sha256.Sum256(imageBytes)

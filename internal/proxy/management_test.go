@@ -944,6 +944,7 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 	}{
 		{provider: proxy.ProviderNameOpenAI, apiKey: testManagementOpenAIKey, model: proxy.ModelNameGPT5},
 		{provider: proxy.ProviderNameDeepSeek, apiKey: testManagementDeepSeekKey, model: proxy.ModelNameDeepSeekV4Flash},
+		{provider: proxy.ProviderNameMoonshot, apiKey: "sk-moonshot", model: proxy.ModelNameMoonshotKimiK3},
 	} {
 		request := authenticatedJSONRequest(http.MethodPut, tenantPath+"/provider-keys/"+providerKeyRequest.provider, managementProviderKeyRequestBody(t, providerKeyRequest.apiKey, providerKeyRequest.model, ""), sessionCookie)
 		response := httptest.NewRecorder()
@@ -976,6 +977,14 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 	gpt56Response := saveReasoningDefault(proxy.ProviderNameOpenAI, proxy.ModelNameGPT56, "max")
 	if gpt56Response.Code != http.StatusOK {
 		t.Fatalf("save GPT-5.6 reasoning defaults status=%d body=%s", gpt56Response.Code, gpt56Response.Body.String())
+	}
+	kimiK3Response := saveReasoningDefault(proxy.ProviderNameMoonshot, proxy.ModelNameMoonshotKimiK3, "high")
+	if kimiK3Response.Code != http.StatusOK {
+		t.Fatalf("save Kimi K3 reasoning defaults status=%d body=%s", kimiK3Response.Code, kimiK3Response.Body.String())
+	}
+	gpt56Response = saveReasoningDefault(proxy.ProviderNameOpenAI, proxy.ModelNameGPT56, "max")
+	if gpt56Response.Code != http.StatusOK {
+		t.Fatalf("restore GPT-5.6 reasoning defaults status=%d body=%s", gpt56Response.Code, gpt56Response.Body.String())
 	}
 
 	profileRequest := httptest.NewRequest(http.MethodGet, tenantPath, nil)
@@ -1026,25 +1035,32 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 		proxy.ModelNameGPT55Pro: {"medium", "high", "xhigh"},
 	}
 	matchedModelEfforts := map[string]bool{}
+	matchedKimiK3 := false
 	for _, provider := range profile.Providers {
-		if provider.ID != proxy.ProviderNameOpenAI {
-			continue
-		}
-		if len(provider.ReasoningEffort) != 0 {
-			t.Fatalf("OpenAI profile retains provider-level reasoning capability=%s", string(provider.ReasoningEffort))
-		}
-		for _, model := range provider.TextModels {
-			expectedEfforts, required := expectedModelEfforts[model.ID]
-			if required {
-				if model.ReasoningEffort == nil || model.ReasoningEffort.Adapter != "openai_responses" || !reflect.DeepEqual(model.ReasoningEffort.Efforts, expectedEfforts) {
-					t.Fatalf("model=%s reasoning capability=%+v want=%v", model.ID, model.ReasoningEffort, expectedEfforts)
+		if provider.ID == proxy.ProviderNameOpenAI {
+			if len(provider.ReasoningEffort) != 0 {
+				t.Fatalf("OpenAI profile retains provider-level reasoning capability=%s", string(provider.ReasoningEffort))
+			}
+			for _, model := range provider.TextModels {
+				expectedEfforts, required := expectedModelEfforts[model.ID]
+				if required {
+					if model.ReasoningEffort == nil || model.ReasoningEffort.Adapter != "openai_responses" || !reflect.DeepEqual(model.ReasoningEffort.Efforts, expectedEfforts) {
+						t.Fatalf("model=%s reasoning capability=%+v want=%v", model.ID, model.ReasoningEffort, expectedEfforts)
+					}
+					matchedModelEfforts[model.ID] = true
 				}
-				matchedModelEfforts[model.ID] = true
+			}
+		}
+		if provider.ID == proxy.ProviderNameMoonshot {
+			for _, model := range provider.TextModels {
+				if model.ID == proxy.ModelNameMoonshotKimiK3 && model.ReasoningEffort != nil && model.ReasoningEffort.Adapter == "moonshot_chat_completions" && reflect.DeepEqual(model.ReasoningEffort.Efforts, []string{"low", "high", "max"}) {
+					matchedKimiK3 = true
+				}
 			}
 		}
 	}
-	if len(matchedModelEfforts) != len(expectedModelEfforts) {
-		t.Fatalf("profile model capabilities=%v want=%v", matchedModelEfforts, expectedModelEfforts)
+	if len(matchedModelEfforts) != len(expectedModelEfforts) || !matchedKimiK3 {
+		t.Fatalf("profile model capabilities=%v Kimi K3=%t want=%v", matchedModelEfforts, matchedKimiK3, expectedModelEfforts)
 	}
 
 	incompatibleResponse := saveReasoningDefault(proxy.ProviderNameOpenAI, proxy.ModelNameGPT5, "max")

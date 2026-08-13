@@ -445,6 +445,7 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain('data-route-family="muse-spark"');
   expect(html).toContain('data-route-family="qwen"');
   expect(html).toContain('data-route-model="kimi-k2.6" data-route-model-family="kimi-k2"');
+  expect(html).toContain('data-route-model="kimi-k3" data-route-model-family="kimi-k3"');
   expect(html).toContain('data-route-model="qwen-plus" data-route-model-family="qwen"');
   expect(html).toContain('data-route-model="qwen3.7-max" data-route-model-family="qwen"');
   expect(html).toContain('data-route-model="qwen3.7-plus" data-route-model-family="qwen"');
@@ -863,6 +864,8 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await expect(catalog.locator('[data-model="grok-4.5"]')).toContainText("Image input");
   await expect(catalog.locator('[data-model="gemini-3.5-flash"]')).toContainText("Image input");
   await expect(catalog.locator('[data-model="gemini-3.5-flash"]')).toContainText("Audio message input");
+  await expect(catalog.locator('[data-model="kimi-k2.6"]')).toContainText("Image input");
+  await expect(catalog.locator('[data-model="kimi-k3"]')).toContainText("Reasoning");
 
   const footer = page.locator(".public-site-footer-fallback");
   await expect(footer).toBeVisible();
@@ -926,6 +929,11 @@ test("visitors can filter and choose a model family, exact model, and provider o
   await expect(textFilter).toHaveAttribute("aria-pressed", "false");
   await expect(counts).toHaveText("8 families · 29 exact models · 29 offerings");
   await expect(routingTree.locator("[data-route-family]:visible")).toHaveCount(8);
+  await openWeightsFilter.click();
+  await expect(counts).toHaveText("10 families · 33 exact models · 33 offerings");
+  await expect(routingTree.locator('[data-route-family="kimi-k2"]')).toBeVisible();
+  await expect(routingTree.locator('[data-route-family="kimi-k3"]')).toBeVisible();
+  await openWeightsFilter.click();
   await routingTree.locator('[data-route-family="grok"]').click();
   await expect(routingTree.locator('[data-route-model-group="grok"] [data-route-model]:visible')).toHaveCount(1);
   await expect(routingTree.locator('[data-route-model="grok-4.5"]')).toHaveAttribute("aria-pressed", "true");
@@ -3908,7 +3916,7 @@ test("reasoning effort is exact to the selected text route and the controls rema
     }
   });
   await installAssetRoutes(page);
-  await installManagementRoutes(page);
+  await installManagementRoutes(page, { savedProviderIDs: ["openai", "deepseek", "meta", "moonshot"] });
 
   await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
@@ -3922,6 +3930,18 @@ test("reasoning effort is exact to the selected text route and the controls rema
   const unsupportedEffort = textRoutingControls.locator(".reasoning-effort-unsupported");
 
   await expect(unsupportedEffort).toBeVisible();
+
+  await textProvider.selectOption("moonshot");
+  await expect(textModel).toHaveValue("kimi-k2.6");
+  await expect(reasoningEffort).toBeHidden();
+  await textModel.selectOption("kimi-k3");
+  await expect(reasoningEffort).toBeVisible();
+  await expect(reasoningEffort.locator("option")).toHaveText(["Not set", "low", "high", "max"]);
+  await reasoningEffort.selectOption("max");
+  await expect.poll(() => defaultsMutations.some((defaults) => (
+    defaults.provider === "moonshot" && defaults.model === "kimi-k3" && defaults.reasoning_effort === "max"
+  ))).toBe(true);
+  await textProvider.selectOption("openai");
   await expect(unsupportedEffort).toContainText("Not supported");
   await expect(reasoningEffort).toBeHidden();
   await textModel.selectOption("gpt-5-mini");
@@ -6325,6 +6345,30 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         system_prompt: "",
         text_default_model: "muse-spark-1.1",
         text_models: [{ id: "muse-spark-1.1" }],
+        supports_dictation: false,
+        dictation_models: [],
+      },
+      {
+        id: "moonshot",
+        label: "Moonshot",
+        aliases: ["kimi"],
+        has_key: false,
+        base_url: "",
+        text_model: "kimi-k2.6",
+        system_prompt: "",
+        text_default_model: "kimi-k2.6",
+        text_models: [
+          { id: "kimi-k2.6" },
+          { id: "kimi-k2.7-code" },
+          { id: "kimi-k2.7-code-highspeed" },
+          {
+            id: "kimi-k3",
+            reasoning_effort: {
+              adapter: "moonshot_chat_completions",
+              efforts: ["low", "high", "max"],
+            },
+          },
+        ],
         supports_dictation: false,
         dictation_models: [],
       },

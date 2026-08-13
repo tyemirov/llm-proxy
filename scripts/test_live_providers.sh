@@ -7,8 +7,8 @@ usage() {
 
 Builds the current llm-proxy binary, verifies each available provider key
 through the authenticated management operation, and only then runs its live
-text smoke test. Media mode verifies the four current image providers and then
-runs one canonical image request for each. The preflight mode builds a temporary
+text smoke test. Media mode verifies the five current image providers and then
+runs canonical image requests for their selected catalog routes. The preflight mode builds a temporary
 static configuration and verifies authenticated routing without an upstream
 provider call.
 
@@ -42,8 +42,10 @@ Optional environment:
   GO                         Go binary. Default: go.
 
 Options:
-  --media                  Run the paid OpenAI, Anthropic, Gemini, and xAI image
-                           matrix. LLM_PROXY_LIVE_PROVIDERS can select a subset.
+  --media                    Run the paid OpenAI, Anthropic, Gemini, Moonshot,
+                             and xAI image matrix. LLM_PROXY_LIVE_PROVIDERS can
+                             select a subset. LLM_PROXY_LIVE_ALL_MODELS=true
+                             runs every selected provider image route.
   --preflight                Verify the disposable static config without an
                              upstream provider call.
   --write-config <path>      Write the disposable static config and exit
@@ -238,6 +240,28 @@ models = sorted({
     for offering in catalog.get("offerings", [])
     if offering.get("provider") == sys.argv[2]
     and "text" in offering.get("capabilities", [])
+    and isinstance(offering.get("model"), str)
+    and offering.get("model")
+})
+if not models:
+    raise SystemExit(1)
+print("\n".join(models))
+' "${PUBLIC_CAPABILITIES_RESPONSE_PATH}" "${provider}"
+}
+
+provider_catalog_image_models() {
+	local provider="$1"
+	python3 -c '
+import json
+import pathlib
+import sys
+
+catalog = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+models = sorted({
+    offering.get("model")
+    for offering in catalog.get("offerings", [])
+    if offering.get("provider") == sys.argv[2]
+    and "image_input" in offering.get("capabilities", [])
     and isinstance(offering.get("model"), str)
     and offering.get("model")
 })
@@ -805,8 +829,9 @@ if [[ "${MEDIA_ONLY}" == "true" && ( "${PREFLIGHT_ONLY}" == "true" || -n "${WRIT
 fi
 
 SUPPORTED_PROVIDERS=(openai deepseek dashscope moonshot minimax siliconflow zai gemini anthropic meta xai)
-MEDIA_PROVIDERS=(openai anthropic gemini xai)
+MEDIA_PROVIDERS=(openai anthropic gemini moonshot xai)
 LIVE_PROVIDERS=()
+IMAGE_PROVIDERS=()
 IMAGE_MODELS=()
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="$(mktemp -d)"
@@ -906,17 +931,30 @@ initialize_live_management
 if [[ "${MEDIA_ONLY}" == "true" ]]; then
   fetch_public_capabilities
   for live_provider in "${LIVE_PROVIDERS[@]}"; do
-    if ! image_model="$(provider_image_model "${live_provider}")"; then
-      echo "error: live provider image model is unavailable or ambiguous: provider=${live_provider}" >&2
-      exit 1
+    if [[ "${LIVE_ALL_MODELS}" == "true" ]]; then
+      if ! live_models="$(provider_catalog_image_models "${live_provider}")"; then
+        echo "error: live provider image models are unavailable: provider=${live_provider}" >&2
+        exit 1
+      fi
+      while IFS= read -r image_model; do
+        [[ -n "${image_model}" ]] || continue
+        IMAGE_PROVIDERS+=("${live_provider}")
+        IMAGE_MODELS+=("${image_model}")
+      done <<<"${live_models}"
+    else
+      if ! image_model="$(provider_image_model "${live_provider}")"; then
+        echo "error: live provider image model is unavailable or ambiguous: provider=${live_provider}" >&2
+        exit 1
+      fi
+      IMAGE_PROVIDERS+=("${live_provider}")
+      IMAGE_MODELS+=("${image_model}")
     fi
-    IMAGE_MODELS+=("${image_model}")
   done
-  for live_provider_index in "${!LIVE_PROVIDERS[@]}"; do
-    verify_provider_key "${LIVE_PROVIDERS[${live_provider_index}]}" "${IMAGE_MODELS[${live_provider_index}]}"
+  for live_provider_index in "${!IMAGE_PROVIDERS[@]}"; do
+    verify_provider_key "${IMAGE_PROVIDERS[${live_provider_index}]}" "${IMAGE_MODELS[${live_provider_index}]}"
   done
-  for live_provider_index in "${!LIVE_PROVIDERS[@]}"; do
-    run_image_smoke "${LIVE_PROVIDERS[${live_provider_index}]}" "${IMAGE_MODELS[${live_provider_index}]}"
+  for live_provider_index in "${!IMAGE_PROVIDERS[@]}"; do
+    run_image_smoke "${IMAGE_PROVIDERS[${live_provider_index}]}" "${IMAGE_MODELS[${live_provider_index}]}"
   done
 else
   if [[ "${LIVE_ALL_MODELS}" == "true" ]]; then

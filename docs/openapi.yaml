@@ -120,7 +120,9 @@ paths:
         media admission and transport limits. Unsupported media or route
         capabilities return HTTP 400 before an upstream call. The service
         rejects an encoded request body above 8 MiB before JSON decoding. A
-        smaller catalog-derived body limit applies when configured.
+        smaller catalog-derived body limit applies when configured. Current
+        Moonshot Kimi image routes preserve attachment order and exact bytes
+        through Chat Completions Data URL blocks.
       tags:
         - Proxy
       security:
@@ -1820,7 +1822,7 @@ components:
           type: integer
           minimum: 0
     MessageAttachment:
-      description: One provider-neutral image or audio input with a MIME type that matches its declared media type.
+      description: One provider-neutral image or audio input with a MIME type that matches its declared media type. The resolved catalog route determines support. Current Moonshot Kimi image routes accept the image variants.
       oneOf:
         - $ref: '#/components/schemas/ImageMessageAttachment'
         - $ref: '#/components/schemas/AudioMessageAttachment'
@@ -2086,7 +2088,7 @@ components:
         reasoning_effort:
           type: string
           minLength: 1
-          description: Omission selects the tenant or route default. An explicit value must be non-blank and supported by the resolved provider/model route.
+          description: Omission selects the tenant or route default. An explicit value must be non-blank and supported by the resolved provider/model route. Kimi K3 accepts low, high, or max.
     DictationRequest:
       type: object
       additionalProperties: false

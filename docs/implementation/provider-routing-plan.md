@@ -226,10 +226,14 @@ provider offerings. Provider-native model identifiers exist only in offerings.
 
 The README model-capability table mirrors `config.yml`; refresh those two
 catalog representations together and do not hardcode model ids in provider
-transports. Moonshot's current Kimi Chat Completions route receives
+transports. Moonshot's current Kimi Chat Completions routes receive
 `max_completion_tokens` when a caller supplies the proxy `max_tokens` value.
-It deliberately omits sampling controls because Kimi K3 fixes those values
-upstream.
+Kimi K3 maps exact proxy reasoning efforts `low`, `high`, and `max` to the
+top-level provider field. Omission keeps Moonshot's default. Kimi K2.6 and
+both Kimi K2.7 Code routes receive no `thinking` field, which keeps their
+provider default. All four routes serialize ordered canonical JPEG, PNG, and
+WebP inputs as Data URL Chat Completions blocks before message text. Only
+visible answer content leaves the adapter. `reasoning_content` is private.
 MiniMax M2.7 maps public `max_tokens` to
 `max_completion_tokens` and carries a configured 2048-token output ceiling.
 GLM-5.2 uses the international Z.AI Chat Completions endpoint. Its
@@ -568,15 +572,16 @@ port unless `LLM_PROXY_LIVE_PORT` explicitly provides one, and cleanup
 terminates only the proxy child started by the harness rather than a process
 discovered through a shared port.
 
-The explicit `--media` mode selects OpenAI, Anthropic, Gemini, and xAI by
-default. It verifies all four provider keys before it sends image requests.
+The explicit `--media` mode selects OpenAI, Anthropic, Gemini, Moonshot, and
+xAI by default. It verifies all selected provider keys before image requests.
 Each case selects its exact image model from the validated public provider
 catalog. It uses the verified model when that route supports image input.
 Otherwise, it requires one exact provider image route. Key verification uses
 the selected image model. Each request sends the same deterministic inline PNG
 through canonical `POST /v2`. The case requires HTTP `200`, the exact response
 marker, and one valid proxy request identifier. The paid media mode remains
-outside `make ci`.
+outside `make ci`. `LLM_PROXY_LIVE_ALL_MODELS=true` expands media mode to
+every image route for each selected provider, including all four Kimi routes.
 
 `make live-test` is deliberately a different boundary: it calls only the
 production API origin with `LLM_PROXY_SECRET`, the Default tenant client
