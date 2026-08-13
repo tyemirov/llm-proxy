@@ -465,12 +465,16 @@ Provider-specific details:
   [reasoning-effort guide](https://platform.kimi.ai/docs/guide/use-reasoning-effort),
   [vision guide](https://platform.kimi.ai/docs/guide/use-kimi-vision-model),
   and [Chat Completions reference](https://platform.kimi.ai/docs/api/chat).
-* MiniMax uses selector `minimax`, exact model `minimax-m2.7`,
-  `${MINIMAX_API_KEY}`, and `https://api.minimax.io/v1`. The shared compatible
-  Chat Completions adapter maps public `max_tokens` to upstream
-  `max_completion_tokens`; the catalog enforces MiniMax's documented 2048-token
-  completion maximum. The proxy does not expose MiniMax-specific reasoning,
-  tool, streaming, or multimodal controls.
+* MiniMax uses selector `minimax`, `${MINIMAX_API_KEY}`, and
+  `https://api.minimax.io/v1`. `minimax-m2.7` remains the default. The catalog
+  also includes M2.7 Highspeed, M2.5, M2.5 Highspeed, M2.1, M2.1 Highspeed,
+  and M2. The shared Chat Completions adapter maps public `max_tokens` to
+  upstream `max_completion_tokens`. All seven routes enforce the documented
+  204,800-token completion maximum. The proxy does not expose MiniMax-specific
+  reasoning, tool, streaming, or multimodal controls. See the official
+  [OpenAI SDK guide](https://platform.minimax.io/docs/api-reference/text-openai-api),
+  [Chat Completions reference](https://platform.minimax.io/docs/api-reference/text-chat-openai),
+  and [PAYG prices](https://platform.minimax.io/docs/guides/pricing-paygo).
 * Meta Model API requests use that shared Chat Completions adapter with the
   exact `meta` selector, `https://api.meta.ai/v1` base URL,
   `${MODEL_API_KEY}` credential, and `muse-spark-1.1` model. llm-proxy exposes
@@ -1163,8 +1167,8 @@ limit. When omitted, the proxy does not send a provider max-token field, except
 Anthropic Messages where `max_tokens` is required upstream and the proxy sends
 the selected model's configured output limit.
 Provider-specific output-token limits are enforced at the request edge when
-known. MiniMax M2.7 rejects `max_tokens` above `2048`; Gemini text models
-currently reject values above `65536`; Claude models reject values above the
+known. MiniMax M2 routes reject `max_tokens` above `204800`. Gemini text models
+currently reject values above `65536`. Claude models reject values above the
 configured synchronous Messages output limit. Those errors return `400 Bad
 Request` before any upstream provider call.
 
@@ -1410,6 +1414,14 @@ workspace URL:
 
 ```shell
 LLM_PROXY_LIVE_PROVIDERS=dashscope \
+  LLM_PROXY_LIVE_ALL_MODELS=true \
+  make test-live-providers LIVE_ENV_FILE=configs/.env
+```
+
+Run the complete MiniMax M2 model matrix:
+
+```shell
+LLM_PROXY_LIVE_PROVIDERS=minimax \
   LLM_PROXY_LIVE_ALL_MODELS=true \
   make test-live-providers LIVE_ENV_FILE=configs/.env
 ```
@@ -2067,10 +2079,9 @@ Bodies that provide both `prompt` and `messages`, empty `messages`, unsupported
 message roles, empty message content, partially specified `order`, duplicate
 or negative `order`, or both `system_prompt` and a system message return
 `400 Bad Request` before any upstream call.
-The proxy returns `400 Bad Request` before upstream dispatch for MiniMax M2.7
-values above `2048` and current Qwen or Gemini values above `65536`. The same
-response applies to Anthropic values above the configured Claude model output
-limit.
+The proxy returns `400 Bad Request` before upstream dispatch for MiniMax M2
+values above `204800` and current Qwen or Gemini values above `65536`. The same
+response applies to values above the configured Claude model output limit.
 
 `POST /v2` is the canonical chat endpoint. Its exact accepted fields come from
 the OpenAPI schema, including the omission-versus-explicit-value contract for
@@ -2317,7 +2328,13 @@ effort through the proxy.
 | `kimi-k3` | Moonshot/Kimi | No | - | No |
 | `kimi-k2.7-code` | Moonshot/Kimi | No | - | No |
 | `kimi-k2.7-code-highspeed` | Moonshot/Kimi | No | - | No |
-| `minimax-m2.7` | MiniMax | Yes | `2048` | No |
+| `minimax-m2.7` | MiniMax | Yes | `204800` | No |
+| `minimax-m2.7-highspeed` | MiniMax | No | `204800` | No |
+| `minimax-m2.5` | MiniMax | No | `204800` | No |
+| `minimax-m2.5-highspeed` | MiniMax | No | `204800` | No |
+| `minimax-m2.1` | MiniMax | No | `204800` | No |
+| `minimax-m2.1-highspeed` | MiniMax | No | `204800` | No |
+| `minimax-m2` | MiniMax | No | `204800` | No |
 | `glm-5.1` | Z.AI | Yes | - | No |
 | `glm-5.2` | Z.AI | No | `131072` | No |
 | `gemini-3.5-flash` | Gemini | No | `65536` | No |
@@ -2361,6 +2378,16 @@ availability, and workspace URL were verified on 2026-08-13 against Alibaba's
 [model catalog](https://www.alibabacloud.com/help/en/model-studio/models),
 [OpenAI compatibility guide](https://www.alibabacloud.com/help/en/model-studio/compatibility-with-openai-responses-api),
 and [pricing page](https://www.alibabacloud.com/help/en/model-studio/model-pricing).
+
+All seven MiniMax M2 routes are text-only Chat Completions offerings with a
+204,800-token context record and output boundary. M2.7 input and output cost
+$0.30 and $1.20 per million tokens. M2.7 Highspeed costs $0.60 and $2.40.
+The M2.5, M2.1, and M2 routes use the same standard input and output rates as
+M2.7. Their Highspeed variants use the M2.7 Highspeed rates. The catalog also
+records the published prompt-cache read and write rates. MiniMax now lists
+M2.5, M2.1, and M2 under legacy prices, but still includes them in the supported
+OpenAI-compatible model list. Limits, availability, and standard PAYG prices
+were verified on 2026-08-13 against MiniMax's official references above.
 
 ### Dictation capabilities
 

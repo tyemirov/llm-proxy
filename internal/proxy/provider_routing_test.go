@@ -389,6 +389,12 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 		{name: "Moonshot Kimi K2.7 Code", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK27Code, tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty", "thinking", "reasoning_effort"}},
 		{name: "Moonshot Kimi K2.7 Code Highspeed", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK27CodeHighSpeed, tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"thinking", "reasoning_effort"}},
 		{name: "MiniMax M2.7", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM27, providerModel: "MiniMax-M2.7", tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
+		{name: "MiniMax M2.7 Highspeed", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM27HighSpeed, providerModel: "MiniMax-M2.7-highspeed", tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
+		{name: "MiniMax M2.5", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM25, providerModel: "MiniMax-M2.5", tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
+		{name: "MiniMax M2.5 Highspeed", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM25HighSpeed, providerModel: "MiniMax-M2.5-highspeed", tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
+		{name: "MiniMax M2.1", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM21, providerModel: "MiniMax-M2.1", tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
+		{name: "MiniMax M2.1 Highspeed", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM21HighSpeed, providerModel: "MiniMax-M2.1-highspeed", tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
+		{name: "MiniMax M2", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM2, providerModel: "MiniMax-M2", tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
 		{name: "SiliconFlow DeepSeek R1", provider: proxy.ProviderNameSiliconFlow, model: proxy.ModelNameSiliconFlowDeepSeek, providerModel: "deepseek-ai/DeepSeek-R1", tokenParameterField: "max_tokens", expectedAPIKey: testSiliconFlowKey},
 		{name: "ZAI GLM 5.2", provider: proxy.ProviderNameZAI, model: "glm-5.2", tokenParameterField: "max_tokens", forbiddenFields: []string{"thinking", "reasoning_effort"}},
 		{name: "Grok 4.20 reasoning", provider: proxy.ProviderNameXAI, model: "grok-4.20-0309-reasoning", tokenParameterField: "max_tokens"},
@@ -635,9 +641,9 @@ func TestProviderRoutingRejectsCurrentQwenMaxTokensAboveModelLimit(t *testing.T)
 	}
 }
 
-func TestProviderRoutingRejectsMiniMaxM27MaxTokensAboveModelLimit(t *testing.T) {
+func TestProviderRoutingRejectsCurrentMiniMaxMaxTokensAboveModelLimit(t *testing.T) {
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		t.Fatal("upstream must not be called for max_tokens above the MiniMax-M2.7 limit")
+		t.Fatal("upstream must not be called for max_tokens above the MiniMax M2 limit")
 	}))
 	defer upstreamServer.Close()
 
@@ -655,21 +661,28 @@ func TestProviderRoutingRejectsMiniMaxM27MaxTokensAboveModelLimit(t *testing.T) 
 		t.Fatalf(messageBuildRouterError, buildError)
 	}
 
-	queryParameters := url.Values{}
-	queryParameters.Set("key", TestSecret)
-	queryParameters.Set("prompt", TestPrompt)
-	queryParameters.Set("provider", proxy.ProviderNameMiniMax)
-	queryParameters.Set("model", proxy.ModelNameMiniMaxM27)
-	queryParameters.Set("max_tokens", "2049")
-	request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
-	responseRecorder := httptest.NewRecorder()
-	router.ServeHTTP(responseRecorder, request)
+	for _, model := range []string{
+		proxy.ModelNameMiniMaxM27,
+		proxy.ModelNameMiniMaxM27HighSpeed,
+		proxy.ModelNameMiniMaxM25,
+		proxy.ModelNameMiniMaxM25HighSpeed,
+		proxy.ModelNameMiniMaxM21,
+		proxy.ModelNameMiniMaxM21HighSpeed,
+		proxy.ModelNameMiniMaxM2,
+	} {
+		queryParameters := url.Values{}
+		queryParameters.Set("key", TestSecret)
+		queryParameters.Set("prompt", TestPrompt)
+		queryParameters.Set("provider", proxy.ProviderNameMiniMax)
+		queryParameters.Set("model", model)
+		queryParameters.Set("max_tokens", "204801")
+		request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
 
-	if responseRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusBadRequest, responseRecorder.Body.String())
-	}
-	if !strings.Contains(responseRecorder.Body.String(), "invalid max_tokens parameter") {
-		t.Fatalf("body=%q want invalid max_tokens parameter", responseRecorder.Body.String())
+		if responseRecorder.Code != http.StatusBadRequest || !strings.Contains(responseRecorder.Body.String(), "invalid max_tokens parameter") {
+			t.Fatalf("model=%s status=%d body=%q", model, responseRecorder.Code, responseRecorder.Body.String())
+		}
 	}
 }
 

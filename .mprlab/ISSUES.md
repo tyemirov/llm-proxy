@@ -358,7 +358,7 @@ retain satisfied historical dependencies.
   - `make ci` passed all 11 gates with 93 browser tests and 100.0% Go statement
     coverage.
 
-- [ ] [I228] (P1) {I223} Add current MiniMax text model offerings.
+- [!] [I228] (P1) {I223} Add current MiniMax text model offerings.
   Goal:
   Give managed tenants access to the current MiniMax M2 text models through
   the existing direct MiniMax provider connection.
@@ -372,6 +372,9 @@ retain satisfied historical dependencies.
   - MiniMax documents `https://api.minimax.io/v1/chat/completions` as the
     OpenAI-compatible text endpoint:
     https://platform.minimax.io/docs/api-reference/text-chat-openai
+  - The current Chat Completions reference gives M2 models a 204,800-token
+    completion maximum. The PAYG page publishes standard rates for all seven:
+    https://platform.minimax.io/docs/guides/pricing-paygo
   Requirements:
   - Keep `minimax-m2.7` as the MiniMax default text model.
   - Add canonical exact models for the six other documented identifiers.
@@ -379,7 +382,7 @@ retain satisfied historical dependencies.
   - Store each exact MiniMax identifier in its provider offering.
   - Use `openai_chat_completions` and `synchronous_completion` for each route.
   - Map the public `max_tokens` value to `max_completion_tokens`.
-  - Apply the documented 2048-token limit to each compatible route.
+  - Apply the documented 204,800-token limit to each compatible route.
   - Record one current price for each new text offering.
   - Record the official price source and verification date.
   - Preserve existing tenant defaults and saved `minimax-m2.7` selections.
@@ -394,12 +397,15 @@ retain satisfied historical dependencies.
   Validation:
   - Prove each exact model selects the documented upstream identifier.
   - Prove each route sends `max_completion_tokens` when the caller supplies a limit.
-  - Prove each route rejects a value above 2048 before provider dispatch.
+  - Prove each route rejects a value above 204,800 before provider dispatch.
   - Prove existing `minimax-m2.7` defaults remain unchanged.
   - Prove each model appears once in every generated model surface.
   - Run one paid key verification and text request with a selected new model.
   - Keep credentials, prompts, and response bodies out of test output.
   - Run `make ci` after the last application change.
+  Blocked: A MiniMax credential and paid-call authorization are not available
+  in this workspace. The operator must supply `MINIMAX_API_KEY` and authorize
+  the 14 paid live calls for seven key checks and seven text requests.
 
 - [!] [I227] (P1) {I223} Add Kimi reasoning and image route capabilities.
   Goal:

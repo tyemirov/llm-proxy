@@ -1586,7 +1586,15 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 		proxy.ProviderNameOpenAI:    {"gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"},
 		proxy.ProviderNameDashScope: {proxy.ModelNameDashScopeQwenPlus, proxy.ModelNameDashScopeQwen36Flash, proxy.ModelNameDashScopeQwen37Max, proxy.ModelNameDashScopeQwen37Plus},
 		proxy.ProviderNameMoonshot:  {proxy.ModelNameMoonshotKimiK26, proxy.ModelNameMoonshotKimiK27Code, proxy.ModelNameMoonshotKimiK27CodeHighSpeed, proxy.ModelNameMoonshotKimiK3},
-		proxy.ProviderNameMiniMax:   {proxy.ModelNameMiniMaxM27},
+		proxy.ProviderNameMiniMax: {
+			proxy.ModelNameMiniMaxM2,
+			proxy.ModelNameMiniMaxM21,
+			proxy.ModelNameMiniMaxM21HighSpeed,
+			proxy.ModelNameMiniMaxM25,
+			proxy.ModelNameMiniMaxM25HighSpeed,
+			proxy.ModelNameMiniMaxM27,
+			proxy.ModelNameMiniMaxM27HighSpeed,
+		},
 		proxy.ProviderNameZAI:       {"glm-5.2"},
 		proxy.ProviderNameGemini:    {"gemini-3.1-pro-preview", "gemini-3-flash-preview"},
 		proxy.ProviderNameAnthropic: {"claude-fable-5", "claude-sonnet-5"},
@@ -1622,6 +1630,12 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 	}
 	if textDefaultsByProvider[proxy.ProviderNameDashScope] != proxy.ModelNameDashScopeQwenPlus {
 		t.Fatalf("profile provider=%s default=%s want=%s", proxy.ProviderNameDashScope, textDefaultsByProvider[proxy.ProviderNameDashScope], proxy.ModelNameDashScopeQwenPlus)
+	}
+	if configuredMiniMaxModels := modelsByProvider[proxy.ProviderNameMiniMax]; !reflect.DeepEqual(configuredMiniMaxModels, expectedModels[proxy.ProviderNameMiniMax]) {
+		t.Fatalf("profile provider=%s models=%v want=%v", proxy.ProviderNameMiniMax, configuredMiniMaxModels, expectedModels[proxy.ProviderNameMiniMax])
+	}
+	if textDefaultsByProvider[proxy.ProviderNameMiniMax] != proxy.ModelNameMiniMaxM27 {
+		t.Fatalf("profile provider=%s default=%s want=%s", proxy.ProviderNameMiniMax, textDefaultsByProvider[proxy.ProviderNameMiniMax], proxy.ModelNameMiniMaxM27)
 	}
 }
 

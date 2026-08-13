@@ -1510,8 +1510,9 @@ func TestOperationalLiveHarnessDiscoversEverySelectedProviderTextModel(testingIn
 	fixtureRoot := testingInstance.TempDir()
 	environmentFile := filepath.Join(fixtureRoot, "live.env")
 	operationCapture := filepath.Join(fixtureRoot, "operations.log")
-	const providerKey = "test-live-dashscope-key"
-	writeOperationalFile(testingInstance, environmentFile, "DASHSCOPE_API_KEY="+providerKey+"\nDASHSCOPE_BASE_URL=https://tenant-workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1\n", 0o600)
+	const dashScopeProviderKey = "test-live-dashscope-key"
+	const miniMaxProviderKey = "test-live-minimax-key"
+	writeOperationalFile(testingInstance, environmentFile, "DASHSCOPE_API_KEY="+dashScopeProviderKey+"\nDASHSCOPE_BASE_URL=https://tenant-workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1\nMINIMAX_API_KEY="+miniMaxProviderKey+"\n", 0o600)
 	command := exec.Command(filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"))
 	command.Dir = repositoryRoot
 	command.Env = []string{
@@ -1520,7 +1521,7 @@ func TestOperationalLiveHarnessDiscoversEverySelectedProviderTextModel(testingIn
 		"LLM_PROXY_LIVE_PORT=" + strconv.Itoa(operationalLoopbackPort(testingInstance)),
 		"PROXY_PID_CAPTURE=" + fixture.proxyPIDPath,
 		"LIVE_ENV_FILE=" + environmentFile,
-		"LLM_PROXY_LIVE_PROVIDERS=dashscope",
+		"LLM_PROXY_LIVE_PROVIDERS=dashscope,minimax",
 		"LLM_PROXY_LIVE_ALL_MODELS=true",
 		"LIVE_OPERATION_CAPTURE=" + operationCapture,
 	}
@@ -1529,18 +1530,33 @@ func TestOperationalLiveHarnessDiscoversEverySelectedProviderTextModel(testingIn
 		testingInstance.Fatalf("live provider all-model harness failed: %v\n%s", commandError, output)
 	}
 	outputText := string(output)
-	models := []string{"qwen-plus", "qwen3.6-flash", "qwen3.7-max", "qwen3.7-plus"}
-	for _, model := range models {
+	models := []struct {
+		provider string
+		model    string
+	}{
+		{provider: "dashscope", model: "qwen-plus"},
+		{provider: "dashscope", model: "qwen3.6-flash"},
+		{provider: "dashscope", model: "qwen3.7-max"},
+		{provider: "dashscope", model: "qwen3.7-plus"},
+		{provider: "minimax", model: "minimax-m2"},
+		{provider: "minimax", model: "minimax-m2.1"},
+		{provider: "minimax", model: "minimax-m2.1-highspeed"},
+		{provider: "minimax", model: "minimax-m2.5"},
+		{provider: "minimax", model: "minimax-m2.5-highspeed"},
+		{provider: "minimax", model: "minimax-m2.7"},
+		{provider: "minimax", model: "minimax-m2.7-highspeed"},
+	}
+	for _, route := range models {
 		for _, expected := range []string{
-			"live provider verification passed: provider=dashscope model=" + model + " status=200",
-			"live provider smoke passed: provider=dashscope model=" + model + " status=200",
+			"live provider verification passed: provider=" + route.provider + " model=" + route.model + " status=200",
+			"live provider smoke passed: provider=" + route.provider + " model=" + route.model + " status=200",
 		} {
 			if !strings.Contains(outputText, expected) {
 				testingInstance.Fatalf("live all-model output missing %q: %s", expected, output)
 			}
 		}
 	}
-	if strings.Contains(outputText, providerKey) || strings.Contains(outputText, "live-generated-secret") {
+	if strings.Contains(outputText, dashScopeProviderKey) || strings.Contains(outputText, miniMaxProviderKey) || strings.Contains(outputText, "live-generated-secret") {
 		testingInstance.Fatalf("live all-model output exposed credential material: %s", output)
 	}
 	captureBytes, readError := os.ReadFile(operationCapture)
@@ -1551,9 +1567,9 @@ func TestOperationalLiveHarnessDiscoversEverySelectedProviderTextModel(testingIn
 	if strings.Count(capture, "verify PUT ") != len(models) || strings.Count(capture, "smoke POST ") != len(models) {
 		testingInstance.Fatalf("live all-model operation count mismatch: %s", capture)
 	}
-	for _, model := range models {
-		if !strings.Contains(capture, `"text_model":"`+model+`"`) || !strings.Contains(capture, `"model":"`+model+`"`) {
-			testingInstance.Fatalf("live all-model capture missing model=%s: %s", model, capture)
+	for _, route := range models {
+		if !strings.Contains(capture, `"text_model":"`+route.model+`"`) || !strings.Contains(capture, `"model":"`+route.model+`"`) {
+			testingInstance.Fatalf("live all-model capture missing provider=%s model=%s: %s", route.provider, route.model, capture)
 		}
 	}
 	assertOperationalProxyChildStopped(testingInstance, fixture.proxyPIDPath)
@@ -1849,7 +1865,7 @@ write_response_headers() {
 
 case "${request_url}" in
   */api/public/capabilities)
-    builtin printf '%s' '{"offerings":[{"provider":"openai","model":"gpt-4.1","capabilities":["image_input","text"]},{"provider":"anthropic","model":"claude-sonnet-4-6","capabilities":["image_input","text"]},{"provider":"gemini","model":"gemini-2.5-flash","capabilities":["audio_input","image_input","text"]},{"provider":"moonshot","model":"kimi-k2.6","capabilities":["image_input","text"]},{"provider":"moonshot","model":"kimi-k2.7-code","capabilities":["image_input","text"]},{"provider":"moonshot","model":"kimi-k2.7-code-highspeed","capabilities":["image_input","text"]},{"provider":"moonshot","model":"kimi-k3","capabilities":["image_input","text"]},{"provider":"xai","model":"grok-4.5","capabilities":["image_input","text"]},{"provider":"dashscope","model":"qwen-plus","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.6-flash","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.7-max","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.7-plus","capabilities":["text"]}]}' >"${output_path}"
+    builtin printf '%s' '{"offerings":[{"provider":"openai","model":"gpt-4.1","capabilities":["image_input","text"]},{"provider":"anthropic","model":"claude-sonnet-4-6","capabilities":["image_input","text"]},{"provider":"gemini","model":"gemini-2.5-flash","capabilities":["audio_input","image_input","text"]},{"provider":"moonshot","model":"kimi-k2.6","capabilities":["image_input","text"]},{"provider":"moonshot","model":"kimi-k2.7-code","capabilities":["image_input","text"]},{"provider":"moonshot","model":"kimi-k2.7-code-highspeed","capabilities":["image_input","text"]},{"provider":"moonshot","model":"kimi-k3","capabilities":["image_input","text"]},{"provider":"xai","model":"grok-4.5","capabilities":["image_input","text"]},{"provider":"dashscope","model":"qwen-plus","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.6-flash","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.7-max","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.7-plus","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.1","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.1-highspeed","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.5","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.5-highspeed","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.7","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.7-highspeed","capabilities":["text"]}]}' >"${output_path}"
     builtin printf '%s' 200
     ;;
   */api/management/account)
@@ -1857,7 +1873,7 @@ case "${request_url}" in
     builtin printf '%s' 200
     ;;
   */api/management/tenants/tenant-live/secrets)
-    builtin printf '%s' '{"secret":"live-generated-secret","profile":{"providers":[{"id":"openai","text_default_model":"gpt-4.1"},{"id":"anthropic","text_default_model":"claude-sonnet-4-6"},{"id":"gemini","text_default_model":"gemini-2.5-flash"},{"id":"moonshot","text_default_model":"kimi-k2.6"},{"id":"xai","text_default_model":"grok-4.3"},{"id":"deepseek","text_default_model":"deepseek-v4-flash"}]}}' >"${output_path}"
+    builtin printf '%s' '{"secret":"live-generated-secret","profile":{"providers":[{"id":"openai","text_default_model":"gpt-4.1"},{"id":"anthropic","text_default_model":"claude-sonnet-4-6"},{"id":"gemini","text_default_model":"gemini-2.5-flash"},{"id":"moonshot","text_default_model":"kimi-k2.6"},{"id":"minimax","text_default_model":"minimax-m2.7"},{"id":"xai","text_default_model":"grok-4.3"},{"id":"deepseek","text_default_model":"deepseek-v4-flash"}]}}' >"${output_path}"
     builtin printf '%s' 200
     ;;
   */api/management/tenants/tenant-live/provider-keys/*)

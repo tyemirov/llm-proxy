@@ -206,8 +206,13 @@ P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlh
 		t.Fatalf("deepseek default offering=%+v found=%t", deepSeekDefault, deepSeekDefaultFound)
 	}
 	miniMaxOfferings := configuredProviderOfferings(capturedConfiguration.ModelCatalog, proxy.ProviderNameMiniMax)
-	if len(miniMaxOfferings) != 1 || miniMaxOfferings[0].Model != proxy.ModelNameMiniMaxM27 || miniMaxOfferings[0].OutputTokenLimit != 2048 {
+	if len(miniMaxOfferings) != 7 || miniMaxOfferings[0].Model != proxy.ModelNameMiniMaxM27 || !slices.Equal(miniMaxOfferings[0].DefaultOperations, []string{proxy.ModelOperationText}) {
 		t.Fatalf("miniMax offerings=%+v", miniMaxOfferings)
+	}
+	for _, offering := range miniMaxOfferings {
+		if offering.OutputTokenLimit != 204800 {
+			t.Fatalf("miniMax offering=%+v", offering)
+		}
 	}
 	openAIOfferings := configuredProviderOfferings(capturedConfiguration.ModelCatalog, proxy.ProviderNameOpenAI)
 	if len(openAIOfferings) < 3 || openAIOfferings[2].Model != "gpt-4.1" || openAIOfferings[2].RequestProfile != "openai_responses_temperature_tools" || !openAIOfferings[2].WebSearch {

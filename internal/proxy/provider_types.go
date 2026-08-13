@@ -76,6 +76,18 @@ const (
 	ModelNameMoonshotKimiK27CodeHighSpeed = "kimi-k2.7-code-highspeed"
 	// ModelNameMiniMaxM27 identifies MiniMax M2.7.
 	ModelNameMiniMaxM27 = "minimax-m2.7"
+	// ModelNameMiniMaxM27HighSpeed identifies MiniMax M2.7 Highspeed.
+	ModelNameMiniMaxM27HighSpeed = "minimax-m2.7-highspeed"
+	// ModelNameMiniMaxM25 identifies MiniMax M2.5.
+	ModelNameMiniMaxM25 = "minimax-m2.5"
+	// ModelNameMiniMaxM25HighSpeed identifies MiniMax M2.5 Highspeed.
+	ModelNameMiniMaxM25HighSpeed = "minimax-m2.5-highspeed"
+	// ModelNameMiniMaxM21 identifies MiniMax M2.1.
+	ModelNameMiniMaxM21 = "minimax-m2.1"
+	// ModelNameMiniMaxM21HighSpeed identifies MiniMax M2.1 Highspeed.
+	ModelNameMiniMaxM21HighSpeed = "minimax-m2.1-highspeed"
+	// ModelNameMiniMaxM2 identifies MiniMax M2.
+	ModelNameMiniMaxM2 = "minimax-m2"
 	// ModelNameSiliconFlowDeepSeek identifies SiliconFlow-hosted DeepSeek R1.
 	ModelNameSiliconFlowDeepSeek = ModelNameDeepSeekReasoner
 	// ModelNameZAIGLM identifies the GLM 5.1 model.

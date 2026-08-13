@@ -49,7 +49,7 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 - `max_tokens` is an optional positive integer on `GET /` query strings and JSON `POST /` bodies. It is the initial per-attempt output budget and is reused for missing-suffix attempts.
 - Provided `max_tokens` maps to OpenAI Responses `max_output_tokens`, Meta, Moonshot, and MiniMax Chat Completions `max_completion_tokens`, other OpenAI-compatible chat completions `max_tokens`, Anthropic Messages `max_tokens`, and Gemini Interactions `generation_config.max_output_tokens`.
 - Omitted `max_tokens` means the proxy omits provider max-token fields and lets the selected provider/model default apply, except Anthropic Messages where the upstream API requires `max_tokens` and the proxy sends the selected model's configured synchronous output limit. After an output-budget stop with no visible progress, a configured model output limit becomes the generic ceiling for increasing the next attempt.
-- Known provider-specific output-token ceilings are validated before upstream calls; MiniMax M2.7 rejects `max_tokens` above `2048`, Gemini text models reject values above `65536`, and Claude models reject values above their configured synchronous Messages output limits with `400 Bad Request`.
+- Known provider-specific output-token ceilings are validated before upstream calls. MiniMax M2 routes reject `max_tokens` above `204800`. Gemini text models reject values above `65536`. Claude models reject values above their configured synchronous Messages output limits with `400 Bad Request`.
 - `reasoning_effort` is optional on `GET /` as a query parameter and on JSON `POST /` and `POST /v2` as a body field. Omission retains the resolved tenant default. A supplied value must be nonblank and supported by the exact resolved text provider/model route; blank, `null`, or unsupported values return `400 Bad Request` before a provider call.
 - `X-LLM-Proxy-Request-Timeout-Seconds` is an optional positive whole-number
   header on `GET /`, `POST /`, `POST /v2`, `POST /model/v1/assets`, and
@@ -123,11 +123,13 @@ limits, and list pricing were verified from Alibaba's official model,
 compatibility, and pricing references on 2026-08-13.
 
 MiniMax is a distinct text-only provider with canonical selector `minimax`,
-exact model `minimax-m2.7`, endpoint `https://api.minimax.io/v1`, and
-`${MINIMAX_API_KEY}`. The shared adapter maps public `max_tokens` to MiniMax
-`max_completion_tokens`; its configured `2048` output limit is rejected at the
-proxy edge before an upstream call. The proxy does not add MiniMax-specific
-reasoning, tools, streaming, or multimodal controls.
+endpoint `https://api.minimax.io/v1`, and `${MINIMAX_API_KEY}`. The seven M2
+routes use exact lowercase canonical model ids and exact provider-native model
+ids. `minimax-m2.7` remains the default. The shared adapter maps public
+`max_tokens` to MiniMax `max_completion_tokens`. Each route has the documented
+204,800-token context and output boundary. MiniMax's supported-model, API,
+limit, and standard PAYG price records were verified on 2026-08-13. The proxy
+does not add MiniMax-specific reasoning, tools, streaming, or media controls.
 
 ## Configuration
 
@@ -234,8 +236,8 @@ both Kimi K2.7 Code routes receive no `thinking` field, which keeps their
 provider default. All four routes serialize ordered canonical JPEG, PNG, and
 WebP inputs as Data URL Chat Completions blocks before message text. Only
 visible answer content leaves the adapter. `reasoning_content` is private.
-MiniMax M2.7 maps public `max_tokens` to
-`max_completion_tokens` and carries a configured 2048-token output ceiling.
+All seven MiniMax M2 routes map public `max_tokens` to
+`max_completion_tokens` and carry a configured 204800-token output ceiling.
 GLM-5.2 uses the international Z.AI Chat Completions endpoint. Its
 128K output maximum is catalog metadata; optional `thinking` and
 provider-native `reasoning_effort` controls are not exposed directly. The

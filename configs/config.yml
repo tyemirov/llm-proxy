@@ -62,7 +62,7 @@ providers:
     base_url: https://api.x.ai/v1
     transcriptions_url: https://api.x.ai/v1/stt
 catalog:
-  revision: 2026-08-13.i227.1
+  revision: 2026-08-13.i228.1
   operations:
   - id: text
     input_artifacts:
@@ -432,6 +432,42 @@ catalog:
     publisher: minimax
     family: minimax-m2
     version: minimax-m2.7
+    operations:
+    - text
+  - id: minimax-m2.7-highspeed
+    publisher: minimax
+    family: minimax-m2
+    version: minimax-m2.7-highspeed
+    operations:
+    - text
+  - id: minimax-m2.5
+    publisher: minimax
+    family: minimax-m2
+    version: minimax-m2.5
+    operations:
+    - text
+  - id: minimax-m2.5-highspeed
+    publisher: minimax
+    family: minimax-m2
+    version: minimax-m2.5-highspeed
+    operations:
+    - text
+  - id: minimax-m2.1
+    publisher: minimax
+    family: minimax-m2
+    version: minimax-m2.1
+    operations:
+    - text
+  - id: minimax-m2.1-highspeed
+    publisher: minimax
+    family: minimax-m2
+    version: minimax-m2.1-highspeed
+    operations:
+    - text
+  - id: minimax-m2
+    publisher: minimax
+    family: minimax-m2
+    version: minimax-m2
     operations:
     - text
   - id: sensevoice-small
@@ -1427,7 +1463,118 @@ catalog:
     - text
     wire_contract: openai_chat_completions
     execution_lifecycle: synchronous_completion
-    output_token_limit: 2048
+    output_token_limit: 204800
+    controls:
+    - id: max_tokens
+      kind: integer
+      minimum: 1
+      maximum: 204800
+    limits:
+    - id: context_tokens
+      value: 204800
+      unit: tokens
+  - provider: minimax
+    model: minimax-m2.7-highspeed
+    provider_model: MiniMax-M2.7-highspeed
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 204800
+    controls:
+    - id: max_tokens
+      kind: integer
+      minimum: 1
+      maximum: 204800
+    limits:
+    - id: context_tokens
+      value: 204800
+      unit: tokens
+  - provider: minimax
+    model: minimax-m2.5
+    provider_model: MiniMax-M2.5
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 204800
+    controls:
+    - id: max_tokens
+      kind: integer
+      minimum: 1
+      maximum: 204800
+    limits:
+    - id: context_tokens
+      value: 204800
+      unit: tokens
+  - provider: minimax
+    model: minimax-m2.5-highspeed
+    provider_model: MiniMax-M2.5-highspeed
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 204800
+    controls:
+    - id: max_tokens
+      kind: integer
+      minimum: 1
+      maximum: 204800
+    limits:
+    - id: context_tokens
+      value: 204800
+      unit: tokens
+  - provider: minimax
+    model: minimax-m2.1
+    provider_model: MiniMax-M2.1
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 204800
+    controls:
+    - id: max_tokens
+      kind: integer
+      minimum: 1
+      maximum: 204800
+    limits:
+    - id: context_tokens
+      value: 204800
+      unit: tokens
+  - provider: minimax
+    model: minimax-m2.1-highspeed
+    provider_model: MiniMax-M2.1-highspeed
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 204800
+    controls:
+    - id: max_tokens
+      kind: integer
+      minimum: 1
+      maximum: 204800
+    limits:
+    - id: context_tokens
+      value: 204800
+      unit: tokens
+  - provider: minimax
+    model: minimax-m2
+    provider_model: MiniMax-M2
+    operations:
+    - text
+    wire_contract: openai_chat_completions
+    execution_lifecycle: synchronous_completion
+    output_token_limit: 204800
+    controls:
+    - id: max_tokens
+      kind: integer
+      minimum: 1
+      maximum: 204800
+    limits:
+    - id: context_tokens
+      value: 204800
+      unit: tokens
   - provider: siliconflow
     model: deepseek-reasoner
     provider_model: deepseek-ai/DeepSeek-R1
@@ -2623,10 +2770,220 @@ catalog:
   - provider: minimax
     model: minimax-m2.7
     operation: text
-    available: false
-    source: https://platform.minimax.io/docs/pricing/pay-as-you-go
-    last_verified: "2026-08-10"
-    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+    available: true
+    rates:
+    - component: input_tokens
+      currency: USD
+      rate: 0.3
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    - component: output_tokens
+      currency: USD
+      rate: 1.2
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    - component: prompt_cache_read_tokens
+      currency: USD
+      rate: 0.06
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    - component: prompt_cache_write_tokens
+      currency: USD
+      rate: 0.375
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    source: https://platform.minimax.io/docs/guides/pricing-paygo
+    last_verified: "2026-08-13"
+  - provider: minimax
+    model: minimax-m2.7-highspeed
+    operation: text
+    available: true
+    rates:
+    - component: input_tokens
+      currency: USD
+      rate: 0.6
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    - component: output_tokens
+      currency: USD
+      rate: 2.4
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    - component: prompt_cache_read_tokens
+      currency: USD
+      rate: 0.06
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    - component: prompt_cache_write_tokens
+      currency: USD
+      rate: 0.375
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    source: https://platform.minimax.io/docs/guides/pricing-paygo
+    last_verified: "2026-08-13"
+  - provider: minimax
+    model: minimax-m2.5
+    operation: text
+    available: true
+    rates:
+    - component: input_tokens
+      currency: USD
+      rate: 0.3
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    - component: output_tokens
+      currency: USD
+      rate: 1.2
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    - component: prompt_cache_read_tokens
+      currency: USD
+      rate: 0.03
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    - component: prompt_cache_write_tokens
+      currency: USD
+      rate: 0.375
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    source: https://platform.minimax.io/docs/guides/pricing-paygo
+    last_verified: "2026-08-13"
+  - provider: minimax
+    model: minimax-m2.5-highspeed
+    operation: text
+    available: true
+    rates:
+    - component: input_tokens
+      currency: USD
+      rate: 0.6
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    - component: output_tokens
+      currency: USD
+      rate: 2.4
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    - component: prompt_cache_read_tokens
+      currency: USD
+      rate: 0.03
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    - component: prompt_cache_write_tokens
+      currency: USD
+      rate: 0.375
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    source: https://platform.minimax.io/docs/guides/pricing-paygo
+    last_verified: "2026-08-13"
+  - provider: minimax
+    model: minimax-m2.1
+    operation: text
+    available: true
+    rates:
+    - component: input_tokens
+      currency: USD
+      rate: 0.3
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    - component: output_tokens
+      currency: USD
+      rate: 1.2
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    - component: prompt_cache_read_tokens
+      currency: USD
+      rate: 0.03
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    - component: prompt_cache_write_tokens
+      currency: USD
+      rate: 0.375
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    source: https://platform.minimax.io/docs/guides/pricing-paygo
+    last_verified: "2026-08-13"
+  - provider: minimax
+    model: minimax-m2.1-highspeed
+    operation: text
+    available: true
+    rates:
+    - component: input_tokens
+      currency: USD
+      rate: 0.6
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    - component: output_tokens
+      currency: USD
+      rate: 2.4
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    - component: prompt_cache_read_tokens
+      currency: USD
+      rate: 0.03
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    - component: prompt_cache_write_tokens
+      currency: USD
+      rate: 0.375
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    source: https://platform.minimax.io/docs/guides/pricing-paygo
+    last_verified: "2026-08-13"
+  - provider: minimax
+    model: minimax-m2
+    operation: text
+    available: true
+    rates:
+    - component: input_tokens
+      currency: USD
+      rate: 0.3
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    - component: output_tokens
+      currency: USD
+      rate: 1.2
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    - component: prompt_cache_read_tokens
+      currency: USD
+      rate: 0.03
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    - component: prompt_cache_write_tokens
+      currency: USD
+      rate: 0.375
+      unit: USD/1M tokens
+      conditions:
+        billing_mode: pay_as_you_go_standard
+    source: https://platform.minimax.io/docs/guides/pricing-paygo
+    last_verified: "2026-08-13"
   - provider: siliconflow
     model: deepseek-reasoner
     operation: text
