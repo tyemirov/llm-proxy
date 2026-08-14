@@ -26,6 +26,8 @@ var forbiddenClientProviderCredentialParameters = map[string]struct{}{
 	"minimax_api_key":               {},
 	"siliconflow_api_key":           {},
 	"zai_api_key":                   {},
+	"zhipu_api_key":                 {},
+	"glm_api_key":                   {},
 	"gemini_api_key":                {},
 	"anthropic_api_key":             {},
 	"claude_api_key":                {},

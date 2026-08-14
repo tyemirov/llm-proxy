@@ -64,6 +64,7 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 
 		request.messages = completionContinuationMessages(originalMessages, accumulatedText.String())
 		request.maxTokens = continuationMaxTokens(request.maxTokens, request.model, generation.text)
+		request.chatCompletionContinuation = generation.chatCompletionContinuation
 		if waitError := waitForRequestTelemetryPhase(requestContext, responsePollInterval, requestTelemetryPhaseContinuationWait); waitError != nil {
 			return textGenerationResult{
 				text:  strings.TrimSpace(accumulatedText.String()),
@@ -112,6 +113,7 @@ func (openAIChatCompletionsTextRouteAdapter) generateText(requestContext context
 		request.maxTokens,
 		request.provider.chatTokenLimitParameter,
 		request.reasoningEffort,
+		request.chatCompletionContinuation,
 		structuredLogger,
 	)
 }

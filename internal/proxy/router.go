@@ -57,13 +57,14 @@ func (input *requestReasoningEffortInput) UnmarshalJSON(rawInput []byte) error {
 
 // chatRequestParameters is the normalized request shape shared by GET and POST handlers after edge validation.
 type chatRequestParameters struct {
-	messages         chatMessages
-	requestDisplay   string
-	provider         providerDefinition
-	model            textModelDefinition
-	webSearchEnabled bool
-	maxTokens        *int
-	reasoningEffort  string
+	messages                   chatMessages
+	requestDisplay             string
+	provider                   providerDefinition
+	model                      textModelDefinition
+	webSearchEnabled           bool
+	maxTokens                  *int
+	reasoningEffort            string
+	chatCompletionContinuation *chatCompletionContinuation
 }
 
 type dictationRequestParameters struct {

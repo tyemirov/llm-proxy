@@ -57,7 +57,7 @@ func TestProviderImageSerializationAndLimitFailureContracts(t *testing.T) {
 	if _, requestError := anthropicClient.generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, logger); !errors.Is(requestError, errAssetStore) {
 		t.Fatalf("Anthropic serialization error=%v", requestError)
 	}
-	if _, requestError := chatClient.generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, chatCompletionTokenLimitMaxTokens, "", logger); !errors.Is(requestError, errAssetStore) {
+	if _, requestError := chatClient.generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, chatCompletionTokenLimitMaxTokens, "", nil, logger); !errors.Is(requestError, errAssetStore) {
 		t.Fatalf("Chat Completions serialization error=%v", requestError)
 	}
 
@@ -104,7 +104,7 @@ func TestProviderImageSerializationAndLimitFailureContracts(t *testing.T) {
 	if _, requestError := anthropicClient.generateText(context.Background(), "key", "https://provider.test", model, inlineMessages, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
 		t.Fatalf("Anthropic media limit error=%v", requestError)
 	}
-	if _, requestError := chatClient.generateText(context.Background(), "key", "https://provider.test", model, inlineMessages, nil, chatCompletionTokenLimitMaxTokens, "", logger); !errors.Is(requestError, ErrProviderMediaLimit) {
+	if _, requestError := chatClient.generateText(context.Background(), "key", "https://provider.test", model, inlineMessages, nil, chatCompletionTokenLimitMaxTokens, "", nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
 		t.Fatalf("Chat Completions media limit error=%v", requestError)
 	}
 }
