@@ -25,6 +25,52 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B138] (P1) Preserve Kimi reasoning during output continuation.
+  Goal:
+  Preserve each private Kimi reasoning field when the proxy requests a missing
+  output suffix.
+  Evidence:
+  - Kimi K3 and K2.7 require complete assistant messages in later requests.
+  - The current adapter discards `reasoning_content` before a continuation
+    request.
+  Requirements:
+  - Retain `reasoning_content` only as private adapter state.
+  - Send each complete assistant message only to its Moonshot continuation.
+  - Return only visible content through public responses, logs, and usage.
+  Validation:
+  - Prove K3 and K2.7 continuations contain exact prior reasoning and content.
+  - Prove public responses do not contain private reasoning.
+  - Run `make ci` after the last application change.
+  Resolution:
+  - Stored truncated reasoning only in private Chat Completions state.
+  - Sent each complete assistant message to the next upstream Kimi request.
+  - Proved K3 and both K2.7 routes return only assembled visible content.
+  - `make ci` passed all 11 gates with 94 browser tests and 100.0% Go
+    statement coverage.
+
+- [x] [B139] (P2) Reject retired Z.AI credential fields.
+  Goal:
+  Reject retired `zhipu_api_key` and `glm_api_key` inputs at each public
+  credential boundary.
+  Evidence:
+  - Query and multipart boundaries ignore unknown fields.
+  - The rejection set contains `zai_api_key` but omits both retired fields.
+  Requirements:
+  - Add both retired fields only to the credential rejection set.
+  - Keep provider and configuration contracts limited to `zai`.
+  - Do not restore retired provider aliases.
+  Validation:
+  - Prove query and `/dictate` multipart inputs return the client credential
+    error.
+  - Prove the request does not use the stored provider key.
+  - Run `make ci` after the last application change.
+  Resolution:
+  - Added both retired field names only to the credential rejection set.
+  - Proved query and multipart inputs return the client credential error.
+  - Proved rejected inputs do not dispatch with the stored provider key.
+  - `make ci` passed all 11 gates with 94 browser tests and 100.0% Go
+    statement coverage.
+
 - [x] [B130] (P1) Store each DashScope workspace URL with its tenant settings.
   Goal:
   Keep provider configuration in the management domain and keep local and
