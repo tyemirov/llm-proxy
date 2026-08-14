@@ -153,6 +153,30 @@ func TestV2RoutesExactOrderedImagesThroughProviderAdapters(testingInstance *test
 				}
 			},
 		},
+		{
+			name: "Moonshot Kimi K2.6", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK26, path: "/chat/completions",
+			assertBody: func(subTest *testing.T, payload map[string]any) {
+				assertChatCompletionImageInput(subTest, payload, firstImage, secondImage)
+			},
+		},
+		{
+			name: "Moonshot Kimi K3", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK3, path: "/chat/completions",
+			assertBody: func(subTest *testing.T, payload map[string]any) {
+				assertChatCompletionImageInput(subTest, payload, firstImage, secondImage)
+			},
+		},
+		{
+			name: "Moonshot Kimi K2.7 Code", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK27Code, path: "/chat/completions",
+			assertBody: func(subTest *testing.T, payload map[string]any) {
+				assertChatCompletionImageInput(subTest, payload, firstImage, secondImage)
+			},
+		},
+		{
+			name: "Moonshot Kimi K2.7 Code Highspeed", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK27CodeHighSpeed, path: "/chat/completions",
+			assertBody: func(subTest *testing.T, payload map[string]any) {
+				assertChatCompletionImageInput(subTest, payload, firstImage, secondImage)
+			},
+		},
 	} {
 		testingInstance.Run(testCase.name, func(subTest *testing.T) {
 			var capturedPayload map[string]any
@@ -168,6 +192,10 @@ func TestV2RoutesExactOrderedImagesThroughProviderAdapters(testingInstance *test
 					_, _ = responseWriter.Write([]byte(`{"content":[{"type":"text","text":"media accepted"}],"stop_reason":"end_turn"}`))
 					return
 				}
+				if testCase.provider == proxy.ProviderNameMoonshot {
+					_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"media accepted"},"finish_reason":"stop"}]}`))
+					return
+				}
 				_, _ = responseWriter.Write([]byte(`{"id":"media-input","status":"completed","output_text":"media accepted"}`))
 			}))
 			defer upstreamServer.Close()
@@ -178,6 +206,8 @@ func TestV2RoutesExactOrderedImagesThroughProviderAdapters(testingInstance *test
 				OpenAIBaseURL:         upstreamServer.URL,
 				AnthropicKey:          testAnthropicKey,
 				AnthropicBaseURL:      upstreamServer.URL,
+				MoonshotKey:           "sk-moonshot",
+				MoonshotBaseURL:       upstreamServer.URL,
 				XAIKey:                testXAIKey,
 				XAIBaseURL:            upstreamServer.URL,
 				LogLevel:              proxy.LogLevelInfo,
@@ -243,6 +273,15 @@ func TestV2AppliesNewProviderMediaLimitsAtTheBoundary(testingInstance *testing.T
 			boundaryAttachments: []map[string]any{messageMediaPayload("image", "image/png", []byte("x"))},
 			aboveAttachments:    []map[string]any{messageMediaPayload("image", "image/png", []byte("xx"))},
 		},
+		{
+			name:                "Moonshot raw image bytes",
+			provider:            proxy.ProviderNameMoonshot,
+			model:               proxy.ModelNameMoonshotKimiK3,
+			limitID:             proxy.CatalogMediaLimitIDImageInlineBytes,
+			limitValue:          1,
+			boundaryAttachments: []map[string]any{messageMediaPayload("image", "image/png", []byte("x"))},
+			aboveAttachments:    []map[string]any{messageMediaPayload("image", "image/png", []byte("xx"))},
+		},
 	} {
 		testingInstance.Run(testCase.name, func(subTest *testing.T) {
 			upstreamCalls := 0
@@ -251,6 +290,10 @@ func TestV2AppliesNewProviderMediaLimitsAtTheBoundary(testingInstance *testing.T
 				responseWriter.Header().Set("Content-Type", "application/json")
 				if testCase.provider == proxy.ProviderNameAnthropic {
 					_, _ = responseWriter.Write([]byte(`{"content":[{"type":"text","text":"accepted"}],"stop_reason":"end_turn"}`))
+					return
+				}
+				if testCase.provider == proxy.ProviderNameMoonshot {
+					_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"accepted"},"finish_reason":"stop"}]}`))
 					return
 				}
 				_, _ = responseWriter.Write([]byte(`{"id":"media-limit","status":"completed","output_text":"accepted"}`))
@@ -265,6 +308,8 @@ func TestV2AppliesNewProviderMediaLimitsAtTheBoundary(testingInstance *testing.T
 				OpenAIBaseURL:         upstreamServer.URL,
 				AnthropicKey:          testAnthropicKey,
 				AnthropicBaseURL:      upstreamServer.URL,
+				MoonshotKey:           "sk-moonshot",
+				MoonshotBaseURL:       upstreamServer.URL,
 				XAIKey:                testXAIKey,
 				XAIBaseURL:            upstreamServer.URL,
 				ModelCatalog:          catalog,
@@ -298,6 +343,29 @@ func TestV2AppliesNewProviderMediaLimitsAtTheBoundary(testingInstance *testing.T
 				subTest.Fatalf("above status=%d calls=%d body=%s", aboveResponse.Code, upstreamCalls, aboveResponse.Body.String())
 			}
 		})
+	}
+}
+
+func assertChatCompletionImageInput(testingInstance *testing.T, payload map[string]any, firstImage []byte, secondImage []byte) {
+	testingInstance.Helper()
+	messages := payload["messages"].([]any)
+	content := messages[0].(map[string]any)["content"].([]any)
+	if len(content) != 3 {
+		testingInstance.Fatalf("Chat Completions content=%v", content)
+	}
+	for index, expected := range []struct {
+		mimeType string
+		data     []byte
+	}{{"image/png", firstImage}, {"image/jpeg", secondImage}} {
+		block := content[index].(map[string]any)
+		imageURL := block["image_url"].(map[string]any)["url"]
+		expectedURL := "data:" + expected.mimeType + ";base64," + base64.StdEncoding.EncodeToString(expected.data)
+		if block["type"] != "image_url" || imageURL != expectedURL {
+			testingInstance.Fatalf("Chat Completions image[%d]=%v want=%s", index, block, expectedURL)
+		}
+	}
+	if textBlock := content[2].(map[string]any); textBlock["type"] != "text" || textBlock["text"] != "Inspect in exact order." {
+		testingInstance.Fatalf("Chat Completions text=%v", textBlock)
 	}
 }
 
@@ -364,6 +432,8 @@ func TestV2RejectsInvalidOrUnsupportedMediaBeforeUpstreamWork(testingInstance *t
 		DeepSeekBaseURL:       upstreamServer.URL,
 		GeminiKey:             testGeminiKey,
 		GeminiBaseURL:         upstreamServer.URL,
+		MoonshotKey:           "sk-moonshot",
+		MoonshotBaseURL:       upstreamServer.URL,
 		XAIKey:                testXAIKey,
 		XAIBaseURL:            upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
@@ -400,6 +470,7 @@ func TestV2RejectsInvalidOrUnsupportedMediaBeforeUpstreamWork(testingInstance *t
 		{name: "system attachment", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, role: "system", attachments: []any{validImage}},
 		{name: "text-only model", provider: proxy.ProviderNameXAI, model: proxy.ModelNameGrok43, role: "user", attachments: []any{validImage}},
 		{name: "provider MIME", provider: proxy.ProviderNameXAI, model: proxy.ModelNameGrok45, role: "user", attachments: []any{messageMediaPayload("image", "image/webp", []byte("webp"))}},
+		{name: "Moonshot unsupported audio", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK3, role: "user", attachments: []any{validAudio}},
 		{name: "text-only provider", provider: proxy.ProviderNameDeepSeek, model: proxy.ModelNameDeepSeekV4Flash, role: "user", attachments: []any{validImage}},
 	} {
 		testingInstance.Run(testCase.name, func(subTest *testing.T) {
@@ -518,6 +589,12 @@ func TestModelCatalogRejectsInvalidMediaInputDeclarations(testingInstance *testi
 			name: "unsupported xAI Chat Completions adapter",
 			configure: func(catalogs proxy.ModelCatalog) {
 				setModelMediaInputs(catalogs, proxy.ProviderNameXAI, proxy.ModelNameGrok43, []string{"image"})
+			},
+		},
+		{
+			name: "unsupported Chat Completions audio input",
+			configure: func(catalogs proxy.ModelCatalog) {
+				setModelMediaInputs(catalogs, proxy.ProviderNameMoonshot, proxy.ModelNameMoonshotKimiK3, []string{"audio"})
 			},
 		},
 		{

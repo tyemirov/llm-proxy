@@ -39,6 +39,10 @@ func TestProviderImageSerializationAndLimitFailureContracts(t *testing.T) {
 		t.Fatal("serialization failure reached provider")
 		return nil, nil
 	}))
+	chatClient := newOpenAICompatibleChatClient(geminiEdgeDoer(func(*http.Request) (*http.Response, error) {
+		t.Fatal("serialization failure reached provider")
+		return nil, nil
+	}))
 	model := textModelDefinition{
 		providerIdentifier: newModelID("provider-model"),
 		requestProfile:     requestProfileOpenAIResponsesTemperature,
@@ -52,6 +56,9 @@ func TestProviderImageSerializationAndLimitFailureContracts(t *testing.T) {
 	}
 	if _, requestError := anthropicClient.generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, logger); !errors.Is(requestError, errAssetStore) {
 		t.Fatalf("Anthropic serialization error=%v", requestError)
+	}
+	if _, requestError := chatClient.generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, chatCompletionTokenLimitMaxTokens, "", logger); !errors.Is(requestError, errAssetStore) {
+		t.Fatalf("Chat Completions serialization error=%v", requestError)
 	}
 
 	closedMessages[0].attachments[0].sizeBytes = 2
@@ -96,6 +103,9 @@ func TestProviderImageSerializationAndLimitFailureContracts(t *testing.T) {
 	}
 	if _, requestError := anthropicClient.generateText(context.Background(), "key", "https://provider.test", model, inlineMessages, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
 		t.Fatalf("Anthropic media limit error=%v", requestError)
+	}
+	if _, requestError := chatClient.generateText(context.Background(), "key", "https://provider.test", model, inlineMessages, nil, chatCompletionTokenLimitMaxTokens, "", logger); !errors.Is(requestError, ErrProviderMediaLimit) {
+		t.Fatalf("Chat Completions media limit error=%v", requestError)
 	}
 }
 

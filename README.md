@@ -452,6 +452,19 @@ Provider-specific details:
   missing-suffix loop and accepts the assembled text only after
   `finish_reason=stop`; `content_filter`, `tool_calls`, missing, and
   provider-specific non-stop reasons are upstream failures.
+* Moonshot Kimi K3 accepts exact public `reasoning_effort` values `low`,
+  `high`, and `max`. The adapter sends the selected value as the top-level
+  provider field and omits it when no value is selected. Kimi K2.6 and both
+  Kimi K2.7 Code routes keep Moonshot's thinking default because the proxy does
+  not send a `thinking` field. Kimi K3, K2.6, K2.7 Code, and K2.7 Code
+  Highspeed accept ordered JPEG, PNG, or WebP inputs through canonical
+  `POST /v2` messages. The adapter sends exact bytes as ordered Data URL blocks
+  before message text. Only visible answer `content` enters the proxy response
+  and usage path. Provider `reasoning_content` stays private. See Moonshot's
+  [Kimi K3 guide](https://platform.kimi.ai/docs/guide/kimi-k3-quickstart),
+  [reasoning-effort guide](https://platform.kimi.ai/docs/guide/use-reasoning-effort),
+  [vision guide](https://platform.kimi.ai/docs/guide/use-kimi-vision-model),
+  and [Chat Completions reference](https://platform.kimi.ai/docs/api/chat).
 * MiniMax uses selector `minimax`, exact model `minimax-m2.7`,
   `${MINIMAX_API_KEY}`, and `https://api.minimax.io/v1`. The shared compatible
   Chat Completions adapter maps public `max_tokens` to upstream
@@ -1340,7 +1353,7 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make ci` | Prepare pinned frontend dependencies, then run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, frontend syntax checks, the 100% coverage-gated Go test suite, Python pytest, Playwright browser tests, the app lifecycle contract test, and the non-paid live-harness preflight. A successful run ends with a per-gate table, current-run coverage, and an explicit `CI PASSED` receipt. |
 | `make test-live-provider-harness` | Generate the temporary static-mode live-test config and verify authenticated routing without an upstream call. |
 | `make test-live-providers` | Start a disposable managed tenant, verify every available provider key through the canonical management operation, and run that provider's live text smoke only after verification succeeds; use `LIVE_ENV_FILE=/path/to/env` to load key values. |
-| `make test-live-provider-media` | Verify OpenAI, Anthropic, Gemini, and xAI keys, then send one paid canonical image request through each provider. |
+| `make test-live-provider-media` | Verify OpenAI, Anthropic, Gemini, Moonshot, and xAI keys, then send one paid canonical image request through each provider. |
 | `make test-live-gemini` | Compatibility wrapper for `make test-live-providers` with `LLM_PROXY_LIVE_PROVIDERS=gemini`. |
 | `make live-test` | Send paid production `POST /v2` requests through the Default tenant using only `LLM_PROXY_SECRET`: echo checks for OpenAI, Anthropic, Meta, Gemini, and Moonshot, plus large completion cases for OpenAI, Anthropic, Meta, and Gemini. |
 | `make release` | Delegate this clean checkout and its schema-v4 resource declaration to the exact sibling `../mprlab-gateway` release transaction. |
@@ -1410,12 +1423,22 @@ safe `200` keyed-profile result, and only then sends that provider's smoke
 request. Candidate payloads, session material, provider responses, and proxy
 responses are never printed, and the temporary state is removed at exit.
 
-The paid image matrix uses OpenAI, Anthropic, Gemini, and xAI by default. It
-requires all four provider keys. Set `LLM_PROXY_LIVE_PROVIDERS` to run a
-selected subset. The harness selects each image model from the validated public
-provider catalog. It uses the configured default when that model supports image
-input. Otherwise, it requires one exact image model for that provider. The key
-verification uses the selected image model.
+The paid image matrix uses OpenAI, Anthropic, Gemini, Moonshot, and xAI by
+default. It requires all five provider keys. Set `LLM_PROXY_LIVE_PROVIDERS` to
+run a selected subset. The harness selects each image model from the validated
+public provider catalog. It uses the configured default when that model supports
+image input. Otherwise, it requires one exact image model for that provider.
+The key verification uses the selected image model.
+
+Set `LLM_PROXY_LIVE_ALL_MODELS=true` with media mode to verify and call every
+image route for each selected provider. This command runs the complete current
+Moonshot image matrix:
+
+```shell
+LLM_PROXY_LIVE_PROVIDERS=moonshot \
+  LLM_PROXY_LIVE_ALL_MODELS=true \
+  make test-live-provider-media LIVE_ENV_FILE=configs/.env
+```
 
 Each image case creates the same deterministic 256 by 256 red PNG. The request
 sends canonical padded base64 data and its matching SHA-256 through `POST /v2`.
@@ -2239,7 +2262,7 @@ tools; use a model marked `Yes` below for web search. A dash in the proxy
 `max_tokens` limit column means the proxy validates only that `max_tokens` is
 positive and lets the upstream provider enforce any provider-side model limit.
 
-### OpenAI reasoning-effort capabilities
+### Reasoning-effort capabilities
 
 The checked-in OpenAI catalog follows the current model documentation and keeps
 each model's list separate. GPT-4.1 is explicitly a non-reasoning model and
@@ -2261,6 +2284,10 @@ See OpenAI's [GPT-4.1 model reference](https://developers.openai.com/api/docs/mo
 [GPT-5.5 model reference](https://developers.openai.com/api/docs/models/gpt-5.5),
 [GPT-5.5 Pro model reference](https://developers.openai.com/api/docs/models/gpt-5.5-pro),
 and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-model).
+
+Kimi K3 accepts `low`, `high`, and `max`. Omission keeps Moonshot's provider
+default. Kimi K2.6 and the Kimi K2.7 Code routes do not expose a selectable
+effort through the proxy.
 
 ### Model capabilities
 

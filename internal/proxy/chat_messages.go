@@ -285,6 +285,34 @@ func (messages chatMessages) openAIResponsesInput(imageDetail string, preserveRo
 	return providerMessages, nil
 }
 
+func (messages chatMessages) chatCompletionMessages() ([]chatCompletionMessage, error) {
+	providerMessages := make([]chatCompletionMessage, 0, len(messages))
+	for messageIndex := range messages {
+		message := &messages[messageIndex]
+		if len(message.attachments) == 0 {
+			providerMessages = append(providerMessages, chatCompletionMessage{Role: string(message.role), Content: message.content})
+			continue
+		}
+		content := make([]map[string]any, 0, len(message.attachments)+1)
+		for attachmentIndex := range message.attachments {
+			attachment := &message.attachments[attachmentIndex]
+			data, dataError := attachment.bytes()
+			if dataError != nil {
+				return nil, dataError
+			}
+			content = append(content, map[string]any{
+				"type": "image_url",
+				"image_url": map[string]string{
+					"url": "data:" + attachment.mimeType + ";base64," + base64.StdEncoding.EncodeToString(data),
+				},
+			})
+		}
+		content = append(content, map[string]any{"type": "text", "text": message.content})
+		providerMessages = append(providerMessages, chatCompletionMessage{Role: string(message.role), Content: content})
+	}
+	return providerMessages, nil
+}
+
 func (messages chatMessages) requestDisplayText() string {
 	return messages.responseVisibleMessages().openAIResponsesTextInput()
 }

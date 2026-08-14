@@ -70,6 +70,16 @@ var textRouteMessageMediaContracts = map[textRouteCapabilities]textRouteMessageM
 			},
 		},
 	},
+	openAIChatCompletionsSynchronousRouteCapabilities: {
+		attachmentLimitTransport: CatalogMediaTransportInline,
+		mimeTypes: map[messageMediaType]map[string]struct{}{
+			messageMediaTypeImage: {
+				messageImageMIMEJPEG: {},
+				messageImageMIMEPNG:  {},
+				messageImageMIMEWebP: {},
+			},
+		},
+	},
 	geminiInteractionsPollableRouteCapabilities: {
 		attachmentLimitTransport: CatalogMediaTransportFile,
 		mimeTypes: map[messageMediaType]map[string]struct{}{

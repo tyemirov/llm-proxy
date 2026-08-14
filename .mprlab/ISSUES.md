@@ -401,7 +401,7 @@ retain satisfied historical dependencies.
   - Keep credentials, prompts, and response bodies out of test output.
   - Run `make ci` after the last application change.
 
-- [ ] [I227] (P1) {I223} Add Kimi reasoning and image route capabilities.
+- [!] [I227] (P1) {I223} Add Kimi reasoning and image route capabilities.
   Goal:
   Expose verified Kimi reasoning and image capabilities through the current
   Moonshot provider and canonical message contract.
@@ -444,6 +444,9 @@ retain satisfied historical dependencies.
   - Run one paid image request through each enabled Moonshot image model.
   - Keep credentials, image data, and response bodies out of test output.
   - Run `make ci` after the last application change.
+  Blocked: A Moonshot credential and paid-call authorization are not available
+  in this workspace. The operator must supply `MOONSHOT_API_KEY` and authorize
+  the eight paid live calls for four key checks and four image requests.
 
 - [!] [I226] (P1) {I038,I223} Add current Qwen text models to DashScope.
   Goal:

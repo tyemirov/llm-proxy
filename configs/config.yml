@@ -62,7 +62,7 @@ providers:
     base_url: https://api.x.ai/v1
     transcriptions_url: https://api.x.ai/v1/stt
 catalog:
-  revision: 2026-08-13.i226.1
+  revision: 2026-08-13.i227.1
   operations:
   - id: text
     input_artifacts:
@@ -402,24 +402,32 @@ catalog:
     version: kimi-k2.6
     operations:
     - text
+    media_inputs:
+    - image
   - id: kimi-k3
     publisher: moonshot
     family: kimi-k3
     version: kimi-k3
     operations:
     - text
+    media_inputs:
+    - image
   - id: kimi-k2.7-code
     publisher: moonshot
     family: kimi-k2
     version: kimi-k2.7-code
     operations:
     - text
+    media_inputs:
+    - image
   - id: kimi-k2.7-code-highspeed
     publisher: moonshot
     family: kimi-k2
     version: kimi-k2.7-code-highspeed
     operations:
     - text
+    media_inputs:
+    - image
   - id: minimax-m2.7
     publisher: minimax
     family: minimax-m2
@@ -1271,6 +1279,34 @@ catalog:
     - text
     wire_contract: openai_chat_completions
     execution_lifecycle: synchronous_completion
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 100000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+      last_verified: "2026-08-13"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: unbounded
+      unit: files
+      scope: request
+      source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+      last_verified: "2026-08-13"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: unknown
+      unit: bytes
+      scope: attachment
+      source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+      last_verified: "2026-08-13"
   - provider: moonshot
     model: kimi-k3
     provider_model: kimi-k3
@@ -1278,6 +1314,40 @@ catalog:
     - text
     wire_contract: openai_chat_completions
     execution_lifecycle: synchronous_completion
+    reasoning_effort:
+      adapter: moonshot_chat_completions
+      efforts:
+      - low
+      - high
+      - max
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 100000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+      last_verified: "2026-08-13"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: unbounded
+      unit: files
+      scope: request
+      source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+      last_verified: "2026-08-13"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: unknown
+      unit: bytes
+      scope: attachment
+      source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+      last_verified: "2026-08-13"
   - provider: moonshot
     model: kimi-k2.7-code
     provider_model: kimi-k2.7-code
@@ -1285,6 +1355,34 @@ catalog:
     - text
     wire_contract: openai_chat_completions
     execution_lifecycle: synchronous_completion
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 100000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+      last_verified: "2026-08-13"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: unbounded
+      unit: files
+      scope: request
+      source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+      last_verified: "2026-08-13"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: unknown
+      unit: bytes
+      scope: attachment
+      source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+      last_verified: "2026-08-13"
   - provider: moonshot
     model: kimi-k2.7-code-highspeed
     provider_model: kimi-k2.7-code-highspeed
@@ -1292,6 +1390,34 @@ catalog:
     - text
     wire_contract: openai_chat_completions
     execution_lifecycle: synchronous_completion
+    media_inputs:
+    - image
+    media_limits:
+    - id: inline_request_bytes
+      media_type: all
+      transport: inline
+      status: bounded
+      value: 100000000
+      unit: bytes
+      scope: request_encoded_bytes
+      source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+      last_verified: "2026-08-13"
+    - id: image_count
+      media_type: image
+      transport: any
+      status: unbounded
+      unit: files
+      scope: request
+      source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+      last_verified: "2026-08-13"
+    - id: image_inline_bytes
+      media_type: image
+      transport: inline
+      status: unknown
+      unit: bytes
+      scope: attachment
+      source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+      last_verified: "2026-08-13"
   - provider: minimax
     model: minimax-m2.7
     provider_model: MiniMax-M2.7

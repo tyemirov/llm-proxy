@@ -20,7 +20,7 @@ type openAICompatibleChatClient struct {
 
 type chatCompletionMessage struct {
 	Role    string `json:"role"`
-	Content string `json:"content"`
+	Content any    `json:"content"`
 }
 
 type chatCompletionRequest struct {
@@ -28,6 +28,7 @@ type chatCompletionRequest struct {
 	Messages            []chatCompletionMessage `json:"messages"`
 	MaxTokens           *int                    `json:"max_tokens,omitempty"`
 	MaxCompletionTokens *int                    `json:"max_completion_tokens,omitempty"`
+	ReasoningEffort     string                  `json:"reasoning_effort,omitempty"`
 }
 
 type chatCompletionResponse struct {
@@ -41,8 +42,7 @@ type chatCompletionChoice struct {
 }
 
 type chatCompletionResponseMessage struct {
-	Content          string `json:"content"`
-	ReasoningContent string `json:"reasoning_content"`
+	Content string `json:"content"`
 }
 
 func newOpenAICompatibleChatClient(httpClient HTTPDoer) *openAICompatibleChatClient {
@@ -51,10 +51,20 @@ func newOpenAICompatibleChatClient(httpClient HTTPDoer) *openAICompatibleChatCli
 	}
 }
 
-func (client *openAICompatibleChatClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, tokenLimitParameter chatCompletionTokenLimitParameter, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *openAICompatibleChatClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, tokenLimitParameter chatCompletionTokenLimitParameter, reasoningEffort string, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+	if mediaLimitError := validateInlineMessageMediaBeforeSerialization(modelIdentifier, messages); mediaLimitError != nil {
+		return textGenerationResult{}, mediaLimitError
+	}
+	providerMessages, messagesError := messages.chatCompletionMessages()
+	if messagesError != nil {
+		return textGenerationResult{}, messagesError
+	}
 	payload := chatCompletionRequest{
 		Model:    modelIdentifier.providerString(),
-		Messages: messages.chatCompletionMessages(),
+		Messages: providerMessages,
+	}
+	if modelIdentifier.reasoningEffort != nil && modelIdentifier.reasoningEffort.adapter == reasoningEffortAdapterMoonshotChatCompletions {
+		payload.ReasoningEffort = reasoningEffort
 	}
 	if maxTokens != nil {
 		switch tokenLimitParameter {
@@ -65,6 +75,9 @@ func (client *openAICompatibleChatClient) generateText(parentContext context.Con
 		}
 	}
 	payloadBytes, _ := json.Marshal(payload)
+	if mediaLimitError := validateInlineMessageMediaRequestLimit(modelIdentifier, messages, payloadBytes); mediaLimitError != nil {
+		return textGenerationResult{}, mediaLimitError
+	}
 
 	requestURL := strings.TrimRight(baseURL, "/") + "/chat/completions"
 	httpRequest, buildError := buildAuthorizedJSONRequest(parentContext, http.MethodPost, requestURL, apiKey, bytes.NewReader(payloadBytes))
@@ -83,14 +96,6 @@ func (client *openAICompatibleChatClient) generateText(parentContext context.Con
 	return generation, nil
 }
 
-func (messages chatMessages) chatCompletionMessages() []chatCompletionMessage {
-	chatMessagesPayload := make([]chatCompletionMessage, 0, len(messages))
-	for _, message := range messages {
-		chatMessagesPayload = append(chatMessagesPayload, chatCompletionMessage{Role: string(message.role), Content: message.content})
-	}
-	return chatMessagesPayload
-}
-
 func parseChatCompletionResponse(responseBytes []byte) (textGenerationResult, error) {
 	var response chatCompletionResponse
 	if decodeError := json.Unmarshal(responseBytes, &response); decodeError != nil {
@@ -107,9 +112,6 @@ func parseChatCompletionResponse(responseBytes []byte) (textGenerationResult, er
 			return generation, fmt.Errorf("%w: chat completion missing finish_reason", ErrProviderAPI)
 		}
 		visibleText := choice.Message.Content
-		if utils.IsBlank(visibleText) {
-			visibleText = choice.Message.ReasoningContent
-		}
 		choiceGeneration := textGenerationResult{text: visibleText, usage: usage}
 		if finishReason == "length" {
 			return choiceGeneration, errProviderOutputLimitReached

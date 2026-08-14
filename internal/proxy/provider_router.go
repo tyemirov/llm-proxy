@@ -111,6 +111,7 @@ func (openAIChatCompletionsTextRouteAdapter) generateText(requestContext context
 		request.messages,
 		request.maxTokens,
 		request.provider.chatTokenLimitParameter,
+		request.reasoningEffort,
 		structuredLogger,
 	)
 }

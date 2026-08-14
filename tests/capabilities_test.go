@@ -143,6 +143,12 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 	}
 	geminiCapabilityFound := false
 	openAIDictationCapabilityFound := false
+	expectedKimiModels := map[string]struct{}{
+		proxy.ModelNameMoonshotKimiK26:              {},
+		proxy.ModelNameMoonshotKimiK3:               {},
+		proxy.ModelNameMoonshotKimiK27Code:          {},
+		proxy.ModelNameMoonshotKimiK27CodeHighSpeed: {},
+	}
 	for _, model := range catalog.Models {
 		for _, capability := range model.Capabilities {
 			if capability == "background" || capability == "synchronous" {
@@ -163,14 +169,30 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 			if !slices.Equal(model.Capabilities, []string{proxy.PublicModelCapabilityDictation}) {
 				testingInstance.Fatalf("OpenAI dictation capability=%+v", model)
 			}
+		default:
+			if _, expected := expectedKimiModels[model.Identifier]; expected {
+				expectedCapabilities := []string{proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityText}
+				if model.Identifier == proxy.ModelNameMoonshotKimiK3 {
+					expectedCapabilities = []string{proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityReasoning, proxy.PublicModelCapabilityText}
+				}
+				if !slices.Equal(model.Capabilities, expectedCapabilities) {
+					testingInstance.Fatalf("Kimi model=%s capabilities=%v", model.Identifier, model.Capabilities)
+				}
+				delete(expectedKimiModels, model.Identifier)
+			}
 		}
 	}
 	for _, offering := range catalog.Offerings {
 		if offering.Provider == proxy.ProviderNameOpenAI && offering.Model == proxy.DefaultDictationModel {
 			openAIDictationCapabilityFound = true
 		}
+		if offering.Provider == proxy.ProviderNameMoonshot && offering.Model == proxy.ModelNameMoonshotKimiK3 {
+			if !reflect.DeepEqual(offering.ReasoningEfforts, []string{"low", "high", "max"}) {
+				testingInstance.Fatalf("Kimi K3 reasoning efforts=%v", offering.ReasoningEfforts)
+			}
+		}
 	}
-	if !geminiCapabilityFound || !openAIDictationCapabilityFound {
+	if !geminiCapabilityFound || !openAIDictationCapabilityFound || len(expectedKimiModels) != 0 {
 		testingInstance.Fatalf("public capability catalog projections missing gemini=%t openai_dictation=%t", geminiCapabilityFound, openAIDictationCapabilityFound)
 	}
 
@@ -229,6 +251,7 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 		proxy.ProviderNameOpenAI:    11,
 		proxy.ProviderNameGemini:    7,
 		proxy.ProviderNameAnthropic: 10,
+		proxy.ProviderNameMoonshot:  4,
 		proxy.ProviderNameXAI:       1,
 	}
 	observedOfferingCounts := map[string]int{}
@@ -246,7 +269,11 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 		}
 		observedLimitIDs := map[string]proxy.CatalogMediaLimit{}
 		for _, limit := range offering.MediaLimits {
-			if limit.LastVerified != "2026-08-11" {
+			expectedVerificationDate := "2026-08-11"
+			if offering.Provider == proxy.ProviderNameMoonshot {
+				expectedVerificationDate = "2026-08-13"
+			}
+			if limit.LastVerified != expectedVerificationDate {
 				testingInstance.Fatalf("media limit=%+v", limit)
 			}
 			observedLimitIDs[limit.ID] = limit
@@ -264,6 +291,14 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 			}
 		} else if _, found := observedLimitIDs[proxy.CatalogMediaLimitIDImageInlineBytes]; !found {
 			testingInstance.Fatalf("provider=%s model=%s missing inline image limit", offering.Provider, offering.Model)
+		}
+		if offering.Provider == proxy.ProviderNameMoonshot {
+			requestLimit := observedLimitIDs[proxy.CatalogMediaLimitIDInlineRequestBytes]
+			imageCount := observedLimitIDs[proxy.CatalogMediaLimitIDImageCount]
+			imageBytes := observedLimitIDs[proxy.CatalogMediaLimitIDImageInlineBytes]
+			if requestLimit.Status != proxy.CatalogMediaLimitStatusBounded || requestLimit.Value == nil || *requestLimit.Value != 100000000 || imageCount.Status != proxy.CatalogMediaLimitStatusUnbounded || imageCount.Value != nil || imageBytes.Status != proxy.CatalogMediaLimitStatusUnknown || imageBytes.Value != nil {
+				testingInstance.Fatalf("Moonshot media limits=%+v", offering.MediaLimits)
+			}
 		}
 	}
 	if !reflect.DeepEqual(observedOfferingCounts, expectedOfferingCounts) {

@@ -456,8 +456,17 @@ func validateTextOffering(offering ProviderOffering, fieldPrefix string) error {
 	if reasoningError != nil {
 		return reasoningError
 	}
-	if reasoningEffort != nil && (reasoningEffort.adapter != reasoningEffortAdapterOpenAIResponses || offering.Provider != ProviderNameOpenAI || modelRequestProfile(offering.RequestProfile) != requestProfileOpenAIResponsesReasoningTools) {
-		return fmt.Errorf("%w: field=%s.reasoning_effort adapter=%s", ErrInvalidModelCatalog, fieldPrefix, reasoningEffort.adapter)
+	if reasoningEffort != nil {
+		switch reasoningEffort.adapter {
+		case reasoningEffortAdapterOpenAIResponses:
+			if offering.Provider != ProviderNameOpenAI || modelRequestProfile(offering.RequestProfile) != requestProfileOpenAIResponsesReasoningTools {
+				return fmt.Errorf("%w: field=%s.reasoning_effort adapter=%s", ErrInvalidModelCatalog, fieldPrefix, reasoningEffort.adapter)
+			}
+		case reasoningEffortAdapterMoonshotChatCompletions:
+			if offering.Provider != ProviderNameMoonshot || offering.Model != ModelNameMoonshotKimiK3 || capabilities != openAIChatCompletionsSynchronousRouteCapabilities || offering.RequestProfile != constants.EmptyString {
+				return fmt.Errorf("%w: field=%s.reasoning_effort adapter=%s", ErrInvalidModelCatalog, fieldPrefix, reasoningEffort.adapter)
+			}
+		}
 	}
 	return nil
 }

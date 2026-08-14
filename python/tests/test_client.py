@@ -65,6 +65,33 @@ def test_media_attachment_constructors_serialize_inline_and_asset_union_variants
         ClientMessage(role="assistant", content="invalid", attachments=(inline,))
 
 
+def test_client_serializes_kimi_k3_image_and_reasoning_selection(running_server: RunningServer) -> None:
+    """The Python client sends one canonical Kimi K3 image request."""
+
+    client = Client(ClientConfig(base_url=running_server.url, secret="test-secret", provider="moonshot"))
+    response = client.post_messages(
+        ClientMessagesRequest(
+            messages=(
+                ClientMessage(
+                    role="user",
+                    content="Inspect.",
+                    attachments=(image_attachment(b"kimi-image", "image/webp"),),
+                ),
+            ),
+            model="kimi-k3",
+            reasoning_effort="max",
+        )
+    )
+
+    captured_request = CapturingHandler.captured_request
+    assert response == "reviewed"
+    assert urllib.parse.parse_qs(urllib.parse.urlparse(captured_request.path).query)["provider"] == ["moonshot"]
+    assert captured_request.body is not None
+    assert captured_request.body["model"] == "kimi-k3"
+    assert captured_request.body["reasoning_effort"] == "max"
+    assert captured_request.body["messages"][0]["attachments"][0]["mime_type"] == "image/webp"
+
+
 def test_client_upload_asset_validates_exact_response_without_exposing_bytes() -> None:
     """The asset client sends exact bytes and validates the hash-bound record."""
 

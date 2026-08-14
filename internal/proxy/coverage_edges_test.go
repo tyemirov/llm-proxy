@@ -1602,7 +1602,7 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 			requestBytes, _ := io.ReadAll(httpRequest.Body)
 			_ = json.Unmarshal(requestBytes, &capturedPayload)
 			responseWriter.Header().Set("Content-Type", "application/json")
-			_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"reasoning_content":"reasoned answer"},"finish_reason":"stop"}]}`))
+			_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"visible answer","reasoning_content":"private reasoning"},"finish_reason":"stop"}]}`))
 		}))
 		subTest.Cleanup(upstreamServer.Close)
 		router := coverageRouter(subTest, proxy.Configuration{
@@ -1619,7 +1619,7 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		queryParameters.Set("provider", "qwen")
 		queryParameters.Set("system_prompt", "system text")
 		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
-		if statusCode != http.StatusOK || body != "reasoned answer" {
+		if statusCode != http.StatusOK || body != "visible answer" || strings.Contains(body, "private reasoning") {
 			subTest.Fatalf("status=%d body=%q", statusCode, body)
 		}
 		messages, ok := capturedPayload["messages"].([]any)
