@@ -1586,7 +1586,15 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 		proxy.ProviderNameOpenAI:    {"gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"},
 		proxy.ProviderNameDashScope: {proxy.ModelNameDashScopeQwenPlus, proxy.ModelNameDashScopeQwen36Flash, proxy.ModelNameDashScopeQwen37Max, proxy.ModelNameDashScopeQwen37Plus},
 		proxy.ProviderNameMoonshot:  {proxy.ModelNameMoonshotKimiK26, proxy.ModelNameMoonshotKimiK27Code, proxy.ModelNameMoonshotKimiK27CodeHighSpeed, proxy.ModelNameMoonshotKimiK3},
-		proxy.ProviderNameMiniMax:   {proxy.ModelNameMiniMaxM27},
+		proxy.ProviderNameMiniMax: {
+			proxy.ModelNameMiniMaxM2,
+			proxy.ModelNameMiniMaxM21,
+			proxy.ModelNameMiniMaxM21HighSpeed,
+			proxy.ModelNameMiniMaxM25,
+			proxy.ModelNameMiniMaxM25HighSpeed,
+			proxy.ModelNameMiniMaxM27,
+			proxy.ModelNameMiniMaxM27HighSpeed,
+		},
 		proxy.ProviderNameZAI:       {"glm-5.2"},
 		proxy.ProviderNameGemini:    {"gemini-3.1-pro-preview", "gemini-3-flash-preview"},
 		proxy.ProviderNameAnthropic: {"claude-fable-5", "claude-sonnet-5"},
@@ -1623,11 +1631,19 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 	if textDefaultsByProvider[proxy.ProviderNameDashScope] != proxy.ModelNameDashScopeQwenPlus {
 		t.Fatalf("profile provider=%s default=%s want=%s", proxy.ProviderNameDashScope, textDefaultsByProvider[proxy.ProviderNameDashScope], proxy.ModelNameDashScopeQwenPlus)
 	}
+	if configuredMiniMaxModels := modelsByProvider[proxy.ProviderNameMiniMax]; !reflect.DeepEqual(configuredMiniMaxModels, expectedModels[proxy.ProviderNameMiniMax]) {
+		t.Fatalf("profile provider=%s models=%v want=%v", proxy.ProviderNameMiniMax, configuredMiniMaxModels, expectedModels[proxy.ProviderNameMiniMax])
+	}
+	if textDefaultsByProvider[proxy.ProviderNameMiniMax] != proxy.ModelNameMiniMaxM27 {
+		t.Fatalf("profile provider=%s default=%s want=%s", proxy.ProviderNameMiniMax, textDefaultsByProvider[proxy.ProviderNameMiniMax], proxy.ModelNameMiniMaxM27)
+	}
 }
 
 func TestManagementGeneratedSecretSupportsDictationAndRejectsMultipartProviderKeys(t *testing.T) {
 	var capturedAuthorization string
+	upstreamRequestCount := 0
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		upstreamRequestCount++
 		capturedAuthorization = request.Header.Get("Authorization")
 		responseWriter.Header().Set("Content-Type", "application/json")
 		_, _ = responseWriter.Write([]byte(`{"text":"managed dictation ok"}`))
@@ -1658,42 +1674,44 @@ func TestManagementGeneratedSecretSupportsDictationAndRejectsMultipartProviderKe
 		t.Fatalf("decode secret: %v", decodeError)
 	}
 
-	for _, includeProviderKeyField := range []bool{true, false} {
-		body := &bytes.Buffer{}
-		writer := multipart.NewWriter(body)
-		if includeProviderKeyField {
-			if writeError := writer.WriteField("openai_api_key", "sk-client"); writeError != nil {
-				t.Fatalf("write provider key field: %v", writeError)
+	for _, credentialField := range []string{"openai_api_key", "zai_api_key", "zhipu_api_key", "glm_api_key", ""} {
+		t.Run(credentialField, func(subTest *testing.T) {
+			body := &bytes.Buffer{}
+			writer := multipart.NewWriter(body)
+			if credentialField != "" {
+				if writeError := writer.WriteField(credentialField, "sk-client"); writeError != nil {
+					subTest.Fatalf("write provider key field: %v", writeError)
+				}
 			}
-		}
-		filePart, createError := writer.CreateFormFile("audio", "recording.webm")
-		if createError != nil {
-			t.Fatalf("CreateFormFile error: %v", createError)
-		}
-		if _, writeError := filePart.Write([]byte("audio")); writeError != nil {
-			t.Fatalf("write audio: %v", writeError)
-		}
-		if closeError := writer.Close(); closeError != nil {
-			t.Fatalf("close multipart: %v", closeError)
-		}
-		request := httptest.NewRequest(http.MethodPost, "/dictate?key="+url.QueryEscape(secretPayload.Secret), body)
-		request.Header.Set("Content-Type", writer.FormDataContentType())
-		response := httptest.NewRecorder()
-		router.ServeHTTP(response, request)
-		if includeProviderKeyField {
-			if response.Code != http.StatusBadRequest {
-				t.Fatalf("multipart provider key status=%d body=%s", response.Code, response.Body.String())
+			filePart, createError := writer.CreateFormFile("audio", "recording.webm")
+			if createError != nil {
+				subTest.Fatalf("CreateFormFile error: %v", createError)
 			}
-			continue
-		}
-		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "managed dictation ok") {
-			t.Fatalf("dictation status=%d body=%s", response.Code, response.Body.String())
-		}
+			if _, writeError := filePart.Write([]byte("audio")); writeError != nil {
+				subTest.Fatalf("write audio: %v", writeError)
+			}
+			if closeError := writer.Close(); closeError != nil {
+				subTest.Fatalf("close multipart: %v", closeError)
+			}
+			request := httptest.NewRequest(http.MethodPost, "/dictate?key="+url.QueryEscape(secretPayload.Secret), body)
+			request.Header.Set("Content-Type", writer.FormDataContentType())
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+			if credentialField != "" {
+				if response.Code != http.StatusBadRequest || strings.TrimSpace(response.Body.String()) != "client provider API keys are not accepted" {
+					subTest.Fatalf("field=%s status=%d body=%q", credentialField, response.Code, response.Body.String())
+				}
+				return
+			}
+			if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "managed dictation ok") {
+				subTest.Fatalf("dictation status=%d body=%s", response.Code, response.Body.String())
+			}
+		})
 	}
-	if capturedAuthorization != "Bearer sk-user-openai" {
-		t.Fatalf("authorization=%q want=%q", capturedAuthorization, "Bearer sk-user-openai")
+	if upstreamRequestCount != 1 || capturedAuthorization != "Bearer sk-user-openai" {
+		t.Fatalf("upstream requests=%d authorization=%q", upstreamRequestCount, capturedAuthorization)
 	}
-	waitForManagementRequestCount(t, router, sessionCookie, 2)
+	waitForManagementRequestCount(t, router, sessionCookie, 5)
 }
 
 func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {

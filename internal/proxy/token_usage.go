@@ -8,8 +8,10 @@ import (
 )
 
 type textGenerationResult struct {
-	text  string
-	usage *tokenUsage
+	text                           string
+	usage                          *tokenUsage
+	chatCompletionReasoningContent *string
+	chatCompletionContinuation     *chatCompletionContinuation
 }
 
 type tokenUsage struct {

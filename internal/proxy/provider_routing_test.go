@@ -389,6 +389,12 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 		{name: "Moonshot Kimi K2.7 Code", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK27Code, tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty", "thinking", "reasoning_effort"}},
 		{name: "Moonshot Kimi K2.7 Code Highspeed", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK27CodeHighSpeed, tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"thinking", "reasoning_effort"}},
 		{name: "MiniMax M2.7", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM27, providerModel: "MiniMax-M2.7", tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
+		{name: "MiniMax M2.7 Highspeed", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM27HighSpeed, providerModel: "MiniMax-M2.7-highspeed", tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
+		{name: "MiniMax M2.5", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM25, providerModel: "MiniMax-M2.5", tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
+		{name: "MiniMax M2.5 Highspeed", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM25HighSpeed, providerModel: "MiniMax-M2.5-highspeed", tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
+		{name: "MiniMax M2.1", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM21, providerModel: "MiniMax-M2.1", tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
+		{name: "MiniMax M2.1 Highspeed", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM21HighSpeed, providerModel: "MiniMax-M2.1-highspeed", tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
+		{name: "MiniMax M2", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM2, providerModel: "MiniMax-M2", tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
 		{name: "SiliconFlow DeepSeek R1", provider: proxy.ProviderNameSiliconFlow, model: proxy.ModelNameSiliconFlowDeepSeek, providerModel: "deepseek-ai/DeepSeek-R1", tokenParameterField: "max_tokens", expectedAPIKey: testSiliconFlowKey},
 		{name: "ZAI GLM 5.2", provider: proxy.ProviderNameZAI, model: "glm-5.2", tokenParameterField: "max_tokens", forbiddenFields: []string{"thinking", "reasoning_effort"}},
 		{name: "Grok 4.20 reasoning", provider: proxy.ProviderNameXAI, model: "grok-4.20-0309-reasoning", tokenParameterField: "max_tokens"},
@@ -554,6 +560,78 @@ func TestProviderRoutingMapsKimiK3ReasoningEffortWithoutExposingReasoningContent
 	}
 }
 
+func TestProviderRoutingPreservesKimiReasoningDuringOutputContinuation(t *testing.T) {
+	testCases := []struct {
+		name  string
+		model string
+	}{
+		{name: "Kimi K3", model: proxy.ModelNameMoonshotKimiK3},
+		{name: "Kimi K2.7 Code", model: proxy.ModelNameMoonshotKimiK27Code},
+		{name: "Kimi K2.7 Code Highspeed", model: proxy.ModelNameMoonshotKimiK27CodeHighSpeed},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			capturedPayloads := make([]map[string]any, 0, 2)
+			upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+				var payload map[string]any
+				if decodeError := json.NewDecoder(request.Body).Decode(&payload); decodeError != nil {
+					subTest.Fatalf("decode upstream request: %v", decodeError)
+				}
+				capturedPayloads = append(capturedPayloads, payload)
+				responseWriter.Header().Set("Content-Type", "application/json")
+				if len(capturedPayloads) == 1 {
+					_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"reasoning_content":"private first reasoning","content":"visible partial "},"finish_reason":"length"}]}`))
+					return
+				}
+				_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"reasoning_content":"private second reasoning","content":"visible suffix"},"finish_reason":"stop"}]}`))
+			}))
+			subTest.Cleanup(upstreamServer.Close)
+
+			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
+				Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+				OpenAIKey:             TestAPIKey,
+				MoonshotKey:           "sk-moonshot",
+				MoonshotBaseURL:       upstreamServer.URL,
+				LogLevel:              proxy.LogLevelInfo,
+				WorkerCount:           1,
+				QueueSize:             1,
+				RequestTimeoutSeconds: TestTimeout,
+			}, zap.NewNop().Sugar())
+			if buildError != nil {
+				subTest.Fatalf(messageBuildRouterError, buildError)
+			}
+
+			queryParameters := url.Values{
+				"key":      {TestSecret},
+				"prompt":   {TestPrompt},
+				"provider": {proxy.ProviderNameMoonshot},
+				"model":    {testCase.model},
+			}
+			responseRecorder := httptest.NewRecorder()
+			router.ServeHTTP(responseRecorder, httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil))
+
+			if responseRecorder.Code != http.StatusOK || responseRecorder.Body.String() != "visible partial visible suffix" {
+				subTest.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
+			}
+			if len(capturedPayloads) != 2 {
+				subTest.Fatalf("upstream requests=%d want=2", len(capturedPayloads))
+			}
+			continuationMessages, messagesOK := capturedPayloads[1]["messages"].([]any)
+			if !messagesOK || len(continuationMessages) != 3 {
+				subTest.Fatalf("continuation messages=%v", capturedPayloads[1]["messages"])
+			}
+			assistantMessage, assistantOK := continuationMessages[1].(map[string]any)
+			instructionMessage, instructionOK := continuationMessages[2].(map[string]any)
+			if !assistantOK || assistantMessage["role"] != "assistant" || assistantMessage["content"] != "visible partial " || assistantMessage["reasoning_content"] != "private first reasoning" {
+				subTest.Fatalf("continuation assistant message=%v", continuationMessages[1])
+			}
+			if !instructionOK || instructionMessage["role"] != "user" || instructionMessage["content"] != "Continue exactly where the previous response stopped. Return only the missing suffix without repeating any completed text." {
+				subTest.Fatalf("continuation instruction=%v", continuationMessages[2])
+			}
+		})
+	}
+}
+
 func TestProviderRoutingRejectsGLM52MaxTokensAboveModelLimit(t *testing.T) {
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		t.Fatal("upstream must not be called for max_tokens above the GLM-5.2 limit")
@@ -635,9 +713,9 @@ func TestProviderRoutingRejectsCurrentQwenMaxTokensAboveModelLimit(t *testing.T)
 	}
 }
 
-func TestProviderRoutingRejectsMiniMaxM27MaxTokensAboveModelLimit(t *testing.T) {
+func TestProviderRoutingRejectsCurrentMiniMaxMaxTokensAboveModelLimit(t *testing.T) {
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		t.Fatal("upstream must not be called for max_tokens above the MiniMax-M2.7 limit")
+		t.Fatal("upstream must not be called for max_tokens above the MiniMax M2 limit")
 	}))
 	defer upstreamServer.Close()
 
@@ -655,21 +733,28 @@ func TestProviderRoutingRejectsMiniMaxM27MaxTokensAboveModelLimit(t *testing.T) 
 		t.Fatalf(messageBuildRouterError, buildError)
 	}
 
-	queryParameters := url.Values{}
-	queryParameters.Set("key", TestSecret)
-	queryParameters.Set("prompt", TestPrompt)
-	queryParameters.Set("provider", proxy.ProviderNameMiniMax)
-	queryParameters.Set("model", proxy.ModelNameMiniMaxM27)
-	queryParameters.Set("max_tokens", "2049")
-	request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
-	responseRecorder := httptest.NewRecorder()
-	router.ServeHTTP(responseRecorder, request)
+	for _, model := range []string{
+		proxy.ModelNameMiniMaxM27,
+		proxy.ModelNameMiniMaxM27HighSpeed,
+		proxy.ModelNameMiniMaxM25,
+		proxy.ModelNameMiniMaxM25HighSpeed,
+		proxy.ModelNameMiniMaxM21,
+		proxy.ModelNameMiniMaxM21HighSpeed,
+		proxy.ModelNameMiniMaxM2,
+	} {
+		queryParameters := url.Values{}
+		queryParameters.Set("key", TestSecret)
+		queryParameters.Set("prompt", TestPrompt)
+		queryParameters.Set("provider", proxy.ProviderNameMiniMax)
+		queryParameters.Set("model", model)
+		queryParameters.Set("max_tokens", "204801")
+		request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
 
-	if responseRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusBadRequest, responseRecorder.Body.String())
-	}
-	if !strings.Contains(responseRecorder.Body.String(), "invalid max_tokens parameter") {
-		t.Fatalf("body=%q want invalid max_tokens parameter", responseRecorder.Body.String())
+		if responseRecorder.Code != http.StatusBadRequest || !strings.Contains(responseRecorder.Body.String(), "invalid max_tokens parameter") {
+			t.Fatalf("model=%s status=%d body=%q", model, responseRecorder.Code, responseRecorder.Body.String())
+		}
 	}
 }
 
@@ -2817,13 +2902,17 @@ func TestProviderRoutingRejectsInvalidDefaultDictationProvider(t *testing.T) {
 
 func TestProviderRoutingRejectsClientSuppliedMetaCredential(t *testing.T) {
 	router := NewTestRouter(t, "https://upstream.invalid")
-	request := httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=hello&model_api_key=sk-client", nil)
-	responseRecorder := httptest.NewRecorder()
+	for _, credentialField := range []string{"model_api_key", "zai_api_key", "zhipu_api_key", "glm_api_key"} {
+		t.Run(credentialField, func(subTest *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=hello&"+credentialField+"=sk-client", nil)
+			responseRecorder := httptest.NewRecorder()
 
-	router.ServeHTTP(responseRecorder, request)
+			router.ServeHTTP(responseRecorder, request)
 
-	if responseRecorder.Code != http.StatusBadRequest || strings.TrimSpace(responseRecorder.Body.String()) != "client provider API keys are not accepted" {
-		t.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
+			if responseRecorder.Code != http.StatusBadRequest || strings.TrimSpace(responseRecorder.Body.String()) != "client provider API keys are not accepted" {
+				subTest.Fatalf("field=%s status=%d body=%q", credentialField, responseRecorder.Code, responseRecorder.Body.String())
+			}
+		})
 	}
 }
 

@@ -1384,7 +1384,7 @@ text = client.post_messages(
     examples: [
       ["Meta Muse route", "A caller sends provider=meta and model=muse-spark-1.1 through Chat Completions."],
       ["Qwen alias", "A caller uses provider=qwen for DashScope routing."],
-      ["MiniMax route", "A caller uses provider=minimax and model=minimax-m2.7 through the shared Chat Completions adapter."],
+      ["MiniMax route", "A caller can select any configured MiniMax M2 route, such as provider=minimax and model=minimax-m2.7-highspeed, through the shared Chat Completions adapter."],
       ["xAI route", "A Grok text request uses the OpenAI-compatible chat adapter behind provider=xai."],
     ],
     limitations: [

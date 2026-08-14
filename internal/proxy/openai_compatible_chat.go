@@ -19,8 +19,13 @@ type openAICompatibleChatClient struct {
 }
 
 type chatCompletionMessage struct {
-	Role    string `json:"role"`
-	Content any    `json:"content"`
+	Role             string  `json:"role"`
+	Content          any     `json:"content"`
+	ReasoningContent *string `json:"reasoning_content,omitempty"`
+}
+
+type chatCompletionContinuation struct {
+	messages []chatCompletionMessage
 }
 
 type chatCompletionRequest struct {
@@ -42,7 +47,8 @@ type chatCompletionChoice struct {
 }
 
 type chatCompletionResponseMessage struct {
-	Content string `json:"content"`
+	Content          string  `json:"content"`
+	ReasoningContent *string `json:"reasoning_content"`
 }
 
 func newOpenAICompatibleChatClient(httpClient HTTPDoer) *openAICompatibleChatClient {
@@ -51,13 +57,19 @@ func newOpenAICompatibleChatClient(httpClient HTTPDoer) *openAICompatibleChatCli
 	}
 }
 
-func (client *openAICompatibleChatClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, tokenLimitParameter chatCompletionTokenLimitParameter, reasoningEffort string, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *openAICompatibleChatClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, tokenLimitParameter chatCompletionTokenLimitParameter, reasoningEffort string, continuation *chatCompletionContinuation, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	if mediaLimitError := validateInlineMessageMediaBeforeSerialization(modelIdentifier, messages); mediaLimitError != nil {
 		return textGenerationResult{}, mediaLimitError
 	}
-	providerMessages, messagesError := messages.chatCompletionMessages()
-	if messagesError != nil {
-		return textGenerationResult{}, messagesError
+	var providerMessages []chatCompletionMessage
+	if continuation == nil {
+		var messagesError error
+		providerMessages, messagesError = messages.chatCompletionMessages()
+		if messagesError != nil {
+			return textGenerationResult{}, messagesError
+		}
+	} else {
+		providerMessages = continuation.messages
 	}
 	payload := chatCompletionRequest{
 		Model:    modelIdentifier.providerString(),
@@ -90,10 +102,22 @@ func (client *openAICompatibleChatClient) generateText(parentContext context.Con
 		return textGenerationResult{}, responseError
 	}
 	generation, parseError := parseChatCompletionResponse(responseBytes)
+	if errors.Is(parseError, errProviderOutputLimitReached) && generation.chatCompletionReasoningContent != nil {
+		generation.chatCompletionContinuation = newChatCompletionContinuation(providerMessages, generation.text, generation.chatCompletionReasoningContent)
+	}
 	if parseError != nil {
 		return generation, parseError
 	}
 	return generation, nil
+}
+
+func newChatCompletionContinuation(providerMessages []chatCompletionMessage, visibleContent string, reasoningContent *string) *chatCompletionContinuation {
+	continuationMessages := append([]chatCompletionMessage(nil), providerMessages...)
+	continuationMessages = append(continuationMessages,
+		chatCompletionMessage{Role: string(chatRoleAssistant), Content: visibleContent, ReasoningContent: reasoningContent},
+		chatCompletionMessage{Role: string(chatRoleUser), Content: completionContinuationInstruction},
+	)
+	return &chatCompletionContinuation{messages: continuationMessages}
 }
 
 func parseChatCompletionResponse(responseBytes []byte) (textGenerationResult, error) {
@@ -112,7 +136,7 @@ func parseChatCompletionResponse(responseBytes []byte) (textGenerationResult, er
 			return generation, fmt.Errorf("%w: chat completion missing finish_reason", ErrProviderAPI)
 		}
 		visibleText := choice.Message.Content
-		choiceGeneration := textGenerationResult{text: visibleText, usage: usage}
+		choiceGeneration := textGenerationResult{text: visibleText, usage: usage, chatCompletionReasoningContent: choice.Message.ReasoningContent}
 		if finishReason == "length" {
 			return choiceGeneration, errProviderOutputLimitReached
 		}

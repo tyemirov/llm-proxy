@@ -238,6 +238,53 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 	if len(expectedQwenRates) != 0 {
 		testingInstance.Fatalf("public capability catalog omitted Qwen prices=%v", expectedQwenRates)
 	}
+
+	expectedMiniMaxRates := map[string][]float64{
+		proxy.ModelNameMiniMaxM27:          {0.3, 1.2, 0.06, 0.375},
+		proxy.ModelNameMiniMaxM27HighSpeed: {0.6, 2.4, 0.06, 0.375},
+		proxy.ModelNameMiniMaxM25:          {0.3, 1.2, 0.03, 0.375},
+		proxy.ModelNameMiniMaxM25HighSpeed: {0.6, 2.4, 0.03, 0.375},
+		proxy.ModelNameMiniMaxM21:          {0.3, 1.2, 0.03, 0.375},
+		proxy.ModelNameMiniMaxM21HighSpeed: {0.6, 2.4, 0.03, 0.375},
+		proxy.ModelNameMiniMaxM2:           {0.3, 1.2, 0.03, 0.375},
+	}
+	validatedMiniMaxOfferings := 0
+	for _, offering := range catalog.Offerings {
+		if _, expected := expectedMiniMaxRates[offering.Model]; !expected || offering.Provider != proxy.ProviderNameMiniMax {
+			continue
+		}
+		if offering.WireContract != "openai_chat_completions" || offering.ExecutionLifecycle != "synchronous_completion" || offering.OutputTokenLimit != 204800 {
+			testingInstance.Fatalf("MiniMax offering route=%+v", offering)
+		}
+		if len(offering.Controls) != 1 || offering.Controls[0].ID != "max_tokens" || offering.Controls[0].Minimum == nil || *offering.Controls[0].Minimum != 1 || offering.Controls[0].Maximum == nil || *offering.Controls[0].Maximum != 204800 {
+			testingInstance.Fatalf("MiniMax offering controls=%+v", offering.Controls)
+		}
+		if len(offering.Limits) != 1 || offering.Limits[0].ID != "context_tokens" || offering.Limits[0].Value == nil || *offering.Limits[0].Value != 204800 || offering.Limits[0].Unit != "tokens" {
+			testingInstance.Fatalf("MiniMax offering limits=%+v", offering.Limits)
+		}
+		validatedMiniMaxOfferings++
+	}
+	if validatedMiniMaxOfferings != len(expectedMiniMaxRates) {
+		testingInstance.Fatalf("public capability catalog MiniMax offerings=%d want=%d", validatedMiniMaxOfferings, len(expectedMiniMaxRates))
+	}
+	for _, price := range catalog.Prices {
+		expectedRates, expected := expectedMiniMaxRates[price.Model]
+		if !expected || price.Provider != proxy.ProviderNameMiniMax {
+			continue
+		}
+		if !price.Available || price.Source != "https://platform.minimax.io/docs/guides/pricing-paygo" || price.LastVerified != "2026-08-13" || len(price.Rates) != len(expectedRates) {
+			testingInstance.Fatalf("MiniMax price=%+v", price)
+		}
+		for rateIndex, expectedRate := range expectedRates {
+			if price.Rates[rateIndex].Rate != expectedRate || price.Rates[rateIndex].Conditions.BillingMode != "pay_as_you_go_standard" {
+				testingInstance.Fatalf("MiniMax price=%+v", price)
+			}
+		}
+		delete(expectedMiniMaxRates, price.Model)
+	}
+	if len(expectedMiniMaxRates) != 0 {
+		testingInstance.Fatalf("public capability catalog omitted MiniMax prices=%v", expectedMiniMaxRates)
+	}
 }
 
 func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstance *testing.T) {
