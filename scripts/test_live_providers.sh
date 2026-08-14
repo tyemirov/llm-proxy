@@ -33,6 +33,9 @@ Optional environment:
   LIVE_ENV_FILE              Path to a dotenv file to parse before discovery.
   LLM_PROXY_LIVE_PROVIDERS   Comma or space separated provider list. If set,
                              every listed provider must have its key.
+  LLM_PROXY_LIVE_ALL_MODELS  Exact true or false. When true, verify and smoke
+                             every selected provider text model discovered from
+                             the public catalog. Default: false.
   LLM_PROXY_LIVE_PORT        Local port for the temporary proxy. Default: a
                              freshly allocated loopback port.
   LLM_PROXY_LIVE_TIMEOUT     Per-request curl timeout in seconds. Default: 45.
@@ -220,6 +223,28 @@ elif len(candidates) == 1:
 else:
     raise SystemExit(1)
 ' "${PUBLIC_CAPABILITIES_RESPONSE_PATH}" "${provider}" "${verified_model}"
+}
+
+provider_catalog_text_models() {
+  local provider="$1"
+  python3 -c '
+import json
+import pathlib
+import sys
+
+catalog = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+models = sorted({
+    offering.get("model")
+    for offering in catalog.get("offerings", [])
+    if offering.get("provider") == sys.argv[2]
+    and "text" in offering.get("capabilities", [])
+    and isinstance(offering.get("model"), str)
+    and offering.get("model")
+})
+if not models:
+    raise SystemExit(1)
+print("\n".join(models))
+' "${PUBLIC_CAPABILITIES_RESPONSE_PATH}" "${provider}"
 }
 
 validate_provider_name() {
@@ -569,13 +594,18 @@ pathlib.Path(sys.argv[3]).write_text(
 
 run_text_smoke() {
   local provider="$1"
+  local requested_model="${2:-}"
   local model
   local response_path
   local request_body
   local http_status
   local response_text
   local request_model_label
-  model="$(provider_model_override "${provider}")"
+  if [[ -n "${requested_model}" ]]; then
+    model="${requested_model}"
+  else
+    model="$(provider_model_override "${provider}")"
+  fi
   response_path="${TMP_DIR}/${provider}-response.txt"
   if [[ -n "${model}" ]]; then
     request_body="$(printf '{"prompt":"Reply with exactly OK and no punctuation.","model":"%s","web_search":false}' "${model}")"
@@ -817,6 +847,11 @@ if [[ " ${LIVE_PROVIDERS[*]} " == *" dashscope "* && -z "${DASHSCOPE_BASE_URL:-}
   exit 1
 fi
 export DASHSCOPE_BASE_URL="${DASHSCOPE_BASE_URL:-https://dashscope.invalid}"
+LIVE_ALL_MODELS="$(env_or_default LLM_PROXY_LIVE_ALL_MODELS false)"
+if [[ "${LIVE_ALL_MODELS}" != "true" && "${LIVE_ALL_MODELS}" != "false" ]]; then
+  echo "error: LLM_PROXY_LIVE_ALL_MODELS must be true or false" >&2
+  exit 1
+fi
 
 if [[ -n "${LLM_PROXY_LIVE_PORT:-}" ]]; then
   PORT="${LLM_PROXY_LIVE_PORT}"
@@ -884,8 +919,23 @@ if [[ "${MEDIA_ONLY}" == "true" ]]; then
     run_image_smoke "${LIVE_PROVIDERS[${live_provider_index}]}" "${IMAGE_MODELS[${live_provider_index}]}"
   done
 else
-  for live_provider in "${LIVE_PROVIDERS[@]}"; do
-    verify_provider_key "${live_provider}"
-    run_text_smoke "${live_provider}"
-  done
+  if [[ "${LIVE_ALL_MODELS}" == "true" ]]; then
+    fetch_public_capabilities
+    for live_provider in "${LIVE_PROVIDERS[@]}"; do
+      if ! live_models="$(provider_catalog_text_models "${live_provider}")"; then
+        echo "error: live provider text models are unavailable: provider=${live_provider}" >&2
+        exit 1
+      fi
+      while IFS= read -r live_model; do
+        [[ -n "${live_model}" ]] || continue
+        verify_provider_key "${live_provider}" "${live_model}"
+        run_text_smoke "${live_provider}" "${live_model}"
+      done <<<"${live_models}"
+    done
+  else
+    for live_provider in "${LIVE_PROVIDERS[@]}"; do
+      verify_provider_key "${live_provider}"
+      run_text_smoke "${live_provider}"
+    done
+  fi
 fi

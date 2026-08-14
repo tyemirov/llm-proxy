@@ -1354,6 +1354,9 @@ each key against the provider's configured default model, or the exact model
 override below, before making that provider's smoke request. By default, the
 subsequent smoke omits `model` and proves that the newly saved managed provider
 default is operational; an override is included in both verification and smoke.
+Set `LLM_PROXY_LIVE_ALL_MODELS=true` to discover every text model for each
+selected provider. The harness uses the validated public catalog and runs one
+verification and one explicit-model smoke request for each model.
 
 `make ci` runs each declared gate sequentially through one top-level runner.
 Coverage is written to a fresh private artifact for that invocation and
@@ -1386,6 +1389,15 @@ listed provider must have its key:
 
 ```shell
 LLM_PROXY_LIVE_PROVIDERS=openai,gemini \
+  make test-live-providers LIVE_ENV_FILE=configs/.env
+```
+
+Run the complete current Qwen model matrix through the saved Singapore
+workspace URL:
+
+```shell
+LLM_PROXY_LIVE_PROVIDERS=dashscope \
+  LLM_PROXY_LIVE_ALL_MODELS=true \
   make test-live-providers LIVE_ENV_FILE=configs/.env
 ```
 
@@ -1923,6 +1935,18 @@ curl --get \
   "http://localhost:8080/"
 ```
 
+Current Qwen text generation through the tenant's saved DashScope workspace:
+
+```shell
+curl --get \
+  --data-urlencode "prompt=Summarize this with Qwen" \
+  --data-urlencode "key=mysecret" \
+  --data-urlencode "provider=dashscope" \
+  --data-urlencode "model=qwen3.7-plus" \
+  --data-urlencode "max_tokens=512" \
+  "http://localhost:8080/"
+```
+
 Gemini text generation:
 
 ```shell
@@ -2020,9 +2044,10 @@ Bodies that provide both `prompt` and `messages`, empty `messages`, unsupported
 message roles, empty message content, partially specified `order`, duplicate
 or negative `order`, or both `system_prompt` and a system message return
 `400 Bad Request` before any upstream call.
-MiniMax M2.7 `max_tokens` values above `2048`, Gemini values above `65536`, and
-Anthropic values above the configured Claude model output limit return `400 Bad
-Request` before the proxy calls the selected provider.
+The proxy returns `400 Bad Request` before upstream dispatch for MiniMax M2.7
+values above `2048` and current Qwen or Gemini values above `65536`. The same
+response applies to Anthropic values above the configured Claude model output
+limit.
 
 `POST /v2` is the canonical chat endpoint. Its exact accepted fields come from
 the OpenAPI schema, including the omission-versus-explicit-value contract for
@@ -2258,6 +2283,9 @@ and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-mo
 | `deepseek-chat` | DeepSeek | No | - | No |
 | `deepseek-reasoner` | DeepSeek, SiliconFlow | SiliconFlow | - | No |
 | `qwen-plus` | DashScope/Qwen | Yes | - | No |
+| `qwen3.7-max` | DashScope/Qwen | No | `65536` | No |
+| `qwen3.7-plus` | DashScope/Qwen | No | `65536` | No |
+| `qwen3.6-flash` | DashScope/Qwen | No | `65536` | No |
 | `kimi-k2.6` | Moonshot/Kimi | Yes | - | No |
 | `kimi-k3` | Moonshot/Kimi | No | - | No |
 | `kimi-k2.7-code` | Moonshot/Kimi | No | - | No |
@@ -2292,6 +2320,20 @@ and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-mo
 | `grok-code-fast` | Grok/xAI | No | - | No |
 | `grok-code-fast-1` | Grok/xAI | No | - | No |
 | `grok-code-fast-1-0825` | Grok/xAI | No | - | No |
+
+The three current Qwen routes are text-only proxy offerings. Each uses the
+tenant's exact Singapore workspace URL and the OpenAI-compatible Chat
+Completions endpoint. `max_tokens` is the request control and has an inclusive
+`1..65536` proxy boundary. Each model has a 1,000,000-token context window.
+The catalog records Singapore pay-as-you-go list rates for the lowest published
+input tier. Qwen 3.7 Max costs $2.50 for input and $7.50 for output per million
+tokens. Qwen 3.7 Plus costs $0.40 for input and $1.60 for output. Qwen 3.6 Flash
+costs $0.25 for input and $1.50 for output. The limits, prices, Singapore
+availability, and workspace URL were verified on 2026-08-13 against Alibaba's
+[text model guide](https://www.alibabacloud.com/help/en/model-studio/text-generation-model),
+[model catalog](https://www.alibabacloud.com/help/en/model-studio/models),
+[OpenAI compatibility guide](https://www.alibabacloud.com/help/en/model-studio/compatibility-with-openai-responses-api),
+and [pricing page](https://www.alibabacloud.com/help/en/model-studio/model-pricing).
 
 ### Dictation capabilities
 

@@ -114,7 +114,13 @@ and [pricing and rate-limit documentation](https://dev.meta.ai/docs/getting-star
 DashScope is the only Alibaba provider. Each managed tenant saves its Singapore
 Model Studio workspace URL with the matching regional API key. Verification and
 routed requests use that saved tenant URL. Static mode requires the same pair in
-`providers.dashscope`. The `qwen` alias resolves to DashScope.
+`providers.dashscope`. The `qwen` alias resolves to DashScope. `qwen-plus`
+remains the exact default. `qwen3.7-max`, `qwen3.7-plus`, and `qwen3.6-flash`
+are additional text-only Chat Completions routes. Each has a 1,000,000-token
+context record and a `65536` output boundary, and maps public `max_tokens` to
+the documented upstream field. Singapore availability, workspace routing,
+limits, and list pricing were verified from Alibaba's official model,
+compatibility, and pricing references on 2026-08-13.
 
 MiniMax is a distinct text-only provider with canonical selector `minimax`,
 exact model `minimax-m2.7`, endpoint `https://api.minimax.io/v1`, and

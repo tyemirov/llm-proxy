@@ -60,6 +60,12 @@ const (
 	ModelNameDeepSeekReasoner = "deepseek-reasoner"
 	// ModelNameDashScopeQwenPlus identifies DashScope Qwen Plus.
 	ModelNameDashScopeQwenPlus = "qwen-plus"
+	// ModelNameDashScopeQwen37Max identifies DashScope Qwen 3.7 Max.
+	ModelNameDashScopeQwen37Max = "qwen3.7-max"
+	// ModelNameDashScopeQwen37Plus identifies DashScope Qwen 3.7 Plus.
+	ModelNameDashScopeQwen37Plus = "qwen3.7-plus"
+	// ModelNameDashScopeQwen36Flash identifies DashScope Qwen 3.6 Flash.
+	ModelNameDashScopeQwen36Flash = "qwen3.6-flash"
 	// ModelNameMoonshotKimiK26 identifies Moonshot Kimi K2.6.
 	ModelNameMoonshotKimiK26 = "kimi-k2.6"
 	// ModelNameMoonshotKimiK3 identifies Moonshot Kimi K3.
