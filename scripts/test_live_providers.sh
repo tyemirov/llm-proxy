@@ -22,7 +22,7 @@ Provider key variables:
   MOONSHOT_API_KEY
   MINIMAX_API_KEY
   SILICONFLOW_API_KEY
-  ZHIPU_API_KEY
+  ZAI_API_KEY
   GEMINI_API_KEY
   ANTHROPIC_API_KEY
   MODEL_API_KEY
@@ -53,7 +53,7 @@ Per-provider model overrides:
   LLM_PROXY_LIVE_MOONSHOT_MODEL
   LLM_PROXY_LIVE_MINIMAX_MODEL
   LLM_PROXY_LIVE_SILICONFLOW_MODEL
-  LLM_PROXY_LIVE_ZHIPU_MODEL
+  LLM_PROXY_LIVE_ZAI_MODEL
   LLM_PROXY_LIVE_GEMINI_MODEL
   LLM_PROXY_LIVE_ANTHROPIC_MODEL
   LLM_PROXY_LIVE_META_MODEL
@@ -138,7 +138,7 @@ provider_key_variable() {
     moonshot) printf "%s\n" "MOONSHOT_API_KEY" ;;
     minimax) printf "%s\n" "MINIMAX_API_KEY" ;;
     siliconflow) printf "%s\n" "SILICONFLOW_API_KEY" ;;
-    zhipu) printf "%s\n" "ZHIPU_API_KEY" ;;
+    zai) printf "%s\n" "ZAI_API_KEY" ;;
     gemini) printf "%s\n" "GEMINI_API_KEY" ;;
     anthropic) printf "%s\n" "ANTHROPIC_API_KEY" ;;
     meta) printf "%s\n" "MODEL_API_KEY" ;;
@@ -155,7 +155,7 @@ provider_model_override() {
     moonshot) env_or_default LLM_PROXY_LIVE_MOONSHOT_MODEL "" ;;
     minimax) env_or_default LLM_PROXY_LIVE_MINIMAX_MODEL "" ;;
     siliconflow) env_or_default LLM_PROXY_LIVE_SILICONFLOW_MODEL "" ;;
-    zhipu) env_or_default LLM_PROXY_LIVE_ZHIPU_MODEL "" ;;
+    zai) env_or_default LLM_PROXY_LIVE_ZAI_MODEL "" ;;
     gemini) env_or_default LLM_PROXY_LIVE_GEMINI_MODEL "" ;;
     anthropic) env_or_default LLM_PROXY_LIVE_ANTHROPIC_MODEL "" ;;
     meta) env_or_default LLM_PROXY_LIVE_META_MODEL "" ;;
@@ -267,7 +267,7 @@ export_unused_provider_placeholders() {
     MOONSHOT_API_KEY \
     MINIMAX_API_KEY \
     SILICONFLOW_API_KEY \
-    ZHIPU_API_KEY \
+    ZAI_API_KEY \
     GEMINI_API_KEY \
     ANTHROPIC_API_KEY \
     MODEL_API_KEY \
@@ -291,7 +291,7 @@ write_static_live_config() {
       provider_keys["moonshot"] = "MOONSHOT_API_KEY"
       provider_keys["minimax"] = "MINIMAX_API_KEY"
       provider_keys["siliconflow"] = "SILICONFLOW_API_KEY"
-      provider_keys["zhipu"] = "ZHIPU_API_KEY"
+      provider_keys["zai"] = "ZAI_API_KEY"
       provider_keys["gemini"] = "GEMINI_API_KEY"
       provider_keys["anthropic"] = "ANTHROPIC_API_KEY"
       provider_keys["meta"] = "MODEL_API_KEY"
@@ -774,7 +774,7 @@ if [[ "${MEDIA_ONLY}" == "true" && ( "${PREFLIGHT_ONLY}" == "true" || -n "${WRIT
   exit 1
 fi
 
-SUPPORTED_PROVIDERS=(openai deepseek dashscope moonshot minimax siliconflow zhipu gemini anthropic meta xai)
+SUPPORTED_PROVIDERS=(openai deepseek dashscope moonshot minimax siliconflow zai gemini anthropic meta xai)
 MEDIA_PROVIDERS=(openai anthropic gemini xai)
 LIVE_PROVIDERS=()
 IMAGE_MODELS=()

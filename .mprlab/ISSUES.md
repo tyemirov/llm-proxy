@@ -489,7 +489,7 @@ retain satisfied historical dependencies.
   - Keep credentials, prompts, and response bodies out of test output.
   - Run `make ci` after the last application change.
 
-- [ ] [I225] (P1) {I223} Move GLM routes to the international Z.AI API.
+- [!] [I225] (P1) {I223} Move GLM routes to the international Z.AI API.
   Goal:
   Use one canonical `zai` provider for international Z.AI text and dictation
   routes. Accept API keys from the international Z.AI platform.
@@ -539,6 +539,8 @@ retain satisfied historical dependencies.
   - Run one paid Z.AI key verification and one small text request.
   - Keep the API key, prompt, and response body out of test output.
   - Run `make ci` after the last application change.
+  Blocked: A Z.AI credential is not available in this workspace. The operator
+  must supply `ZAI_API_KEY` and authorize the two paid live calls.
 
 - [ ] [I223] (P0) {I216,I221} Load all supported providers and models from one catalog file.
   Goal:

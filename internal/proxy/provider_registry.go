@@ -120,9 +120,9 @@ func configuredProviderDefinitions(configuration Configuration) map[providerID]p
 			transcriptionAPIKey: configuration.SiliconFlowKey, transcriptionsURL: configuration.SiliconFlowTranscriptionsURL, transcriptionModelField: keyModel,
 			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
 		},
-		providerID(ProviderNameZhipu): {
-			identifier: providerID(ProviderNameZhipu), aliases: []string{providerAliasGLM}, textAPIKey: configuration.ZhipuKey, textBaseURL: configuration.ZhipuBaseURL,
-			transcriptionAPIKey: configuration.ZhipuKey, transcriptionsURL: configuration.ZhipuTranscriptionsURL, transcriptionModelField: keyModel,
+		providerID(ProviderNameZAI): {
+			identifier: providerID(ProviderNameZAI), textAPIKey: configuration.ZAIKey, textBaseURL: configuration.ZAIBaseURL,
+			transcriptionAPIKey: configuration.ZAIKey, transcriptionsURL: configuration.ZAITranscriptionsURL, transcriptionModelField: keyModel,
 			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
 		},
 		providerID(ProviderNameGemini): {
@@ -153,7 +153,7 @@ func configuredProviderAPIKeys(configuration Configuration) map[providerID]strin
 	configuredProviderAPIKey(configuration.MoonshotKey, ProviderNameMoonshot, providerAPIKeys)
 	configuredProviderAPIKey(configuration.MiniMaxKey, ProviderNameMiniMax, providerAPIKeys)
 	configuredProviderAPIKey(configuration.SiliconFlowKey, ProviderNameSiliconFlow, providerAPIKeys)
-	configuredProviderAPIKey(configuration.ZhipuKey, ProviderNameZhipu, providerAPIKeys)
+	configuredProviderAPIKey(configuration.ZAIKey, ProviderNameZAI, providerAPIKeys)
 	configuredProviderAPIKey(configuration.GeminiKey, ProviderNameGemini, providerAPIKeys)
 	configuredProviderAPIKey(configuration.AnthropicKey, ProviderNameAnthropic, providerAPIKeys)
 	configuredProviderAPIKey(configuration.MetaKey, ProviderNameMeta, providerAPIKeys)

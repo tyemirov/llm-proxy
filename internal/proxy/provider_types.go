@@ -17,8 +17,8 @@ const (
 	ProviderNameMiniMax = "minimax"
 	// ProviderNameSiliconFlow identifies SiliconFlow routing.
 	ProviderNameSiliconFlow = "siliconflow"
-	// ProviderNameZhipu identifies Zhipu/GLM routing.
-	ProviderNameZhipu = "zhipu"
+	// ProviderNameZAI identifies international Z.AI routing.
+	ProviderNameZAI = "zai"
 	// ProviderNameGemini identifies Google Gemini routing.
 	ProviderNameGemini = "gemini"
 	// ProviderNameAnthropic identifies Anthropic Claude routing.
@@ -32,22 +32,21 @@ const (
 const (
 	providerAliasQwen   = "qwen"
 	providerAliasKimi   = "kimi"
-	providerAliasGLM    = "glm"
 	providerAliasClaude = "claude"
 )
 
 const (
-	defaultDeepSeekBaseURL        = "https://api.deepseek.com"
-	defaultMoonshotBaseURL        = "https://api.moonshot.ai/v1"
-	defaultMiniMaxBaseURL         = "https://api.minimax.io/v1"
-	defaultSiliconFlowBaseURL     = "https://api.siliconflow.com/v1"
-	defaultZhipuBaseURL           = "https://open.bigmodel.cn/api/paas/v4"
-	defaultZhipuTranscriptionsURL = "https://api.z.ai/api/paas/v4/audio/transcriptions"
-	defaultGeminiBaseURL          = "https://generativelanguage.googleapis.com/v1beta"
-	defaultAnthropicBaseURL       = "https://api.anthropic.com"
-	defaultMetaBaseURL            = "https://api.meta.ai/v1"
-	defaultXAIBaseURL             = "https://api.x.ai/v1"
-	defaultXAITranscriptionsURL   = "https://api.x.ai/v1/stt"
+	defaultDeepSeekBaseURL      = "https://api.deepseek.com"
+	defaultMoonshotBaseURL      = "https://api.moonshot.ai/v1"
+	defaultMiniMaxBaseURL       = "https://api.minimax.io/v1"
+	defaultSiliconFlowBaseURL   = "https://api.siliconflow.com/v1"
+	defaultZAIBaseURL           = "https://api.z.ai/api/paas/v4"
+	defaultZAITranscriptionsURL = "https://api.z.ai/api/paas/v4/audio/transcriptions"
+	defaultGeminiBaseURL        = "https://generativelanguage.googleapis.com/v1beta"
+	defaultAnthropicBaseURL     = "https://api.anthropic.com"
+	defaultMetaBaseURL          = "https://api.meta.ai/v1"
+	defaultXAIBaseURL           = "https://api.x.ai/v1"
+	defaultXAITranscriptionsURL = "https://api.x.ai/v1/stt"
 )
 
 const (
@@ -73,8 +72,8 @@ const (
 	ModelNameMiniMaxM27 = "minimax-m2.7"
 	// ModelNameSiliconFlowDeepSeek identifies SiliconFlow-hosted DeepSeek R1.
 	ModelNameSiliconFlowDeepSeek = ModelNameDeepSeekReasoner
-	// ModelNameZhipuGLM identifies the GLM 5.1 model.
-	ModelNameZhipuGLM = "glm-5.1"
+	// ModelNameZAIGLM identifies the GLM 5.1 model.
+	ModelNameZAIGLM = "glm-5.1"
 	// ModelNameGemini35Flash identifies Gemini 3.5 Flash.
 	ModelNameGemini35Flash = "gemini-3.5-flash"
 	// ModelNameGemini31FlashLite identifies Gemini 3.1 Flash-Lite.

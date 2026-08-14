@@ -49,8 +49,8 @@ providers:
   siliconflow:
     base_url: https://api.siliconflow.com/v1
     transcriptions_url: https://api.siliconflow.com/v1/audio/transcriptions
-  zhipu:
-    base_url: https://open.bigmodel.cn/api/paas/v4
+  zai:
+    base_url: https://api.z.ai/api/paas/v4
     transcriptions_url: https://api.z.ai/api/paas/v4/audio/transcriptions
   gemini:
     base_url: https://generativelanguage.googleapis.com/v1beta
@@ -62,7 +62,7 @@ providers:
     base_url: https://api.x.ai/v1
     transcriptions_url: https://api.x.ai/v1/stt
 catalog:
-  revision: 2026-08-11.f033.1
+  revision: 2026-08-13.i225.1
   operations:
   - id: text
     input_artifacts:
@@ -107,8 +107,8 @@ catalog:
     label: SiliconFlow
     credential_kinds:
     - api_key
-  - id: zhipu
-    label: Zhipu
+  - id: zai
+    label: Z.AI
     credential_kinds:
     - api_key
   - id: gemini
@@ -140,8 +140,8 @@ catalog:
     label: MiniMax
   - id: funaudio
     label: FunAudioLLM
-  - id: zhipu
-    label: Zhipu AI
+  - id: zai
+    label: Z.AI
   - id: google
     label: Google
   - id: anthropic
@@ -196,11 +196,11 @@ catalog:
     label: SenseVoice
     weight_access: open_weights
   - id: glm-5
-    publisher: zhipu
+    publisher: zai
     label: GLM-5
     weight_access: open_weights
   - id: glm-asr
-    publisher: zhipu
+    publisher: zai
     label: GLM ASR
     weight_access: open_weights
   - id: gemini
@@ -415,19 +415,19 @@ catalog:
     operations:
     - dictation
   - id: glm-5.1
-    publisher: zhipu
+    publisher: zai
     family: glm-5
     version: glm-5.1
     operations:
     - text
   - id: glm-5.2
-    publisher: zhipu
+    publisher: zai
     family: glm-5
     version: glm-5.2
     operations:
     - text
   - id: glm-asr-2512
-    publisher: zhipu
+    publisher: zai
     family: glm-asr
     version: glm-asr-2512
     operations:
@@ -1251,7 +1251,7 @@ catalog:
     - dictation
     wire_contract: multipart_transcription
     execution_lifecycle: synchronous_completion
-  - provider: zhipu
+  - provider: zai
     model: glm-5.1
     provider_model: glm-5.1
     operations:
@@ -1260,7 +1260,7 @@ catalog:
     - text
     wire_contract: openai_chat_completions
     execution_lifecycle: synchronous_completion
-  - provider: zhipu
+  - provider: zai
     model: glm-5.2
     provider_model: glm-5.2
     operations:
@@ -1268,7 +1268,7 @@ catalog:
     wire_contract: openai_chat_completions
     execution_lifecycle: synchronous_completion
     output_token_limit: 131072
-  - provider: zhipu
+  - provider: zai
     model: glm-asr-2512
     provider_model: glm-asr-2512
     operations:
@@ -2383,21 +2383,21 @@ catalog:
     source: https://docs.siliconflow.com/en/userguide/introduction/pricing
     last_verified: "2026-08-10"
     unavailable_reason: Exact published pricing has not been imported for this provider offering.
-  - provider: zhipu
+  - provider: zai
     model: glm-5.1
     operation: text
     available: false
     source: https://docs.z.ai/guides/overview/pricing
     last_verified: "2026-08-10"
     unavailable_reason: Exact published pricing has not been imported for this provider offering.
-  - provider: zhipu
+  - provider: zai
     model: glm-5.2
     operation: text
     available: false
     source: https://docs.z.ai/guides/overview/pricing
     last_verified: "2026-08-10"
     unavailable_reason: Exact published pricing has not been imported for this provider offering.
-  - provider: zhipu
+  - provider: zai
     model: glm-asr-2512
     operation: dictation
     available: false

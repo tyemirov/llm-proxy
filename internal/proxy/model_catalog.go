@@ -130,7 +130,7 @@ var providerTextRouteCapabilities = map[string]map[textRouteCapabilities]struct{
 	ProviderNameMoonshot:    {openAIChatCompletionsSynchronousRouteCapabilities: {}},
 	ProviderNameMiniMax:     {openAIChatCompletionsSynchronousRouteCapabilities: {}},
 	ProviderNameSiliconFlow: {openAIChatCompletionsSynchronousRouteCapabilities: {}},
-	ProviderNameZhipu:       {openAIChatCompletionsSynchronousRouteCapabilities: {}},
+	ProviderNameZAI:         {openAIChatCompletionsSynchronousRouteCapabilities: {}},
 	ProviderNameGemini: {
 		geminiInteractionsPollableRouteCapabilities:    {},
 		geminiInteractionsSynchronousRouteCapabilities: {},

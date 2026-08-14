@@ -120,7 +120,7 @@ func TestIntegrationGatewayContextTimeoutCancelsUpstreamRequest(testingInstance 
 		MoonshotBaseURL:              "https://moonshot.invalid",
 		SiliconFlowBaseURL:           "https://siliconflow.invalid",
 		SiliconFlowTranscriptionsURL: "https://siliconflow.invalid/audio/transcriptions",
-		ZhipuBaseURL:                 "https://zhipu.invalid",
+		ZAIBaseURL:                   "https://zai.invalid",
 	}), loggerInstance.Sugar())
 	if buildError != nil {
 		testingInstance.Fatalf(buildRouterFailedFormat, buildError)

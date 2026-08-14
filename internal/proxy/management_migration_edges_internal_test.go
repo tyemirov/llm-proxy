@@ -204,6 +204,20 @@ func TestManagedTenantSQLiteMigrationPreflightRejectsMalformedOwnershipData(t *t
 			want: "provider=qwen model=qwen-plus reason=not_canonical",
 		},
 		{
+			name: "retired and canonical Z.AI provider conflict",
+			configure: func(subTest *testing.T, testFixture fixture) {
+				addProvider(subTest, testFixture, func(record *legacyManagedProviderAPIKeyRecord) {
+					record.ProviderID = retiredZhipuProviderIdentifier
+					record.TextModel = ModelNameZAIGLM
+				})
+				addProvider(subTest, testFixture, func(record *legacyManagedProviderAPIKeyRecord) {
+					record.ProviderID = ProviderNameZAI
+					record.TextModel = ModelNameZAIGLM
+				})
+			},
+			want: "provider_conflict=zai",
+		},
+		{
 			name: "noncanonical model case",
 			configure: func(subTest *testing.T, testFixture fixture) {
 				addProvider(subTest, testFixture, func(record *legacyManagedProviderAPIKeyRecord) {

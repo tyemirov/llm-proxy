@@ -23,7 +23,7 @@ import (
 const (
 	testDeepSeekKey    = "sk-deepseek"
 	testSiliconFlowKey = "sk-siliconflow"
-	testZhipuKey       = "sk-zhipu"
+	testZAIKey         = "sk-zai"
 	testGeminiKey      = "sk-gemini"
 	testAnthropicKey   = "sk-ant"
 	testMetaKey        = "sk-meta"
@@ -110,7 +110,7 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 		proxy.ProviderNameMoonshot,
 		proxy.ProviderNameMiniMax,
 		proxy.ProviderNameSiliconFlow,
-		proxy.ProviderNameZhipu,
+		proxy.ProviderNameZAI,
 		proxy.ProviderNameGemini,
 		proxy.ProviderNameAnthropic,
 		proxy.ProviderNameMeta,
@@ -126,7 +126,7 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 		proxy.ProviderNameMoonshot:    {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
 		proxy.ProviderNameMiniMax:     {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
 		proxy.ProviderNameSiliconFlow: {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
-		proxy.ProviderNameZhipu:       {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
+		proxy.ProviderNameZAI:         {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
 		proxy.ProviderNameAnthropic:   {wireContract: "anthropic_messages", executionLifecycle: "synchronous_completion"},
 		proxy.ProviderNameMeta:        {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
 		proxy.ProviderNameXAI:         {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
@@ -218,7 +218,7 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 		MoonshotKey:                  "sk-moonshot",
 		MiniMaxKey:                   "sk-minimax",
 		SiliconFlowKey:               testSiliconFlowKey,
-		ZhipuKey:                     testZhipuKey,
+		ZAIKey:                       testZAIKey,
 		GeminiKey:                    testGeminiKey,
 		AnthropicKey:                 testAnthropicKey,
 		MetaKey:                      testMetaKey,
@@ -231,8 +231,8 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 		MiniMaxBaseURL:               upstreamServer.URL,
 		SiliconFlowBaseURL:           upstreamServer.URL,
 		SiliconFlowTranscriptionsURL: upstreamServer.URL + "/audio/transcriptions",
-		ZhipuBaseURL:                 upstreamServer.URL,
-		ZhipuTranscriptionsURL:       upstreamServer.URL + "/audio/transcriptions",
+		ZAIBaseURL:                   upstreamServer.URL,
+		ZAITranscriptionsURL:         upstreamServer.URL + "/audio/transcriptions",
 		GeminiBaseURL:                upstreamServer.URL,
 		AnthropicBaseURL:             upstreamServer.URL,
 		MetaBaseURL:                  upstreamServer.URL,
@@ -379,7 +379,7 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 		{name: "Moonshot Kimi K2.7 Code", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK27Code, tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty"}},
 		{name: "MiniMax M2.7", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM27, providerModel: "MiniMax-M2.7", tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
 		{name: "SiliconFlow DeepSeek R1", provider: proxy.ProviderNameSiliconFlow, model: proxy.ModelNameSiliconFlowDeepSeek, providerModel: "deepseek-ai/DeepSeek-R1", tokenParameterField: "max_tokens", expectedAPIKey: testSiliconFlowKey},
-		{name: "Zhipu GLM 5.2", provider: proxy.ProviderNameZhipu, model: "glm-5.2", tokenParameterField: "max_tokens", forbiddenFields: []string{"thinking", "reasoning_effort"}},
+		{name: "ZAI GLM 5.2", provider: proxy.ProviderNameZAI, model: "glm-5.2", tokenParameterField: "max_tokens", forbiddenFields: []string{"thinking", "reasoning_effort"}},
 		{name: "Grok 4.20 reasoning", provider: proxy.ProviderNameXAI, model: "grok-4.20-0309-reasoning", tokenParameterField: "max_tokens"},
 	}
 	for _, testCase := range testCases {
@@ -424,8 +424,8 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 				MiniMaxBaseURL:        upstreamServer.URL,
 				SiliconFlowKey:        testSiliconFlowKey,
 				SiliconFlowBaseURL:    upstreamServer.URL,
-				ZhipuKey:              testZhipuKey,
-				ZhipuBaseURL:          upstreamServer.URL,
+				ZAIKey:                testZAIKey,
+				ZAIBaseURL:            upstreamServer.URL,
 				XAIKey:                testXAIKey,
 				XAIBaseURL:            upstreamServer.URL,
 				LogLevel:              proxy.LogLevelInfo,
@@ -488,8 +488,8 @@ func TestProviderRoutingRejectsGLM52MaxTokensAboveModelLimit(t *testing.T) {
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
 		OpenAIKey:             TestAPIKey,
-		ZhipuKey:              testZhipuKey,
-		ZhipuBaseURL:          upstreamServer.URL,
+		ZAIKey:                testZAIKey,
+		ZAIBaseURL:            upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -502,7 +502,7 @@ func TestProviderRoutingRejectsGLM52MaxTokensAboveModelLimit(t *testing.T) {
 	queryParameters := url.Values{}
 	queryParameters.Set("key", TestSecret)
 	queryParameters.Set("prompt", TestPrompt)
-	queryParameters.Set("provider", proxy.ProviderNameZhipu)
+	queryParameters.Set("provider", proxy.ProviderNameZAI)
 	queryParameters.Set("model", "glm-5.2")
 	queryParameters.Set("max_tokens", "131073")
 	request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
@@ -2641,16 +2641,16 @@ func TestProviderRoutingRejectsInvalidDefaultDictationProvider(t *testing.T) {
 			expectedError: "unsupported provider endpoint: provider=meta endpoint=dictation",
 		},
 		{
-			name: "missing_zhipu_credential",
+			name: "missing_zai_credential",
 			configuration: proxy.Configuration{
-				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameZhipu}),
+				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameZAI}),
 				OpenAIKey:             TestAPIKey,
 				LogLevel:              proxy.LogLevelInfo,
 				WorkerCount:           1,
 				QueueSize:             1,
 				RequestTimeoutSeconds: TestTimeout,
 			},
-			expectedError: "provider not configured: provider=zhipu endpoint=dictation",
+			expectedError: "provider not configured: provider=zai endpoint=dictation",
 		},
 		{
 			name: "missing_grok_credential",
@@ -2778,7 +2778,7 @@ func TestProviderRoutingSupportsSiliconFlowDictation(t *testing.T) {
 	}
 }
 
-func TestProviderRoutingSupportsZhipuAndGrokDictation(t *testing.T) {
+func TestProviderRoutingSupportsZAIAndGrokDictation(t *testing.T) {
 	testCases := []struct {
 		name             string
 		providerName     string
@@ -2789,23 +2789,23 @@ func TestProviderRoutingSupportsZhipuAndGrokDictation(t *testing.T) {
 		configuration    func(string) proxy.Configuration
 	}{
 		{
-			name:             "zhipu",
-			providerName:     proxy.ProviderNameZhipu,
-			apiKey:           testZhipuKey,
+			name:             "zai",
+			providerName:     proxy.ProviderNameZAI,
+			apiKey:           testZAIKey,
 			expectedModel:    "glm-asr-2512",
 			expectModelField: true,
-			expectedResponse: "zhipu dictation ok",
+			expectedResponse: "zai dictation ok",
 			configuration: func(transcriptionsURL string) proxy.Configuration {
 				return proxy.Configuration{
-					Tenants:                proxy.SingleTenantConfigurations("test", TestSecret),
-					OpenAIKey:              TestAPIKey,
-					ZhipuKey:               testZhipuKey,
-					ZhipuTranscriptionsURL: transcriptionsURL,
-					LogLevel:               proxy.LogLevelInfo,
-					WorkerCount:            1,
-					QueueSize:              1,
-					RequestTimeoutSeconds:  TestTimeout,
-					MaxInputAudioBytes:     1024 * 1024,
+					Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+					OpenAIKey:             TestAPIKey,
+					ZAIKey:                testZAIKey,
+					ZAITranscriptionsURL:  transcriptionsURL,
+					LogLevel:              proxy.LogLevelInfo,
+					WorkerCount:           1,
+					QueueSize:             1,
+					RequestTimeoutSeconds: TestTimeout,
+					MaxInputAudioBytes:    1024 * 1024,
 				}
 			},
 		},

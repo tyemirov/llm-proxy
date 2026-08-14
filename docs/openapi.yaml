@@ -714,7 +714,7 @@ components:
       name: provider
       in: query
       required: false
-      description: Canonical provider identifier. Omission uses the tenant default.
+      description: Canonical provider identifier from the public capability catalog, such as zai. Retired zhipu and glm values are invalid. Omission uses the tenant default.
       schema:
         type: string
         minLength: 1
@@ -811,7 +811,7 @@ components:
       name: provider
       in: path
       required: true
-      description: Canonical provider identifier.
+      description: Canonical provider identifier from the public capability catalog, such as zai. Retired zhipu and glm values are invalid.
       schema:
         type: string
         minLength: 1

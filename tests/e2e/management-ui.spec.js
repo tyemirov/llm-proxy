@@ -2264,6 +2264,21 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
     "provider=meta",
   );
   await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"]')).toHaveCount(0);
+
+  await providerSelector.selectOption("zai");
+  await expect(providerEditor.getByRole("textbox", { name: "Z.AI API key" })).toHaveValue("");
+  await expect(providerEditor.getByRole("combobox", { name: "Provider default model" })).toHaveValue("glm-5.1");
+  await expect(providerSelector.locator('option[value="zhipu"]')).toHaveCount(0);
+  await expect(providerSelector.locator('option[value="glm"]')).toHaveCount(0);
+  await expect(settingsDialog.locator('request-example[data-example-id="provider-text"] .usage-snippet')).toContainText(
+    "provider=zai",
+  );
+  await expect(settingsDialog.locator('request-example[data-example-id="provider-v2"] .usage-snippet')).toContainText(
+    "provider=zai",
+  );
+  await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"] .usage-snippet')).toContainText(
+    "provider=zai",
+  );
 });
 
 test("system prompt editors stay hidden until their labels expand them and reset with context", async ({ page }) => {
@@ -6311,6 +6326,20 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         supports_dictation: true,
         dictation_default_model: "xai-stt",
         dictation_models: ["xai-stt"],
+      },
+      {
+        id: "zai",
+        label: "Z.AI",
+        aliases: [],
+        has_key: false,
+        base_url: "",
+        text_model: "glm-5.1",
+        system_prompt: "",
+        text_default_model: "glm-5.1",
+        text_models: [{ id: "glm-5.1" }, { id: "glm-5.2" }],
+        supports_dictation: true,
+        dictation_default_model: "glm-asr-2512",
+        dictation_models: ["glm-asr-2512"],
       },
     ],
     proxy: {

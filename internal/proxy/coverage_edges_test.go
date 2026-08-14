@@ -631,12 +631,12 @@ func TestCoverageConfigurationValidationMatrix(t *testing.T) {
 			expectedError: "provider not configured: provider=siliconflow",
 		},
 		{
-			name: "missing zhipu text credential from alias",
+			name: "retired glm provider alias",
 			configuration: proxy.Configuration{
-				Tenants:   proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: "glm", Model: proxy.ModelNameZhipuGLM, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel}),
+				Tenants:   proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: "glm", Model: proxy.ModelNameZAIGLM, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel}),
 				OpenAIKey: TestAPIKey,
 			},
-			expectedError: "provider not configured: provider=zhipu",
+			expectedError: "unknown provider: glm",
 		},
 		{
 			name: "unknown default text provider",
@@ -674,13 +674,13 @@ func TestCoverageConfigurationValidationMatrix(t *testing.T) {
 			expectedError: "unsupported provider endpoint: provider=moonshot endpoint=dictation",
 		},
 		{
-			name: "missing glm default dictation credential",
+			name: "retired glm default dictation provider",
 			configuration: proxy.Configuration{
 				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: "glm"}),
 				OpenAIKey:             TestAPIKey,
 				RequestTimeoutSeconds: TestTimeout,
 			},
-			expectedError: "provider not configured: provider=zhipu endpoint=dictation",
+			expectedError: "unknown provider: glm",
 		},
 		{
 			name: "unknown default dictation provider",
@@ -1966,7 +1966,7 @@ func TestCoverageDictationEdges(t *testing.T) {
 				wantStatus: http.StatusServiceUnavailable,
 			},
 			{
-				name: "zhipu missing credential",
+				name: "zai missing credential",
 				configuration: proxy.Configuration{
 					Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
 					OpenAIKey:             TestAPIKey,
@@ -1976,22 +1976,22 @@ func TestCoverageDictationEdges(t *testing.T) {
 					RequestTimeoutSeconds: TestTimeout,
 					MaxInputAudioBytes:    1024,
 				},
-				requestURL: "/dictate?key=" + TestSecret + "&provider=zhipu",
+				requestURL: "/dictate?key=" + TestSecret + "&provider=zai",
 				wantStatus: http.StatusServiceUnavailable,
 			},
 			{
-				name: "zhipu unknown model",
+				name: "zai unknown model",
 				configuration: proxy.Configuration{
 					Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
 					OpenAIKey:             TestAPIKey,
-					ZhipuKey:              testZhipuKey,
+					ZAIKey:                testZAIKey,
 					LogLevel:              proxy.LogLevelInfo,
 					WorkerCount:           1,
 					QueueSize:             1,
 					RequestTimeoutSeconds: TestTimeout,
 					MaxInputAudioBytes:    1024,
 				},
-				requestURL: "/dictate?key=" + TestSecret + "&provider=zhipu&model=unknown",
+				requestURL: "/dictate?key=" + TestSecret + "&provider=zai&model=unknown",
 				wantStatus: http.StatusBadRequest,
 			},
 			{
