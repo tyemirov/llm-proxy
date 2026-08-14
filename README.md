@@ -460,7 +460,11 @@ Provider-specific details:
   Highspeed accept ordered JPEG, PNG, or WebP inputs through canonical
   `POST /v2` messages. The adapter sends exact bytes as ordered Data URL blocks
   before message text. Only visible answer `content` enters the proxy response
-  and usage path. Provider `reasoning_content` stays private. See Moonshot's
+  and usage path. For output continuation, the adapter stores the complete
+  truncated assistant message as private state. It sends that message,
+  including `reasoning_content`, only to the next upstream Kimi request.
+  Provider `reasoning_content` stays absent from public responses and logs. See
+  Moonshot's
   [Kimi K3 guide](https://platform.kimi.ai/docs/guide/kimi-k3-quickstart),
   [reasoning-effort guide](https://platform.kimi.ai/docs/guide/use-reasoning-effort),
   [vision guide](https://platform.kimi.ai/docs/guide/use-kimi-vision-model),
