@@ -235,7 +235,10 @@ top-level provider field. Omission keeps Moonshot's default. Kimi K2.6 and
 both Kimi K2.7 Code routes receive no `thinking` field, which keeps their
 provider default. All four routes serialize ordered canonical JPEG, PNG, and
 WebP inputs as Data URL Chat Completions blocks before message text. Only
-visible answer content leaves the adapter. `reasoning_content` is private.
+visible answer content leaves the adapter. For output continuation, the
+adapter sends the complete truncated assistant message to the next Kimi
+request. This private message includes `reasoning_content` and never enters a
+public response or log.
 All seven MiniMax M2 routes map public `max_tokens` to
 `max_completion_tokens` and carry a configured 204800-token output ceiling.
 GLM-5.2 uses the international Z.AI Chat Completions endpoint. Its
