@@ -2588,6 +2588,228 @@ retain satisfied historical dependencies.
 ## Planning
 *do not implement yet*
 
+- [ ] [P008] (P1) Plan unified local inference and `computercat` GPU control.
+  Goal:
+  Make LLM Proxy the sole public inference API for cloud and local operations.
+  Plan a forward-only migration that makes Qwen3.8-27B Q4_K_M, SAM 3.1
+  still-image segmentation, and all current Dictator operations available
+  through LLM Proxy. Keep model execution on `computercat`, load only the
+  required GPU runtime, and stop an idle runtime. This planning issue does not
+  authorize implementation.
+  Requirements:
+  - Use these confirmed architecture constraints:
+    - Keep the public LLM Proxy service on the gateway host. A failure or
+      restart on `computercat` must not stop cloud provider routes.
+    - Make LLM Proxy own public authentication, tenant authorization, the
+      provider catalog, request validation, asset ownership, public operation
+      state, usage records, rate limits, and normalized errors.
+    - Keep Dictator as a private speech runtime. Move its public capabilities
+      behind LLM Proxy. Do not move its speech engines and artifact workers
+      into the public LLM Proxy process.
+    - Run one private node controller on `computercat`. Make it own GPU request
+      admission, runtime selection, container lifecycle, readiness checks,
+      draining, idle timers, and crash reconciliation.
+    - Use Docker Compose and one small controller. Do not introduce Kubernetes
+      for this single-node runtime.
+    - Treat `computercat` as deployment placement, not as a public provider or
+      model identity.
+    - Use one exclusive GPU group. Do not promise simultaneous residency or
+      low cold-start latency for different runtimes on one GPU. Record a
+      second GPU as a capacity requirement if the service needs that promise.
+    - Return an explicit local-offering unavailable error when the private
+      node is unavailable. Do not send the request to a cloud model or another
+      local model.
+    - Replace the former Gemma proposal with Qwen3.8. Do not add Gemma to this
+      plan.
+    - Limit the first SAM 3.1 scope to still images. Do not add video tracking
+      or segmentation sessions.
+    - Complete one bounded Dictator cutover. Remove the direct public Dictator
+      route and direct first-party callers after the cutover. Do not keep a
+      compatibility route, dual writes, or an indefinite dual-read period.
+  - Define a private control contract between LLM Proxy and the node controller:
+    - Accept only declared runtime profile identifiers. Never accept an
+      arbitrary image, command, path, port, mount, or environment value from a
+      public request.
+    - Authenticate and authorize the gateway-to-node connection. Keep the
+      controller and all model endpoints off the public network.
+    - Do not give the public LLM Proxy container direct access to the Docker
+      socket. If the controller runs in a container, use a restricted socket
+      boundary that exposes only the required lifecycle operations.
+    - Return typed states for queued, starting, ready, busy, draining,
+      stopped, failed, and unavailable work. Include a bounded wait estimate
+      or retry time where the controller can calculate it.
+    - Issue a GPU lease only after the selected runtime is ready. Release the
+      lease after a synchronous request ends or an asynchronous operation
+      reaches a terminal state.
+    - Close admission before a runtime enters the draining state. Wait for its
+      active leases and background operations to end. Do not stop a container
+      that owns active work.
+    - Stop the complete runtime container to unload a model. Verify that CUDA
+      memory is released before another runtime starts. Do not use an in-process
+      cache-clear call as the unload contract.
+    - Start the idle timer only when the runtime has no active lease, queued
+      request, or background operation. Permit an exact idle limit for each
+      runtime profile.
+    - Use a bounded queue and a documented fairness rule. Continuous Qwen
+      traffic must not prevent admitted segmentation or speech work from
+      running.
+    - Reconcile a controller or container restart from declared state. Fail or
+      resume public operations only according to the selected operation-state
+      contract. Never infer success from an incomplete record.
+  - Define immutable runtime profiles and artifact storage:
+    - Pin each container image, model revision, quantization, tokenizer,
+      processor, and checksum. Reject a profile whose required artifact is not
+      present or does not match its checksum.
+    - Download gated and large model artifacts during an explicit preparation
+      step. Do not download model files on the first public request.
+    - Keep model files and caches outside disposable containers. Mount them
+      read-only where the runtime does not need to write.
+    - Give each profile exact GPU, host-memory, temporary-storage, concurrency,
+      startup, request, drain, and idle limits.
+    - Record cold-start time, warm latency, peak GPU memory, peak host memory,
+      and shutdown time for every qualified profile.
+  - Qualify the Qwen text profile before it enters the public catalog:
+    - Use canonical model ID `qwen3.8-27b-q4-k-m` for the exact Qwen3.8-27B
+      Q4_K_M artifact. Pin its source revision and checksum.
+    - Evaluate `llama.cpp` `llama-server` as the first GGUF runtime. Record a
+      different runtime only if measured results or a required request feature
+      rejects this choice.
+    - Start with one inference slot, full supported CUDA offload, a 16K context
+      limit, and text-only messages. Test 32K context before it is advertised.
+    - Map the canonical messages contract, usage values, finish reasons,
+      cancellation, timeouts, structured output, tools, and reasoning effort
+      only after each item passes an exact runtime test. Reject a capability
+      that the profile does not declare.
+    - Keep private reasoning text out of public responses, usage records, and
+      logs.
+  - Qualify the SAM image profile before it enters the public catalog:
+    - Select the official SAM 3.1 still-image processor and checkpoint after
+      license, access, revision, and checksum review.
+    - Accept the input image through the tenant-owned LLM Proxy asset system.
+      Define exact text, box, positive-point, and negative-point prompt shapes.
+      Define one coordinate system and reject mixed or out-of-range values.
+    - Return ordered instances with an exact score, bounding box, and
+      tenant-owned mask artifact. Decide whether the canonical mask format is
+      PNG, run-length encoding, or one exact combination before implementation.
+    - Use a public operation resource when queue and cold-start time can exceed
+      the synchronous request budget. Define cancellation, expiry, retention,
+      and asset-deletion behavior.
+  - Move Dictator capabilities through the LLM Proxy boundary:
+    - Inventory transcription, diarization, subtitle generation, alignment,
+      speech synthesis, reference-sample extraction, artifacts, and job APIs
+      against the current Dictator gRPC contract.
+    - Define resource-oriented LLM Proxy operations for the retained
+      capabilities. Do not expose Dictator gRPC names, internal artifact IDs,
+      storage paths, or job IDs in the public contract.
+    - Make LLM Proxy own tenant assets and public operation IDs. Define the
+      private mapping and transfer contract for Dictator inputs, outputs,
+      progress, cancellation, failures, and restart reconciliation.
+    - Keep a Dictator runtime resident while one of its accepted background
+      jobs is active. Add an exact drain and activity signal before the node
+      controller can stop it.
+    - Decide whether one Dictator container profile can satisfy measured GPU
+      limits. Split transcription, analysis, and synthesis into separate
+      profiles when one process keeps incompatible models resident.
+    - Decide whether the current `/dictate` route becomes the canonical local
+      transcription resource or is removed in the same forward migration.
+      Do not create a second permanent transcription contract.
+  - Define the public LLM Proxy contract as one atomic release boundary:
+    - Add local operations and offerings to the normalized provider catalog.
+      Keep runtime placement and private endpoint data out of its public
+      projection.
+    - Route Qwen through the canonical messages version selected by F020. Do
+      not add a new local text endpoint or preserve `/v2` after `/v3` becomes
+      current.
+    - Define typed segmentation and retained speech resources, operation
+      states, error codes, cancellation, limits, prices or internal-cost
+      records, usage units, and retention rules.
+    - Update the server, OpenAPI document, Go client, Python client, Node.js
+      client, CLI, examples, and black-box fixtures in the same contract
+      change. First-party applications must use an official LLM Proxy client.
+    - Keep provider credentials, gated-model tokens, node credentials, and
+      private runtime addresses on the server. Redact prompts, media content,
+      reasoning text, tokens, and private runtime errors from logs.
+    - Update F026 and its dependent speech issues before implementation. F026
+      currently requires clients to consume Dictator separately, which
+      conflicts with this target boundary.
+  - Resolve these open decisions before implementation issues are approved:
+    - Select the canonical provider identity for MPR Lab local offerings and
+      the exact model and operation IDs. Do not use a deployment host name as
+      the provider ID.
+    - Select private HTTP or gRPC for the node control contract. Specify mutual
+      authentication, authorization, timeouts, retry rules, and request IDs.
+    - Select a host service or a restricted container for the node controller.
+      Record its deployment owner and the owner of the `computercat` Compose
+      project.
+    - Set per-profile idle limits, queue limits, admission priorities, fairness
+      rules, maximum cold-start waits, and maintenance behavior from measured
+      data.
+    - Select public asynchronous operation storage and restart behavior. State
+      which component is authoritative for each state transition.
+    - Select the exact SAM prompt set, coordinate system, mask format, maximum
+      image size, maximum instance count, and retention limits.
+    - Select the Dictator profile split, artifact transfer method, public
+      operation shapes, `/dictate` disposition, and bounded caller cutover.
+    - Decide whether local usage has a billable price, an internal cost only,
+      or no price. Keep the decision explicit in catalog and usage contracts.
+  - Use this implementation sequence after the architecture is approved:
+    1. Qualify the hardware and each pinned runtime on `computercat`. Measure
+       Qwen at 16K and 32K, SAM prompt and output cases, each Dictator profile,
+       repeated runtime switches, and complete GPU-memory release.
+    2. Approve public API ownership, catalog identities, asset ownership,
+       operation state, private control, deployment, and security contracts.
+       Update the planning records for F020, F026, and F030 where required.
+    3. Build the node controller against fake runtime containers. Prove its
+       state machine, GPU leases, bounded queue, fairness, draining, idle stop,
+       failed startup, cancellation, and restart reconciliation.
+    4. Prepare private Dictator profiles. Add exact readiness, activity, drain,
+       and cancellation signals. Prove that an accepted background job prevents
+       unload until it reaches a terminal state.
+    5. Add the local provider adapter and Qwen offering to LLM Proxy. Exercise
+       the public router and each official client against a fake node before a
+       live `computercat` acceptance run.
+    6. Add the SAM segmentation resource, image-asset validation, private
+       adapter, mask artifacts, and asynchronous operation behavior.
+    7. Add the retained Dictator speech resources and private adapter. Migrate
+       public operation and asset ownership to LLM Proxy.
+    8. Deploy the private controller and runtime profiles on `computercat`.
+       Remove public runtime ports and routes. Install only the credentials and
+       model artifacts that each component requires.
+    9. Migrate every first-party caller to the released official LLM Proxy
+       client. Remove direct Dictator clients, configuration, public DNS and
+       route ownership, and obsolete integration contract text in the same
+       bounded cutover.
+    10. Run production acceptance through Qwen, SAM, Dictator, and Qwen again.
+        Confirm queue behavior, no active-work preemption, no GPU-memory growth,
+        cancellation, restart recovery, idle unload, logs, metrics, and cloud
+        route availability while `computercat` is unavailable.
+  Deliverables:
+  - Add an approved architecture decision that assigns public API, node
+    control, GPU lifecycle, asset, operation, catalog, security, deployment,
+    and observability ownership.
+  - Add a measured runtime qualification report for every pinned profile and
+    the repeated Qwen-to-SAM-to-Dictator-to-Qwen switch sequence.
+  - Add exact public and private API schemas, state diagrams, timeout budgets,
+    queue rules, idle policies, deployment topology, and threat boundaries.
+  - Add a cross-repository migration table for LLM Proxy, Dictator, deployment
+    configuration, official clients, and each first-party caller. Give each
+    forward migration and deletion an ordered implementation issue.
+  - Add an acceptance matrix for fake-runtime tests, live-node tests, failure
+    injection, resource limits, security, observability, and production
+    receipts.
+  Validation:
+  - Confirm each open decision has one approved answer and one owner. Confirm
+    each implementation step has an ordered issue and explicit dependency.
+  - Review the plan against the current LLM Proxy API, official clients,
+    Dictator gRPC contract, Dictator callers, and deployment resources. Resolve
+    all contract conflicts before the first implementation issue starts.
+  - Confirm the acceptance matrix proves exact routing, tenant isolation,
+    server-side secrets, bounded admission, fair scheduling, safe draining,
+    complete unload, crash reconciliation, public error normalization, and no
+    cloud fallback for unavailable local work.
+  - Approve one deletion receipt for the direct Dictator public route, direct
+    first-party clients, old configuration, and obsolete contract text. Do not
+    mark this planning issue complete from a partial or dual-path migration.
 - [ ] [P001] (P1) Design a tenant-scoped provider, model, and key-acquisition onboarding flow.
   Goal:
   Let a signed-in managed user complete one clear text-routing setup: select a
