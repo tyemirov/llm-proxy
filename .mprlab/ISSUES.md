@@ -1329,6 +1329,50 @@ retain satisfied historical dependencies.
     the final run after the last code edit.
 ## Maintenance
 
+- [ ] [M022] (P1) Remove static tenant mode.
+  Goal:
+  The service has one tenant contract. Each client uses a managed tenant key
+  that an authenticated user creates through the management API.
+  Requirements:
+  - Make management configuration mandatory. Remove `management.enabled` and
+    its disabled state.
+  - Remove the `tenants` configuration block and all static tenant types,
+    validation, authentication, and routing paths.
+  - Remove configuration-level provider API keys. Load provider credentials
+    only from encrypted managed tenant records.
+  - Authenticate public proxy requests only against managed tenant secret
+    digests.
+  - Reject obsolete `management.enabled`, `tenants`, and provider `api_key`
+    fields as unknown configuration. Do not add a migration or compatibility
+    path.
+  - Remove `SERVICE_SECRET` from environment documentation, examples, test
+    inputs, and generated public content. Use `LLM_PROXY_SECRET` only for
+    registered client keys.
+  - Replace the static live-provider preflight with a non-paid managed
+    preflight. Create a disposable user, tenant, client key, and provider
+    connection through current public boundaries.
+  - Remove static mode from application code, tests, fixtures, and current
+    documentation. Keep issue archive records unchanged.
+  - Preserve public `key` authentication with generated managed tenant keys.
+  Deliverables:
+  - Implement a managed-only configuration, startup, authentication, and
+    routing contract.
+  - Implement a managed live-provider preflight with no static tenant
+    configuration.
+  - Update configuration examples, environment documentation, README,
+    routing documentation, generated public content, and contract tests.
+  Validation:
+  - Prove the service starts with the complete managed configuration.
+  - Prove obsolete static fields fail strict configuration loading.
+  - Create a managed client key through the management API. Use that key for
+    successful public text and dictation requests.
+  - Prove missing, unknown, and replaced managed client keys fail public
+    authentication.
+  - Prove current application code and user documentation contain no static
+    tenant contract or `SERVICE_SECRET` input.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
 - [ ] [M021] (P1) {F024,F025,F026,F027} Remove the completed MediaOps operation-import bridge.
   Goal:
   Leave only the canonical model-operation contract after migration of every
