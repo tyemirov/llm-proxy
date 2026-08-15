@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Integrate once through one multi-provider LLM proxy</title>
+    <meta name="description" content="Connect through one canonical API or official client, then select any supported text provider and model route without rebuilding the application integration.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/">
+    <meta property="og:title" content="Integrate once through one multi-provider LLM proxy">
+    <meta property="og:description" content="Connect through one canonical API or official client, then select any supported text provider and model route without rebuilding the application integration.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.3.0/dist/js-yaml.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"></script>
+    <script
+      id="mpr-ui-bundle"
+      type="application/json"
+      data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
+    ></script>
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Integrate once through one multi-provider LLM proxy","description":"Connect through one canonical API or official client, then select any supported text provider and model route without rebuilding the application integration.","url":"https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/","datePublished":"2026-07-06","dateModified":"2026-08-08","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/","about":["LLM Proxy","Provider routing","multi-provider LLM proxy"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Integrate once through one multi-provider LLM proxy","item":"https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What changes when an application switches providers?","acceptedAnswer":{"@type":"Answer","text":"The caller changes the provider selector and optionally the model. POST /v2, tenant client-key authentication, messages, response formatting, and proxy status behavior remain on the same contract."}},{"@type":"Question","name":"Which official LLM Proxy clients are available?","acceptedAnswer":{"@type":"Answer","text":"The repository supplies a typed Go package, a synchronous Python package, and an installable Go command-line client. Direct HTTP callers use the same canonical POST /v2 operation."}},{"@type":"Question","name":"Can every model use every capability?","acceptedAnswer":{"@type":"Answer","text":"No. The generated model matrix publishes the exact capabilities declared for each supported route, and the proxy rejects unsupported route-capability combinations before provider dispatch."}},{"@type":"Question","name":"Does the supported catalog include an uptime or model-addition SLA?","acceptedAnswer":{"@type":"Answer","text":"The catalog states the current implemented routing contract. Provider lifecycle, model-onboarding time, and hosted availability are outside that contract pending a separately approved support and SLA policy."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Switch OpenAI, Claude, and Gemini behind one endpoint, which covers OpenAI Claude Gemini one endpoint."}}]}</script>
+    <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
+  </head>
+  <body class="resource-page">
+
+    <mpr-header
+      class="public-site-header"
+      data-config-url="https://llm-proxy-api.mprlab.com/config-ui.yaml"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      logout-url="/"
+      settings="false"
+      sign-in-label="Log In"
+      sign-in-redirect-url="/app/"
+      size="small"
+      sticky="true"
+      auth-transition='{"title":"Opening LLM Proxy","message":"Loading your app."}'
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"}]}'
+    >
+      <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
+        <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
+        <span>LLM Proxy</span>
+      </a>
+    </mpr-header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>Integrate once through one multi-provider LLM proxy</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Provider routing</p>
+            <h1>Integrate once through one multi-provider LLM proxy</h1>
+            <p class="resource-deck">Connect through one canonical API or official client, then select any supported text provider and model route without rebuilding the application integration.</p>
+            <p class="resource-audience">AI-assisted builders, startups, product teams, and platform groups that need model choice without repeated provider integrations.</p>
+            <p class="resource-byline">Reviewed 2026-08-08 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <aside class="resource-verdict" aria-label="Quick verdict">
+              <strong>Quick verdict</strong>
+              <p>Use one canonical messages integration when provider and model choice should remain a routing decision instead of becoming application architecture.</p>
+            </aside>
+            <div class="resource-actions">
+              <a class="resource-button" href="/docs/">Open API reference</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>Adding a provider SDK, credential flow, payload mapper, and error parser for every model family turns model choice into application integration work.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy gives callers one tenant-secret-authenticated POST /v2 messages contract. Provider and model selection change the route while provider-specific credentials and wire formats stay behind the proxy.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Choose direct HTTP, the official Go package, the official Python package, or the installable CLI.</li>
+<li>Authenticate the application with one tenant client key while provider API keys stay server-side.</li>
+<li>Send canonical messages through POST /v2 and omit provider or model when managed defaults should apply.</li>
+<li>Change provider and model selectors when the product needs another supported route; keep the integration contract unchanged.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+
+                        <tr>
+                          <td>One canonical request</td>
+                          <td>Every bundled client sends the same POST /v2 messages shape.</td>
+                          <td>A prototype can begin with curl and move to Go or Python without adopting a provider payload.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Explicit route selection</td>
+                          <td>Provider and model values change routing instead of the client library.</td>
+                          <td>The same application request can target a supported Gemini, Anthropic, OpenAI, Meta, or compatible route.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Server-side adapters</td>
+                          <td>The proxy owns provider authentication, payload mapping, validation, and status translation.</td>
+                          <td>Product code does not parse separate OpenAI Responses, Anthropic Messages, and Gemini Interactions contracts.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Current capability catalog</td>
+                          <td>The public matrix comes from the validated registry used by request routing.</td>
+                          <td>A caller can verify image input, audio input, reasoning, web search, dictation, and output-limit support before selecting a route.</td>
+                        </tr>
+
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+
+                    <section class="resource-card">
+                      <h3>AI-assisted prototype</h3>
+                      <p>Generated application code calls one documented endpoint and never receives an upstream provider key.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Product model comparison</h3>
+                      <p>A startup sends the same transcript to supported OpenAI, Anthropic, and Gemini routes by changing only route selection.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Institutional application platform</h3>
+                      <p>A platform team gives several applications separate client keys while managing provider credentials and route defaults centrally.</p>
+                    </section>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>The public capability matrix defines the currently supported provider, model, and feature combinations.</li>
+<li>A configured server-side provider credential is required before that provider can serve a tenant request.</li>
+<li>Provider-specific capabilities remain route-specific and must be declared by the selected model.</li>
+<li>Provider lifecycle, model-onboarding, and hosted uptime commitments are outside the current catalog contract pending an approved support and SLA policy.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>Repository evidence</h2>
+            <pre class="usage-snippet"><code>curl -X POST   &quot;https://llm-proxy-api.mprlab.com/v2?key=$LLM_PROXY_SECRET&amp;provider=gemini&quot;   -H &quot;Content-Type: application/json&quot;   -d '{&quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;Summarize this&quot;}]}'</code></pre>
+            <p>Verified 2026-08-08 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+
+                    <details>
+                      <summary>What changes when an application switches providers?</summary>
+                      <p>The caller changes the provider selector and optionally the model. POST /v2, tenant client-key authentication, messages, response formatting, and proxy status behavior remain on the same contract.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Which official LLM Proxy clients are available?</summary>
+                      <p>The repository supplies a typed Go package, a synchronous Python package, and an installable Go command-line client. Direct HTTP callers use the same canonical POST /v2 operation.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Can every model use every capability?</summary>
+                      <p>No. The generated model matrix publishes the exact capabilities declared for each supported route, and the proxy rejects unsupported route-capability combinations before provider dispatch.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Does the supported catalog include an uptime or model-addition SLA?</summary>
+                      <p>The catalog states the current implemented routing contract. Provider lifecycle, model-onboarding time, and hosted availability are outside that contract pending a separately approved support and SLA policy.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is Switch OpenAI, Claude, and Gemini behind one endpoint, which covers OpenAI Claude Gemini one endpoint.</p>
+                    </details>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+
+                    <a class="resource-related" href="/resources/openai-claude-gemini-one-endpoint/">
+                      <span>Provider routing</span>
+                      <strong>Switch OpenAI, Claude, and Gemini behind one endpoint</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/go-client-v2-only-llm-proxy/">
+                      <span>Clients</span>
+                      <strong>Go LLM Proxy client with a v2-only transport</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/python-client-v2-only-llm-proxy/">
+                      <span>Clients</span>
+                      <strong>Python LLM Proxy client with v2 messages</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/installable-llm-proxy-cli/">
+                      <span>Clients</span>
+                      <strong>Installable LLM Proxy CLI for prompt workflows</strong>
+                    </a>
+
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Choose one integration surface</h2>
+            <p>Start with direct HTTP, Go, Python, or the command line, then use the live catalog to select a supported route.</p>
+            <a class="resource-button" href="/#integrate">Compare integration options</a>
+          </section>
+        </article>
+      </main>
+    <mpr-footer
+      class="public-site-footer"
+      size="small"
+      sticky="true"
+      wrapper-class="public-site-footer-layout"
+      privacy-link-label="Privacy"
+      privacy-link-href="/privacy/"
+      theme-switcher="square"
+      horizontal-links='{"alignment":"left","links":[{"label":"Terms","href":"/terms/"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+      links-collection='{"style":"drop-up","text":"Built by Marco Polo Research Lab","links":[{"label":"Marco Polo Research Lab","url":"https://mprlab.com"},{"label":"Gravity Notes","url":"https://gravity.mprlab.com"},{"label":"LoopAware","url":"https://loopaware.mprlab.com"},{"label":"Allergy Wheel","url":"https://allergy.mprlab.com"},{"label":"Social Threader","url":"https://threader.mprlab.com"},{"label":"RSVP","url":"https://rsvp.mprlab.com"},{"label":"Countdown Calendar","url":"https://countdown.mprlab.com"},{"label":"LLM Crossword","url":"https://llm-crossword.mprlab.com"},{"label":"Prompt Bubbles","url":"https://prompts.mprlab.com"},{"label":"Wallpapers","url":"https://wallpapers.mprlab.com"}]}'
+    >
+      <footer class="public-site-footer-fallback" role="contentinfo">
+        <nav class="public-site-footer-fallback__nav" aria-label="Footer">
+          <a href="/privacy/">Privacy</a>
+          <a href="/terms/">Terms</a>
+          <a href="/resources/">Resources</a>
+          <a href="https://github.com/tyemirov/llm-proxy">GitHub</a>
+        </nav>
+        <details class="public-site-footer-fallback__projects">
+          <summary>Built by Marco Polo Research Lab</summary>
+          <ul>
+            <li><a href="https://mprlab.com">Marco Polo Research Lab</a></li>
+            <li><a href="https://gravity.mprlab.com">Gravity Notes</a></li>
+            <li><a href="https://loopaware.mprlab.com">LoopAware</a></li>
+            <li><a href="https://allergy.mprlab.com">Allergy Wheel</a></li>
+            <li><a href="https://threader.mprlab.com">Social Threader</a></li>
+            <li><a href="https://rsvp.mprlab.com">RSVP</a></li>
+            <li><a href="https://countdown.mprlab.com">Countdown Calendar</a></li>
+            <li><a href="https://llm-crossword.mprlab.com">LLM Crossword</a></li>
+            <li><a href="https://prompts.mprlab.com">Prompt Bubbles</a></li>
+            <li><a href="https://wallpapers.mprlab.com">Wallpapers</a></li>
+          </ul>
+        </details>
+      </footer>
+    </mpr-footer>
+
+  </body>
+</html>
