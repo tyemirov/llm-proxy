@@ -181,3 +181,16 @@ mprlab_resources:
           domain: .mprlab.com
           session_name: app_session_llm_proxy
           refresh_name: app_refresh_llm_proxy
+        oauth:
+          access_token_ttl: 5m
+          refresh_token_ttl: 720h
+          consent_ttl: 720h
+          allow_client_metadata_documents: true
+          resources:
+            - identifier: https://llm-proxy-api.mprlab.com
+              display_name: LLM Proxy API
+              scopes:
+                - identifier: llm-proxy:use
+                  display_name: Use LLM Proxy
+                  description: Use the LLM Proxy API.
+          clients: []

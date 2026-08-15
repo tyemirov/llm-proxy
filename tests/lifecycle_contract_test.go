@@ -137,6 +137,27 @@ func TestOperationalRepositoryOwnsSchemaV4Lifecycle(testingInstance *testing.T) 
 		testingInstance.Fatalf("unexpected private-value bindings: %#v", privateBindings)
 	}
 
+	authenticationTenant := resourcesByIdentity["tauth_tenant/authentication"]["tenant"].(map[string]any)
+	expectedOAuthPolicy := map[string]any{
+		"access_token_ttl":                "5m",
+		"refresh_token_ttl":               "720h",
+		"consent_ttl":                     "720h",
+		"allow_client_metadata_documents": true,
+		"resources": []any{map[string]any{
+			"identifier":   "https://llm-proxy-api.mprlab.com",
+			"display_name": "LLM Proxy API",
+			"scopes": []any{map[string]any{
+				"identifier":   "llm-proxy:use",
+				"display_name": "Use LLM Proxy",
+				"description":  "Use the LLM Proxy API.",
+			}},
+		}},
+		"clients": []any{},
+	}
+	if !reflect.DeepEqual(authenticationTenant["oauth"], expectedOAuthPolicy) {
+		testingInstance.Fatalf("unexpected TAuth tenant OAuth policy: %#v", authenticationTenant["oauth"])
+	}
+
 	runtimeServices, servicesAvailable := resourcesByIdentity["compose_project/runtime"]["services"].([]any)
 	if !servicesAvailable || len(runtimeServices) != 1 {
 		testingInstance.Fatalf("unexpected runtime services: %#v", resourcesByIdentity["compose_project/runtime"]["services"])
