@@ -2413,7 +2413,7 @@ retain satisfied historical dependencies.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
-- [!] [F021] (P1) Add OAuth-authenticated tenant-scoped MCP access.
+- [ ] [F021] (P1) Add OAuth-authenticated tenant-scoped MCP access.
   Goal:
   An authenticated user can connect a remote MCP client to one owned tenant.
   The server uses that tenant's saved provider credentials, routing defaults,
@@ -2424,15 +2424,18 @@ retain satisfied historical dependencies.
   - Provider credentials remain on the server and belong to one tenant.
   - TAuth provides the OAuth authorization-server contract that a remote MCP
     client requires.
-  - The gateway cannot yet generate the root OAuth block or tenant OAuth policy.
+  - The gateway generates the root OAuth block and the tenant OAuth policy.
+  - The deployment manifest declares the protected API origin and the
+    `llm-proxy:use` scope.
   Requirements:
   - Serve MCP protocol version `2026-07-28` at the exact resource URL
     `https://llm-proxy-api.mprlab.com/mcp/{tenant_id}`.
   - Use the official Go MCP SDK in stateless Streamable HTTP mode. Return JSON
     responses and reject every unsupported protocol version.
   - Do not create an MCP session or implement an earlier MCP transport.
-  - Treat the exact MCP URL as the OAuth protected-resource identifier and
-    access-token audience.
+  - Use `https://llm-proxy-api.mprlab.com` as the OAuth protected-resource
+    identifier and access-token audience.
+  - Confirm the token subject owns the exact `{tenant_id}` path resource.
   - Publish path-specific OAuth Protected Resource Metadata at
     `/.well-known/oauth-protected-resource/mcp/{tenant_id}`.
   - Return an RFC-compliant Bearer challenge for an unauthenticated MCP
@@ -2500,8 +2503,8 @@ retain satisfied historical dependencies.
     acceptance. Record live-host acceptance as a separate deployment result.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-  Blocked: mprlab-gateway F001 must complete the TAuth OAuth aggregate
-  deployment contract before this feature can declare its protected resources.
+  Dependency handoff: 2026-08-15 — gateway F001 and both application manifests
+  passed local contract validation. Production activation remains separate.
 
 - [ ] [F028] (P2) {F027} Add HeyGen Avatar V as a gateway-owned avatar engine.
   Goal:
