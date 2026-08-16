@@ -285,6 +285,8 @@ func TestOperationalProductionLifecycleDelegatesOnlyToSiblingGateway(testingInst
 		"scripts/publish-release.sh",
 		"scripts/build-container-artifact.sh",
 		"scripts/build-pages-artifact.sh",
+		"site/.nojekyll",
+		"site/CNAME",
 		"tools/gitrelease",
 	} {
 		_, statError := os.Stat(filepath.Join(repositoryRoot, filepath.FromSlash(forbiddenPath)))
@@ -328,7 +330,6 @@ func TestOperationalPagesArtifactUsesFrontendRendererWithBackendRESTData(testing
 		"--public-capabilities-only",
 		"node scripts/render_public_site.mjs",
 		"--capabilities-url",
-		"rm /pages/CNAME",
 		"FROM scratch AS pages",
 		"COPY --from=renderer /pages/ /",
 	} {
@@ -336,7 +337,14 @@ func TestOperationalPagesArtifactUsesFrontendRendererWithBackendRESTData(testing
 			testingInstance.Errorf("Pages Dockerfile is missing %q", requiredContract)
 		}
 	}
-	for _, forbiddenRenderer := range []string{"--render-site-output", "--site-source", "--site-config-url"} {
+	for _, forbiddenRenderer := range []string{
+		"--render-site-output",
+		"--site-source",
+		"--site-config-url",
+		"/pages/.nojekyll",
+		"/pages/CNAME",
+		"/pages/.mprlab-release.json",
+	} {
 		if strings.Contains(dockerfileText, forbiddenRenderer) {
 			testingInstance.Errorf("Pages Dockerfile retains Go renderer contract %q", forbiddenRenderer)
 		}

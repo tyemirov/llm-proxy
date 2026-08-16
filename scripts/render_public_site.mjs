@@ -171,9 +171,6 @@ async function renderPublicSite(renderOptions) {
   await rm(join(outputDirectory, legacyRuntimeConfigFile), { force: true });
   await renderConfigURLs(outputDirectory, renderOptions.configURL);
   await renderLandingContent(outputDirectory, capabilityCatalog);
-  if (!await pathExists(join(outputDirectory, "CNAME"))) {
-    throw new Error(`public_site_cname_missing: ${outputDirectory}`);
-  }
 }
 
 /**
