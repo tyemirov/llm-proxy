@@ -388,7 +388,7 @@ retain satisfied historical dependencies.
     the final markers, validated request ids, and no response-body disclosure.
   - For any source change, run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-- [ ] [B141] (P0) Center the X icon inside the top-right square.
+- [ ] [B141] (P1) Center the X icon inside the top-right square.
   Goal:
   Align the X icon so it is visually centered within the square control in the top-right corner, matching the intended UI layout shown in the attached screenshot.
   
