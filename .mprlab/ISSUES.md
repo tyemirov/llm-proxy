@@ -46,7 +46,6 @@ retain satisfied historical dependencies.
   - Added lifecycle coverage that rejects all reserved marker paths.
   - `make ci` passed all 11 gates with 94 browser tests and 100.0% Go
     statement coverage.
-
 - [x] [B138] (P1) Preserve Kimi reasoning during output continuation.
   Goal:
   Preserve each private Kimi reasoning field when the proxy requests a missing
@@ -69,7 +68,6 @@ retain satisfied historical dependencies.
   - Proved K3 and both K2.7 routes return only assembled visible content.
   - `make ci` passed all 11 gates with 94 browser tests and 100.0% Go
     statement coverage.
-
 - [x] [B139] (P2) Reject retired Z.AI credential fields.
   Goal:
   Reject retired `zhipu_api_key` and `glm_api_key` inputs at each public
@@ -92,7 +90,6 @@ retain satisfied historical dependencies.
   - Proved rejected inputs do not dispatch with the stored provider key.
   - `make ci` passed all 11 gates with 94 browser tests and 100.0% Go
     statement coverage.
-
 - [x] [B130] (P1) Store each DashScope workspace URL with its tenant settings.
   Goal:
   Keep provider configuration in the management domain and keep local and
@@ -391,6 +388,20 @@ retain satisfied historical dependencies.
     the final markers, validated request ids, and no response-body disclosure.
   - For any source change, run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
+- [ ] [B141] (P1) Center the X icon inside the top-right square.
+  Goal:
+  Align the X icon so it is visually centered within the square control in the top-right corner, matching the intended UI layout shown in the attached screenshot.
+  
+  Requirements:
+  Preserve the existing square size, placement, styling, and click/interaction behavior. Adjust only the icon positioning/alignment needed to center the X horizontally and vertically within its container. Ensure the fix remains responsive and does not introduce layout shifts in nearby content.
+  
+  Deliverables:
+  Code changes that correct the X icon alignment in the top-right square control. Include any related style/layout updates needed for consistent centering across supported viewports.
+  
+  Validation:
+  Open the affected screen and confirm the X appears centered within the top-right square. Verify the square remains in the same top-right position, the control still functions as before, and no surrounding UI elements are visually displaced.
+
+
 ## Improvements
 
 - [x] [I224] (P0) {F035} Add a paid live matrix for provider image routes.
@@ -425,7 +436,6 @@ retain satisfied historical dependencies.
     rejected `grok-4.5` verification with HTTP `422`. No image request ran.
   - `make ci` passed all 11 gates with 93 browser tests and 100.0% Go statement
     coverage.
-
 - [!] [I228] (P1) {I223} Add current MiniMax text model offerings.
   Goal:
   Give managed tenants access to the current MiniMax M2 text models through
@@ -474,7 +484,6 @@ retain satisfied historical dependencies.
   Blocked: A MiniMax credential and paid-call authorization are not available
   in this workspace. The operator must supply `MINIMAX_API_KEY` and authorize
   the 14 paid live calls for seven key checks and seven text requests.
-
 - [!] [I227] (P1) {I223} Add Kimi reasoning and image route capabilities.
   Goal:
   Expose verified Kimi reasoning and image capabilities through the current
@@ -521,7 +530,6 @@ retain satisfied historical dependencies.
   Blocked: A Moonshot credential and paid-call authorization are not available
   in this workspace. The operator must supply `MOONSHOT_API_KEY` and authorize
   the eight paid live calls for four key checks and four image requests.
-
 - [!] [I226] (P1) {I038,I223} Add current Qwen text models to DashScope.
   Goal:
   Let managed tenants select current Qwen flagship and cost-efficient models
@@ -568,7 +576,6 @@ retain satisfied historical dependencies.
   Blocked: A DashScope credential and tenant Singapore workspace URL are not
   available in this workspace. The operator must supply `DASHSCOPE_API_KEY`
   and `DASHSCOPE_BASE_URL` and authorize the six paid live calls.
-
 - [!] [I225] (P1) {I223} Move GLM routes to the international Z.AI API.
   Goal:
   Use one canonical `zai` provider for international Z.AI text and dictation
@@ -621,7 +628,6 @@ retain satisfied historical dependencies.
   - Run `make ci` after the last application change.
   Blocked: A Z.AI credential is not available in this workspace. The operator
   must supply `ZAI_API_KEY` and authorize the two paid live calls.
-
 - [ ] [I223] (P0) {I216,I221} Load all supported providers and models from one catalog file.
   Goal:
   Make `configs/providers.yml` the only source that defines supported providers,
@@ -735,7 +741,6 @@ retain satisfied historical dependencies.
   - Prove the test provider requires no provider-specific production source
     change.
   - After the last application change, run `make ci`.
-
 - [ ] [I041] (P1) Migrate xAI text routes to Responses without OpenAI background assumptions.
   Goal:
   Move Grok models off xAI's deprecated Chat Completions surface while
@@ -768,7 +773,6 @@ retain satisfied historical dependencies.
   - Public fixtures prove xAI Responses request/response mapping, synchronous
     continuation, storage policy, usage, safe errors, and absence of
     `background` polling. Existing xAI speech routing remains independent.
-
 - [ ] [I218] (P1) Expand the product node into integration routes.
   Goal:
   Make the product-to-proxy side of the public routing tree as actionable as
@@ -802,7 +806,6 @@ retain satisfied historical dependencies.
     connector geometry and containment at 1280-, 900-, and 390-pixel widths.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
 - [ ] [I210] (P1) Add Meta Muse Spark 1.2 as a selectable Standard-tier model.
   Goal:
   Add Meta's current Muse Spark 1.2 checkpoint to the existing `meta` text
@@ -1349,6 +1352,8 @@ retain satisfied historical dependencies.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
+
+
 ## Maintenance
 
 - [ ] [M022] (P1) Remove static tenant mode.
@@ -1394,7 +1399,6 @@ retain satisfied historical dependencies.
     tenant contract or `SERVICE_SECRET` input.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
 - [ ] [M021] (P1) {F024,F025,F026,F027} Remove the completed MediaOps operation-import bridge.
   Goal:
   Leave only the canonical model-operation contract after migration of every
@@ -1418,7 +1422,6 @@ retain satisfied historical dependencies.
     status, tenant isolation, recovery, and artifact behavior.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
 - [ ] [M004R] (P1) Dependency and security audit.
   Goal:
   Keep third-party dependencies, runtime versions, and security-sensitive configuration within the current supported contract.
@@ -1732,7 +1735,6 @@ retain satisfied historical dependencies.
   Let `/v2` accept provider-neutral media without a smaller LLM Proxy media
   limit. Translate each attachment into the selected provider's supported
   transport. Preserve exact media bytes, order, MIME type, and SHA-256.
-
   Observed failure:
   - Creative Director sends `master-character-sheet.png` through
     `NewImageAttachment` for Gemini semantic image QA.
@@ -1744,7 +1746,6 @@ retain satisfied historical dependencies.
   - Gemini permits this request under its documented inline request limit.
   - Creative Director receives no QA result. It cannot produce the next
     MediaOps operation.
-
   Provider limit evidence:
   - The following provider limits were verified on 2026-08-11.
   - Gemini Interactions permits 20 MB for a request with inline image data.
@@ -1766,14 +1767,12 @@ retain satisfied historical dependencies.
   - These values are provider facts. They do not define one proxy limit.
   - LLM Proxy currently routes message media only to Gemini. Other values
     define contracts for future provider adapters.
-
   Contract gap:
   - The current `/v2` contract applies one 4 MiB limit before provider
     dispatch.
   - The selected Gemini provider permits the rejected request.
   - One proxy limit cannot represent different provider limits or transports.
   - F022 defines asset upload. It does not connect assets to `/v2` attachments.
-
   Requirements:
   - Use the F022 tenant asset store for asset-backed attachments.
   - Add an asset-reference variant to the canonical user-message attachment
@@ -1811,7 +1810,6 @@ retain satisfied historical dependencies.
     usage records.
   - Add official-client constructors for asset-backed image and audio
     attachments.
-
   Deliverables:
   - Add the OpenAPI asset-reference schema and provider limit schema.
   - Add tenant asset resolution and provider transport selection.
@@ -1820,7 +1818,6 @@ retain satisfied historical dependencies.
     limits.
   - Update the root README, API reference, provider routing guide, and release
     notes.
-
   Validation:
   - Send the 3,326,724-byte image inline through `/v2` to fake Gemini.
   - Require provider dispatch without a proxy 413 response.
@@ -1842,7 +1839,6 @@ retain satisfied historical dependencies.
     providers.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
   Resolution:
   - Added tenant asset upload, deletion, strict resolution, and official client
     support.
@@ -1857,7 +1853,6 @@ retain satisfied historical dependencies.
   - Made Gemini Files API deletion authoritative after every finalized upload,
     including polling and cancellation failures.
   - Passed the final 11-gate CI run with 100.0% Go statement coverage.
-
 - [ ] [F032] (P1) {I223} Add Baidu Qianfan as a user-configurable text provider.
   Goal:
   Let a managed user paste, verify, and save a Baidu Qianfan API key through
@@ -1947,7 +1942,6 @@ retain satisfied historical dependencies.
     output. Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair. Keep deployment and
     production acceptance operator-owned.
-
 - [ ] [F022] (P1) Add the durable model-operation, asset, and official-client foundation.
   Goal:
   Extend LLM Proxy from blocking text and dictation into a shared model-provider
@@ -2037,7 +2031,6 @@ retain satisfied historical dependencies.
     durable and sanitized evidence.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
 - [ ] [F024] (P1) {F022} Add image generation and editing to model operations.
   Goal:
   Make LLM Proxy the sole provider boundary for the current OpenAI, Vertex, and
@@ -2071,7 +2064,6 @@ retain satisfied historical dependencies.
     provider suite and repository CI pass.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
 - [ ] [F025] (P1) {F022} Add durable video generation to model operations.
   Goal:
   Make LLM Proxy the sole provider boundary for Vertex Veo, Vertex Gemini Omni,
@@ -2107,7 +2099,6 @@ retain satisfied historical dependencies.
     fake provider suite and repository CI pass.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
 - [ ] [F026] (P1) {F022} Add ElevenLabs speech, music, and alignment operations.
   Goal:
   Make LLM Proxy the sole external-provider boundary for the current
@@ -2143,7 +2134,6 @@ retain satisfied historical dependencies.
     fake provider suite and repository CI pass.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
 - [ ] [F027] (P1) {F022} Add provider account mutations, avatars, translation, and lip-sync.
   Goal:
   Complete gateway ownership of external media-provider credentials and
@@ -2177,7 +2167,6 @@ retain satisfied historical dependencies.
     suite and repository CI pass.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
 - [ ] [F017] (P1) Add shared MPR UI inactivity warning and automatic logout.
   Goal:
   Make an authenticated browser session warn and sign out explicitly after
@@ -2527,7 +2516,6 @@ retain satisfied historical dependencies.
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
   Dependency handoff: 2026-08-15 — gateway F001 and both application manifests
   passed local contract validation. Production activation remains separate.
-
 - [ ] [F028] (P2) {F027} Add HeyGen Avatar V as a gateway-owned avatar engine.
   Goal:
   Add the current Avatar V engine to the gateway HeyGen avatar contract before
@@ -2552,7 +2540,6 @@ retain satisfied historical dependencies.
     control rejection, terminal artifact download, and restart recovery.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
 - [ ] [F029] (P2) {F025} Add MiniMax H3 V2 video generation to model operations.
   Goal:
   Add the provider-qualified MiniMax H3 V2 route to the gateway before MediaOps
@@ -2581,7 +2568,6 @@ retain satisfied historical dependencies.
     V1 behavior through public black-box tests.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
 - [ ] [F030] (P2) {F026} Add Speechify text-to-speech and voice discovery to model operations.
   Goal:
   Add the current Speechify complete-response speech and voice-discovery
@@ -2612,7 +2598,6 @@ retain satisfied historical dependencies.
     safety, and artifact integrity through public black-box tests.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
 - [ ] [F020] (P2) {F016} Add route-validated sampling controls to the canonical v3 messages contract.
   Goal:
   Let a caller set low-level sampling controls only when the selected provider
@@ -2653,6 +2638,7 @@ retain satisfied historical dependencies.
     the same typed failures and do not retain a `/v2` request path.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
 
 ## Planning
 *do not implement yet*
@@ -3036,3 +3022,5 @@ retain satisfied historical dependencies.
     integrity before publication.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
+
+
