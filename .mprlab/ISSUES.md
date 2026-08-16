@@ -388,8 +388,18 @@ retain satisfied historical dependencies.
     the final markers, validated request ids, and no response-body disclosure.
   - For any source change, run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-- [ ] [B141] (P0) Center the x inside the square in the top right corner.
-  ![image](images/1786914825099_image.png)
+- [ ] [B141] (P0) Center the X icon inside the top-right square.
+  Goal:
+  Align the X icon so it is visually centered within the square control in the top-right corner, matching the intended UI layout shown in the attached screenshot.
+  
+  Requirements:
+  Preserve the existing square size, placement, styling, and click/interaction behavior. Adjust only the icon positioning/alignment needed to center the X horizontally and vertically within its container. Ensure the fix remains responsive and does not introduce layout shifts in nearby content.
+  
+  Deliverables:
+  Code changes that correct the X icon alignment in the top-right square control. Include any related style/layout updates needed for consistent centering across supported viewports.
+  
+  Validation:
+  Open the affected screen and confirm the X appears centered within the top-right square. Verify the square remains in the same top-right position, the control still functions as before, and no surrounding UI elements are visually displaced.
 
 
 ## Improvements
