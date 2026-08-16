@@ -38,7 +38,6 @@ RUN set -eu; \
     kill "${capability_api_pid}"; \
     wait "${capability_api_pid}" 2>/dev/null || true; \
     trap - EXIT; \
-    rm /pages/CNAME; \
     cp docs/openapi.yaml /pages/openapi.yaml
 
 FROM scratch AS pages

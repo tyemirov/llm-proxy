@@ -162,7 +162,6 @@ async function siteFixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), "llm-proxy-renderer-"));
   const source = path.join(root, "source");
   await mkdir(path.join(source, "app"), { recursive: true });
-  await writeFile(path.join(source, "CNAME"), "llm-proxy.example\n", "utf8");
   await writeFile(
     path.join(source, "index.html"),
     '<mpr-header data-config-url="/config-ui.yaml"></mpr-header><!-- llm-proxy-routing-tree --><!-- llm-proxy-capability-catalog -->',

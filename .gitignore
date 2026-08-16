@@ -17,7 +17,6 @@
 configs/*.sqlite
 configs/*.sqlite-*
 configs/client_secret_*.json
-site/CNAME
 site/config-ui.yaml
 site/llm-proxy-config.json
 

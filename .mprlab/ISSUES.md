@@ -25,6 +25,28 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B140] (P1) Remove gateway-owned Pages markers.
+  Goal:
+  The LLM Proxy Pages image contains only application-owned site files.
+  Evidence:
+  - The release gate rejected the image because `site/.nojekyll` reached the
+    final Pages image.
+  - The source also owns `site/CNAME`, and the Dockerfile deletes that file.
+  Requirements:
+  - Remove `.nojekyll` and `CNAME` from the application source.
+  - Remove the application renderer and Dockerfile contracts for `CNAME`.
+  - Keep all reserved Pages marker ownership in the gateway.
+  Validation:
+  - Prove the repository and Pages Dockerfile do not own reserved markers.
+  - Run the renderer integration test.
+  - Run `make ci` after the last application change.
+  Resolution:
+  - Removed `.nojekyll` and `CNAME` from the application source.
+  - Removed the renderer requirement and Dockerfile deletion for `CNAME`.
+  - Added lifecycle coverage that rejects all reserved marker paths.
+  - `make ci` passed all 11 gates with 94 browser tests and 100.0% Go
+    statement coverage.
+
 - [x] [B138] (P1) Preserve Kimi reasoning during output continuation.
   Goal:
   Preserve each private Kimi reasoning field when the proxy requests a missing
