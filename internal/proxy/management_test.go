@@ -1883,6 +1883,91 @@ func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
 	}
 }
 
+func TestManagementValidationFailureUsageUsesSelectedProviderDefaultModel(t *testing.T) {
+	router := newManagementRouter(t, proxy.Configuration{})
+	sessionCookie := managementSessionCookie(t, "usage-provider-default-user")
+	tenantPath := managementDefaultTenantTestPath(t, router, sessionCookie, "")
+
+	for _, providerKey := range []struct {
+		provider string
+		apiKey   string
+		model    string
+	}{
+		{provider: proxy.ProviderNameOpenAI, apiKey: testManagementOpenAIKey, model: proxy.ModelNameGPT41},
+		{provider: proxy.ProviderNameGemini, apiKey: testGeminiKey, model: proxy.ModelNameGemini25Flash},
+	} {
+		request := authenticatedJSONRequest(
+			http.MethodPut,
+			tenantPath+"/provider-keys/"+providerKey.provider,
+			managementProviderKeyRequestBody(t, providerKey.apiKey, providerKey.model, ""),
+			sessionCookie,
+		)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("save provider=%s status=%d body=%s", providerKey.provider, response.Code, response.Body.String())
+		}
+	}
+
+	secretRequest := authenticatedJSONRequest(http.MethodPost, tenantPath+"/secrets", `{}`, sessionCookie)
+	secretResponse := httptest.NewRecorder()
+	router.ServeHTTP(secretResponse, secretRequest)
+	if secretResponse.Code != http.StatusOK {
+		t.Fatalf("secret status=%d body=%s", secretResponse.Code, secretResponse.Body.String())
+	}
+	var secretPayload struct {
+		Secret string `json:"secret"`
+	}
+	if decodeError := json.Unmarshal(secretResponse.Body.Bytes(), &secretPayload); decodeError != nil {
+		t.Fatalf("decode secret: %v", decodeError)
+	}
+
+	requestCases := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodGet, path: "/"},
+		{method: http.MethodPost, path: "/", body: `{"prompt":"hello","max_tokens":0}`},
+		{method: http.MethodPost, path: "/v2", body: `{"messages":[{"role":"user","content":"hello"}],"max_tokens":0}`},
+	}
+	for _, requestCase := range requestCases {
+		query := url.Values{
+			"key":      []string{secretPayload.Secret},
+			"provider": []string{proxy.ProviderNameGemini},
+		}
+		if requestCase.method == http.MethodGet {
+			query.Set("prompt", "hello")
+			query.Set("max_tokens", "0")
+		}
+		request := httptest.NewRequest(
+			requestCase.method,
+			requestCase.path+"?"+query.Encode(),
+			strings.NewReader(requestCase.body),
+		)
+		if requestCase.method == http.MethodPost {
+			request.Header.Set("Content-Type", "application/json")
+		}
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("method=%s path=%s status=%d body=%s", requestCase.method, requestCase.path, response.Code, response.Body.String())
+		}
+	}
+
+	usage := waitForManagementValue(t, func() managementUsageTestResponse {
+		return requestManagementUsage(t, router, sessionCookie, "30d")
+	}, func(payload managementUsageTestResponse) bool {
+		return payload.Totals.Requests == len(requestCases)
+	})
+	if len(usage.Providers) != 1 || usage.Providers[0].Provider != proxy.ProviderNameGemini || usage.Providers[0].Data.Requests != len(requestCases) {
+		t.Fatalf("providers=%+v", usage.Providers)
+	}
+	if len(usage.Models) != 1 || usage.Models[0].Provider != proxy.ProviderNameGemini || usage.Models[0].Model != proxy.ModelNameGemini25Flash || usage.Models[0].Data.Requests != len(requestCases) {
+		t.Fatalf("models=%+v", usage.Models)
+	}
+}
+
 func TestManagementAdminUsersDashboard(t *testing.T) {
 	chatServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.Header().Set("Content-Type", "application/json")
@@ -2441,6 +2526,13 @@ type managementUsageTestResponse struct {
 			Requests int `json:"requests"`
 		} `json:"data"`
 	} `json:"providers"`
+	Models []struct {
+		Provider string `json:"provider"`
+		Model    string `json:"model"`
+		Data     struct {
+			Requests int `json:"requests"`
+		} `json:"data"`
+	} `json:"models"`
 	StatusCodes []struct {
 		StatusCode int `json:"status_code"`
 		Requests   int `json:"requests"`
