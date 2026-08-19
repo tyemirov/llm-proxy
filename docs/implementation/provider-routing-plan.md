@@ -51,6 +51,21 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 - Omitted `max_tokens` means the proxy omits provider max-token fields and lets the selected provider/model default apply, except Anthropic Messages where the upstream API requires `max_tokens` and the proxy sends the selected model's configured synchronous output limit. After an output-budget stop with no visible progress, a configured model output limit becomes the generic ceiling for increasing the next attempt.
 - Known provider-specific output-token ceilings are validated before upstream calls. MiniMax M2 routes reject `max_tokens` above `204800`. Gemini text models reject values above `65536`. Claude models reject values above their configured synchronous Messages output limits with `400 Bad Request`.
 - `reasoning_effort` is optional on `GET /` as a query parameter and on JSON `POST /` and `POST /v2` as a body field. Omission retains the resolved tenant default. A supplied value must be nonblank and supported by the exact resolved text provider/model route; blank, `null`, or unsupported values return `400 Bad Request` before a provider call.
+- `structured_output.schema` is optional on canonical `POST /v2`. It requires
+  one valid `Idempotency-Key` header. The header is invalid without the field.
+- The proxy compiles the caller JSON Schema before provider dispatch. It maps
+  the schema only to supported provider protocols and validates the final JSON.
+- Structured requests do not use output continuation or repair inference.
+  Unsupported routes and invalid provider JSON fail without a second call.
+- A structured request uses a private tenant-bound record with
+  `not_dispatched`, `dispatched`, `succeeded`, `failed`, or `uncertain` state.
+  Authenticated `GET /v2/requests` reconciles the same idempotency key.
+- The request intent contains the resolved route and canonical request body.
+  Request-timeout and transport settings do not change that identity.
+- A restart changes an interrupted `dispatched` record to `uncertain`. An
+  uncertain record never permits automatic or duplicate provider dispatch.
+- The record stores tenant, key, and intent hashes instead of their plaintext
+  values. It does not store prompts, schemas, credentials, or provider bodies.
 - `X-LLM-Proxy-Request-Timeout-Seconds` is an optional positive whole-number
   header on `GET /`, `POST /`, `POST /v2`, `POST /model/v1/assets`, and
   `POST /dictate`. Omission uses `server.request_timeout_seconds`; a supplied
@@ -97,6 +112,10 @@ This matrix describes capabilities wired through `llm-proxy`. Upstream products
 can expose speech APIs that are not yet proxy adapters; do not mark them
 supported for `/dictate` until the provider registry and black-box routing tests
 cover that path.
+
+Structured requests use `openai_responses`, `gemini_interactions`, or
+`anthropic_messages`. Each other protocol rejects a structured request before
+provider dispatch.
 
 The canonical Meta contract uses selector `meta` with no aliases,
 `https://api.meta.ai/v1`, `${MODEL_API_KEY}`, and model
