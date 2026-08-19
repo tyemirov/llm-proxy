@@ -25,7 +25,7 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
-- [!] [B141] (P1) {I229} Publish the structured-request client contract.
+- [!] [B142] (P1) {I229} Publish the structured-request client contract.
   Goal:
   Let Creative Director consume the declared structured-output and durable
   request API from an official released Go module.
@@ -487,15 +487,21 @@ retain satisfied historical dependencies.
   - Authenticated `GET /v2/requests` returns safe progress, result, failure, or
     uncertainty data. It does not expose prompts, schemas, credentials, or raw
     provider bodies.
+  - Review hardening removes interrupted atomic-write temporary records and
+    expires known terminal records during lookup or repeated submission.
+  - Reconciliation responses now use `Cache-Control: no-store`. Caller
+    cancellation cannot replace a saved known success with uncertainty.
+  - The Go client returns a typed pending error for HTTP `202`. Provider-specific
+    subset admission rejects unsupported schemas before provider dispatch.
   - The Go and Python clients expose validated structured requests. Creative
     Director persists visible review progress and reconciles the same request
     identity without a repair inference.
   - Fake-provider tests cover exact provider payloads, one-call success,
     unsupported routes, replay, conflicts, tenant isolation, restart
     uncertainty, invalid output, and safe status data.
-  - The final bounded `make ci` passed all 11 gates with 100.0% Go statement
-    coverage. Smith Creative Director CI and the no-spend Kamu pipeline
-    integration also passed.
+  - The review-correction final bounded `make ci` passed all 11 gates, including
+    94 browser scenarios, with 100.0% Go statement coverage. Smith Creative
+    Director CI and the no-spend Kamu pipeline integration also passed.
   - Validation made no paid provider call and performed no release,
     publication, or deployment.
 
@@ -3117,5 +3123,3 @@ retain satisfied historical dependencies.
     integrity before publication.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
-
-
