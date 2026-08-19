@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/tyemirov/llm-proxy/internal/utils"
@@ -56,10 +57,19 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 		accumulatedUsage = mergeTokenUsage(accumulatedUsage, generation.usage)
 		recordContinuationProgress(requestContext, structuredLogger, generation, len([]byte(accumulatedText.String())), generationError)
 		if !errors.Is(generationError, errProviderOutputLimitReached) {
-			return textGenerationResult{
+			result := textGenerationResult{
 				text:  strings.TrimSpace(accumulatedText.String()),
 				usage: accumulatedUsage,
-			}, generationError
+			}
+			if generationError == nil {
+				if validationError := request.structuredOutput.validateResponse(result.text); validationError != nil {
+					return textGenerationResult{usage: accumulatedUsage}, validationError
+				}
+			}
+			return result, generationError
+		}
+		if request.structuredOutput != nil {
+			return textGenerationResult{usage: accumulatedUsage}, fmt.Errorf("%w: structured output reached provider output limit", ErrProviderAPI)
 		}
 
 		request.messages = completionContinuationMessages(originalMessages, accumulatedText.String())
@@ -87,6 +97,7 @@ func (openAIResponsesTextRouteAdapter) generateText(requestContext context.Conte
 		request.webSearchEnabled,
 		request.maxTokens,
 		request.reasoningEffort,
+		request.structuredOutput,
 		structuredLogger,
 	)
 }
@@ -99,6 +110,7 @@ func (openAIResponsesSynchronousTextRouteAdapter) generateText(requestContext co
 		request.model,
 		request.messages,
 		request.maxTokens,
+		request.structuredOutput,
 		structuredLogger,
 	)
 }
@@ -127,6 +139,7 @@ func (geminiInteractionsTextRouteAdapter) generateText(requestContext context.Co
 		request.messages,
 		request.maxTokens,
 		request.model.executionLifecycle,
+		request.structuredOutput,
 		structuredLogger,
 	)
 }
@@ -139,6 +152,7 @@ func (anthropicMessagesTextRouteAdapter) generateText(requestContext context.Con
 		request.model,
 		request.messages,
 		request.maxTokens,
+		request.structuredOutput,
 		structuredLogger,
 	)
 }

@@ -516,6 +516,9 @@ func (contract *Contract) validateValue(schema map[string]any, value any, contex
 	if resolveError != nil {
 		return resolveError
 	}
+	if len(resolvedSchema) == 0 {
+		return nil
+	}
 	if oneOfValues, hasOneOf := resolvedSchema["oneOf"].([]any); hasOneOf {
 		matchCount := 0
 		var lastError error

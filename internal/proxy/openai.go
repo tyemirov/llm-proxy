@@ -75,7 +75,7 @@ func hasFinalMessage(rawPayload []byte) bool {
 }
 
 // openAIRequest sends messages to the OpenAI responses API and returns the resulting text.
-func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, messages chatMessages, webSearchEnabled bool, maxTokens *int, reasoningEffort string, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, messages chatMessages, webSearchEnabled bool, maxTokens *int, reasoningEffort string, structuredOutput *structuredOutputSchema, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	if mediaLimitError := validateInlineMessageMediaBeforeSerialization(modelIdentifier, messages); mediaLimitError != nil {
 		return textGenerationResult{}, mediaLimitError
 	}
@@ -83,7 +83,7 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 	if inputError != nil {
 		return textGenerationResult{}, inputError
 	}
-	payload := BuildRequestPayload(modelIdentifier.providerString(), modelIdentifier.requestProfile.string(), input, webSearchEnabled, maxTokens, reasoningEffort)
+	payload := buildRequestPayload(modelIdentifier.providerString(), modelIdentifier.requestProfile.string(), input, webSearchEnabled, maxTokens, reasoningEffort, true, true, structuredOutput)
 	payloadBytes, _ := json.Marshal(payload)
 	if mediaLimitError := validateInlineMessageMediaRequestLimit(modelIdentifier, messages, payloadBytes); mediaLimitError != nil {
 		return textGenerationResult{}, mediaLimitError
@@ -119,7 +119,7 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 	return client.resolveOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
 }
 
-func (client *OpenAIClient) xAIResponsesRequest(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *OpenAIClient) xAIResponsesRequest(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, structuredOutput *structuredOutputSchema, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	if mediaLimitError := validateInlineMessageMediaBeforeSerialization(modelIdentifier, messages); mediaLimitError != nil {
 		return textGenerationResult{}, mediaLimitError
 	}
@@ -128,15 +128,17 @@ func (client *OpenAIClient) xAIResponsesRequest(parentContext context.Context, a
 		return textGenerationResult{}, inputError
 	}
 	payload := struct {
-		Model           string `json:"model"`
-		Input           any    `json:"input"`
-		MaxOutputTokens *int   `json:"max_output_tokens,omitempty"`
-		Store           bool   `json:"store"`
+		Model           string                `json:"model"`
+		Input           any                   `json:"input"`
+		MaxOutputTokens *int                  `json:"max_output_tokens,omitempty"`
+		Store           bool                  `json:"store"`
+		Text            *openAIStructuredText `json:"text,omitempty"`
 	}{
 		Model:           modelIdentifier.providerString(),
 		Input:           input,
 		MaxOutputTokens: maxTokens,
 		Store:           false,
+		Text:            openAIStructuredTextFor(structuredOutput),
 	}
 	payloadBytes, _ := json.Marshal(payload)
 	if mediaLimitError := validateInlineMessageMediaRequestLimit(modelIdentifier, messages, payloadBytes); mediaLimitError != nil {

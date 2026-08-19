@@ -99,7 +99,7 @@ func TestOpenAPIContractDocumentsActualAuthenticationBoundaries(t *testing.T) {
 	for _, operation := range operations {
 		expectedSecurity := [][]string{{"TAuthSession"}}
 		switch operation.Path {
-		case "/", "/v2", "/dictate", "/model/v1/assets", "/model/v1/assets/{asset_id}":
+		case "/", "/v2", "/v2/requests", "/dictate", "/model/v1/assets", "/model/v1/assets/{asset_id}":
 			expectedSecurity = [][]string{{"TenantClientKey"}}
 		case proxy.ManagementConfigUIPath, proxy.PublicCapabilitiesPath:
 			expectedSecurity = [][]string{}
