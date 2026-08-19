@@ -114,11 +114,12 @@ The object contains the caller-owned JSON Schema. A structured request requires
 exactly one valid `Idempotency-Key` header. The proxy rejects either input when
 the other input is absent.
 
-The proxy compiles the schema before provider dispatch. It maps the schema to
-OpenAI Responses `text.format`, Gemini Interactions `response_format`, or
-Anthropic Messages `output_config.format`. The proxy validates the final JSON
-against the same schema before durable success. Other provider protocols reject
-structured requests before provider work.
+The proxy compiles the schema and validates the selected provider subset before
+provider dispatch. It maps the schema to OpenAI Responses `text.format`, Gemini
+Interactions `response_format`, or Anthropic Messages `output_config.format`.
+The proxy validates the final JSON against the same schema before durable
+success. Other provider protocols reject structured requests before provider
+work.
 
 A structured request does not use output continuation or a repair inference.
 Invalid provider JSON causes one terminal provider failure. This rule prevents
@@ -141,7 +142,8 @@ Use authenticated `GET /v2/requests` with the same `Idempotency-Key` header.
 A successful record returns the exact saved JSON with status `200`. An active
 record returns safe timestamps and elapsed time with status `202`. A failed
 record returns its safe failure with the recorded status. An uncertain record
-returns `409 structured_request_outcome_unknown`.
+returns `409 structured_request_outcome_unknown`. Every reconciliation response
+sets `Cache-Control: no-store` because its content depends on the tenant and key.
 
 An identical `POST /v2` submission reuses a succeeded or active record. A
 failed record permits an explicit new attempt with the same request intent.
