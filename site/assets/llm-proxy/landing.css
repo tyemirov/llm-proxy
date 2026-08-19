@@ -20,6 +20,7 @@
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --content: 1120px;
+  --public-header-scroll-clearance: 72px;
 }
 
 *,
@@ -30,6 +31,7 @@
 
 html {
   scroll-behavior: smooth;
+  scroll-padding-top: var(--public-header-scroll-clearance);
 }
 
 body {
@@ -671,7 +673,7 @@ routing-tree {
 
 .section {
   padding-block: clamp(5rem, 9vw, 7.5rem);
-  scroll-margin-top: 72px;
+  scroll-margin-top: var(--public-header-scroll-clearance);
 }
 
 .section--raised {
