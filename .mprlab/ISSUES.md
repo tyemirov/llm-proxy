@@ -25,6 +25,31 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B143] (P1) Keep route filters clear of the sticky public header.
+  Goal:
+  Visitors can click each route filter after the browser scrolls the route
+  explorer.
+  Evidence:
+  - Expected: Each visible and enabled filter accepts pointer input.
+  - Actual: GitHub CI positioned the Text filter under the sticky `mpr-header`.
+    The header intercepted pointer input until the test timed out.
+  Requirements:
+  - Preserve the sticky public header and all route explorer selection behavior.
+  - Keep scrolled route controls outside the header hit area.
+  - Do not use forced clicks or longer timeouts.
+  Validation:
+  - Repeat the affected browser scenario with the CI browser configuration.
+  - Run the final `make ci` gate.
+
+  Resolution:
+  - The landing page now uses one 72-pixel scroll clearance for the document
+    and section anchors.
+  - The browser test scrolls the Text filter to the start position. It verifies
+    that the filter is below the header and owns its center hit point.
+  - The affected scenario passed 20 serial repetitions.
+  - The final `make ci` passed all 11 gates with 94 browser scenarios and
+    100.0% Go statement coverage.
+
 - [!] [B142] (P1) {I229} Publish the structured-request client contract.
   Goal:
   Let Creative Director consume the declared structured-output and durable
