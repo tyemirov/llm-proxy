@@ -23,6 +23,7 @@ from llm_proxy_client import (
     ClientConfig,
     ClientMessage,
     ClientMessagesRequest,
+    ClientStructuredOutput,
     LLMProxyClientError,
     LLMProxyHTTPError,
     LLMProxyModelProfileError,
@@ -130,6 +131,7 @@ class CapturedRequest:
     accept: str = ""
     content_type: str = ""
     request_timeout: str = ""
+    idempotency_key: str = ""
     body: dict[str, Any] | None = None
 
 
@@ -153,6 +155,7 @@ class CapturingHandler(BaseHTTPRequestHandler):
             accept=self.headers.get("Accept", ""),
             content_type=self.headers.get("Content-Type", ""),
             request_timeout=self.headers.get("X-LLM-Proxy-Request-Timeout-Seconds", ""),
+            idempotency_key=self.headers.get("Idempotency-Key", ""),
             body=json.loads(raw_body),
         )
         type(self).captured_request = captured_request
@@ -603,6 +606,36 @@ def test_client_posts_v2_messages_body(running_server: RunningServer) -> None:
     }
 
 
+def test_client_posts_schema_constrained_request_with_idempotency_header(running_server: RunningServer) -> None:
+    """The public client binds one caller schema to one idempotency key."""
+
+    structured_output = ClientStructuredOutput(
+        schema={
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["decision"],
+            "properties": {"decision": {"type": "string", "enum": ["pass", "return"]}},
+        },
+        idempotency_key="review:story-1",
+    )
+    client = Client(ClientConfig(base_url=running_server.url, secret="test-secret", provider="openai"))
+
+    response_text = client.post_messages(
+        ClientMessagesRequest(
+            messages=(ClientMessage(role="user", content="Review"),),
+            model="gpt-5.5",
+            structured_output=structured_output,
+        )
+    )
+
+    captured_request = CapturingHandler.captured_request
+    assert response_text == "reviewed"
+    assert captured_request.idempotency_key == "review:story-1"
+    assert captured_request.body is not None
+    assert captured_request.body["structured_output"] == {"schema": structured_output.schema}
+    assert_python_v2_request_conforms_to_openapi(captured_request)
+
+
 @pytest.mark.parametrize(
     ("config_kwargs", "expected_error"),
     [
@@ -718,6 +751,18 @@ def test_config_validation_errors(config_kwargs: dict[str, object], expected_err
             {"messages": (ClientMessage(role="user", content="prompt"),), "request_timeout_seconds": True},
             "request_timeout_seconds must be a positive whole number",
         ),
+        (
+            {"messages": (ClientMessage(role="user", content="prompt"),), "structured_output": "invalid"},
+            "invalid structured output",
+        ),
+        (
+            {
+                "messages": (ClientMessage(role="user", content="prompt"),),
+                "web_search": True,
+                "structured_output": ClientStructuredOutput(schema={}, idempotency_key="request-1"),
+            },
+            "structured output conflicts with web_search",
+        ),
     ],
 )
 def test_messages_request_validation_errors(request_kwargs: dict[str, object], expected_error: str) -> None:
@@ -725,6 +770,23 @@ def test_messages_request_validation_errors(request_kwargs: dict[str, object], e
 
     with pytest.raises(LLMProxyClientError, match=expected_error):
         ClientMessagesRequest(**request_kwargs)
+
+
+@pytest.mark.parametrize(
+    ("schema", "idempotency_key", "expected_error"),
+    [
+        ([], "request-1", "schema must be an object"),
+        ({"const": float("nan")}, "request-1", "schema must be valid JSON"),
+        ({}, " bad", "invalid idempotency key"),
+    ],
+)
+def test_structured_output_validation_errors(
+    schema: object, idempotency_key: str, expected_error: str
+) -> None:
+    """Invalid structured-output input fails before HTTP work."""
+
+    with pytest.raises(LLMProxyClientError, match=expected_error):
+        ClientStructuredOutput(schema=schema, idempotency_key=idempotency_key)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
