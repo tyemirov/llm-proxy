@@ -248,14 +248,14 @@ func TestTextRequestDefaultsForProviderInternalEdges(t *testing.T) {
 		}),
 	}
 	staticExplicitDefaults := textRequestDefaultsForProvider(ProviderNameDeepSeek, staticTenant, providers)
-	if staticExplicitDefaults.model != "" || staticExplicitDefaults.systemPrompt != "tenant system" {
+	if staticExplicitDefaults.model != ModelNameDeepSeekV4Flash || staticExplicitDefaults.systemPrompt != "tenant system" {
 		t.Fatalf("static explicit defaults=%+v", staticExplicitDefaults)
 	}
 
 	managedTenant := staticTenant
 	managedTenant.managed = true
 	managedNoSettingsDefaults := textRequestDefaultsForProvider(ProviderNameOpenAI, managedTenant, providers)
-	if managedNoSettingsDefaults.model != "" || managedNoSettingsDefaults.systemPrompt != "tenant system" {
+	if managedNoSettingsDefaults.model != ModelNameGPT41 || managedNoSettingsDefaults.systemPrompt != "tenant system" {
 		t.Fatalf("managed no-settings defaults=%+v", managedNoSettingsDefaults)
 	}
 	managedUnknownProviderDefaults := textRequestDefaultsForProvider("unknown-provider", managedTenant, providers)

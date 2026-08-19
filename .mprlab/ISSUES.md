@@ -25,6 +25,39 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B145] (P1) Keep failed request usage on one model route.
+  Goal:
+  Usage reports show the model route that the request contract selects.
+  Evidence:
+  - Expected: An explicit provider with no model uses its saved model or its
+    catalog default.
+  - Actual: A failed Gemini request can use the tenant-wide OpenAI model in
+    usage data.
+  - The dashboard then shows an invalid pair such as
+    `gemini / gpt-5.6-terra`.
+  - A registered provider without saved settings can record an empty model.
+  Requirements:
+  - Derive the failed request provider and model from one route default.
+  - Use the same provider-specific default that request validation uses.
+  - Use the provider catalog default when no saved provider model exists.
+  - Do not change successful request usage or public response behavior.
+  Validation:
+  - Prove failed `GET /`, `POST /`, and `POST /v2` requests use the selected
+    provider's saved model.
+  - Prove usage summaries contain no tenant-wide model under that provider.
+  - Prove the documented unconfigured-provider `503` records the catalog
+    default model.
+  - Run `make ci` after the last application change.
+
+  Resolution:
+  - An explicit registered provider now selects its catalog default before
+    request validation.
+  - A saved managed-provider model replaces that catalog default.
+  - Failed `GET /`, `POST /`, and `POST /v2` requests now record the selected
+    provider model.
+  - The final `make ci` passed all 11 gates with 94 browser scenarios and
+    100.0% Go statement coverage.
+
 - [x] [B144] (P1) Use preinstalled Playwright OS packages in hosted CI.
   Goal:
   Hosted CI completes the canonical gate within its 350-second watchdog.
@@ -83,27 +116,40 @@ retain satisfied historical dependencies.
   - The final `make ci` passed all 11 gates with 94 browser scenarios and
     100.0% Go statement coverage.
 
-- [!] [B142] (P1) {I229} Publish the structured-request client contract.
+- [x] [B142] (P1) {I229} Publish the structured-request client contract.
   Goal:
   Let Creative Director consume the declared structured-output and durable
   request API from an official released Go module.
   Evidence:
-  - The current released module is `v1.0.0`.
+  - Before this change, the current released module was `v1.0.0`.
   - That release has no structured-output request fields and no durable request
     reconciliation method.
+  - Product release `v3.1.0` contains the client at commit `fe48b5b`, but Go
+    rejects that tag because the module path does not end in `/v3`.
   Requirements:
   - Keep structured request construction and reconciliation in the official Go
     client.
   - Remove provider, model, and format query values from reconciliation calls.
-  - Publish one valid module release and update Creative Director to use it.
+  - Publish commit `fe48b5b` as Go module `v1.1.0` for the unchanged module
+    path `github.com/tyemirov/llm-proxy`.
+  - Do not use a pseudo-version, a replace directive, or a local workspace as
+    released dependency evidence.
+  - Update Creative Director to use `v1.1.0`.
   Validation:
   - Prove the official client sends the structured schema and idempotency key.
   - Prove reconciliation sends no provider request selection.
-  - Run the LLM Proxy and Creative Director CI gates.
-  Blocked:
-  The local implementation passes all 11 LLM Proxy CI gates and the Creative
-  Director CI gate. Repository rules require explicit authorization for the
-  commit, tag, and push that make the module available to Creative Director.
+  - Prove that `go list -m -versions github.com/tyemirov/llm-proxy` includes
+    `v1.1.0`.
+  - Run the LLM Proxy CI gate.
+  - Run the Creative Director CI gate without a Go workspace or replace
+    directive.
+  Completion evidence:
+  - Tag `v1.1.0` points to commit
+    `fe48b5b2259b022eca2156b81be3697465453d8a`.
+  - The public Go module graph lists `v1.1.0`.
+  - The exact release tree passed all 11 CI gates with 100.0% Go statement
+    coverage.
+  - Creative Director selects `v1.1.0` and passes CI without a workspace.
 
 - [x] [B140] (P1) Remove gateway-owned Pages markers.
   Goal:
