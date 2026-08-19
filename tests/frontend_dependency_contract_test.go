@@ -18,6 +18,14 @@ func TestOperationalFrontendValidationPreparesPinnedDependencies(testingInstance
 	if lookupError != nil {
 		testingInstance.Fatalf("resolve Make executable: %v", lookupError)
 	}
+	for _, environmentVariable := range []string{
+		"GNUMAKEFLAGS",
+		"MAKEFLAGS",
+		"MFLAGS",
+		"PLAYWRIGHT_INSTALL_FLAGS",
+	} {
+		testingInstance.Setenv(environmentVariable, "PLAYWRIGHT_INSTALL_FLAGS=")
+	}
 
 	scenarios := []struct {
 		name             string
@@ -112,7 +120,7 @@ func TestOperationalFrontendValidationPreparesPinnedDependencies(testingInstance
 			command := exec.CommandContext(commandContext, makePath, makeArguments...)
 			command.Dir = fixtureRoot
 			command.Env = append(
-				os.Environ(),
+				frontendDependencyFixtureEnvironment(),
 				"FRONTEND_NPM_LOG="+npmLogPath,
 				"FRONTEND_PLAYWRIGHT_FIXTURE="+filepath.Join(fixtureRoot, "playwright"),
 			)
@@ -152,6 +160,22 @@ func TestOperationalFrontendValidationPreparesPinnedDependencies(testingInstance
 	if !strings.Contains(workflow, "run: timeout -k 350s -s SIGKILL 350s make ci PLAYWRIGHT_INSTALL_FLAGS=") {
 		testingInstance.Fatal("hosted CI does not declare its preinstalled Playwright OS packages")
 	}
+}
+
+func frontendDependencyFixtureEnvironment() []string {
+	environment := make([]string, 0, len(os.Environ()))
+	for _, assignment := range os.Environ() {
+		name, _, found := strings.Cut(assignment, "=")
+		if !found {
+			continue
+		}
+		switch name {
+		case "GNUMAKEFLAGS", "MAKEFLAGS", "MFLAGS", "PLAYWRIGHT_INSTALL_FLAGS":
+			continue
+		}
+		environment = append(environment, assignment)
+	}
+	return environment
 }
 
 func prepareFrontendDependencyFixture(testingInstance *testing.T, repositoryRoot string, fixtureRoot string) {
