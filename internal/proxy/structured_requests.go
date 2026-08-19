@@ -33,6 +33,7 @@ var (
 	errStructuredRequestNotFound = errors.New("structured request not found")
 	idempotencyKeyPattern        = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
 	digestPattern                = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	structuredRequestTempPattern = regexp.MustCompile(`^\.structured-request-[0-9]+\.tmp$`)
 	structuredRequestLstat       = os.Lstat
 	structuredRequestChmod       = os.Chmod
 	structuredRequestMkdirAll    = os.MkdirAll
@@ -129,6 +130,9 @@ func (store *structuredRequestStore) recoverInterrupted() error {
 		if entry.IsDir() {
 			return nil
 		}
+		if structuredRequestTemporaryFile(store.root, path, entry) {
+			return structuredRequestRemove(path)
+		}
 		if filepath.Ext(path) != ".json" {
 			return fmt.Errorf("structured request store contains unexpected file: %s", path)
 		}
@@ -156,6 +160,14 @@ func (store *structuredRequestStore) recoverInterrupted() error {
 		}
 		return nil
 	})
+}
+
+func structuredRequestTemporaryFile(root string, path string, entry fs.DirEntry) bool {
+	tenantDirectory := filepath.Dir(path)
+	return entry.Type().IsRegular() &&
+		structuredRequestTempPattern.MatchString(entry.Name()) &&
+		filepath.Dir(tenantDirectory) == root &&
+		digestPattern.MatchString(filepath.Base(tenantDirectory))
 }
 
 func validIdempotencyKey(rawKey string) bool {
@@ -196,25 +208,33 @@ func (store *structuredRequestStore) begin(requestTenant tenant, idempotencyKey 
 	}
 	record, readError := store.read(path)
 	if readError == nil {
-		if record.IntentSHA256 != intentSHA256 {
-			return structuredRequestRecord{}, false, errStructuredRequestConflict
+		expired, expirationError := store.expireTerminal(path, record)
+		if expirationError != nil {
+			return structuredRequestRecord{}, false, expirationError
 		}
-		if record.State == structuredRequestStateFailed {
-			now := store.now().UTC().Format(time.RFC3339Nano)
-			record.ProxyRequestID = proxyRequestID
-			record.State = structuredRequestStateNotDispatched
-			record.StartedAt = now
-			record.UpdatedAt = now
-			record.CompletedAt = ""
-			record.StatusCode = 0
-			record.FailureCode = ""
-			record.Result = nil
-			if publishError := store.publish(path, record); publishError != nil {
-				return structuredRequestRecord{}, false, publishError
+		if expired {
+			readError = os.ErrNotExist
+		} else {
+			if record.IntentSHA256 != intentSHA256 {
+				return structuredRequestRecord{}, false, errStructuredRequestConflict
 			}
-			return record, true, nil
+			if record.State == structuredRequestStateFailed {
+				now := store.now().UTC().Format(time.RFC3339Nano)
+				record.ProxyRequestID = proxyRequestID
+				record.State = structuredRequestStateNotDispatched
+				record.StartedAt = now
+				record.UpdatedAt = now
+				record.CompletedAt = ""
+				record.StatusCode = 0
+				record.FailureCode = ""
+				record.Result = nil
+				if publishError := store.publish(path, record); publishError != nil {
+					return structuredRequestRecord{}, false, publishError
+				}
+				return record, true, nil
+			}
+			return record, false, nil
 		}
-		return record, false, nil
 	}
 	if !os.IsNotExist(readError) {
 		return structuredRequestRecord{}, false, readError
@@ -241,7 +261,34 @@ func (store *structuredRequestStore) lookup(requestTenant tenant, idempotencyKey
 	if os.IsNotExist(readError) {
 		return structuredRequestRecord{}, errStructuredRequestNotFound
 	}
+	if readError == nil {
+		expired, expirationError := store.expireTerminal(path, record)
+		if expirationError != nil {
+			return structuredRequestRecord{}, expirationError
+		}
+		if expired {
+			return structuredRequestRecord{}, errStructuredRequestNotFound
+		}
+	}
 	return record, readError
+}
+
+func (store *structuredRequestStore) expireTerminal(path string, record structuredRequestRecord) (bool, error) {
+	if store.retention <= 0 || record.State == structuredRequestStateUncertain ||
+		(record.State != structuredRequestStateSucceeded && record.State != structuredRequestStateFailed) {
+		return false, nil
+	}
+	updatedAt, timeError := time.Parse(time.RFC3339Nano, record.UpdatedAt)
+	if timeError != nil {
+		return false, fmt.Errorf("decode structured request updated_at: %w", timeError)
+	}
+	if store.now().UTC().Sub(updatedAt) < store.retention {
+		return false, nil
+	}
+	if removeError := structuredRequestRemove(path); removeError != nil {
+		return false, fmt.Errorf("expire structured request record: %w", removeError)
+	}
+	return true, nil
 }
 
 func (store *structuredRequestStore) transition(requestTenant tenant, idempotencyKey string, intentSHA256 string, update func(*structuredRequestRecord, time.Time)) (structuredRequestRecord, error) {

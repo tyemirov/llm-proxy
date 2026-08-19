@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"os"
@@ -138,6 +139,36 @@ func TestStructuredRequestPathAndReadFailures(testingInstance *testing.T) {
 	store.publish = func(string, structuredRequestRecord) error { return errStructuredRequestTestIO }
 	if _, _, retryError := store.begin(requestTenant, "retry-publish", intent, "openai", "gpt", "proxy-retry"); !errors.Is(retryError, errStructuredRequestTestIO) {
 		testingInstance.Fatalf("retry publish error=%v", retryError)
+	}
+}
+
+func TestStructuredRequestRuntimeExpirationFailures(testingInstance *testing.T) {
+	reset := captureStructuredRequestFileOperations()
+	testingInstance.Cleanup(reset)
+	now := time.Date(2026, time.August, 18, 12, 0, 10, 0, time.UTC)
+	record := validStructuredRequestTestRecord()
+	record.State = structuredRequestStateSucceeded
+	record.UpdatedAt = now.Add(-10 * time.Second).Format(time.RFC3339Nano)
+	record.CompletedAt = record.UpdatedAt
+	record.StatusCode = 200
+	record.Result = json.RawMessage(`{"ok":true}`)
+	store := &structuredRequestStore{
+		root: testingInstance.TempDir(), retention: time.Second, now: func() time.Time { return now },
+		read: func(string) (structuredRequestRecord, error) { return record, nil },
+	}
+	structuredRequestRemove = func(string) error { return errStructuredRequestTestIO }
+	requestTenant := structuredTestTenant(testingInstance, "expiration-failure")
+	if _, lookupError := store.lookup(requestTenant, "lookup"); !errors.Is(lookupError, errStructuredRequestTestIO) {
+		testingInstance.Fatalf("lookup expiration error=%v", lookupError)
+	}
+	store.publish = publishStructuredRequestRecord
+	if _, _, beginError := store.begin(requestTenant, "begin", record.IntentSHA256, record.Provider, record.Model, "proxy-new"); !errors.Is(beginError, errStructuredRequestTestIO) {
+		testingInstance.Fatalf("begin expiration error=%v", beginError)
+	}
+
+	record.UpdatedAt = "not-a-time"
+	if _, expirationError := store.expireTerminal("ignored", record); expirationError == nil {
+		testingInstance.Fatal("invalid expiration time must fail")
 	}
 }
 

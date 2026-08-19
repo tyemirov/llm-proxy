@@ -101,6 +101,8 @@ func TestStructuredRequestRejectsInvalidContractsBeforeProviderDispatch(testingI
 		{name: "missing key", body: structuredV2Body("review", false, "deepseek-v4-flash"), want: "invalid Idempotency-Key"},
 		{name: "key without schema", body: `{"messages":[{"role":"user","content":"review"}]}`, key: "review:extra", want: "invalid Idempotency-Key"},
 		{name: "web search", body: structuredV2Body("review", true, proxy.ModelNameGPT55), key: "review:web", want: "structured_output does not support web_search", provider: proxy.ProviderNameOpenAI},
+		{name: "OpenAI open object", body: `{"messages":[{"role":"user","content":"review"}],"model":"gpt-5.5","structured_output":{"schema":{"type":"object","properties":{"decision":{"type":"string"}},"required":["decision"]}}}`, key: "review:open-object", want: "structured_output is unsupported", provider: proxy.ProviderNameOpenAI},
+		{name: "OpenAI optional property", body: `{"messages":[{"role":"user","content":"review"}],"model":"gpt-5.5","structured_output":{"schema":{"type":"object","additionalProperties":false,"properties":{"decision":{"type":"string"}}}}}`, key: "review:optional", want: "structured_output is unsupported", provider: proxy.ProviderNameOpenAI},
 		{name: "unsupported wire", body: structuredV2Body("review", false, "deepseek-v4-flash"), key: "review:chat", want: "structured_output is unsupported"},
 	}
 	for _, testCase := range testCases {

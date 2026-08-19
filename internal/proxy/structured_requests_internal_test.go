@@ -105,6 +105,58 @@ func TestStructuredRequestStoreLifecycle(testingInstance *testing.T) {
 	}
 }
 
+func TestStructuredRequestStoreRuntimeRetention(testingInstance *testing.T) {
+	currentTime := time.Date(2026, time.August, 18, 12, 0, 0, 0, time.UTC)
+	store, storeError := newStructuredRequestStore(testingInstance.TempDir(), 10)
+	if storeError != nil {
+		testingInstance.Fatal(storeError)
+	}
+	store.now = func() time.Time { return currentTime }
+	requestTenant := structuredTestTenant(testingInstance, "runtime-retention")
+	intent := structuredRequestIntent("openai", "gpt", []byte(`{"request":1}`))
+
+	_, _, _ = store.begin(requestTenant, "lookup-expired", intent, "openai", "gpt", "proxy-lookup")
+	_ = store.succeed(requestTenant, "lookup-expired", intent, `{"result":1}`)
+	currentTime = currentTime.Add(10 * time.Second)
+	if _, lookupError := store.lookup(requestTenant, "lookup-expired"); !errors.Is(lookupError, errStructuredRequestNotFound) {
+		testingInstance.Fatalf("expired lookup error=%v", lookupError)
+	}
+
+	_, _, _ = store.begin(requestTenant, "submission-expired", intent, "openai", "gpt", "proxy-old")
+	_ = store.succeed(requestTenant, "submission-expired", intent, `{"result":2}`)
+	currentTime = currentTime.Add(10 * time.Second)
+	replacementIntent := structuredRequestIntent("openai", "gpt", []byte(`{"request":2}`))
+	replacement, created, beginError := store.begin(requestTenant, "submission-expired", replacementIntent, "openai", "gpt", "proxy-new")
+	if beginError != nil || !created || replacement.IntentSHA256 != replacementIntent || replacement.ProxyRequestID != "proxy-new" {
+		testingInstance.Fatalf("replacement=%+v created=%t error=%v", replacement, created, beginError)
+	}
+
+	_, _, _ = store.begin(requestTenant, "failed-expired", intent, "openai", "gpt", "proxy-failed")
+	_ = store.fail(requestTenant, "failed-expired", intent, http.StatusBadGateway, "provider_failed")
+	currentTime = currentTime.Add(10 * time.Second)
+	if _, lookupError := store.lookup(requestTenant, "failed-expired"); !errors.Is(lookupError, errStructuredRequestNotFound) {
+		testingInstance.Fatalf("expired failed lookup error=%v", lookupError)
+	}
+
+	_, _, _ = store.begin(requestTenant, "uncertain-retained", intent, "openai", "gpt", "proxy-uncertain")
+	_ = store.uncertain(requestTenant, "uncertain-retained", intent)
+	_, _, _ = store.begin(requestTenant, "active-retained", intent, "openai", "gpt", "proxy-active")
+	currentTime = currentTime.Add(10 * time.Second)
+	uncertain, uncertainError := store.lookup(requestTenant, "uncertain-retained")
+	active, activeError := store.lookup(requestTenant, "active-retained")
+	if uncertainError != nil || uncertain.State != structuredRequestStateUncertain || activeError != nil || active.State != structuredRequestStateNotDispatched {
+		testingInstance.Fatalf("uncertain=%+v error=%v active=%+v error=%v", uncertain, uncertainError, active, activeError)
+	}
+
+	store.retention = 0
+	_, _, _ = store.begin(requestTenant, "retention-disabled", intent, "openai", "gpt", "proxy-disabled")
+	_ = store.succeed(requestTenant, "retention-disabled", intent, `{"result":3}`)
+	currentTime = currentTime.Add(time.Hour)
+	if record, lookupError := store.lookup(requestTenant, "retention-disabled"); lookupError != nil || record.State != structuredRequestStateSucceeded {
+		testingInstance.Fatalf("retention-disabled record=%+v error=%v", record, lookupError)
+	}
+}
+
 func TestStructuredRequestStoreRecoveryAndSafety(testingInstance *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	activeRoot := testingInstance.TempDir()
@@ -120,6 +172,11 @@ func TestStructuredRequestStoreRecoveryAndSafety(testingInstance *testing.T) {
 	_, _, _ = active.begin(requestTenant, "not-dispatched", intent, "openai", "gpt", "proxy-not-dispatched")
 	_, _, _ = active.begin(requestTenant, "terminal", intent, "openai", "gpt", "proxy-terminal")
 	_ = active.succeed(requestTenant, "terminal", intent, `{"ok":true}`)
+	activePath, _ := active.recordPath(sha256Hex(requestTenant.identifier.string()), sha256Hex("active"), false)
+	interruptedTempPath := filepath.Join(filepath.Dir(activePath), ".structured-request-123456789.tmp")
+	if writeError := os.WriteFile(interruptedTempPath, []byte(`{"interrupted":true}`), 0o600); writeError != nil {
+		testingInstance.Fatal(writeError)
+	}
 	recovered, recoveredError := newStructuredRequestStore(activeRoot, 3600)
 	if recoveredError != nil {
 		testingInstance.Fatal(recoveredError)
@@ -129,6 +186,9 @@ func TestStructuredRequestStoreRecoveryAndSafety(testingInstance *testing.T) {
 	terminalRecord, _ := recovered.lookup(requestTenant, "terminal")
 	if activeRecord.State != structuredRequestStateUncertain || activeRecord.FailureCode != "structured_request_interrupted" || notDispatchedRecord.State != structuredRequestStateNotDispatched || terminalRecord.State != structuredRequestStateSucceeded {
 		testingInstance.Fatalf("active=%+v not_dispatched=%+v terminal=%+v", activeRecord, notDispatchedRecord, terminalRecord)
+	}
+	if _, statError := os.Stat(interruptedTempPath); !os.IsNotExist(statError) {
+		testingInstance.Fatalf("interrupted temporary file still exists: %v", statError)
 	}
 
 	expiredRoot := testingInstance.TempDir()
@@ -173,16 +233,20 @@ func TestStructuredRequestStoreRecoveryAndSafety(testingInstance *testing.T) {
 		})
 	}
 
-	unexpectedRoot := testingInstance.TempDir()
-	untracked := filepath.Join(unexpectedRoot, structuredRequestDirectoryName)
-	if makeError := os.MkdirAll(untracked, 0o700); makeError != nil {
-		testingInstance.Fatal(makeError)
-	}
-	if writeError := os.WriteFile(filepath.Join(untracked, "unexpected.txt"), []byte("x"), 0o600); writeError != nil {
-		testingInstance.Fatal(writeError)
-	}
-	if _, storeError := newStructuredRequestStore(unexpectedRoot, 1); storeError == nil {
-		testingInstance.Fatal("unexpected file must fail recovery")
+	for _, unexpectedName := range []string{"unexpected.txt", ".structured-request-not-random.tmp"} {
+		testingInstance.Run(unexpectedName, func(subtest *testing.T) {
+			unexpectedRoot := subtest.TempDir()
+			untracked := filepath.Join(unexpectedRoot, structuredRequestDirectoryName, strings.Repeat("a", 64))
+			if makeError := os.MkdirAll(untracked, 0o700); makeError != nil {
+				subtest.Fatal(makeError)
+			}
+			if writeError := os.WriteFile(filepath.Join(untracked, unexpectedName), []byte("x"), 0o600); writeError != nil {
+				subtest.Fatal(writeError)
+			}
+			if _, storeError := newStructuredRequestStore(unexpectedRoot, 1); storeError == nil {
+				subtest.Fatal("unexpected file must fail recovery")
+			}
+		})
 	}
 }
 
@@ -321,8 +385,8 @@ func TestStructuredRequestStatusHandler(testingInstance *testing.T) {
 			contextValue.Request = request
 			contextValue.Set(contextKeyTenant, requestTenant)
 			structuredRequestStatusHandler(store)(contextValue)
-			if response.Code != testCase.statusCode || !strings.Contains(response.Body.String(), testCase.contains) {
-				subtest.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			if response.Code != testCase.statusCode || !strings.Contains(response.Body.String(), testCase.contains) || response.Header().Get(headerCacheControl) != cacheControlNoStore {
+				subtest.Fatalf("status=%d body=%s cache_control=%q", response.Code, response.Body.String(), response.Header().Get(headerCacheControl))
 			}
 		})
 	}
@@ -337,8 +401,8 @@ func TestStructuredRequestStatusHandler(testingInstance *testing.T) {
 	contextValue.Request = request
 	contextValue.Set(contextKeyTenant, requestTenant)
 	structuredRequestStatusHandler(store)(contextValue)
-	if response.Code != 500 || !strings.Contains(response.Body.String(), "structured_request_store_error") {
-		testingInstance.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	if response.Code != 500 || !strings.Contains(response.Body.String(), "structured_request_store_error") || response.Header().Get(headerCacheControl) != cacheControlNoStore {
+		testingInstance.Fatalf("status=%d body=%s cache_control=%q", response.Code, response.Body.String(), response.Header().Get(headerCacheControl))
 	}
 }
 
@@ -570,7 +634,8 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 		testingInstance.Run(testCase.name, func(subtest *testing.T) {
 			store, _ := newStructuredRequestStore(subtest.TempDir(), 10)
 			requestContext, cancel := context.WithCancel(context.Background())
-			chatRequest, providers := structuredSubmitRequest(schema, "cancel-"+testCase.name, func(context.Context, *providerRouter, chatRequestParameters, *zap.SugaredLogger) (textGenerationResult, error) {
+			idempotencyKey := "cancel-" + testCase.name
+			chatRequest, providers := structuredSubmitRequest(schema, idempotencyKey, func(context.Context, *providerRouter, chatRequestParameters, *zap.SugaredLogger) (textGenerationResult, error) {
 				cancel()
 				return testCase.result, testCase.err
 			})
@@ -578,6 +643,17 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 			submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, body, store, nil, logger, time.Now())
 			if contextValue.Writer.Status() != statusClientClosedRequest {
 				subtest.Fatalf("status=%d recorder=%d body=%s", contextValue.Writer.Status(), response.Code, response.Body.String())
+			}
+			record, lookupError := store.lookup(requestTenant, idempotencyKey)
+			if lookupError != nil {
+				subtest.Fatal(lookupError)
+			}
+			canonicalResult, _ := canonicalJSON(record.Result)
+			if testCase.err == nil && (record.State != structuredRequestStateSucceeded || string(canonicalResult) != `{"decision":"pass"}`) {
+				subtest.Fatalf("known success record=%+v", record)
+			}
+			if testCase.err != nil && record.State != structuredRequestStateUncertain {
+				subtest.Fatalf("unknown outcome record=%+v", record)
 			}
 		})
 	}

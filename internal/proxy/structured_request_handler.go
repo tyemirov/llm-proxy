@@ -33,6 +33,7 @@ type structuredRequestError struct {
 
 func structuredRequestStatusHandler(store *structuredRequestStore) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
+		ginContext.Header(headerCacheControl, cacheControlNoStore)
 		idempotencyKey, keyError := reconciliationIdempotencyKey(ginContext)
 		if keyError != nil {
 			writeStructuredRequestError(ginContext, http.StatusBadRequest, llmproxycontract.ErrorCodeInvalidIdempotencyKey, "", "", "")
@@ -157,14 +158,13 @@ func submitStructuredChatRequest(
 		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, chatRequest.provider.identifier.string(), chatRequest.model.string(), statusCode, generation.usage, requestStart)
 		return
 	}
-	if requestContextEnded(ginContext) {
-		_ = store.uncertain(requestTenant, chatRequest.idempotencyKey, intentSHA256)
-		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, chatRequest.provider.identifier.string(), chatRequest.model.string(), ginContext.Writer.Status(), generation.usage, requestStart)
-		return
-	}
 	if persistError := store.succeed(requestTenant, chatRequest.idempotencyKey, intentSHA256, generation.text); persistError != nil {
 		writeStructuredRequestError(ginContext, http.StatusInternalServerError, llmproxycontract.ErrorCodeStructuredRequestStore, "", "", "")
 		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, chatRequest.provider.identifier.string(), chatRequest.model.string(), http.StatusInternalServerError, generation.usage, requestStart)
+		return
+	}
+	if requestContextEnded(ginContext) {
+		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, chatRequest.provider.identifier.string(), chatRequest.model.string(), ginContext.Writer.Status(), generation.usage, requestStart)
 		return
 	}
 	markRequestOutcome(ginContext, requestOutcomeSuccess, managedUsageOutcomeSuccess)
