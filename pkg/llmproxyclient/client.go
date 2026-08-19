@@ -43,6 +43,8 @@ var (
 	ErrInvalidModelProfile = errors.New("llm_proxy_client_invalid_model_profile")
 	// ErrClientHTTPFailure reports an unsuccessful llm-proxy HTTP response.
 	ErrClientHTTPFailure = errors.New("llm_proxy_client_http_failure")
+	// ErrStructuredRequestPending reports an accepted structured request that requires reconciliation.
+	ErrStructuredRequestPending = errors.New("llm_proxy_client_structured_request_pending")
 )
 
 var postBodyQueryKeys = map[string]struct{}{
@@ -415,6 +417,7 @@ func NewClient(config Config, httpClient HTTPDoer) (Client, error) {
 }
 
 // PostMessages sends a v2 JSON POST messages request and returns the response text.
+// An accepted pending request returns StructuredRequestPendingError.
 func (client Client) PostMessages(contextValue context.Context, request MessagesRequest) (string, error) {
 	requestURL, requestBody, requestError := client.messagesPostRequest(request)
 	if requestError != nil {
@@ -466,6 +469,13 @@ func (client Client) postPayload(contextValue context.Context, requestURL url.UR
 	_ = httpResponse.Body.Close()
 	if readError != nil {
 		return "", fmt.Errorf("%w: read response body: %v", ErrClientHTTPFailure, readError)
+	}
+	if httpResponse.StatusCode == http.StatusAccepted {
+		pendingResult, pendingError := decodeStructuredRequestPending(responseBody)
+		if pendingError != nil {
+			return "", pendingError
+		}
+		return "", &StructuredRequestPendingError{snapshot: pendingResult}
 	}
 	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
 		return "", newHTTPFailure(httpResponse.StatusCode, responseBody)

@@ -64,6 +64,30 @@ func TestStructuredMessagesRequestAndReconciliation(testingInstance *testing.T) 
 		testingInstance.Fatalf("output=%q calls=%d error=%v", output, callCount, postError)
 	}
 
+	client.httpClient = structuredClientDoer(func(*http.Request) (*http.Response, error) {
+		return structuredClientResponse(
+			http.StatusAccepted,
+			`{"state":"dispatched","proxy_request_id":"proxy-pending","started_at":"2026-08-18T00:00:00Z","updated_at":"2026-08-18T00:00:01Z","elapsed_seconds":1}`,
+			"dispatched",
+		), nil
+	})
+	pendingOutput, pendingPostError := client.PostMessages(context.Background(), request)
+	var pendingError *StructuredRequestPendingError
+	if pendingPostError == nil || pendingOutput != "" || pendingPostError.Error() != "llm_proxy_client_structured_request_pending: state=dispatched" ||
+		!errors.Is(pendingPostError, ErrStructuredRequestPending) || !errors.As(pendingPostError, &pendingError) {
+		testingInstance.Fatalf("pending output=%q error=%v", pendingOutput, pendingPostError)
+	}
+	pendingSnapshot := pendingError.Snapshot()
+	if pendingSnapshot.State != "dispatched" || pendingSnapshot.ProxyRequestID != "proxy-pending" || pendingSnapshot.ElapsedSeconds != 1 {
+		testingInstance.Fatalf("pending snapshot=%+v", pendingSnapshot)
+	}
+	client.httpClient = structuredClientDoer(func(*http.Request) (*http.Response, error) {
+		return structuredClientResponse(http.StatusAccepted, `{}`, "dispatched"), nil
+	})
+	if _, malformedPendingError := client.PostMessages(context.Background(), request); !errors.Is(malformedPendingError, ErrClientHTTPFailure) {
+		testingInstance.Fatalf("malformed pending error=%v", malformedPendingError)
+	}
+
 	statusDoer := structuredClientDoer(func(httpRequest *http.Request) (*http.Response, error) {
 		if httpRequest.Method != http.MethodGet || httpRequest.URL.Path != "/prefix/v2/requests" ||
 			httpRequest.URL.Query().Get(queryKey) != "secret" || httpRequest.URL.Query().Has(queryFormat) ||

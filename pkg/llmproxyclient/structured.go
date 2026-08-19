@@ -77,6 +77,26 @@ type StructuredRequestResult struct {
 	Output         string `json:"-"`
 }
 
+// StructuredRequestPendingError reports a durable structured request that has not reached a terminal state.
+type StructuredRequestPendingError struct {
+	snapshot StructuredRequestResult
+}
+
+// Error reports the accepted durable request state.
+func (pending *StructuredRequestPendingError) Error() string {
+	return fmt.Sprintf("%s: state=%s", ErrStructuredRequestPending, pending.snapshot.State)
+}
+
+// Unwrap preserves errors.Is(error, ErrStructuredRequestPending).
+func (pending *StructuredRequestPendingError) Unwrap() error {
+	return ErrStructuredRequestPending
+}
+
+// Snapshot returns the durable request state that the proxy accepted.
+func (pending *StructuredRequestPendingError) Snapshot() StructuredRequestResult {
+	return pending.snapshot
+}
+
 type structuredRequestErrorResponse struct {
 	Error struct {
 		Code           string `json:"code"`
@@ -122,16 +142,7 @@ func (client Client) GetStructuredRequest(contextValue context.Context, idempote
 		}, nil
 	}
 	if httpResponse.StatusCode == http.StatusAccepted {
-		var result StructuredRequestResult
-		decoder := json.NewDecoder(bytes.NewReader(responseBody))
-		decoder.DisallowUnknownFields()
-		if decodeError := decoder.Decode(&result); decodeError != nil {
-			return StructuredRequestResult{}, fmt.Errorf("%w: decode structured request status: %v", ErrClientHTTPFailure, decodeError)
-		}
-		if decodeError := decoder.Decode(&struct{}{}); decodeError != io.EOF || strings.TrimSpace(result.State) == "" {
-			return StructuredRequestResult{}, fmt.Errorf("%w: invalid structured request status", ErrClientHTTPFailure)
-		}
-		return result, nil
+		return decodeStructuredRequestPending(responseBody)
 	}
 	result := StructuredRequestResult{}
 	var errorResponse structuredRequestErrorResponse
@@ -141,6 +152,24 @@ func (client Client) GetStructuredRequest(contextValue context.Context, idempote
 		result.FailureCode = strings.TrimSpace(errorResponse.Error.Cause)
 	}
 	return result, newHTTPFailure(httpResponse.StatusCode, responseBody)
+}
+
+func decodeStructuredRequestPending(responseBody []byte) (StructuredRequestResult, error) {
+	var result StructuredRequestResult
+	decoder := json.NewDecoder(bytes.NewReader(responseBody))
+	decoder.DisallowUnknownFields()
+	if decodeError := decoder.Decode(&result); decodeError != nil {
+		return StructuredRequestResult{}, fmt.Errorf("%w: decode structured request status: %v", ErrClientHTTPFailure, decodeError)
+	}
+	if decodeError := decoder.Decode(&struct{}{}); decodeError != io.EOF ||
+		(result.State != "not_dispatched" && result.State != "dispatched") ||
+		strings.TrimSpace(result.ProxyRequestID) == "" ||
+		strings.TrimSpace(result.StartedAt) == "" ||
+		strings.TrimSpace(result.UpdatedAt) == "" ||
+		result.ElapsedSeconds < 0 {
+		return StructuredRequestResult{}, fmt.Errorf("%w: invalid structured request status", ErrClientHTTPFailure)
+	}
+	return result, nil
 }
 
 func structuredRequestEndpointPath(basePath string) string {
