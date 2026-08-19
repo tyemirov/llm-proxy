@@ -29,26 +29,32 @@ retain satisfied historical dependencies.
   Goal:
   Usage reports show the model route that the request contract selects.
   Evidence:
-  - Expected: An explicit provider with no model uses that provider's saved
-    default model.
+  - Expected: An explicit provider with no model uses its saved model or its
+    catalog default.
   - Actual: A failed Gemini request can use the tenant-wide OpenAI model in
     usage data.
   - The dashboard then shows an invalid pair such as
     `gemini / gpt-5.6-terra`.
+  - A registered provider without saved settings can record an empty model.
   Requirements:
   - Derive the failed request provider and model from one route default.
   - Use the same provider-specific default that request validation uses.
+  - Use the provider catalog default when no saved provider model exists.
   - Do not change successful request usage or public response behavior.
   Validation:
   - Prove failed `GET /`, `POST /`, and `POST /v2` requests use the selected
     provider's saved model.
   - Prove usage summaries contain no tenant-wide model under that provider.
+  - Prove the documented unconfigured-provider `503` records the catalog
+    default model.
   - Run `make ci` after the last application change.
 
   Resolution:
-  - Each text handler now selects one provider-specific route default before
-    validation.
-  - Failed requests now use that default for provider and model usage.
+  - An explicit registered provider now selects its catalog default before
+    request validation.
+  - A saved managed-provider model replaces that catalog default.
+  - Failed `GET /`, `POST /`, and `POST /v2` requests now record the selected
+    provider model.
   - The final `make ci` passed all 11 gates with 94 browser scenarios and
     100.0% Go statement coverage.
 
@@ -135,6 +141,8 @@ retain satisfied historical dependencies.
   - Prove that `go list -m -versions github.com/tyemirov/llm-proxy` includes
     `v1.1.0`.
   - Run the LLM Proxy CI gate.
+  - Run the Creative Director CI gate without a Go workspace or replace
+    directive.
   Completion evidence:
   - Tag `v1.1.0` points to commit
     `fe48b5b2259b022eca2156b81be3697465453d8a`.
@@ -142,13 +150,6 @@ retain satisfied historical dependencies.
   - The exact release tree passed all 11 CI gates with 100.0% Go statement
     coverage.
   - Creative Director selects `v1.1.0` and passes CI without a workspace.
-  - Run the Creative Director CI gate without a Go workspace or replace
-    directive.
-  Blocked:
-  The local implementation passes all 11 LLM Proxy CI gates and the Creative
-  Director CI gate. Repository rules require explicit authorization for the
-  execution chain to publish the `v1.1.0` tag. The existing `v3.1.0` product
-  release is not a selectable release of the declared Go module.
 
 - [x] [B140] (P1) Remove gateway-owned Pages markers.
   Goal:
