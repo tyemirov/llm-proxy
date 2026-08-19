@@ -4,6 +4,7 @@ GO ?= go
 GOFMT ?= gofmt
 NPM ?= npm
 UV ?= uv
+PLAYWRIGHT_INSTALL_FLAGS ?= --with-deps
 BIN_DIR ?= bin
 BINARY_NAME ?= llm-proxy
 PYTHON_PROJECT_DIR ?= python
@@ -41,7 +42,7 @@ frontend-dependencies: $(FRONTEND_DEPENDENCY_STAMP)
 
 $(FRONTEND_DEPENDENCY_STAMP): package.json package-lock.json
 	$(NPM) ci
-	./node_modules/.bin/playwright install --with-deps chromium
+	./node_modules/.bin/playwright install $(PLAYWRIGHT_INSTALL_FLAGS) chromium
 	@touch "$@"
 
 frontend-lint: frontend-dependencies
