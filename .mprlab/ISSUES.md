@@ -25,6 +25,86 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B144] (P1) Use preinstalled Playwright OS packages in hosted CI.
+  Goal:
+  Hosted CI completes the canonical gate within its 350-second watchdog.
+  Evidence:
+  - Expected: Hosted CI completes all 11 gates and prints the success receipt.
+  - Actual: Run `32207613268` reached gate 9 before the watchdog killed
+    `make ci` at exactly 350 seconds.
+  - Playwright spent 93 seconds on optional font packages from the Ubuntu
+    package mirror. The browser suite then passed all 94 scenarios.
+  - Run `32208690338` reduced frontend setup to 11 seconds. The outer Make flag
+    changed the default-path fixture cases through inherited `MAKEFLAGS`.
+  Requirements:
+  - Keep Make as the only frontend dependency owner.
+  - Keep the default clean-checkout `--with-deps` behavior.
+  - Let hosted CI declare its preinstalled OS packages.
+  - Install the exact pinned Chromium browser through the same Make target.
+  - Isolate fixture Make processes from parent command variables.
+  - Do not increase the watchdog duration.
+  Validation:
+  - Prove the default and hosted Make command sequences through the public
+    target.
+  - Run the final `make ci` gate.
+
+  Resolution:
+  - Make keeps `--with-deps` as the default Playwright installation flag.
+  - Hosted CI supplies an empty installation flag. Make installs the pinned
+    Chromium browser without a second OS package operation.
+  - Fixture Make processes reject inherited Make command variables. The
+    black-box test proves both exact command sequences under contaminated
+    parent state.
+  - The final `make ci` passed all 11 gates in 125 seconds with 100.0% Go
+    statement coverage.
+
+- [x] [B143] (P1) Keep route filters clear of the sticky public header.
+  Goal:
+  Visitors can click each route filter after the browser scrolls the route
+  explorer.
+  Evidence:
+  - Expected: Each visible and enabled filter accepts pointer input.
+  - Actual: GitHub CI positioned the Text filter under the sticky `mpr-header`.
+    The header intercepted pointer input until the test timed out.
+  Requirements:
+  - Preserve the sticky public header and all route explorer selection behavior.
+  - Keep scrolled route controls outside the header hit area.
+  - Do not use forced clicks or longer timeouts.
+  Validation:
+  - Repeat the affected browser scenario with the CI browser configuration.
+  - Run the final `make ci` gate.
+
+  Resolution:
+  - The landing page now uses one 72-pixel scroll clearance for the document
+    and section anchors.
+  - The browser test scrolls the Text filter to the start position. It verifies
+    that the filter is below the header and owns its center hit point.
+  - The affected scenario passed 20 serial repetitions.
+  - The final `make ci` passed all 11 gates with 94 browser scenarios and
+    100.0% Go statement coverage.
+
+- [!] [B142] (P1) {I229} Publish the structured-request client contract.
+  Goal:
+  Let Creative Director consume the declared structured-output and durable
+  request API from an official released Go module.
+  Evidence:
+  - The current released module is `v1.0.0`.
+  - That release has no structured-output request fields and no durable request
+    reconciliation method.
+  Requirements:
+  - Keep structured request construction and reconciliation in the official Go
+    client.
+  - Remove provider, model, and format query values from reconciliation calls.
+  - Publish one valid module release and update Creative Director to use it.
+  Validation:
+  - Prove the official client sends the structured schema and idempotency key.
+  - Prove reconciliation sends no provider request selection.
+  - Run the LLM Proxy and Creative Director CI gates.
+  Blocked:
+  The local implementation passes all 11 LLM Proxy CI gates and the Creative
+  Director CI gate. Repository rules require explicit authorization for the
+  commit, tag, and push that make the module available to Creative Director.
+
 - [x] [B140] (P1) Remove gateway-owned Pages markers.
   Goal:
   The LLM Proxy Pages image contains only application-owned site files.
@@ -403,6 +483,85 @@ retain satisfied historical dependencies.
 
 
 ## Improvements
+
+- [x] [I229] (P0) Add schema-constrained, resumable semantic-review requests.
+  Goal:
+  Let Creative Director submit one semantic-review inference with a declared
+  JSON Schema. Reconcile the durable request after a caller transport failure
+  without another paid provider submission.
+  Requirements:
+  - Extend canonical `POST /v2` with one optional `structured_output` object
+    containing the exact caller-owned JSON Schema. Require one valid
+    `Idempotency-Key` header when that object is present, and reject either
+    input when supplied alone.
+  - Validate the schema before provider dispatch. Route it only through exact
+    provider adapters with a current structured-output wire mapping. Reject an
+    unsupported route before upstream work. Do not use prompt-only JSON or a
+    repair request.
+  - Map the schema to OpenAI Responses `text.format`, Gemini Interactions
+    `response_format`, and Anthropic Messages `output_config.format`. Validate
+    the terminal provider text against the same schema before accepting it.
+  - Persist the tenant-bound idempotency intent before dispatch. Record exact
+    `not_dispatched`, `dispatched`, `succeeded`, `failed`, and `uncertain`
+    states with atomic mode-0600 records under retained server storage.
+  - Repeating one key and identical intent must replay success or report an
+    active or uncertain state without a second provider call. A known failed
+    state can start an explicit new attempt. A different intent must return a
+    conflict.
+  - Add an authenticated `GET /v2/requests` reconciliation operation keyed by
+    the same header. Return the stored JSON result, visible in-flight timing,
+    a terminal safe failure, or an explicit uncertain outcome. A restart must
+    classify an interrupted dispatch as uncertain rather than resubmit it.
+  - Keep request timeout and transport policy out of the idempotency intent.
+    Keep tenant secrets, provider credentials, prompts, schemas, results, and
+    raw provider bodies out of URLs, logs, usage records, and status metadata.
+  - Extend the official Go client with validated structured-output and
+    reconciliation types. Update Creative Director to use its deterministic
+    semantic request id and decision schema and to recover a completed result
+    from its existing durable review-progress record.
+  Deliverables:
+  - Strict OpenAPI, server state machine, provider adapter, Go client, and
+    Creative Director integration changes.
+  - Updated README, routing notes, release notes, and focused fake-provider and
+    restart/reconciliation coverage.
+  Validation:
+  - Prove exact provider payloads and one-call success for OpenAI, Gemini, and
+    Anthropic. Prove unsupported routes fail before dispatch.
+  - Prove duplicate convergence, intent conflict, tenant isolation, restart
+    uncertainty, successful result replay, invalid provider output rejection,
+    and secret/content-safe status responses.
+  - Prove Creative Director no longer makes a second inference for malformed
+    structured output and can bind a reconciled success to the current report.
+  - Run the required pre-change and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, plus Smith repository CI.
+
+  Resolution:
+  - `POST /v2` now validates the caller JSON Schema before dispatch. The exact
+    provider adapters map it to OpenAI Responses, Gemini Interactions, and
+    Anthropic Messages structured-output fields.
+  - Tenant-bound mode-0600 records persist request intent and the five durable
+    states. Replays converge without a second provider call, conflicting
+    intent fails, and interrupted dispatch becomes `uncertain` after restart.
+  - Authenticated `GET /v2/requests` returns safe progress, result, failure, or
+    uncertainty data. It does not expose prompts, schemas, credentials, or raw
+    provider bodies.
+  - Review hardening removes interrupted atomic-write temporary records and
+    expires known terminal records during lookup or repeated submission.
+  - Reconciliation responses now use `Cache-Control: no-store`. Caller
+    cancellation cannot replace a saved known success with uncertainty.
+  - The Go client returns a typed pending error for HTTP `202`. Provider-specific
+    subset admission rejects unsupported schemas before provider dispatch.
+  - The Go and Python clients expose validated structured requests. Creative
+    Director persists visible review progress and reconciles the same request
+    identity without a repair inference.
+  - Fake-provider tests cover exact provider payloads, one-call success,
+    unsupported routes, replay, conflicts, tenant isolation, restart
+    uncertainty, invalid output, and safe status data.
+  - The review-correction final bounded `make ci` passed all 11 gates, including
+    94 browser scenarios, with 100.0% Go statement coverage. Smith Creative
+    Director CI and the no-spend Kamu pipeline integration also passed.
+  - Validation made no paid provider call and performed no release,
+    publication, or deployment.
 
 - [x] [I224] (P0) {F035} Add a paid live matrix for provider image routes.
   Goal:
@@ -3022,5 +3181,3 @@ retain satisfied historical dependencies.
     integrity before publication.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
-
-

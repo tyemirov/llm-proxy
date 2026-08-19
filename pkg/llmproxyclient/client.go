@@ -43,6 +43,8 @@ var (
 	ErrInvalidModelProfile = errors.New("llm_proxy_client_invalid_model_profile")
 	// ErrClientHTTPFailure reports an unsuccessful llm-proxy HTTP response.
 	ErrClientHTTPFailure = errors.New("llm_proxy_client_http_failure")
+	// ErrStructuredRequestPending reports an accepted structured request that requires reconciliation.
+	ErrStructuredRequestPending = errors.New("llm_proxy_client_structured_request_pending")
 )
 
 var postBodyQueryKeys = map[string]struct{}{
@@ -51,6 +53,7 @@ var postBodyQueryKeys = map[string]struct{}{
 	"max_output_tokens": {},
 	"max_tokens":        {},
 	"reasoning_effort":  {},
+	"structured_output": {},
 	"prompt":            {},
 	"system_prompt":     {},
 	"web_search":        {},
@@ -206,6 +209,10 @@ type MessagesRequestInput struct {
 	ReasoningEffort *string
 	// RequestTimeoutSeconds optionally selects the proxy-owned wall-clock work budget.
 	RequestTimeoutSeconds *int
+	// StructuredOutput requires provider-enforced JSON Schema output.
+	StructuredOutput *StructuredOutputInput
+	// IdempotencyKey binds a structured request to one durable provider submission.
+	IdempotencyKey string
 }
 
 // MessagesRequest is a validated v2 messages-only JSON POST request.
@@ -216,6 +223,8 @@ type MessagesRequest struct {
 	maxTokens             *int
 	reasoningEffort       *string
 	requestTimeoutSeconds *int
+	structuredOutput      *structuredOutput
+	idempotencyKey        string
 }
 
 // NewMessagesRequest validates v2 messages-only request input.
@@ -231,6 +240,17 @@ func NewMessagesRequest(input MessagesRequestInput) (MessagesRequest, error) {
 	}
 	if input.RequestTimeoutSeconds != nil && *input.RequestTimeoutSeconds <= 0 {
 		return MessagesRequest{}, fmt.Errorf("%w: request_timeout_seconds must be positive", ErrInvalidClientRequest)
+	}
+	structuredOutput, structuredOutputError := newStructuredOutput(input.StructuredOutput)
+	if structuredOutputError != nil {
+		return MessagesRequest{}, structuredOutputError
+	}
+	idempotencyKey := strings.TrimSpace(input.IdempotencyKey)
+	if (structuredOutput == nil) != (idempotencyKey == "") || (idempotencyKey != "" && !validClientIdempotencyKey(idempotencyKey)) {
+		return MessagesRequest{}, fmt.Errorf("%w: structured_output and a valid idempotency key are required together", ErrInvalidClientRequest)
+	}
+	if structuredOutput != nil && input.WebSearch {
+		return MessagesRequest{}, fmt.Errorf("%w: structured_output does not support web_search", ErrInvalidClientRequest)
 	}
 	var requestTimeoutSeconds *int
 	if input.RequestTimeoutSeconds != nil {
@@ -248,6 +268,8 @@ func NewMessagesRequest(input MessagesRequestInput) (MessagesRequest, error) {
 		maxTokens:             copyOptionalInteger(input.MaxTokens),
 		reasoningEffort:       copyOptionalString(input.ReasoningEffort),
 		requestTimeoutSeconds: requestTimeoutSeconds,
+		structuredOutput:      structuredOutput,
+		idempotencyKey:        idempotencyKey,
 	}, nil
 }
 
@@ -264,6 +286,9 @@ func (request MessagesRequest) payloadBody(model string) []byte {
 	}
 	if request.reasoningEffort != nil {
 		payload["reasoning_effort"] = *request.reasoningEffort
+	}
+	if request.structuredOutput != nil {
+		payload["structured_output"] = map[string]any{"schema": request.structuredOutput.canonical}
 	}
 	payloadBytes, _ := json.Marshal(payload)
 	return payloadBytes
@@ -392,12 +417,13 @@ func NewClient(config Config, httpClient HTTPDoer) (Client, error) {
 }
 
 // PostMessages sends a v2 JSON POST messages request and returns the response text.
+// An accepted pending request returns StructuredRequestPendingError.
 func (client Client) PostMessages(contextValue context.Context, request MessagesRequest) (string, error) {
 	requestURL, requestBody, requestError := client.messagesPostRequest(request)
 	if requestError != nil {
 		return "", requestError
 	}
-	return client.postPayload(contextValue, requestURL, requestBody, request.requestTimeoutSeconds)
+	return client.postPayload(contextValue, requestURL, requestBody, request.requestTimeoutSeconds, request.idempotencyKey)
 }
 
 func (client Client) messagesPostRequest(request MessagesRequest) (url.URL, []byte, error) {
@@ -418,7 +444,7 @@ func (client Client) messagesPostRequest(request MessagesRequest) (url.URL, []by
 	return client.config.messagesPostURLForProvider(modelProfile.provider), request.payloadBody(modelProfile.model), nil
 }
 
-func (client Client) postPayload(contextValue context.Context, requestURL url.URL, requestBody []byte, requestTimeoutSeconds *int) (string, error) {
+func (client Client) postPayload(contextValue context.Context, requestURL url.URL, requestBody []byte, requestTimeoutSeconds *int, idempotencyKey string) (string, error) {
 	httpRequest := (&http.Request{
 		Method:        http.MethodPost,
 		URL:           &requestURL,
@@ -431,6 +457,9 @@ func (client Client) postPayload(contextValue context.Context, requestURL url.UR
 	if requestTimeoutSeconds != nil {
 		httpRequest.Header.Set(llmproxycontract.HeaderRequestTimeoutSeconds, strconv.Itoa(*requestTimeoutSeconds))
 	}
+	if idempotencyKey != "" {
+		httpRequest.Header.Set(llmproxycontract.HeaderIdempotencyKey, idempotencyKey)
+	}
 
 	httpResponse, httpError := client.httpClient.Do(httpRequest)
 	if httpError != nil {
@@ -440,6 +469,13 @@ func (client Client) postPayload(contextValue context.Context, requestURL url.UR
 	_ = httpResponse.Body.Close()
 	if readError != nil {
 		return "", fmt.Errorf("%w: read response body: %v", ErrClientHTTPFailure, readError)
+	}
+	if httpResponse.StatusCode == http.StatusAccepted {
+		pendingResult, pendingError := decodeStructuredRequestPending(responseBody)
+		if pendingError != nil {
+			return "", pendingError
+		}
+		return "", &StructuredRequestPendingError{snapshot: pendingResult}
 	}
 	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
 		return "", newHTTPFailure(httpResponse.StatusCode, responseBody)

@@ -31,13 +31,14 @@ type chatRequestPayload struct {
 }
 
 type chatV2RequestPayload struct {
-	Prompt          json.RawMessage             `json:"prompt"`
-	Messages        *[]chatV2MessagePayload     `json:"messages"`
-	Model           string                      `json:"model"`
-	WebSearch       bool                        `json:"web_search"`
-	SystemPrompt    json.RawMessage             `json:"system_prompt"`
-	MaxTokens       *int                        `json:"max_tokens"`
-	ReasoningEffort requestReasoningEffortInput `json:"reasoning_effort"`
+	Prompt           json.RawMessage             `json:"prompt"`
+	Messages         *[]chatV2MessagePayload     `json:"messages"`
+	Model            string                      `json:"model"`
+	WebSearch        bool                        `json:"web_search"`
+	SystemPrompt     json.RawMessage             `json:"system_prompt"`
+	MaxTokens        *int                        `json:"max_tokens"`
+	ReasoningEffort  requestReasoningEffortInput `json:"reasoning_effort"`
+	StructuredOutput json.RawMessage             `json:"structured_output"`
 }
 
 type requestReasoningEffortInput struct {
@@ -65,6 +66,8 @@ type chatRequestParameters struct {
 	maxTokens                  *int
 	reasoningEffort            string
 	chatCompletionContinuation *chatCompletionContinuation
+	structuredOutput           *structuredOutputSchema
+	idempotencyKey             string
 }
 
 type dictationRequestParameters struct {
@@ -128,6 +131,10 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	}
 	tenantAuthenticator := newTenantAuthenticator(runtimeStaticTenants, managedTenants)
 	assetStore := newTenantAssetStore(configuration.AssetStorePath, configuration.MaxAssetBytes, configuration.AssetRetentionSeconds)
+	structuredRequests, structuredStoreError := newStructuredRequestStore(configuration.AssetStorePath, configuration.AssetRetentionSeconds)
+	if structuredStoreError != nil {
+		return nil, structuredStoreError
+	}
 
 	router.Use(gin.Recovery())
 	registerPublicCapabilityRoutes(router, capabilityCatalog)
@@ -142,7 +149,8 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	}
 	router.GET(rootPath, rootProxyHandler)
 	router.POST(rootPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, chatJSONHandler(upstreamProviders, providers, configuration.MaxPromptBytes, managedTenants, structuredLogger))))
-	router.POST(v2Path, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, chatV2JSONHandler(upstreamProviders, providers, maximumV2RequestBytes(configuration.MaxPromptBytes, configuration.ModelCatalog), assetStore, managedTenants, structuredLogger))))
+	router.POST(v2Path, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, chatV2JSONHandler(upstreamProviders, providers, maximumV2RequestBytes(configuration.MaxPromptBytes, configuration.ModelCatalog), assetStore, structuredRequests, managedTenants, structuredLogger))))
+	router.GET(llmproxycontract.StructuredRequestPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, structuredRequestStatusHandler(structuredRequests)))
 	router.POST(llmproxycontract.AssetPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, tenantAssetUploadHandler(assetStore))))
 	router.DELETE(llmproxycontract.AssetPath+"/:asset_id", tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, tenantAssetDeleteHandler(assetStore)))
 	router.POST(dictatePath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, dictateHandler(upstreamProviders, providers, configuration.MaxInputAudioBytes, managedTenants, structuredLogger))))
@@ -217,7 +225,7 @@ func chatJSONHandler(upstreamProviders *providerRouter, providers *providerRegis
 	}
 }
 
-func chatV2JSONHandler(upstreamProviders *providerRouter, providers *providerRegistry, maxRequestBytes int64, assetStore *tenantAssetStore, managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
+func chatV2JSONHandler(upstreamProviders *providerRouter, providers *providerRegistry, maxRequestBytes int64, assetStore *tenantAssetStore, structuredRequests *structuredRequestStore, managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		requestStart := time.Now()
 		requestTenant := authenticatedTenantFromContext(ginContext)
@@ -252,7 +260,11 @@ func chatV2JSONHandler(upstreamProviders *providerRouter, providers *providerReg
 			return
 		}
 		defer chatRequest.messages.closeMedia()
-		submitChatRequest(ginContext, upstreamProviders, chatRequest, requestTenant, usageEndpointV2, managedTenants, structuredLogger)
+		if chatRequest.structuredOutput == nil {
+			submitChatRequest(ginContext, upstreamProviders, chatRequest, requestTenant, usageEndpointV2, managedTenants, structuredLogger)
+			return
+		}
+		submitStructuredChatRequest(ginContext, upstreamProviders, chatRequest, requestTenant, bodyBytes, structuredRequests, managedTenants, structuredLogger, requestStart)
 	}
 }
 
@@ -470,6 +482,24 @@ func chatRequestFromV2Payload(ginContext *gin.Context, payload chatV2RequestPayl
 		ginContext.String(http.StatusBadRequest, errorInvalidReasoningEffort)
 		return chatRequestParameters{}, false
 	}
+	structuredOutput, structuredOutputError := newStructuredOutputSchema(payload.StructuredOutput)
+	if structuredOutputError != nil {
+		ginContext.String(http.StatusBadRequest, "invalid structured_output")
+		return chatRequestParameters{}, false
+	}
+	idempotencyKey, idempotencyError := structuredRequestKey(ginContext, structuredOutput)
+	if idempotencyError != nil {
+		ginContext.String(http.StatusBadRequest, "invalid Idempotency-Key")
+		return chatRequestParameters{}, false
+	}
+	if structuredOutput != nil && payload.WebSearch {
+		ginContext.String(http.StatusBadRequest, "structured_output does not support web_search")
+		return chatRequestParameters{}, false
+	}
+	if routeError := validateStructuredOutputRoute(resolvedModel, structuredOutput); routeError != nil {
+		ginContext.String(http.StatusBadRequest, "structured_output is unsupported for the selected route")
+		return chatRequestParameters{}, false
+	}
 	messages, messageError := newV2PayloadChatMessages(*payload.Messages, defaults.systemPrompt, requestTenant, assetStore)
 	if messageError != nil {
 		if isTenantAssetError(messageError) {
@@ -493,7 +523,23 @@ func chatRequestFromV2Payload(ginContext *gin.Context, payload chatV2RequestPayl
 		webSearchEnabled: payload.WebSearch,
 		maxTokens:        payload.MaxTokens,
 		reasoningEffort:  reasoningEffort,
+		structuredOutput: structuredOutput,
+		idempotencyKey:   idempotencyKey,
 	}, true
+}
+
+func structuredRequestKey(ginContext *gin.Context, structuredOutput *structuredOutputSchema) (string, error) {
+	values := ginContext.Request.Header.Values(llmproxycontract.HeaderIdempotencyKey)
+	if structuredOutput == nil {
+		if len(values) == 0 {
+			return "", nil
+		}
+		return "", errStructuredOutputInvalid
+	}
+	if len(values) != 1 || !validIdempotencyKey(values[0]) {
+		return "", errStructuredOutputInvalid
+	}
+	return values[0], nil
 }
 
 func reasoningEffortForResolvedTextRoute(model textModelDefinition, rawEffort string) string {

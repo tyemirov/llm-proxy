@@ -8,6 +8,12 @@ const (
 	HeaderAssetSHA256 = "X-LLM-Proxy-Asset-SHA256"
 	// HeaderRequestID carries the proxy-owned identifier used to correlate one public request with structured logs.
 	HeaderRequestID = "X-LLM-Proxy-Request-ID"
+	// HeaderIdempotencyKey binds one structured request intent to one durable provider submission.
+	HeaderIdempotencyKey = "Idempotency-Key"
+	// HeaderStructuredRequestState reports the durable state of a structured request.
+	HeaderStructuredRequestState = "X-LLM-Proxy-Structured-Request-State"
+	// StructuredRequestPath is the authenticated reconciliation endpoint for structured v2 requests.
+	StructuredRequestPath = "/v2/requests"
 	// HeaderRequestTimeoutSeconds carries the accepted proxy work budget for one upstream request.
 	HeaderRequestTimeoutSeconds = "X-LLM-Proxy-Request-Timeout-Seconds"
 	// ErrorCodeInvalidRequestTimeout identifies a rejected request-timeout header.
@@ -20,4 +26,18 @@ const (
 	ErrorCodeProviderMediaLimitExceeded = "provider_media_limit_exceeded"
 	// ErrorCodeRequestTimeout identifies expiration of the accepted proxy work budget.
 	ErrorCodeRequestTimeout = "request_timeout"
+	// ErrorCodeInvalidIdempotencyKey identifies a missing or malformed idempotency key.
+	ErrorCodeInvalidIdempotencyKey = "invalid_idempotency_key"
+	// ErrorCodeStructuredRequestNotFound identifies a missing tenant-bound durable request.
+	ErrorCodeStructuredRequestNotFound = "structured_request_not_found"
+	// ErrorCodeStructuredRequestIntentConflict identifies reuse of one key for a different request intent.
+	ErrorCodeStructuredRequestIntentConflict = "structured_request_intent_conflict"
+	// ErrorCodeStructuredRequestOutcomeUnknown identifies a dispatched request whose provider outcome cannot be proved.
+	ErrorCodeStructuredRequestOutcomeUnknown = "structured_request_outcome_unknown"
+	// ErrorCodeStructuredRequestFailed identifies a terminal provider failure recorded for a structured request.
+	ErrorCodeStructuredRequestFailed = "structured_request_failed"
+	// ErrorCodeStructuredRequestInvalid identifies invalid structured-request state at submission.
+	ErrorCodeStructuredRequestInvalid = "structured_request_invalid"
+	// ErrorCodeStructuredRequestStore identifies a durable request-store failure.
+	ErrorCodeStructuredRequestStore = "structured_request_store_error"
 )

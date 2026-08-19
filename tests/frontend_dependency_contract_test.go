@@ -18,10 +18,19 @@ func TestOperationalFrontendValidationPreparesPinnedDependencies(testingInstance
 	if lookupError != nil {
 		testingInstance.Fatalf("resolve Make executable: %v", lookupError)
 	}
+	for _, environmentVariable := range []string{
+		"GNUMAKEFLAGS",
+		"MAKEFLAGS",
+		"MFLAGS",
+		"PLAYWRIGHT_INSTALL_FLAGS",
+	} {
+		testingInstance.Setenv(environmentVariable, "PLAYWRIGHT_INSTALL_FLAGS=")
+	}
 
 	scenarios := []struct {
 		name             string
 		target           string
+		makeArguments    []string
 		expectedCommands []string
 	}{
 		{
@@ -72,6 +81,18 @@ func TestOperationalFrontendValidationPreparesPinnedDependencies(testingInstance
 				"run frontend:test:blackbox",
 			},
 		},
+		{
+			name:          "hosted-ci",
+			target:        "ci",
+			makeArguments: []string{"PLAYWRIGHT_INSTALL_FLAGS="},
+			expectedCommands: []string{
+				"ci",
+				"playwright install chromium",
+				"run frontend:lint",
+				"run frontend:test",
+				"run frontend:test:blackbox",
+			},
+		},
 	}
 
 	for _, scenario := range scenarios {
@@ -87,19 +108,19 @@ func TestOperationalFrontendValidationPreparesPinnedDependencies(testingInstance
 
 			commandContext, cancelCommand := context.WithTimeout(context.Background(), frontendDependencyContractTimeout)
 			defer cancelCommand()
-			command := exec.CommandContext(
-				commandContext,
-				makePath,
+			makeArguments := []string{
 				"--no-print-directory",
 				scenario.target,
-				"NPM="+filepath.Join(fixtureRoot, "npm"),
-				"GO="+filepath.Join(fixtureRoot, "go"),
+				"NPM=" + filepath.Join(fixtureRoot, "npm"),
+				"GO=" + filepath.Join(fixtureRoot, "go"),
 				"GOFMT=true",
 				"UV=true",
-			)
+			}
+			makeArguments = append(makeArguments, scenario.makeArguments...)
+			command := exec.CommandContext(commandContext, makePath, makeArguments...)
 			command.Dir = fixtureRoot
 			command.Env = append(
-				os.Environ(),
+				frontendDependencyFixtureEnvironment(),
 				"FRONTEND_NPM_LOG="+npmLogPath,
 				"FRONTEND_PLAYWRIGHT_FIXTURE="+filepath.Join(fixtureRoot, "playwright"),
 			)
@@ -136,9 +157,25 @@ func TestOperationalFrontendValidationPreparesPinnedDependencies(testingInstance
 			testingInstance.Fatalf("hosted CI duplicates Make-owned frontend setup %q", duplicateSetup)
 		}
 	}
-	if !strings.Contains(workflow, "run: timeout -k 350s -s SIGKILL 350s make ci") {
-		testingInstance.Fatal("hosted CI does not invoke the canonical make ci contract")
+	if !strings.Contains(workflow, "run: timeout -k 350s -s SIGKILL 350s make ci PLAYWRIGHT_INSTALL_FLAGS=") {
+		testingInstance.Fatal("hosted CI does not declare its preinstalled Playwright OS packages")
 	}
+}
+
+func frontendDependencyFixtureEnvironment() []string {
+	environment := make([]string, 0, len(os.Environ()))
+	for _, assignment := range os.Environ() {
+		name, _, found := strings.Cut(assignment, "=")
+		if !found {
+			continue
+		}
+		switch name {
+		case "GNUMAKEFLAGS", "MAKEFLAGS", "MFLAGS", "PLAYWRIGHT_INSTALL_FLAGS":
+			continue
+		}
+		environment = append(environment, assignment)
+	}
+	return environment
 }
 
 func prepareFrontendDependencyFixture(testingInstance *testing.T, repositoryRoot string, fixtureRoot string) {
@@ -194,7 +231,7 @@ esac
 set -euo pipefail
 
 builtin printf 'playwright %s|%s\n' "$*" "${PLAYWRIGHT_BROWSERS_PATH:?}" >>"${FRONTEND_NPM_LOG:?}"
-[[ "$*" == "install --with-deps chromium" ]]
+[[ "$*" == "install --with-deps chromium" || "$*" == "install chromium" ]]
 mkdir -p "${PLAYWRIGHT_BROWSERS_PATH}"
 `, 0o755)
 	writeOperationalFile(testingInstance, filepath.Join(fixtureRoot, "go"), `#!/usr/bin/env bash

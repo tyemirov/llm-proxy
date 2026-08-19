@@ -48,13 +48,13 @@ func TestProviderImageSerializationAndLimitFailureContracts(t *testing.T) {
 		requestProfile:     requestProfileOpenAIResponsesTemperature,
 		outputTokenLimit:   32,
 	}
-	if _, requestError := openAIClient.openAIRequest(context.Background(), "key", model, closedMessages, false, nil, "", logger); !errors.Is(requestError, errAssetStore) {
+	if _, requestError := openAIClient.openAIRequest(context.Background(), "key", model, closedMessages, false, nil, "", nil, logger); !errors.Is(requestError, errAssetStore) {
 		t.Fatalf("OpenAI serialization error=%v", requestError)
 	}
-	if _, requestError := openAIClient.xAIResponsesRequest(context.Background(), "key", "https://provider.test", model, closedMessages, nil, logger); !errors.Is(requestError, errAssetStore) {
+	if _, requestError := openAIClient.xAIResponsesRequest(context.Background(), "key", "https://provider.test", model, closedMessages, nil, nil, logger); !errors.Is(requestError, errAssetStore) {
 		t.Fatalf("xAI serialization error=%v", requestError)
 	}
-	if _, requestError := anthropicClient.generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, logger); !errors.Is(requestError, errAssetStore) {
+	if _, requestError := anthropicClient.generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, nil, logger); !errors.Is(requestError, errAssetStore) {
 		t.Fatalf("Anthropic serialization error=%v", requestError)
 	}
 	if _, requestError := chatClient.generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, chatCompletionTokenLimitMaxTokens, "", nil, logger); !errors.Is(requestError, errAssetStore) {
@@ -69,13 +69,13 @@ func TestProviderImageSerializationAndLimitFailureContracts(t *testing.T) {
 		Value:     int64Pointer(1),
 		Scope:     CatalogMediaLimitScopeAttachment,
 	}}
-	if _, requestError := openAIClient.openAIRequest(context.Background(), "key", model, closedMessages, false, nil, "", logger); !errors.Is(requestError, ErrProviderMediaLimit) {
+	if _, requestError := openAIClient.openAIRequest(context.Background(), "key", model, closedMessages, false, nil, "", nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
 		t.Fatalf("OpenAI pre-serialization media limit error=%v", requestError)
 	}
-	if _, requestError := openAIClient.xAIResponsesRequest(context.Background(), "key", "https://provider.test", model, closedMessages, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
+	if _, requestError := openAIClient.xAIResponsesRequest(context.Background(), "key", "https://provider.test", model, closedMessages, nil, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
 		t.Fatalf("xAI pre-serialization media limit error=%v", requestError)
 	}
-	if _, requestError := anthropicClient.generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
+	if _, requestError := anthropicClient.generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
 		t.Fatalf("Anthropic pre-serialization media limit error=%v", requestError)
 	}
 
@@ -95,13 +95,13 @@ func TestProviderImageSerializationAndLimitFailureContracts(t *testing.T) {
 		Status:    CatalogMediaLimitStatusBounded,
 		Value:     int64Pointer(4),
 	}}
-	if _, requestError := openAIClient.openAIRequest(context.Background(), "key", model, inlineMessages, false, nil, "", logger); !errors.Is(requestError, ErrProviderMediaLimit) {
+	if _, requestError := openAIClient.openAIRequest(context.Background(), "key", model, inlineMessages, false, nil, "", nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
 		t.Fatalf("OpenAI media limit error=%v", requestError)
 	}
-	if _, requestError := openAIClient.xAIResponsesRequest(context.Background(), "key", "https://provider.test", model, inlineMessages, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
+	if _, requestError := openAIClient.xAIResponsesRequest(context.Background(), "key", "https://provider.test", model, inlineMessages, nil, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
 		t.Fatalf("xAI media limit error=%v", requestError)
 	}
-	if _, requestError := anthropicClient.generateText(context.Background(), "key", "https://provider.test", model, inlineMessages, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
+	if _, requestError := anthropicClient.generateText(context.Background(), "key", "https://provider.test", model, inlineMessages, nil, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
 		t.Fatalf("Anthropic media limit error=%v", requestError)
 	}
 	if _, requestError := chatClient.generateText(context.Background(), "key", "https://provider.test", model, inlineMessages, nil, chatCompletionTokenLimitMaxTokens, "", nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
@@ -117,10 +117,10 @@ func TestSynchronousResponsesFailureContracts(t *testing.T) {
 	client := NewOpenAIClient(geminiEdgeDoer(func(*http.Request) (*http.Response, error) {
 		return nil, context.Canceled
 	}), NewEndpoints())
-	if _, requestError := client.xAIResponsesRequest(context.Background(), "key", "http://[::1", model, messages, nil, logger); requestError == nil {
+	if _, requestError := client.xAIResponsesRequest(context.Background(), "key", "http://[::1", model, messages, nil, nil, logger); requestError == nil {
 		t.Fatal("xAI accepted invalid Responses URL")
 	}
-	if _, requestError := client.xAIResponsesRequest(context.Background(), "key", "https://provider.test", model, messages, nil, logger); requestError == nil {
+	if _, requestError := client.xAIResponsesRequest(context.Background(), "key", "https://provider.test", model, messages, nil, nil, logger); requestError == nil {
 		t.Fatal("xAI transport error was accepted")
 	}
 
@@ -131,7 +131,7 @@ func TestSynchronousResponsesFailureContracts(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader("{")),
 		}, nil
 	}), NewEndpoints())
-	if _, requestError := client.xAIResponsesRequest(context.Background(), "key", "https://provider.test", model, messages, nil, logger); requestError == nil {
+	if _, requestError := client.xAIResponsesRequest(context.Background(), "key", "https://provider.test", model, messages, nil, nil, logger); requestError == nil {
 		t.Fatal("xAI malformed response was accepted")
 	}
 

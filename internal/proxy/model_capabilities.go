@@ -21,11 +21,12 @@ type Reasoning struct {
 
 // requestPayloadBase contains fields common to all requests.
 type requestPayloadBase struct {
-	Model           string `json:"model"`
-	Input           any    `json:"input"`
-	MaxOutputTokens *int   `json:"max_output_tokens,omitempty"`
-	Background      bool   `json:"background"`
-	Store           bool   `json:"store"`
+	Model           string                `json:"model"`
+	Input           any                   `json:"input"`
+	MaxOutputTokens *int                  `json:"max_output_tokens,omitempty"`
+	Background      bool                  `json:"background"`
+	Store           bool                  `json:"store"`
+	Text            *openAIStructuredText `json:"text,omitempty"`
 }
 
 // requestPayloadWithTools is for models supporting tools but not temperature (e.g., gpt-5).
@@ -57,16 +58,17 @@ type Tool struct {
 
 // BuildRequestPayload selects the correct OpenAI Responses payload shape for the configured request profile.
 func BuildRequestPayload(modelIdentifier string, rawRequestProfile string, combinedPrompt any, webSearchEnabled bool, maxTokens *int, reasoningEffort string) any {
-	return buildRequestPayload(modelIdentifier, rawRequestProfile, combinedPrompt, webSearchEnabled, maxTokens, reasoningEffort, true, true)
+	return buildRequestPayload(modelIdentifier, rawRequestProfile, combinedPrompt, webSearchEnabled, maxTokens, reasoningEffort, true, true, nil)
 }
 
-func buildRequestPayload(modelIdentifier string, rawRequestProfile string, combinedPrompt any, webSearchEnabled bool, maxTokens *int, reasoningEffort string, background bool, store bool) any {
+func buildRequestPayload(modelIdentifier string, rawRequestProfile string, combinedPrompt any, webSearchEnabled bool, maxTokens *int, reasoningEffort string, background bool, store bool, structuredOutput *structuredOutputSchema) any {
 	base := requestPayloadBase{
 		Model:           modelIdentifier,
 		Input:           combinedPrompt,
 		MaxOutputTokens: maxTokens,
 		Background:      background,
 		Store:           store,
+		Text:            openAIStructuredTextFor(structuredOutput),
 	}
 	requestProfile := modelRequestProfile(strings.ToLower(strings.TrimSpace(rawRequestProfile)))
 

@@ -1954,7 +1954,8 @@ func waitForOperationalFile(testingInstance *testing.T, path string, timeout tim
 	testingInstance.Helper()
 	deadline := time.Now().Add(timeout)
 	for {
-		if _, statError := os.Stat(path); statError == nil {
+		fileBytes, readError := os.ReadFile(path)
+		if readError == nil && len(fileBytes) > 0 {
 			return
 		}
 		if time.Now().After(deadline) {

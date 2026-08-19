@@ -133,6 +133,7 @@ func buildOpenAIProviderKeyVerificationRequest(requestContext context.Context, e
 		"",
 		false,
 		false,
+		nil,
 	)
 	payloadBytes, _ := json.Marshal(payload)
 	return buildAuthorizedJSONRequest(requestContext, http.MethodPost, endpoints.GetResponsesURL(), apiKey, bytes.NewReader(payloadBytes))

@@ -28,10 +28,11 @@ type anthropicMessagesClient struct {
 }
 
 type anthropicMessagesRequest struct {
-	Model     string             `json:"model"`
-	MaxTokens int                `json:"max_tokens"`
-	System    string             `json:"system,omitempty"`
-	Messages  []anthropicMessage `json:"messages"`
+	Model        string                           `json:"model"`
+	MaxTokens    int                              `json:"max_tokens"`
+	System       string                           `json:"system,omitempty"`
+	Messages     []anthropicMessage               `json:"messages"`
+	OutputConfig *anthropicStructuredOutputConfig `json:"output_config,omitempty"`
 }
 
 type anthropicMessage struct {
@@ -68,7 +69,7 @@ func newAnthropicMessagesClient(httpClient HTTPDoer) *anthropicMessagesClient {
 	}
 }
 
-func (client *anthropicMessagesClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *anthropicMessagesClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, structuredOutput *structuredOutputSchema, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	if mediaLimitError := validateInlineMessageMediaBeforeSerialization(modelIdentifier, messages); mediaLimitError != nil {
 		return textGenerationResult{}, mediaLimitError
 	}
@@ -77,10 +78,11 @@ func (client *anthropicMessagesClient) generateText(parentContext context.Contex
 		return textGenerationResult{}, messagesError
 	}
 	payload := anthropicMessagesRequest{
-		Model:     modelIdentifier.providerString(),
-		MaxTokens: anthropicMaxTokens(modelIdentifier, maxTokens),
-		System:    systemPrompt,
-		Messages:  providerMessages,
+		Model:        modelIdentifier.providerString(),
+		MaxTokens:    anthropicMaxTokens(modelIdentifier, maxTokens),
+		System:       systemPrompt,
+		Messages:     providerMessages,
+		OutputConfig: anthropicStructuredOutputFor(structuredOutput),
 	}
 	payloadBytes, _ := json.Marshal(payload)
 	if mediaLimitError := validateInlineMessageMediaRequestLimit(modelIdentifier, messages, payloadBytes); mediaLimitError != nil {

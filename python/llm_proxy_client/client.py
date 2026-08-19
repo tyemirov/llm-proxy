@@ -20,6 +20,7 @@ FORMAT_QUERY_VALUE_TEXT_PLAIN = "text/plain"
 JSON_CONTENT_TYPE = "application/json; charset=utf-8"
 KEY_QUERY_KEY = "key"
 REQUEST_TIMEOUT_HEADER = "X-LLM-Proxy-Request-Timeout-Seconds"
+IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
 ASSET_SHA256_HEADER = "X-LLM-Proxy-Asset-SHA256"
 ASSET_ENDPOINT_PATH = "/model/v1/assets"
 PROVIDER_QUERY_KEY = "provider"
@@ -34,6 +35,7 @@ POST_BODY_QUERY_KEYS = frozenset(
         "max_output_tokens",
         "max_tokens",
         "reasoning_effort",
+        "structured_output",
         "prompt",
         "system_prompt",
         "web_search",
@@ -45,6 +47,7 @@ AUDIO_MIME_TYPES = frozenset({"audio/m4a", "audio/mpeg", "audio/wav"})
 MEDIA_MIME_TYPES = IMAGE_MIME_TYPES | AUDIO_MIME_TYPES
 ASSET_ID_PATTERN = re.compile(r"^ast_[0-9a-f]{32}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+IDEMPOTENCY_KEY_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 
 
 class LLMProxyClientError(ValueError):
@@ -446,6 +449,31 @@ class ClientMessage:
 
 
 @dataclass(frozen=True)
+class ClientStructuredOutput:
+    """One caller JSON Schema and its durable request identity."""
+
+    schema: dict[str, Any]
+    idempotency_key: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.schema, dict):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: structured output schema must be an object")
+        try:
+            json.dumps(self.schema, ensure_ascii=False, allow_nan=False)
+        except (TypeError, ValueError) as error:
+            raise LLMProxyClientError(
+                "llm_proxy_client_invalid_request: structured output schema must be valid JSON"
+            ) from error
+        if not IDEMPOTENCY_KEY_PATTERN.fullmatch(self.idempotency_key):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid idempotency key")
+
+    def body(self) -> dict[str, Any]:
+        """Return the canonical structured-output body object."""
+
+        return {"schema": self.schema}
+
+
+@dataclass(frozen=True)
 class ClientMessagesRequest:
     """Validated v2 messages-only JSON POST request."""
 
@@ -454,6 +482,7 @@ class ClientMessagesRequest:
     web_search: bool = False
     max_tokens: int | None = None
     reasoning_effort: str | None = None
+    structured_output: ClientStructuredOutput | None = None
     request_timeout_seconds: int | None = None
 
     def __post_init__(self) -> None:
@@ -466,6 +495,10 @@ class ClientMessagesRequest:
             raise LLMProxyClientError("llm_proxy_client_invalid_request: max_tokens must be positive")
         if self.reasoning_effort is not None and not self.reasoning_effort.strip():
             raise LLMProxyClientError("llm_proxy_client_invalid_request: reasoning_effort must be nonblank")
+        if self.structured_output is not None and not isinstance(self.structured_output, ClientStructuredOutput):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid structured output")
+        if self.structured_output is not None and self.web_search:
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: structured output conflicts with web_search")
         if self.request_timeout_seconds is not None and (
             isinstance(self.request_timeout_seconds, bool)
             or not isinstance(self.request_timeout_seconds, int)
@@ -493,6 +526,8 @@ class ClientMessagesRequest:
             payload["max_tokens"] = self.max_tokens
         if self.reasoning_effort is not None:
             payload["reasoning_effort"] = self.reasoning_effort
+        if self.structured_output is not None:
+            payload["structured_output"] = self.structured_output.body()
         return payload
 
 
@@ -551,8 +586,14 @@ class Client:
                 request._body_with_model(model_profile.model),
                 self.config._messages_post_url_for_provider(model_profile.provider),
                 request.request_timeout_seconds,
+                request.structured_output.idempotency_key if request.structured_output is not None else "",
             )
-        return self._post_json(request.body(), self.config.messages_post_url(), request.request_timeout_seconds)
+        return self._post_json(
+            request.body(),
+            self.config.messages_post_url(),
+            request.request_timeout_seconds,
+            request.structured_output.idempotency_key if request.structured_output is not None else "",
+        )
 
     def upload_asset(self, data: bytes, mime_type: str) -> ClientAsset:
         """Upload exact tenant media bytes and return their hash-bound asset record."""
@@ -619,7 +660,11 @@ class Client:
         )
 
     def _post_json(
-        self, request_payload: dict[str, Any], request_url: str, request_timeout_seconds: int | None
+        self,
+        request_payload: dict[str, Any],
+        request_url: str,
+        request_timeout_seconds: int | None,
+        idempotency_key: str,
     ) -> str:
         """Send a JSON POST request payload and return the response text."""
 
@@ -630,6 +675,8 @@ class Client:
         }
         if request_timeout_seconds is not None:
             request_headers[REQUEST_TIMEOUT_HEADER] = str(request_timeout_seconds)
+        if idempotency_key:
+            request_headers[IDEMPOTENCY_KEY_HEADER] = idempotency_key
         prepared_request = urllib.request.Request(
             request_url,
             data=request_body,

@@ -1042,6 +1042,28 @@ test("visitors can filter and choose a model family, exact model, and provider o
     "web_search",
     "reasoning",
   ];
+  await textFilter.evaluate((filter) => {
+    filter.scrollIntoView({ block: "start", inline: "nearest", behavior: "instant" });
+  });
+  const routeFilterScrollGeometry = await textFilter.evaluate((filter) => {
+    const stickyHeader = document.querySelector("body > mpr-header");
+    if (!stickyHeader) {
+      throw new Error("public_sticky_header_missing");
+    }
+    const filterBounds = filter.getBoundingClientRect();
+    const headerBounds = stickyHeader.getBoundingClientRect();
+    const hitTarget = document.elementFromPoint(
+      filterBounds.left + (filterBounds.width / 2),
+      filterBounds.top + (filterBounds.height / 2),
+    );
+    return {
+      filterOwnsCenter: hitTarget === filter || filter.contains(hitTarget),
+      filterTop: filterBounds.top,
+      headerBottom: headerBounds.bottom,
+    };
+  });
+  expect(routeFilterScrollGeometry.filterTop).toBeGreaterThanOrEqual(routeFilterScrollGeometry.headerBottom);
+  expect(routeFilterScrollGeometry.filterOwnsCenter).toBe(true);
   for (const capability of canonicalCapabilities) {
     const capabilityFilter = routingTree.locator(`[data-route-capability="${capability}"]`);
     await capabilityFilter.click();
@@ -1501,12 +1523,13 @@ test("site publishes the exact canonical OpenAPI artifact and its derived refere
     `<a class="resource-button" href="${openAPIPath}" download="${openAPIDownloadFilename}">Download YAML</a>`,
   );
   expect(documentationHTML).toContain('id="operation-postV2Messages"');
+  expect(documentationHTML).toContain('id="operation-getV2StructuredRequest"');
   expect(documentationHTML).toContain('id="operation-uploadTenantAsset"');
   expect(documentationHTML).toContain('id="operation-deleteTenantAsset"');
   expect(documentationHTML).not.toContain('id="operation-deleteManagementTenantSecret"');
   expect(documentationHTML).toContain("<code>reasoning_effort</code>");
   expect(documentationHTML).toContain(`href="${openAPIPath}"`);
-  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(23);
+  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(24);
 });
 
 test("OpenAPI reference views and downloads the exact canonical YAML", async ({ page }) => {

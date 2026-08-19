@@ -113,16 +113,19 @@ paths:
       description: >-
         The current messages-only operation. `messages` is required. User
         messages may include ordered inline or tenant-asset-backed image and
-        audio attachments. `model`, `web_search`, `max_tokens`, and
-        `reasoning_effort` are optional. Omitting `reasoning_effort` selects
-        the tenant or route default. A supplied value must be non-blank and
-        supported by the resolved route. The selected provider offering owns
-        media admission and transport limits. Unsupported media or route
-        capabilities return HTTP 400 before an upstream call. The service
-        rejects an encoded request body above 8 MiB before JSON decoding. A
-        smaller catalog-derived body limit applies when configured. Current
-        Moonshot Kimi image routes preserve attachment order and exact bytes
-        through Chat Completions Data URL blocks.
+        audio attachments. `model`, `web_search`, `max_tokens`,
+        `reasoning_effort`, and `structured_output` are optional. A structured
+        request requires one Idempotency-Key and a supported provider protocol.
+        The proxy compiles the schema and validates the selected provider subset
+        before dispatch. It saves its provider result for reconciliation through
+        `GET /v2/requests`. Omitting `reasoning_effort` selects the tenant or route
+        default. A supplied value must be non-blank and supported by the resolved
+        route. The selected provider offering owns media admission and transport
+        limits. Unsupported media or route capabilities return HTTP 400 before
+        an upstream call. The service rejects an encoded request body above 8
+        MiB before JSON decoding. A smaller catalog-derived body limit applies
+        when configured. Current Moonshot Kimi image routes preserve attachment
+        order and exact bytes through Chat Completions Data URL blocks.
       tags:
         - Proxy
       security:
@@ -134,11 +137,14 @@ paths:
         - $ref: '#/components/parameters/ResponseFormat'
         - $ref: '#/components/parameters/Accept'
         - $ref: '#/components/parameters/RequestTimeout'
+        - $ref: '#/components/parameters/OptionalIdempotencyKey'
       requestBody:
         $ref: '#/components/requestBodies/V2Request'
       responses:
         '200':
-          $ref: '#/components/responses/TextSuccess'
+          $ref: '#/components/responses/V2Success'
+        '202':
+          $ref: '#/components/responses/V2StructuredRequestPending'
         '400':
           $ref: '#/components/responses/V2BadRequest'
         '403':
@@ -147,6 +153,8 @@ paths:
           $ref: '#/components/responses/AssetFailure'
         '410':
           $ref: '#/components/responses/AssetFailure'
+        '409':
+          $ref: '#/components/responses/V2StructuredRequestConflict'
         '413':
           $ref: '#/components/responses/ProxyPayloadTooLarge'
         '429':
@@ -160,7 +168,45 @@ paths:
         '504':
           $ref: '#/components/responses/ProxyTimeout'
         '500':
-          $ref: '#/components/responses/AssetFailure'
+          $ref: '#/components/responses/V2InternalFailure'
+  /v2/requests:
+    get:
+      operationId: getV2StructuredRequest
+      summary: Reconcile a durable structured-output request
+      description: >-
+        Returns the terminal JSON result, a safe in-progress receipt, or a safe
+        terminal failure for the authenticated tenant and exact Idempotency-Key.
+        This operation never dispatches provider work. Every response sets
+        Cache-Control to no-store.
+      tags:
+        - Proxy
+      security:
+        - TenantClientKey: []
+      x-llm-proxy-allow-undeclared-query: true
+      parameters:
+        - $ref: '#/components/parameters/TenantClientKey'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          $ref: '#/components/responses/StructuredRequestSucceeded'
+        '202':
+          $ref: '#/components/responses/StructuredRequestPending'
+        '400':
+          $ref: '#/components/responses/StructuredRequestBadRequest'
+        '404':
+          $ref: '#/components/responses/StructuredRequestNotFound'
+        '409':
+          $ref: '#/components/responses/StructuredRequestConflict'
+        '429':
+          $ref: '#/components/responses/StructuredRequestFailed'
+        '500':
+          $ref: '#/components/responses/StructuredRequestStoreFailure'
+        '502':
+          $ref: '#/components/responses/StructuredRequestFailed'
+        '503':
+          $ref: '#/components/responses/StructuredRequestFailed'
+        '504':
+          $ref: '#/components/responses/StructuredRequestFailed'
   /model/v1/assets:
     post:
       operationId: uploadTenantAsset
@@ -785,6 +831,22 @@ components:
       schema:
         type: integer
         minimum: 1
+    OptionalIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Required with structured_output and invalid without it. A repeated active or successful request does not start a second provider call. A known failed request permits an explicit new attempt. An uncertain request never starts provider work again.
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Exact key of the durable structured-output request to reconcile.
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
     AssetSHA256:
       name: X-LLM-Proxy-Asset-SHA256
       in: header
@@ -960,6 +1022,31 @@ components:
         text/csv:
           schema:
             type: string
+    V2Success:
+      description: Complete generated text, or exact JSON that passed the caller schema. A structured success includes the durable request state.
+      headers:
+        X-LLM-Proxy-Request-Timeout-Seconds:
+          $ref: '#/components/headers/ResolvedRequestTimeout'
+        X-LLM-Proxy-Request-Tokens:
+          $ref: '#/components/headers/OptionalTokenCount'
+        X-LLM-Proxy-Response-Tokens:
+          $ref: '#/components/headers/OptionalTokenCount'
+        X-LLM-Proxy-Total-Tokens:
+          $ref: '#/components/headers/OptionalTokenCount'
+        X-LLM-Proxy-Structured-Request-State:
+          $ref: '#/components/headers/OptionalStructuredRequestState'
+      content:
+        text/plain:
+          schema:
+            type: string
+        application/json:
+          schema: {}
+        application/xml:
+          schema:
+            type: string
+        text/csv:
+          schema:
+            type: string
     DictationSuccess:
       description: Transcription result.
       headers:
@@ -1014,6 +1101,37 @@ components:
             oneOf:
               - $ref: '#/components/schemas/ProxyErrorEnvelope'
               - $ref: '#/components/schemas/AssetErrorEnvelope'
+    V2StructuredRequestPending:
+      description: The durable request is active. Reconcile the same key again.
+      headers:
+        X-LLM-Proxy-Request-Timeout-Seconds:
+          $ref: '#/components/headers/ResolvedRequestTimeout'
+        X-LLM-Proxy-Structured-Request-State:
+          $ref: '#/components/headers/StructuredRequestState'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StructuredRequestStatus'
+    V2StructuredRequestConflict:
+      description: The key identifies a different intent or an uncertain provider outcome.
+      headers:
+        X-LLM-Proxy-Request-Timeout-Seconds:
+          $ref: '#/components/headers/ResolvedRequestTimeout'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StructuredRequestErrorEnvelope'
+    V2InternalFailure:
+      description: The asset store or structured request store failed.
+      headers:
+        X-LLM-Proxy-Request-Timeout-Seconds:
+          $ref: '#/components/headers/ResolvedRequestTimeout'
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/AssetErrorEnvelope'
+              - $ref: '#/components/schemas/StructuredRequestErrorEnvelope'
     AssetCreated:
       description: The asset is available to its authenticated tenant.
       headers:
@@ -1032,6 +1150,74 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/AssetErrorEnvelope'
+    StructuredRequestSucceeded:
+      description: Exact provider output that passed the caller JSON Schema and was durably committed before this response.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+        X-LLM-Proxy-Structured-Request-State:
+          $ref: '#/components/headers/StructuredRequestState'
+      content:
+        application/json:
+          schema: {}
+    StructuredRequestPending:
+      description: The durable request has not reached a terminal state. Reconcile the same key again.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+        X-LLM-Proxy-Structured-Request-State:
+          $ref: '#/components/headers/StructuredRequestState'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StructuredRequestStatus'
+    StructuredRequestBadRequest:
+      description: The Idempotency-Key is missing or invalid.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StructuredRequestErrorEnvelope'
+    StructuredRequestNotFound:
+      description: No durable request exists for the authenticated tenant and key.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StructuredRequestErrorEnvelope'
+    StructuredRequestConflict:
+      description: The key names a different request intent, or provider dispatch completed with an outcome that cannot be proven.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StructuredRequestErrorEnvelope'
+    StructuredRequestFailed:
+      description: The durable request reached a safe terminal provider failure.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+        X-LLM-Proxy-Structured-Request-State:
+          $ref: '#/components/headers/StructuredRequestState'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StructuredRequestErrorEnvelope'
+    StructuredRequestStoreFailure:
+      description: The durable request record cannot be read or updated.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StructuredRequestErrorEnvelope'
     ProxyRateLimited:
       description: The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.
       headers:
@@ -1242,11 +1428,32 @@ components:
         type: integer
         minimum: 0
     NoStore:
-      description: Prevents persistence of authenticated or secret-bearing management responses.
+      description: Prevents persistence of authenticated or secret-bearing responses.
       schema:
         type: string
         const: no-store
       x-required: true
+    StructuredRequestState:
+      description: Current durable state of the structured request.
+      schema:
+        type: string
+        enum:
+          - not_dispatched
+          - dispatched
+          - succeeded
+          - failed
+          - uncertain
+      x-required: true
+    OptionalStructuredRequestState:
+      description: Present when this response belongs to a structured request.
+      schema:
+        type: string
+        enum:
+          - not_dispatched
+          - dispatched
+          - succeeded
+          - failed
+          - uncertain
   schemas:
     PublicCapabilityCatalog:
       type: object
@@ -2089,6 +2296,80 @@ components:
           type: string
           minLength: 1
           description: Omission selects the tenant or route default. An explicit value must be non-blank and supported by the resolved provider/model route. Kimi K3 accepts low, high, or max.
+        structured_output:
+          $ref: '#/components/schemas/StructuredOutput'
+    StructuredOutput:
+      type: object
+      additionalProperties: false
+      required:
+        - schema
+      properties:
+        schema:
+          type: object
+          description: JSON Schema admitted against the selected provider subset, enforced by that provider, and revalidated by llm-proxy before durable success.
+    StructuredRequestStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - state
+        - proxy_request_id
+        - started_at
+        - updated_at
+        - elapsed_seconds
+      properties:
+        state:
+          type: string
+          enum:
+            - not_dispatched
+            - dispatched
+        proxy_request_id:
+          type: string
+          minLength: 1
+        started_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        elapsed_seconds:
+          type: integer
+          format: int64
+          minimum: 0
+    StructuredRequestErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          $ref: '#/components/schemas/StructuredRequestError'
+    StructuredRequestError:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          enum:
+            - invalid_idempotency_key
+            - structured_request_not_found
+            - structured_request_intent_conflict
+            - structured_request_outcome_unknown
+            - structured_request_failed
+            - structured_request_invalid
+            - structured_request_store_error
+        state:
+          type: string
+          enum:
+            - failed
+            - uncertain
+        cause:
+          type: string
+          minLength: 1
+        proxy_request_id:
+          type: string
+          minLength: 1
     DictationRequest:
       type: object
       additionalProperties: false

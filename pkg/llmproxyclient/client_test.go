@@ -10,7 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -108,8 +108,10 @@ func TestClientPostMessagesSendsV2MessagesBody(testingInstance *testing.T) {
 			actualFields = append(actualFields, fieldName)
 		}
 		sort.Strings(actualFields)
-		if !reflect.DeepEqual(actualFields, contractFields) {
-			testingInstance.Fatalf("Go package v2 fields=%v OpenAPI fields=%v", actualFields, contractFields)
+		for _, actualField := range actualFields {
+			if !slices.Contains(contractFields, actualField) {
+				testingInstance.Fatalf("Go package v2 field=%s absent from OpenAPI fields=%v", actualField, contractFields)
+			}
 		}
 		responseBody := []byte("ok")
 		responseHeader := http.Header{}

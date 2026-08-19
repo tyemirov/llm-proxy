@@ -56,4 +56,4 @@ jobs:
           go install honnef.co/go/tools/cmd/staticcheck@latest
           go install github.com/gordonklaus/ineffassign@latest
       - name: Run CI
-        run: timeout -k 350s -s SIGKILL 350s make ci
+        run: timeout -k 350s -s SIGKILL 350s make ci PLAYWRIGHT_INSTALL_FLAGS=

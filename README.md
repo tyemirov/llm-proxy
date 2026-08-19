@@ -30,6 +30,7 @@ the public **Log In** action authenticates the user through MPR UI and TAuth.
 - Choose the dictation model per request via `model=...` on `/dictate`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider's configured default
 - Optional per-request web search via exact `web_search=true`; `false` or omission keeps it disabled
 - Optional exact inline or tenant-asset-backed image and audio attachments on canonical `POST /v2` user messages
+- Provider-enforced JSON Schema output and durable request reconciliation for supported canonical `POST /v2` routes
 - Optional logging at `debug` or `info` levels
 - Forwards requests using server-side provider API keys, loaded from the database in management mode
 - Optional TAuth-protected self-service UI where signed-in users automatically receive an llm-proxy client key and their provider settings plus routing defaults autosave
@@ -37,10 +38,10 @@ the public **Log In** action authenticates the user through MPR UI and TAuth.
 
 ## REST Contract
 
-llm-proxy exposes a blocking REST contract for text generation, including
-optional media evidence on canonical `POST /v2`. A caller sends one
-authenticated `GET /`, `POST /`, or `POST /v2` request and receives the final
-formatted answer in that same HTTP response.
+llm-proxy exposes a blocking REST contract for text generation. Canonical
+`POST /v2` also accepts optional media evidence and structured requests. An
+ordinary request returns its final formatted answer in the same HTTP response.
+The structured request contract also provides durable reconciliation.
 
 ### Canonical OpenAPI ownership
 
@@ -81,15 +82,15 @@ exposes `ClientMessagesRequest.web_search: bool`. All bundled clients use
 base URL, and serialize the request body as `"web_search": true` or
 `"web_search": false`.
 
-The caller does not stream tokens, poll a job endpoint, or follow a resume
-token. OpenAI Responses and Gemini 3.x Interactions use pollable upstream
-lifecycles: llm-proxy sends stored background requests and keeps the client
-request open while it polls a nonblank resource id through `status=queued` and
+An ordinary request does not stream tokens, poll a job endpoint, or use a
+resume token. OpenAI Responses and Gemini 3.x Interactions use pollable upstream
+lifecycles. The proxy sends stored background requests and holds the client
+connection. It polls a nonblank resource id through `status=queued` and
 `status=in_progress`. Gemini 2.5 Interactions instead complete synchronously
 with `background: false` and `store: false`. A documented terminal status is
 resolved immediately, and a missing or unknown status is rejected rather than
-polled. Provider resource ids remain in the active request lifecycle;
-llm-proxy has no durable provider-job queue or later resume endpoint.
+polled. Provider resource ids remain in the active request lifecycle. The proxy
+does not keep a durable provider job or expose a provider resource id.
 
 Every current text route uses one provider-neutral completion coordinator.
 When an upstream attempt exhausts its output budget—OpenAI Responses
@@ -102,9 +103,63 @@ reports its complete stop signal or the overall request deadline expires.
 Safety filters, refusals, tool/intermediate states, malformed responses, and
 missing or unknown signals remain `502` failures and never trigger this loop.
 
-A `504 Gateway Timeout` means the overall proxy request deadline expired before
-the selected upstream provider produced a final answer. It is not a prompt for
-the client to poll llm-proxy.
+A `504 Gateway Timeout` means the proxy request budget expired before a final
+answer. For a structured request, reconcile the idempotency key before a new
+submission.
+
+### Structured JSON output and reconciliation
+
+Canonical `POST /v2` accepts an optional `structured_output.schema` object.
+The object contains the caller-owned JSON Schema. A structured request requires
+exactly one valid `Idempotency-Key` header. The proxy rejects either input when
+the other input is absent.
+
+The proxy compiles the schema and validates the selected provider subset before
+provider dispatch. It maps the schema to OpenAI Responses `text.format`, Gemini
+Interactions `response_format`, or Anthropic Messages `output_config.format`.
+The proxy validates the final JSON against the same schema before durable
+success. Other provider protocols reject structured requests before provider
+work.
+
+A structured request does not use output continuation or a repair inference.
+Invalid provider JSON causes one terminal provider failure. This rule prevents
+a malformed response from causing a second paid inference.
+
+The idempotency key binds one request intent to one authenticated tenant. The
+intent contains the resolved provider, model, and canonical request body. A
+different intent with the same key returns `409 Conflict`. Request-timeout and
+transport settings are not part of the request intent.
+
+The durable record has these states:
+
+- `not_dispatched`: The proxy saved the request intent before provider work.
+- `dispatched`: The proxy started provider work.
+- `succeeded`: The proxy saved the validated JSON result.
+- `failed`: The proxy saved a known provider failure.
+- `uncertain`: The proxy cannot prove the result after provider dispatch.
+
+Use authenticated `GET /v2/requests` with the same `Idempotency-Key` header.
+A successful record returns the exact saved JSON with status `200`. An active
+record returns safe timestamps and elapsed time with status `202`. A failed
+record returns its safe failure with the recorded status. An uncertain record
+returns `409 structured_request_outcome_unknown`. Every reconciliation response
+sets `Cache-Control: no-store` because its content depends on the tenant and key.
+
+An identical `POST /v2` submission reuses a succeeded or active record. A
+failed record permits an explicit new attempt with the same request intent.
+An uncertain record never starts provider work again. A process restart changes
+each interrupted `dispatched` record to `uncertain`.
+
+The proxy stores private records under
+`server.asset_store_path/structured-requests`. Directories use mode `0700`, and
+records use mode `0600`. A record contains tenant, key, and intent hashes. It
+also contains routing, timing, state, safe failure, and successful result data.
+It does not contain prompts, schemas, credentials, or raw provider bodies.
+
+Terminal records use `server.asset_retention_seconds`. Uncertain records remain
+available because automatic removal would erase the no-resubmit decision. A
+structured record does not contain a provider resource id and cannot restart
+uncertain provider work.
 
 ### Request work budgets
 
