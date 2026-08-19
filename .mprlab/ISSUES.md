@@ -25,6 +25,34 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B144] (P1) Use preinstalled Playwright OS packages in hosted CI.
+  Goal:
+  Hosted CI completes the canonical gate within its 350-second watchdog.
+  Evidence:
+  - Expected: Hosted CI completes all 11 gates and prints the success receipt.
+  - Actual: Run `32207613268` reached gate 9 before the watchdog killed
+    `make ci` at exactly 350 seconds.
+  - Playwright spent 93 seconds on optional font packages from the Ubuntu
+    package mirror. The browser suite then passed all 94 scenarios.
+  Requirements:
+  - Keep Make as the only frontend dependency owner.
+  - Keep the default clean-checkout `--with-deps` behavior.
+  - Let hosted CI declare its preinstalled OS packages.
+  - Install the exact pinned Chromium browser through the same Make target.
+  - Do not increase the watchdog duration.
+  Validation:
+  - Prove the default and hosted Make command sequences through the public
+    target.
+  - Run the final `make ci` gate.
+
+  Resolution:
+  - Make keeps `--with-deps` as the default Playwright installation flag.
+  - Hosted CI supplies an empty installation flag. Make installs the pinned
+    Chromium browser without a second OS package operation.
+  - The black-box Make test proves both exact command sequences.
+  - The final `make ci` passed all 11 gates in 129 seconds with 100.0% Go
+    statement coverage.
+
 - [x] [B143] (P1) Keep route filters clear of the sticky public header.
   Goal:
   Visitors can click each route filter after the browser scrolls the route
