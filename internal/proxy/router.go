@@ -286,15 +286,25 @@ func textRequestDefaultsForProvider(rawProvider string, requestTenant tenant, pr
 	if providerExplicit {
 		defaults.model = constants.EmptyString
 	}
-	if !requestTenant.managed || !providerExplicit {
+	if !providerExplicit {
 		return defaults
 	}
 	providerCandidate := strings.TrimSpace(rawProvider)
-	providerIdentifier, providerError := providers.canonicalProviderID(providerCandidate)
-	if providerError != nil {
+	providerDefinition, catalogDefaultModel, resolutionError := providers.resolveTextModel(
+		providerCandidate,
+		constants.EmptyString,
+		constants.EmptyString,
+		constants.EmptyString,
+		false,
+	)
+	if resolutionError != nil {
 		return defaults
 	}
-	settings, hasSettings := requestTenant.providerSettings[providerIdentifier]
+	defaults.model = catalogDefaultModel.string()
+	if !requestTenant.managed {
+		return defaults
+	}
+	settings, hasSettings := requestTenant.providerSettings[providerDefinition.identifier]
 	if !hasSettings {
 		return defaults
 	}

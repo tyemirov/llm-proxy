@@ -1968,6 +1968,81 @@ func TestManagementValidationFailureUsageUsesSelectedProviderDefaultModel(t *tes
 	}
 }
 
+func TestManagementUnconfiguredProviderUsageUsesCatalogDefaultModel(t *testing.T) {
+	router := newManagementRouter(t, proxy.Configuration{})
+	sessionCookie := managementSessionCookie(t, "usage-catalog-default-user")
+	tenantPath := managementDefaultTenantTestPath(t, router, sessionCookie, "")
+
+	providerRequest := authenticatedJSONRequest(
+		http.MethodPut,
+		tenantPath+"/provider-keys/"+proxy.ProviderNameOpenAI,
+		managementProviderKeyRequestBody(t, testManagementOpenAIKey, proxy.ModelNameGPT41, ""),
+		sessionCookie,
+	)
+	providerResponse := httptest.NewRecorder()
+	router.ServeHTTP(providerResponse, providerRequest)
+	if providerResponse.Code != http.StatusOK {
+		t.Fatalf("save provider status=%d body=%s", providerResponse.Code, providerResponse.Body.String())
+	}
+
+	secretRequest := authenticatedJSONRequest(http.MethodPost, tenantPath+"/secrets", `{}`, sessionCookie)
+	secretResponse := httptest.NewRecorder()
+	router.ServeHTTP(secretResponse, secretRequest)
+	if secretResponse.Code != http.StatusOK {
+		t.Fatalf("secret status=%d body=%s", secretResponse.Code, secretResponse.Body.String())
+	}
+	var secretPayload struct {
+		Secret string `json:"secret"`
+	}
+	if decodeError := json.Unmarshal(secretResponse.Body.Bytes(), &secretPayload); decodeError != nil {
+		t.Fatalf("decode secret: %v", decodeError)
+	}
+
+	requestCases := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodGet, path: "/", body: ""},
+		{method: http.MethodPost, path: "/", body: `{"prompt":"hello"}`},
+		{method: http.MethodPost, path: "/v2", body: `{"messages":[{"role":"user","content":"hello"}]}`},
+	}
+	for _, requestCase := range requestCases {
+		query := url.Values{
+			"key":      []string{secretPayload.Secret},
+			"provider": []string{proxy.ProviderNameGemini},
+		}
+		if requestCase.method == http.MethodGet {
+			query.Set("prompt", "hello")
+		}
+		request := httptest.NewRequest(
+			requestCase.method,
+			requestCase.path+"?"+query.Encode(),
+			strings.NewReader(requestCase.body),
+		)
+		if requestCase.method == http.MethodPost {
+			request.Header.Set("Content-Type", "application/json")
+		}
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusServiceUnavailable {
+			t.Fatalf("method=%s path=%s status=%d body=%s", requestCase.method, requestCase.path, response.Code, response.Body.String())
+		}
+	}
+
+	usage := waitForManagementValue(t, func() managementUsageTestResponse {
+		return requestManagementUsage(t, router, sessionCookie, "30d")
+	}, func(payload managementUsageTestResponse) bool {
+		return payload.Totals.Requests == len(requestCases)
+	})
+	if len(usage.Providers) != 1 || usage.Providers[0].Provider != proxy.ProviderNameGemini || usage.Providers[0].Data.Requests != len(requestCases) {
+		t.Fatalf("providers=%+v", usage.Providers)
+	}
+	if len(usage.Models) != 1 || usage.Models[0].Provider != proxy.ProviderNameGemini || usage.Models[0].Model != proxy.ModelNameGemini25Flash || usage.Models[0].Data.Requests != len(requestCases) {
+		t.Fatalf("models=%+v", usage.Models)
+	}
+}
+
 func TestManagementAdminUsersDashboard(t *testing.T) {
 	chatServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.Header().Set("Content-Type", "application/json")
