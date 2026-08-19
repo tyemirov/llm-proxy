@@ -34,11 +34,14 @@ retain satisfied historical dependencies.
     `make ci` at exactly 350 seconds.
   - Playwright spent 93 seconds on optional font packages from the Ubuntu
     package mirror. The browser suite then passed all 94 scenarios.
+  - Run `32208690338` reduced frontend setup to 11 seconds. The outer Make flag
+    changed the default-path fixture cases through inherited `MAKEFLAGS`.
   Requirements:
   - Keep Make as the only frontend dependency owner.
   - Keep the default clean-checkout `--with-deps` behavior.
   - Let hosted CI declare its preinstalled OS packages.
   - Install the exact pinned Chromium browser through the same Make target.
+  - Isolate fixture Make processes from parent command variables.
   - Do not increase the watchdog duration.
   Validation:
   - Prove the default and hosted Make command sequences through the public
@@ -49,8 +52,10 @@ retain satisfied historical dependencies.
   - Make keeps `--with-deps` as the default Playwright installation flag.
   - Hosted CI supplies an empty installation flag. Make installs the pinned
     Chromium browser without a second OS package operation.
-  - The black-box Make test proves both exact command sequences.
-  - The final `make ci` passed all 11 gates in 129 seconds with 100.0% Go
+  - Fixture Make processes reject inherited Make command variables. The
+    black-box test proves both exact command sequences under contaminated
+    parent state.
+  - The final `make ci` passed all 11 gates in 125 seconds with 100.0% Go
     statement coverage.
 
 - [x] [B143] (P1) Keep route filters clear of the sticky public header.
