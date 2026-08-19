@@ -116,16 +116,16 @@ paths:
         audio attachments. `model`, `web_search`, `max_tokens`,
         `reasoning_effort`, and `structured_output` are optional. A structured
         request requires one Idempotency-Key and a supported provider protocol.
-        The proxy saves its provider result for reconciliation through
-        `GET /v2/requests`. Omitting `reasoning_effort` selects the tenant or
-        route default. A supplied value must be non-blank and supported by the
-        resolved route. The selected provider offering owns media admission and
-        transport limits. Unsupported media or route capabilities return HTTP
-        400 before an upstream call. The service rejects an encoded request body
-        above 8 MiB before JSON decoding. A smaller catalog-derived body limit
-        applies when configured. Current Moonshot Kimi image routes preserve
-        attachment order and exact bytes through Chat Completions Data URL
-        blocks.
+        The proxy compiles the schema and validates the selected provider subset
+        before dispatch. It saves its provider result for reconciliation through
+        `GET /v2/requests`. Omitting `reasoning_effort` selects the tenant or route
+        default. A supplied value must be non-blank and supported by the resolved
+        route. The selected provider offering owns media admission and transport
+        limits. Unsupported media or route capabilities return HTTP 400 before
+        an upstream call. The service rejects an encoded request body above 8
+        MiB before JSON decoding. A smaller catalog-derived body limit applies
+        when configured. Current Moonshot Kimi image routes preserve attachment
+        order and exact bytes through Chat Completions Data URL blocks.
       tags:
         - Proxy
       security:
@@ -176,7 +176,8 @@ paths:
       description: >-
         Returns the terminal JSON result, a safe in-progress receipt, or a safe
         terminal failure for the authenticated tenant and exact Idempotency-Key.
-        This operation never dispatches provider work.
+        This operation never dispatches provider work. Every response sets
+        Cache-Control to no-store.
       tags:
         - Proxy
       security:
@@ -1152,6 +1153,8 @@ components:
     StructuredRequestSucceeded:
       description: Exact provider output that passed the caller JSON Schema and was durably committed before this response.
       headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
         X-LLM-Proxy-Structured-Request-State:
           $ref: '#/components/headers/StructuredRequestState'
       content:
@@ -1160,6 +1163,8 @@ components:
     StructuredRequestPending:
       description: The durable request has not reached a terminal state. Reconcile the same key again.
       headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
         X-LLM-Proxy-Structured-Request-State:
           $ref: '#/components/headers/StructuredRequestState'
       content:
@@ -1168,18 +1173,27 @@ components:
             $ref: '#/components/schemas/StructuredRequestStatus'
     StructuredRequestBadRequest:
       description: The Idempotency-Key is missing or invalid.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/StructuredRequestErrorEnvelope'
     StructuredRequestNotFound:
       description: No durable request exists for the authenticated tenant and key.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/StructuredRequestErrorEnvelope'
     StructuredRequestConflict:
       description: The key names a different request intent, or provider dispatch completed with an outcome that cannot be proven.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
       content:
         application/json:
           schema:
@@ -1187,6 +1201,8 @@ components:
     StructuredRequestFailed:
       description: The durable request reached a safe terminal provider failure.
       headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
         X-LLM-Proxy-Structured-Request-State:
           $ref: '#/components/headers/StructuredRequestState'
       content:
@@ -1195,6 +1211,9 @@ components:
             $ref: '#/components/schemas/StructuredRequestErrorEnvelope'
     StructuredRequestStoreFailure:
       description: The durable request record cannot be read or updated.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
       content:
         application/json:
           schema:
@@ -1409,7 +1428,7 @@ components:
         type: integer
         minimum: 0
     NoStore:
-      description: Prevents persistence of authenticated or secret-bearing management responses.
+      description: Prevents persistence of authenticated or secret-bearing responses.
       schema:
         type: string
         const: no-store
@@ -2287,7 +2306,7 @@ components:
       properties:
         schema:
           type: object
-          description: JSON Schema enforced by the selected provider and revalidated by llm-proxy before durable success.
+          description: JSON Schema admitted against the selected provider subset, enforced by that provider, and revalidated by llm-proxy before durable success.
     StructuredRequestStatus:
       type: object
       additionalProperties: false
