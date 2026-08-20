@@ -482,22 +482,52 @@ retain satisfied historical dependencies.
     returned HTTP `200` with `in_progress`. Retrieval returned HTTP `403` with
     `permission_denied`, and deletion returned HTTP `200`. The check retained
     no provider resource ID or response body.
+  - PR #288 deployed as `v4.0.0` from application commit `48adaed`. The runtime
+    uses only tenant-managed provider credentials from the retained database.
+  - The deployed verifier sends `background: false` and `store: false` for all
+    Gemini models. It accepts a synchronous create response without retrieval.
+  - This verifier can accept a key that cannot retrieve a background
+    interaction. Production then rejects the first retrieval with HTTP `403`.
   Requirements:
-  - Preserve Gemini 3.5 Flash's stored background Interactions lifecycle, the
-    900-second request budget, response redaction, and the current deterministic
-    long-completion case.
-  - Keep the permission correction operational. Do not change the adapter or a
-    proxy rate window without new evidence of a source or configuration defect.
+  - For a pollable Gemini model, verify the stored background lifecycle.
+  - Create and retrieve one interaction with the candidate key.
+  - Cancel the interaction when the retrieved state is active.
+  - Delete every stored verification interaction.
+  - Do each verification lifecycle operation one time.
+  - Limit each successful provider response to 1 MiB.
+  - Persist the candidate only after all required lifecycle operations succeed.
+  - Reject a candidate when create succeeds and retrieval returns HTTP `403`.
+  - Preserve the prior key, settings, and defaults after a rejected replacement.
+  - Preserve the 900-second production request budget and response redaction.
   Validation:
+  - Prove the pollable verification request uses `background: true` and
+    `store: true`.
+  - Prove successful verification performs create, retrieve, cancel, and delete
+    before persistence.
+  - Prove retrieval HTTP `403` rejects the candidate and preserves prior state.
+  - Prove a lost lifecycle response does not retry its provider operation.
+  - Prove an oversized lifecycle response rejects the candidate.
   - After the identified boundary is resolved, run the exact Gemini echo and
-    background cases with only the Default-tenant secret and prove HTTP `200`,
-    the final markers, validated request ids, and no response-body disclosure.
+    background cases with only `LLM_PROXY_SECRET`. Prove HTTP `200`, the final
+    markers, validated request ids, and no response-body disclosure.
   - For any source change, run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-  Blocked: the Gemini project owner or Google must grant the key and project
-  permission to retrieve Interactions resources. The owner can instead replace
-  the key with one from a project that has this access. Then rerun the two exact
-  Gemini cases.
+  Development resolution:
+  - On 2026-08-19, pollable Gemini verification now performs one stored
+    background create, one retrieval, cancellation of active work, and deletion.
+  - The management transaction starts only after the complete lifecycle succeeds.
+  - Regression coverage proves that retrieval HTTP `403` rejects a candidate,
+    cleans up the interaction, and preserves the prior credential and settings.
+  - Review corrections make each lifecycle operation a single attempt.
+  - Review corrections limit each successful lifecycle response to 1 MiB.
+  - The review follow-up `make ci` passed all 11 gates with 100% Go statement
+    coverage.
+  - The required baseline and final `make ci` runs passed all 11 gates with
+    100% Go statement coverage.
+  Blocked: release and deploy this source through the repository lifecycle.
+  Then save a new Google AI Studio Auth key in Default tenant Settings and run
+  the exact Gemini echo and background cases. Revoke the old Standard key only
+  after retrieval succeeds.
 - [ ] [B141] (P1) Center the X icon inside the top-right square.
   Goal:
   Align the X icon so it is visually centered within the square control in the top-right corner, matching the intended UI layout shown in the attached screenshot.
@@ -1821,6 +1851,10 @@ retain satisfied historical dependencies.
   - A reviewed governance normalization change with no unrelated product or runtime edits.
   Validation:
   - Run the MPR Lab governor in `--dry-run` and `--check` modes and require no pending managed-file changes.
+  Progress: 2026-08-20. Applied the current managed updates to
+  `.mprlab/POLICY.md` and `.mprlab/issues-md-format.md`. The Governor check is
+  clean. M013 still blocks completion because the root product-context decision
+  is open.
 - [ ] [M019] (P2) Refresh non-security direct dependency pins.
   Goal:
   Bring direct Go, frontend, and Python development dependencies to their current supported releases after the security graph is stable.

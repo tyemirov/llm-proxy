@@ -418,9 +418,9 @@ omission keeps the existing tenant/provider-default behavior.
 
 Every nonempty `api_key` submitted to
 `PUT /api/management/tenants/:tenant_id/provider-keys/:provider` is an
-unverified new or replacement credential. After ownership, provider, and exact
-selected text-model resolution, the handler performs one fixed,
-non-user-content inference through the provider's canonical text transport:
+unverified new or replacement credential. The handler resolves ownership,
+provider, exact text model, wire contract, and execution lifecycle. It then
+performs one fixed, non-user-content probe through the canonical transport:
 
 - OpenAI Responses uses one synchronous, non-stored `POST /responses` with
   `background: false`, `store: false`, and a 16-token output limit.
@@ -429,27 +429,30 @@ non-user-content inference through the provider's canonical text transport:
 - DeepSeek, DashScope, Moonshot, MiniMax, SiliconFlow, Z.AI, Meta, and xAI
   Chat Completions models use one authenticated `POST /chat/completions`.
   The request uses the provider's declared token-limit parameter.
-- Gemini uses one synchronous, non-stored `POST /interactions` request with
-  `x-goog-api-key`, `Api-Revision: 2026-05-20`, `background: false`,
-  `store: false`, and `generation_config.max_output_tokens: 16`.
+- A synchronous Gemini model uses one non-stored `POST /interactions` request.
+  It sends `background: false`, `store: false`, and a 16-token output limit.
+- A pollable Gemini model creates one stored background interaction. It then
+  retrieves the interaction once. It cancels active work and deletes the
+  stored interaction before it accepts the credential.
 - Anthropic uses one Messages request with `x-api-key`,
   `anthropic-version: 2023-06-01`, and `max_tokens: 16`.
 
-The verifier uses the management request context and the same shared upstream
-worker, queue, and origin-rate-limit boundary as proxy traffic. It performs no
-retry, alternate endpoint, polling, continuation, background work, or managed
-usage recording. A transport success counts only when its canonical response
-envelope is structurally valid. Provider `4xx` credential/model rejection maps
-to `422 provider_key_rejected` except `408` timeout and `429` rate limit;
-upstream `504` also maps to timeout. Transport cancellation/deadline, outage,
-and malformed success map to the documented provider-neutral `504`, `503`, or
-`429` error. Candidate keys, fixed probe content, authenticated URLs, and raw
-upstream bodies never enter logs, management responses, profiles, or usage
-rows.
+The verifier uses the management request context and the shared upstream
+worker, queue, and origin-rate-limit boundary. It does not retry, use an
+alternative endpoint, start a continuation, or record managed usage. A pollable
+Gemini probe uses the production adapter's create, retrieve, cancel, and delete
+operations. A transport success counts only when its canonical response is
+valid. Provider `4xx` credential or model rejection maps to
+`422 provider_key_rejected`, except `408` and `429`. Upstream `504` also maps
+to timeout. Transport cancellation, deadline, outage, and malformed success
+map to the documented provider-neutral error. Candidate keys, probe content,
+authenticated URLs, and raw upstream bodies never enter logs, responses,
+profiles, or usage rows.
 
 Only successful verification enters the existing atomic provider-key
-transaction, which encrypts the credential, saves the submitted model and
-system prompt, reconciles routing defaults, and returns the complete profile.
+transaction. The transaction encrypts the credential and saves the submitted
+model and system prompt. It reconciles routing defaults and returns the
+complete profile.
 Every failure leaves a new provider unkeyed or preserves the prior verified
 replacement credential, settings, and defaults unchanged. An empty `api_key`
 is the canonical retain-existing-key settings update and bypasses verification.

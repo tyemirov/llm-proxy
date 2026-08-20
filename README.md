@@ -771,20 +771,22 @@ invalidates the prior request. Other provider-key edits still autosave through
 the same verify-before-persist operation when the user leaves the field,
 switches providers, or closes Settings.
 
-The verifier makes exactly one provider-authenticated, non-user-content
-operation through the selected transport and the shared upstream worker,
-queue, origin-rate-limit, and request-context boundaries. It does not retry,
-fall back, poll, continue in the background, or record managed usage. Only an
-accepted credential, model, and base URL combination enters the provider-key
-transaction. That transaction encrypts the key and saves its submitted base
-URL, model, and system prompt,
+The verifier uses the selected route's exact lifecycle for one fixed,
+non-user-content probe. Synchronous routes make one provider request. A
+pollable Gemini route creates one stored background interaction and retrieves
+it once. The verifier cancels an active interaction and deletes every stored
+interaction before it accepts the credential. Every request uses the shared
+upstream worker, queue, origin-rate-limit, and management request boundaries.
+The verifier does not retry, start a continuation, or record managed usage.
+Only an accepted credential, model, base URL, and lifecycle combination enters
+the provider-key transaction. That transaction encrypts the key and saves its
+submitted base URL, model, and system prompt,
 reconciles routing defaults, and returns the complete keyed profile. When the
-saved provider text model changes and the same provider owns the active text
-route, that transaction also updates the active routing model and clears a
-reasoning effort only when the new model does not support it. A different
-active provider remains unchanged. The browser then clears the raw draft and
-returns to the masked presentation. A successful first key unlocks mandatory
-Settings.
+saved provider text model changes, that transaction can update the active text
+route. It does this only when the same provider owns that route. It also clears
+a reasoning effort when the new model does not support it. A different active
+provider remains unchanged. The browser then clears the raw draft and returns
+to the masked presentation. A successful first key unlocks mandatory Settings.
 
 Credential/model rejection returns `422 provider_key_rejected`; an unconfirmed
 provider rate limit, timeout/cancellation, or outage/malformed response returns
