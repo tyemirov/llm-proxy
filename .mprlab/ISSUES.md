@@ -1593,12 +1593,14 @@ retain satisfied historical dependencies.
     configuration-level provider-key, authentication, and routing paths.
   - Public proxy calls now authenticate only with managed tenant client keys.
     Provider credentials and defaults come only from encrypted tenant records.
-  - Replaced the live-provider harness with disposable managed setup. Added a
-    production client-key preflight that stops before paid calls on rejection.
+  - Managed authentication now sends request cancellation to the tenant
+    database query.
+  - The non-paid preflight now saves a generated OpenAI key through the
+    management API. It routes one prompt through a loopback Responses server.
   - Updated current configuration, tests, documentation, and generated public
     content to use `LLM_PROXY_SECRET` as the only client-key input.
-  - The final `make ci` passed all 11 gates in 169 seconds with 94 browser tests
-    and 100.0% Go statement coverage.
+  - The follow-up `make ci` passed all 11 gates with 100.0% Go statement
+    coverage and the managed provider preflight.
 - [ ] [M021] (P1) {F024,F025,F026,F027} Remove the completed MediaOps operation-import bridge.
   Goal:
   Leave only the canonical model-operation contract after migration of every
