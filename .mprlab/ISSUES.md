@@ -563,6 +563,9 @@ retain satisfied historical dependencies.
   - The compiled lifecycle test rejects a `schema_version` field.
   - Current operator documents describe the permanent versionless contract.
   - The final repository validation passed.
+  - Hosted GitHub `Test` attempt 1 ended with exit 137 when the workflow's
+    outer 350-second timeout stopped gate 10 after gates 1 through 9 passed.
+    Attempt 2 completed successfully at `2026-08-20T23:19:58Z`.
   - Gateway commit `753c727` planned release for application commit
     `490acd7` with 218 tasks passed, 4 changed, and 0 failed.
 
