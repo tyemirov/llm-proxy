@@ -116,7 +116,7 @@
 
                         <tr>
                           <td>Strict placeholders</td>
-                          <td>Missing placeholders fail startup outside the exact optional provider-key case.</td>
+                          <td>Missing placeholders fail startup.</td>
                           <td>Configuration errors are visible before traffic.</td>
                         </tr>
 
@@ -149,8 +149,8 @@
 
 
                     <section class="resource-card">
-                      <h3>Provider disabled</h3>
-                      <p>A non-default provider api_key that is exactly a missing placeholder can expand to blank and remain disabled.</p>
+                      <h3>Obsolete credential field</h3>
+                      <p>A provider api_key field is rejected because provider credentials are tenant-managed state.</p>
                     </section>
 
             </div>
@@ -160,7 +160,7 @@
             <h2>Objections and limitations</h2>
             <ul class="resource-list">
               <li>Changing config requires restart.</li>
-<li>The optional-provider-key exception applies only to the whole api_key value.</li>
+<li>Client keys and provider API keys are saved through authenticated tenant management.</li>
 <li>This is a config discipline feature, not a secrets manager.</li>
             </ul>
           </section>

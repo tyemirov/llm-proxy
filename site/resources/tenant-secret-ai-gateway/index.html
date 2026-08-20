@@ -87,8 +87,8 @@
           <section>
             <h2>How it works</h2>
             <ol class="resource-steps">
-              <li>Create a tenant in static config or through the management UI.</li>
-<li>Generate or configure a tenant secret for the client.</li>
+              <li>Create a tenant through the authenticated management UI.</li>
+<li>Create or replace the tenant client key for the application.</li>
 <li>Use the same key parameter across GET, POST, /v2, and /dictate.</li>
 <li>Replace the secret or delete its owning managed tenant when access should change.</li>
             </ol>
@@ -160,7 +160,7 @@
             <h2>Objections and limitations</h2>
             <ul class="resource-list">
               <li>Tenant secrets should not be placed in public client code without appropriate controls.</li>
-<li>Management mode uses database state for generated secrets; persistence must be configured.</li>
+<li>Generated client keys use managed database state; persistence must be configured.</li>
 <li>This is not a full identity provider; it is the proxy authentication boundary.</li>
             </ul>
           </section>
