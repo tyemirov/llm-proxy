@@ -1340,7 +1340,7 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make up` | Require the ignored private `configs/.env.local`, then build and run the complete local browser orchestration: ghttp static UI and same-origin TAuth routes on `localhost:4179`, plus the API on `localhost:8080`. It waits for Compose startup before verifying the static/config/auth/API boundaries and reporting ready. |
 | `make down` | Stop the exact local Compose project started by `make up`, including orphaned services and its project network, while retaining the named local TAuth and management data volumes. |
 | `make ci` | Prepare pinned frontend dependencies, then run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, frontend syntax checks, the 100% coverage-gated Go test suite, Python pytest, Playwright browser tests, the app lifecycle contract test, and the non-paid live-harness preflight. A successful run ends with a per-gate table, current-run coverage, and an explicit `CI PASSED` receipt. |
-| `make test-live-provider-harness` | Generate a temporary managed tenant and verify authenticated routing without an upstream call. |
+| `make test-live-provider-harness` | Save a temporary managed OpenAI connection and route one request through a loopback provider. |
 | `make test-live-providers` | Start a disposable managed tenant, verify every available provider key through the canonical management operation, and run that provider's live text smoke only after verification succeeds; use `LIVE_ENV_FILE=/path/to/env` to load key values. |
 | `make test-live-provider-media` | Verify OpenAI, Anthropic, Gemini, Moonshot, and xAI keys, then send one paid canonical image request through each provider. |
 | `make test-live-gemini` | Compatibility wrapper for `make test-live-providers` with `LLM_PROXY_LIVE_PROVIDERS=gemini`. |
@@ -1456,13 +1456,14 @@ LLM_PROXY_LIVE_PROVIDERS=openai,gemini \
 ```
 
 The non-paid `--preflight` mode creates an isolated managed user, tenant, and
-client key, then proves authenticated routing without a provider call. The
-`--write-config` mode writes the same managed-only service configuration
-without building or starting the proxy. Inspect that config with
+client key. It saves a generated OpenAI key through the management API. It then
+reloads the encrypted provider record and routes one prompt through a loopback
+Responses server. The `--write-config` mode writes the managed-only service
+configuration without building or starting the proxy. Inspect that config with
 `./scripts/test_live_providers.sh --write-config
 /tmp/llm-proxy-live.yml`. Unless `LLM_PROXY_LIVE_PORT` explicitly selects a
 port, each harness run allocates a fresh loopback port. Cleanup removes only the
-temporary proxy child it started and never terminates an unrelated listener.
+temporary proxy and provider children that it starts.
 
 ### Production Default-tenant live test
 
