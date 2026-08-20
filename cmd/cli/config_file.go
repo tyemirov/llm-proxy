@@ -20,24 +20,16 @@ const (
 	dotEnvFileName = ".env"
 )
 
-const (
-	providerAliasQwen   = "qwen"
-	providerAliasKimi   = "kimi"
-	providerAliasClaude = "claude"
-)
-
 var (
 	errConfigFileRead            = errors.New("config_file_read_failed")
 	errConfigFileParse           = errors.New("config_file_parse_failed")
 	errConfigEnvironmentRead     = errors.New("config_environment_read_failed")
 	errConfigPlaceholderMissing  = errors.New("config_placeholder_missing")
 	errConfigInvalid             = errors.New("config_invalid")
-	errProviderAPIKeyRequired    = errors.New("provider_api_key_required")
 	errProviderBaseURLRequired   = errors.New("provider_base_url_required")
 	errTranscriptionsURLRequired = errors.New("provider_transcriptions_url_required")
 	placeholderPattern           = regexp.MustCompile(`\$\{([^}]+)\}`)
 	placeholderNamePattern       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	optionalAPIKeyLinePattern    = regexp.MustCompile(`^\s*api_key:\s*(?:"\$\{([A-Za-z_][A-Za-z0-9_]*)\}"|'\$\{([A-Za-z_][A-Za-z0-9_]*)\}'|\$\{([A-Za-z_][A-Za-z0-9_]*)\})\s*(?:#.*)?$`)
 	readConfigBytes              = os.ReadFile
 	readDotEnvFile               = gotenv.Read
 	processEnvironment           = os.Environ
@@ -46,7 +38,6 @@ var (
 type fileConfiguration struct {
 	Server     serverConfiguration     `mapstructure:"server"`
 	Management managementConfiguration `mapstructure:"management"`
-	Tenants    []tenantConfiguration   `mapstructure:"tenants"`
 	Providers  providersConfiguration  `mapstructure:"providers"`
 	Catalog    proxy.ModelCatalog      `mapstructure:"catalog"`
 }
@@ -72,14 +63,7 @@ type upstreamRateLimitConfiguration struct {
 	Interval    string `mapstructure:"interval"`
 }
 
-type tenantConfiguration struct {
-	ID       string               `mapstructure:"id"`
-	Secret   string               `mapstructure:"secret"`
-	Defaults tenantDefaultsConfig `mapstructure:"defaults"`
-}
-
 type managementConfiguration struct {
-	Enabled                  bool     `mapstructure:"enabled"`
 	PublicOrigin             string   `mapstructure:"public_origin"`
 	UIDescription            string   `mapstructure:"ui_description"`
 	UIOrigins                []string `mapstructure:"ui_origins"`
@@ -101,15 +85,6 @@ type managementConfiguration struct {
 	ProxyOrigin              string   `mapstructure:"proxy_origin"`
 }
 
-type tenantDefaultsConfig struct {
-	Provider          string `mapstructure:"provider"`
-	Model             string `mapstructure:"model"`
-	DictationProvider string `mapstructure:"dictation_provider"`
-	DictationModel    string `mapstructure:"dictation_model"`
-	SystemPrompt      string `mapstructure:"system_prompt"`
-	ReasoningEffort   string `mapstructure:"reasoning_effort"`
-}
-
 type providersConfiguration struct {
 	OpenAI      transcribingProviderConfiguration `mapstructure:"openai"`
 	DeepSeek    providerConfiguration             `mapstructure:"deepseek"`
@@ -125,20 +100,12 @@ type providersConfiguration struct {
 }
 
 type providerConfiguration struct {
-	APIKey  string `mapstructure:"api_key"`
 	BaseURL string `mapstructure:"base_url"`
 }
 
 type transcribingProviderConfiguration struct {
-	APIKey            string `mapstructure:"api_key"`
 	BaseURL           string `mapstructure:"base_url"`
 	TranscriptionsURL string `mapstructure:"transcriptions_url"`
-}
-
-type providerAPIKeyRequirement struct {
-	providerName string
-	fieldName    string
-	apiKey       string
 }
 
 func loadRuntimeConfiguration(rawConfigPath string) (proxy.Configuration, error) {
@@ -230,9 +197,6 @@ func expandConfigPlaceholders(configContent string, expansionEnvironment map[str
 			if foundValue {
 				return placeholderValue
 			}
-			if optionalMissingAPIKeyPlaceholder(configLine, placeholderName) {
-				return constants.EmptyString
-			}
 			missingPlaceholders[placeholderName] = struct{}{}
 			return placeholder
 		})
@@ -247,17 +211,6 @@ func expandConfigPlaceholders(configContent string, expansionEnvironment map[str
 		return constants.EmptyString, fmt.Errorf("%w: names=%s", errConfigPlaceholderMissing, strings.Join(missingNames, ","))
 	}
 	return expandedConfig.String(), nil
-}
-
-func optionalMissingAPIKeyPlaceholder(configLine string, placeholderName string) bool {
-	trimmedLine := strings.TrimRight(configLine, "\r\n")
-	placeholderLineMatches := optionalAPIKeyLinePattern.FindStringSubmatch(trimmedLine)
-	if len(placeholderLineMatches) == 0 {
-		return false
-	}
-	return placeholderLineMatches[1] == placeholderName ||
-		placeholderLineMatches[2] == placeholderName ||
-		placeholderLineMatches[3] == placeholderName
 }
 
 func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configuration, error) {
@@ -277,19 +230,7 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		return proxy.Configuration{}, usageQueueError
 	}
 	return proxy.NewConfiguration(proxy.Configuration{
-		Tenants:                      tenantConfigurations(configuration.Tenants),
 		Management:                   managementProxyConfiguration(configuration.Management, usageQueueSize),
-		OpenAIKey:                    configuration.Providers.OpenAI.APIKey,
-		DeepSeekKey:                  configuration.Providers.DeepSeek.APIKey,
-		DashScopeKey:                 configuration.Providers.DashScope.APIKey,
-		MoonshotKey:                  configuration.Providers.Moonshot.APIKey,
-		MiniMaxKey:                   configuration.Providers.MiniMax.APIKey,
-		SiliconFlowKey:               configuration.Providers.SiliconFlow.APIKey,
-		ZAIKey:                       configuration.Providers.ZAI.APIKey,
-		GeminiKey:                    configuration.Providers.Gemini.APIKey,
-		AnthropicKey:                 configuration.Providers.Anthropic.APIKey,
-		MetaKey:                      configuration.Providers.Meta.APIKey,
-		XAIKey:                       configuration.Providers.XAI.APIKey,
 		OpenAIBaseURL:                configuration.Providers.OpenAI.BaseURL,
 		OpenAITranscriptionsURL:      configuration.Providers.OpenAI.TranscriptionsURL,
 		DeepSeekBaseURL:              configuration.Providers.DeepSeek.BaseURL,
@@ -345,7 +286,6 @@ func proxyUpstreamRateLimitConfigurations(configurations []upstreamRateLimitConf
 
 func managementProxyConfiguration(configuration managementConfiguration, usageQueueSize int) proxy.ManagementConfiguration {
 	return proxy.ManagementConfiguration{
-		Enabled:                  configuration.Enabled,
 		PublicOrigin:             configuration.PublicOrigin,
 		UIDescription:            configuration.UIDescription,
 		UIOrigins:                configuration.UIOrigins,
@@ -372,13 +312,7 @@ func (configuration fileConfiguration) validateCompleteConfiguration() error {
 	if providerValidationError := configuration.Providers.validateCompleteProviderConfiguration(); providerValidationError != nil {
 		return providerValidationError
 	}
-	if configuration.Management.Enabled {
-		return nil
-	}
-	if strings.TrimSpace(configuration.Providers.DashScope.APIKey) != constants.EmptyString && strings.TrimSpace(configuration.Providers.DashScope.BaseURL) == constants.EmptyString {
-		return fmt.Errorf("%w: provider=%s field=%s", errProviderBaseURLRequired, proxy.ProviderNameDashScope, "providers.dashscope.base_url")
-	}
-	return configuration.validateTenantDefaultProviderCredentials()
+	return nil
 }
 
 func (configuration providersConfiguration) validateCompleteProviderConfiguration() error {
@@ -420,85 +354,4 @@ func (configuration providersConfiguration) validateCompleteProviderConfiguratio
 		}
 	}
 	return nil
-}
-
-func (configuration fileConfiguration) validateTenantDefaultProviderCredentials() error {
-	for _, currentTenant := range configuration.Tenants {
-		if requiredAPIKey, knownProvider := configuration.Providers.textAPIKeyRequirement(currentTenant.Defaults.Provider); knownProvider && strings.TrimSpace(requiredAPIKey.apiKey) == constants.EmptyString {
-			return fmt.Errorf("%w: provider=%s field=%s tenant=%s endpoint=text", errProviderAPIKeyRequired, requiredAPIKey.providerName, requiredAPIKey.fieldName, currentTenant.ID)
-		}
-		if requiredAPIKey, knownProvider := configuration.Providers.dictationAPIKeyRequirement(currentTenant.Defaults.DictationProvider); knownProvider && strings.TrimSpace(requiredAPIKey.apiKey) == constants.EmptyString {
-			return fmt.Errorf("%w: provider=%s field=%s tenant=%s endpoint=dictation", errProviderAPIKeyRequired, requiredAPIKey.providerName, requiredAPIKey.fieldName, currentTenant.ID)
-		}
-	}
-	return nil
-}
-
-func (configuration providersConfiguration) textAPIKeyRequirement(rawProvider string) (providerAPIKeyRequirement, bool) {
-	normalizedProvider := strings.ToLower(strings.TrimSpace(rawProvider))
-	if normalizedProvider == constants.EmptyString {
-		normalizedProvider = proxy.ProviderNameOpenAI
-	}
-	return configuration.apiKeyRequirement(normalizedProvider)
-}
-
-func (configuration providersConfiguration) dictationAPIKeyRequirement(rawProvider string) (providerAPIKeyRequirement, bool) {
-	normalizedProvider := strings.ToLower(strings.TrimSpace(rawProvider))
-	if normalizedProvider == constants.EmptyString {
-		normalizedProvider = proxy.ProviderNameOpenAI
-	}
-	switch normalizedProvider {
-	case proxy.ProviderNameOpenAI, proxy.ProviderNameSiliconFlow, proxy.ProviderNameZAI, proxy.ProviderNameXAI:
-		return configuration.apiKeyRequirement(normalizedProvider)
-	default:
-		return providerAPIKeyRequirement{}, false
-	}
-}
-
-func (configuration providersConfiguration) apiKeyRequirement(normalizedProvider string) (providerAPIKeyRequirement, bool) {
-	switch normalizedProvider {
-	case proxy.ProviderNameOpenAI:
-		return providerAPIKeyRequirement{providerName: proxy.ProviderNameOpenAI, fieldName: "providers.openai.api_key", apiKey: configuration.OpenAI.APIKey}, true
-	case proxy.ProviderNameDeepSeek:
-		return providerAPIKeyRequirement{providerName: proxy.ProviderNameDeepSeek, fieldName: "providers.deepseek.api_key", apiKey: configuration.DeepSeek.APIKey}, true
-	case proxy.ProviderNameDashScope, providerAliasQwen:
-		return providerAPIKeyRequirement{providerName: proxy.ProviderNameDashScope, fieldName: "providers.dashscope.api_key", apiKey: configuration.DashScope.APIKey}, true
-	case proxy.ProviderNameMoonshot, providerAliasKimi:
-		return providerAPIKeyRequirement{providerName: proxy.ProviderNameMoonshot, fieldName: "providers.moonshot.api_key", apiKey: configuration.Moonshot.APIKey}, true
-	case proxy.ProviderNameMiniMax:
-		return providerAPIKeyRequirement{providerName: proxy.ProviderNameMiniMax, fieldName: "providers.minimax.api_key", apiKey: configuration.MiniMax.APIKey}, true
-	case proxy.ProviderNameSiliconFlow:
-		return providerAPIKeyRequirement{providerName: proxy.ProviderNameSiliconFlow, fieldName: "providers.siliconflow.api_key", apiKey: configuration.SiliconFlow.APIKey}, true
-	case proxy.ProviderNameZAI:
-		return providerAPIKeyRequirement{providerName: proxy.ProviderNameZAI, fieldName: "providers.zai.api_key", apiKey: configuration.ZAI.APIKey}, true
-	case proxy.ProviderNameGemini:
-		return providerAPIKeyRequirement{providerName: proxy.ProviderNameGemini, fieldName: "providers.gemini.api_key", apiKey: configuration.Gemini.APIKey}, true
-	case proxy.ProviderNameAnthropic, providerAliasClaude:
-		return providerAPIKeyRequirement{providerName: proxy.ProviderNameAnthropic, fieldName: "providers.anthropic.api_key", apiKey: configuration.Anthropic.APIKey}, true
-	case proxy.ProviderNameMeta:
-		return providerAPIKeyRequirement{providerName: proxy.ProviderNameMeta, fieldName: "providers.meta.api_key", apiKey: configuration.Meta.APIKey}, true
-	case proxy.ProviderNameXAI:
-		return providerAPIKeyRequirement{providerName: proxy.ProviderNameXAI, fieldName: "providers.xai.api_key", apiKey: configuration.XAI.APIKey}, true
-	default:
-		return providerAPIKeyRequirement{}, false
-	}
-}
-
-func tenantConfigurations(rawTenants []tenantConfiguration) []proxy.TenantConfiguration {
-	tenants := make([]proxy.TenantConfiguration, 0, len(rawTenants))
-	for _, rawTenant := range rawTenants {
-		tenants = append(tenants, proxy.TenantConfiguration{
-			ID:     rawTenant.ID,
-			Secret: rawTenant.Secret,
-			Defaults: proxy.TenantDefaults{
-				Provider:          rawTenant.Defaults.Provider,
-				Model:             rawTenant.Defaults.Model,
-				DictationProvider: rawTenant.Defaults.DictationProvider,
-				DictationModel:    rawTenant.Defaults.DictationModel,
-				SystemPrompt:      rawTenant.Defaults.SystemPrompt,
-				ReasoningEffort:   rawTenant.Defaults.ReasoningEffort,
-			},
-		})
-	}
-	return tenants
 }
