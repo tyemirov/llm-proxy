@@ -19,7 +19,7 @@ Docker and container guidance for this repository. Use this guide only when Dock
 
 - Treat local orchestration and production orchestration as different contracts.
 - MPR Lab has no current plan to put these contracts together.
-- Keep app-owned local orchestration during a migration to `schema_version: 3`.
+- Keep app-owned local orchestration separate from the current selected application manifest.
 - A local topology can be different from the production topology.
 - Keep local orchestration files outside `.mprlab/deploy/`.
 - Do not use local orchestration files as production lifecycle inputs.
