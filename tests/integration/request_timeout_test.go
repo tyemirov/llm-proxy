@@ -565,10 +565,10 @@ func TestIntegrationRequestTimeoutLogsTerminalOutcomes(testingInstance *testing.
 	}
 
 	outcomeEntries := observedLogs.FilterMessage("upstream request ended").All()
-	if len(outcomeEntries) != 3 {
+	if len(outcomeEntries) != 2 {
 		testingInstance.Fatalf("outcome log entries=%d", len(outcomeEntries))
 	}
-	expectedOutcomes := []string{"success", "provider_failure", "caller_cancelled"}
+	expectedOutcomes := []string{"success", "provider_failure"}
 	for entryIndex, expectedOutcome := range expectedOutcomes {
 		outcomeFields := outcomeEntries[entryIndex].ContextMap()
 		if outcomeFields["outcome"] != expectedOutcome {

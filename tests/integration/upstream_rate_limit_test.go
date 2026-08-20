@@ -323,7 +323,27 @@ func TestIntegrationUpstreamRateLimitReservesAtCallAdmissionAfterWorkerWait(test
 
 func TestIntegrationCanceledWorkerAcquisitionsDoNotReserveRateSlots(testingInstance *testing.T) {
 	gin.SetMode(gin.TestMode)
+	firstUpstreamStarted := make(chan struct{})
+	releaseFirstUpstream := make(chan struct{})
+	var releaseFirstUpstreamOnce sync.Once
+	testingInstance.Cleanup(func() {
+		releaseFirstUpstreamOnce.Do(func() { close(releaseFirstUpstream) })
+	})
+	var upstreamCallMutex sync.Mutex
+	upstreamCallCount := 0
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		upstreamCallMutex.Lock()
+		upstreamCallCount++
+		callIndex := upstreamCallCount
+		upstreamCallMutex.Unlock()
+		if callIndex == 1 {
+			close(firstUpstreamStarted)
+			select {
+			case <-releaseFirstUpstream:
+			case <-httpRequest.Context().Done():
+				return
+			}
+		}
 		writeRateLimitUpstreamResponse(responseWriter, httpRequest.URL.Path)
 	}))
 	testingInstance.Cleanup(upstreamServer.Close)
@@ -337,25 +357,58 @@ func TestIntegrationCanceledWorkerAcquisitionsDoNotReserveRateSlots(testingInsta
 		Interval:    "2s",
 	}}
 	router := buildRateLimitIntegrationRouter(testingInstance, configuration, zap.NewNop().Sugar())
-
-	requestPath := "/?prompt=" + url.QueryEscape(promptValue) + "&key=" + url.QueryEscape(serviceSecretValue) + "&provider=" + proxy.ProviderNameDeepSeek
-	for requestIndex := 0; requestIndex < 256; requestIndex++ {
-		requestContext, cancelRequest := context.WithCancel(context.Background())
-		cancelRequest()
-		httpRequest := httptest.NewRequest(http.MethodGet, requestPath, nil).WithContext(requestContext)
-		responseRecorder := httptest.NewRecorder()
-		router.ServeHTTP(responseRecorder, httpRequest)
-		if responseRecorder.Code != 499 {
-			testingInstance.Fatalf("canceled request %d status=%d want=%d", requestIndex, responseRecorder.Code, 499)
-		}
-	}
-
 	applicationServer := httptest.NewServer(router)
 	testingInstance.Cleanup(applicationServer.Close)
+	results := make(chan rateLimitRequestResult, 1)
+	go func() {
+		statusCode, requestError := performRateLimitTextRequest(applicationServer.Client(), applicationServer.URL, proxy.ProviderNameDeepSeek)
+		results <- rateLimitRequestResult{statusCode: statusCode, requestError: requestError}
+	}()
+	select {
+	case <-firstUpstreamStarted:
+	case <-time.After(rateLimitAssertionTimeout):
+		testingInstance.Fatal("first upstream request did not start")
+	}
+
+	requestPath := "/?prompt=" + url.QueryEscape(promptValue) + "&key=" + url.QueryEscape(serviceSecretValue) + "&provider=" + proxy.ProviderNameDeepSeek
+	requestContext, cancelRequest := context.WithCancel(context.Background())
+	httpRequest := httptest.NewRequest(http.MethodGet, requestPath, nil).WithContext(requestContext)
+	responseRecorder := httptest.NewRecorder()
+	canceledRequestDone := make(chan struct{})
+	go func() {
+		router.ServeHTTP(responseRecorder, httpRequest)
+		close(canceledRequestDone)
+	}()
+	time.Sleep(rateLimitCancellationTimeout)
+	cancelRequest()
+	select {
+	case <-canceledRequestDone:
+	case <-time.After(rateLimitAssertionTimeout):
+		testingInstance.Fatal("canceled worker acquisition did not complete")
+	}
+	if responseRecorder.Code != 499 {
+		testingInstance.Fatalf("canceled status=%d want=%d", responseRecorder.Code, 499)
+	}
+
+	releaseFirstUpstreamOnce.Do(func() { close(releaseFirstUpstream) })
+	select {
+	case result := <-results:
+		if result.requestError != nil || result.statusCode != http.StatusOK {
+			testingInstance.Fatalf("first request status=%d error=%v", result.statusCode, result.requestError)
+		}
+	case <-time.After(rateLimitAssertionTimeout):
+		testingInstance.Fatal("first request did not complete")
+	}
 	validClient := &http.Client{Timeout: 250 * time.Millisecond}
 	statusCode, requestError := performRateLimitTextRequest(validClient, applicationServer.URL, proxy.ProviderNameDeepSeek)
 	if requestError != nil || statusCode != http.StatusOK {
 		testingInstance.Fatalf("valid request after canceled worker acquisitions status=%d error=%v", statusCode, requestError)
+	}
+	upstreamCallMutex.Lock()
+	actualUpstreamCallCount := upstreamCallCount
+	upstreamCallMutex.Unlock()
+	if actualUpstreamCallCount != 2 {
+		testingInstance.Fatalf("upstream call count=%d want=2", actualUpstreamCallCount)
 	}
 }
 

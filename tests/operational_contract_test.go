@@ -1979,6 +1979,37 @@ case "${request_url}" in
     builtin printf '%s' 200
     ;;
   */api/management/tenants/tenant-live/provider-keys/*)
+    if [[ -n "${PREFLIGHT_PROVIDER_URL:-}" ]]; then
+      if [[ -n "${CURL_PREFLIGHT_BLOCK_PATH:-}" ]]; then
+        builtin printf '%s\n' ready >"${CURL_PREFLIGHT_BLOCK_PATH}"
+        sleep "${CURL_PREFLIGHT_BLOCK_SECONDS:-1}"
+      fi
+      python3 -c '
+import json
+import os
+import pathlib
+import sys
+import urllib.request
+
+candidate = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+payload = json.dumps({
+    "model": candidate["text_model"],
+    "input": "Verify this provider credential.",
+    "max_output_tokens": 16,
+}).encode("utf-8")
+request = urllib.request.Request(
+    os.environ["PREFLIGHT_PROVIDER_URL"] + "/responses",
+    data=payload,
+    headers={
+        "Authorization": "Bearer " + os.environ["PREFLIGHT_PROVIDER_API_KEY"],
+        "Content-Type": "application/json",
+    },
+    method="POST",
+)
+with urllib.request.urlopen(request, timeout=5) as response:
+    response.read()
+' "${request_body_path}"
+    fi
     if [[ -n "${LIVE_OPERATION_CAPTURE:-}" ]]; then
       builtin printf 'verify %s %s\n' "${request_method}" "${request_url}" >>"${LIVE_OPERATION_CAPTURE}"
       builtin printf 'payload ' >>"${LIVE_OPERATION_CAPTURE}"
@@ -1987,13 +2018,6 @@ case "${request_url}" in
     fi
     builtin printf '%s' '{}' >"${output_path}"
     builtin printf '%s' 200
-    ;;
-  *provider=unsupported-live-preflight*)
-    if [[ -n "${CURL_PREFLIGHT_BLOCK_PATH:-}" ]]; then
-      builtin printf '%s\n' ready >"${CURL_PREFLIGHT_BLOCK_PATH}"
-      sleep "${CURL_PREFLIGHT_BLOCK_SECONDS:-1}"
-    fi
-    builtin printf '%s' 400
     ;;
   */v2?provider=*)
     if [[ -n "${LIVE_OPERATION_CAPTURE:-}" ]]; then
@@ -2007,6 +2031,29 @@ case "${request_url}" in
     builtin printf '%s' 200
     ;;
   *provider=*)
+    if [[ -n "${PREFLIGHT_PROVIDER_URL:-}" ]]; then
+      python3 -c '
+import json
+import os
+import urllib.request
+
+payload = json.dumps({
+    "model": "gpt-4.1",
+    "input": "Reply with exactly OK and no punctuation.",
+}).encode("utf-8")
+request = urllib.request.Request(
+    os.environ["PREFLIGHT_PROVIDER_URL"] + "/responses",
+    data=payload,
+    headers={
+        "Authorization": "Bearer " + os.environ["PREFLIGHT_PROVIDER_API_KEY"],
+        "Content-Type": "application/json",
+    },
+    method="POST",
+)
+with urllib.request.urlopen(request, timeout=5) as response:
+    response.read()
+'
+    fi
     if [[ -n "${LIVE_OPERATION_CAPTURE:-}" ]]; then
       builtin printf 'smoke %s %s\n' "${request_method}" "${request_url}" >>"${LIVE_OPERATION_CAPTURE}"
       builtin printf 'smoke-payload %s\n' "${request_body}" >>"${LIVE_OPERATION_CAPTURE}"

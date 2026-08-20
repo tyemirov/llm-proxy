@@ -238,6 +238,15 @@ func TestIntegrationRequestTelemetryClassifiesFailureCancellationAndBudgetExpiry
 			if response.Code != testCase.expectedStatus {
 				subTest.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 			}
+			if testCase.requestContext != nil {
+				if summaries := observedLogs.FilterMessage(telemetrySummaryEvent).All(); len(summaries) != 0 {
+					subTest.Fatalf("pre-authentication cancellation summaries=%v", summaries)
+				}
+				if progress := observedLogs.FilterMessage(telemetryProgressEvent).All(); len(progress) != 0 {
+					subTest.Fatalf("pre-authentication cancellation progress=%v", progress)
+				}
+				return
+			}
 			requestID := response.Header().Get(llmproxycontract.HeaderRequestID)
 			summary := telemetrySummaryForRequest(subTest, observedLogs, requestID)
 			expectedBudget := int64(2)
