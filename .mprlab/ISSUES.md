@@ -493,6 +493,8 @@ retain satisfied historical dependencies.
   - Create and retrieve one interaction with the candidate key.
   - Cancel the interaction when the retrieved state is active.
   - Delete every stored verification interaction.
+  - Do each verification lifecycle operation one time.
+  - Limit each successful provider response to 1 MiB.
   - Persist the candidate only after all required lifecycle operations succeed.
   - Reject a candidate when create succeeds and retrieval returns HTTP `403`.
   - Preserve the prior key, settings, and defaults after a rejected replacement.
@@ -503,6 +505,8 @@ retain satisfied historical dependencies.
   - Prove successful verification performs create, retrieve, cancel, and delete
     before persistence.
   - Prove retrieval HTTP `403` rejects the candidate and preserves prior state.
+  - Prove a lost lifecycle response does not retry its provider operation.
+  - Prove an oversized lifecycle response rejects the candidate.
   - After the identified boundary is resolved, run the exact Gemini echo and
     background cases with only `LLM_PROXY_SECRET`. Prove HTTP `200`, the final
     markers, validated request ids, and no response-body disclosure.
@@ -514,6 +518,10 @@ retain satisfied historical dependencies.
   - The management transaction starts only after the complete lifecycle succeeds.
   - Regression coverage proves that retrieval HTTP `403` rejects a candidate,
     cleans up the interaction, and preserves the prior credential and settings.
+  - Review corrections make each lifecycle operation a single attempt.
+  - Review corrections limit each successful lifecycle response to 1 MiB.
+  - The review follow-up `make ci` passed all 11 gates with 100% Go statement
+    coverage.
   - The required baseline and final `make ci` runs passed all 11 gates with
     100% Go statement coverage.
   Blocked: release and deploy this source through the repository lifecycle.
