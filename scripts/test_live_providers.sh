@@ -9,7 +9,7 @@ Builds the current llm-proxy binary, verifies each available provider key
 through the authenticated management operation, and only then runs its live
 text smoke test. Media mode verifies the five current image providers and then
 runs canonical image requests for their selected catalog routes. The preflight mode builds a temporary
-static configuration and verifies authenticated routing without an upstream
+managed configuration and verifies authenticated routing without an upstream
 provider call.
 
 Required environment:
@@ -46,9 +46,10 @@ Options:
                              and xAI image matrix. LLM_PROXY_LIVE_PROVIDERS can
                              select a subset. LLM_PROXY_LIVE_ALL_MODELS=true
                              runs every selected provider image route.
-  --preflight                Verify the disposable static config without an
+
+  --preflight                Verify the disposable managed config without an
                              upstream provider call.
-  --write-config <path>      Write the disposable static config and exit
+  --write-config <path>      Write the disposable managed config and exit
                              without building the proxy or calling providers.
 
 Per-provider model overrides:
@@ -307,85 +308,8 @@ discover_live_providers() {
   done
 }
 
-export_unused_provider_placeholders() {
-  local key_variable
-  for key_variable in \
-    OPENAI_API_KEY \
-    DEEPSEEK_API_KEY \
-    DASHSCOPE_API_KEY \
-    MOONSHOT_API_KEY \
-    MINIMAX_API_KEY \
-    SILICONFLOW_API_KEY \
-    ZAI_API_KEY \
-    GEMINI_API_KEY \
-    ANTHROPIC_API_KEY \
-    MODEL_API_KEY \
-    XAI_API_KEY; do
-    if [[ -z "${!key_variable:-}" ]]; then
-      export "${key_variable}=unused-${key_variable}-for-live-smoke"
-    fi
-  done
-}
-
 redact_log() {
   sed -E 's/(key=)[^& ]+/\1<redacted>/g; s/(api_key: ).+/\1<redacted>/g' "${LOG_PATH}" >&2 || true
-}
-
-write_static_live_config() {
-  awk -v port="${PORT}" '
-    BEGIN {
-      provider_keys["openai"] = "OPENAI_API_KEY"
-      provider_keys["deepseek"] = "DEEPSEEK_API_KEY"
-      provider_keys["dashscope"] = "DASHSCOPE_API_KEY"
-      provider_keys["moonshot"] = "MOONSHOT_API_KEY"
-      provider_keys["minimax"] = "MINIMAX_API_KEY"
-      provider_keys["siliconflow"] = "SILICONFLOW_API_KEY"
-      provider_keys["zai"] = "ZAI_API_KEY"
-      provider_keys["gemini"] = "GEMINI_API_KEY"
-      provider_keys["anthropic"] = "ANTHROPIC_API_KEY"
-      provider_keys["meta"] = "MODEL_API_KEY"
-      provider_keys["xai"] = "XAI_API_KEY"
-    }
-    /^  port: / && replaced == 0 {
-      print "  port: " port
-      replaced = 1
-      next
-    }
-    /^management:$/ {
-      print "management:"
-      print "  enabled: false"
-      print "tenants:"
-      print "  - id: live-smoke"
-      print "    secret: \"${SERVICE_SECRET}\""
-      print "    defaults:"
-      print "      provider: openai"
-      print "      model: gpt-4.1"
-      print "      dictation_provider: openai"
-      print "      dictation_model: gpt-4o-mini-transcribe"
-      print "      system_prompt: \"\""
-      in_management = 1
-      next
-    }
-    /^providers:$/ {
-      in_management = 0
-      print
-      next
-    }
-    in_management == 1 { next }
-    {
-      print
-      if ($0 ~ /^  [[:alnum:]_]+:$/) {
-        provider = $1
-        sub(/:$/, "", provider)
-        if (provider in provider_keys) {
-          print "    api_key: \"${" provider_keys[provider] "}\""
-          if (provider == "dashscope") {
-            print "    base_url: \"${DASHSCOPE_BASE_URL}\""
-          }
-        }
-      }
-    }
-  ' "${ROOT_DIR}/configs/config.yml" > "${CONFIG_PATH}"
 }
 
 write_managed_live_config() {
@@ -401,7 +325,6 @@ write_managed_live_config() {
 
 configure_live_management_environment() {
   local live_origin="http://127.0.0.1:${PORT}"
-  export LLM_PROXY_MANAGEMENT_ENABLED=true
   export LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN="${live_origin}"
   export LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN="${live_origin}"
   export LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN="http://localhost:${PORT}"
@@ -534,7 +457,7 @@ print(tenants[0]["id"])
     redact_log
     exit 1
   fi
-  if ! SERVICE_SECRET="$(python3 -c '
+  if ! LLM_PROXY_SECRET="$(python3 -c '
 import json
 import pathlib
 import sys
@@ -646,7 +569,7 @@ run_text_smoke() {
       --data "${request_body}" \
       -o "${response_path}" \
       -w "%{http_code}" \
-      "http://127.0.0.1:${PORT}/?provider=${provider}&format=text/plain&key=${SERVICE_SECRET}"
+      "http://127.0.0.1:${PORT}/?provider=${provider}&format=text/plain&key=${LLM_PROXY_SECRET}"
   )"
 
   response_text="$(tr -d '\r\n' < "${response_path}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
@@ -764,7 +687,7 @@ run_image_smoke() {
       --data-binary "@${request_path}" \
       -o "${response_path}" \
       -w "%{http_code}" \
-      "http://127.0.0.1:${PORT}/v2?provider=${provider}&format=text/plain&key=${SERVICE_SECRET}"
+      "http://127.0.0.1:${PORT}/v2?provider=${provider}&format=text/plain&key=${LLM_PROXY_SECRET}"
   )"
 
   response_text="$(tr -d '\r\n' <"${response_path}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
@@ -776,21 +699,21 @@ run_image_smoke() {
   echo "live provider image smoke passed: provider=${provider} model=${model} status=${http_status}"
 }
 
-run_static_config_preflight() {
+run_managed_config_preflight() {
   local response_path="${TMP_DIR}/preflight-response.txt"
   local http_status
   http_status="$(
     curl -sS --max-time 5 \
       -o "${response_path}" \
       -w "%{http_code}" \
-      "http://127.0.0.1:${PORT}/?provider=unsupported-live-preflight&prompt=ready&key=${SERVICE_SECRET}"
+      "http://127.0.0.1:${PORT}/?provider=unsupported-live-preflight&prompt=ready&key=${LLM_PROXY_SECRET}"
   )"
   if [[ "${http_status}" != "400" ]]; then
     echo "error: live provider harness preflight failed: status=${http_status}" >&2
     redact_log
     exit 1
   fi
-  echo "live provider harness preflight passed: static tenant authenticated and routing rejected the unknown provider"
+  echo "live provider harness preflight passed: managed tenant authenticated and routing rejected the unknown provider"
 }
 
 PREFLIGHT_ONLY=false
@@ -893,14 +816,10 @@ fi
 LOG_PATH="${TMP_DIR}/llm-proxy.log"
 PUBLIC_CAPABILITIES_RESPONSE_PATH="${TMP_DIR}/public-capabilities.json"
 export LLM_PROXY_LIVE_PORT="${PORT}"
-if [[ "${PREFLIGHT_ONLY}" == "true" || -n "${WRITE_CONFIG_PATH}" ]]; then
-  export SERVICE_SECRET="${SERVICE_SECRET:-live-service-secret}"
-  export_unused_provider_placeholders
-  write_static_live_config
-else
+if [[ -z "${WRITE_CONFIG_PATH}" ]]; then
   configure_live_management_environment
-  write_managed_live_config
 fi
+write_managed_live_config
 
 if [[ -n "${WRITE_CONFIG_PATH}" ]]; then
   echo "isolated live provider config written: ${CONFIG_PATH}"
@@ -922,12 +841,11 @@ GOEXPERIMENT= "${BINARY_PATH}" --config "${CONFIG_PATH}" >"${LOG_PATH}" 2>&1 &
 PROXY_PID="$!"
 wait_for_proxy
 
+initialize_live_management
 if [[ "${PREFLIGHT_ONLY}" == "true" ]]; then
-  run_static_config_preflight
+  run_managed_config_preflight
   exit 0
 fi
-
-initialize_live_management
 if [[ "${MEDIA_ONLY}" == "true" ]]; then
   fetch_public_capabilities
   for live_provider in "${LIVE_PROVIDERS[@]}"; do
