@@ -531,6 +531,228 @@ func TestManagementPollableGeminiProviderKeyVerificationRejectsIncompleteLifecyc
 	}
 }
 
+func TestManagementPollableGeminiProviderKeyVerificationDoesNotRetryLostLifecycleResponses(t *testing.T) {
+	const interactionIdentifier = "single-attempt-verification-interaction"
+	lifecycleCases := []struct {
+		name             string
+		failedRequest    string
+		expectedSequence []string
+	}{
+		{
+			name:             "create",
+			failedRequest:    http.MethodPost + " " + testGeminiInteractionsPath,
+			expectedSequence: []string{http.MethodPost + " " + testGeminiInteractionsPath},
+		},
+		{
+			name:          "retrieve",
+			failedRequest: http.MethodGet + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
+			expectedSequence: []string{
+				http.MethodPost + " " + testGeminiInteractionsPath,
+				http.MethodGet + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
+				http.MethodPost + " " + testGeminiInteractionsPath + "/" + interactionIdentifier + "/cancel",
+				http.MethodDelete + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
+			},
+		},
+		{
+			name:          "cancel",
+			failedRequest: http.MethodPost + " " + testGeminiInteractionsPath + "/" + interactionIdentifier + "/cancel",
+			expectedSequence: []string{
+				http.MethodPost + " " + testGeminiInteractionsPath,
+				http.MethodGet + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
+				http.MethodPost + " " + testGeminiInteractionsPath + "/" + interactionIdentifier + "/cancel",
+				http.MethodDelete + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
+			},
+		},
+		{
+			name:          "delete",
+			failedRequest: http.MethodDelete + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
+			expectedSequence: []string{
+				http.MethodPost + " " + testGeminiInteractionsPath,
+				http.MethodGet + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
+				http.MethodPost + " " + testGeminiInteractionsPath + "/" + interactionIdentifier + "/cancel",
+				http.MethodDelete + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
+			},
+		},
+	}
+
+	for _, lifecycleCase := range lifecycleCases {
+		t.Run(lifecycleCase.name, func(subTest *testing.T) {
+			candidateKey := "single-attempt-" + lifecycleCase.name + "-gemini-key"
+			requestAttempts := make(map[string]int)
+			requestSequence := make([]string, 0, len(lifecycleCase.expectedSequence))
+			verificationHTTPClient := coverageHTTPDoer(func(request *http.Request) (*http.Response, error) {
+				assertGeminiInteractionHeaders(subTest, request, candidateKey)
+				requestOperation := request.Method + " " + request.URL.Path
+				requestAttempts[requestOperation]++
+				requestSequence = append(requestSequence, requestOperation)
+				if requestOperation == lifecycleCase.failedRequest && requestAttempts[requestOperation] == 1 {
+					return nil, errors.New("Gemini lifecycle response lost after provider processing")
+				}
+				switch requestOperation {
+				case http.MethodPost + " " + testGeminiInteractionsPath,
+					http.MethodGet + " " + testGeminiInteractionsPath + "/" + interactionIdentifier:
+					return coverageHTTPResponse(http.StatusOK, `{"id":"`+interactionIdentifier+`","status":"in_progress"}`), nil
+				case http.MethodPost + " " + testGeminiInteractionsPath + "/" + interactionIdentifier + "/cancel",
+					http.MethodDelete + " " + testGeminiInteractionsPath + "/" + interactionIdentifier:
+					return coverageHTTPResponse(http.StatusOK, `{}`), nil
+				default:
+					subTest.Fatalf("unexpected Gemini verification request=%s", requestOperation)
+					return nil, nil
+				}
+			})
+
+			previousHTTPClient := proxy.HTTPClient
+			proxy.HTTPClient = verificationHTTPClient
+			subTest.Cleanup(func() { proxy.HTTPClient = previousHTTPClient })
+			router := newOperationalProviderKeyVerificationRouter(
+				subTest,
+				providerKeyVerificationConfiguration("https://provider.invalid"),
+				zap.NewNop().Sugar(),
+				subTest.TempDir()+"/managed-tenants.db",
+				TestTimeout,
+			)
+			proxy.HTTPClient = previousHTTPClient
+			sessionCookie := managementSessionCookie(subTest, "pollable-gemini-single-attempt-"+lifecycleCase.name)
+			tenantID := managementDefaultTenantTestID(subTest, router, sessionCookie)
+			response := putManagementProviderKey(
+				subTest,
+				router,
+				sessionCookie,
+				tenantID,
+				proxy.ProviderNameGemini,
+				candidateKey,
+				proxy.ModelNameGemini35Flash,
+				"must not persist",
+				context.Background(),
+			)
+			if response.Code != http.StatusServiceUnavailable || strings.TrimSpace(response.Body.String()) != "provider_key_verification_unavailable" {
+				subTest.Fatalf("status=%d body=%q", response.Code, response.Body.String())
+			}
+			if requestAttempts[lifecycleCase.failedRequest] != 1 {
+				subTest.Fatalf("Gemini %s attempts=%d want=1", lifecycleCase.name, requestAttempts[lifecycleCase.failedRequest])
+			}
+			if fmt.Sprint(requestSequence) != fmt.Sprint(lifecycleCase.expectedSequence) {
+				subTest.Fatalf("Gemini verification sequence=%v want=%v", requestSequence, lifecycleCase.expectedSequence)
+			}
+			profile := requestProviderKeyVerificationProfile(subTest, router, sessionCookie, tenantID)
+			rejectedProvider := verificationProfileProvider(subTest, profile, proxy.ProviderNameGemini)
+			if rejectedProvider.HasKey || profile.Tenant.Defaults.Provider != "" || profile.Tenant.Defaults.Model != "" {
+				subTest.Fatalf("rejected provider=%+v defaults=%+v", rejectedProvider, profile.Tenant.Defaults)
+			}
+		})
+	}
+}
+
+func TestManagementPollableGeminiProviderKeyVerificationRejectsOversizedLifecycleResponses(t *testing.T) {
+	const (
+		interactionIdentifier = "oversized-verification-interaction"
+		oversizedBody         = 1<<20 + 1
+	)
+	lifecycleCases := []struct {
+		name             string
+		oversizedRequest string
+		expectedSequence []string
+	}{
+		{
+			name:             "create",
+			oversizedRequest: http.MethodPost + " " + testGeminiInteractionsPath,
+			expectedSequence: []string{http.MethodPost + " " + testGeminiInteractionsPath},
+		},
+		{
+			name:             "retrieve",
+			oversizedRequest: http.MethodGet + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
+			expectedSequence: []string{
+				http.MethodPost + " " + testGeminiInteractionsPath,
+				http.MethodGet + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
+				http.MethodPost + " " + testGeminiInteractionsPath + "/" + interactionIdentifier + "/cancel",
+				http.MethodDelete + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
+			},
+		},
+		{
+			name:             "cancel",
+			oversizedRequest: http.MethodPost + " " + testGeminiInteractionsPath + "/" + interactionIdentifier + "/cancel",
+			expectedSequence: []string{
+				http.MethodPost + " " + testGeminiInteractionsPath,
+				http.MethodGet + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
+				http.MethodPost + " " + testGeminiInteractionsPath + "/" + interactionIdentifier + "/cancel",
+				http.MethodDelete + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
+			},
+		},
+		{
+			name:             "delete",
+			oversizedRequest: http.MethodDelete + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
+			expectedSequence: []string{
+				http.MethodPost + " " + testGeminiInteractionsPath,
+				http.MethodGet + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
+				http.MethodPost + " " + testGeminiInteractionsPath + "/" + interactionIdentifier + "/cancel",
+				http.MethodDelete + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
+			},
+		},
+	}
+
+	for _, lifecycleCase := range lifecycleCases {
+		t.Run(lifecycleCase.name, func(subTest *testing.T) {
+			candidateKey := "oversized-" + lifecycleCase.name + "-gemini-key"
+			requestSequence := make([]string, 0, len(lifecycleCase.expectedSequence))
+			verificationHTTPClient := coverageHTTPDoer(func(request *http.Request) (*http.Response, error) {
+				assertGeminiInteractionHeaders(subTest, request, candidateKey)
+				requestOperation := request.Method + " " + request.URL.Path
+				requestSequence = append(requestSequence, requestOperation)
+				if requestOperation == lifecycleCase.oversizedRequest {
+					return coverageHTTPResponse(http.StatusOK, strings.Repeat("x", oversizedBody)), nil
+				}
+				switch requestOperation {
+				case http.MethodPost + " " + testGeminiInteractionsPath,
+					http.MethodGet + " " + testGeminiInteractionsPath + "/" + interactionIdentifier:
+					return coverageHTTPResponse(http.StatusOK, `{"id":"`+interactionIdentifier+`","status":"in_progress"}`), nil
+				case http.MethodPost + " " + testGeminiInteractionsPath + "/" + interactionIdentifier + "/cancel",
+					http.MethodDelete + " " + testGeminiInteractionsPath + "/" + interactionIdentifier:
+					return coverageHTTPResponse(http.StatusOK, `{}`), nil
+				default:
+					subTest.Fatalf("unexpected Gemini verification request=%s", requestOperation)
+					return nil, nil
+				}
+			})
+
+			previousHTTPClient := proxy.HTTPClient
+			proxy.HTTPClient = verificationHTTPClient
+			subTest.Cleanup(func() { proxy.HTTPClient = previousHTTPClient })
+			router := newOperationalProviderKeyVerificationRouter(
+				subTest,
+				providerKeyVerificationConfiguration("https://provider.invalid"),
+				zap.NewNop().Sugar(),
+				subTest.TempDir()+"/managed-tenants.db",
+				TestTimeout,
+			)
+			proxy.HTTPClient = previousHTTPClient
+			sessionCookie := managementSessionCookie(subTest, "pollable-gemini-oversized-"+lifecycleCase.name)
+			tenantID := managementDefaultTenantTestID(subTest, router, sessionCookie)
+			response := putManagementProviderKey(
+				subTest,
+				router,
+				sessionCookie,
+				tenantID,
+				proxy.ProviderNameGemini,
+				candidateKey,
+				proxy.ModelNameGemini35Flash,
+				"must not persist",
+				context.Background(),
+			)
+			if response.Code != http.StatusServiceUnavailable || strings.TrimSpace(response.Body.String()) != "provider_key_verification_unavailable" {
+				subTest.Fatalf("status=%d body=%q", response.Code, response.Body.String())
+			}
+			if fmt.Sprint(requestSequence) != fmt.Sprint(lifecycleCase.expectedSequence) {
+				subTest.Fatalf("Gemini verification sequence=%v want=%v", requestSequence, lifecycleCase.expectedSequence)
+			}
+			profile := requestProviderKeyVerificationProfile(subTest, router, sessionCookie, tenantID)
+			rejectedProvider := verificationProfileProvider(subTest, profile, proxy.ProviderNameGemini)
+			if rejectedProvider.HasKey || profile.Tenant.Defaults.Provider != "" || profile.Tenant.Defaults.Model != "" {
+				subTest.Fatalf("rejected provider=%+v defaults=%+v", rejectedProvider, profile.Tenant.Defaults)
+			}
+		})
+	}
+}
+
 func TestManagementXAIResponsesVerificationUsesTheXAIEndpoint(t *testing.T) {
 	openAIRequests := atomic.Int32{}
 	openAIServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, _ *http.Request) {

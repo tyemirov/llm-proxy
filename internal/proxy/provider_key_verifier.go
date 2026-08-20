@@ -120,9 +120,9 @@ func (verifier *operationalProviderKeyVerifier) verify(parentContext context.Con
 	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
 		return providerKeyVerificationStatusError(httpResponse.StatusCode)
 	}
-	responseBytes, readError := io.ReadAll(io.LimitReader(httpResponse.Body, providerKeyVerificationResponseLimit+1))
-	if readError != nil || int64(len(responseBytes)) > providerKeyVerificationResponseLimit {
-		return errProviderKeyVerificationUnavailable
+	responseBytes, responseError := readProviderKeyVerificationResponse(httpResponse.Body)
+	if responseError != nil {
+		return responseError
 	}
 	responseValidator := providerKeyVerificationResponseValidators[model.wireContract]
 	if !responseValidator(responseBytes) {
@@ -132,7 +132,7 @@ func (verifier *operationalProviderKeyVerifier) verify(parentContext context.Con
 }
 
 func (verifier *operationalProviderKeyVerifier) verifyPollableGeminiCredential(verificationContext context.Context, provider providerDefinition, model textModelDefinition, apiKey string) (verificationError error) {
-	geminiClient := newGeminiInteractionsClient(verifier.httpClient)
+	geminiClient := newGeminiInteractionsClientWithHTTPPerformer(verifier.httpClient, performProviderKeyVerificationGeminiInteractionHTTP)
 	payload := geminiProviderKeyVerificationPayload(model, true)
 	createdSnapshot, createError := geminiClient.createInteraction(verificationContext, apiKey, provider.textBaseURL, payload, verifier.logger)
 	if strings.TrimSpace(createdSnapshot.identifier) == "" {
@@ -162,6 +162,27 @@ func (verifier *operationalProviderKeyVerifier) verifyPollableGeminiCredential(v
 		return errProviderKeyVerificationUnavailable
 	}
 	return nil
+}
+
+func performProviderKeyVerificationGeminiInteractionHTTP(httpClient HTTPDoer, httpRequest *http.Request, _ *zap.SugaredLogger) (int, []byte, http.Header, error) {
+	httpResponse, requestError := httpClient.Do(httpRequest)
+	if requestError != nil {
+		return 0, nil, nil, requestError
+	}
+	defer httpResponse.Body.Close()
+	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
+		return httpResponse.StatusCode, nil, httpResponse.Header, nil
+	}
+	responseBytes, responseError := readProviderKeyVerificationResponse(httpResponse.Body)
+	return httpResponse.StatusCode, responseBytes, httpResponse.Header, responseError
+}
+
+func readProviderKeyVerificationResponse(responseBody io.Reader) ([]byte, error) {
+	responseBytes, readError := io.ReadAll(io.LimitReader(responseBody, providerKeyVerificationResponseLimit+1))
+	if readError != nil || int64(len(responseBytes)) > providerKeyVerificationResponseLimit {
+		return nil, errProviderKeyVerificationUnavailable
+	}
+	return responseBytes, nil
 }
 
 func buildOpenAIProviderKeyVerificationRequest(requestContext context.Context, endpoints *Endpoints, _ providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {

@@ -51,8 +51,11 @@ const (
 )
 
 type geminiInteractionsClient struct {
-	httpClient HTTPDoer
+	httpClient             HTTPDoer
+	performInteractionHTTP geminiInteractionHTTPPerformer
 }
+
+type geminiInteractionHTTPPerformer func(HTTPDoer, *http.Request, *zap.SugaredLogger) (int, []byte, http.Header, error)
 
 type geminiInteractionCleanupMode uint8
 
@@ -127,7 +130,19 @@ type geminiInteractionSnapshot struct {
 }
 
 func newGeminiInteractionsClient(httpClient HTTPDoer) *geminiInteractionsClient {
-	return &geminiInteractionsClient{httpClient: httpClient}
+	return newGeminiInteractionsClientWithHTTPPerformer(httpClient, performRetryingGeminiInteractionHTTP)
+}
+
+func newGeminiInteractionsClientWithHTTPPerformer(httpClient HTTPDoer, performer geminiInteractionHTTPPerformer) *geminiInteractionsClient {
+	return &geminiInteractionsClient{
+		httpClient:             httpClient,
+		performInteractionHTTP: performer,
+	}
+}
+
+func performRetryingGeminiInteractionHTTP(httpClient HTTPDoer, httpRequest *http.Request, structuredLogger *zap.SugaredLogger) (int, []byte, http.Header, error) {
+	statusCode, responseBytes, responseHeader, _, requestError := utils.PerformHTTPRequest(httpClient.Do, httpRequest, structuredLogger, logEventProviderRequestError)
+	return statusCode, responseBytes, responseHeader, requestError
 }
 
 func (client *geminiInteractionsClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, executionLifecycle textExecutionLifecycle, structuredOutput *structuredOutputSchema, structuredLogger *zap.SugaredLogger) (generation textGenerationResult, generationError error) {
@@ -289,7 +304,7 @@ func (client *geminiInteractionsClient) performInteractionRequest(parentContext 
 		httpRequest.Header.Set(headerContentType, mimeApplicationJSON)
 	}
 
-	statusCode, responseBytes, responseHeader, _, requestError := utils.PerformHTTPRequest(client.httpClient.Do, httpRequest, structuredLogger, logEventProviderRequestError)
+	statusCode, responseBytes, responseHeader, requestError := client.performInteractionHTTP(client.httpClient, httpRequest, structuredLogger)
 	if statusCode == http.StatusRequestEntityTooLarge && geminiInteractionPayloadHasMedia(payload) {
 		return nil, newProviderMediaLimitHTTPError(statusCode, responseHeader)
 	}
