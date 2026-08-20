@@ -24,6 +24,12 @@ type blockingUsageManagedTenantDatabase struct {
 	usageRelease chan struct{}
 }
 
+type cancelAwareAuthenticationManagedTenantDatabase struct {
+	managedTenantDatabase
+	queryStarted chan struct{}
+	queryRelease chan struct{}
+}
+
 func (database *blockingUsageManagedTenantDatabase) createUsageEvent(requestContext context.Context, record managedUsageEventRecord) error {
 	close(database.usageStarted)
 	select {
@@ -31,6 +37,48 @@ func (database *blockingUsageManagedTenantDatabase) createUsageEvent(requestCont
 		return database.managedTenantDatabase.createUsageEvent(requestContext, record)
 	case <-requestContext.Done():
 		return requestContext.Err()
+	}
+}
+
+func (database *cancelAwareAuthenticationManagedTenantDatabase) tenantBySecretDigest(requestContext context.Context, _ string) (managedTenantRecord, error) {
+	close(database.queryStarted)
+	select {
+	case <-requestContext.Done():
+		return managedTenantRecord{}, requestContext.Err()
+	case <-database.queryRelease:
+		return managedTenantRecord{}, gorm.ErrRecordNotFound
+	}
+}
+
+func TestManagedTenantAuthenticationHonorsRequestCancellation(t *testing.T) {
+	database := &cancelAwareAuthenticationManagedTenantDatabase{
+		managedTenantDatabase: newFakeManagedTenantDatabase(),
+		queryStarted:          make(chan struct{}),
+		queryRelease:          make(chan struct{}),
+	}
+	defer close(database.queryRelease)
+	store := newManagedTenantStoreWithDatabase(database)
+	requestContext, cancelRequest := context.WithCancel(context.Background())
+	defer cancelRequest()
+	authenticationDone := make(chan bool, 1)
+	go func() {
+		_, authenticated := store.authenticate(requestContext, "llmp_cancelled_authentication")
+		authenticationDone <- authenticated
+	}()
+
+	select {
+	case <-database.queryStarted:
+	case <-time.After(time.Second):
+		t.Fatal("managed authentication query did not start")
+	}
+	cancelRequest()
+	select {
+	case authenticated := <-authenticationDone:
+		if authenticated {
+			t.Fatal("cancelled managed authentication succeeded")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("managed authentication did not honor request cancellation")
 	}
 }
 

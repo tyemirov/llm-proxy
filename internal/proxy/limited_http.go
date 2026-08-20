@@ -130,12 +130,8 @@ func (doer *limitedHTTPDoer) acquireUpstreamWorker(httpRequest *http.Request) er
 func (doer *limitedHTTPDoer) acquireRateLimitedWorker(httpRequest *http.Request, rateLimiter *upstreamRateLimiter) (upstreamRateLimitWait, error) {
 	wait := upstreamRateLimitWait{}
 	for {
-		if acquireError := doer.acquire(httpRequest); acquireError != nil {
+		if acquireError := doer.acquireCancelableWorker(httpRequest); acquireError != nil {
 			return wait, acquireError
-		}
-		if contextError := httpRequest.Context().Err(); contextError != nil {
-			doer.releaseActive()
-			return wait, contextError
 		}
 		waitDuration := rateLimiter.nextWaitDuration(doer.clock.Now())
 		if waitDuration <= 0 {
@@ -154,6 +150,13 @@ func (doer *limitedHTTPDoer) acquireRateLimitedWorker(httpRequest *http.Request,
 			return wait, waitError
 		}
 	}
+}
+
+func (doer *limitedHTTPDoer) acquireCancelableWorker(httpRequest *http.Request) error {
+	if acquireError := doer.acquire(httpRequest); acquireError != nil {
+		return acquireError
+	}
+	return doer.releaseWorkerForCanceledContext(httpRequest.Context())
 }
 
 func (rateLimiter *upstreamRateLimiter) nextWaitDuration(now time.Time) time.Duration {
@@ -204,6 +207,15 @@ func (doer *limitedHTTPDoer) acquire(httpRequest *http.Request) error {
 		addRequestTelemetryPhase(httpRequest.Context(), requestTelemetryPhaseUpstreamAdmission, admissionStartedAt)
 		return httpRequest.Context().Err()
 	}
+}
+
+func (doer *limitedHTTPDoer) releaseWorkerForCanceledContext(requestContext context.Context) error {
+	contextError := requestContext.Err()
+	if contextError == nil {
+		return nil
+	}
+	doer.releaseActive()
+	return contextError
 }
 
 func (doer *limitedHTTPDoer) releaseActive() {

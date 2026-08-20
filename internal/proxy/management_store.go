@@ -2734,7 +2734,7 @@ func (store *managedTenantStore) authenticate(requestContext context.Context, ra
 	}
 	presentedDigest := sha256.Sum256([]byte(presentedSecret))
 	presentedDigestString := hex.EncodeToString(presentedDigest[:])
-	record, recordError := store.database.tenantBySecretDigest(context.WithoutCancel(requestContext), presentedDigestString)
+	record, recordError := store.database.tenantBySecretDigest(requestContext, presentedDigestString)
 	if recordError != nil {
 		return tenant{}, false
 	}

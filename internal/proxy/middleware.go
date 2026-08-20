@@ -81,6 +81,11 @@ func tenantAuthenticatedHandler(authenticator tenantAuthenticator, structuredLog
 func authenticateTenantRequest(ginContext *gin.Context, authenticator tenantAuthenticator, structuredLogger *zap.SugaredLogger) bool {
 	requestTenant, authenticated := authenticator.authenticate(ginContext.Request.Context(), ginContext.Query(queryParameterKey))
 	if !authenticated {
+		if ginContext.Request.Context().Err() != nil {
+			ginContext.Status(statusClientClosedRequest)
+			ginContext.Abort()
+			return false
+		}
 		structuredLogger.Warnw(
 			logEventForbiddenRequest,
 			logFieldRequestID, requestIDFromContext(ginContext),
