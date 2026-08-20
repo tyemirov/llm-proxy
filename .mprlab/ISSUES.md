@@ -562,7 +562,7 @@ retain satisfied historical dependencies.
   - The selected application manifest now has no schema number.
   - The compiled lifecycle test rejects a `schema_version` field.
   - Current operator documents describe the permanent versionless contract.
-  - The final repository and gateway plan validations passed.
+  - The final repository validation passed.
 
 - [x] [I229] (P0) Add schema-constrained, resumable semantic-review requests.
   Goal:
