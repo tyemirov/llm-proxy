@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="97fa4f3ca48c18aa2ae935bef21262de0b40bbb694c991e3d249ff7146db1940">
+    <meta name="openapi-source-sha256" content="ab81cae6355f37c2360e06485d9f29a45f87ffede97c490757a5599e2440cd8a">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="97fa4f3ca48c18aa2ae935bef21262de0b40bbb694c991e3d249ff7146db1940">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="ab81cae6355f37c2360e06485d9f29a45f87ffede97c490757a5599e2440cd8a">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -49,7 +49,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>97fa4f3ca48c18aa2ae935bef21262de0b40bbb694c991e3d249ff7146db1940</code></span>
+          <span>Source SHA-256 <code>ab81cae6355f37c2360e06485d9f29a45f87ffede97c490757a5599e2440cd8a</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -639,7 +639,19 @@ paths:
     put:
       operationId: putManagementProviderKey
       summary: Verify and save provider settings and a provider credential
-      description: A nonempty api_key performs exactly one provider-authenticated verification operation for the selected provider, text model, and provider base URL under the management request context and shared upstream admission/rate-limit boundary. Changing a saved DashScope base_url also verifies the retained key against the new URL. Only a successful verification atomically persists the credential and submitted settings, reconciles routing defaults, and returns a keyed profile. Rejection and unconfirmed transient outcomes never mutate the provider key, settings, defaults, or managed usage. An empty api_key retains the existing verified credential. The operation returns 409 without a mutation if that retained credential changes before the verified update can persist.
+      description: &gt;-
+        A nonempty api_key verifies the selected provider, text model, base URL,
+        wire contract, and execution lifecycle. Synchronous routes use one
+        provider request. Pollable Gemini routes create and retrieve one stored
+        background interaction. The verifier cancels active work and deletes
+        the interaction before persistence. Changing a saved DashScope base_url
+        also verifies the retained key against the new URL. Only complete
+        verification atomically persists the credential and submitted settings.
+        It also reconciles routing defaults and returns a keyed profile.
+        Rejection and unconfirmed outcomes do not mutate provider state or
+        managed usage. An empty api_key retains the existing verified
+        credential. The operation returns 409 without a mutation when that
+        credential changes before persistence.
       tags:
         - Management
       security:
@@ -3735,7 +3747,7 @@ components:
           <span class="api-operation-id">putManagementProviderKey</span>
         </header>
         <h2>Verify and save provider settings and a provider credential</h2>
-        <p>A nonempty api_key performs exactly one provider-authenticated verification operation for the selected provider, text model, and provider base URL under the management request context and shared upstream admission/rate-limit boundary. Changing a saved DashScope base_url also verifies the retained key against the new URL. Only a successful verification atomically persists the credential and submitted settings, reconciles routing defaults, and returns a keyed profile. Rejection and unconfirmed transient outcomes never mutate the provider key, settings, defaults, or managed usage. An empty api_key retains the existing verified credential. The operation returns 409 without a mutation if that retained credential changes before the verified update can persist.</p>
+        <p>A nonempty api_key verifies the selected provider, text model, base URL, wire contract, and execution lifecycle. Synchronous routes use one provider request. Pollable Gemini routes create and retrieve one stored background interaction. The verifier cancels active work and deletes the interaction before persistence. Changing a saved DashScope base_url also verifies the retained key against the new URL. Only complete verification atomically persists the credential and submitted settings. It also reconciles routing defaults and returns a keyed profile. Rejection and unconfirmed outcomes do not mutate provider state or managed usage. An empty api_key retains the existing verified credential. The operation returns 409 without a mutation when that credential changes before persistence.</p>
         <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
         <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
         <div class="api-contract-block">
