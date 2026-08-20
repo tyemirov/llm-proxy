@@ -118,7 +118,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	geminiClient := newGeminiInteractionsClient(upstreamHTTPClient)
 	anthropicClient := newAnthropicMessagesClient(upstreamHTTPClient)
 	upstreamProviders := newProviderRouter(openAIClient, chatClient, geminiClient, anthropicClient)
-	keyVerifier := newOperationalProviderKeyVerifier(upstreamHTTPClient, configuration.Endpoints, time.Duration(configuration.RequestTimeoutSeconds)*time.Second)
+	keyVerifier := newOperationalProviderKeyVerifier(upstreamHTTPClient, configuration.Endpoints, time.Duration(configuration.RequestTimeoutSeconds)*time.Second, structuredLogger)
 	managedTenants, storeError := openManagedTenantStore(configuration.Management, providers)
 	if storeError != nil {
 		return nil, storeError
