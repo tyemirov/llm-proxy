@@ -1851,6 +1851,10 @@ retain satisfied historical dependencies.
   - A reviewed governance normalization change with no unrelated product or runtime edits.
   Validation:
   - Run the MPR Lab governor in `--dry-run` and `--check` modes and require no pending managed-file changes.
+  Progress: 2026-08-20. Applied the current managed updates to
+  `.mprlab/POLICY.md` and `.mprlab/issues-md-format.md`. The Governor check is
+  clean. M013 still blocks completion because the root product-context decision
+  is open.
 - [ ] [M019] (P2) Refresh non-security direct dependency pins.
   Goal:
   Bring direct Go, frontend, and Python development dependencies to their current supported releases after the security graph is stable.

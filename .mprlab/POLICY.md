@@ -27,6 +27,22 @@ This policy controls all agent work in this repository.
 - Hardcoded workflow, path, event, or message literals when a canonical constant or backend payload exists.
 - Unit tests as a substitute for public contract coverage.
 
+## Credential Discovery
+
+- Identify each required environment variable from the active command and repository contract.
+- Inspect the process environment before you request a login.
+- Inspect repository private environment files before you report a credential blocker.
+- Include ignored `.env`, `.env.*`, and `*.env` files in the authorized repository roots.
+- Treat tracked example and sample environment files as documentation only.
+- Search only for exact variable names. Do not print, copy, or record secret values.
+- When a command declares one repository environment file as its input, clear
+  its owned process variables and source only that file.
+- Use the command's standard environment lookup. Do not add a credential parser
+  or another input channel.
+- When available, use a non-mutating authentication command to verify the discovered value.
+- Request new credentials only after each authorized existing input fails verification.
+- Report a credential blocker only after you complete this gate.
+
 ## Validation
 
 - Use repository-native `make` targets when available.
