@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Authenticate an LLM Proxy client with a tenant secret</title>
+    <meta name="description" content="Configure a client with a tenant secret, send canonical /v2 requests, and keep management sessions and provider keys on separate boundaries.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/llm-proxy-client-authentication/">
+    <meta property="og:title" content="Authenticate an LLM Proxy client with a tenant secret">
+    <meta property="og:description" content="Configure a client with a tenant secret, send canonical /v2 requests, and keep management sessions and provider keys on separate boundaries.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/llm-proxy-client-authentication/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.3.0/dist/js-yaml.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"></script>
+    <script
+      id="mpr-ui-bundle"
+      type="application/json"
+      data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
+    ></script>
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Authenticate an LLM Proxy client with a tenant secret","description":"Configure a client with a tenant secret, send canonical /v2 requests, and keep management sessions and provider keys on separate boundaries.","url":"https://llm-proxy.mprlab.com/resources/llm-proxy-client-authentication/","datePublished":"2026-08-08","dateModified":"2026-08-08","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/llm-proxy-client-authentication/","about":["LLM Proxy","Clients","LLM Proxy client authentication"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Authenticate an LLM Proxy client with a tenant secret","item":"https://llm-proxy.mprlab.com/resources/llm-proxy-client-authentication/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Does the LLM Proxy client load user-level or system-level YAML?","acceptedAnswer":{"@type":"Answer","text":"No. The installable client uses explicit flags or LLM_PROXY_BASE_URL and LLM_PROXY_SECRET, and its optional file-based provider/model input is an application-owned JSON model profile. config.yml belongs to the service runtime."}},{"@type":"Question","name":"What authenticates a public text request?","acceptedAnswer":{"@type":"Answer","text":"GET, POST, and POST /v2 requests authenticate with the tenant secret in the key query parameter. The bundled text clients add that parameter while sending the request body to canonical /v2."}},{"@type":"Question","name":"What authenticates management Settings operations?","acceptedAnswer":{"@type":"Answer","text":"The management UI relies on the configured MPR UI and TAuth session for management APIs. That browser session is separate from the tenant secret used by public proxy requests."}},{"@type":"Question","name":"Where do provider API keys belong?","acceptedAnswer":{"@type":"Answer","text":"Provider API keys belong only in authenticated tenant management storage. Public proxy requests reject provider-key-like fields instead of forwarding them upstream."}},{"@type":"Question","name":"What happens when the client key is missing, invalid, or replaced?","acceptedAnswer":{"@type":"Answer","text":"The public proxy request returns 403 before it reaches an upstream provider."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Tenant-secret AI gateway for internal applications, which covers tenant secret AI gateway."}}]}</script>
+    <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
+  </head>
+  <body class="resource-page">
+
+    <mpr-header
+      class="public-site-header"
+      data-config-url="https://llm-proxy-api.mprlab.com/config-ui.yaml"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      logout-url="/"
+      settings="false"
+      sign-in-label="Log In"
+      sign-in-redirect-url="/app/"
+      size="small"
+      sticky="true"
+      auth-transition='{"title":"Opening LLM Proxy","message":"Loading your app."}'
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"}]}'
+    >
+      <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
+        <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
+        <span>LLM Proxy</span>
+      </a>
+    </mpr-header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>Authenticate an LLM Proxy client with a tenant secret</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Clients</p>
+            <h1>Authenticate an LLM Proxy client with a tenant secret</h1>
+            <p class="resource-deck">Configure a client with a tenant secret, send canonical /v2 requests, and keep management sessions and provider keys on separate boundaries.</p>
+            <p class="resource-audience">Developers connecting an application, script, or command-line workflow to LLM Proxy.</p>
+            <p class="resource-byline">Reviewed 2026-08-08 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <aside class="resource-verdict" aria-label="Quick verdict">
+              <strong>Quick verdict</strong>
+              <p>Use the tenant secret on client-to-proxy calls; use the TAuth management session only to obtain or manage access, and never substitute an upstream provider API key for either one.</p>
+            </aside>
+            <div class="resource-actions">
+              <a class="resource-button" href="/docs/">Open API reference</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>A client integration can confuse three different credentials: the tenant secret that authorizes proxy requests, the TAuth session that authorizes management actions, and upstream provider API keys that must stay server-side.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy authenticates public client requests with key=&lt;tenant secret&gt;. The bundled text clients send canonical POST /v2 messages, while the TAuth-protected management UI creates or manages client access and provider settings separately.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>A signed-in management user creates or replaces the tenant client key and receives its value once.</li>
+<li>Give the client a proxy base URL and tenant secret through its application configuration; the installable CLI accepts flags or LLM_PROXY_BASE_URL and LLM_PROXY_SECRET.</li>
+<li>Send canonical POST /v2 messages with the tenant secret in the key query parameter.</li>
+<li>Omit provider and model to use the authenticated tenant default, or select a configured provider when the request needs an override.</li>
+<li>Confirm replacement when the client key must change; future proxy requests with the prior, missing, or invalid key return 403.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+
+                        <tr>
+                          <td>One public client credential</td>
+                          <td>The client authenticates to LLM Proxy with a tenant secret instead of an upstream provider key.</td>
+                          <td>A script sends key=mysecret to /v2 while OpenAI, Gemini, or other provider credentials remain on the server.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Separate management authentication</td>
+                          <td>TAuth/MPR UI sessions authorize management APIs and Settings, not a direct text request.</td>
+                          <td>A signed-in user can create or replace a client key, then the application uses that key on its own proxy calls.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Explicit client configuration</td>
+                          <td>The installable CLI reads flags or environment values; it has no user-level or system-level YAML lookup.</td>
+                          <td>An application can use the optional JSON model profile only when it owns per-user provider/model selection.</td>
+                        </tr>
+
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+
+                    <section class="resource-card">
+                      <h3>Backend integration</h3>
+                      <p>A service stores its tenant secret in its deployment-owned configuration and sends messages through /v2.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Management onboarding</h3>
+                      <p>A user signs in through the shared MPR UI, copies the one-time client key, and saves a provider key before using generated request examples.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Provider-default request</h3>
+                      <p>A caller omits provider and model so the authenticated tenant's configured route decides the upstream provider and model.</p>
+                    </section>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>The bundled Go, Python, and CLI clients are text-message clients; dictation uses the separate multipart /dictate contract.</li>
+<li>A tenant secret is still sensitive application access material and is not an upstream provider API key.</li>
+<li>The optional application-owned model profile is JSON only and cannot be combined with competing provider or model inputs.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>Repository evidence</h2>
+            <pre class="usage-snippet"><code>curl -X POST \
+  -H &quot;Content-Type: application/json&quot; \
+  --data '{&quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;Summarize this&quot;,&quot;order&quot;:2},{&quot;role&quot;:&quot;system&quot;,&quot;content&quot;:&quot;Be concise.&quot;,&quot;order&quot;:1}],&quot;model&quot;:&quot;deepseek-v4-flash&quot;,&quot;max_tokens&quot;:4096}' \
+  &quot;http://localhost:8080/v2?key=mysecret&amp;provider=deepseek&quot;</code></pre>
+            <p>Verified 2026-08-08 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+
+                    <details>
+                      <summary>Does the LLM Proxy client load user-level or system-level YAML?</summary>
+                      <p>No. The installable client uses explicit flags or LLM_PROXY_BASE_URL and LLM_PROXY_SECRET, and its optional file-based provider/model input is an application-owned JSON model profile. config.yml belongs to the service runtime.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>What authenticates a public text request?</summary>
+                      <p>GET, POST, and POST /v2 requests authenticate with the tenant secret in the key query parameter. The bundled text clients add that parameter while sending the request body to canonical /v2.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>What authenticates management Settings operations?</summary>
+                      <p>The management UI relies on the configured MPR UI and TAuth session for management APIs. That browser session is separate from the tenant secret used by public proxy requests.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Where do provider API keys belong?</summary>
+                      <p>Provider API keys belong only in authenticated tenant management storage. Public proxy requests reject provider-key-like fields instead of forwarding them upstream.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>What happens when the client key is missing, invalid, or replaced?</summary>
+                      <p>The public proxy request returns 403 before it reaches an upstream provider.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is Tenant-secret AI gateway for internal applications, which covers tenant secret AI gateway.</p>
+                    </details>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+
+                    <a class="resource-related" href="/resources/tenant-secret-ai-gateway/">
+                      <span>Security</span>
+                      <strong>Tenant-secret AI gateway for internal applications</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/server-side-provider-api-keys/">
+                      <span>Security</span>
+                      <strong>Keep provider API keys server-side for LLM apps</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/canonical-v2-chat-messages-api/">
+                      <span>API contract</span>
+                      <strong>Canonical /v2 chat messages API for LLM calls</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/go-client-v2-only-llm-proxy/">
+                      <span>Clients</span>
+                      <strong>Go LLM Proxy client with a v2-only transport</strong>
+                    </a>
+
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Use this pattern in LLM Proxy</h2>
+            <p>Start from the canonical API reference, then use the management surface when the workflow needs tenant or provider configuration.</p>
+            <a class="resource-button" href="/docs/">Open API reference</a>
+          </section>
+        </article>
+      </main>
+    <mpr-footer
+      class="public-site-footer"
+      size="small"
+      sticky="true"
+      wrapper-class="public-site-footer-layout"
+      privacy-link-label="Privacy"
+      privacy-link-href="/privacy/"
+      theme-switcher="square"
+      horizontal-links='{"alignment":"left","links":[{"label":"Terms","href":"/terms/"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+      links-collection='{"style":"drop-up","text":"Built by Marco Polo Research Lab","links":[{"label":"Marco Polo Research Lab","url":"https://mprlab.com"},{"label":"Gravity Notes","url":"https://gravity.mprlab.com"},{"label":"LoopAware","url":"https://loopaware.mprlab.com"},{"label":"Allergy Wheel","url":"https://allergy.mprlab.com"},{"label":"Social Threader","url":"https://threader.mprlab.com"},{"label":"RSVP","url":"https://rsvp.mprlab.com"},{"label":"Countdown Calendar","url":"https://countdown.mprlab.com"},{"label":"LLM Crossword","url":"https://llm-crossword.mprlab.com"},{"label":"Prompt Bubbles","url":"https://prompts.mprlab.com"},{"label":"Wallpapers","url":"https://wallpapers.mprlab.com"}]}'
+    >
+      <footer class="public-site-footer-fallback" role="contentinfo">
+        <nav class="public-site-footer-fallback__nav" aria-label="Footer">
+          <a href="/privacy/">Privacy</a>
+          <a href="/terms/">Terms</a>
+          <a href="/resources/">Resources</a>
+          <a href="https://github.com/tyemirov/llm-proxy">GitHub</a>
+        </nav>
+        <details class="public-site-footer-fallback__projects">
+          <summary>Built by Marco Polo Research Lab</summary>
+          <ul>
+            <li><a href="https://mprlab.com">Marco Polo Research Lab</a></li>
+            <li><a href="https://gravity.mprlab.com">Gravity Notes</a></li>
+            <li><a href="https://loopaware.mprlab.com">LoopAware</a></li>
+            <li><a href="https://allergy.mprlab.com">Allergy Wheel</a></li>
+            <li><a href="https://threader.mprlab.com">Social Threader</a></li>
+            <li><a href="https://rsvp.mprlab.com">RSVP</a></li>
+            <li><a href="https://countdown.mprlab.com">Countdown Calendar</a></li>
+            <li><a href="https://llm-crossword.mprlab.com">LLM Crossword</a></li>
+            <li><a href="https://prompts.mprlab.com">Prompt Bubbles</a></li>
+            <li><a href="https://wallpapers.mprlab.com">Wallpapers</a></li>
+          </ul>
+        </details>
+      </footer>
+    </mpr-footer>
+
+  </body>
+</html>
