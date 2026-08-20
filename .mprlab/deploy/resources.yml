@@ -41,8 +41,6 @@ mprlab_resources:
               output: origin
             LLM_PROXY_MANAGEMENT_DATABASE_PATH:
               value: /data/llm-proxy-management.sqlite
-            LLM_PROXY_MANAGEMENT_ENABLED:
-              value: "true"
             LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID:
               resource: authentication
               output: google-web-client-id
