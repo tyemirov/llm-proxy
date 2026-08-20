@@ -12,7 +12,6 @@ server:
   max_input_audio_bytes: 26214400
   upstream_rate_limits: []
 management:
-  enabled: ${LLM_PROXY_MANAGEMENT_ENABLED}
   public_origin: "${LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN}"
   ui_description: "${LLM_PROXY_MANAGEMENT_UI_DESCRIPTION}"
   ui_origins:
