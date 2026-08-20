@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/tyemirov/llm-proxy/internal/proxy"
 	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"go.uber.org/zap"
@@ -34,8 +35,6 @@ const (
 	promptValue = "ping"
 	// integrationServiceSecret is the service secret for OpenAI stub server tests.
 	integrationServiceSecret = serviceSecretValue
-	// integrationOpenAIKey is the OpenAI API key for the stub server tests.
-	integrationOpenAIKey = openAIKeyValue
 	// integrationModelsPath is the path for the models endpoint.
 	integrationModelsPath = "/v1/models"
 	// integrationResponsesPath is the path for the responses endpoint.
@@ -76,8 +75,6 @@ const (
 	metadataTemperatureTools = `{"allowed_request_fields":["temperature","tools"]}`
 	// metadataEmpty provides model metadata with no allowed request fields.
 	metadataEmpty = `{"allowed_request_fields":[]}`
-	// expectedErrorFormat is used when a configuration error is expected.
-	expectedErrorFormat = "expected %s error, got %v"
 	// getFailedFormat reports HTTP GET request failures.
 	getFailedFormat = "GET failed: %v"
 	// statusWantFormat reports an unexpected HTTP status code.
@@ -127,14 +124,12 @@ func newIntegrationServer(testingInstance *testing.T, openAIServer *httptest.Ser
 	testingInstance.Cleanup(func() { proxy.HTTPClient = originalClient })
 	loggerInstance, _ := zap.NewDevelopment()
 	testingInstance.Cleanup(func() { _ = loggerInstance.Sync() })
-	router, buildRouterError := proxy.BuildRouter(integrationConfiguration(testingInstance, proxy.Configuration{
-		Tenants:     proxy.SingleTenantConfigurations("integration", integrationServiceSecret),
-		OpenAIKey:   integrationOpenAIKey,
+	router, buildRouterError := buildIntegrationRouter(testingInstance, proxy.Configuration{
 		LogLevel:    logLevelDebug,
 		WorkerCount: 1,
 		QueueSize:   4,
 		Endpoints:   endpoints,
-	}), loggerInstance.Sugar())
+	}, loggerInstance.Sugar())
 	if buildRouterError != nil {
 		testingInstance.Fatalf(buildRouterErrorFormat, buildRouterError)
 	}
@@ -153,14 +148,14 @@ func newIntegrationServerWithDefaults(testingInstance *testing.T, openAIServer *
 	testingInstance.Cleanup(func() { proxy.HTTPClient = originalClient })
 	loggerInstance, _ := zap.NewDevelopment()
 	testingInstance.Cleanup(func() { _ = loggerInstance.Sync() })
-	router, buildRouterError := proxy.BuildRouter(integrationConfiguration(testingInstance, proxy.Configuration{
-		Tenants:     proxy.SingleTenantConfigurationsWithDefaults("integration", integrationServiceSecret, defaults),
-		OpenAIKey:   integrationOpenAIKey,
+	tenant := testfixtures.StandardManagedTenant(integrationServiceSecret)
+	tenant.Defaults = defaults
+	router, buildRouterError := testfixtures.BuildManagedRouter(testingInstance, integrationConfiguration(testingInstance, proxy.Configuration{
 		LogLevel:    logLevelDebug,
 		WorkerCount: 1,
 		QueueSize:   4,
 		Endpoints:   endpoints,
-	}), loggerInstance.Sugar())
+	}), loggerInstance.Sugar(), tenant)
 	if buildRouterError != nil {
 		testingInstance.Fatalf(buildRouterErrorFormat, buildRouterError)
 	}
@@ -175,6 +170,11 @@ func integrationConfiguration(testingInstance testing.TB, configuration proxy.Co
 		configuration.ModelCatalog = testfixtures.ModelCatalog(testingInstance)
 	}
 	return configuration
+}
+
+func buildIntegrationRouter(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger) (*gin.Engine, error) {
+	testingInstance.Helper()
+	return testfixtures.BuildManagedRouter(testingInstance, integrationConfiguration(testingInstance, configuration), structuredLogger, testfixtures.StandardManagedTenant(integrationServiceSecret))
 }
 
 // makeHTTPClient returns a stub HTTP client capturing payloads and returning canned responses.

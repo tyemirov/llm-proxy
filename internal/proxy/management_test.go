@@ -1303,34 +1303,6 @@ func TestManagementStartupRejectsInvalidPersistedRoutingDefaults(t *testing.T) {
 	}
 }
 
-func TestManagementRejectsStaticCredentialModel(t *testing.T) {
-	testCases := []struct {
-		name          string
-		configuration proxy.Configuration
-		expectedField string
-	}{
-		{
-			name:          "static tenant",
-			configuration: proxy.Configuration{Tenants: proxy.SingleTenantConfigurations("legacy", "legacy-secret")},
-			expectedField: "field=tenants",
-		},
-		{
-			name:          "static provider key",
-			configuration: proxy.Configuration{OpenAIKey: "sk-global"},
-			expectedField: "field=providers.api_key",
-		},
-	}
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(subTest *testing.T) {
-			configuration := managementConfigurationWithDatabasePath(testCase.configuration, filepath.Join(subTest.TempDir(), "managed-tenants.db"))
-			_, buildError := buildRouterWithCatalogs(subTest, configuration, zap.NewNop().Sugar())
-			if buildError == nil || !strings.Contains(buildError.Error(), testCase.expectedField) {
-				subTest.Fatalf("error=%v want contains %q", buildError, testCase.expectedField)
-			}
-		})
-	}
-}
-
 func TestManagementConfigurationValidationRequiresBackendAuthFields(t *testing.T) {
 	authFieldTestCases := []struct {
 		name          string
@@ -2479,7 +2451,6 @@ func managementConfigurationWithDatabasePath(configuration proxy.Configuration, 
 		databaseDialector = nil
 	}
 	configuration.Management = proxy.ManagementConfiguration{
-		Enabled:                  true,
 		PublicOrigin:             "http://localhost:8080",
 		UIDescription:            "LLM Proxy",
 		UIOrigins:                []string{"http://localhost:8080", "http://127.0.0.1:4179", "http://localhost:4179"},

@@ -32,8 +32,8 @@ the public **Log In** action authenticates the user through MPR UI and TAuth.
 - Optional exact inline or tenant-asset-backed image and audio attachments on canonical `POST /v2` user messages
 - Provider-enforced JSON Schema output and durable request reconciliation for supported canonical `POST /v2` routes
 - Optional logging at `debug` or `info` levels
-- Forwards requests using server-side provider API keys, loaded from the database in management mode
-- Optional TAuth-protected self-service UI where signed-in users automatically receive an llm-proxy client key and their provider settings plus routing defaults autosave
+- Forwards requests with tenant-managed provider API keys loaded from the management database
+- TAuth-protected self-service UI where signed-in users automatically receive an llm-proxy client key and their provider settings plus routing defaults autosave
 - Supports plain text, JSON, XML, or CSV responses
 
 ## REST Contract
@@ -373,17 +373,17 @@ adapters before they are available through `/dictate`.
 
 | Provider selector | Aliases | Wire contract | Execution lifecycle | Configured default text model | Credential field | Default base URL | Dictation | Web search |
 |-------------------|---------|---------------|---------------------|-------------------------------|------------------|------------------|-----------|------------|
-| `openai` | none | `openai_responses` | `pollable_resource` | `gpt-4.1` | `providers.openai.api_key` | `https://api.openai.com/v1` | Yes: `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | Yes, on marked OpenAI models |
-| `meta` | none | `openai_chat_completions` | `synchronous_completion` | `muse-spark-1.1` | `providers.meta.api_key` | `https://api.meta.ai/v1` | No | No |
-| `deepseek` | none | `openai_chat_completions` | `synchronous_completion` | `deepseek-v4-flash` | `providers.deepseek.api_key` | `https://api.deepseek.com` | No | No |
+| `openai` | none | `openai_responses` | `pollable_resource` | `gpt-4.1` | Tenant-managed API key | `https://api.openai.com/v1` | Yes: `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | Yes, on marked OpenAI models |
+| `meta` | none | `openai_chat_completions` | `synchronous_completion` | `muse-spark-1.1` | Tenant-managed API key | `https://api.meta.ai/v1` | No | No |
+| `deepseek` | none | `openai_chat_completions` | `synchronous_completion` | `deepseek-v4-flash` | Tenant-managed API key | `https://api.deepseek.com` | No | No |
 | `dashscope` | `qwen` | `openai_chat_completions` | `synchronous_completion` | `qwen-plus` | Tenant-managed API key | Tenant-managed Singapore workspace URL | No | No |
-| `moonshot` | `kimi` | `openai_chat_completions` | `synchronous_completion` | `kimi-k2.6` | `providers.moonshot.api_key` | `https://api.moonshot.ai/v1` | No | No |
-| `minimax` | none | `openai_chat_completions` | `synchronous_completion` | `minimax-m2.7` | `providers.minimax.api_key` | `https://api.minimax.io/v1` | No | No |
-| `siliconflow` | none | `openai_chat_completions` | `synchronous_completion` | `deepseek-reasoner` | `providers.siliconflow.api_key` | `https://api.siliconflow.com/v1` | Yes: `sensevoice-small` | No |
-| `zai` | none | `openai_chat_completions` | `synchronous_completion` | `glm-5.1` | `providers.zai.api_key` | `https://api.z.ai/api/paas/v4` | Yes: `glm-asr-2512` | No |
-| `gemini` | none | `gemini_interactions` | Model-specific: Gemini 3.x `pollable_resource`; Gemini 2.5 `synchronous_completion` | `gemini-2.5-flash` | `providers.gemini.api_key` | `https://generativelanguage.googleapis.com/v1beta` | No | No |
-| `anthropic` | `claude` | `anthropic_messages` | `synchronous_completion` | `claude-sonnet-4-6` | `providers.anthropic.api_key` | `https://api.anthropic.com` | No | No |
-| `xai` | none | Model-specific: `grok-4.5` uses `openai_responses`, and other text models use `openai_chat_completions` | `synchronous_completion` | `grok-4.3` | `providers.xai.api_key` | `https://api.x.ai/v1` | Yes: `xai-stt` | No |
+| `moonshot` | `kimi` | `openai_chat_completions` | `synchronous_completion` | `kimi-k2.6` | Tenant-managed API key | `https://api.moonshot.ai/v1` | No | No |
+| `minimax` | none | `openai_chat_completions` | `synchronous_completion` | `minimax-m2.7` | Tenant-managed API key | `https://api.minimax.io/v1` | No | No |
+| `siliconflow` | none | `openai_chat_completions` | `synchronous_completion` | `deepseek-reasoner` | Tenant-managed API key | `https://api.siliconflow.com/v1` | Yes: `sensevoice-small` | No |
+| `zai` | none | `openai_chat_completions` | `synchronous_completion` | `glm-5.1` | Tenant-managed API key | `https://api.z.ai/api/paas/v4` | Yes: `glm-asr-2512` | No |
+| `gemini` | none | `gemini_interactions` | Model-specific: Gemini 3.x `pollable_resource`; Gemini 2.5 `synchronous_completion` | `gemini-2.5-flash` | Tenant-managed API key | `https://generativelanguage.googleapis.com/v1beta` | No | No |
+| `anthropic` | `claude` | `anthropic_messages` | `synchronous_completion` | `claude-sonnet-4-6` | Tenant-managed API key | `https://api.anthropic.com` | No | No |
+| `xai` | none | Model-specific: `grok-4.5` uses `openai_responses`, and other text models use `openai_chat_completions` | `synchronous_completion` | `grok-4.3` | Tenant-managed API key | `https://api.x.ai/v1` | Yes: `xai-stt` | No |
 
 All upstream provider credentials are server-side only. Client requests must
 never send OpenAI, Meta, Anthropic, xAI, Gemini, or other upstream API keys.
@@ -524,7 +524,7 @@ Provider-specific details:
   [reasoning-effort guide](https://platform.kimi.ai/docs/guide/use-reasoning-effort),
   [vision guide](https://platform.kimi.ai/docs/guide/use-kimi-vision-model),
   and [Chat Completions reference](https://platform.kimi.ai/docs/api/chat).
-* MiniMax uses selector `minimax`, `${MINIMAX_API_KEY}`, and
+* MiniMax uses selector `minimax`, a tenant-managed API key, and
   `https://api.minimax.io/v1`. `minimax-m2.7` remains the default. The catalog
   also includes M2.7 Highspeed, M2.5, M2.5 Highspeed, M2.1, M2.1 Highspeed,
   and M2. The shared Chat Completions adapter maps public `max_tokens` to
@@ -535,8 +535,8 @@ Provider-specific details:
   [Chat Completions reference](https://platform.minimax.io/docs/api-reference/text-chat-openai),
   and [PAYG prices](https://platform.minimax.io/docs/guides/pricing-paygo).
 * Meta Model API requests use that shared Chat Completions adapter with the
-  exact `meta` selector, `https://api.meta.ai/v1` base URL,
-  `${MODEL_API_KEY}` credential, and `muse-spark-1.1` model. llm-proxy exposes
+  exact `meta` selector, `https://api.meta.ai/v1` base URL, a tenant-managed
+  credential, and `muse-spark-1.1` model. llm-proxy exposes
   the public `max_tokens` input upstream as Meta's current
   `max_completion_tokens` field rather than Meta's deprecated `max_tokens` field.
   The proxy exposes Muse Spark 1.1 only as text generation through `GET /`,
@@ -594,29 +594,23 @@ Provider-specific details:
   uses xAI STT through `providers.xai.transcriptions_url`. The upstream STT
   endpoint does not receive a `model` multipart field.
 
-When management is disabled, provider API keys are optional until a configured
-static tenant uses that provider as a default. If a non-default provider key is
-blank or its whole `api_key` value is a missing `${...}` placeholder, startup
-continues and explicit requests for that provider return `503 provider not
-configured`. Missing placeholders in other fields, or embedded inside a longer
-`api_key` value, fail startup. If a static tenant's default text or dictation
-provider lacks its API key, startup fails before the server listens. Provider
-`base_url` values are explicit config values. A static DashScope API key
-requires its matching `providers.dashscope.base_url`. Dictation-capable provider
-`transcriptions_url` values are also explicit config values and are required for
-OpenAI, SiliconFlow, Z.AI, and Grok/xAI. The normalized catalog must contain
-all supported providers and each supported text or dictation route. When
-`management.enabled` is false, startup
-validates that `tenants` includes at least one unique `id` and unique `secret`.
-When management is enabled, `tenants` and nonblank provider `api_key` fields are
-invalid: all client tokens and provider credentials are user-owned database
-state.
-Unknown YAML keys fail startup.
+All client keys, provider API keys, and tenant defaults are tenant-owned
+management state. An explicit request for a provider without a saved tenant
+credential returns `503 provider not configured`. An omitted provider resolves
+through the authenticated tenant's saved default and requires a saved
+credential for that route. Provider `base_url` values are explicit config
+values, except the DashScope workspace base URL, which is saved with the
+tenant-managed key. Dictation-capable provider `transcriptions_url` values are
+explicit config values and are required for OpenAI, SiliconFlow, Z.AI, and
+Grok/xAI. The normalized catalog must contain all supported providers and each
+supported text or dictation route. The `management` configuration is mandatory.
+Obsolete `management.enabled`, top-level `tenants`, and provider `api_key`
+fields are unknown YAML keys and fail startup.
 
 ### Self-service management UI
 
-Set `management.enabled: true` to enable TAuth-protected management APIs under
-`/api/management`. The browser site is static and lives in `site/`: `/` is the
+The mandatory management configuration exposes TAuth-protected management APIs
+under `/api/management`. The browser site is static and lives in `site/`: `/` is the
 anonymous-only product landing page and `/app/` is the only authenticated app
 route. The landing page replaces itself with `/app/` whenever MPR UI reports
 its documented authenticated lifecycle, including restored and refreshed TAuth
@@ -821,7 +815,7 @@ Signed-in users also choose each provider's text model and provider-specific
 system prompt, choose routing defaults, and replace llm-proxy client keys after
 confirming that the prior value stops working immediately. A client key cannot
 be deleted independently; access is rotated through replacement or removed
-with the owning non-final tenant. Management mode requires
+with the owning non-final tenant. Management requires
 `management.database_path` so signups, enabled
 providers, defaults, generated secret digests, and committed usage events
 survive restarts in a GORM-managed SQLite database at the configured location.
@@ -1028,9 +1022,9 @@ or `upstream_error`. They are selected at the request/error boundary; prompts,
 audio, transcripts, responses, tenant secrets, provider API keys, raw upstream
 bodies, and free-form error text are not stored in usage events.
 
-Management mode no longer imports config tenants or global provider keys.
-TAuth subjects own personal tenants directly; there is no shared-tenant,
-membership, role, invitation, or team-tenancy contract.
+The runtime never imports config tenants or global provider keys.
+TAuth subjects own personal tenants directly. The contract has no shared
+tenant, membership, role, invitation, or team tenancy.
 
 F014 upgrades the previous one-tenant-per-user database to schema version 1
 as one bounded startup transaction:
@@ -1110,9 +1104,8 @@ Server/runtime settings, backend auth validation settings, fixed provider base
 URLs, transcription URLs, model catalogs, and browser-facing MPR UI/TAuth
 bootstrap settings remain config-file-owned. Each managed DashScope workspace
 URL is tenant-owned and is stored with that tenant's encrypted provider key,
-selected model, and system prompt. Static mode requires
-`providers.dashscope.base_url` when it configures a DashScope API key. The
-GitHub Pages artifact is only the static shell. API-served browser config
+selected model, and system prompt. The GitHub Pages artifact is only the static
+shell. API-served browser config
 endpoints are projections of backend `config.yml`, not independent
 configuration sources.
 
@@ -1326,83 +1319,16 @@ module graph. LLM Proxy does not try another CDN or a bundled fallback; the
 failure screen completes the shared MPR transition without making a protected
 management request.
 
-With `management.enabled: false`, set a static tenant's default text
-provider/model to route omitted-provider requests to DeepSeek. Static tenant
-blocks are invalid in management mode, where every token is owned by an
-authenticated user:
+Use **Settings** in `/app/` to save each provider API key and select the
+Default tenant's text and dictation routes. The same settings store the
+provider-specific default model. Supported routes can also save a
+`reasoning_effort` default. A supported per-request value overrides that saved
+default for one request. The proxy rejects a default that the selected
+provider/model route does not declare.
 
-```yaml
-tenants:
-  - id: deepseek
-    secret: "${SERVICE_SECRET}"
-    defaults:
-      provider: deepseek
-      model: deepseek-v4-flash
-```
-
-For a static tenant, `reasoning_effort` is a route-bound default. Set it only
-when the exact configured provider/model declares the value. It applies when a
-caller omits the optional per-request field; a supplied supported value
-overrides it. For example, a supported OpenAI route can use `high`:
-
-```yaml
-tenants:
-  - id: openai-reasoning
-    secret: "${SERVICE_SECRET}"
-    defaults:
-      provider: openai
-      model: gpt-5
-      reasoning_effort: high
-```
-
-The allowed values are the selected route's configured list; omit the field or
-use an empty value to leave it explicitly unset. The proxy rejects an
-incompatible static default at startup and forwards an effort only when the
-resolved route declares that exact value.
-
-Set Gemini as the default text provider:
-
-```yaml
-tenants:
-  - id: gemini
-    secret: "${SERVICE_SECRET}"
-    defaults:
-      provider: gemini
-      model: gemini-2.5-flash
-```
-
-Set Anthropic as the default text provider:
-
-```yaml
-tenants:
-  - id: anthropic
-    secret: "${SERVICE_SECRET}"
-    defaults:
-      provider: anthropic
-      model: claude-sonnet-4-6
-```
-
-Set xAI as the default text provider:
-
-```yaml
-tenants:
-  - id: xai
-    secret: "${SERVICE_SECRET}"
-    defaults:
-      provider: xai
-      model: grok-4.3
-```
-
-Set Meta Muse Spark 1.1 as the default text provider:
-
-```yaml
-tenants:
-  - id: meta
-    secret: "${SERVICE_SECRET}"
-    defaults:
-      provider: meta
-      model: muse-spark-1.1
-```
+Create or replace the tenant's client key separately in **Settings**. That
+generated client key is the value that applications store as
+`LLM_PROXY_SECRET`. It is not an upstream provider credential.
 
 ## Local Automation
 
@@ -1414,7 +1340,7 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make up` | Require the ignored private `configs/.env.local`, then build and run the complete local browser orchestration: ghttp static UI and same-origin TAuth routes on `localhost:4179`, plus the API on `localhost:8080`. It waits for Compose startup before verifying the static/config/auth/API boundaries and reporting ready. |
 | `make down` | Stop the exact local Compose project started by `make up`, including orphaned services and its project network, while retaining the named local TAuth and management data volumes. |
 | `make ci` | Prepare pinned frontend dependencies, then run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, frontend syntax checks, the 100% coverage-gated Go test suite, Python pytest, Playwright browser tests, the app lifecycle contract test, and the non-paid live-harness preflight. A successful run ends with a per-gate table, current-run coverage, and an explicit `CI PASSED` receipt. |
-| `make test-live-provider-harness` | Generate the temporary static-mode live-test config and verify authenticated routing without an upstream call. |
+| `make test-live-provider-harness` | Save a temporary managed OpenAI connection and route one request through a loopback provider. |
 | `make test-live-providers` | Start a disposable managed tenant, verify every available provider key through the canonical management operation, and run that provider's live text smoke only after verification succeeds; use `LIVE_ENV_FILE=/path/to/env` to load key values. |
 | `make test-live-provider-media` | Verify OpenAI, Anthropic, Gemini, Moonshot, and xAI keys, then send one paid canonical image request through each provider. |
 | `make test-live-gemini` | Compatibility wrapper for `make test-live-providers` with `LLM_PROXY_LIVE_PROVIDERS=gemini`. |
@@ -1529,14 +1455,15 @@ LLM_PROXY_LIVE_PROVIDERS=openai,gemini \
   make test-live-provider-media LIVE_ENV_FILE=configs/.env
 ```
 
-The non-paid `--preflight` and `--write-config` modes retain the isolated
-static-mode contract with management disabled, a temporary tenant, and
-placeholder values for unused provider keys; they make no verification or
-upstream provider call. Inspect that config without building with
+The non-paid `--preflight` mode creates an isolated managed user, tenant, and
+client key. It saves a generated OpenAI key through the management API. It then
+reloads the encrypted provider record and routes one prompt through a loopback
+Responses server. The `--write-config` mode writes the managed-only service
+configuration without building or starting the proxy. Inspect that config with
 `./scripts/test_live_providers.sh --write-config
 /tmp/llm-proxy-live.yml`. Unless `LLM_PROXY_LIVE_PORT` explicitly selects a
 port, each harness run allocates a fresh loopback port. Cleanup removes only the
-temporary proxy child it started and never terminates an unrelated listener.
+temporary proxy and provider children that it starts.
 
 ### Production Default-tenant live test
 
@@ -1547,19 +1474,25 @@ loads a dotenv file nor reads, accepts, or sends a local upstream-provider key.
 The saved provider credentials and per-provider default models remain entirely
 on the production tenant.
 
-The command sends canonical `POST /v2` requests with an explicit provider. Its
-echo cases omit `model`, so they exercise each saved Default-tenant provider
-model. It runs those echo markers for OpenAI, Anthropic, Meta, Gemini, and
-Moonshot, then sends the same deterministic request larger than 16 KiB through
-OpenAI, Anthropic, Meta, and Gemini. The long Gemini case explicitly selects
-`gemini-3.5-flash` so the production check proves the background Interactions
-path even when the tenant's saved Gemini model is a synchronous 2.5 model. The
+Before any paid provider call, the command sends an intentionally incomplete
+`POST /v2` request with `LLM_PROXY_SECRET`. A valid client key must reach normal
+request validation and return `400` with a proxy request ID. A missing,
+rejected, or unreachable client key stops the command before the provider
+matrix starts.
+
+The command then sends canonical `POST /v2` requests with an explicit provider.
+Its echo cases omit `model`, so they exercise each saved Default-tenant provider
+model. It runs echo markers for OpenAI, Anthropic, Meta, Gemini, and Moonshot.
+It sends the same deterministic request larger than 16 KiB through OpenAI,
+Anthropic, Meta, and Gemini. The long Gemini case explicitly selects
+`gemini-3.5-flash`. This selection proves the background Interactions path when
+the tenant's saved Gemini model is a synchronous 2.5 model. The
 long request requires normalized output for every portfolio record before its
 final marker and uses a 900-second request budget. OpenAI and Gemini 3.5 keep
-the blocking caller request open while their resource adapters perform
-server-owned background polling. Anthropic and Meta use their canonical
-synchronous completion paths (including shared output-continuation work when
-needed); the test client never polls a provider or llm-proxy itself.
+the blocking caller request open while their resource adapters own background
+polling. Anthropic and Meta use their canonical
+synchronous completion paths, including shared output-continuation work when
+needed. The test client never polls a provider or llm-proxy itself.
 Each case verifies HTTP `200`, the echoed request budget, a validated proxy
 request ID, and a completion marker. Its result line prints that request ID for
 log correlation without printing the response body or tenant secret. A
@@ -1638,12 +1571,11 @@ configuration input is an application-owned JSON model profile for per-user
 provider/model selection. Service `config.yml` remains server-side operator
 configuration and is never loaded by a bundled client.
 
-Public proxy calls authenticate with the tenant secret in `key=...`. The
-optional MPR UI/TAuth session instead authorizes management actions such as
-creating a client key or saving a provider key; it does not authenticate a
-direct `POST /v2` request. Upstream provider API keys stay in server-side
-configuration or authenticated management storage and must never be sent by a
-client.
+Public proxy calls authenticate with the tenant secret in `key=...`. The MPR
+UI/TAuth session instead authorizes management actions such as
+creating a client key or saving a provider key. It does not authenticate a
+direct `POST /v2` request. Upstream provider API keys stay only in
+authenticated tenant management storage. A client must never send them.
 
 For an end-to-end first request and the boundary between these credentials, see
 the [client authentication guide](https://llm-proxy.mprlab.com/resources/llm-proxy-client-authentication/).
@@ -1661,7 +1593,7 @@ Use it with explicit flags:
 ```shell
 llm-proxy-client \
   --base-url "http://localhost:8080/?provider=gemini" \
-  --secret "$SERVICE_SECRET" \
+  --secret "$LLM_PROXY_SECRET" \
   --prompt "Summarize this"
 ```
 
@@ -1669,7 +1601,7 @@ Or read configuration and prompt text from environment/stdin:
 
 ```shell
 export LLM_PROXY_BASE_URL="http://localhost:8080/"
-export LLM_PROXY_SECRET="$SERVICE_SECRET"
+export LLM_PROXY_SECRET="..."
 printf 'large prompt...\n' | llm-proxy-client --max-tokens 4096
 ```
 
@@ -1679,7 +1611,7 @@ one request with `--reasoning-effort`:
 ```shell
 llm-proxy-client \
   --base-url "http://localhost:8080/?provider=openai" \
-  --secret "$SERVICE_SECRET" \
+  --secret "$LLM_PROXY_SECRET" \
   --model gpt-5.5 \
   --reasoning-effort high \
   --request-timeout-seconds 900 \
@@ -1846,7 +1778,7 @@ Use the profile directly from the installable CLI:
 ```shell
 llm-proxy-client \
   --base-url "http://localhost:8080/" \
-  --secret "$SERVICE_SECRET" \
+  --secret "$LLM_PROXY_SECRET" \
   --model-profile "/var/lib/my-app/users/42/model.json" \
   --prompt "Summarize this"
 ```
@@ -2452,10 +2384,10 @@ were verified on 2026-08-13 against MiniMax's official references above.
 
 | Provider selector | Models | Credential field | Transcription URL field | Notes |
 |-------------------|--------|------------------|-------------------------|-------|
-| `openai` | `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | `providers.openai.api_key` | `providers.openai.transcriptions_url` | Default dictation provider and default model `gpt-4o-mini-transcribe`. |
-| `siliconflow` | `sensevoice-small` | `providers.siliconflow.api_key` | `providers.siliconflow.transcriptions_url` | OpenAI-compatible audio transcription. |
-| `zai` | `glm-asr-2512` | `providers.zai.api_key` | `providers.zai.transcriptions_url` | Z.AI GLM-ASR; sends `model=glm-asr-2512`. |
-| `xai` | `xai-stt` | `providers.xai.api_key` | `providers.xai.transcriptions_url` | xAI STT. The proxy model name selects the provider but is not sent as a multipart `model` field. |
+| `openai` | `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | Tenant-managed API key | `providers.openai.transcriptions_url` | Default dictation provider and default model `gpt-4o-mini-transcribe`. |
+| `siliconflow` | `sensevoice-small` | Tenant-managed API key | `providers.siliconflow.transcriptions_url` | OpenAI-compatible audio transcription. |
+| `zai` | `glm-asr-2512` | Tenant-managed API key | `providers.zai.transcriptions_url` | Z.AI GLM-ASR; sends `model=glm-asr-2512`. |
+| `xai` | `xai-stt` | Tenant-managed API key | `providers.xai.transcriptions_url` | xAI STT. The proxy model name selects the provider but is not sent as a multipart `model` field. |
 
 ### Status codes
 

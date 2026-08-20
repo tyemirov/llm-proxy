@@ -24,6 +24,12 @@ type blockingUsageManagedTenantDatabase struct {
 	usageRelease chan struct{}
 }
 
+type cancelAwareAuthenticationManagedTenantDatabase struct {
+	managedTenantDatabase
+	queryStarted chan struct{}
+	queryRelease chan struct{}
+}
+
 func (database *blockingUsageManagedTenantDatabase) createUsageEvent(requestContext context.Context, record managedUsageEventRecord) error {
 	close(database.usageStarted)
 	select {
@@ -31,6 +37,48 @@ func (database *blockingUsageManagedTenantDatabase) createUsageEvent(requestCont
 		return database.managedTenantDatabase.createUsageEvent(requestContext, record)
 	case <-requestContext.Done():
 		return requestContext.Err()
+	}
+}
+
+func (database *cancelAwareAuthenticationManagedTenantDatabase) tenantBySecretDigest(requestContext context.Context, _ string) (managedTenantRecord, error) {
+	close(database.queryStarted)
+	select {
+	case <-requestContext.Done():
+		return managedTenantRecord{}, requestContext.Err()
+	case <-database.queryRelease:
+		return managedTenantRecord{}, gorm.ErrRecordNotFound
+	}
+}
+
+func TestManagedTenantAuthenticationHonorsRequestCancellation(t *testing.T) {
+	database := &cancelAwareAuthenticationManagedTenantDatabase{
+		managedTenantDatabase: newFakeManagedTenantDatabase(),
+		queryStarted:          make(chan struct{}),
+		queryRelease:          make(chan struct{}),
+	}
+	defer close(database.queryRelease)
+	store := newManagedTenantStoreWithDatabase(database)
+	requestContext, cancelRequest := context.WithCancel(context.Background())
+	defer cancelRequest()
+	authenticationDone := make(chan bool, 1)
+	go func() {
+		_, authenticated := store.authenticate(requestContext, "llmp_cancelled_authentication")
+		authenticationDone <- authenticated
+	}()
+
+	select {
+	case <-database.queryStarted:
+	case <-time.After(time.Second):
+		t.Fatal("managed authentication query did not start")
+	}
+	cancelRequest()
+	select {
+	case authenticated := <-authenticationDone:
+		if authenticated {
+			t.Fatal("cancelled managed authentication succeeded")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("managed authentication did not honor request cancellation")
 	}
 }
 
@@ -57,7 +105,6 @@ func TestManagedTenantAuthenticationDoesNotWaitForUsagePersistence(t *testing.T)
 	usageRecord, usageRecordError := store.newManagedUsageRecord(tenant{
 		identifier: tenantID,
 		userID:     ownerID,
-		managed:    true,
 	}, managedUsageEvent{outcomeCode: managedUsageOutcomeSuccess})
 	if usageRecordError != nil {
 		t.Fatalf("usage record error=%v", usageRecordError)
@@ -608,16 +655,12 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 	}
 
 	database.tenantByOwnerAndIDErrors = []error{errInternalTestDatabase}
-	if _, _, generationError := store.generateSecret(principal, identifier, func([sha256.Size]byte) bool { return false }); !errors.Is(generationError, errManagedTenantStorePersist) {
+	if _, _, generationError := store.generateSecret(principal, identifier); !errors.Is(generationError, errManagedTenantStorePersist) {
 		t.Fatalf("generate query error=%v", generationError)
 	}
 	store.randomReader = strings.NewReader("")
-	if _, _, generationError := store.generateSecret(principal, identifier, func([sha256.Size]byte) bool { return false }); !errors.Is(generationError, errManagedSecretGeneration) {
+	if _, _, generationError := store.generateSecret(principal, identifier); !errors.Is(generationError, errManagedSecretGeneration) {
 		t.Fatalf("generate random error=%v", generationError)
-	}
-	store.randomReader = bytes.NewReader(bytes.Repeat([]byte{2}, generatedTenantSecretBytes*generatedTenantSecretAttempts))
-	if _, _, generationError := store.generateSecret(principal, identifier, func([sha256.Size]byte) bool { return true }); !errors.Is(generationError, errManagedSecretCollision) {
-		t.Fatalf("static collision error=%v", generationError)
 	}
 	store.randomReader = bytes.NewReader(bytes.Repeat([]byte{3}, generatedTenantSecretBytes*generatedTenantSecretAttempts))
 	firstRawSecret := generatedTenantSecretPrefix + hex.EncodeToString(bytes.Repeat([]byte{3}, generatedTenantSecretBytes))
@@ -626,27 +669,27 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 	otherRecord := fakeTenantRecord("other", "managed-other", "Other", now)
 	otherRecord.SecretDigest = &firstDigestText
 	database.tenantsByID[otherRecord.TenantID] = otherRecord
-	if _, _, generationError := store.generateSecret(principal, identifier, func([sha256.Size]byte) bool { return false }); !errors.Is(generationError, errManagedSecretCollision) {
+	if _, _, generationError := store.generateSecret(principal, identifier); !errors.Is(generationError, errManagedSecretCollision) {
 		t.Fatalf("database collision error=%v", generationError)
 	}
 	delete(database.tenantsByID, otherRecord.TenantID)
 	store.randomReader = bytes.NewReader(bytes.Repeat([]byte{4}, generatedTenantSecretBytes*generatedTenantSecretAttempts))
 	database.saveTenantErrors = repeatFakeError(gorm.ErrDuplicatedKey, generatedTenantSecretAttempts)
-	if _, _, generationError := store.generateSecret(principal, identifier, func([sha256.Size]byte) bool { return false }); !errors.Is(generationError, errManagedSecretCollision) {
+	if _, _, generationError := store.generateSecret(principal, identifier); !errors.Is(generationError, errManagedSecretCollision) {
 		t.Fatalf("save collision error=%v", generationError)
 	}
 	store.randomReader = bytes.NewReader(bytes.Repeat([]byte{5}, generatedTenantSecretBytes))
 	database.saveTenantErrors = []error{errInternalTestDatabase}
-	if _, _, generationError := store.generateSecret(principal, identifier, func([sha256.Size]byte) bool { return false }); !errors.Is(generationError, errManagedTenantStorePersist) {
+	if _, _, generationError := store.generateSecret(principal, identifier); !errors.Is(generationError, errManagedTenantStorePersist) {
 		t.Fatalf("generate persistence error=%v", generationError)
 	}
 	store.randomReader = bytes.NewReader(bytes.Repeat([]byte{6}, generatedTenantSecretBytes))
 	database.tenantByOwnerAndIDErrors = []error{nil, errInternalTestDatabase}
-	if _, _, generationError := store.generateSecret(principal, identifier, func([sha256.Size]byte) bool { return false }); !errors.Is(generationError, errManagedTenantStorePersist) {
+	if _, _, generationError := store.generateSecret(principal, identifier); !errors.Is(generationError, errManagedTenantStorePersist) {
 		t.Fatalf("generate reload error=%v", generationError)
 	}
 	store.randomReader = bytes.NewReader(bytes.Repeat([]byte{7}, generatedTenantSecretBytes))
-	rawSecret, secretSnapshot, generationError := store.generateSecret(principal, identifier, func([sha256.Size]byte) bool { return false })
+	rawSecret, secretSnapshot, generationError := store.generateSecret(principal, identifier)
 	if generationError != nil || rawSecret == "" || !secretSnapshot.hasSecret {
 		t.Fatalf("generated secret=%q snapshot=%+v error=%v", rawSecret, secretSnapshot, generationError)
 	}
@@ -720,7 +763,7 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 
 	cancelledContext, cancel := context.WithCancel(context.Background())
 	cancel()
-	managedTenant := tenant{identifier: tenantID(identifier.string()), userID: principal.userID, managed: true}
+	managedTenant := tenant{identifier: tenantID(identifier.string()), userID: principal.userID}
 	usageRecord, usageRecordError := store.newManagedUsageRecord(managedTenant, managedUsageEvent{outcomeCode: managedUsageOutcomeSuccess})
 	if usageRecordError != nil {
 		t.Fatalf("usage record error=%v", usageRecordError)

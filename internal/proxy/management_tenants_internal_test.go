@@ -598,7 +598,7 @@ func TestManagedTenantQwenCloudRetirementMigrationReconcilesCurrentTenants(t *te
 	endpoints := NewEndpoints()
 	endpoints.SetResponsesURL(upstreamServer.URL)
 	configuration := Configuration{
-		Management:  ManagementConfiguration{Enabled: true},
+		Management:  ManagementConfiguration{},
 		WorkerCount: 1, QueueSize: 1, MaxPromptBytes: 1024,
 		Endpoints: endpoints, ModelCatalog: internalManagedUsageWriterProviderModels(),
 		upstreamRateLimits:   upstreamRateLimits{rules: map[string]upstreamRateLimitRule{}},
@@ -823,7 +823,6 @@ func openLegacyManagedTenantDatabaseWithDialector(t *testing.T, dialector gorm.D
 
 func internalManagementProviderRegistry() *providerRegistry {
 	return newProviderRegistry(Configuration{
-		OpenAIKey:               "sk-config-openai",
 		OpenAITranscriptionsURL: "https://openai.example/transcriptions",
 		ModelCatalog: internalTestModelCatalog(
 			internalTestOffering(ProviderNameOpenAI, ModelNameGPT41, []string{ModelOperationText}, []string{ModelOperationText}),

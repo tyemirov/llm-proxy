@@ -105,9 +105,7 @@ func TestIntegrationGatewayContextTimeoutCancelsUpstreamRequest(testingInstance 
 	observedCore, observedLogs := observer.New(zapcore.DebugLevel)
 	loggerInstance := zap.New(observedCore)
 	testingInstance.Cleanup(func() { _ = loggerInstance.Sync() })
-	router, buildError := proxy.BuildRouter(integrationConfiguration(testingInstance, proxy.Configuration{
-		Tenants:                      proxy.SingleTenantConfigurations("integration", serviceSecretValue),
-		OpenAIKey:                    openAIKeyValue,
+	router, buildError := buildIntegrationRouter(testingInstance, proxy.Configuration{
 		LogLevel:                     logLevelDebug,
 		WorkerCount:                  1,
 		QueueSize:                    4,
@@ -121,7 +119,7 @@ func TestIntegrationGatewayContextTimeoutCancelsUpstreamRequest(testingInstance 
 		SiliconFlowBaseURL:           "https://siliconflow.invalid",
 		SiliconFlowTranscriptionsURL: "https://siliconflow.invalid/audio/transcriptions",
 		ZAIBaseURL:                   "https://zai.invalid",
-	}), loggerInstance.Sugar())
+	}, loggerInstance.Sugar())
 	if buildError != nil {
 		testingInstance.Fatalf(buildRouterFailedFormat, buildError)
 	}
@@ -168,7 +166,7 @@ func TestIntegrationUpstreamRequestTimeoutTriggersGatewayTimeout(testingInstance
 		testingInstance.Run(testCase.name, func(subTest *testing.T) {
 			endpoints := proxy.NewEndpoints()
 			configureProxy(subTest, makeTimeoutHTTPClient(subTest, endpoints), endpoints)
-			router, buildError := proxy.BuildRouter(integrationConfiguration(subTest, proxy.Configuration{Tenants: proxy.SingleTenantConfigurations("integration", serviceSecretValue), OpenAIKey: openAIKeyValue, LogLevel: logLevelDebug, WorkerCount: 1, QueueSize: 8, RequestTimeoutSeconds: timeoutRequestTimeout, Endpoints: endpoints}), newLogger(subTest))
+			router, buildError := buildIntegrationRouter(subTest, proxy.Configuration{LogLevel: logLevelDebug, WorkerCount: 1, QueueSize: 8, RequestTimeoutSeconds: timeoutRequestTimeout, Endpoints: endpoints}, newLogger(subTest))
 			if buildError != nil {
 				subTest.Fatalf("BuildRouter failed: %v", buildError)
 			}
@@ -223,8 +221,6 @@ func (body *closeAwareBlockingBody) Close() error {
 
 func timeoutContractConfiguration(defaultSeconds int, maximumSeconds int) proxy.Configuration {
 	return proxy.Configuration{
-		Tenants:                  proxy.SingleTenantConfigurations("integration", serviceSecretValue),
-		OpenAIKey:                openAIKeyValue,
 		LogLevel:                 proxy.LogLevelInfo,
 		WorkerCount:              1,
 		QueueSize:                4,
@@ -238,7 +234,7 @@ func timeoutContractRouter(testingInstance *testing.T, doer proxy.HTTPDoer, conf
 	previousHTTPClient := proxy.HTTPClient
 	proxy.HTTPClient = doer
 	testingInstance.Cleanup(func() { proxy.HTTPClient = previousHTTPClient })
-	router, buildError := proxy.BuildRouter(integrationConfiguration(testingInstance, configuration), logger)
+	router, buildError := buildIntegrationRouter(testingInstance, configuration, logger)
 	if buildError != nil {
 		testingInstance.Fatalf("BuildRouter failed: %v", buildError)
 	}
@@ -569,10 +565,10 @@ func TestIntegrationRequestTimeoutLogsTerminalOutcomes(testingInstance *testing.
 	}
 
 	outcomeEntries := observedLogs.FilterMessage("upstream request ended").All()
-	if len(outcomeEntries) != 3 {
+	if len(outcomeEntries) != 2 {
 		testingInstance.Fatalf("outcome log entries=%d", len(outcomeEntries))
 	}
-	expectedOutcomes := []string{"success", "provider_failure", "caller_cancelled"}
+	expectedOutcomes := []string{"success", "provider_failure"}
 	for entryIndex, expectedOutcome := range expectedOutcomes {
 		outcomeFields := outcomeEntries[entryIndex].ContextMap()
 		if outcomeFields["outcome"] != expectedOutcome {

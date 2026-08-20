@@ -9,8 +9,8 @@ Builds the current llm-proxy binary, verifies each available provider key
 through the authenticated management operation, and only then runs its live
 text smoke test. Media mode verifies the five current image providers and then
 runs canonical image requests for their selected catalog routes. The preflight mode builds a temporary
-static configuration and verifies authenticated routing without an upstream
-provider call.
+managed configuration and verifies authenticated routing through a local
+provider connection.
 
 Required environment:
   At least one provider API key, unless no-op skip behavior is desired.
@@ -46,9 +46,10 @@ Options:
                              and xAI image matrix. LLM_PROXY_LIVE_PROVIDERS can
                              select a subset. LLM_PROXY_LIVE_ALL_MODELS=true
                              runs every selected provider image route.
-  --preflight                Verify the disposable static config without an
-                             upstream provider call.
-  --write-config <path>      Write the disposable static config and exit
+
+  --preflight                Verify the disposable managed config without an
+                             external provider call.
+  --write-config <path>      Write the disposable managed config and exit
                              without building the proxy or calling providers.
 
 Per-provider model overrides:
@@ -307,101 +308,148 @@ discover_live_providers() {
   done
 }
 
-export_unused_provider_placeholders() {
-  local key_variable
-  for key_variable in \
-    OPENAI_API_KEY \
-    DEEPSEEK_API_KEY \
-    DASHSCOPE_API_KEY \
-    MOONSHOT_API_KEY \
-    MINIMAX_API_KEY \
-    SILICONFLOW_API_KEY \
-    ZAI_API_KEY \
-    GEMINI_API_KEY \
-    ANTHROPIC_API_KEY \
-    MODEL_API_KEY \
-    XAI_API_KEY; do
-    if [[ -z "${!key_variable:-}" ]]; then
-      export "${key_variable}=unused-${key_variable}-for-live-smoke"
-    fi
-  done
-}
-
 redact_log() {
   sed -E 's/(key=)[^& ]+/\1<redacted>/g; s/(api_key: ).+/\1<redacted>/g' "${LOG_PATH}" >&2 || true
-}
-
-write_static_live_config() {
-  awk -v port="${PORT}" '
-    BEGIN {
-      provider_keys["openai"] = "OPENAI_API_KEY"
-      provider_keys["deepseek"] = "DEEPSEEK_API_KEY"
-      provider_keys["dashscope"] = "DASHSCOPE_API_KEY"
-      provider_keys["moonshot"] = "MOONSHOT_API_KEY"
-      provider_keys["minimax"] = "MINIMAX_API_KEY"
-      provider_keys["siliconflow"] = "SILICONFLOW_API_KEY"
-      provider_keys["zai"] = "ZAI_API_KEY"
-      provider_keys["gemini"] = "GEMINI_API_KEY"
-      provider_keys["anthropic"] = "ANTHROPIC_API_KEY"
-      provider_keys["meta"] = "MODEL_API_KEY"
-      provider_keys["xai"] = "XAI_API_KEY"
-    }
-    /^  port: / && replaced == 0 {
-      print "  port: " port
-      replaced = 1
-      next
-    }
-    /^management:$/ {
-      print "management:"
-      print "  enabled: false"
-      print "tenants:"
-      print "  - id: live-smoke"
-      print "    secret: \"${SERVICE_SECRET}\""
-      print "    defaults:"
-      print "      provider: openai"
-      print "      model: gpt-4.1"
-      print "      dictation_provider: openai"
-      print "      dictation_model: gpt-4o-mini-transcribe"
-      print "      system_prompt: \"\""
-      in_management = 1
-      next
-    }
-    /^providers:$/ {
-      in_management = 0
-      print
-      next
-    }
-    in_management == 1 { next }
-    {
-      print
-      if ($0 ~ /^  [[:alnum:]_]+:$/) {
-        provider = $1
-        sub(/:$/, "", provider)
-        if (provider in provider_keys) {
-          print "    api_key: \"${" provider_keys[provider] "}\""
-          if (provider == "dashscope") {
-            print "    base_url: \"${DASHSCOPE_BASE_URL}\""
-          }
-        }
-      }
-    }
-  ' "${ROOT_DIR}/configs/config.yml" > "${CONFIG_PATH}"
+  if [[ -n "${PREFLIGHT_PROVIDER_LOG_PATH:-}" && -f "${PREFLIGHT_PROVIDER_LOG_PATH}" ]]; then
+    sed -E 's/(Bearer )[A-Za-z0-9._~-]+/\1<redacted>/g' "${PREFLIGHT_PROVIDER_LOG_PATH}" >&2 || true
+  fi
 }
 
 write_managed_live_config() {
-  awk -v port="${PORT}" '
+  awk -v port="${PORT}" -v preflight_provider_url="${PREFLIGHT_PROVIDER_URL:-}" '
     /^  port: / && replaced == 0 {
       print "  port: " port
       replaced = 1
       next
     }
+    /^  openai:$/ {
+      in_openai = 1
+      print
+      next
+    }
+    in_openai == 1 && /^    base_url: / {
+      if (preflight_provider_url != "") {
+        print "    base_url: " preflight_provider_url
+        preflight_replaced++
+      } else {
+        print
+      }
+      in_openai = 0
+      next
+    }
+    in_openai == 1 && /^  [a-z]/ {
+      in_openai = 0
+    }
     { print }
+    END {
+      if (preflight_provider_url != "" && preflight_replaced != 1) {
+        exit 1
+      }
+    }
   ' "${ROOT_DIR}/configs/config.yml" >"${CONFIG_PATH}"
+}
+
+start_managed_preflight_provider() {
+  local ready_path="${TMP_DIR}/managed-preflight-provider.ready"
+  PREFLIGHT_PROVIDER_LOG_PATH="${TMP_DIR}/managed-preflight-provider.log"
+  export PREFLIGHT_PROVIDER_API_KEY
+  PREFLIGHT_PROVIDER_API_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+  python3 -c '
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import json
+import os
+import pathlib
+import sys
+
+expected_prompts = (
+    "Verify this provider credential.",
+    "Reply with exactly OK and no punctuation.",
+)
+expected_key = os.environ["PREFLIGHT_PROVIDER_API_KEY"]
+observed_model = None
+request_count = 0
+request_failed = False
+
+class Handler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        global observed_model, request_count, request_failed
+        response_status = 200
+        response_body = {"id": "managed-preflight-verification", "status": "completed"}
+        try:
+            content_length = int(self.headers.get("Content-Length", ""))
+            payload = json.loads(self.rfile.read(content_length))
+            payload_text = json.dumps(payload, separators=(",", ":"))
+            model = payload.get("model")
+            request_valid = (
+                request_count < len(expected_prompts)
+                and self.path == "/responses"
+                and self.headers.get("Authorization") == f"Bearer {expected_key}"
+                and self.headers.get_content_type() == "application/json"
+                and isinstance(model, str)
+                and model != ""
+                and expected_prompts[request_count] in payload_text
+                and (observed_model is None or model == observed_model)
+            )
+        except (json.JSONDecodeError, TypeError, ValueError):
+            request_valid = False
+            model = None
+        if not request_valid:
+            request_failed = True
+            response_status = 400
+            response_body = {"error": "invalid managed preflight provider request"}
+        elif request_count == 0:
+            observed_model = model
+        else:
+            response_body = {
+                "id": "managed-preflight-route",
+                "status": "completed",
+                "output": [{
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "OK"}],
+                }],
+            }
+        request_count += 1
+        response_bytes = json.dumps(response_body, separators=(",", ":")).encode("utf-8")
+        self.send_response(response_status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(response_bytes)))
+        self.end_headers()
+        self.wfile.write(response_bytes)
+
+    def log_message(self, _format, *_arguments):
+        return
+
+server = HTTPServer(("127.0.0.1", int(sys.argv[1])), Handler)
+pathlib.Path(sys.argv[2]).touch()
+for _ in expected_prompts:
+    server.handle_request()
+    if request_failed:
+        raise SystemExit("managed preflight provider rejected a request")
+server.server_close()
+if request_count != len(expected_prompts):
+    raise SystemExit("managed preflight provider received an invalid request count")
+' "${PREFLIGHT_PROVIDER_PORT}" "${ready_path}" >"${PREFLIGHT_PROVIDER_LOG_PATH}" 2>&1 &
+  PREFLIGHT_PROVIDER_PID="$!"
+
+  for _ in {1..50}; do
+    if [[ -f "${ready_path}" ]]; then
+      return
+    fi
+    if ! kill -0 "${PREFLIGHT_PROVIDER_PID}" >/dev/null 2>&1; then
+      echo "error: managed preflight provider exited before readiness" >&2
+      redact_log
+      exit 1
+    fi
+    sleep 0.02
+  done
+  echo "error: managed preflight provider did not become ready" >&2
+  redact_log
+  exit 1
 }
 
 configure_live_management_environment() {
   local live_origin="http://127.0.0.1:${PORT}"
-  export LLM_PROXY_MANAGEMENT_ENABLED=true
   export LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN="${live_origin}"
   export LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN="${live_origin}"
   export LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN="http://localhost:${PORT}"
@@ -534,7 +582,7 @@ print(tenants[0]["id"])
     redact_log
     exit 1
   fi
-  if ! SERVICE_SECRET="$(python3 -c '
+  if ! LLM_PROXY_SECRET="$(python3 -c '
 import json
 import pathlib
 import sys
@@ -646,7 +694,7 @@ run_text_smoke() {
       --data "${request_body}" \
       -o "${response_path}" \
       -w "%{http_code}" \
-      "http://127.0.0.1:${PORT}/?provider=${provider}&format=text/plain&key=${SERVICE_SECRET}"
+      "http://127.0.0.1:${PORT}/?provider=${provider}&format=text/plain&key=${LLM_PROXY_SECRET}"
   )"
 
   response_text="$(tr -d '\r\n' < "${response_path}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
@@ -764,7 +812,7 @@ run_image_smoke() {
       --data-binary "@${request_path}" \
       -o "${response_path}" \
       -w "%{http_code}" \
-      "http://127.0.0.1:${PORT}/v2?provider=${provider}&format=text/plain&key=${SERVICE_SECRET}"
+      "http://127.0.0.1:${PORT}/v2?provider=${provider}&format=text/plain&key=${LLM_PROXY_SECRET}"
   )"
 
   response_text="$(tr -d '\r\n' <"${response_path}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
@@ -776,21 +824,18 @@ run_image_smoke() {
   echo "live provider image smoke passed: provider=${provider} model=${model} status=${http_status}"
 }
 
-run_static_config_preflight() {
-  local response_path="${TMP_DIR}/preflight-response.txt"
-  local http_status
-  http_status="$(
-    curl -sS --max-time 5 \
-      -o "${response_path}" \
-      -w "%{http_code}" \
-      "http://127.0.0.1:${PORT}/?provider=unsupported-live-preflight&prompt=ready&key=${SERVICE_SECRET}"
-  )"
-  if [[ "${http_status}" != "400" ]]; then
-    echo "error: live provider harness preflight failed: status=${http_status}" >&2
+run_managed_config_preflight() {
+  OPENAI_API_KEY="${PREFLIGHT_PROVIDER_API_KEY}"
+  export OPENAI_API_KEY
+  verify_provider_key openai
+  run_text_smoke openai
+  if ! wait "${PREFLIGHT_PROVIDER_PID}"; then
+    echo "error: managed preflight provider did not observe the required requests" >&2
     redact_log
     exit 1
   fi
-  echo "live provider harness preflight passed: static tenant authenticated and routing rejected the unknown provider"
+  PREFLIGHT_PROVIDER_PID=""
+  echo "live provider harness preflight passed: saved managed provider key reloaded and routed through the local provider"
 }
 
 PREFLIGHT_ONLY=false
@@ -836,6 +881,10 @@ IMAGE_MODELS=()
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="$(mktemp -d)"
 PROXY_PID=""
+PREFLIGHT_PROVIDER_PID=""
+PREFLIGHT_PROVIDER_LOG_PATH=""
+PREFLIGHT_PROVIDER_URL=""
+PREFLIGHT_PROVIDER_API_KEY=""
 
 cleanup() {
   local exit_status=$?
@@ -843,6 +892,10 @@ cleanup() {
   if [[ -n "${PROXY_PID}" ]] && kill -0 "${PROXY_PID}" >/dev/null 2>&1; then
     kill -TERM "${PROXY_PID}" >/dev/null 2>&1 || true
     wait "${PROXY_PID}" >/dev/null 2>&1 || true
+  fi
+  if [[ -n "${PREFLIGHT_PROVIDER_PID}" ]] && kill -0 "${PREFLIGHT_PROVIDER_PID}" >/dev/null 2>&1; then
+    kill -TERM "${PREFLIGHT_PROVIDER_PID}" >/dev/null 2>&1 || true
+    wait "${PREFLIGHT_PROVIDER_PID}" >/dev/null 2>&1 || true
   fi
   rm -rf "${TMP_DIR}"
   return "${exit_status}"
@@ -893,14 +946,19 @@ fi
 LOG_PATH="${TMP_DIR}/llm-proxy.log"
 PUBLIC_CAPABILITIES_RESPONSE_PATH="${TMP_DIR}/public-capabilities.json"
 export LLM_PROXY_LIVE_PORT="${PORT}"
-if [[ "${PREFLIGHT_ONLY}" == "true" || -n "${WRITE_CONFIG_PATH}" ]]; then
-  export SERVICE_SECRET="${SERVICE_SECRET:-live-service-secret}"
-  export_unused_provider_placeholders
-  write_static_live_config
-else
+if [[ -z "${WRITE_CONFIG_PATH}" ]]; then
   configure_live_management_environment
-  write_managed_live_config
 fi
+if [[ "${PREFLIGHT_ONLY}" == "true" ]]; then
+  PREFLIGHT_PROVIDER_PORT="$(allocate_loopback_port)"
+  while [[ "${PREFLIGHT_PROVIDER_PORT}" == "${PORT}" ]]; do
+    PREFLIGHT_PROVIDER_PORT="$(allocate_loopback_port)"
+  done
+  export PREFLIGHT_PROVIDER_URL
+  PREFLIGHT_PROVIDER_URL="http://127.0.0.1:${PREFLIGHT_PROVIDER_PORT}"
+  start_managed_preflight_provider
+fi
+write_managed_live_config
 
 if [[ -n "${WRITE_CONFIG_PATH}" ]]; then
   echo "isolated live provider config written: ${CONFIG_PATH}"
@@ -922,12 +980,11 @@ GOEXPERIMENT= "${BINARY_PATH}" --config "${CONFIG_PATH}" >"${LOG_PATH}" 2>&1 &
 PROXY_PID="$!"
 wait_for_proxy
 
+initialize_live_management
 if [[ "${PREFLIGHT_ONLY}" == "true" ]]; then
-  run_static_config_preflight
+  run_managed_config_preflight
   exit 0
 fi
-
-initialize_live_management
 if [[ "${MEDIA_ONLY}" == "true" ]]; then
   fetch_public_capabilities
   for live_provider in "${LIVE_PROVIDERS[@]}"; do

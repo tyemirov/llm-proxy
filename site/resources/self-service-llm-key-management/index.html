@@ -85,13 +85,13 @@
 
           <section>
             <h2>How LLM Proxy helps</h2>
-            <p>LLM Proxy includes an optional TAuth-protected management UI that creates a missing client key after authentication, autosaves provider settings, and keeps Settings open until at least one managed provider key persists.</p>
+            <p>LLM Proxy includes a TAuth-protected management UI that creates a missing client key after authentication, autosaves provider settings, and keeps Settings open until at least one managed provider key persists.</p>
           </section>
 
           <section>
             <h2>How it works</h2>
             <ol class="resource-steps">
-              <li>Enable management mode with TAuth and database configuration.</li>
+              <li>Configure TAuth, the management database, and provider-key encryption.</li>
 <li>Publish the static Pages UI and serve runtime config from the API backend.</li>
 <li>Users sign in; the UI creates and presents a missing client key once.</li>
 <li>Users enter at least one provider key; the selected provider settings autosave before they leave Settings.</li>
@@ -170,7 +170,7 @@
           <section>
             <h2>Objections and limitations</h2>
             <ul class="resource-list">
-              <li>Management mode requires configured TAuth, CORS origins, database settings, and provider-key encryption key.</li>
+              <li>Management requires configured TAuth, CORS origins, database settings, and a provider-key encryption key.</li>
 <li>The backend serves management APIs and runtime config; the static Pages app is only the shell.</li>
 <li>Autosave responses return masked key status; raw retrieval requires the separate owner-authenticated reveal action.</li>
             </ul>

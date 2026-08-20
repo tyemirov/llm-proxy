@@ -368,64 +368,28 @@ retain satisfied historical dependencies.
   - Proved xAI WebP asset rejection closes the asset reader.
   - `make ci` passed all 11 gates with 93 browser tests and 100.0% Go statement
     coverage.
-- [!] [B126] (P1) Activate the current v0.4.0 release on every public surface.
-  Goal:
-  Make the production API, container, and Pages site serve the immutable
-  `v0.4.0` source revision.
-  Evidence:
-  - GitHub release `v0.4.0` points to source commit
-    `0cc9537bbdc838d62961d88ce32195f7b4578fab`.
-  - On 2026-08-10, the public Pages marker reported `v0.3.0` and source commit
-    `7917ce1ed824b9946d2a98a5a55b90c443db884a`.
-  - On the same date, the public API configuration route returned HTTP `200`
-    and the proxy root returned its expected HTTP `403` authentication
-    boundary. These checks prove availability but do not identify the running
-    container revision.
-  Requirements:
-  - Use the repository lifecycle to publish and activate the exact `v0.4.0`
-    container and Pages artifacts.
-  - Preserve the retained management data volume and apply only migrations
-    owned by the released binary.
-  - Record the release tag, source commit, container manifest digest, running
-    image ID, repository digest, and Pages marker as one activation receipt.
-  - Verify the API and Pages surfaces independently after activation.
-  Validation:
-  - Prove the versioned image and `latest` resolve to the recorded manifest.
-  - Prove the running image matches that manifest and source revision.
-  - Prove the public Pages marker reports `v0.4.0` and the same source commit.
-  - Prove the configuration route returns HTTP `200` and the proxy root returns
-    HTTP `403` after activation.
-  Blocked: the production operator must run the repository-owned deployment
-  lifecycle and record the image and Pages activation receipt.
-- [!] [B127] (P1) Activate I045 telemetry for B088 production acceptance.
-  Goal:
-  This activation issue makes the production proxy emit I045's safe request
-  phase and provider-progress events. A public request id can then identify the
-  exact long-completion boundary.
-  Evidence:
-  - The I045 work is completed. Its baseline and final 11-gate `make ci` runs
-    passed with 100.0% Go statement coverage.
-  - The currently active production revision does not contain the I045 source.
-  - The 2026-08-10 B088 paid run produced correlated OpenAI and Meta request
-    ids, but the running service cannot emit I045's phase totals or progress
-    events for them.
-  Requirements:
-  - Complete the repository execution chain for the I045 source, release the
-    resulting immutable revision, and activate that exact revision through the
-    repository-owned production lifecycle.
-  - Preserve the current production configuration and managed data volume.
-    Record the release tag, source commit, container manifest digest, running
-    image id, and repository digest in the activation receipt.
-  Validation:
-  - Send one redacted accepted request and prove its validated
-    `X-LLM-Proxy-Request-ID` correlates with one terminal phase summary and the
-    applicable content-free provider-progress events in production logs.
-  - Prove the running revision matches the recorded immutable source and image
-    before B088 spends another paid long-completion or canary request.
-  Blocked: the execution chain must merge and release the completed I045 source,
-  then the production operator must activate that immutable revision and record
-  the receipt.
-- [ ] [B088] (P1) {B127} Restore Default-tenant long completion routing for OpenAI and Meta.
+- [x] [B126] (P1) Reconcile the stale v0.4.0 production activation blocker.
+  Resolution:
+  - The forward-only production lifecycle superseded `v0.4.0` with `v3.1.1`.
+  - The `v3.1.1` release receipt binds source commit
+    `264fb18379eef07d65e90ff7b47ae7e621869e0a` to container manifest
+    `sha256:f7e145af76763655557e5739ca964ab8713058c53c33c5f017b5999ceb54946e`.
+  - The running service uses that manifest and image ID
+    `sha256:74890559bf309ea2362f47f47f6733574c05330a6a0a6e4d87e6d2c1160da19f`.
+    The Pages marker reports the same version and source commit.
+  - The public configuration route returned HTTP `200`. The proxy root returned
+    its expected HTTP `403` authentication boundary.
+- [x] [B127] (P1) Activate I045 telemetry for B088 production acceptance.
+  Resolution:
+  - Production `v3.1.1` contains I045 and uses the recorded immutable source and
+    container manifest from B126.
+  - Request `EM73QSJWEYKXDL4FTHXYGJ5TSF` correlated one content-free Gemini
+    provider-progress event with one terminal phase summary. The summary
+    recorded the 900-second request budget, provider HTTP time, poll wait, and
+    zero proxy rate-limit wait.
+  - The live harness validated the matching response request ID without printing
+    the response body or a credential.
+- [ ] [B088] (P1) Restore Default-tenant long completion routing for OpenAI and Meta.
   Goal:
   Make the Default tenant complete deterministic production live-test requests
   through OpenAI and Meta. Do not use local provider credentials, fallback
@@ -460,8 +424,8 @@ retain satisfied historical dependencies.
     with HTTP `200`, 10,836 response bytes, and its final marker. Its request id
     was `2GTUJCLSMIOO7CIJUW6XYLWTM3`.
   - The same run proved both target routes accept the saved Default-tenant
-    credential and model through their echo cases. Exact phase classification
-    now depends on B127 because the running production revision predates I045.
+    credential and model through their echo cases. Production `v3.1.1` now
+    contains I045, and B127 records the correlated telemetry acceptance.
   Requirements:
   - Diagnose and restore the exact OpenAI and Meta production routes through
     the saved Default-tenant provider configuration. Retain OpenAI's
@@ -486,11 +450,11 @@ retain satisfied historical dependencies.
     any failure before another paid run.
   - For any source change, run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-- [ ] [B128] (P1) Restore Gemini long-completion production acceptance after provider rate limiting.
+- [!] [B128] (P1) Restore Gemini long-completion production acceptance after provider permission failure.
   Goal:
   Make the Default tenant's Gemini 3.5 Flash background case complete the
-  production live-test contract. First, classify and resolve the provider
-  rate-limit failure.
+  production live-test contract. Resolve the active provider permission
+  failure before another acceptance run.
   Completion boundary:
   - Repository changes and repository validation prove development completion.
   - Production acceptance is an explicit completion condition for this issue.
@@ -500,20 +464,40 @@ retain satisfied historical dependencies.
   - The later `gemini-background-polling` case returned the sanitized provider
     HTTP `429` boundary with 162 response bytes and request id
     `H3VZZRB52HTFOBITJH22NNZ3WR`.
+  - On 2026-08-19, production `v3.1.1` accepted the current Default-tenant
+    client key. Both exact Gemini cases reached `gemini-3.5-flash`, then
+    returned sanitized HTTP `502` responses with 156 response bytes. The
+    validated request ids were `NHZT3Z3NJD3MPHO7SKD5T74RCZ` for echo and
+    `EM73QSJWEYKXDL4FTHXYGJ5TSF` for background polling.
+  - I045 correlated each request with a non-retryable upstream HTTP `403` on
+    the first resource poll. The background summary recorded 500 milliseconds
+    of provider poll wait and zero proxy rate-limit wait. Resource cleanup also
+    failed at the provider boundary.
+  - Google's current Interactions error contract classifies HTTP `403` as
+    `permission_denied`: the API key does not have permission for the resource.
+    The implementation uses Google's documented API-key header, API revision,
+    create route, and retrieval route. No source or proxy-window change is
+    supported by this evidence.
+  - A bounded operator-key control confirmed the same provider boundary. Create
+    returned HTTP `200` with `in_progress`. Retrieval returned HTTP `403` with
+    `permission_denied`, and deletion returned HTTP `200`. The check retained
+    no provider resource ID or response body.
   Requirements:
-  - Correlate the failed request with safe provider rate-limit metadata and
-    determine the exact quota, billing, or configured proxy-window boundary.
   - Preserve Gemini 3.5 Flash's stored background Interactions lifecycle, the
     900-second request budget, response redaction, and the current deterministic
     long-completion case.
-  - Apply only the correction supported by that evidence. Keep provider quota
-    or billing work operational and proxy rate-window work in source/config.
+  - Keep the permission correction operational. Do not change the adapter or a
+    proxy rate window without new evidence of a source or configuration defect.
   Validation:
   - After the identified boundary is resolved, run the exact Gemini echo and
     background cases with only the Default-tenant secret and prove HTTP `200`,
     the final markers, validated request ids, and no response-body disclosure.
   - For any source change, run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Blocked: the Gemini project owner or Google must grant the key and project
+  permission to retrieve Interactions resources. The owner can instead replace
+  the key with one from a project that has this access. Then rerun the two exact
+  Gemini cases.
 - [ ] [B141] (P1) Center the X icon inside the top-right square.
   Goal:
   Align the X icon so it is visually centered within the square control in the top-right corner, matching the intended UI layout shown in the attached screenshot.
@@ -1561,7 +1545,7 @@ retain satisfied historical dependencies.
 
 ## Maintenance
 
-- [ ] [M022] (P1) Remove static tenant mode.
+- [x] [M022] (P1) Remove static tenant mode.
   Goal:
   The service has one tenant contract. Each client uses a managed tenant key
   that an authenticated user creates through the management API.
@@ -1604,6 +1588,19 @@ retain satisfied historical dependencies.
     tenant contract or `SERVICE_SECRET` input.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - Made management configuration mandatory and removed static tenant,
+    configuration-level provider-key, authentication, and routing paths.
+  - Public proxy calls now authenticate only with managed tenant client keys.
+    Provider credentials and defaults come only from encrypted tenant records.
+  - Managed authentication now sends request cancellation to the tenant
+    database query.
+  - The non-paid preflight now saves a generated OpenAI key through the
+    management API. It routes one prompt through a loopback Responses server.
+  - Updated current configuration, tests, documentation, and generated public
+    content to use `LLM_PROXY_SECRET` as the only client-key input.
+  - The follow-up `make ci` passed all 11 gates with 100.0% Go statement
+    coverage and the managed provider preflight.
 - [ ] [M021] (P1) {F024,F025,F026,F027} Remove the completed MediaOps operation-import bridge.
   Goal:
   Leave only the canonical model-operation contract after migration of every
@@ -1700,12 +1697,11 @@ retain satisfied historical dependencies.
   - Verify inspected production or public surfaces directly where access is available.
   - Confirm any deploy-required finding is filed with the exact publish/deploy boundary and owner.
   - Confirm no production state was changed by the audit unless explicitly requested.
-  Last run: 2026-08-10 open-issue audit. GitHub release `v0.4.0` points to
-  source commit `0cc9537bbdc838d62961d88ce32195f7b4578fab`. The live API
-  returned the expected proxy (`403`) and configuration (`200`) boundaries.
-  The public Pages marker still reports `v0.3.0` and source commit
-  `7917ce1ed824b9946d2a98a5a55b90c443db884a`. B126 owns that exact activation
-  drift and the operator-held running-image receipt.
+  Last run: 2026-08-19 B128 production audit. The running service uses the
+  `v3.1.1` container manifest and source commit. The public Pages marker reports
+  the same version and commit. The live API returned the expected proxy (`403`)
+  and configuration (`200`) boundaries. B126 records the reconciled activation
+  receipt. B128 records the remaining Gemini provider-permission blocker.
 - [ ] [M001R] (P2) Backlog hygiene and archive.
   Goal:
   Keep the issue tracker reliable, readable, and focused on active work while preserving resolved history in the appropriate archive.

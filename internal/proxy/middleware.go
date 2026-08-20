@@ -81,6 +81,11 @@ func tenantAuthenticatedHandler(authenticator tenantAuthenticator, structuredLog
 func authenticateTenantRequest(ginContext *gin.Context, authenticator tenantAuthenticator, structuredLogger *zap.SugaredLogger) bool {
 	requestTenant, authenticated := authenticator.authenticate(ginContext.Request.Context(), ginContext.Query(queryParameterKey))
 	if !authenticated {
+		if ginContext.Request.Context().Err() != nil {
+			ginContext.Status(statusClientClosedRequest)
+			ginContext.Abort()
+			return false
+		}
 		structuredLogger.Warnw(
 			logEventForbiddenRequest,
 			logFieldRequestID, requestIDFromContext(ginContext),
@@ -94,29 +99,15 @@ func authenticateTenantRequest(ginContext *gin.Context, authenticator tenantAuth
 }
 
 type tenantAuthenticator struct {
-	staticTenants  tenantRegistry
 	managedTenants *managedTenantStore
 }
 
-func newTenantAuthenticator(staticTenants tenantRegistry, managedTenants *managedTenantStore) tenantAuthenticator {
-	return tenantAuthenticator{
-		staticTenants:  staticTenants,
-		managedTenants: managedTenants,
-	}
+func newTenantAuthenticator(managedTenants *managedTenantStore) tenantAuthenticator {
+	return tenantAuthenticator{managedTenants: managedTenants}
 }
 
 func (authenticator tenantAuthenticator) authenticate(requestContext context.Context, rawSecret string) (tenant, bool) {
-	if requestTenant, authenticated := authenticator.staticTenants.authenticate(rawSecret); authenticated {
-		return requestTenant, true
-	}
-	if authenticator.managedTenants == nil {
-		return tenant{}, false
-	}
 	return authenticator.managedTenants.authenticate(requestContext, rawSecret)
-}
-
-func (authenticator tenantAuthenticator) containsStaticSecretDigest(secretDigest [sha256.Size]byte) bool {
-	return authenticator.staticTenants.containsSecretDigest(secretDigest)
 }
 
 func tenantIfPresentFromContext(ginContext *gin.Context) (tenant, bool) {

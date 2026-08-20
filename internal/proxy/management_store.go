@@ -2694,7 +2694,7 @@ func (store *managedTenantStore) updateDefaults(principal managementPrincipal, t
 	return store.snapshot(record)
 }
 
-func (store *managedTenantStore) generateSecret(principal managementPrincipal, tenantIdentifier managedTenantIdentifier, secretDigestInUse func([sha256.Size]byte) bool) (string, managedTenantSnapshot, error) {
+func (store *managedTenantStore) generateSecret(principal managementPrincipal, tenantIdentifier managedTenantIdentifier) (string, managedTenantSnapshot, error) {
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
 	record, recordError := store.database.tenantByOwnerAndID(principal.userID, tenantIdentifier.string())
@@ -2706,7 +2706,7 @@ func (store *managedTenantStore) generateSecret(principal managementPrincipal, t
 		if secretError != nil {
 			return constants.EmptyString, managedTenantSnapshot{}, secretError
 		}
-		if secretDigestInUse(secretDigest) || store.containsSecretDigestLocked(secretDigest) {
+		if store.containsSecretDigestLocked(secretDigest) {
 			continue
 		}
 		digestValue := hex.EncodeToString(secretDigest[:])
@@ -2931,8 +2931,7 @@ func (store *managedTenantStore) tenant(record managedTenantRecord, secretDigest
 		identifier:       tenantID(record.TenantID),
 		userID:           record.OwnerUserID,
 		secretDigest:     secretDigest,
-		defaults:         newManagedTenantDefaults(defaults),
-		managed:          true,
+		defaults:         newTenantDefaults(defaults),
 		providerSettings: providerSettings,
 	}, nil
 }

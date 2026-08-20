@@ -119,9 +119,9 @@ const pages = Object.freeze([
     description: "Use tenant secrets for clients while upstream provider credentials stay on the LLM Proxy server.",
     audience: "Internal-tool builders who need AI calls without distributing raw upstream keys.",
     problem: "Client apps, notebooks, browser utilities, and scripts can drift into storing raw OpenAI, Anthropic, Gemini, or xAI keys. Once those keys leave the backend, rotation and audit work become harder.",
-    solution: "LLM Proxy rejects upstream-provider-key-like fields on public proxy requests and reads provider credentials only from server-side config or authenticated management storage.",
+    solution: "LLM Proxy rejects upstream-provider-key-like fields on public proxy requests and reads provider credentials only from authenticated tenant management storage.",
     steps: [
-      "Load provider credentials through config.yml or save them in the authenticated management UI.",
+      "Save provider credentials in the authenticated management UI.",
       "Give clients only an llm-proxy tenant secret.",
       "Route text and dictation requests with key=<tenant secret>.",
       "Rotate provider keys in the backend without changing every client integration.",
@@ -153,8 +153,8 @@ const pages = Object.freeze([
     problem: "When every app gets its own provider credential and routing rules, access control becomes difficult to reason about and providers become embedded in product code.",
     solution: "LLM Proxy keeps public proxy requests authenticated by key=<tenant secret>, then applies the tenant's configured defaults and server-side provider credentials.",
     steps: [
-      "Create a tenant in static config or through the management UI.",
-      "Generate or configure a tenant secret for the client.",
+      "Create a tenant through the authenticated management UI.",
+      "Create or replace the tenant client key for the application.",
       "Use the same key parameter across GET, POST, /v2, and /dictate.",
       "Replace the secret or delete its owning managed tenant when access should change.",
     ],
@@ -170,7 +170,7 @@ const pages = Object.freeze([
     ],
     limitations: [
       "Tenant secrets should not be placed in public client code without appropriate controls.",
-      "Management mode uses database state for generated secrets; persistence must be configured.",
+      "Generated client keys use managed database state; persistence must be configured.",
       "This is not a full identity provider; it is the proxy authentication boundary.",
     ],
   }),
@@ -183,9 +183,9 @@ const pages = Object.freeze([
     description: "Log in to the LLM Proxy app, create a client key for the selected tenant, and autosave one provider API key before leaving Settings.",
     audience: "Teams that want user-owned AI access without asking operators to edit YAML for every change.",
     problem: "Operator-provisioned AI access does not scale when each user or team needs provider keys, defaults, generated secrets, and examples updated separately.",
-    solution: "LLM Proxy includes an optional TAuth-protected management UI that creates a missing client key after authentication, autosaves provider settings, and keeps Settings open until at least one managed provider key persists.",
+    solution: "LLM Proxy includes a TAuth-protected management UI that creates a missing client key after authentication, autosaves provider settings, and keeps Settings open until at least one managed provider key persists.",
     steps: [
-      "Enable management mode with TAuth and database configuration.",
+      "Configure TAuth, the management database, and provider-key encryption.",
       "Publish the static Pages UI and serve runtime config from the API backend.",
       "Users sign in; the UI creates and presents a missing client key once.",
       "Users enter at least one provider key; the selected provider settings autosave before they leave Settings.",
@@ -202,7 +202,7 @@ const pages = Object.freeze([
       ["Usage review", "The user returns to the dashboard and selects all-time, 30-day, 7-day, or 1-day request and token summaries."],
     ],
     limitations: [
-      "Management mode requires configured TAuth, CORS origins, database settings, and provider-key encryption key.",
+      "Management requires configured TAuth, CORS origins, database settings, and a provider-key encryption key.",
       "The backend serves management APIs and runtime config; the static Pages app is only the shell.",
       "Autosave responses return masked key status; raw retrieval requires the separate owner-authenticated reveal action.",
     ],
@@ -621,7 +621,7 @@ done`,
     examples: [
       ["Plain text caller", "A CLI reads the text body and token headers separately."],
       ["Dashboard metric", "The management UI shows request and token graphs for the signed-in tenant."],
-      ["Provider comparison", "A team compares usage by provider and model using the normalized metadata available in management mode."],
+      ["Provider comparison", "A team compares usage by provider and model using authenticated management metadata."],
     ],
     limitations: [
       "Usage metadata appears only when the upstream provider returns token information.",
@@ -640,7 +640,7 @@ done`,
     solution: "LLM Proxy's authenticated Usage Overview defaults to account-wide aggregates across every owned tenant, with an independent tenant filter and safe scope-bound failure details.",
     quickVerdict: "Every tenant remains independently routable. Usage opens on All tenants and 30 days, while Settings has its own editor-only tenant selector.",
     steps: [
-      "Enable management mode and generated-secret routing.",
+      "Create managed tenants and their generated client keys.",
       "Send proxy requests through any owned tenant's generated secret; each tenant remains operational independently.",
       "Record canonical outcome metadata for managed-tenant requests without storing request or provider-error content.",
       "Open Usage Overview on All tenants and 30 days, or use the Usage tenant selector immediately before ALL to narrow the report.",
@@ -845,9 +845,9 @@ GET /api/management/tenants/:tenant_id/usage?interval=30d`,
     primaryKeyword: "encrypted provider key storage",
     title: "Encrypted provider key storage for managed tenants",
     description: "Store tenant-owned provider API keys with AES-GCM encryption at rest and honest security wording.",
-    audience: "Teams evaluating how LLM Proxy stores BYO provider credentials in management mode.",
+    audience: "Teams evaluating how LLM Proxy stores tenant-owned provider credentials.",
     problem: "Provider API keys are high-value secrets. A management database should not store raw upstream credentials as plaintext rows.",
-    solution: "LLM Proxy requires a base64 32-byte provider-key encryption key in management mode and encrypts managed provider API keys at rest with AES-GCM and row-bound associated data.",
+    solution: "LLM Proxy requires a base64 32-byte provider-key encryption key and encrypts managed provider API keys at rest with AES-GCM and row-bound associated data.",
     steps: [
       "Generate a base64 32-byte management.provider_key_encryption_key.",
       "Configure it as a backend deployment secret.",
@@ -878,7 +878,7 @@ GET /api/management/tenants/:tenant_id/usage?interval=30d`,
     description: "Fail public proxy requests that try to send upstream provider API keys in query, JSON, or multipart input.",
     audience: "Security-conscious teams that want mistakes to fail before provider credentials spread.",
     problem: "A caller may accidentally include an OpenAI or provider api_key field in a proxy request body, query string, or multipart form.",
-    solution: "LLM Proxy public endpoints reject provider-key-like fields so upstream credentials stay in server-side configuration or authenticated management storage.",
+    solution: "LLM Proxy public endpoints reject provider-key-like fields so upstream credentials stay in only authenticated tenant management storage.",
     steps: [
       "Keep upstream provider credentials out of public proxy requests.",
       "Authenticate clients only with key=<tenant secret>.",
@@ -898,7 +898,7 @@ GET /api/management/tenants/:tenant_id/usage?interval=30d`,
     limitations: [
       "This catches provider-key-like request fields; it does not inspect arbitrary prompt text for secrets.",
       "Tenant secrets must still be protected by client teams.",
-      "Provider credentials belong in backend config or authenticated management storage.",
+      "Provider credentials belong only in authenticated tenant management storage.",
     ],
   }),
   page({
@@ -918,17 +918,17 @@ GET /api/management/tenants/:tenant_id/usage?interval=30d`,
     ],
     features: [
       ["Single config file", "Runtime code receives only validated config values.", "Flags and env are not alternate service config sources."],
-      ["Strict placeholders", "Missing placeholders fail startup outside the exact optional provider-key case.", "Configuration errors are visible before traffic."],
+      ["Strict placeholders", "Missing placeholders fail startup.", "Configuration errors are visible before traffic."],
       ["Unknown-key rejection", "Stale or misspelled YAML keys fail instead of being ignored.", "Forward-only config stays clean."],
     ],
     examples: [
       ["Hosted profile", "Deployment secrets provide LLM_PROXY_MANAGEMENT_* placeholder values."],
       ["Local profile", "configs/.env supplies SQLite management database values for local runs."],
-      ["Provider disabled", "A non-default provider api_key that is exactly a missing placeholder can expand to blank and remain disabled."],
+      ["Obsolete credential field", "A provider api_key field is rejected because provider credentials are tenant-managed state."],
     ],
     limitations: [
       "Changing config requires restart.",
-      "The optional-provider-key exception applies only to the whole api_key value.",
+      "Client keys and provider API keys are saved through authenticated tenant management.",
       "This is a config discipline feature, not a secrets manager.",
     ],
   }),
@@ -1010,12 +1010,12 @@ return database.Transaction(func(transaction *gorm.DB) error {`,
     primaryKeyword: "GORM managed tenant persistence",
     title: "GORM-managed tenant persistence for LLM Proxy",
     description: "Persist TAuth accounts, isolated tenants, provider settings, generated secret digests, defaults, and usage through GORM.",
-    audience: "Backend operators deciding how management-mode state is stored.",
+    audience: "Backend operators deciding how tenant management state is stored.",
     problem: "Self-service management needs persistent tenant state without mutating runtime config files or adding raw SQL paths.",
     solution: "LLM Proxy stores TAuth users, their personal tenants, provider keys, defaults, generated secret digests, and usage events in a GORM-managed database.",
     steps: [
       "Configure management.database_path with the SQLite database location.",
-      "Run management mode with the required provider-key encryption key.",
+      "Run the service with the required provider-key encryption key.",
       "Let GORM model APIs own signup, provider, defaults, secret, and usage state.",
     ],
     features: [
@@ -1048,9 +1048,9 @@ return database.Transaction(func(transaction *gorm.DB) error {`,
     description: "Configure a client with a tenant secret, send canonical /v2 requests, and keep management sessions and provider keys on separate boundaries.",
     audience: "Developers connecting an application, script, or command-line workflow to LLM Proxy.",
     problem: "A client integration can confuse three different credentials: the tenant secret that authorizes proxy requests, the TAuth session that authorizes management actions, and upstream provider API keys that must stay server-side.",
-    solution: "LLM Proxy authenticates public client requests with key=<tenant secret>. The bundled text clients send canonical POST /v2 messages, while the optional TAuth-protected management UI creates or manages client access and provider settings separately.",
+    solution: "LLM Proxy authenticates public client requests with key=<tenant secret>. The bundled text clients send canonical POST /v2 messages, while the TAuth-protected management UI creates or manages client access and provider settings separately.",
     steps: [
-      "Choose the tenant-secret source: an operator configures a static tenant, or a signed-in management user receives a generated client key once.",
+      "A signed-in management user creates or replaces the tenant client key and receives its value once.",
       "Give the client a proxy base URL and tenant secret through its application configuration; the installable CLI accepts flags or LLM_PROXY_BASE_URL and LLM_PROXY_SECRET.",
       "Send canonical POST /v2 messages with the tenant secret in the key query parameter.",
       "Omit provider and model to use the authenticated tenant default, or select a configured provider when the request needs an override.",
@@ -1091,11 +1091,11 @@ return database.Transaction(func(transaction *gorm.DB) error {`,
       },
       {
         question: "What authenticates management Settings operations?",
-        answer: "The optional management UI relies on the configured MPR UI and TAuth session for management APIs. That browser session is separate from the tenant secret used by public proxy requests.",
+        answer: "The management UI relies on the configured MPR UI and TAuth session for management APIs. That browser session is separate from the tenant secret used by public proxy requests.",
       },
       {
         question: "Where do provider API keys belong?",
-        answer: "Provider API keys belong in server-side runtime configuration or authenticated management storage. Public proxy requests reject provider-key-like fields instead of forwarding them upstream.",
+        answer: "Provider API keys belong only in authenticated tenant management storage. Public proxy requests reject provider-key-like fields instead of forwarding them upstream.",
       },
       {
         question: "What happens when the client key is missing, invalid, or replaced?",
@@ -1261,7 +1261,7 @@ text = client.post_messages(
       verifiedOn: CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE,
       code: `llm-proxy-client \\
   --base-url "http://localhost:8080/?provider=openai" \\
-  --secret "$SERVICE_SECRET" \\
+  --secret "$LLM_PROXY_SECRET" \\
   --model "gpt-5.5" \\
   --reasoning-effort "high" \\
   --request-timeout-seconds 900 \\
@@ -1369,9 +1369,9 @@ text = client.post_messages(
     description: "Route Meta Muse Spark, DeepSeek, DashScope Qwen, Kimi, MiniMax, SiliconFlow, Z.AI, and Grok text calls through one compatible adapter.",
     audience: "Teams adopting OpenAI-compatible chat providers without rewriting every caller.",
     problem: "OpenAI-compatible providers share a broad shape but still need different base URLs, keys, defaults, and availability rules.",
-    solution: "LLM Proxy uses a shared compatible chat adapter for configured providers while keeping provider URLs, keys, and model catalogs in config.",
+    solution: "LLM Proxy uses a shared compatible chat adapter while keeping provider URLs and the model catalog in config and keeping keys and defaults in tenant settings.",
     steps: [
-      "Configure provider base_url, api_key, and normalized provider offerings.",
+      "Configure provider runtime URLs and normalized offerings, then save the API key in tenant settings.",
       "Use provider selectors such as meta, deepseek, dashscope, moonshot, minimax, siliconflow, zai, or xai.",
       "Send GET, compatibility POST, or canonical /v2 requests.",
       "Let omitted model use the selected provider's configured default.",
@@ -1379,7 +1379,7 @@ text = client.post_messages(
     features: [
       ["Shared adapter", "Compatible chat providers use one proxy integration pattern.", "Provider-specific logic stays centralized."],
       ["Provider aliases", "Some providers expose aliases such as qwen or kimi.", "Callers can use documented selectors."],
-      ["Disabled-provider behavior", "Blank non-default provider keys keep startup working and return 503 when selected.", "Operators can stage provider support before credentials exist."],
+      ["Unconfigured-provider behavior", "A selected provider without a saved tenant key returns 503.", "Operators can add provider credentials without changing service config."],
     ],
     examples: [
       ["Meta Muse route", "A caller sends provider=meta and model=muse-spark-1.1 through Chat Completions."],
@@ -1389,7 +1389,7 @@ text = client.post_messages(
     ],
     limitations: [
       "Meta support is text-only; the proxy does not expose Meta dictation, web search, tools, multimodal inputs, or a Responses fallback.",
-      "Each provider still needs a configured key before serving tenant traffic.",
+      "Each provider needs a saved tenant key before serving tenant traffic.",
       "Provider base URLs should stay explicit in config.",
     ],
   }),
@@ -1403,7 +1403,7 @@ text = client.post_messages(
     problem: "Gemini models differ between stored background Interactions and non-stored synchronous Interactions, which shared proxy callers should not have to coordinate.",
     solution: "LLM Proxy selects the configured model lifecycle, polls and cleans up Gemini 3.x resources, and resolves Gemini 2.5 synchronously behind one blocking caller request.",
     steps: [
-      "Configure providers.gemini.api_key, base_url, and Gemini provider offerings.",
+      "Save the Gemini API key in tenant settings and configure the Gemini runtime URL and offerings.",
       "Select provider=gemini or set Gemini as a tenant default.",
       "Send canonical messages through /v2 or compatibility text requests.",
       "Keep max_tokens within configured Gemini output limits.",
@@ -1411,7 +1411,7 @@ text = client.post_messages(
     features: [
       ["Native adapter", "The backend maps user and assistant messages into Gemini interaction steps.", "System instructions use Gemini's system_instruction shape."],
       ["Resource lifecycle", "The proxy polls queued and in-progress Gemini 3.x interactions server-side.", "Gemini 2.5 requests are synchronous and non-stored; active 3.x resources are cancelled and deleted on exit."],
-      ["Configured defaults", "Omitted model uses the Gemini offering marked as the text default.", "The default currently comes from config, not client code."],
+      ["Tenant defaults", "Omitted model uses the tenant's saved Gemini text model.", "Client code can omit the model while tenant settings remain authoritative."],
       ["Output limit validation", "Gemini max_tokens values above configured limits return 400 before upstream calls.", "Known constraints are enforced at the edge."],
     ],
     examples: [
@@ -1435,7 +1435,7 @@ text = client.post_messages(
     problem: "Anthropic Messages has native system and max_tokens requirements that differ from OpenAI-compatible chat routes.",
     solution: "LLM Proxy maps shared messages into Anthropic's native Messages API, translates system messages to the top-level system field, and sends configured output limits when needed.",
     steps: [
-      "Configure providers.anthropic.api_key, base_url, and Claude model catalog.",
+      "Save the Anthropic API key in tenant settings and configure the Claude runtime URL and model catalog.",
       "Select provider=anthropic or use the claude alias.",
       "Send messages through /v2 with user and optional system messages.",
       "Let omitted max_tokens use the selected Claude model's configured output limit.",
@@ -1743,7 +1743,7 @@ text = client.post_messages(
     description: "Run paid-provider smoke checks separately from CI when real upstream behavior needs verification.",
     audience: "Operators validating provider credentials and hosted provider routes after config or deployment changes.",
     problem: "CI should be deterministic and avoid paid provider calls, but some changes still need live confirmation against real upstream providers.",
-    solution: "LLM Proxy keeps live provider smoke tests outside make ci, parses provider keys from a dotenv file without executing shell code, and forces the temporary proxy into management-disabled mode.",
+    solution: "LLM Proxy keeps live provider smoke tests outside make ci, parses provider keys from a dotenv file without executing shell code, and saves them into an isolated temporary managed tenant.",
     steps: [
       "Put provider API keys in an ignored env file.",
       "Run make test-live-providers LIVE_ENV_FILE=configs/.env.",
@@ -1753,7 +1753,7 @@ text = client.post_messages(
     ],
     features: [
       ["Separate from CI", "Live provider smoke tests are not part of make ci.", "Routine validation stays deterministic."],
-      ["Provider discovery and isolation", "The dynamic target runs providers whose keys are available through a management-disabled temporary config.", "Missing optional keys and hosted management state do not affect unrelated smoke checks."],
+      ["Provider discovery and isolation", "The dynamic target runs providers whose keys are available through an isolated temporary managed tenant.", "Missing keys and hosted management state do not affect unrelated smoke checks."],
       ["Default model path", "By default, smoke requests omit model so provider configured defaults are tested.", "The test exercises the default-selection contract."],
     ],
     examples: [
@@ -1816,7 +1816,7 @@ text = client.post_messages(
     faq: [
       {
         question: "What credential does an internal application receive?",
-        answer: "The application receives an LLM Proxy tenant client key. Upstream provider API keys remain in server-side configuration or authenticated management storage.",
+        answer: "The application receives an LLM Proxy tenant client key. Upstream provider API keys remain in authenticated tenant management storage.",
       },
       {
         question: "Can platform teams change a tenant's default model centrally?",
@@ -2526,7 +2526,7 @@ Generated: ${currentResourceModifiedDate}
 | File | Type | Why reviewed | Key findings | Confidence |
 |---|---|---|---|---|
 | ${evidence.readme} | Required product docs | Primary product description, REST contract, config, public landing, management UI, clients, deployment, and security wording | LLM Proxy is a lightweight HTTP proxy for text and dictation providers with tenant-secret auth, server-side credentials, a public capability landing page, a TAuth management app at /app/, usage dashboards, provider routing, and strict config loading. | High |
-| ${evidence.providerRouting} | Implementation notes | Provider routing, config ownership, management mode, error contract, and adapter notes | Multi-provider routing, model catalogs, omitted-model behavior, split-origin management, usage storage, and provider-key security are implemented contracts. | High |
+| ${evidence.providerRouting} | Implementation notes | Provider routing, config ownership, management, error contract, and adapter notes | Multi-provider routing, model catalogs, omitted-model behavior, split-origin management, usage storage, and provider-key security are implemented contracts. | High |
 | ${evidence.dictation} | Implementation notes | Dictation endpoint contract | /dictate accepts multipart audio with key auth and returns JSON text; dictation routing is implemented for supported providers in the current README. | High |
 | ${evidence.campaign} | Marketing copy | Existing audience and claim framing | Existing public claims emphasize server-side provider keys, multi-provider routing, dictation, usage dashboards, API-served config, and careful encrypted-at-rest wording. | Medium |
 

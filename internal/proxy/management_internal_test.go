@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"net/http"
@@ -22,6 +21,7 @@ var errInternalTestRead = errors.New("read failed")
 const testManagedProviderKeyEncryptionKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 
 func TestResponseConstructionHonorsRequestDeadline(t *testing.T) {
+	managedTenants := newManagedTenantStoreWithDatabase(newFakeManagedTenantDatabase())
 	testCases := []struct {
 		name     string
 		complete func(*gin.Context)
@@ -35,7 +35,7 @@ func TestResponseConstructionHonorsRequestDeadline(t *testing.T) {
 					textGenerationResult{text: "late response"},
 					tenant{},
 					usageEndpointText,
-					nil,
+					managedTenants,
 					zap.NewNop().Sugar(),
 					time.Now(),
 				)
@@ -50,7 +50,7 @@ func TestResponseConstructionHonorsRequestDeadline(t *testing.T) {
 					tenant{},
 					providerDefinition{},
 					modelID(""),
-					nil,
+					managedTenants,
 					zap.NewNop().Sugar(),
 					time.Now(),
 				)
@@ -232,48 +232,44 @@ func TestManagedUsageSummaryBucketsAndOrdering(t *testing.T) {
 
 func TestTextRequestDefaultsForProviderInternalEdges(t *testing.T) {
 	providers := newProviderRegistry(Configuration{
-		OpenAIKey:   "sk-openai",
-		DeepSeekKey: "sk-deepseek",
 		ModelCatalog: internalTestModelCatalog(
 			internalTestOffering(ProviderNameOpenAI, ModelNameGPT41, []string{ModelOperationText}, []string{ModelOperationText}),
 			internalTestOffering(ProviderNameOpenAI, ModelNameGPT55, []string{ModelOperationText}, nil),
 			internalTestOffering(ProviderNameDeepSeek, ModelNameDeepSeekV4Flash, []string{ModelOperationText}, []string{ModelOperationText}),
 		),
 	})
-	staticTenant := tenant{
+	requestTenant := tenant{
 		defaults: newTenantDefaults(TenantDefaults{
 			Provider:     ProviderNameOpenAI,
 			Model:        ModelNameGPT41,
 			SystemPrompt: "tenant system",
 		}),
 	}
-	staticExplicitDefaults := textRequestDefaultsForProvider(ProviderNameDeepSeek, staticTenant, providers)
-	if staticExplicitDefaults.model != ModelNameDeepSeekV4Flash || staticExplicitDefaults.systemPrompt != "tenant system" {
-		t.Fatalf("static explicit defaults=%+v", staticExplicitDefaults)
+	explicitDefaults := textRequestDefaultsForProvider(ProviderNameDeepSeek, requestTenant, providers)
+	if explicitDefaults.model != ModelNameDeepSeekV4Flash || explicitDefaults.systemPrompt != "tenant system" {
+		t.Fatalf("explicit defaults=%+v", explicitDefaults)
 	}
 
-	managedTenant := staticTenant
-	managedTenant.managed = true
-	managedNoSettingsDefaults := textRequestDefaultsForProvider(ProviderNameOpenAI, managedTenant, providers)
+	managedNoSettingsDefaults := textRequestDefaultsForProvider(ProviderNameOpenAI, requestTenant, providers)
 	if managedNoSettingsDefaults.model != ModelNameGPT41 || managedNoSettingsDefaults.systemPrompt != "tenant system" {
 		t.Fatalf("managed no-settings defaults=%+v", managedNoSettingsDefaults)
 	}
-	managedUnknownProviderDefaults := textRequestDefaultsForProvider("unknown-provider", managedTenant, providers)
+	managedUnknownProviderDefaults := textRequestDefaultsForProvider("unknown-provider", requestTenant, providers)
 	if managedUnknownProviderDefaults.model != "" || managedUnknownProviderDefaults.systemPrompt != "tenant system" {
 		t.Fatalf("managed unknown-provider defaults=%+v", managedUnknownProviderDefaults)
 	}
 
-	managedTenant.providerSettings = map[providerID]managedProviderSettings{
+	requestTenant.providerSettings = map[providerID]managedProviderSettings{
 		newProviderID(ProviderNameOpenAI): {
 			textModel:    ModelNameGPT55,
 			systemPrompt: "saved system",
 		},
 	}
-	managedSavedOmittedDefaults := textRequestDefaultsForProvider("", managedTenant, providers)
+	managedSavedOmittedDefaults := textRequestDefaultsForProvider("", requestTenant, providers)
 	if managedSavedOmittedDefaults.model != ModelNameGPT41 || managedSavedOmittedDefaults.systemPrompt != "tenant system" {
 		t.Fatalf("managed saved omitted defaults=%+v", managedSavedOmittedDefaults)
 	}
-	managedSavedExplicitDefaults := textRequestDefaultsForProvider(ProviderNameOpenAI, managedTenant, providers)
+	managedSavedExplicitDefaults := textRequestDefaultsForProvider(ProviderNameOpenAI, requestTenant, providers)
 	if managedSavedExplicitDefaults.model != ModelNameGPT55 || managedSavedExplicitDefaults.systemPrompt != "saved system" {
 		t.Fatalf("managed saved explicit defaults=%+v", managedSavedExplicitDefaults)
 	}
@@ -331,7 +327,6 @@ func TestManagementConfigurationInternalEdges(t *testing.T) {
 		}
 	}
 	invalidQueueConfiguration := ManagementConfiguration{
-		Enabled:                  true,
 		PublicOrigin:             "https://llm-proxy.example",
 		UIDescription:            "LLM Proxy",
 		UIOrigins:                []string{"https://llm-proxy.example"},
@@ -350,29 +345,6 @@ func TestManagementConfigurationInternalEdges(t *testing.T) {
 	}
 	if validationError := validateManagementConfiguration(invalidQueueConfiguration); !errors.Is(validationError, ErrInvalidManagementConfiguration) || !strings.Contains(validationError.Error(), "management.usage_queue_size") {
 		t.Fatalf("usage queue validation error=%v", validationError)
-	}
-}
-
-func TestTenantRegistryContainsSecretDigestEdges(t *testing.T) {
-	secretDigest := sha256.Sum256([]byte("service-secret"))
-	serviceTenantID, tenantIDError := newTenantID("service")
-	if tenantIDError != nil {
-		t.Fatalf("new tenant id: %v", tenantIDError)
-	}
-	registry := tenantRegistry{
-		tenants: []tenant{
-			{
-				identifier:   serviceTenantID,
-				secretDigest: secretDigest,
-				defaults:     newTenantDefaults(DefaultTenantDefaults()),
-			},
-		},
-	}
-	if !registry.containsSecretDigest(secretDigest) {
-		t.Fatalf("registry did not find known secret digest")
-	}
-	if registry.containsSecretDigest(sha256.Sum256([]byte("other-secret"))) {
-		t.Fatalf("registry matched unknown secret digest")
 	}
 }
 

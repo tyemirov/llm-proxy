@@ -637,7 +637,6 @@ exec "${REAL_AWK_PATH:?}" "$@"
 		"GHTTP_SERVE_NO_MARKDOWN",
 	})
 	assertOperationalEnvironmentKeys(testingInstance, filepath.Join(fixtureRoot, "configs", ".env.api.local"), []string{
-		"LLM_PROXY_MANAGEMENT_ENABLED",
 		"LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN",
 		"LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN",
 		"LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN",
@@ -1179,7 +1178,6 @@ done
 [[ -n "${curl_config_path}" ]]
 [[ -n "${headers_path}" ]]
 [[ -n "${response_path}" ]]
-[[ -n "${request_timeout_seconds}" ]]
 
 request_url=""
 while IFS= read -r config_line; do
@@ -1201,6 +1199,15 @@ builtin printf '%s' "${call_index}" >"${call_count_path}"
 builtin printf '%s' "${request_url}" >"${CURL_CAPTURE_DIRECTORY}/url-${call_index}"
 builtin printf '%s' "${request_body}" >"${CURL_CAPTURE_DIRECTORY}/body-${call_index}"
 builtin printf '%s' "${request_timeout_seconds}" >"${CURL_CAPTURE_DIRECTORY}/timeout-${call_index}"
+
+if [[ "${request_url}" == "https://llm-proxy-api.mprlab.com/v2?key="* && "${request_url}" != *"provider="* ]]; then
+  builtin printf 'HTTP/1.1 400 Bad Request\r\nX-LLM-Proxy-Request-ID: AAAAAAAAAAAAAAAAAAAAAAAAAA\r\n\r\n' >"${headers_path}"
+  builtin printf '%s' 'invalid request' >"${response_path}"
+  builtin printf '%s' '400'
+  exit 0
+fi
+
+[[ -n "${request_timeout_seconds}" ]]
 
 response_marker="LLM_PROXY_LIVE_ECHO_OK"
 if [[ "${request_body}" == *LLM_PROXY_LIVE_COMPLEX_OK* ]]; then
@@ -1224,8 +1231,19 @@ builtin printf '%s' '200'
 	if !strings.Contains(output, "live test passed: total_cases=9") {
 		testingInstance.Fatalf("production live-test did not report all cases: %s", output)
 	}
-	if strings.Count(output, "request_id=AAAAAAAAAAAAAAAAAAAAAAAAAA") != 9 {
+	if !strings.Contains(output, "live test preflight passed: client_key=authenticated status=400") {
+		testingInstance.Fatalf("production live-test omitted the client authentication preflight: %s", output)
+	}
+	if strings.Count(output, "request_id=AAAAAAAAAAAAAAAAAAAAAAAAAA") != 10 {
 		testingInstance.Fatalf("production live-test did not report one validated request id per case: %s", output)
+	}
+	preflightURLBytes, preflightURLError := os.ReadFile(filepath.Join(captureDirectory, "url-1"))
+	if preflightURLError != nil {
+		testingInstance.Fatalf("read production live-test preflight URL: %v", preflightURLError)
+	}
+	preflightURL, preflightParseError := url.Parse(string(preflightURLBytes))
+	if preflightParseError != nil || preflightURL.Path != "/v2" || preflightURL.Query().Get("key") != defaultTenantSecret || preflightURL.Query().Has("provider") {
+		testingInstance.Fatalf("production live-test used invalid preflight URL: %s error=%v", preflightURLBytes, preflightParseError)
 	}
 	for _, expectedCase := range []string{
 		"case=openai-background-polling provider=openai status=200",
@@ -1248,7 +1266,7 @@ builtin printf '%s' '200'
 	}
 	expectedProviders := []string{"openai", "anthropic", "meta", "gemini", "moonshot", "openai", "anthropic", "meta", "gemini"}
 	for callIndex, expectedProvider := range expectedProviders {
-		captureIndex := callIndex + 1
+		captureIndex := callIndex + 2
 		requestURLBytes, readURLError := os.ReadFile(filepath.Join(captureDirectory, "url-"+strconv.Itoa(captureIndex)))
 		if readURLError != nil {
 			testingInstance.Fatalf("read production live-test URL for call %d: %v", captureIndex, readURLError)
@@ -1264,7 +1282,7 @@ builtin printf '%s' '200'
 		if query.Get("key") != defaultTenantSecret || query.Get("provider") != expectedProvider || query.Get("format") != "text/plain" {
 			testingInstance.Fatalf("production live-test call %d used unexpected tenant or route query: %s", captureIndex, requestURL)
 		}
-		if captureIndex == 9 {
+		if captureIndex == 10 {
 			if query.Get("model") != "gemini-3.5-flash" {
 				testingInstance.Fatalf("production Gemini background call used model=%q", query.Get("model"))
 			}
@@ -1325,6 +1343,85 @@ func TestOperationalProductionLiveTestRequiresDefaultTenantSecret(testingInstanc
 	}
 }
 
+func TestOperationalProductionLiveTestStopsWhenClientKeyIsRejected(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	for _, relativePath := range []string{
+		"Makefile",
+		filepath.Join(operationalScriptsDirectory, "live_test.sh"),
+	} {
+		copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, relativePath), filepath.Join(fixtureRoot, relativePath))
+	}
+
+	toolDirectory := filepath.Join(fixtureRoot, "tools")
+	callCountPath := filepath.Join(fixtureRoot, "curl-call-count")
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "curl"), `#!/usr/bin/env bash
+set -euo pipefail
+
+headers_path=""
+response_path=""
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --dump-header)
+      headers_path="$2"
+      shift 2
+      ;;
+    --output)
+      response_path="$2"
+      shift 2
+      ;;
+    --config|--request|--header|--connect-timeout|--max-time|--write-out|--data-binary)
+      shift 2
+      ;;
+    --silent|--show-error)
+      shift
+      ;;
+    *)
+      exit 2
+      ;;
+  esac
+done
+[[ -n "${headers_path}" ]]
+[[ -n "${response_path}" ]]
+cat >/dev/null
+call_count=0
+if [[ -f "${CURL_CALL_COUNT_PATH:?}" ]]; then
+  call_count="$(<"${CURL_CALL_COUNT_PATH}")"
+fi
+builtin printf '%s' "$((call_count + 1))" >"${CURL_CALL_COUNT_PATH}"
+builtin printf 'HTTP/1.1 403 Forbidden\r\nX-LLM-Proxy-Request-ID: BBBBBBBBBBBBBBBBBBBBBBBBBB\r\n\r\n' >"${headers_path}"
+builtin printf '%s' 'forbidden' >"${response_path}"
+builtin printf '%s' '403'
+`, 0o755)
+
+	rejectedTenantSecret := "rejected-default-tenant-secret"
+	command := exec.Command("make", "live-test")
+	command.Dir = fixtureRoot
+	command.Env = append(
+		os.Environ(),
+		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"CURL_CALL_COUNT_PATH="+callCountPath,
+		"LLM_PROXY_SECRET="+rejectedTenantSecret,
+	)
+	output, commandError := command.CombinedOutput()
+	if commandError == nil {
+		testingInstance.Fatalf("make live-test accepted a rejected client key: %s", output)
+	}
+	outputText := string(output)
+	if !strings.Contains(outputText, "live test preflight failed: client_key=rejected status=403") {
+		testingInstance.Fatalf("make live-test did not report the rejected client key: %s", outputText)
+	}
+	callCount, readCallCountError := os.ReadFile(callCountPath)
+	if readCallCountError != nil || string(callCount) != "1" {
+		testingInstance.Fatalf("make live-test made provider calls after rejected client key: count=%s error=%v output=%s", callCount, readCallCountError, outputText)
+	}
+	for _, forbiddenValue := range []string{rejectedTenantSecret, "case=", "LLM_PROXY_LIVE_ECHO_OK", "LLM_PROXY_LIVE_COMPLEX_OK"} {
+		if strings.Contains(outputText, forbiddenValue) {
+			testingInstance.Fatalf("make live-test rejected-key failure exposed or executed %q: %s", forbiddenValue, outputText)
+		}
+	}
+}
+
 func TestOperationalProductionLiveTestDoesNotInventRequestIDForTransportFailure(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	fixtureRoot := testingInstance.TempDir()
@@ -1352,8 +1449,8 @@ exit 7
 		testingInstance.Fatalf("make live-test accepted transport failures: %s", output)
 	}
 	outputText := string(output)
-	if strings.Count(outputText, "transport_error") != 9 || !strings.Contains(outputText, "failed_cases=9 total_cases=9") {
-		testingInstance.Fatalf("make live-test did not report the complete transport-failure matrix: %s", outputText)
+	if strings.Count(outputText, "transport_error") != 1 || !strings.Contains(outputText, "live test preflight failed: client_key=transport_error") {
+		testingInstance.Fatalf("make live-test did not stop at the client-authentication preflight: %s", outputText)
 	}
 	for _, forbiddenValue := range []string{"request_id=", defaultTenantSecret, "LLM_PROXY_LIVE_ECHO_OK", "LLM_PROXY_LIVE_COMPLEX_OK"} {
 		if strings.Contains(outputText, forbiddenValue) {
@@ -1362,12 +1459,12 @@ exit 7
 	}
 }
 
-func TestOperationalLiveConfigDisablesManagementAndSafelyLoadsDotenv(testingInstance *testing.T) {
+func TestOperationalLiveConfigRequiresManagementAndSafelyLoadsDotenv(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	fixtureRoot := testingInstance.TempDir()
 	environmentFile := filepath.Join(fixtureRoot, "live.env")
 	configurationOutput := filepath.Join(fixtureRoot, "live-config.yml")
-	writeOperationalFile(testingInstance, environmentFile, "DASHSCOPE_API_KEY=test-dashscope-key\nDASHSCOPE_BASE_URL=https://dashscope.example\nMINIMAX_API_KEY=test-minimax-key\nLLM_PROXY_MANAGEMENT_ENABLED=true\nLLM_PROXY_MANAGEMENT_UI_DESCRIPTION=LLM Proxy\n", 0o600)
+	writeOperationalFile(testingInstance, environmentFile, "DASHSCOPE_API_KEY=test-dashscope-key\nDASHSCOPE_BASE_URL=https://dashscope.example\nMINIMAX_API_KEY=test-minimax-key\nLLM_PROXY_MANAGEMENT_UI_DESCRIPTION=LLM Proxy\n", 0o600)
 	environment := append(
 		os.Environ(),
 		"LIVE_ENV_FILE="+environmentFile,
@@ -1390,12 +1487,12 @@ func TestOperationalLiveConfigDisablesManagementAndSafelyLoadsDotenv(testingInst
 	if !strings.Contains(configuration, "  port: 18181") {
 		testingInstance.Fatalf("generated live config did not set the requested port: %s", configuration)
 	}
-	if !strings.Contains(configuration, "management:\n  enabled: false") {
-		testingInstance.Fatalf("generated live config did not disable management: %s", configuration)
+	if !strings.Contains(configuration, "management:\n  public_origin:") {
+		testingInstance.Fatalf("generated live config omitted mandatory management: %s", configuration)
 	}
-	for _, expectedFragment := range []string{"base_url: \"${DASHSCOPE_BASE_URL}\"", "api_key: \"${DASHSCOPE_API_KEY}\"", "api_key: \"${MINIMAX_API_KEY}\""} {
-		if !strings.Contains(configuration, expectedFragment) {
-			testingInstance.Fatalf("generated live config missing %q: %s", expectedFragment, configuration)
+	for _, forbiddenFragment := range []string{"enabled:", "tenants:", "api_key:", "test-dashscope-key", "test-minimax-key"} {
+		if strings.Contains(configuration, forbiddenFragment) {
+			testingInstance.Fatalf("generated live config retained obsolete or secret-bearing %q: %s", forbiddenFragment, configuration)
 		}
 	}
 }
@@ -1422,8 +1519,13 @@ func TestOperationalLiveConfigWritesWithoutProviderKeys(testingInstance *testing
 	if !strings.Contains(configuration, "  port: 18182") {
 		testingInstance.Fatalf("generated live config did not set the requested port: %s", configuration)
 	}
-	if !strings.Contains(configuration, "management:\n  enabled: false") {
-		testingInstance.Fatalf("generated live config did not disable management: %s", configuration)
+	if !strings.Contains(configuration, "management:\n  public_origin:") {
+		testingInstance.Fatalf("generated live config omitted mandatory management: %s", configuration)
+	}
+	for _, forbiddenFragment := range []string{"enabled:", "tenants:", "api_key:"} {
+		if strings.Contains(configuration, forbiddenFragment) {
+			testingInstance.Fatalf("generated live config retained obsolete %q: %s", forbiddenFragment, configuration)
+		}
 	}
 }
 
@@ -1877,6 +1979,37 @@ case "${request_url}" in
     builtin printf '%s' 200
     ;;
   */api/management/tenants/tenant-live/provider-keys/*)
+    if [[ -n "${PREFLIGHT_PROVIDER_URL:-}" ]]; then
+      if [[ -n "${CURL_PREFLIGHT_BLOCK_PATH:-}" ]]; then
+        builtin printf '%s\n' ready >"${CURL_PREFLIGHT_BLOCK_PATH}"
+        sleep "${CURL_PREFLIGHT_BLOCK_SECONDS:-1}"
+      fi
+      python3 -c '
+import json
+import os
+import pathlib
+import sys
+import urllib.request
+
+candidate = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+payload = json.dumps({
+    "model": candidate["text_model"],
+    "input": "Verify this provider credential.",
+    "max_output_tokens": 16,
+}).encode("utf-8")
+request = urllib.request.Request(
+    os.environ["PREFLIGHT_PROVIDER_URL"] + "/responses",
+    data=payload,
+    headers={
+        "Authorization": "Bearer " + os.environ["PREFLIGHT_PROVIDER_API_KEY"],
+        "Content-Type": "application/json",
+    },
+    method="POST",
+)
+with urllib.request.urlopen(request, timeout=5) as response:
+    response.read()
+' "${request_body_path}"
+    fi
     if [[ -n "${LIVE_OPERATION_CAPTURE:-}" ]]; then
       builtin printf 'verify %s %s\n' "${request_method}" "${request_url}" >>"${LIVE_OPERATION_CAPTURE}"
       builtin printf 'payload ' >>"${LIVE_OPERATION_CAPTURE}"
@@ -1885,13 +2018,6 @@ case "${request_url}" in
     fi
     builtin printf '%s' '{}' >"${output_path}"
     builtin printf '%s' 200
-    ;;
-  *provider=unsupported-live-preflight*)
-    if [[ -n "${CURL_PREFLIGHT_BLOCK_PATH:-}" ]]; then
-      builtin printf '%s\n' ready >"${CURL_PREFLIGHT_BLOCK_PATH}"
-      sleep "${CURL_PREFLIGHT_BLOCK_SECONDS:-1}"
-    fi
-    builtin printf '%s' 400
     ;;
   */v2?provider=*)
     if [[ -n "${LIVE_OPERATION_CAPTURE:-}" ]]; then
@@ -1905,6 +2031,29 @@ case "${request_url}" in
     builtin printf '%s' 200
     ;;
   *provider=*)
+    if [[ -n "${PREFLIGHT_PROVIDER_URL:-}" ]]; then
+      python3 -c '
+import json
+import os
+import urllib.request
+
+payload = json.dumps({
+    "model": "gpt-4.1",
+    "input": "Reply with exactly OK and no punctuation.",
+}).encode("utf-8")
+request = urllib.request.Request(
+    os.environ["PREFLIGHT_PROVIDER_URL"] + "/responses",
+    data=payload,
+    headers={
+        "Authorization": "Bearer " + os.environ["PREFLIGHT_PROVIDER_API_KEY"],
+        "Content-Type": "application/json",
+    },
+    method="POST",
+)
+with urllib.request.urlopen(request, timeout=5) as response:
+    response.read()
+'
+    fi
     if [[ -n "${LIVE_OPERATION_CAPTURE:-}" ]]; then
       builtin printf 'smoke %s %s\n' "${request_method}" "${request_url}" >>"${LIVE_OPERATION_CAPTURE}"
       builtin printf 'smoke-payload %s\n' "${request_body}" >>"${LIVE_OPERATION_CAPTURE}"
@@ -2007,8 +2156,7 @@ func operationalRepositoryRoot(testingInstance *testing.T) string {
 
 func writeOperationalLocalEnvironment(testingInstance *testing.T, fixtureRoot string) {
 	testingInstance.Helper()
-	writeOperationalFile(testingInstance, filepath.Join(fixtureRoot, "configs", ".env.local"), `LLM_PROXY_MANAGEMENT_ENABLED=true
-LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN=http://localhost:4179
+	writeOperationalFile(testingInstance, filepath.Join(fixtureRoot, "configs", ".env.local"), `LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN=http://localhost:4179
 LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN=http://localhost:4179
 LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN=http://localhost:4179
 LLM_PROXY_MANAGEMENT_UI_DESCRIPTION=LLM Proxy test

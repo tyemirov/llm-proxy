@@ -118,7 +118,7 @@ Structured requests use `openai_responses`, `gemini_interactions`, or
 provider dispatch.
 
 The canonical Meta contract uses selector `meta` with no aliases,
-`https://api.meta.ai/v1`, `${MODEL_API_KEY}`, and model
+`https://api.meta.ai/v1`, a tenant-managed API key, and model
 `muse-spark-1.1`. llm-proxy sends Meta requests only through the shared
 OpenAI-compatible Chat Completions adapter on the text endpoints and maps the
 public `max_tokens` input to Meta's current `max_completion_tokens` field. It
@@ -132,8 +132,7 @@ and [pricing and rate-limit documentation](https://dev.meta.ai/docs/getting-star
 
 DashScope is the only Alibaba provider. Each managed tenant saves its Singapore
 Model Studio workspace URL with the matching regional API key. Verification and
-routed requests use that saved tenant URL. Static mode requires the same pair in
-`providers.dashscope`. The `qwen` alias resolves to DashScope. `qwen-plus`
+routed requests use that saved tenant URL. The `qwen` alias resolves to DashScope. `qwen-plus`
 remains the exact default. `qwen3.7-max`, `qwen3.7-plus`, and `qwen3.6-flash`
 are additional text-only Chat Completions routes. Each has a 1,000,000-token
 context record and a `65536` output boundary, and maps public `max_tokens` to
@@ -142,7 +141,7 @@ limits, and list pricing were verified from Alibaba's official model,
 compatibility, and pricing references on 2026-08-13.
 
 MiniMax is a distinct text-only provider with canonical selector `minimax`,
-endpoint `https://api.minimax.io/v1`, and `${MINIMAX_API_KEY}`. The seven M2
+endpoint `https://api.minimax.io/v1`, and a tenant-managed API key. The seven M2
 routes use exact lowercase canonical model ids and exact provider-native model
 ids. `minimax-m2.7` remains the default. The shared adapter maps public
 `max_tokens` to MiniMax `max_completion_tokens`. Each route has the documented
@@ -155,10 +154,8 @@ does not add MiniMax-specific reasoning, tools, streaming, or media controls.
 Runtime service configuration comes from `config.yml`; env vars and `.env`
 files are interpolation inputs only for `${NAME}` placeholders in that YAML.
 The loader rejects unknown keys and missing placeholders before the proxy
-starts, except when a provider `api_key` value is exactly one missing
-placeholder. That exact missing provider credential expands to an empty string
-so non-default providers can stay disabled; missing placeholders in other
-fields or embedded inside longer values fail startup.
+starts. Client keys, provider API keys, and tenant routing defaults are
+tenant-owned management state and are not runtime configuration fields.
 
 Shared config fields:
 
@@ -176,7 +173,6 @@ Shared config fields:
 - `server.upstream_rate_limits[].origin`
 - `server.upstream_rate_limits[].max_requests`
 - `server.upstream_rate_limits[].interval`
-- `management.enabled`
 - `management.public_origin`
 - `management.ui_description`
 - `management.ui_origins`
@@ -195,28 +191,22 @@ Shared config fields:
 - `management.provider_key_encryption_key`
 - `management.management_api_origin`
 - `management.proxy_origin`
-- `tenants[].id`
-- `tenants[].secret`
-- `tenants[].defaults.provider`
-- `tenants[].defaults.model`
-- `tenants[].defaults.dictation_provider`
-- `tenants[].defaults.dictation_model`
-- `tenants[].defaults.system_prompt`
-- `tenants[].defaults.reasoning_effort`
+Provider runtime URLs:
 
-Provider credentials and base URLs:
+- `providers.openai.base_url`, `providers.openai.transcriptions_url`
+- `providers.meta.base_url`
+- `providers.deepseek.base_url`
+- `providers.dashscope.base_url`
+- `providers.moonshot.base_url`
+- `providers.minimax.base_url`
+- `providers.siliconflow.base_url`, `providers.siliconflow.transcriptions_url`
+- `providers.zai.base_url`, `providers.zai.transcriptions_url`
+- `providers.gemini.base_url`
+- `providers.anthropic.base_url`
+- `providers.xai.base_url`, `providers.xai.transcriptions_url`
 
-- `providers.openai.api_key`, `providers.openai.base_url`, `providers.openai.transcriptions_url`
-- `providers.meta.api_key`, `providers.meta.base_url`
-- `providers.deepseek.api_key`, `providers.deepseek.base_url`
-- `providers.dashscope.api_key`, `providers.dashscope.base_url`
-- `providers.moonshot.api_key`, `providers.moonshot.base_url`
-- `providers.minimax.api_key`, `providers.minimax.base_url`
-- `providers.siliconflow.api_key`, `providers.siliconflow.base_url`, `providers.siliconflow.transcriptions_url`
-- `providers.zai.api_key`, `providers.zai.base_url`, `providers.zai.transcriptions_url`
-- `providers.gemini.api_key`, `providers.gemini.base_url`
-- `providers.anthropic.api_key`, `providers.anthropic.base_url`
-- `providers.xai.api_key`, `providers.xai.base_url`, `providers.xai.transcriptions_url`
+The managed DashScope provider setting supplies the tenant-specific workspace
+base URL together with its API key.
 
 Normalized model catalog:
 
@@ -590,8 +580,9 @@ same provider-settings operation above, and runs that provider's smoke request
 only after the verification returns a keyed profile. Verification payloads,
 session material, and provider/proxy response bodies remain in the private
 temporary directory and are removed at exit. `--write-config` and `--preflight`
-retain the non-paid static-tenant configuration with management disabled and
-make no verification or upstream call. Each mode allocates a fresh loopback
+retain the non-paid managed-only configuration and make no provider
+verification or upstream call. The preflight creates a disposable managed
+user, tenant, and client key, then proves authenticated routing. Each mode allocates a fresh loopback
 port unless `LLM_PROXY_LIVE_PORT` explicitly provides one, and cleanup
 terminates only the proxy child started by the harness rather than a process
 discovered through a shared port.
@@ -610,32 +601,32 @@ every image route for each selected provider, including all four Kimi routes.
 `make live-test` is deliberately a different boundary: it calls only the
 production API origin with `LLM_PROXY_SECRET`, the Default tenant client
 secret. It never loads a dotenv file or local provider credential. The command
-uses canonical `POST /v2` calls with explicit OpenAI, Anthropic, Meta, Gemini,
-and Moonshot providers and no explicit model, so managed production provider
-settings remain authoritative. Five echo-marker requests verify those routes;
-matching deterministic requests larger than 16 KiB target OpenAI, Anthropic,
-Meta, and Gemini with a 900-second request budget and a required normalized line
-for each portfolio record before the final marker. The Gemini long case selects
+first sends an intentionally incomplete `POST /v2` request. The client key must
+reach normal request validation and return `400` with a proxy request ID. A
+missing, rejected, or unreachable client key stops the command before any paid
+provider call. The command then uses canonical `POST /v2` calls with explicit
+OpenAI, Anthropic, Meta, Gemini, and Moonshot providers. Requests have no
+explicit model, so managed production provider settings remain authoritative.
+Five echo-marker requests verify those routes. Matching deterministic requests
+larger than 16 KiB target OpenAI, Anthropic, Meta, and Gemini. Each request uses
+a 900-second budget and requires a normalized line for each portfolio record
+before the final marker. The Gemini long case selects
 `gemini-3.5-flash`, while the Gemini echo retains the saved provider model.
 OpenAI and Gemini 3.5 keep one blocking request open while the proxy owns their
 resource polling. Anthropic and Meta exercise their canonical synchronous completion paths, including shared
 output-continuation work when needed. The client validates the final marker,
 status, resolved timeout header, and proxy request-id header. Each HTTP result
-prints the validated request id for structured-log correlation; a transport
+prints the validated request ID for structured-log correlation. A transport
 failure without a response prints none. This paid check remains outside
 `make ci`, runs all nine cases even after an earlier failure, and never prints
 a tenant secret or response body.
 
-Startup validates configured tenants, provider endpoints, and the normalized
-model catalog. Catalog validation rejects invalid identities, references,
-route pairs, defaults, and capabilities.
-
-When management mode is disabled, at least one static tenant is required. Each
-static tenant default must resolve to one valid provider offering.
-
-When management mode is enabled, static tenants and config-level provider keys
-are invalid. Managed tenants own their provider credentials and routing
-defaults in the database.
+Startup validates the mandatory management configuration, provider endpoints,
+and normalized model catalog. Catalog validation rejects invalid identities,
+references, route pairs, defaults, and capabilities. Obsolete
+`management.enabled`, top-level `tenants`, and provider `api_key` fields are
+unknown configuration keys. Managed tenants own client keys, provider
+credentials, and routing defaults in the database.
 
 The repository owns the schema-v4 production declaration in
 `.mprlab/deploy/resources.yml`. The repository also owns the standard
@@ -665,7 +656,21 @@ DNS must leave `llm-proxy.mprlab.com` pointed at GitHub Pages and point `llm-pro
 
 Provider API keys are accepted only through authenticated, tenant-scoped management endpoints. Every nonempty new or replacement credential is operationally verified against its exact provider and selected text model before it is encrypted at rest with AES-GCM using the required `management.provider_key_encryption_key`. Normal save, tenant-profile, and administrator responses return only masked status. The sole raw-key response is the explicit owner-authenticated `POST /api/management/tenants/:tenant_id/provider-keys/:provider/reveal` action, which requires the configured management origin and returns `Cache-Control: no-store`. Each provider-key record also stores that provider's selected text model and provider-specific system prompt. Managed text requests that select a provider and omit `model` use the saved provider text model, and provider-selected requests without request-level system instructions use the saved provider system prompt. The bounded F014 migration rejects plaintext or corrupt legacy rows and re-encrypts valid keys with the preserved opaque tenant id as AES-GCM associated data. This is an encrypted-at-rest guarantee for database dumps, backups, and direct storage access, not a user-only decryption or zero-knowledge guarantee.
 
-Management mode requires `management.database_path` and `management.provider_key_encryption_key`; management persistence uses the pure-Go GORM SQLite driver so `CGO_ENABLED=0` release builds remain valid. Administrators are config-owned through exact `management.admin_emails` entries; public config populates those entries from the plural `${LLM_PROXY_MANAGEMENT_ADMIN_EMAILS}` YAML flow sequence placeholder so personal admin addresses stay out of the repository while allowing multiple admins. An admin session gets `user.is_admin: true`, an `Admin` avatar-menu item, and `GET /api/management/admin/users` access to all managed users' tenant facts and 30-day usage summaries without provider API keys, masked key values, generated secrets, secret digests, prompts, responses, audio names, or transcripts. Non-admin sessions receive `403` from admin APIs. The packaged management config uses strict expandable `LLM_PROXY_MANAGEMENT_*` placeholders, so local and hosted profiles must define explicit values in the runtime environment or `configs/.env`.
+Management requires `management.database_path` and
+`management.provider_key_encryption_key`. Persistence uses the pure-Go GORM
+SQLite driver, so `CGO_ENABLED=0` release builds remain valid. Exact
+`management.admin_emails` entries configure administrators. Public config
+populates those entries from the plural
+`${LLM_PROXY_MANAGEMENT_ADMIN_EMAILS}` YAML flow sequence placeholder. Thus,
+personal admin addresses stay out of the repository and multiple admins remain
+possible. An admin session gets `user.is_admin: true`, an `Admin` avatar-menu
+item, and access to `GET /api/management/admin/users`. The operation returns
+all managed users' tenant facts and 30-day usage summaries. It excludes
+provider API keys, masked key values, generated secrets, secret digests,
+prompts, responses, audio names, and transcripts. Non-admin sessions receive
+`403` from admin APIs. The packaged management config uses strict expandable
+`LLM_PROXY_MANAGEMENT_*` placeholders. Local and hosted profiles must define
+explicit values in the runtime environment or `configs/.env`.
 
 Account state, tenant names, enabled providers, defaults, and generated-secret digests are persisted through GORM and are never stored by mutating the runtime config file. One TAuth subject owns one or more personal tenants; there is no membership, invitation, role, or shared-tenant model. F014 upgrades the previous one-row-per-user shape as one startup transaction: it preflights all legacy tenant, provider, and usage rows; rejects unclaimed static owners, duplicates, invalid routing or secrets, plaintext/corrupt keys, and orphan rows; renames the two colliding legacy GORM indexes and the old tables; creates explicit user and tenant records; preserves opaque tenant ids and usage; rebinds provider-key encryption to tenant ids; verifies counts, values, and decryption; writes schema version 1; and drops only its bounded legacy tables. Every failed stage rolls back to the untouched legacy schema and original index names and prevents startup.
 

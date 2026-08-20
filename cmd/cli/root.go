@@ -90,7 +90,6 @@ var rootCmd = &cobra.Command{
 		structuredLogger.Infow(logEventStarting,
 			"port", runtimeConfiguration.Port,
 			"log_level", strings.ToLower(runtimeConfiguration.LogLevel),
-			"tenant_count", len(runtimeConfiguration.Tenants),
 		)
 		return serveProxy(runtimeConfiguration, structuredLogger)
 	},

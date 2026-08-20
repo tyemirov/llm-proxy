@@ -25,14 +25,12 @@ func TestIntegrationModelSpecSuppression(testingInstance *testing.T) {
 			endpoints := proxy.NewEndpoints()
 			client, captured := makeHTTPClient(subTest, true, endpoints)
 			configureProxy(subTest, client, endpoints)
-			router, buildRouterError := proxy.BuildRouter(integrationConfiguration(subTest, proxy.Configuration{
-				Tenants:     proxy.SingleTenantConfigurations("integration", serviceSecretValue),
-				OpenAIKey:   openAIKeyValue,
+			router, buildRouterError := buildIntegrationRouter(subTest, proxy.Configuration{
 				LogLevel:    logLevelDebug,
 				WorkerCount: 1,
 				QueueSize:   8,
 				Endpoints:   endpoints,
-			}), newLogger(subTest))
+			}, newLogger(subTest))
 			if buildRouterError != nil {
 				subTest.Fatalf(buildRouterFailedFormat, buildRouterError)
 			}
@@ -77,13 +75,11 @@ func TestIntegrationModelSpecSuppression(testingInstance *testing.T) {
 // TestIntegrationModelCatalogRejectsUnsupportedWebSearch verifies configured model capability validation.
 func TestIntegrationModelCatalogRejectsUnsupportedWebSearch(testingInstance *testing.T) {
 	gin.SetMode(gin.TestMode)
-	router, buildRouterError := proxy.BuildRouter(integrationConfiguration(testingInstance, proxy.Configuration{
-		Tenants:     proxy.SingleTenantConfigurations("integration", serviceSecretValue),
-		OpenAIKey:   openAIKeyValue,
+	router, buildRouterError := buildIntegrationRouter(testingInstance, proxy.Configuration{
 		LogLevel:    logLevelDebug,
 		WorkerCount: 1,
 		QueueSize:   8,
-	}), newLogger(testingInstance))
+	}, newLogger(testingInstance))
 	if buildRouterError != nil {
 		testingInstance.Fatalf(buildRouterFailedFormat, buildRouterError)
 	}
@@ -118,14 +114,12 @@ func TestIntegrationGPT56TemperatureSuppression(testingInstance *testing.T) {
 	endpoints := proxy.NewEndpoints()
 	client, captured := makeHTTPClient(testingInstance, true, endpoints)
 	configureProxy(testingInstance, client, endpoints)
-	router, buildRouterError := proxy.BuildRouter(integrationConfiguration(testingInstance, proxy.Configuration{
-		Tenants:     proxy.SingleTenantConfigurations("integration", serviceSecretValue),
-		OpenAIKey:   openAIKeyValue,
+	router, buildRouterError := buildIntegrationRouter(testingInstance, proxy.Configuration{
 		LogLevel:    logLevelDebug,
 		WorkerCount: 1,
 		QueueSize:   8,
 		Endpoints:   endpoints,
-	}), newLogger(testingInstance))
+	}, newLogger(testingInstance))
 	if buildRouterError != nil {
 		testingInstance.Fatalf(buildRouterFailedFormat, buildRouterError)
 	}

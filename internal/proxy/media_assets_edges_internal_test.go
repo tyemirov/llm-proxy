@@ -37,10 +37,7 @@ func (reader *gatedAssetReader) Read(data []byte) (int, error) {
 }
 
 func TestTenantAssetUploadDoesNotBlockExistingAssetResolution(t *testing.T) {
-	requestTenant, tenantError := newTenant(TenantConfiguration{ID: "asset-concurrency", Secret: "secret"})
-	if tenantError != nil {
-		t.Fatalf("new tenant: %v", tenantError)
-	}
+	requestTenant := managedTenantForInternalTest("asset-concurrency", "secret")
 	store := newTenantAssetStore(t.TempDir(), 1024, 60)
 	existingData := []byte("existing")
 	existingDigestBytes := sha256.Sum256(existingData)
@@ -86,10 +83,7 @@ func TestTenantAssetUploadDoesNotBlockExistingAssetResolution(t *testing.T) {
 }
 
 func TestTenantAssetStoreRecoversPersistedExpiryState(t *testing.T) {
-	requestTenant, tenantError := newTenant(TenantConfiguration{ID: "asset-recovery", Secret: "secret"})
-	if tenantError != nil {
-		t.Fatalf("new tenant: %v", tenantError)
-	}
+	requestTenant := managedTenantForInternalTest("asset-recovery", "secret")
 	root := t.TempDir()
 	now := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
 	store := newTenantAssetStore(root, 1024, 60)
@@ -166,10 +160,7 @@ func TestTenantAssetExpirationMaintenanceFailureContracts(t *testing.T) {
 		}
 	})
 
-	requestTenant, tenantError := newTenant(TenantConfiguration{ID: "asset-maintenance", Secret: "secret"})
-	if tenantError != nil {
-		t.Fatalf("new tenant: %v", tenantError)
-	}
+	requestTenant := managedTenantForInternalTest("asset-maintenance", "secret")
 	now := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
 	assetBytes := []byte("asset-maintenance")
 	digestBytes := sha256.Sum256(assetBytes)
@@ -308,10 +299,7 @@ func TestTenantAssetStoreFailureContracts(t *testing.T) {
 	}
 	t.Cleanup(reset)
 
-	requestTenant, tenantError := newTenant(TenantConfiguration{ID: "asset-edge", Secret: "secret"})
-	if tenantError != nil {
-		t.Fatalf("new tenant: %v", tenantError)
-	}
+	requestTenant := managedTenantForInternalTest("asset-edge", "secret")
 	assetBytes := []byte("asset-edge-bytes")
 	digestBytes := sha256.Sum256(assetBytes)
 	digest := hex.EncodeToString(digestBytes[:])
@@ -429,8 +417,8 @@ func TestTenantAssetMetadataAndResolutionFailureContracts(t *testing.T) {
 	}
 	t.Cleanup(reset)
 
-	requestTenant, _ := newTenant(TenantConfiguration{ID: "asset-owner", Secret: "secret"})
-	foreignTenant, _ := newTenant(TenantConfiguration{ID: "asset-foreign", Secret: "other"})
+	requestTenant := managedTenantForInternalTest("asset-owner", "secret")
+	foreignTenant := managedTenantForInternalTest("asset-foreign", "other")
 	now := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
 	store := newTenantAssetStore(t.TempDir(), 1024, 60)
 	store.now = func() time.Time { return now }
@@ -590,8 +578,8 @@ func TestTenantAssetMetadataAndResolutionFailureContracts(t *testing.T) {
 }
 
 func TestTenantAssetDeletionAndHTTPErrorContracts(t *testing.T) {
-	requestTenant, _ := newTenant(TenantConfiguration{ID: "asset-delete", Secret: "secret"})
-	foreignTenant, _ := newTenant(TenantConfiguration{ID: "asset-foreign", Secret: "other"})
+	requestTenant := managedTenantForInternalTest("asset-delete", "secret")
+	foreignTenant := managedTenantForInternalTest("asset-foreign", "other")
 	store := newTenantAssetStore(t.TempDir(), 128, 60)
 	now := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
 	store.now = func() time.Time { return now }
@@ -718,7 +706,7 @@ func TestMediaLimitAndMessageMediaEdgeContracts(t *testing.T) {
 	if maximumV2RequestBytes(1, overflowCatalog) != MaxV2RequestBytes || maximumV2RequestBytes(7, ModelCatalog{}) != 7 {
 		t.Fatal("v2 request bound mismatch")
 	}
-	if _, configError := validateConfig(Configuration{AssetStorePath: "relative"}); configError == nil {
+	if configError := validateConfig(Configuration{AssetStorePath: "relative"}); configError == nil {
 		t.Fatal("relative asset store path accepted")
 	}
 	value := int64(1)
@@ -800,11 +788,12 @@ func TestMediaLimitAndMessageMediaEdgeContracts(t *testing.T) {
 }
 
 func TestV2RouteMIMERejectionClosesTheResolvedAsset(t *testing.T) {
-	tenantIdentifier, tenantError := newTenantID("media-owner")
-	if tenantError != nil {
-		t.Fatalf("tenant identifier: %v", tenantError)
+	requestTenant := tenant{
+		identifier: tenantID("media-owner"),
+		providerSettings: map[providerID]managedProviderSettings{
+			providerID(ProviderNameXAI): {apiKey: "xai-test-key"},
+		},
 	}
-	requestTenant := tenant{identifier: tenantIdentifier}
 	assetStore := newTenantAssetStore(t.TempDir(), 1024, 60)
 	mediaBytes := []byte("webp-asset")
 	digest := sha256.Sum256(mediaBytes)
@@ -829,10 +818,10 @@ func TestV2RouteMIMERejectionClosesTheResolvedAsset(t *testing.T) {
 		MediaInputs: []string{string(messageMediaTypeImage)},
 	}
 	providers := newProviderRegistry(Configuration{
-		XAIKey: "xai-key", XAIBaseURL: "https://provider.test",
+		XAIBaseURL:   "https://provider.test",
 		ModelCatalog: ModelCatalog{Offerings: []ProviderOffering{offering}},
 	})
-	validator := newModelValidator(providers)
+	validator := newModelValidator(providers.forTenant(requestTenant))
 	attachmentBytes, _ := json.Marshal([]chatMessageAttachmentPayload{{
 		Type: string(messageMediaTypeImage), MIMEType: messageImageMIMEWebP,
 		AssetID: &assetMetadata.AssetID, SHA256: assetMetadata.SHA256,

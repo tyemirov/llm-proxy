@@ -35,8 +35,6 @@ func newDictationRouterWithAudioLimit(t *testing.T, transcriptionsURL string, re
 	t.Cleanup(func() { _ = logger.Sync() })
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
 		LogLevel:              proxy.LogLevelDebug,
 		WorkerCount:           1,
 		QueueSize:             1,

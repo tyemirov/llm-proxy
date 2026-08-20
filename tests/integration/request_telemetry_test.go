@@ -124,7 +124,6 @@ func TestIntegrationRequestTelemetryTracksProviderNeutralContinuation(testingIns
 	var upstreamCalls atomic.Int64
 	observedCore, observedLogs := observer.New(zapcore.InfoLevel)
 	configuration := timeoutContractConfiguration(2, 3)
-	configuration.MetaKey = "meta-telemetry-key-sentinel"
 	configuration.MetaBaseURL = "https://meta-telemetry.invalid"
 	router := timeoutContractRouter(
 		testingInstance,
@@ -165,7 +164,7 @@ func TestIntegrationRequestTelemetryTracksProviderNeutralContinuation(testingIns
 	if telemetryNumericField(summary, "continuation_wait_ms") < telemetryPollTolerance.Milliseconds() || telemetryNumericField(summary, "provider_poll_wait_ms") != 0 {
 		testingInstance.Fatalf("continuation phase summary=%v", summary)
 	}
-	assertTelemetryLogsExcludeContent(testingInstance, observedLogs, telemetryUnsafePrompt, "first-part-", "second-part", configuration.MetaKey)
+	assertTelemetryLogsExcludeContent(testingInstance, observedLogs, telemetryUnsafePrompt, "first-part-", "second-part", "sk-meta")
 }
 
 func TestIntegrationRequestTelemetryClassifiesFailureCancellationAndBudgetExpiry(testingInstance *testing.T) {
@@ -238,6 +237,15 @@ func TestIntegrationRequestTelemetryClassifiesFailureCancellationAndBudgetExpiry
 
 			if response.Code != testCase.expectedStatus {
 				subTest.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			if testCase.requestContext != nil {
+				if summaries := observedLogs.FilterMessage(telemetrySummaryEvent).All(); len(summaries) != 0 {
+					subTest.Fatalf("pre-authentication cancellation summaries=%v", summaries)
+				}
+				if progress := observedLogs.FilterMessage(telemetryProgressEvent).All(); len(progress) != 0 {
+					subTest.Fatalf("pre-authentication cancellation progress=%v", progress)
+				}
+				return
 			}
 			requestID := response.Header().Get(llmproxycontract.HeaderRequestID)
 			summary := telemetrySummaryForRequest(subTest, observedLogs, requestID)

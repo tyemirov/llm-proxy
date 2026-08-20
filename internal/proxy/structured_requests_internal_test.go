@@ -457,11 +457,7 @@ func TestStructuredRequestRecordResponses(testingInstance *testing.T) {
 
 func structuredTestTenant(testingInstance *testing.T, identifier string) tenant {
 	testingInstance.Helper()
-	requestTenant, tenantError := newTenant(TenantConfiguration{ID: identifier, Secret: "secret-" + identifier})
-	if tenantError != nil {
-		testingInstance.Fatal(tenantError)
-	}
-	return requestTenant
+	return managedTenantForInternalTest(identifier, "secret-"+identifier)
 }
 
 func withStructuredRecord(record structuredRequestRecord, update func(*structuredRequestRecord)) structuredRequestRecord {
@@ -490,6 +486,7 @@ func TestCanonicalStructuredJSON(testingInstance *testing.T) {
 func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 	gin.SetMode(gin.TestMode)
 	requestTenant := structuredTestTenant(testingInstance, "submit")
+	managedTenants := newManagedTenantStoreWithDatabase(newFakeManagedTenantDatabase())
 	schema, schemaError := newStructuredOutputSchema(json.RawMessage(`{"schema":{"type":"object","required":["decision"],"properties":{"decision":{"type":"string"}}}}`))
 	if schemaError != nil {
 		testingInstance.Fatal(schemaError)
@@ -503,7 +500,7 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 			return textGenerationResult{text: `{"decision":"pass"}`}, nil
 		})
 		contextValue, response := structuredSubmitContext(subtest, context.Background())
-		submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, body, store, nil, logger, time.Now())
+		submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, body, store, managedTenants, logger, time.Now())
 		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"decision":"pass"`) {
 			subtest.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 		}
@@ -513,7 +510,7 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 		store, _ := newStructuredRequestStore(subtest.TempDir(), 10)
 		chatRequest, providers := structuredSubmitRequest(schema, "invalid-body", nil)
 		contextValue, response := structuredSubmitContext(subtest, context.Background())
-		submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, []byte(`{`), store, nil, logger, time.Now())
+		submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, []byte(`{`), store, managedTenants, logger, time.Now())
 		if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "structured_request_invalid") {
 			subtest.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 		}
@@ -524,7 +521,7 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 		chatRequest, providers := structuredSubmitRequest(schema, "conflict", nil)
 		_, _, _ = store.begin(requestTenant, chatRequest.idempotencyKey, strings.Repeat("a", 64), "openai", "gpt", "old")
 		contextValue, response := structuredSubmitContext(subtest, context.Background())
-		submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, body, store, nil, logger, time.Now())
+		submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, body, store, managedTenants, logger, time.Now())
 		if response.Code != http.StatusConflict {
 			subtest.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 		}
@@ -537,7 +534,7 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 		}
 		chatRequest, providers := structuredSubmitRequest(schema, "begin-failure", nil)
 		contextValue, response := structuredSubmitContext(subtest, context.Background())
-		submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, body, store, nil, logger, time.Now())
+		submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, body, store, managedTenants, logger, time.Now())
 		if response.Code != http.StatusInternalServerError {
 			subtest.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 		}
@@ -556,7 +553,7 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 		}
 		chatRequest, providers := structuredSubmitRequest(schema, "claim-failure", nil)
 		contextValue, response := structuredSubmitContext(subtest, context.Background())
-		submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, body, store, nil, logger, time.Now())
+		submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, body, store, managedTenants, logger, time.Now())
 		if response.Code != http.StatusInternalServerError {
 			subtest.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 		}
@@ -579,7 +576,7 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 			return originalRead(path)
 		}
 		contextValue, response := structuredSubmitContext(subtest, context.Background())
-		submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, body, store, nil, logger, time.Now())
+		submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, body, store, managedTenants, logger, time.Now())
 		if response.Code != http.StatusInternalServerError {
 			subtest.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 		}
@@ -591,7 +588,7 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 			return textGenerationResult{}, ErrProviderAPI
 		})
 		contextValue, response := structuredSubmitContext(subtest, context.Background())
-		submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, body, store, nil, logger, time.Now())
+		submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, body, store, managedTenants, logger, time.Now())
 		if response.Code != http.StatusBadGateway {
 			subtest.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 		}
@@ -604,7 +601,7 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 			return textGenerationResult{}, ErrProviderAPI
 		})
 		contextValue, response := structuredSubmitContext(subtest, context.Background())
-		submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, body, store, nil, logger, time.Now())
+		submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, body, store, managedTenants, logger, time.Now())
 		if response.Code != http.StatusInternalServerError {
 			subtest.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 		}
@@ -617,7 +614,7 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 			return textGenerationResult{text: `{"decision":"pass"}`}, nil
 		})
 		contextValue, response := structuredSubmitContext(subtest, context.Background())
-		submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, body, store, nil, logger, time.Now())
+		submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, body, store, managedTenants, logger, time.Now())
 		if response.Code != http.StatusInternalServerError {
 			subtest.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 		}
@@ -640,7 +637,7 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 				return testCase.result, testCase.err
 			})
 			contextValue, response := structuredSubmitContext(subtest, requestContext)
-			submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, body, store, nil, logger, time.Now())
+			submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, body, store, managedTenants, logger, time.Now())
 			if contextValue.Writer.Status() != statusClientClosedRequest {
 				subtest.Fatalf("status=%d recorder=%d body=%s", contextValue.Writer.Status(), response.Code, response.Body.String())
 			}

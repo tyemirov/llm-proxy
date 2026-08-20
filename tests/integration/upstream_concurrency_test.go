@@ -123,15 +123,13 @@ func TestIntegrationBackgroundPollSleepDoesNotOccupyUpstreamWorker(testingInstan
 	}
 	endpoints := proxy.NewEndpoints()
 	configureProxy(testingInstance, &http.Client{Transport: roundTripper}, endpoints)
-	router, buildError := proxy.BuildRouter(integrationConfiguration(testingInstance, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("integration", serviceSecretValue),
-		OpenAIKey:             openAIKeyValue,
+	router, buildError := buildIntegrationRouter(testingInstance, proxy.Configuration{
 		LogLevel:              logLevelDebug,
 		WorkerCount:           concurrencySingleUpstreamWorker,
 		QueueSize:             concurrencySingleQueuedHTTPRequest,
 		RequestTimeoutSeconds: concurrencyRequestTimeoutSeconds,
 		Endpoints:             endpoints,
-	}), newLogger(testingInstance))
+	}, newLogger(testingInstance))
 	if buildError != nil {
 		testingInstance.Fatalf(buildRouterFailedFormat, buildError)
 	}

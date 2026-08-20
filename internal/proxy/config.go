@@ -46,24 +46,11 @@ const (
 	// DefaultManagementUsageQueueSize is the number of managed usage events retained for asynchronous persistence.
 	DefaultManagementUsageQueueSize = 1024
 	managedProviderKeyBytes         = 32
-	tenantValidationErrorFormat     = "%w: tenant=%s"
 )
 
 // Configuration holds runtime settings.
 type Configuration struct {
-	Tenants                      []TenantConfiguration
 	Management                   ManagementConfiguration
-	OpenAIKey                    string
-	DeepSeekKey                  string
-	DashScopeKey                 string
-	MoonshotKey                  string
-	MiniMaxKey                   string
-	SiliconFlowKey               string
-	ZAIKey                       string
-	GeminiKey                    string
-	AnthropicKey                 string
-	MetaKey                      string
-	XAIKey                       string
 	OpenAIBaseURL                string
 	OpenAITranscriptionsURL      string
 	DeepSeekBaseURL              string
@@ -94,7 +81,6 @@ type Configuration struct {
 	Endpoints                    *Endpoints
 	ModelCatalog                 ModelCatalog
 	upstreamRateLimits           upstreamRateLimits
-	tenants                      tenantRegistry
 	managementSessionValidator   *managementSessionValidator
 	requestTimeoutPolicy         requestTimeoutPolicy
 	validated                    bool
@@ -102,7 +88,6 @@ type Configuration struct {
 
 // ManagementConfiguration holds authenticated browser UI and self-service tenant settings.
 type ManagementConfiguration struct {
-	Enabled                  bool
 	PublicOrigin             string
 	UIDescription            string
 	UIOrigins                []string
@@ -136,20 +121,14 @@ func NewConfiguration(configuration Configuration) (Configuration, error) {
 	if rateLimitError != nil {
 		return Configuration{}, rateLimitError
 	}
-	tenants, validationError := validateConfig(configuration)
-	if validationError != nil {
+	if validationError := validateConfig(configuration); validationError != nil {
 		return Configuration{}, validationError
 	}
-	var sessionValidator *managementSessionValidator
-	if configuration.Management.Enabled {
-		var sessionValidationError error
-		sessionValidator, sessionValidationError = newManagementSessionValidator(configuration.Management)
-		if sessionValidationError != nil {
-			return Configuration{}, sessionValidationError
-		}
+	sessionValidator, sessionValidationError := newManagementSessionValidator(configuration.Management)
+	if sessionValidationError != nil {
+		return Configuration{}, sessionValidationError
 	}
 	configuration.upstreamRateLimits = upstreamRateLimits
-	configuration.tenants = tenants
 	configuration.managementSessionValidator = sessionValidator
 	configuration.requestTimeoutPolicy = timeoutPolicy
 	configuration.validated = true
@@ -163,48 +142,15 @@ func ensureValidatedConfiguration(configuration Configuration) (Configuration, e
 	return NewConfiguration(configuration)
 }
 
-func validateConfig(configuration Configuration) (tenantRegistry, error) {
+func validateConfig(configuration Configuration) error {
 	if !filepath.IsAbs(configuration.AssetStorePath) || filepath.Clean(configuration.AssetStorePath) != configuration.AssetStorePath {
-		return tenantRegistry{}, fmt.Errorf("invalid asset_store_path")
+		return fmt.Errorf("invalid asset_store_path")
 	}
 	if managementValidationError := validateManagementConfiguration(configuration.Management); managementValidationError != nil {
-		return tenantRegistry{}, managementValidationError
-	}
-	if configuration.Management.Enabled {
-		if len(configuration.Tenants) != 0 {
-			return tenantRegistry{}, fmt.Errorf("%w: field=tenants unsupported_in_management_mode", ErrInvalidManagementConfiguration)
-		}
-		if len(configuredProviderAPIKeys(configuration)) != 0 {
-			return tenantRegistry{}, fmt.Errorf("%w: field=providers.api_key unsupported_in_management_mode", ErrInvalidManagementConfiguration)
-		}
-	}
-	tenants, tenantError := newTenantRegistry(configuration.Tenants, configuration.Management.Enabled)
-	if tenantError != nil {
-		return tenantRegistry{}, tenantError
+		return managementValidationError
 	}
 	if _, modelCatalogError := validateModelCatalog(configuration.ModelCatalog); modelCatalogError != nil {
-		return tenantRegistry{}, modelCatalogError
-	}
-	providers := newProviderRegistry(configuration)
-	validator := newModelValidator(providers)
-	for _, currentTenant := range tenants.tenants {
-		if validationError := validateTenantDefaultRuntime(providers, validator, currentTenant); validationError != nil {
-			return tenantRegistry{}, validationError
-		}
-	}
-	return tenants, nil
-}
-
-func validateTenantDefaultRuntime(providers *providerRegistry, validator *modelValidator, currentTenant tenant) error {
-	textProvider, textModel, verificationError := validator.ResolveText(constants.EmptyString, constants.EmptyString, currentTenant.defaults.provider, currentTenant.defaults.model, false)
-	if verificationError != nil {
-		return fmt.Errorf(tenantValidationErrorFormat, verificationError, currentTenant.identifier.string())
-	}
-	if _, _, verificationError := validator.ResolveDictation(constants.EmptyString, constants.EmptyString, currentTenant.defaults.dictationProvider, currentTenant.defaults.dictationModel); verificationError != nil {
-		return fmt.Errorf(tenantValidationErrorFormat, verificationError, currentTenant.identifier.string())
-	}
-	if reasoningEffortError := validateReasoningEffortForResolvedTextRoute(textProvider, textModel, currentTenant.defaults.reasoningEffort); reasoningEffortError != nil {
-		return fmt.Errorf(tenantValidationErrorFormat, reasoningEffortError, currentTenant.identifier.string())
+		return modelCatalogError
 	}
 	return nil
 }
@@ -215,17 +161,6 @@ var errQueueFull = errors.New(errorQueueFull)
 // ApplyTunables ensures tunable configuration values have sensible defaults.
 func (configuration *Configuration) ApplyTunables() {
 	configuration.Management.ApplyTunables()
-	configuration.OpenAIKey = strings.TrimSpace(configuration.OpenAIKey)
-	configuration.DeepSeekKey = strings.TrimSpace(configuration.DeepSeekKey)
-	configuration.DashScopeKey = strings.TrimSpace(configuration.DashScopeKey)
-	configuration.MoonshotKey = strings.TrimSpace(configuration.MoonshotKey)
-	configuration.MiniMaxKey = strings.TrimSpace(configuration.MiniMaxKey)
-	configuration.SiliconFlowKey = strings.TrimSpace(configuration.SiliconFlowKey)
-	configuration.ZAIKey = strings.TrimSpace(configuration.ZAIKey)
-	configuration.GeminiKey = strings.TrimSpace(configuration.GeminiKey)
-	configuration.AnthropicKey = strings.TrimSpace(configuration.AnthropicKey)
-	configuration.MetaKey = strings.TrimSpace(configuration.MetaKey)
-	configuration.XAIKey = strings.TrimSpace(configuration.XAIKey)
 	if configuration.WorkerCount <= 0 {
 		configuration.WorkerCount = DefaultWorkers
 	}
@@ -346,9 +281,6 @@ func (configuration *ManagementConfiguration) ApplyTunables() {
 }
 
 func validateManagementConfiguration(configuration ManagementConfiguration) error {
-	if !configuration.Enabled {
-		return nil
-	}
 	requiredFields := []struct {
 		fieldName  string
 		fieldValue string

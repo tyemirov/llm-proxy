@@ -25,6 +25,7 @@ usage() {
     'Requires only LLM_PROXY_SECRET, the Default-tenant client secret.' \
     'It never loads dotenv files or local upstream-provider credentials.' \
     '' \
+    'The command first validates managed client-key retrieval without calling a provider.' \
     'The command sends one echo-marker request to OpenAI, Anthropic, Meta, Gemini, and Moonshot,' \
     'then sends matching large-completion requests through OpenAI, Anthropic, Meta, and Gemini.' \
     'The Gemini long case selects gemini-3.5-flash so OpenAI and Gemini prove server-owned background polling.'
@@ -114,6 +115,52 @@ write_curl_config() {
     "${provider_identifier}" \
     "${ENCODED_TENANT_SECRET}" \
     "${model_query}" >"${curl_config_path}"
+}
+
+run_client_authentication_preflight() {
+  local curl_config_path="${TEMPORARY_DIRECTORY}/client-authentication.curl"
+  local headers_path="${TEMPORARY_DIRECTORY}/client-authentication.headers"
+  local response_path="${TEMPORARY_DIRECTORY}/client-authentication.response"
+  local http_status=""
+  local response_bytes
+  local response_request_id=""
+
+  builtin printf 'url = "%s/v2?key=%s"\n' \
+    "${PRODUCTION_API_ORIGIN}" \
+    "${ENCODED_TENANT_SECRET}" >"${curl_config_path}"
+  if ! http_status="$(
+    printf '%s' '{}' | curl \
+      --silent \
+      --show-error \
+      --config "${curl_config_path}" \
+      --request POST \
+      --header 'Content-Type: application/json' \
+      --connect-timeout "${CURL_CONNECT_TIMEOUT_SECONDS}" \
+      --max-time "${ECHO_CURL_TIMEOUT_SECONDS}" \
+      --dump-header "${headers_path}" \
+      --output "${response_path}" \
+      --write-out '%{http_code}' \
+      --data-binary @-
+  )"; then
+    response_bytes="$(response_size "${response_path}")"
+    builtin printf 'live test preflight failed: client_key=transport_error response_bytes=%s\n' "${response_bytes}" >&2
+    return 1
+  fi
+
+  response_bytes="$(response_size "${response_path}")"
+  if ! response_request_id="$(validated_response_request_id "${headers_path}")"; then
+    builtin printf 'live test preflight failed: client_key=unconfirmed status=%s response_bytes=%s invalid_request_id_header\n' \
+      "${http_status}" "${response_bytes}" >&2
+    return 1
+  fi
+  if [[ "${http_status}" != '400' ]]; then
+    builtin printf 'live test preflight failed: client_key=rejected status=%s response_bytes=%s request_id=%s\n' \
+      "${http_status}" "${response_bytes}" "${response_request_id}" >&2
+    return 1
+  fi
+
+  builtin printf 'live test preflight passed: client_key=authenticated status=%s response_bytes=%s request_id=%s\n' \
+    "${http_status}" "${response_bytes}" "${response_request_id}"
 }
 
 response_size() {
@@ -238,6 +285,8 @@ umask 077
 TEMPORARY_DIRECTORY="$(mktemp -d)"
 trap cleanup EXIT HUP INT TERM
 ENCODED_TENANT_SECRET="$(encode_tenant_secret)"
+
+run_client_authentication_preflight || exit 1
 
 echo_request_body="$(build_echo_request)"
 long_completion_request_body="$(build_long_completion_request)"

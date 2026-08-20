@@ -515,7 +515,6 @@ func newInternalManagementService(t *testing.T, database *fakeManagedTenantDatab
 		store,
 		providers,
 		internalProviderKeyVerifier{},
-		newTenantAuthenticator(tenantRegistry{}, store),
 		zap.NewNop().Sugar(),
 	)
 }

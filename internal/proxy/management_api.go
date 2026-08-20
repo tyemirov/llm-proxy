@@ -48,7 +48,6 @@ type managementService struct {
 	store            *managedTenantStore
 	providers        *providerRegistry
 	keyVerifier      providerKeyVerifier
-	authenticator    tenantAuthenticator
 	structuredLogger *zap.SugaredLogger
 }
 
@@ -263,14 +262,13 @@ type managementDefaultsRequest struct {
 	ReasoningEffort   *string `json:"reasoning_effort"`
 }
 
-func newManagementService(configuration ManagementConfiguration, sessionValidator *managementSessionValidator, store *managedTenantStore, providers *providerRegistry, keyVerifier providerKeyVerifier, authenticator tenantAuthenticator, structuredLogger *zap.SugaredLogger) *managementService {
+func newManagementService(configuration ManagementConfiguration, sessionValidator *managementSessionValidator, store *managedTenantStore, providers *providerRegistry, keyVerifier providerKeyVerifier, structuredLogger *zap.SugaredLogger) *managementService {
 	return &managementService{
 		configuration:    configuration,
 		sessionValidator: sessionValidator,
 		store:            store,
 		providers:        providers,
 		keyVerifier:      keyVerifier,
-		authenticator:    authenticator,
 		structuredLogger: structuredLogger,
 	}
 }
@@ -735,7 +733,7 @@ func (service *managementService) generateSecretHandler() gin.HandlerFunc {
 			return
 		}
 		principal := managementPrincipalFromContext(ginContext)
-		rawSecret, snapshot, generationError := service.store.generateSecret(principal, tenantIdentifier, service.authenticator.containsStaticSecretDigest)
+		rawSecret, snapshot, generationError := service.store.generateSecret(principal, tenantIdentifier)
 		if generationError != nil {
 			writeManagementStoreError(ginContext, generationError)
 			return
