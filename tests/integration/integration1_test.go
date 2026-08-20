@@ -48,15 +48,13 @@ func newIntegrationServerWithTimeout(testingInstance *testing.T, openAIServer *h
 	testingInstance.Cleanup(func() { proxy.HTTPClient = originalClient })
 	logger, _ := zap.NewDevelopment()
 	testingInstance.Cleanup(func() { _ = logger.Sync() })
-	router, buildRouterError := proxy.BuildRouter(integrationConfiguration(testingInstance, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("integration", integrationServiceSecret),
-		OpenAIKey:             integrationOpenAIKey,
+	router, buildRouterError := buildIntegrationRouter(testingInstance, proxy.Configuration{
 		LogLevel:              logLevelDebug,
 		WorkerCount:           1,
 		QueueSize:             4,
 		RequestTimeoutSeconds: requestTimeoutSeconds,
 		Endpoints:             endpoints,
-	}), logger.Sugar())
+	}, logger.Sugar())
 	if buildRouterError != nil {
 		testingInstance.Fatalf(buildRouterErrorFormat, buildRouterError)
 	}

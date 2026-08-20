@@ -66,15 +66,13 @@ func newRouterWithStubbedOpenAI(testingInstance *testing.T, modelsBody, response
 
 	logger, _ := zap.NewDevelopment()
 	defer logger.Sync()
-	router, buildError := proxy.BuildRouter(testfixtures.WithModelCatalog(testingInstance, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", "sekret"),
-		OpenAIKey:             "sk-test",
+	router, buildError := testfixtures.BuildManagedRouter(testingInstance, proxy.Configuration{
 		LogLevel:              "debug",
 		WorkerCount:           workerCount,
 		QueueSize:             queueSize,
 		RequestTimeoutSeconds: requestTimeoutSeconds,
 		Endpoints:             endpoints,
-	}), logger.Sugar())
+	}, logger.Sugar(), testfixtures.StandardManagedTenant("sekret"))
 	if buildError != nil {
 		testingInstance.Fatalf("BuildRouter error: %v", buildError)
 	}
@@ -187,15 +185,13 @@ func TestEndpoint_ReturnsServiceUnavailableWhenQueueFull(testingInstance *testin
 
 	logger, _ := zap.NewDevelopment()
 	defer logger.Sync()
-	router, buildError := proxy.BuildRouter(testfixtures.WithModelCatalog(testingInstance, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", "sekret"),
-		OpenAIKey:             "sk-test",
+	router, buildError := testfixtures.BuildManagedRouter(testingInstance, proxy.Configuration{
 		LogLevel:              "debug",
 		WorkerCount:           1,
 		QueueSize:             1,
 		RequestTimeoutSeconds: 1,
 		Endpoints:             endpoints,
-	}), logger.Sugar())
+	}, logger.Sugar(), testfixtures.StandardManagedTenant("sekret"))
 	if buildError != nil {
 		testingInstance.Fatalf("BuildRouter error: %v", buildError)
 	}
@@ -292,15 +288,13 @@ func TestEndpoint_ReturnsGatewayTimeoutWhenWaitingForUpstreamWorker(testingInsta
 
 	logger, _ := zap.NewDevelopment()
 	defer logger.Sync()
-	router, buildError := proxy.BuildRouter(testfixtures.WithModelCatalog(testingInstance, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", "sekret"),
-		OpenAIKey:             "sk-test",
+	router, buildError := testfixtures.BuildManagedRouter(testingInstance, proxy.Configuration{
 		LogLevel:              "debug",
 		WorkerCount:           1,
 		QueueSize:             1,
 		RequestTimeoutSeconds: 1,
 		Endpoints:             endpoints,
-	}), logger.Sugar())
+	}, logger.Sugar(), testfixtures.StandardManagedTenant("sekret"))
 	if buildError != nil {
 		testingInstance.Fatalf("BuildRouter error: %v", buildError)
 	}

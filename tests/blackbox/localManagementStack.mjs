@@ -350,7 +350,6 @@ tenants:
 function llmProxyEnvironment(frontendOrigin, tAuthOrigin, llmProxyOrigin, temporaryDirectory) {
   return {
     ...process.env,
-    LLM_PROXY_MANAGEMENT_ENABLED: "true",
     LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN: frontendOrigin,
     LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN: frontendOrigin,
     LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN: frontendOrigin,

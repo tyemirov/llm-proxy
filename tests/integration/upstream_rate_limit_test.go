@@ -547,10 +547,6 @@ func TestIntegrationUpstreamRateLimitCancellationReturnsGatewayTimeoutAndLogs(te
 
 func rateLimitIntegrationConfiguration(upstreamURL string) proxy.Configuration {
 	return proxy.Configuration{
-		Tenants:                 proxy.SingleTenantConfigurations("integration", serviceSecretValue),
-		OpenAIKey:               openAIKeyValue,
-		DeepSeekKey:             "sk-deepseek",
-		DashScopeKey:            "sk-dashscope",
 		OpenAIBaseURL:           upstreamURL + "/v1",
 		OpenAITranscriptionsURL: upstreamURL + rateLimitDictationPath,
 		DeepSeekBaseURL:         upstreamURL,
@@ -567,7 +563,7 @@ func buildRateLimitIntegrationRouter(testingInstance *testing.T, configuration p
 	previousHTTPClient := proxy.HTTPClient
 	proxy.HTTPClient = &http.Client{Timeout: time.Duration(rateLimitRequestTimeoutSeconds) * time.Second}
 	testingInstance.Cleanup(func() { proxy.HTTPClient = previousHTTPClient })
-	router, buildError := proxy.BuildRouter(integrationConfiguration(testingInstance, configuration), structuredLogger)
+	router, buildError := buildIntegrationRouter(testingInstance, configuration, structuredLogger)
 	if buildError != nil {
 		testingInstance.Fatalf(buildRouterFailedFormat, buildError)
 	}

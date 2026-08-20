@@ -81,14 +81,12 @@ func TestIntegration_OmitsDisallowedParameters(testingInstance *testing.T) {
 			logger, _ := zap.NewDevelopment()
 			defer logger.Sync()
 
-			router, buildRouterError := proxy.BuildRouter(testfixtures.WithModelCatalog(subTestInstance, proxy.Configuration{
-				Tenants:     proxy.SingleTenantConfigurations("capabilities", serviceSecret),
-				OpenAIKey:   openAIKey,
+			router, buildRouterError := testfixtures.BuildManagedRouter(subTestInstance, proxy.Configuration{
 				LogLevel:    logLevel,
 				WorkerCount: 1,
 				QueueSize:   4,
 				Endpoints:   endpoints,
-			}), logger.Sugar())
+			}, logger.Sugar(), testfixtures.StandardManagedTenant(serviceSecret))
 			if buildRouterError != nil {
 				subTestInstance.Fatalf("BuildRouter error: %v", buildRouterError)
 			}
@@ -387,12 +385,12 @@ func TestPublicCapabilityRESTResourceProjectsChangedCatalogWithoutPrivateConfig(
 		Source: "https://platform.moonshot.ai/docs/pricing/chat", LastVerified: "2026-08-10",
 		UnavailableReason: "Exact published pricing has not been imported for this provider offering.",
 	})
-	router, buildError := proxy.BuildRouter(proxy.Configuration{
-		Tenants:       proxy.SingleTenantConfigurations("private-tenant", privateSecret),
-		OpenAIKey:     privateAPIKey,
+	tenant := testfixtures.StandardManagedTenant(privateSecret)
+	tenant.ProviderKeys[proxy.ProviderNameOpenAI] = privateAPIKey
+	router, buildError := testfixtures.BuildManagedRouter(testingInstance, proxy.Configuration{
 		OpenAIBaseURL: privateBaseURL,
 		ModelCatalog:  catalogs,
-	}, zap.NewNop().Sugar())
+	}, zap.NewNop().Sugar(), tenant)
 	if buildError != nil {
 		testingInstance.Fatalf("BuildRouter error: %v", buildError)
 	}

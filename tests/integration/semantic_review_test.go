@@ -137,15 +137,13 @@ func TestIntegrationLargeSemanticReviewPostUsesRequestMaxTokens(testingInstance 
 	originalClient := proxy.HTTPClient
 	proxy.HTTPClient = openAIServer.Client()
 	testingInstance.Cleanup(func() { proxy.HTTPClient = originalClient })
-	router, buildError := proxy.BuildRouter(integrationConfiguration(testingInstance, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("integration", serviceSecretValue),
-		OpenAIKey:             openAIKeyValue,
+	router, buildError := buildIntegrationRouter(testingInstance, proxy.Configuration{
 		LogLevel:              logLevelDebug,
 		WorkerCount:           1,
 		QueueSize:             8,
 		RequestTimeoutSeconds: requestTimeoutSecondsDefault,
 		Endpoints:             endpoints,
-	}), newLogger(testingInstance))
+	}, newLogger(testingInstance))
 	if buildError != nil {
 		testingInstance.Fatalf(buildRouterFailedFormat, buildError)
 	}
@@ -237,15 +235,13 @@ func TestIntegrationLargeSemanticReviewPostPollsBackgroundOpenAIResponse(testing
 	originalClient := proxy.HTTPClient
 	proxy.HTTPClient = openAIServer.Client()
 	testingInstance.Cleanup(func() { proxy.HTTPClient = originalClient })
-	router, buildError := proxy.BuildRouter(integrationConfiguration(testingInstance, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("integration", serviceSecretValue),
-		OpenAIKey:             openAIKeyValue,
+	router, buildError := buildIntegrationRouter(testingInstance, proxy.Configuration{
 		LogLevel:              logLevelDebug,
 		WorkerCount:           1,
 		QueueSize:             8,
 		RequestTimeoutSeconds: 3,
 		Endpoints:             endpoints,
-	}), newLogger(testingInstance))
+	}, newLogger(testingInstance))
 	if buildError != nil {
 		testingInstance.Fatalf(buildRouterFailedFormat, buildError)
 	}
@@ -327,15 +323,13 @@ func TestIntegrationLargeSemanticReviewPostCompletesThroughServerSidePolling(tes
 	originalClient := proxy.HTTPClient
 	proxy.HTTPClient = openAIServer.Client()
 	testingInstance.Cleanup(func() { proxy.HTTPClient = originalClient })
-	router, buildError := proxy.BuildRouter(integrationConfiguration(testingInstance, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("integration", serviceSecretValue),
-		OpenAIKey:             openAIKeyValue,
+	router, buildError := buildIntegrationRouter(testingInstance, proxy.Configuration{
 		LogLevel:              logLevelDebug,
 		WorkerCount:           1,
 		QueueSize:             8,
 		RequestTimeoutSeconds: 3,
 		Endpoints:             endpoints,
-	}), newLogger(testingInstance))
+	}, newLogger(testingInstance))
 	if buildError != nil {
 		testingInstance.Fatalf(buildRouterFailedFormat, buildError)
 	}
