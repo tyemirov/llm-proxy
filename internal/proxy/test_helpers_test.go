@@ -56,8 +56,6 @@ func NewTestRouter(t *testing.T, serverURL string) *gin.Engine {
 	t.Cleanup(func() { _ = logger.Sync() })
 
 	router, err := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
 		LogLevel:              proxy.LogLevelDebug,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -72,11 +70,22 @@ func NewTestRouter(t *testing.T, serverURL string) *gin.Engine {
 
 func buildRouterWithCatalogs(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger) (*gin.Engine, error) {
 	testingInstance.Helper()
-	return proxy.BuildRouter(withModelCatalog(testingInstance, configuration), structuredLogger)
+	configuration = withModelCatalog(testingInstance, configuration)
+	management := configuration.Management
+	if management.PublicOrigin != "" || management.UIDescription != "" || management.TAuthURL != "" || management.DatabasePath != "" || management.ProviderKeyEncryptionKey != "" || management.DatabaseDialector != nil {
+		return proxy.BuildRouter(configuration, structuredLogger)
+	}
+	return proxy.BuildRouterWithManagedTenantForTest(testingInstance, configuration, structuredLogger, proxy.StandardManagedTenantTestConfiguration(TestSecret))
+}
+
+func buildRouterWithManagedTenant(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger, tenantConfiguration proxy.ManagedTenantTestConfiguration) (*gin.Engine, error) {
+	testingInstance.Helper()
+	return proxy.BuildRouterWithManagedTenantForTest(testingInstance, withModelCatalog(testingInstance, configuration), structuredLogger, tenantConfiguration)
 }
 
 func newConfigurationWithCatalogs(testingInstance testing.TB, configuration proxy.Configuration) (proxy.Configuration, error) {
 	testingInstance.Helper()
+	configuration.Management = proxy.ManagedRouterTestManagementConfiguration()
 	return proxy.NewConfiguration(withModelCatalog(testingInstance, configuration))
 }
 

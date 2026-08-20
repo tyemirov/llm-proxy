@@ -311,9 +311,6 @@ func TestGeminiInteractionsPollFailureStillDeletesWhenCancellationFails(testingI
 func geminiInteractionsTestRouter(testingInstance testing.TB, baseURL string) http.Handler {
 	testingInstance.Helper()
 	router, buildError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		GeminiKey:             testGeminiKey,
 		GeminiBaseURL:         baseURL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,

@@ -123,7 +123,7 @@ func TestManagedUsageFailureDomainRejectsMalformedValues(t *testing.T) {
 
 	database := newFakeManagedTenantDatabase()
 	store := newManagedTenantStoreWithDatabase(database)
-	managedTenant := tenant{identifier: tenantID("managed-default"), userID: "owner", managed: true}
+	managedTenant := tenant{identifier: tenantID("managed-default"), userID: "owner"}
 	observedCore, observedLogs := observer.New(zapcore.WarnLevel)
 	store.usageWriter.submit(managedTenant, managedUsageEvent{
 		outcomeCode: managedUsageOutcomeCode("provider_error"),
@@ -141,7 +141,6 @@ func TestRecordManagedUsageReportsPersistenceFailures(t *testing.T) {
 	requestTenant := tenant{
 		identifier: tenantID("managed-default"),
 		userID:     "tauth-owner",
-		managed:    true,
 	}
 	observedCore, observedLogs := observer.New(zapcore.WarnLevel)
 	recorder := httptest.NewRecorder()
@@ -240,7 +239,6 @@ func TestManagedUsageWriterKeepsPublicResponsesIndependentFromPersistence(t *tes
 	store := newManagedTenantStoreWithDatabaseAndCipherAndUsageQueue(database, providerKeyCipher, 1)
 
 	managementConfiguration := ManagementConfiguration{
-		Enabled:           true,
 		PublicOrigin:      "http://localhost:8080",
 		UIOrigins:         []string{"http://localhost:8080"},
 		TAuthTenantID:     "llm-proxy-test",

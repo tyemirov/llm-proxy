@@ -95,84 +95,56 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 func configuredProviderDefinitions(configuration Configuration) map[providerID]providerDefinition {
 	return map[providerID]providerDefinition{
 		providerID(ProviderNameOpenAI): {
-			identifier: providerID(ProviderNameOpenAI), textAPIKey: configuration.OpenAIKey,
-			transcriptionAPIKey: configuration.OpenAIKey, transcriptionsURL: configuration.OpenAITranscriptionsURL,
+			identifier: providerID(ProviderNameOpenAI), transcriptionsURL: configuration.OpenAITranscriptionsURL,
 			transcriptionModelField: keyModel, textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{},
 		},
 		providerID(ProviderNameDeepSeek): {
-			identifier: providerID(ProviderNameDeepSeek), textAPIKey: configuration.DeepSeekKey, textBaseURL: configuration.DeepSeekBaseURL,
+			identifier: providerID(ProviderNameDeepSeek), textBaseURL: configuration.DeepSeekBaseURL,
 			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
 		},
 		providerID(ProviderNameDashScope): {
-			identifier: providerID(ProviderNameDashScope), aliases: []string{providerAliasQwen}, textAPIKey: configuration.DashScopeKey, textBaseURL: configuration.DashScopeBaseURL,
+			identifier: providerID(ProviderNameDashScope), aliases: []string{providerAliasQwen}, textBaseURL: configuration.DashScopeBaseURL,
 			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
 		},
 		providerID(ProviderNameMoonshot): {
-			identifier: providerID(ProviderNameMoonshot), aliases: []string{providerAliasKimi}, textAPIKey: configuration.MoonshotKey, textBaseURL: configuration.MoonshotBaseURL,
+			identifier: providerID(ProviderNameMoonshot), aliases: []string{providerAliasKimi}, textBaseURL: configuration.MoonshotBaseURL,
 			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxCompletionTokens,
 		},
 		providerID(ProviderNameMiniMax): {
-			identifier: providerID(ProviderNameMiniMax), textAPIKey: configuration.MiniMaxKey, textBaseURL: configuration.MiniMaxBaseURL,
+			identifier: providerID(ProviderNameMiniMax), textBaseURL: configuration.MiniMaxBaseURL,
 			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxCompletionTokens,
 		},
 		providerID(ProviderNameSiliconFlow): {
-			identifier: providerID(ProviderNameSiliconFlow), textAPIKey: configuration.SiliconFlowKey, textBaseURL: configuration.SiliconFlowBaseURL,
-			transcriptionAPIKey: configuration.SiliconFlowKey, transcriptionsURL: configuration.SiliconFlowTranscriptionsURL, transcriptionModelField: keyModel,
+			identifier: providerID(ProviderNameSiliconFlow), textBaseURL: configuration.SiliconFlowBaseURL,
+			transcriptionsURL: configuration.SiliconFlowTranscriptionsURL, transcriptionModelField: keyModel,
 			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
 		},
 		providerID(ProviderNameZAI): {
-			identifier: providerID(ProviderNameZAI), textAPIKey: configuration.ZAIKey, textBaseURL: configuration.ZAIBaseURL,
-			transcriptionAPIKey: configuration.ZAIKey, transcriptionsURL: configuration.ZAITranscriptionsURL, transcriptionModelField: keyModel,
+			identifier: providerID(ProviderNameZAI), textBaseURL: configuration.ZAIBaseURL,
+			transcriptionsURL: configuration.ZAITranscriptionsURL, transcriptionModelField: keyModel,
 			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
 		},
 		providerID(ProviderNameGemini): {
-			identifier: providerID(ProviderNameGemini), textAPIKey: configuration.GeminiKey, textBaseURL: configuration.GeminiBaseURL,
+			identifier: providerID(ProviderNameGemini), textBaseURL: configuration.GeminiBaseURL,
 			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{},
 		},
 		providerID(ProviderNameAnthropic): {
-			identifier: providerID(ProviderNameAnthropic), aliases: []string{providerAliasClaude}, textAPIKey: configuration.AnthropicKey, textBaseURL: configuration.AnthropicBaseURL,
+			identifier: providerID(ProviderNameAnthropic), aliases: []string{providerAliasClaude}, textBaseURL: configuration.AnthropicBaseURL,
 			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{},
 		},
 		providerID(ProviderNameMeta): {
-			identifier: providerID(ProviderNameMeta), textAPIKey: configuration.MetaKey, textBaseURL: configuration.MetaBaseURL,
+			identifier: providerID(ProviderNameMeta), textBaseURL: configuration.MetaBaseURL,
 			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxCompletionTokens,
 		},
 		providerID(ProviderNameXAI): {
-			identifier: providerID(ProviderNameXAI), textAPIKey: configuration.XAIKey, textBaseURL: configuration.XAIBaseURL,
-			transcriptionAPIKey: configuration.XAIKey, transcriptionsURL: configuration.XAITranscriptionsURL, transcriptionModelField: constants.EmptyString,
+			identifier: providerID(ProviderNameXAI), textBaseURL: configuration.XAIBaseURL,
+			transcriptionsURL: configuration.XAITranscriptionsURL, transcriptionModelField: constants.EmptyString,
 			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
 		},
 	}
 }
 
-func configuredProviderAPIKeys(configuration Configuration) map[providerID]string {
-	providerAPIKeys := map[providerID]string{}
-	configuredProviderAPIKey(configuration.OpenAIKey, ProviderNameOpenAI, providerAPIKeys)
-	configuredProviderAPIKey(configuration.DeepSeekKey, ProviderNameDeepSeek, providerAPIKeys)
-	configuredProviderAPIKey(configuration.DashScopeKey, ProviderNameDashScope, providerAPIKeys)
-	configuredProviderAPIKey(configuration.MoonshotKey, ProviderNameMoonshot, providerAPIKeys)
-	configuredProviderAPIKey(configuration.MiniMaxKey, ProviderNameMiniMax, providerAPIKeys)
-	configuredProviderAPIKey(configuration.SiliconFlowKey, ProviderNameSiliconFlow, providerAPIKeys)
-	configuredProviderAPIKey(configuration.ZAIKey, ProviderNameZAI, providerAPIKeys)
-	configuredProviderAPIKey(configuration.GeminiKey, ProviderNameGemini, providerAPIKeys)
-	configuredProviderAPIKey(configuration.AnthropicKey, ProviderNameAnthropic, providerAPIKeys)
-	configuredProviderAPIKey(configuration.MetaKey, ProviderNameMeta, providerAPIKeys)
-	configuredProviderAPIKey(configuration.XAIKey, ProviderNameXAI, providerAPIKeys)
-	return providerAPIKeys
-}
-
-func configuredProviderAPIKey(rawAPIKey string, rawProvider string, providerAPIKeys map[providerID]string) {
-	apiKey := strings.TrimSpace(rawAPIKey)
-	if apiKey == constants.EmptyString {
-		return
-	}
-	providerAPIKeys[newProviderID(rawProvider)] = apiKey
-}
-
 func (registry *providerRegistry) forTenant(requestTenant tenant) *providerRegistry {
-	if !requestTenant.managed {
-		return registry
-	}
 	definitions := make(map[providerID]providerDefinition, len(registry.definitions))
 	for identifier, definition := range registry.definitions {
 		definition.textAPIKey = constants.EmptyString

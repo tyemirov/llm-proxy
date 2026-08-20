@@ -42,13 +42,16 @@ func TestStructuredRequestConvergesAcrossSubmitReplayAndReconciliation(testingIn
 	testingInstance.Cleanup(upstream.Close)
 	endpoints := proxy.NewEndpoints()
 	endpoints.SetResponsesURL(upstream.URL)
-	router := coverageRouter(testingInstance, proxy.Configuration{
-		Tenants: proxy.SingleTenantConfigurationsWithDefaults("structured", TestSecret, proxy.TenantDefaults{
-			Provider: proxy.ProviderNameOpenAI, Model: proxy.ModelNameGPT55,
-		}),
-		OpenAIKey: "provider-key", WorkerCount: 1, QueueSize: 2, RequestTimeoutSeconds: TestTimeout,
+	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
+	tenantConfiguration.ID = "structured"
+	tenantConfiguration.Defaults.Model = proxy.ModelNameGPT55
+	router, buildError := buildRouterWithManagedTenant(testingInstance, proxy.Configuration{
+		WorkerCount: 1, QueueSize: 2, RequestTimeoutSeconds: TestTimeout,
 		Endpoints: endpoints, AssetStorePath: testingInstance.TempDir(), AssetRetentionSeconds: 3600,
-	})
+	}, coverageLogger(), tenantConfiguration)
+	if buildError != nil {
+		testingInstance.Fatalf(messageBuildRouterError, buildError)
+	}
 	body := structuredV2Body("review", false, proxy.ModelNameGPT55)
 
 	first := performStructuredRequest(testingInstance, router, body, "review:one")
@@ -83,12 +86,18 @@ func TestStructuredRequestRejectsInvalidContractsBeforeProviderDispatch(testingI
 	testingInstance.Cleanup(upstream.Close)
 	endpoints := proxy.NewEndpoints()
 	endpoints.SetResponsesURL(upstream.URL)
-	router := coverageRouter(testingInstance, proxy.Configuration{
-		Tenants:   proxy.SingleTenantConfigurationsWithDefaults("structured-invalid", TestSecret, proxy.TenantDefaults{Provider: "deepseek", Model: "deepseek-v4-flash"}),
-		OpenAIKey: "provider-key", DeepSeekKey: "deepseek-key", DeepSeekBaseURL: upstream.URL,
-		WorkerCount: 1, QueueSize: 2, RequestTimeoutSeconds: TestTimeout, Endpoints: endpoints,
+	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
+	tenantConfiguration.ID = "structured-invalid"
+	tenantConfiguration.Defaults.Provider = proxy.ProviderNameDeepSeek
+	tenantConfiguration.Defaults.Model = proxy.ModelNameDeepSeekV4Flash
+	router, buildError := buildRouterWithManagedTenant(testingInstance, proxy.Configuration{
+		DeepSeekBaseURL: upstream.URL,
+		WorkerCount:     1, QueueSize: 2, RequestTimeoutSeconds: TestTimeout, Endpoints: endpoints,
 		AssetStorePath: testingInstance.TempDir(), AssetRetentionSeconds: 3600,
-	})
+	}, coverageLogger(), tenantConfiguration)
+	if buildError != nil {
+		testingInstance.Fatalf(messageBuildRouterError, buildError)
+	}
 
 	testCases := []struct {
 		name     string
@@ -128,11 +137,16 @@ func TestStructuredRequestPersistsProviderSchemaFailure(testingInstance *testing
 	testingInstance.Cleanup(upstream.Close)
 	endpoints := proxy.NewEndpoints()
 	endpoints.SetResponsesURL(upstream.URL)
-	router := coverageRouter(testingInstance, proxy.Configuration{
-		Tenants:   proxy.SingleTenantConfigurationsWithDefaults("structured-failure", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.ModelNameGPT55}),
-		OpenAIKey: "provider-key", WorkerCount: 1, QueueSize: 2, RequestTimeoutSeconds: TestTimeout,
+	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
+	tenantConfiguration.ID = "structured-failure"
+	tenantConfiguration.Defaults.Model = proxy.ModelNameGPT55
+	router, buildError := buildRouterWithManagedTenant(testingInstance, proxy.Configuration{
+		WorkerCount: 1, QueueSize: 2, RequestTimeoutSeconds: TestTimeout,
 		Endpoints: endpoints, AssetStorePath: testingInstance.TempDir(), AssetRetentionSeconds: 3600,
-	})
+	}, coverageLogger(), tenantConfiguration)
+	if buildError != nil {
+		testingInstance.Fatalf(messageBuildRouterError, buildError)
+	}
 	body := structuredV2Body("review", false, proxy.ModelNameGPT55)
 	first := performStructuredRequest(testingInstance, router, body, "review:failure")
 	if first.Code != http.StatusBadGateway || providerCalls.Load() != 1 {
@@ -156,10 +170,11 @@ func TestBuildRouterRejectsUnsafeStructuredRequestStore(testingInstance *testing
 	if writeError := os.WriteFile(filepath.Join(assetRoot, "structured-requests"), []byte("unsafe"), 0o600); writeError != nil {
 		testingInstance.Fatal(writeError)
 	}
-	_, buildError := proxy.BuildRouter(withModelCatalog(testingInstance, proxy.Configuration{
-		Tenants: proxy.SingleTenantConfigurations("unsafe-structured-store", TestSecret), OpenAIKey: "provider-key",
+	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
+	tenantConfiguration.ID = "unsafe-structured-store"
+	_, buildError := buildRouterWithManagedTenant(testingInstance, proxy.Configuration{
 		WorkerCount: 1, QueueSize: 1, RequestTimeoutSeconds: TestTimeout, AssetStorePath: assetRoot,
-	}), coverageLogger())
+	}, coverageLogger(), tenantConfiguration)
 	if buildError == nil {
 		testingInstance.Fatal("unsafe structured request store must fail router construction")
 	}

@@ -42,15 +42,13 @@ func TestRequestLogsExcludeQueryContent(testingInstance *testing.T) {
 	observedCore, observedLogs := observer.New(zapcore.DebugLevel)
 	loggerInstance := zap.New(observedCore)
 	testingInstance.Cleanup(func() { _ = loggerInstance.Sync() })
-	router, buildError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("logging", tenantSecretQueryValue),
-		OpenAIKey:             TestAPIKey,
+	router, buildError := buildRouterWithManagedTenant(testingInstance, proxy.Configuration{
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
 		RequestTimeoutSeconds: TestTimeout,
 		Endpoints:             endpoints,
-	}, loggerInstance.Sugar())
+	}, loggerInstance.Sugar(), proxy.StandardManagedTenantTestConfiguration(tenantSecretQueryValue))
 	if buildError != nil {
 		testingInstance.Fatalf(messageBuildRouterError, buildError)
 	}
@@ -209,15 +207,15 @@ func TestChatHandlersApplyPublicReasoningEffortOverTenantDefault(testingInstance
 	defaults := proxy.DefaultTenantDefaults()
 	defaults.Model = proxy.ModelNameGPT55
 	defaults.ReasoningEffort = "xhigh"
-	router, buildError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, defaults),
-		OpenAIKey:             TestAPIKey,
+	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
+	tenantConfiguration.Defaults = defaults
+	router, buildError := buildRouterWithManagedTenant(testingInstance, proxy.Configuration{
 		LogLevel:              proxy.LogLevelDebug,
 		WorkerCount:           1,
 		QueueSize:             1,
 		RequestTimeoutSeconds: TestTimeout,
 		Endpoints:             endpoints,
-	}, zap.NewNop().Sugar())
+	}, zap.NewNop().Sugar(), tenantConfiguration)
 	if buildError != nil {
 		testingInstance.Fatalf(messageBuildRouterError, buildError)
 	}
@@ -395,15 +393,15 @@ func TestChatHandlerCompletesIncompleteGPT55JSONBody(testingInstance *testing.T)
 	defaults := proxy.DefaultTenantDefaults()
 	defaults.Model = proxy.ModelNameGPT55
 	defaults.ReasoningEffort = "high"
-	router, buildRouterError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, defaults),
-		OpenAIKey:             TestAPIKey,
+	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
+	tenantConfiguration.Defaults = defaults
+	router, buildRouterError := buildRouterWithManagedTenant(testingInstance, proxy.Configuration{
 		LogLevel:              proxy.LogLevelDebug,
 		WorkerCount:           1,
 		QueueSize:             1,
 		RequestTimeoutSeconds: TestTimeout,
 		Endpoints:             endpoints,
-	}, zap.NewNop().Sugar())
+	}, zap.NewNop().Sugar(), tenantConfiguration)
 	if buildRouterError != nil {
 		testingInstance.Fatalf(messageBuildRouterError, buildRouterError)
 	}
@@ -435,8 +433,6 @@ func TestChatHandlerRejectsOversizedJSONBody(testingInstance *testing.T) {
 	endpoints := proxy.NewEndpoints()
 	logger := zap.NewNop()
 	router, buildRouterError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,

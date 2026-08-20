@@ -215,8 +215,6 @@ func TestOpenAPIContractValidatesTenantAssetUploadAndDeleteExchanges(t *testing.
 		t.Fatalf("load canonical OpenAPI contract: %v", loadError)
 	}
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:        proxy.SingleTenantConfigurations("asset-contract", TestSecret),
-		OpenAIKey:      TestAPIKey,
 		AssetStorePath: t.TempDir(),
 	}, nil)
 	if buildError != nil {

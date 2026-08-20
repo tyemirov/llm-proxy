@@ -7,7 +7,7 @@ import (
 // ErrUnknownModel is returned when a model identifier is not recognized.
 var ErrUnknownModel = errors.New(errorUnknownModel)
 
-// modelValidator validates model identifiers using the static provider registry.
+// modelValidator validates model identifiers using the configured provider registry.
 type modelValidator struct {
 	registry *providerRegistry
 }

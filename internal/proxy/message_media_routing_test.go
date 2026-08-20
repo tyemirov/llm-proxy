@@ -35,11 +35,7 @@ func TestV2RoutesExactOrderedImageAndAudioAttachmentsThroughGemini(testingInstan
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		GeminiKey:             testGeminiKey,
 		GeminiBaseURL:         upstreamServer.URL,
-		XAIKey:                testXAIKey,
 		XAIBaseURL:            upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -201,14 +197,9 @@ func TestV2RoutesExactOrderedImagesThroughProviderAdapters(testingInstance *test
 			defer upstreamServer.Close()
 
 			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
-				Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-				OpenAIKey:             TestAPIKey,
 				OpenAIBaseURL:         upstreamServer.URL,
-				AnthropicKey:          testAnthropicKey,
 				AnthropicBaseURL:      upstreamServer.URL,
-				MoonshotKey:           "sk-moonshot",
 				MoonshotBaseURL:       upstreamServer.URL,
-				XAIKey:                testXAIKey,
 				XAIBaseURL:            upstreamServer.URL,
 				LogLevel:              proxy.LogLevelInfo,
 				WorkerCount:           1,
@@ -302,15 +293,10 @@ func TestV2AppliesNewProviderMediaLimitsAtTheBoundary(testingInstance *testing.T
 
 			catalog := testfixtures.ModelCatalog(subTest)
 			setProviderMediaLimit(subTest, &catalog, testCase.provider, testCase.model, testCase.limitID, testCase.limitValue)
-			router, buildError := proxy.BuildRouter(proxy.Configuration{
-				Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-				OpenAIKey:             TestAPIKey,
+			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
 				OpenAIBaseURL:         upstreamServer.URL,
-				AnthropicKey:          testAnthropicKey,
 				AnthropicBaseURL:      upstreamServer.URL,
-				MoonshotKey:           "sk-moonshot",
 				MoonshotBaseURL:       upstreamServer.URL,
-				XAIKey:                testXAIKey,
 				XAIBaseURL:            upstreamServer.URL,
 				ModelCatalog:          catalog,
 				LogLevel:              proxy.LogLevelInfo,
@@ -426,15 +412,9 @@ func TestV2RejectsInvalidOrUnsupportedMediaBeforeUpstreamWork(testingInstance *t
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		DeepSeekKey:           testDeepSeekKey,
 		DeepSeekBaseURL:       upstreamServer.URL,
-		GeminiKey:             testGeminiKey,
 		GeminiBaseURL:         upstreamServer.URL,
-		MoonshotKey:           "sk-moonshot",
 		MoonshotBaseURL:       upstreamServer.URL,
-		XAIKey:                testXAIKey,
 		XAIBaseURL:            upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -514,9 +494,6 @@ func TestCompatibilityMessagesRejectMediaAndV2IgnoresCompatibilityBodyLimit(test
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		GeminiKey:             testGeminiKey,
 		GeminiBaseURL:         upstreamServer.URL,
 		MaxPromptBytes:        512,
 		LogLevel:              proxy.LogLevelInfo,
@@ -608,9 +585,7 @@ func TestModelCatalogRejectsInvalidMediaInputDeclarations(testingInstance *testi
 		testingInstance.Run(testCase.name, func(subTest *testing.T) {
 			catalogs := testfixtures.ModelCatalog(subTest)
 			testCase.configure(catalogs)
-			_, buildError := proxy.BuildRouter(proxy.Configuration{
-				Tenants:      proxy.SingleTenantConfigurations("test", TestSecret),
-				OpenAIKey:    TestAPIKey,
+			_, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
 				ModelCatalog: catalogs,
 			}, zap.NewNop().Sugar())
 			if buildError == nil || !strings.Contains(buildError.Error(), "invalid_model_catalog") {

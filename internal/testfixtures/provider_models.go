@@ -37,6 +37,8 @@ func ModelCatalog(testingInstance testing.TB) proxy.ModelCatalog {
 // WithModelCatalog returns a configuration with the explicit model catalog from configs/config.yml.
 func WithModelCatalog(testingInstance testing.TB, configuration proxy.Configuration) proxy.Configuration {
 	testingInstance.Helper()
-	configuration.ModelCatalog = ModelCatalog(testingInstance)
+	if len(configuration.ModelCatalog.Offerings) == 0 {
+		configuration.ModelCatalog = ModelCatalog(testingInstance)
+	}
 	return configuration
 }

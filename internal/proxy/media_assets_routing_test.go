@@ -474,17 +474,20 @@ func mediaAssetRouter(t *testing.T, geminiBaseURL string, assetRoot string, cata
 
 func mediaAssetRouterWithMaxPrompt(t *testing.T, geminiBaseURL string, assetRoot string, catalog proxy.ModelCatalog, retentionSeconds int, maxPromptBytes int64) http.Handler {
 	t.Helper()
+	defaults := proxy.TenantDefaults{Provider: proxy.ProviderNameGemini, Model: proxy.ModelNameGemini25Flash, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel}
+	firstTenant := proxy.StandardManagedTenantTestConfiguration("secret-a")
+	firstTenant.ID = "tenant-a"
+	firstTenant.Defaults = defaults
+	secondTenant := proxy.StandardManagedTenantTestConfiguration("secret-b")
+	secondTenant.ID = "tenant-b"
+	secondTenant.Defaults = defaults
 	configuration := proxy.Configuration{
-		Tenants: []proxy.TenantConfiguration{
-			{ID: "tenant-a", Secret: "secret-a", Defaults: proxy.TenantDefaults{Provider: proxy.ProviderNameGemini, Model: proxy.ModelNameGemini25Flash, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel}},
-			{ID: "tenant-b", Secret: "secret-b", Defaults: proxy.TenantDefaults{Provider: proxy.ProviderNameGemini, Model: proxy.ModelNameGemini25Flash, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel}},
-		},
-		OpenAIKey: "openai-key", GeminiKey: "gemini-key", GeminiBaseURL: geminiBaseURL,
-		WorkerCount: 2, QueueSize: 4, RequestTimeoutSeconds: 10, MaxPromptBytes: maxPromptBytes,
+		GeminiBaseURL: geminiBaseURL,
+		WorkerCount:   2, QueueSize: 4, RequestTimeoutSeconds: 10, MaxPromptBytes: maxPromptBytes,
 		MaxAssetBytes: 10 * 1024 * 1024, AssetRetentionSeconds: retentionSeconds, AssetStorePath: assetRoot,
 		ModelCatalog: catalog,
 	}
-	router, buildError := proxy.BuildRouter(configuration, zap.NewNop().Sugar())
+	router, buildError := proxy.BuildRouterWithManagedTenantsForTest(t, configuration, zap.NewNop().Sugar(), []proxy.ManagedTenantTestConfiguration{firstTenant, secondTenant})
 	if buildError != nil {
 		t.Fatalf("BuildRouter error: %v", buildError)
 	}

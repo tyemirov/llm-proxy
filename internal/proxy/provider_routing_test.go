@@ -64,8 +64,6 @@ func TestProviderRoutingUsesConfiguredOpenAIURLsForTextAndDictation(t *testing.T
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                 proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:               TestAPIKey,
 		OpenAIBaseURL:           upstreamServer.URL + "/text-api",
 		OpenAITranscriptionsURL: upstreamServer.URL + "/dictation-api/transcriptions",
 		LogLevel:                proxy.LogLevelInfo,
@@ -218,18 +216,6 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 	t.Cleanup(upstreamServer.Close)
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                      proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                    TestAPIKey,
-		DeepSeekKey:                  testDeepSeekKey,
-		DashScopeKey:                 "sk-dashscope",
-		MoonshotKey:                  "sk-moonshot",
-		MiniMaxKey:                   "sk-minimax",
-		SiliconFlowKey:               testSiliconFlowKey,
-		ZAIKey:                       testZAIKey,
-		GeminiKey:                    testGeminiKey,
-		AnthropicKey:                 testAnthropicKey,
-		MetaKey:                      testMetaKey,
-		XAIKey:                       testXAIKey,
 		OpenAIBaseURL:                upstreamServer.URL,
 		OpenAITranscriptionsURL:      upstreamServer.URL + "/audio/transcriptions",
 		DeepSeekBaseURL:              upstreamServer.URL,
@@ -329,9 +315,6 @@ func TestProviderRoutingSupportsDeepSeekChatCompletions(t *testing.T) {
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		DeepSeekKey:           testDeepSeekKey,
 		DeepSeekBaseURL:       upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -431,19 +414,11 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 			subTest.Cleanup(upstreamServer.Close)
 
 			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
-				Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-				OpenAIKey:             TestAPIKey,
-				DashScopeKey:          "sk-dashscope",
 				DashScopeBaseURL:      upstreamServer.URL,
-				MoonshotKey:           "sk-moonshot",
 				MoonshotBaseURL:       upstreamServer.URL,
-				MiniMaxKey:            "sk-minimax",
 				MiniMaxBaseURL:        upstreamServer.URL,
-				SiliconFlowKey:        testSiliconFlowKey,
 				SiliconFlowBaseURL:    upstreamServer.URL,
-				ZAIKey:                testZAIKey,
 				ZAIBaseURL:            upstreamServer.URL,
-				XAIKey:                testXAIKey,
 				XAIBaseURL:            upstreamServer.URL,
 				LogLevel:              proxy.LogLevelInfo,
 				WorkerCount:           1,
@@ -510,9 +485,6 @@ func TestProviderRoutingMapsKimiK3ReasoningEffortWithoutExposingReasoningContent
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		MoonshotKey:           "sk-moonshot",
 		MoonshotBaseURL:       upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -588,9 +560,6 @@ func TestProviderRoutingPreservesKimiReasoningDuringOutputContinuation(t *testin
 			subTest.Cleanup(upstreamServer.Close)
 
 			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
-				Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-				OpenAIKey:             TestAPIKey,
-				MoonshotKey:           "sk-moonshot",
 				MoonshotBaseURL:       upstreamServer.URL,
 				LogLevel:              proxy.LogLevelInfo,
 				WorkerCount:           1,
@@ -639,9 +608,6 @@ func TestProviderRoutingRejectsGLM52MaxTokensAboveModelLimit(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		ZAIKey:                testZAIKey,
 		ZAIBaseURL:            upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -683,9 +649,6 @@ func TestProviderRoutingRejectsCurrentQwenMaxTokensAboveModelLimit(t *testing.T)
 			defer upstreamServer.Close()
 
 			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
-				Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-				OpenAIKey:             TestAPIKey,
-				DashScopeKey:          "sk-dashscope",
 				DashScopeBaseURL:      upstreamServer.URL,
 				LogLevel:              proxy.LogLevelInfo,
 				WorkerCount:           1,
@@ -720,9 +683,6 @@ func TestProviderRoutingRejectsCurrentMiniMaxMaxTokensAboveModelLimit(t *testing
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		MiniMaxKey:            "sk-minimax",
 		MiniMaxBaseURL:        upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -796,9 +756,6 @@ func TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints(t *testin
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		MetaKey:               testMetaKey,
 		MetaBaseURL:           upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -925,10 +882,7 @@ func TestProviderRoutingUsesConfiguredTextModelCatalog(t *testing.T) {
 		configuredNativeModel   = "deepseek-native-route"
 	)
 
-	baseConfiguration, configurationError := newConfigurationWithCatalogs(t, proxy.Configuration{
-		Tenants:   proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey: TestAPIKey,
-	})
+	baseConfiguration, configurationError := newConfigurationWithCatalogs(t, proxy.Configuration{})
 	if configurationError != nil {
 		t.Fatalf("NewConfiguration error: %v", configurationError)
 	}
@@ -964,9 +918,6 @@ func TestProviderRoutingUsesConfiguredTextModelCatalog(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		DeepSeekKey:           testDeepSeekKey,
 		DeepSeekBaseURL:       upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -1020,16 +971,16 @@ func TestProviderRoutingAppliesModelSpecificReasoningEffortCapability(t *testing
 	defaults := proxy.DefaultTenantDefaults()
 	defaults.Model = proxy.ModelNameGPT5
 	defaults.ReasoningEffort = "high"
-	router, buildError := proxy.BuildRouter(proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, defaults),
-		OpenAIKey:             TestAPIKey,
+	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
+	tenantConfiguration.Defaults = defaults
+	router, buildError := buildRouterWithManagedTenant(t, proxy.Configuration{
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
 		RequestTimeoutSeconds: TestTimeout,
 		Endpoints:             endpoints,
 		ModelCatalog:          catalogs,
-	}, zap.NewNop().Sugar())
+	}, zap.NewNop().Sugar(), tenantConfiguration)
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
 	}
@@ -1049,9 +1000,7 @@ func TestProviderRoutingRejectsModelReasoningEffortCapabilityOnUnsupportedRoute(
 	catalogs := testfixtures.ModelCatalog(t)
 	catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, proxy.ModelNameGPT4oMini)].ReasoningEffort = openAIResponsesReasoningEffortCapability()
 
-	_, configurationError := proxy.NewConfiguration(proxy.Configuration{
-		Tenants:      proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:    TestAPIKey,
+	_, configurationError := newConfigurationWithCatalogs(t, proxy.Configuration{
 		ModelCatalog: catalogs,
 	})
 	if configurationError == nil || !strings.Contains(configurationError.Error(), "invalid_model_catalog") || !strings.Contains(configurationError.Error(), "adapter=openai_responses") {
@@ -1136,9 +1085,7 @@ func TestProviderRoutingRejectsInvalidReasoningEffortCatalogCapabilities(t *test
 		t.Run(testCase.name, func(subTest *testing.T) {
 			catalogs := testfixtures.ModelCatalog(subTest)
 			testCase.configure(catalogs)
-			_, configurationError := proxy.NewConfiguration(proxy.Configuration{
-				Tenants:      proxy.SingleTenantConfigurations("test", TestSecret),
-				OpenAIKey:    TestAPIKey,
+			_, configurationError := newConfigurationWithCatalogs(subTest, proxy.Configuration{
 				ModelCatalog: catalogs,
 			})
 			if configurationError == nil || !strings.Contains(configurationError.Error(), "invalid_model_catalog") {
@@ -1148,24 +1095,8 @@ func TestProviderRoutingRejectsInvalidReasoningEffortCatalogCapabilities(t *test
 	}
 }
 
-func TestProviderRoutingRejectsUnsupportedStaticTenantReasoningEffort(t *testing.T) {
-	defaults := proxy.DefaultTenantDefaults()
-	defaults.ReasoningEffort = "unsupported_effort"
-	_, configurationError := proxy.NewConfiguration(proxy.Configuration{
-		Tenants:      proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, defaults),
-		OpenAIKey:    TestAPIKey,
-		ModelCatalog: testfixtures.ModelCatalog(t),
-	})
-	if configurationError == nil || !strings.Contains(configurationError.Error(), "unsupported provider capability") {
-		t.Fatalf("configuration error=%v want unsupported tenant reasoning effort", configurationError)
-	}
-}
-
 func TestProviderRoutingRejectsMissingConfiguredProviderCatalog(t *testing.T) {
-	baseConfiguration, configurationError := newConfigurationWithCatalogs(t, proxy.Configuration{
-		Tenants:   proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey: TestAPIKey,
-	})
+	baseConfiguration, configurationError := newConfigurationWithCatalogs(t, proxy.Configuration{})
 	if configurationError != nil {
 		t.Fatalf("NewConfiguration error: %v", configurationError)
 	}
@@ -1178,8 +1109,6 @@ func TestProviderRoutingRejectsMissingConfiguredProviderCatalog(t *testing.T) {
 	}
 
 	_, configurationError = newConfigurationWithCatalogs(t, proxy.Configuration{
-		Tenants:      proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:    TestAPIKey,
 		ModelCatalog: configuredCatalogs,
 	})
 	if configurationError == nil || !strings.Contains(configurationError.Error(), "field=catalog.providers provider=deepseek reason=missing") {
@@ -1204,9 +1133,6 @@ func TestProviderRoutingTranslatesMaxTokensForOpenAICompatibleChat(t *testing.T)
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		DeepSeekKey:           testDeepSeekKey,
 		DeepSeekBaseURL:       upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -1251,22 +1177,15 @@ func TestProviderRoutingSupportsMessagesJSONPostForOpenAICompatibleChat(t *testi
 	}))
 	defer upstreamServer.Close()
 
-	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants: proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{
-			Provider:          proxy.ProviderNameOpenAI,
-			Model:             proxy.DefaultModel,
-			DictationProvider: proxy.ProviderNameOpenAI,
-			DictationModel:    proxy.DefaultDictationModel,
-			SystemPrompt:      "Tenant system.",
-		}),
-		OpenAIKey:             TestAPIKey,
-		DeepSeekKey:           testDeepSeekKey,
+	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
+	tenantConfiguration.ProviderSystemPrompts = map[string]string{proxy.ProviderNameDeepSeek: "Tenant system."}
+	router, buildError := buildRouterWithManagedTenant(t, proxy.Configuration{
 		DeepSeekBaseURL:       upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
 		RequestTimeoutSeconds: TestTimeout,
-	}, zap.NewNop().Sugar())
+	}, zap.NewNop().Sugar(), tenantConfiguration)
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
 	}
@@ -1343,9 +1262,6 @@ func TestProviderRoutingSurfacesChatCompletionTokenUsage(t *testing.T) {
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		DeepSeekKey:           testDeepSeekKey,
 		DeepSeekBaseURL:       upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -1426,9 +1342,6 @@ func TestProviderRoutingSupportsGeminiInteractionsWithBackgroundPolling(t *testi
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		GeminiKey:             testGeminiKey,
 		GeminiBaseURL:         upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -1527,9 +1440,6 @@ func TestProviderRoutingIncreasesKnownGeminiBudgetAfterEmptyMaxTokensResponse(t 
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		GeminiKey:             testGeminiKey,
 		GeminiBaseURL:         upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -1590,9 +1500,6 @@ func TestProviderRoutingUsesGeminiDefaultModelForJSONPosts(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		GeminiKey:             testGeminiKey,
 		GeminiBaseURL:         upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -1691,40 +1598,27 @@ func TestProviderRoutingSelectsDefaultsByTenantSecret(t *testing.T) {
 
 	endpoints := proxy.NewEndpoints()
 	endpoints.SetResponsesURL(openAIServer.URL)
-	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants: []proxy.TenantConfiguration{
-			{
-				ID:     "openai",
-				Secret: openAITenantSecret,
-				Defaults: proxy.TenantDefaults{
-					Provider:          proxy.ProviderNameOpenAI,
-					Model:             proxy.ModelNameGPT41,
-					DictationProvider: proxy.ProviderNameOpenAI,
-					DictationModel:    proxy.DefaultDictationModel,
-					SystemPrompt:      "openai tenant system",
-				},
-			},
-			{
-				ID:     "gemini",
-				Secret: geminiTenantSecret,
-				Defaults: proxy.TenantDefaults{
-					Provider:          proxy.ProviderNameGemini,
-					Model:             proxy.ModelNameGemini35Flash,
-					DictationProvider: proxy.ProviderNameOpenAI,
-					DictationModel:    proxy.DefaultDictationModel,
-					SystemPrompt:      "gemini tenant system",
-				},
-			},
-		},
-		OpenAIKey:             TestAPIKey,
-		GeminiKey:             testGeminiKey,
+	openAITenant := proxy.StandardManagedTenantTestConfiguration(openAITenantSecret)
+	openAITenant.ID = "openai"
+	openAITenant.Defaults.SystemPrompt = "openai tenant system"
+	geminiTenant := proxy.StandardManagedTenantTestConfiguration(geminiTenantSecret)
+	geminiTenant.ID = "gemini"
+	geminiTenant.Defaults = proxy.TenantDefaults{
+		Provider:          proxy.ProviderNameGemini,
+		Model:             proxy.ModelNameGemini35Flash,
+		DictationProvider: proxy.ProviderNameOpenAI,
+		DictationModel:    proxy.DefaultDictationModel,
+		SystemPrompt:      "gemini tenant system",
+	}
+	geminiTenant.ProviderSystemPrompts = map[string]string{proxy.ProviderNameOpenAI: "gemini tenant openai system"}
+	router, buildError := proxy.BuildRouterWithManagedTenantsForTest(t, withModelCatalog(t, proxy.Configuration{
 		GeminiBaseURL:         geminiServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             3,
 		RequestTimeoutSeconds: TestTimeout,
 		Endpoints:             endpoints,
-	}, zap.NewNop().Sugar())
+	}), zap.NewNop().Sugar(), []proxy.ManagedTenantTestConfiguration{openAITenant, geminiTenant})
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
 	}
@@ -1776,7 +1670,7 @@ func TestProviderRoutingSelectsDefaultsByTenantSecret(t *testing.T) {
 	if openAIInputs[0] != "openai tenant system\n\nhello openai default" {
 		t.Fatalf("openAI default input=%q", openAIInputs[0])
 	}
-	if openAIInputs[1] != "gemini tenant system\n\nhello override" {
+	if openAIInputs[1] != "gemini tenant openai system\n\nhello override" {
 		t.Fatalf("override input=%q", openAIInputs[1])
 	}
 }
@@ -1804,9 +1698,6 @@ func TestProviderRoutingSupportsGeminiJSONPost(t *testing.T) {
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		GeminiKey:             testGeminiKey,
 		GeminiBaseURL:         upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -1864,9 +1755,6 @@ func TestProviderRoutingSupportsMessagesJSONPostForGemini(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		GeminiKey:             testGeminiKey,
 		GeminiBaseURL:         upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -1932,9 +1820,6 @@ func TestProviderRoutingSupportsAnthropicMessages(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		AnthropicKey:          testAnthropicKey,
 		AnthropicBaseURL:      upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -2029,9 +1914,6 @@ func TestProviderRoutingAnthropicDefaultMaxTokensByModel(t *testing.T) {
 			defer upstreamServer.Close()
 
 			router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-				Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-				OpenAIKey:             TestAPIKey,
-				AnthropicKey:          testAnthropicKey,
 				AnthropicBaseURL:      upstreamServer.URL,
 				LogLevel:              proxy.LogLevelInfo,
 				WorkerCount:           1,
@@ -2078,9 +1960,6 @@ func TestProviderRoutingTranslatesMaxTokensForAnthropicMessages(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		AnthropicKey:          testAnthropicKey,
 		AnthropicBaseURL:      upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -2128,9 +2007,6 @@ func TestProviderRoutingSupportsGrokChatCompletions(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		XAIKey:                testXAIKey,
 		XAIBaseURL:            upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -2171,9 +2047,6 @@ func TestProviderRoutingRejectsGeminiJSONPostMaxTokensAboveModelLimit(t *testing
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		GeminiKey:             testGeminiKey,
 		GeminiBaseURL:         upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -2207,9 +2080,6 @@ func TestProviderRoutingRejectsGeminiQueryMaxTokensAboveModelLimit(t *testing.T)
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		GeminiKey:             testGeminiKey,
 		GeminiBaseURL:         upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -2246,9 +2116,6 @@ func TestProviderRoutingRejectsAnthropicMaxTokensAboveModelLimit(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		AnthropicKey:          testAnthropicKey,
 		AnthropicBaseURL:      upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -2281,9 +2148,6 @@ func TestProviderRoutingRejectsAnthropicMaxTokensAboveModelLimit(t *testing.T) {
 func TestProviderRoutingRejectsGeminiUnsupportedAndInvalidRequests(t *testing.T) {
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		GeminiKey:             testGeminiKey,
 		GeminiBaseURL:         "https://gemini.invalid",
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -2336,11 +2200,6 @@ func TestProviderRoutingRejectsGeminiUnsupportedAndInvalidRequests(t *testing.T)
 
 func TestProviderRoutingRejectsAnthropicMetaAndGrokUnsupportedCapabilities(t *testing.T) {
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		AnthropicKey:          testAnthropicKey,
-		MetaKey:               testMetaKey,
-		XAIKey:                testXAIKey,
 		AnthropicBaseURL:      "https://anthropic.invalid",
 		MetaBaseURL:           "https://meta.invalid",
 		XAIBaseURL:            "https://xai.invalid",
@@ -2396,15 +2255,15 @@ func TestProviderRoutingRejectsAnthropicMetaAndGrokUnsupportedCapabilities(t *te
 
 func TestProviderRoutingRejectsGeminiMissingCredential(t *testing.T) {
 	logger := zap.NewNop()
-	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
+	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
+	delete(tenantConfiguration.ProviderKeys, proxy.ProviderNameGemini)
+	router, buildError := buildRouterWithManagedTenant(t, proxy.Configuration{
 		GeminiBaseURL:         "https://gemini.invalid",
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
 		RequestTimeoutSeconds: TestTimeout,
-	}, logger.Sugar())
+	}, logger.Sugar(), tenantConfiguration)
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
 	}
@@ -2423,9 +2282,11 @@ func TestProviderRoutingRejectsGeminiMissingCredential(t *testing.T) {
 }
 
 func TestProviderRoutingRejectsAnthropicMetaAndGrokMissingCredentials(t *testing.T) {
-	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
+	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
+	delete(tenantConfiguration.ProviderKeys, proxy.ProviderNameAnthropic)
+	delete(tenantConfiguration.ProviderKeys, proxy.ProviderNameMeta)
+	delete(tenantConfiguration.ProviderKeys, proxy.ProviderNameXAI)
+	router, buildError := buildRouterWithManagedTenant(t, proxy.Configuration{
 		AnthropicBaseURL:      "https://anthropic.invalid",
 		MetaBaseURL:           "https://meta.invalid",
 		XAIBaseURL:            "https://xai.invalid",
@@ -2433,7 +2294,7 @@ func TestProviderRoutingRejectsAnthropicMetaAndGrokMissingCredentials(t *testing
 		WorkerCount:           1,
 		QueueSize:             1,
 		RequestTimeoutSeconds: TestTimeout,
-	}, zap.NewNop().Sugar())
+	}, zap.NewNop().Sugar(), tenantConfiguration)
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
 	}
@@ -2456,60 +2317,6 @@ func TestProviderRoutingRejectsAnthropicMetaAndGrokMissingCredentials(t *testing
 
 			if responseRecorder.Code != http.StatusServiceUnavailable {
 				subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusServiceUnavailable, responseRecorder.Body.String())
-			}
-		})
-	}
-}
-
-func TestProviderRoutingRejectsMissingGeminiDefaultCredential(t *testing.T) {
-	logger := zap.NewNop()
-	_, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameGemini, Model: proxy.ModelNameGemini35Flash, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel}),
-		OpenAIKey:             TestAPIKey,
-		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
-		RequestTimeoutSeconds: TestTimeout,
-	}, logger.Sugar())
-	if buildError == nil || !strings.Contains(buildError.Error(), "provider not configured: provider=gemini") {
-		t.Fatalf("error=%v want Gemini provider not configured", buildError)
-	}
-}
-
-func TestProviderRoutingRejectsMissingAnthropicMetaAndGrokDefaultCredentials(t *testing.T) {
-	testCases := []struct {
-		name          string
-		defaults      proxy.TenantDefaults
-		expectedError string
-	}{
-		{
-			name:          "anthropic",
-			defaults:      proxy.TenantDefaults{Provider: proxy.ProviderNameAnthropic, Model: proxy.ModelNameClaudeSonnet46, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel},
-			expectedError: "provider not configured: provider=anthropic",
-		},
-		{
-			name:          "meta",
-			defaults:      proxy.TenantDefaults{Provider: proxy.ProviderNameMeta, Model: proxy.ModelNameMuseSpark11, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel},
-			expectedError: "provider not configured: provider=meta",
-		},
-		{
-			name:          "xai",
-			defaults:      proxy.TenantDefaults{Provider: proxy.ProviderNameXAI, Model: proxy.ModelNameGrok43, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel},
-			expectedError: "provider not configured: provider=xai",
-		},
-	}
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(subTest *testing.T) {
-			_, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, testCase.defaults),
-				OpenAIKey:             TestAPIKey,
-				LogLevel:              proxy.LogLevelInfo,
-				WorkerCount:           1,
-				QueueSize:             1,
-				RequestTimeoutSeconds: TestTimeout,
-			}, zap.NewNop().Sugar())
-			if buildError == nil || !strings.Contains(buildError.Error(), testCase.expectedError) {
-				subTest.Fatalf("error=%v want %q", buildError, testCase.expectedError)
 			}
 		})
 	}
@@ -2550,9 +2357,6 @@ func TestProviderRoutingMapsGeminiProviderErrors(t *testing.T) {
 
 			logger := zap.NewNop()
 			router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-				Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-				OpenAIKey:             TestAPIKey,
-				GeminiKey:             testGeminiKey,
 				GeminiBaseURL:         upstreamServer.URL,
 				LogLevel:              proxy.LogLevelInfo,
 				WorkerCount:           1,
@@ -2579,9 +2383,6 @@ func TestProviderRoutingMapsGeminiTransportErrors(t *testing.T) {
 	t.Run("invalid request URL", func(subTest *testing.T) {
 		logger := zap.NewNop()
 		router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:             TestAPIKey,
-			GeminiKey:             testGeminiKey,
 			GeminiBaseURL:         "http://[::1",
 			LogLevel:              proxy.LogLevelInfo,
 			WorkerCount:           1,
@@ -2609,9 +2410,6 @@ func TestProviderRoutingMapsGeminiTransportErrors(t *testing.T) {
 
 		logger := zap.NewNop()
 		router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:             TestAPIKey,
-			GeminiKey:             testGeminiKey,
 			GeminiBaseURL:         "https://gemini.invalid",
 			LogLevel:              proxy.LogLevelInfo,
 			WorkerCount:           1,
@@ -2659,9 +2457,6 @@ func TestProviderRoutingMapsAnthropicProviderErrors(t *testing.T) {
 			defer upstreamServer.Close()
 
 			router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-				Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-				OpenAIKey:             TestAPIKey,
-				AnthropicKey:          testAnthropicKey,
 				AnthropicBaseURL:      upstreamServer.URL,
 				LogLevel:              proxy.LogLevelInfo,
 				WorkerCount:           1,
@@ -2687,9 +2482,6 @@ func TestProviderRoutingMapsAnthropicProviderErrors(t *testing.T) {
 func TestProviderRoutingMapsAnthropicTransportErrors(t *testing.T) {
 	t.Run("invalid request URL", func(subTest *testing.T) {
 		router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:             TestAPIKey,
-			AnthropicKey:          testAnthropicKey,
 			AnthropicBaseURL:      "http://[::1",
 			LogLevel:              proxy.LogLevelInfo,
 			WorkerCount:           1,
@@ -2716,9 +2508,6 @@ func TestProviderRoutingMapsAnthropicTransportErrors(t *testing.T) {
 		subTest.Cleanup(func() { proxy.HTTPClient = originalHTTPClient })
 
 		router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:             TestAPIKey,
-			AnthropicKey:          testAnthropicKey,
 			AnthropicBaseURL:      "https://anthropic.invalid",
 			LogLevel:              proxy.LogLevelInfo,
 			WorkerCount:           1,
@@ -2743,9 +2532,6 @@ func TestProviderRoutingMapsAnthropicTransportErrors(t *testing.T) {
 func TestProviderRoutingRejectsUnsupportedWebSearch(t *testing.T) {
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
-		DeepSeekKey:           testDeepSeekKey,
 		DeepSeekBaseURL:       "https://deepseek.invalid",
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -2768,15 +2554,15 @@ func TestProviderRoutingRejectsUnsupportedWebSearch(t *testing.T) {
 
 func TestProviderRoutingRejectsMissingProviderCredential(t *testing.T) {
 	logger := zap.NewNop()
-	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
+	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
+	delete(tenantConfiguration.ProviderKeys, proxy.ProviderNameDeepSeek)
+	router, buildError := buildRouterWithManagedTenant(t, proxy.Configuration{
 		DeepSeekBaseURL:       "https://deepseek.invalid",
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
 		RequestTimeoutSeconds: TestTimeout,
-	}, logger.Sugar())
+	}, logger.Sugar(), tenantConfiguration)
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
 	}
@@ -2791,112 +2577,6 @@ func TestProviderRoutingRejectsMissingProviderCredential(t *testing.T) {
 	}
 	if !strings.Contains(responseRecorder.Body.String(), "provider not configured: provider=deepseek endpoint=text") {
 		t.Fatalf("body=%q want provider not configured detail", responseRecorder.Body.String())
-	}
-}
-
-func TestProviderRoutingRejectsInvalidDefaultDictationProvider(t *testing.T) {
-	testCases := []struct {
-		name          string
-		configuration proxy.Configuration
-		expectedError string
-	}{
-		{
-			name: "missing_siliconflow_credential",
-			configuration: proxy.Configuration{
-				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameSiliconFlow}),
-				OpenAIKey:             TestAPIKey,
-				LogLevel:              proxy.LogLevelInfo,
-				WorkerCount:           1,
-				QueueSize:             1,
-				RequestTimeoutSeconds: TestTimeout,
-			},
-			expectedError: "provider not configured: provider=siliconflow endpoint=dictation",
-		},
-		{
-			name: "unsupported_deepseek_dictation",
-			configuration: proxy.Configuration{
-				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameDeepSeek}),
-				OpenAIKey:             TestAPIKey,
-				DeepSeekKey:           testDeepSeekKey,
-				LogLevel:              proxy.LogLevelInfo,
-				WorkerCount:           1,
-				QueueSize:             1,
-				RequestTimeoutSeconds: TestTimeout,
-			},
-			expectedError: "unsupported provider endpoint: provider=deepseek endpoint=dictation",
-		},
-		{
-			name: "unsupported_gemini_dictation",
-			configuration: proxy.Configuration{
-				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameGemini}),
-				OpenAIKey:             TestAPIKey,
-				GeminiKey:             testGeminiKey,
-				LogLevel:              proxy.LogLevelInfo,
-				WorkerCount:           1,
-				QueueSize:             1,
-				RequestTimeoutSeconds: TestTimeout,
-			},
-			expectedError: "unsupported provider endpoint: provider=gemini endpoint=dictation",
-		},
-		{
-			name: "unsupported_anthropic_dictation",
-			configuration: proxy.Configuration{
-				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameAnthropic}),
-				OpenAIKey:             TestAPIKey,
-				AnthropicKey:          testAnthropicKey,
-				LogLevel:              proxy.LogLevelInfo,
-				WorkerCount:           1,
-				QueueSize:             1,
-				RequestTimeoutSeconds: TestTimeout,
-			},
-			expectedError: "unsupported provider endpoint: provider=anthropic endpoint=dictation",
-		},
-		{
-			name: "unsupported_meta_dictation",
-			configuration: proxy.Configuration{
-				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameMeta}),
-				OpenAIKey:             TestAPIKey,
-				MetaKey:               testMetaKey,
-				LogLevel:              proxy.LogLevelInfo,
-				WorkerCount:           1,
-				QueueSize:             1,
-				RequestTimeoutSeconds: TestTimeout,
-			},
-			expectedError: "unsupported provider endpoint: provider=meta endpoint=dictation",
-		},
-		{
-			name: "missing_zai_credential",
-			configuration: proxy.Configuration{
-				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameZAI}),
-				OpenAIKey:             TestAPIKey,
-				LogLevel:              proxy.LogLevelInfo,
-				WorkerCount:           1,
-				QueueSize:             1,
-				RequestTimeoutSeconds: TestTimeout,
-			},
-			expectedError: "provider not configured: provider=zai endpoint=dictation",
-		},
-		{
-			name: "missing_grok_credential",
-			configuration: proxy.Configuration{
-				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameXAI}),
-				OpenAIKey:             TestAPIKey,
-				LogLevel:              proxy.LogLevelInfo,
-				WorkerCount:           1,
-				QueueSize:             1,
-				RequestTimeoutSeconds: TestTimeout,
-			},
-			expectedError: "provider not configured: provider=xai endpoint=dictation",
-		},
-	}
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(subTest *testing.T) {
-			logger := zap.NewNop()
-			_, buildError := buildRouterWithCatalogs(t, testCase.configuration, logger.Sugar())
-			if buildError == nil || !strings.Contains(buildError.Error(), testCase.expectedError) {
-				subTest.Fatalf("error=%v want contains %q", buildError, testCase.expectedError)
-			}
-		})
 	}
 }
 
@@ -2919,8 +2599,6 @@ func TestProviderRoutingRejectsClientSuppliedMetaCredential(t *testing.T) {
 func TestProviderRoutingRejectsConflictingJSONModelParameters(t *testing.T) {
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -2966,9 +2644,6 @@ func TestProviderRoutingSupportsSiliconFlowDictation(t *testing.T) {
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                      proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                    TestAPIKey,
-		SiliconFlowKey:               testSiliconFlowKey,
 		SiliconFlowTranscriptionsURL: upstreamServer.URL,
 		LogLevel:                     proxy.LogLevelInfo,
 		WorkerCount:                  1,
@@ -3025,9 +2700,6 @@ func TestProviderRoutingSupportsZAIAndGrokDictation(t *testing.T) {
 			expectedResponse: "zai dictation ok",
 			configuration: func(transcriptionsURL string) proxy.Configuration {
 				return proxy.Configuration{
-					Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-					OpenAIKey:             TestAPIKey,
-					ZAIKey:                testZAIKey,
 					ZAITranscriptionsURL:  transcriptionsURL,
 					LogLevel:              proxy.LogLevelInfo,
 					WorkerCount:           1,
@@ -3046,9 +2718,6 @@ func TestProviderRoutingSupportsZAIAndGrokDictation(t *testing.T) {
 			expectedResponse: "xai dictation ok",
 			configuration: func(transcriptionsURL string) proxy.Configuration {
 				return proxy.Configuration{
-					Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-					OpenAIKey:             TestAPIKey,
-					XAIKey:                testXAIKey,
 					XAITranscriptionsURL:  transcriptionsURL,
 					LogLevel:              proxy.LogLevelInfo,
 					WorkerCount:           1,

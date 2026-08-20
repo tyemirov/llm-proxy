@@ -19,7 +19,7 @@ import (
 )
 
 // chatRequestPayload is the JSON contract for POST / LLM requests.
-// Client authentication stays outside this body on the key query parameter; provider credentials are loaded from server configuration.
+// Client authentication stays outside this body on the key query parameter; provider credentials are loaded from tenant-managed settings.
 type chatRequestPayload struct {
 	Prompt          string                      `json:"prompt"`
 	Messages        *[]chatMessagePayload       `json:"messages"`
@@ -77,7 +77,7 @@ type dictationRequestParameters struct {
 	audioReader io.Reader
 }
 
-// BuildRouter constructs the HTTP router used by the proxy. configuration supplies queue sizes, worker counts, timeout values, API credentials and other settings. structuredLogger records structured log messages during routing.
+// BuildRouter constructs the HTTP router used by the proxy. configuration supplies management, routing, queue, worker, and timeout settings. structuredLogger records structured log messages during routing.
 func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogger) (*gin.Engine, error) {
 	return buildRouter(configuration, structuredLogger, newManagedTenantStore)
 }
@@ -119,17 +119,11 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	anthropicClient := newAnthropicMessagesClient(upstreamHTTPClient)
 	upstreamProviders := newProviderRouter(openAIClient, chatClient, geminiClient, anthropicClient)
 	keyVerifier := newOperationalProviderKeyVerifier(upstreamHTTPClient, configuration.Endpoints, time.Duration(configuration.RequestTimeoutSeconds)*time.Second)
-	var managedTenants *managedTenantStore
-	runtimeStaticTenants := configuration.tenants
-	if configuration.Management.Enabled {
-		var storeError error
-		managedTenants, storeError = openManagedTenantStore(configuration.Management, providers)
-		if storeError != nil {
-			return nil, storeError
-		}
-		runtimeStaticTenants = tenantRegistry{}
+	managedTenants, storeError := openManagedTenantStore(configuration.Management, providers)
+	if storeError != nil {
+		return nil, storeError
 	}
-	tenantAuthenticator := newTenantAuthenticator(runtimeStaticTenants, managedTenants)
+	tenantAuthenticator := newTenantAuthenticator(managedTenants)
 	assetStore := newTenantAssetStore(configuration.AssetStorePath, configuration.MaxAssetBytes, configuration.AssetRetentionSeconds)
 	structuredRequests, structuredStoreError := newStructuredRequestStore(configuration.AssetStorePath, configuration.AssetRetentionSeconds)
 	if structuredStoreError != nil {
@@ -143,10 +137,8 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 		structuredLogger,
 		requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, chatHandler(upstreamProviders, providers, managedTenants, structuredLogger)),
 	)
-	if configuration.Management.Enabled {
-		managementService := newManagementService(configuration.Management, configuration.managementSessionValidator, managedTenants, providers, keyVerifier, tenantAuthenticator, structuredLogger)
-		managementService.registerRoutes(router)
-	}
+	managementService := newManagementService(configuration.Management, configuration.managementSessionValidator, managedTenants, providers, keyVerifier, structuredLogger)
+	managementService.registerRoutes(router)
 	router.GET(rootPath, rootProxyHandler)
 	router.POST(rootPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, chatJSONHandler(upstreamProviders, providers, configuration.MaxPromptBytes, managedTenants, structuredLogger))))
 	router.POST(v2Path, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, chatV2JSONHandler(upstreamProviders, providers, maximumV2RequestBytes(configuration.MaxPromptBytes, configuration.ModelCatalog), assetStore, structuredRequests, managedTenants, structuredLogger))))
@@ -301,9 +293,6 @@ func textRequestDefaultsForProvider(rawProvider string, requestTenant tenant, pr
 		return defaults
 	}
 	defaults.model = catalogDefaultModel.string()
-	if !requestTenant.managed {
-		return defaults
-	}
 	settings, hasSettings := requestTenant.providerSettings[providerDefinition.identifier]
 	if !hasSettings {
 		return defaults
@@ -740,9 +729,6 @@ func bindRequestTelemetryRoute(ginContext *gin.Context, providerIdentifier strin
 }
 
 func recordManagedUsage(managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger, ginContext *gin.Context, requestTenant tenant, endpoint string, providerIdentifier string, modelIdentifier string, statusCode int, usage *tokenUsage, requestStart time.Time) {
-	if managedTenants == nil || !requestTenant.managed {
-		return
-	}
 	formattingStartedAt := time.Now()
 	ginContext.Writer.Flush()
 	addRequestTelemetryPhase(ginContext.Request.Context(), requestTelemetryPhaseResponseFormatting, formattingStartedAt)

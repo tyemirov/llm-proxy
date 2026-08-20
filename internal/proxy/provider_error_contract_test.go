@@ -77,7 +77,6 @@ func TestProviderErrorContractSanitizesEveryTextTransport(t *testing.T) {
 			wantRetryable:      true,
 			wantRetryAfter:     stringPointer("120"),
 			configure: func(configuration *proxy.Configuration, baseURL string) {
-				configuration.AnthropicKey = testAnthropicKey
 				configuration.AnthropicBaseURL = baseURL
 			},
 		},
@@ -91,7 +90,6 @@ func TestProviderErrorContractSanitizesEveryTextTransport(t *testing.T) {
 			wantRetryable:      true,
 			wantRetryAfter:     &retryAfterDate,
 			configure: func(configuration *proxy.Configuration, baseURL string) {
-				configuration.GeminiKey = testGeminiKey
 				configuration.GeminiBaseURL = baseURL
 			},
 		},
@@ -106,7 +104,6 @@ func TestProviderErrorContractSanitizesEveryTextTransport(t *testing.T) {
 			wantRetryAfter:     stringPointer("11"),
 			truncateBody:       true,
 			configure: func(configuration *proxy.Configuration, baseURL string) {
-				configuration.MetaKey = testMetaKey
 				configuration.MetaBaseURL = baseURL
 			},
 		},
@@ -120,7 +117,6 @@ func TestProviderErrorContractSanitizesEveryTextTransport(t *testing.T) {
 			wantRetryable:      true,
 			wantRetryAfter:     stringPointer("7"),
 			configure: func(configuration *proxy.Configuration, baseURL string) {
-				configuration.MoonshotKey = "sk-moonshot"
 				configuration.MoonshotBaseURL = baseURL
 			},
 		},
@@ -178,7 +174,6 @@ func TestProviderErrorContractRepresentsProtocolFailureWithoutInventingUpstreamS
 	t.Cleanup(upstreamServer.Close)
 
 	configuration := providerErrorTestConfiguration()
-	configuration.AnthropicKey = testAnthropicKey
 	configuration.AnthropicBaseURL = upstreamServer.URL
 	router, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
 	if buildError != nil {
@@ -331,8 +326,6 @@ func TestProviderErrorContractLogsOnlySafeCorrelationMetadata(t *testing.T) {
 
 func providerErrorTestConfiguration() proxy.Configuration {
 	return proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:             TestAPIKey,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
