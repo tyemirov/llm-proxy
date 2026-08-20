@@ -563,6 +563,8 @@ retain satisfied historical dependencies.
   - The compiled lifecycle test rejects a `schema_version` field.
   - Current operator documents describe the permanent versionless contract.
   - The final repository validation passed.
+  - Gateway commit `753c727` planned release for application commit
+    `490acd7` with 218 tasks passed, 4 changed, and 0 failed.
 
 - [x] [I229] (P0) Add schema-constrained, resumable semantic-review requests.
   Goal:
