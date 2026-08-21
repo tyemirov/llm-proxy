@@ -54,28 +54,27 @@ retain satisfied historical dependencies.
   - Hosted run `32450200399` passed all 11 gates. The canonical gate used 350
     seconds, and the complete job used 6 minutes and 46 seconds.
 
-- [x] [B146] (P0) Use the current lifecycle manifest schema.
+- [x] [B147] (P0) Restore the permanent selected application manifest.
   Goal:
   The release command accepts the selected application manifest.
-  Expected result:
-  - The gateway accepts the manifest with schema version 5.
-  Actual result:
-  - The gateway rejects schema version 4 before the release operation starts.
+  Evidence:
+  - Expected: The manifest contains only `owner`, `release`, and `resources`.
+  - Actual: Commit `f349171` added `schema_version` on the `owner` line.
+  - Actual: Commit `97215af` made the public lifecycle test invalid Go code.
   Requirements:
-  - Set the selected application manifest to schema version 5.
-  - Keep all nonmobile resource shapes unchanged.
-  - Update the compiled lifecycle contract test for schema version 5.
+  - Restore the permanent manifest contract from I230.
+  - Keep all resource shapes unchanged.
+  - Restore the public lifecycle contract test for the permanent manifest.
   Validation:
   - Run the focused lifecycle contract test.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  - Run `make ci` after the last change.
   Resolution:
-  - Migrated the selected manifest to schema version 5.
-  - Kept each nonmobile resource shape unchanged.
-  - Updated the compiled lifecycle contract test for schema version 5.
-  - The focused lifecycle test passed.
-  - The baseline and final CI runs passed all 11 gates with 100 percent Go
-    statement coverage.
+  - Restored the permanent manifest without `schema_version`.
+  - Kept all resource shapes unchanged.
+  - Restored the public lifecycle contract test and its exact root-key check.
+  - The initial CI run stopped during Go static analysis on the invalid test.
+  - `make go-test` passed with 100.0 percent Go statement coverage.
+  - The final `make ci` passed all 11 gates in 138 seconds.
   - Did not run release, publication, or deployment.
 - [x] [B145] (P1) Keep failed request usage on one model route.
   Goal:

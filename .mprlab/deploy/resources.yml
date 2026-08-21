@@ -1,6 +1,6 @@
 ---
 mprlab_resources:
-  schema_version: 5  owner: llm-proxy
+  owner: llm-proxy
   release:
     scheme: semver
   resources:
