@@ -544,6 +544,31 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [x] [I230] (P0) Use the permanent versionless selected application manifest.
+  Goal:
+  The selected application manifest uses one permanent contract without a
+  schema number.
+  Requirements:
+  - Remove `schema_version` from `.mprlab/deploy/resources.yml`.
+  - Require only `owner`, `release`, and `resources` at the manifest root.
+  - Reject each numbered selected application manifest form.
+  - Keep independent schema contracts unchanged.
+  - Keep local orchestration separate from the production manifest.
+  Validation:
+  - Run `make ci` after the last repository change.
+  - Run the gateway `plan-app-release` target against the committed branch.
+
+  Resolution:
+  - The selected application manifest now has no schema number.
+  - The compiled lifecycle test rejects a `schema_version` field.
+  - Current operator documents describe the permanent versionless contract.
+  - The final repository validation passed.
+  - Hosted GitHub `Test` attempt 1 ended with exit 137 when the workflow's
+    outer 350-second timeout stopped gate 10 after gates 1 through 9 passed.
+    Attempt 2 completed successfully at `2026-08-20T23:19:58Z`.
+  - Gateway commit `753c727` planned release for application commit
+    `490acd7` with 218 tasks passed, 4 changed, and 0 failed.
+
 - [x] [I229] (P0) Add schema-constrained, resumable semantic-review requests.
   Goal:
   Let Creative Director submit one semantic-review inference with a declared

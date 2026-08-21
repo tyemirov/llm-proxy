@@ -603,7 +603,7 @@ references, route pairs, defaults, and capabilities. Obsolete
 unknown configuration keys. Managed tenants own client keys, provider
 credentials, and routing defaults in the database.
 
-The repository owns the schema-v4 production declaration in
+The repository owns the permanent versionless production declaration in
 `.mprlab/deploy/resources.yml`. The repository also owns the standard
 `make release`, `make publish`, and `make deploy` entrypoints. These targets use
 the exact `../mprlab-gateway` sibling. The gateway owns SemVer selection, schema
