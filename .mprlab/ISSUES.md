@@ -25,6 +25,80 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B150] (P2) Record terminal visibility errors as failures.
+  Goal:
+  OpenAI poll progress events agree with terminal provider failure summaries.
+  Evidence:
+  - Expected: Only a visibility error that starts reconciliation records
+    `pending`.
+  - Actual: Reconciliation and later poll `403` or `404` errors also record
+    `pending`.
+  Requirements:
+  - Make the shared lifecycle identify only the visibility error that starts
+    reconciliation.
+  - Record all terminal OpenAI visibility errors as `failure`.
+  - Keep the B149 observation and provider error contracts.
+  Validation:
+  - Make sure that a repeated visibility error records `pending` and then
+    `failure` through the public request route.
+  - Run `make ci` after the last application change.
+  Resolution:
+  - The shared lifecycle now identifies the first visibility error that starts
+    reconciliation.
+  - OpenAI records that retried observation as `pending`.
+  - OpenAI records reconciliation and later poll visibility errors as
+    `failure`.
+  - Public request tests include terminal reconciliation `403` and later poll
+    `404` responses.
+  - `make go-test` passed with 100.0 percent Go statement coverage.
+  - The final `make ci` passed all 11 gates in 175 seconds with 100.0 percent
+    Go statement coverage.
+
+- [x] [B149] (P1) Stabilize the first read of a pollable resource.
+  Goal:
+  Read each created provider resource after its visibility boundary.
+  Evidence:
+  - Expected: A successful create makes the same resource readable with the
+    same credential.
+  - Actual: The first read can return HTTP `403` before a later read returns
+    HTTP `200` for the same resource and credential.
+  - Two Gemini 3.5 Flash checks became readable after the initial observation
+    interval and completed without a permission change.
+  Requirements:
+  - Own post-create observation in the shared `pollable_resource` lifecycle.
+  - Apply the lifecycle to request execution and provider connection
+    verification.
+  - Keep provider adapters responsible for wire formats and provider status
+    parsing.
+  - Bound all observation work with the caller context.
+  - Release the upstream worker during each observation interval.
+  - Return the provider error when the resource does not cross the visibility
+    boundary.
+  - Preserve cleanup, safe errors, and secret redaction.
+  Validation:
+  - Prove delayed visibility through public request and management routes.
+  - Prove each implemented pollable transport adapter uses the shared
+    lifecycle.
+  - Prove synchronous transports do not use the lifecycle.
+  - Prove cancellation stops the observation phase.
+  - Run `make ci` after the last application change.
+  Resolution:
+  - Added one provider-neutral lifecycle for observation of a created resource.
+  - The lifecycle reads immediately. It reconciles one first-read HTTP `403`
+    or `404` after a two-second, context-bound interval.
+  - OpenAI Responses, Gemini Interactions, and pollable connection verification
+    now use the shared lifecycle. Synchronous transports remain unchanged.
+  - Public request tests cover delayed visibility through OpenAI and Gemini.
+    Management tests cover transient and persistent retrieval failures.
+  - Cancellation prevents a reconciliation read after the request context ends.
+  - `make go-test` passed with 100.0 percent Go statement coverage.
+  - The final `make ci` passed all 11 gates in 167 seconds with 100.0 percent
+    Go statement coverage.
+  - `make test-live-gemini` passed provider verification and text smoke checks
+    for `gemini-3.5-flash` with the existing Authorization key.
+  - Release, deployment, credential rotation, and production acceptance remain
+    in B128.
+
 - [x] [B148] (P0) Deploy the provider catalog with the service.
   Goal:
   The deployed service starts with its canonical provider catalog.
@@ -524,11 +598,11 @@ retain satisfied historical dependencies.
     any failure before another paid run.
   - For any source change, run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-- [!] [B128] (P1) Restore Gemini long-completion production acceptance after provider permission failure.
+- [!] [B128] (P1) Restore Gemini long-completion production acceptance after first-read visibility failure.
   Goal:
   Make the Default tenant's Gemini 3.5 Flash background case complete the
-  production live-test contract. Resolve the active provider permission
-  failure before another acceptance run.
+  production live-test contract. Release the corrected pollable-resource
+  lifecycle before another acceptance run.
   Completion boundary:
   - Repository changes and repository validation prove development completion.
   - Production acceptance is an explicit completion condition for this issue.
@@ -547,30 +621,34 @@ retain satisfied historical dependencies.
     the first resource poll. The background summary recorded 500 milliseconds
     of provider poll wait and zero proxy rate-limit wait. Resource cleanup also
     failed at the provider boundary.
-  - Google's current Interactions error contract classifies HTTP `403` as
-    `permission_denied`: the API key does not have permission for the resource.
-    The implementation uses Google's documented API-key header, API revision,
-    create route, and retrieval route. No source or proxy-window change is
-    supported by this evidence.
-  - A bounded operator-key control confirmed the same provider boundary. Create
-    returned HTTP `200` with `in_progress`. Retrieval returned HTTP `403` with
-    `permission_denied`, and deletion returned HTTP `200`. The check retained
-    no provider resource ID or response body.
+  - A bounded operator-key control first reproduced the provider boundary.
+    Create returned HTTP `200` with `in_progress`. The first read returned HTTP
+    `403` with `permission_denied`, and deletion returned HTTP `200`.
+  - On 2026-08-21, a second read of that same resource returned HTTP `200` with
+    `completed` after 500 milliseconds. The credential and resource id did not
+    change.
+  - Two later Gemini 3.5 Flash controls waited two seconds after create. The
+    first read returned HTTP `200` with `completed`, and deletion returned HTTP
+    `200` in both controls.
+  - These controls classify the failure as first-read resource visibility, not
+    a durable credential permission failure. The checks retained no provider
+    resource id or response body.
   - PR #288 deployed as `v4.0.0` from application commit `48adaed`. The runtime
     uses only tenant-managed provider credentials from the retained database.
   - The deployed verifier sends `background: false` and `store: false` for all
     Gemini models. It accepts a synchronous create response without retrieval.
-  - This verifier can accept a key that cannot retrieve a background
-    interaction. Production then rejects the first retrieval with HTTP `403`.
+  - The deployed verifier and request path treat the first retrieval HTTP `403`
+    as a durable failure. They do not reconcile later visibility.
   Requirements:
   - For a pollable Gemini model, verify the stored background lifecycle.
-  - Create and retrieve one interaction with the candidate key.
+  - Create and observe one interaction with the candidate key.
   - Cancel the interaction when the retrieved state is active.
   - Delete every stored verification interaction.
-  - Do each verification lifecycle operation one time.
+  - Use the shared `pollable_resource` visibility contract for the first read.
+  - Do each create, transport attempt, later read, cancel, and delete one time.
   - Limit each successful provider response to 1 MiB.
   - Persist the candidate only after all required lifecycle operations succeed.
-  - Reject a candidate when create succeeds and retrieval returns HTTP `403`.
+  - Reject a candidate when the reconciliation read returns HTTP `403`.
   - Preserve the prior key, settings, and defaults after a rejected replacement.
   - Preserve the 900-second production request budget and response redaction.
   Validation:
@@ -578,7 +656,10 @@ retain satisfied historical dependencies.
     `store: true`.
   - Prove successful verification performs create, retrieve, cancel, and delete
     before persistence.
-  - Prove retrieval HTTP `403` rejects the candidate and preserves prior state.
+  - Prove a transient first-read HTTP `403` reaches the same resource and lets
+    verification complete.
+  - Prove a persistent HTTP `403` rejects the candidate and preserves prior
+    state.
   - Prove a lost lifecycle response does not retry its provider operation.
   - Prove an oversized lifecycle response rejects the candidate.
   - After the identified boundary is resolved, run the exact Gemini echo and
@@ -598,10 +679,22 @@ retain satisfied historical dependencies.
     coverage.
   - The required baseline and final `make ci` runs passed all 11 gates with
     100% Go statement coverage.
-  Blocked: release and deploy this source through the repository lifecycle.
-  Then save a new Google AI Studio Auth key in Default tenant Settings and run
-  the exact Gemini echo and background cases. Revoke the old Standard key only
-  after retrieval succeeds.
+  - On 2026-08-21, release `v5.0.1` deployed application commit `9e6f585`,
+    which contains PR #289.
+  - The release receipt records container image
+    `sha256:26e83fea6cfa8b207771f6b19bee6743fc1938b4a33d97c48229a94d69e9c72b`.
+  - The public release marker identifies the same version and application
+    commit.
+  - The management configuration health check returned HTTP `200`.
+  - The unauthenticated API root returned HTTP `403`.
+  - On 2026-08-21, B149 added a provider-neutral first-read visibility
+    lifecycle to the development checkout.
+  - The existing Authorization key passed local `gemini-3.5-flash` provider
+    verification and text smoke checks through the corrected lifecycle.
+  - The local checks did not release or deploy the change.
+  Blocked: Release and deploy B149. Rotate the exposed Authorization key and
+  save its replacement in the Default tenant. Run the exact Gemini echo and
+  background cases.
 - [ ] [B141] (P1) Center the X icon inside the top-right square.
   Goal:
   Align the X icon so it is visually centered within the square control in the top-right corner, matching the intended UI layout shown in the attached screenshot.
