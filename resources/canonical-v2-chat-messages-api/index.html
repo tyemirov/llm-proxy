@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Canonical /v2 chat messages API for LLM calls</title>
+    <meta name="description" content="Send ordered system, user, and assistant messages through one v2 endpoint before provider routing.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/canonical-v2-chat-messages-api/">
+    <meta property="og:title" content="Canonical /v2 chat messages API for LLM calls">
+    <meta property="og:description" content="Send ordered system, user, and assistant messages through one v2 endpoint before provider routing.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/canonical-v2-chat-messages-api/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.3.0/dist/js-yaml.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"></script>
+    <script
+      id="mpr-ui-bundle"
+      type="application/json"
+      data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
+    ></script>
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Canonical /v2 chat messages API for LLM calls","description":"Send ordered system, user, and assistant messages through one v2 endpoint before provider routing.","url":"https://llm-proxy.mprlab.com/resources/canonical-v2-chat-messages-api/","datePublished":"2026-07-06","dateModified":"2026-08-08","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/canonical-v2-chat-messages-api/","about":["LLM Proxy","API contract","v2 chat messages API"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Canonical /v2 chat messages API for LLM calls","item":"https://llm-proxy.mprlab.com/resources/canonical-v2-chat-messages-api/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of v2 chat messages API?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy exposes /v2 as the canonical chat endpoint. Its artifact-defined request fields are messages, model, web_search, max_tokens, reasoning_effort, structured_output, and the proxy maps that shared request to the selected provider."}},{"@type":"Question","name":"Who should read this api contract resource?","acceptedAnswer":{"@type":"Answer","text":"Developers who want a stable chat transcript contract instead of provider-specific payloads."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Large prompt JSON POST for LLM requests, which covers large prompt JSON POST."}}]}</script>
+    <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
+  </head>
+  <body class="resource-page">
+
+    <mpr-header
+      class="public-site-header"
+      data-config-url="https://llm-proxy-api.mprlab.com/config-ui.yaml"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      logout-url="/"
+      settings="false"
+      sign-in-label="Log In"
+      sign-in-redirect-url="/app/"
+      size="small"
+      sticky="true"
+      auth-transition='{"title":"Opening LLM Proxy","message":"Loading your app."}'
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"}]}'
+    >
+      <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
+        <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
+        <span>LLM Proxy</span>
+      </a>
+    </mpr-header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>Canonical /v2 chat messages API for LLM calls</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">API contract</p>
+            <h1>Canonical /v2 chat messages API for LLM calls</h1>
+            <p class="resource-deck">Send ordered system, user, and assistant messages through one v2 endpoint before provider routing.</p>
+            <p class="resource-audience">Developers who want a stable chat transcript contract instead of provider-specific payloads.</p>
+            <p class="resource-byline">Reviewed 2026-08-08 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <div class="resource-actions">
+              <a class="resource-button" href="/docs/">Open API reference</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>Chat transcript callers can end up building OpenAI, Anthropic, Gemini, and compatible-provider request bodies separately, with different message rules in each client.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy exposes /v2 as the canonical chat endpoint. Its artifact-defined request fields are messages, model, web_search, max_tokens, reasoning_effort, structured_output, and the proxy maps that shared request to the selected provider.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Send POST /v2 with messages[] and the tenant key query parameter.</li>
+<li>Use system role messages for instructions rather than a body system_prompt.</li>
+<li>Provide order values only when every submitted message has a unique non-negative order.</li>
+<li>Let omitted model resolve to the tenant or selected-provider default.</li>
+<li>Omit reasoning_effort to retain the tenant default, or send a nonblank value declared by the exact resolved route.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+
+                        <tr>
+                          <td>Messages-only input</td>
+                          <td>The canonical endpoint rejects prompt and body system_prompt fields.</td>
+                          <td>Ambiguous input fails before an upstream call.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Order support</td>
+                          <td>Messages can be sorted by explicit order when callers cannot rely on array position.</td>
+                          <td>Event-sourced transcripts can still route deterministically.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Route-bound reasoning effort</td>
+                          <td>A caller can override the tenant default only with a nonblank value declared by the exact resolved provider/model route.</td>
+                          <td>Blank, null, and unsupported values fail with 400 before an upstream call.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Provider mapping</td>
+                          <td>The proxy maps shared messages into OpenAI, Claude, Gemini, or compatible provider shapes.</td>
+                          <td>Client code does not need a provider SDK.</td>
+                        </tr>
+
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+
+                    <section class="resource-card">
+                      <h3>Chat transcript</h3>
+                      <p>A support tool sends system, user, and assistant messages to /v2 with provider omitted.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Provider experiment</h3>
+                      <p>The same /v2 body is sent with provider=anthropic for a Claude trial.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Ordered events</h3>
+                      <p>A caller sends order values from persisted event IDs so the proxy sorts the transcript.</p>
+                    </section>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>POST /v2 requires at least one user message.</li>
+<li>Unsupported roles, duplicate order values, and mixed prompt fields return 400.</li>
+<li>Reasoning effort is not a global option list; a value unsupported by the resolved route returns 400.</li>
+<li>Server-injected tenant default system prompts are sent upstream but not echoed in response metadata.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+
+                    <details>
+                      <summary>What is the main job of v2 chat messages API?</summary>
+                      <p>LLM Proxy exposes /v2 as the canonical chat endpoint. Its artifact-defined request fields are messages, model, web_search, max_tokens, reasoning_effort, structured_output, and the proxy maps that shared request to the selected provider.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Who should read this api contract resource?</summary>
+                      <p>Developers who want a stable chat transcript contract instead of provider-specific payloads.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Does this page claim provider performance or pricing advantages?</summary>
+                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Where should setup details come from?</summary>
+                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is Large prompt JSON POST for LLM requests, which covers large prompt JSON POST.</p>
+                    </details>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+
+                    <a class="resource-related" href="/resources/large-prompt-json-post/">
+                      <span>API contract</span>
+                      <strong>Large prompt JSON POST for LLM requests</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/openai-web-search-guardrails/">
+                      <span>API contract</span>
+                      <strong>OpenAI web search guardrails in an LLM proxy</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/bring-your-own-provider-key-portal/">
+                      <span>Management UI</span>
+                      <strong>Bring-your-own provider key portal for AI access</strong>
+                    </a>
+
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Use this pattern in LLM Proxy</h2>
+            <p>Start from the canonical API reference, then use the management surface when the workflow needs tenant or provider configuration.</p>
+            <a class="resource-button" href="/docs/">Open API reference</a>
+          </section>
+        </article>
+      </main>
+    <mpr-footer
+      class="public-site-footer"
+      size="small"
+      sticky="true"
+      wrapper-class="public-site-footer-layout"
+      privacy-link-label="Privacy"
+      privacy-link-href="/privacy/"
+      theme-switcher="square"
+      horizontal-links='{"alignment":"left","links":[{"label":"Terms","href":"/terms/"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+      links-collection='{"style":"drop-up","text":"Built by Marco Polo Research Lab","links":[{"label":"Marco Polo Research Lab","url":"https://mprlab.com"},{"label":"Gravity Notes","url":"https://gravity.mprlab.com"},{"label":"LoopAware","url":"https://loopaware.mprlab.com"},{"label":"Allergy Wheel","url":"https://allergy.mprlab.com"},{"label":"Social Threader","url":"https://threader.mprlab.com"},{"label":"RSVP","url":"https://rsvp.mprlab.com"},{"label":"Countdown Calendar","url":"https://countdown.mprlab.com"},{"label":"LLM Crossword","url":"https://llm-crossword.mprlab.com"},{"label":"Prompt Bubbles","url":"https://prompts.mprlab.com"},{"label":"Wallpapers","url":"https://wallpapers.mprlab.com"}]}'
+    >
+      <footer class="public-site-footer-fallback" role="contentinfo">
+        <nav class="public-site-footer-fallback__nav" aria-label="Footer">
+          <a href="/privacy/">Privacy</a>
+          <a href="/terms/">Terms</a>
+          <a href="/resources/">Resources</a>
+          <a href="https://github.com/tyemirov/llm-proxy">GitHub</a>
+        </nav>
+        <details class="public-site-footer-fallback__projects">
+          <summary>Built by Marco Polo Research Lab</summary>
+          <ul>
+            <li><a href="https://mprlab.com">Marco Polo Research Lab</a></li>
+            <li><a href="https://gravity.mprlab.com">Gravity Notes</a></li>
+            <li><a href="https://loopaware.mprlab.com">LoopAware</a></li>
+            <li><a href="https://allergy.mprlab.com">Allergy Wheel</a></li>
+            <li><a href="https://threader.mprlab.com">Social Threader</a></li>
+            <li><a href="https://rsvp.mprlab.com">RSVP</a></li>
+            <li><a href="https://countdown.mprlab.com">Countdown Calendar</a></li>
+            <li><a href="https://llm-crossword.mprlab.com">LLM Crossword</a></li>
+            <li><a href="https://prompts.mprlab.com">Prompt Bubbles</a></li>
+            <li><a href="https://wallpapers.mprlab.com">Wallpapers</a></li>
+          </ul>
+        </details>
+      </footer>
+    </mpr-footer>
+
+  </body>
+</html>

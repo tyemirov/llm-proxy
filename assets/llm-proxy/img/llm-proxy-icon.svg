@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">LLM Proxy icon</title>
+  <desc id="desc">A provider-routing mark with four endpoints crossing through a central proxy node.</desc>
+  <defs>
+    <linearGradient id="llm-proxy-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#092635"/>
+      <stop offset="1" stop-color="#12372a"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="256" height="256" rx="36" fill="url(#llm-proxy-bg)"/>
+  <path
+    d="M60 86h42l26 42 26-42h42M60 170h42l26-42 26 42h42"
+    fill="none"
+    stroke="#ffd369"
+    stroke-width="10"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <circle cx="60" cy="86" r="14" fill="#4ad3d9"/>
+  <circle cx="196" cy="86" r="14" fill="#4ad3d9"/>
+  <circle cx="60" cy="170" r="14" fill="#4ad3d9"/>
+  <circle cx="196" cy="170" r="14" fill="#4ad3d9"/>
+  <circle cx="128" cy="128" r="18" fill="none" stroke="#4ad3d9" stroke-width="10"/>
+</svg>

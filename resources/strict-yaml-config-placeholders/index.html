@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Strict YAML config placeholders for LLM Proxy</title>
+    <meta name="description" content="Use config.yml for service settings, providers.yml for provider definitions, and env only for declared values.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/strict-yaml-config-placeholders/">
+    <meta property="og:title" content="Strict YAML config placeholders for LLM Proxy">
+    <meta property="og:description" content="Use config.yml for service settings, providers.yml for provider definitions, and env only for declared values.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/strict-yaml-config-placeholders/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.3.0/dist/js-yaml.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"></script>
+    <script
+      id="mpr-ui-bundle"
+      type="application/json"
+      data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
+    ></script>
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Strict YAML config placeholders for LLM Proxy","description":"Use config.yml for service settings, providers.yml for provider definitions, and env only for declared values.","url":"https://llm-proxy.mprlab.com/resources/strict-yaml-config-placeholders/","datePublished":"2026-07-06","dateModified":"2026-08-20","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/strict-yaml-config-placeholders/","about":["LLM Proxy","Configuration","strict YAML config placeholders"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Strict YAML config placeholders for LLM Proxy","item":"https://llm-proxy.mprlab.com/resources/strict-yaml-config-placeholders/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of strict YAML config placeholders?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy reads service settings from config.yml and provider definitions from providers.yml. It expands declared environment values and rejects unknown YAML keys."}},{"@type":"Question","name":"Who should read this configuration resource?","acceptedAnswer":{"@type":"Answer","text":"Operators who want predictable startup behavior and no hidden runtime defaults."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is LLM provider catalog configuration in providers.yml, which covers LLM model catalog configuration."}}]}</script>
+    <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
+  </head>
+  <body class="resource-page">
+
+    <mpr-header
+      class="public-site-header"
+      data-config-url="https://llm-proxy-api.mprlab.com/config-ui.yaml"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      logout-url="/"
+      settings="false"
+      sign-in-label="Log In"
+      sign-in-redirect-url="/app/"
+      size="small"
+      sticky="true"
+      auth-transition='{"title":"Opening LLM Proxy","message":"Loading your app."}'
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"}]}'
+    >
+      <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
+        <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
+        <span>LLM Proxy</span>
+      </a>
+    </mpr-header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>Strict YAML config placeholders for LLM Proxy</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Configuration</p>
+            <h1>Strict YAML config placeholders for LLM Proxy</h1>
+            <p class="resource-deck">Use config.yml for service settings, providers.yml for provider definitions, and env only for declared values.</p>
+            <p class="resource-audience">Operators who want predictable startup behavior and no hidden runtime defaults.</p>
+            <p class="resource-byline">Reviewed 2026-08-20 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <div class="resource-actions">
+              <a class="resource-button" href="/docs/">Open API reference</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>Services that merge flags, env, defaults, and files can start with surprising configuration. Missing secrets may appear only when traffic arrives.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy reads service settings from config.yml and provider definitions from providers.yml. It expands declared environment values and rejects unknown YAML keys.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Put service configuration in config.yml.</li>
+<li>Put provider definitions and environment bindings in providers.yml.</li>
+<li>Use process environment or a sibling .env only to satisfy placeholders.</li>
+<li>Avoid ${NAME:-default}; the loader supports plain ${NAME}.</li>
+<li>Let startup fail when required placeholders or unknown keys are present.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+
+                        <tr>
+                          <td>Explicit YAML owners</td>
+                          <td>Runtime code receives one validated service config and one validated provider catalog.</td>
+                          <td>Flags and env are not alternate schema sources.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Strict placeholders</td>
+                          <td>Missing placeholders fail startup.</td>
+                          <td>Configuration errors are visible before traffic.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Unknown-key rejection</td>
+                          <td>Stale or misspelled YAML keys fail instead of being ignored.</td>
+                          <td>Forward-only config stays clean.</td>
+                        </tr>
+
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+
+                    <section class="resource-card">
+                      <h3>Hosted profile</h3>
+                      <p>Deployment secrets provide LLM_PROXY_MANAGEMENT_* placeholder values.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Local profile</h3>
+                      <p>configs/.env supplies SQLite management database values for local runs.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Obsolete credential field</h3>
+                      <p>A provider api_key field is rejected because provider credentials are tenant-managed state.</p>
+                    </section>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>Changing config requires restart.</li>
+<li>Client keys and provider API keys are saved through authenticated tenant management.</li>
+<li>This is a config discipline feature, not a secrets manager.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+
+                    <details>
+                      <summary>What is the main job of strict YAML config placeholders?</summary>
+                      <p>LLM Proxy reads service settings from config.yml and provider definitions from providers.yml. It expands declared environment values and rejects unknown YAML keys.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Who should read this configuration resource?</summary>
+                      <p>Operators who want predictable startup behavior and no hidden runtime defaults.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Does this page claim provider performance or pricing advantages?</summary>
+                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Where should setup details come from?</summary>
+                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is LLM provider catalog configuration in providers.yml, which covers LLM model catalog configuration.</p>
+                    </details>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+
+                    <a class="resource-related" href="/resources/model-catalog-configuration/">
+                      <span>Configuration</span>
+                      <strong>LLM provider catalog configuration in providers.yml</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/provider-default-model-selection/">
+                      <span>Configuration</span>
+                      <strong>Provider default model selection for omitted models</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/multi-tenant-ownership-migration/">
+                      <span>Configuration</span>
+                      <strong>Transactional multi-tenant account ownership migration</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/reject-client-provider-key-leaks/">
+                      <span>Security</span>
+                      <strong>Reject client-supplied provider key leaks</strong>
+                    </a>
+
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Use this pattern in LLM Proxy</h2>
+            <p>Start from the canonical API reference, then use the management surface when the workflow needs tenant or provider configuration.</p>
+            <a class="resource-button" href="/docs/">Open API reference</a>
+          </section>
+        </article>
+      </main>
+    <mpr-footer
+      class="public-site-footer"
+      size="small"
+      sticky="true"
+      wrapper-class="public-site-footer-layout"
+      privacy-link-label="Privacy"
+      privacy-link-href="/privacy/"
+      theme-switcher="square"
+      horizontal-links='{"alignment":"left","links":[{"label":"Terms","href":"/terms/"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+      links-collection='{"style":"drop-up","text":"Built by Marco Polo Research Lab","links":[{"label":"Marco Polo Research Lab","url":"https://mprlab.com"},{"label":"Gravity Notes","url":"https://gravity.mprlab.com"},{"label":"LoopAware","url":"https://loopaware.mprlab.com"},{"label":"Allergy Wheel","url":"https://allergy.mprlab.com"},{"label":"Social Threader","url":"https://threader.mprlab.com"},{"label":"RSVP","url":"https://rsvp.mprlab.com"},{"label":"Countdown Calendar","url":"https://countdown.mprlab.com"},{"label":"LLM Crossword","url":"https://llm-crossword.mprlab.com"},{"label":"Prompt Bubbles","url":"https://prompts.mprlab.com"},{"label":"Wallpapers","url":"https://wallpapers.mprlab.com"}]}'
+    >
+      <footer class="public-site-footer-fallback" role="contentinfo">
+        <nav class="public-site-footer-fallback__nav" aria-label="Footer">
+          <a href="/privacy/">Privacy</a>
+          <a href="/terms/">Terms</a>
+          <a href="/resources/">Resources</a>
+          <a href="https://github.com/tyemirov/llm-proxy">GitHub</a>
+        </nav>
+        <details class="public-site-footer-fallback__projects">
+          <summary>Built by Marco Polo Research Lab</summary>
+          <ul>
+            <li><a href="https://mprlab.com">Marco Polo Research Lab</a></li>
+            <li><a href="https://gravity.mprlab.com">Gravity Notes</a></li>
+            <li><a href="https://loopaware.mprlab.com">LoopAware</a></li>
+            <li><a href="https://allergy.mprlab.com">Allergy Wheel</a></li>
+            <li><a href="https://threader.mprlab.com">Social Threader</a></li>
+            <li><a href="https://rsvp.mprlab.com">RSVP</a></li>
+            <li><a href="https://countdown.mprlab.com">Countdown Calendar</a></li>
+            <li><a href="https://llm-crossword.mprlab.com">LLM Crossword</a></li>
+            <li><a href="https://prompts.mprlab.com">Prompt Bubbles</a></li>
+            <li><a href="https://wallpapers.mprlab.com">Wallpapers</a></li>
+          </ul>
+        </details>
+      </footer>
+    </mpr-footer>
+
+  </body>
+</html>
