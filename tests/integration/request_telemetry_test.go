@@ -120,6 +120,85 @@ func TestIntegrationRequestTelemetryCorrelatesOpenAIPollingAndTerminalPhases(tes
 	)
 }
 
+func TestIntegrationRequestTelemetryMarksOnlyRetriedVisibilityErrorPending(testingInstance *testing.T) {
+	testCases := []struct {
+		name            string
+		pollResponses   []string
+		pollStatuses    []int
+		expectedSignals []string
+	}{
+		{
+			name: "reconciliation visibility error",
+			pollResponses: []string{
+				`{"error":"` + telemetryUnsafeProviderBody + `"}`,
+				`{"error":"` + telemetryUnsafeProviderBody + `"}`,
+			},
+			pollStatuses:    []int{http.StatusForbidden, http.StatusForbidden},
+			expectedSignals: []string{"pending", "failure"},
+		},
+		{
+			name: "later poll visibility error",
+			pollResponses: []string{
+				`{"id":"` + telemetryUnsafeUpstreamID + `","status":"in_progress"}`,
+				`{"error":"` + telemetryUnsafeProviderBody + `"}`,
+			},
+			pollStatuses:    []int{http.StatusOK, http.StatusNotFound},
+			expectedSignals: []string{"pending", "failure"},
+		},
+	}
+	for _, testCase := range testCases {
+		testingInstance.Run(testCase.name, func(subTest *testing.T) {
+			var upstreamCalls atomic.Int64
+			observedCore, observedLogs := observer.New(zapcore.InfoLevel)
+			router := timeoutContractRouter(
+				subTest,
+				requestTimeoutHTTPDoer(func(*http.Request) (*http.Response, error) {
+					callIndex := int(upstreamCalls.Add(1))
+					if callIndex == 1 {
+						return completedTimeoutContractResponse(`{"id":"` + telemetryUnsafeUpstreamID + `","status":"queued"}`), nil
+					}
+					response := completedTimeoutContractResponse(testCase.pollResponses[callIndex-2])
+					response.StatusCode = testCase.pollStatuses[callIndex-2]
+					return response, nil
+				}),
+				timeoutContractConfiguration(5, 5),
+				zap.New(observedCore).Sugar(),
+			)
+			request := httptest.NewRequest(http.MethodGet, "/?key="+serviceSecretValue+"&prompt="+telemetryUnsafePrompt, nil)
+			response := httptest.NewRecorder()
+
+			router.ServeHTTP(response, request)
+
+			if response.Code != http.StatusBadGateway || upstreamCalls.Load() != 3 {
+				subTest.Fatalf("status=%d calls=%d body=%s", response.Code, upstreamCalls.Load(), response.Body.String())
+			}
+			requestID := response.Header().Get(llmproxycontract.HeaderRequestID)
+			pollSignals := make([]string, 0, len(testCase.expectedSignals))
+			for _, entry := range observedLogs.FilterMessage(telemetryProgressEvent).All() {
+				fields := entry.ContextMap()
+				if fields["request_id"] == requestID && fields["progress_kind"] == telemetryOpenAIPollProgress {
+					completionSignal, signalIsString := fields["completion_signal"].(string)
+					if !signalIsString {
+						subTest.Fatalf("poll completion signal=%v", fields["completion_signal"])
+					}
+					pollSignals = append(pollSignals, completionSignal)
+				}
+			}
+			if len(pollSignals) != len(testCase.expectedSignals) {
+				subTest.Fatalf("poll completion signals=%v want=%v", pollSignals, testCase.expectedSignals)
+			}
+			for signalIndex, expectedSignal := range testCase.expectedSignals {
+				if pollSignals[signalIndex] != expectedSignal {
+					subTest.Fatalf("poll completion signals=%v want=%v", pollSignals, testCase.expectedSignals)
+				}
+			}
+			summary := telemetrySummaryForRequest(subTest, observedLogs, requestID)
+			assertTelemetrySummaryIdentity(subTest, summary, "/", proxy.ProviderNameOpenAI, proxy.ModelNameGPT41, 5, http.StatusBadGateway, "provider_failure")
+			assertTelemetryLogsExcludeContent(subTest, observedLogs, telemetryUnsafePrompt, telemetryUnsafeProviderBody, telemetryUnsafeUpstreamID, serviceSecretValue, openAIKeyValue)
+		})
+	}
+}
+
 func TestIntegrationRequestTelemetryTracksProviderNeutralContinuation(testingInstance *testing.T) {
 	var upstreamCalls atomic.Int64
 	observedCore, observedLogs := observer.New(zapcore.InfoLevel)
