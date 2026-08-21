@@ -25,6 +25,29 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B148] (P0) Deploy the provider catalog with the service.
+  Goal:
+  The deployed service starts with its canonical provider catalog.
+  Evidence:
+  - Expected: `providers.yml` exists beside `/app/config.yml`.
+  - Actual: Production generation 6 mounted only `/app/config.yml`.
+  - Actual: The container restarted with `provider_catalog_read_failed`.
+  Requirements:
+  - Mount `configs/providers.yml` at `/app/providers.yml`.
+  - Keep both runtime assets read-only.
+  - Require the exact runtime asset pair in the public lifecycle test.
+  Validation:
+  - Use the current successful CI result as the initial result.
+  - Run `make go-test`.
+  - Run `make ci` after the last change.
+  Resolution:
+  - Added the canonical provider catalog as `/app/providers.yml`.
+  - Kept the configuration and provider catalog assets read-only.
+  - The public lifecycle test now requires the exact runtime asset pair.
+  - `make go-test` passed with 100.0 percent Go statement coverage.
+  - The final `make ci` passed all 11 gates in 130 seconds.
+  - Did not run release, publication, or deployment.
+
 - [x] [B146] (P1) Bound the complete hosted CI job.
   Goal:
   Hosted CI completes the current canonical gate on GitHub-hosted runners.

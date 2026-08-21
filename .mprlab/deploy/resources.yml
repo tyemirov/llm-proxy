@@ -83,6 +83,9 @@ mprlab_resources:
             - source: configs/config.yml
               target: /app/config.yml
               mode: "0444"
+            - source: configs/providers.yml
+              target: /app/providers.yml
+              mode: "0444"
           mounts:
             - volume: data
               target: /data
