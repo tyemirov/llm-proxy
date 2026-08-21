@@ -25,7 +25,7 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
-- [ ] [B146] (P1) Bound the complete hosted CI job.
+- [x] [B146] (P1) Bound the complete hosted CI job.
   Goal:
   Hosted CI completes the current canonical gate on GitHub-hosted runners.
   Evidence:
@@ -44,6 +44,15 @@ retain satisfied historical dependencies.
   - Prove the exact hosted workflow contract through the public Make test.
   - Run `make ci` after the last workflow or test change.
   - Prove one hosted run completes all 11 gates and prints the success receipt.
+
+  Resolution:
+  - The workflow now applies one 10-minute limit to the complete hosted job.
+  - The CI step invokes `make ci` without a second shell execution limit.
+  - The focused Make contract test passed.
+  - The final local `make ci` passed all 11 gates in 169 seconds with 100.0%
+    Go statement coverage.
+  - Hosted run `32450200399` passed all 11 gates. The canonical gate used 350
+    seconds, and the complete job used 6 minutes and 46 seconds.
 
 - [x] [B145] (P1) Keep failed request usage on one model route.
   Goal:
