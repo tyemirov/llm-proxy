@@ -27,7 +27,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Gemini Interactions proxy for shared LLM calls","description":"Run model-specific Gemini Interactions lifecycles while callers keep one blocking proxy request.","url":"https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/","about":["LLM Proxy","Provider routing","Gemini Interactions proxy"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Gemini Interactions proxy for shared LLM calls","description":"Run model-specific Gemini Interactions lifecycles while callers keep one blocking proxy request.","url":"https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/","datePublished":"2026-07-06","dateModified":"2026-08-20","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/","about":["LLM Proxy","Provider routing","Gemini Interactions proxy"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Gemini Interactions proxy for shared LLM calls","item":"https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of Gemini Interactions proxy?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy selects the configured model lifecycle, polls and cleans up Gemini 3.x resources, and resolves Gemini 2.5 synchronously behind one blocking caller request."}},{"@type":"Question","name":"Who should read this provider routing resource?","acceptedAnswer":{"@type":"Answer","text":"Developers adding Gemini as a provider without bringing Gemini-specific payloads into every app."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Integrate once through one multi-provider LLM proxy, which covers multi-provider LLM proxy."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
@@ -67,7 +67,7 @@
             <h1>Gemini Interactions proxy for shared LLM calls</h1>
             <p class="resource-deck">Run model-specific Gemini Interactions lifecycles while callers keep one blocking proxy request.</p>
             <p class="resource-audience">Developers adding Gemini as a provider without bringing Gemini-specific payloads into every app.</p>
-            <p class="resource-byline">Reviewed 2026-07-11 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <p class="resource-byline">Reviewed 2026-08-20 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
             <div class="resource-actions">
               <a class="resource-button" href="/docs/">Open API reference</a>
               <a class="resource-link" href="/resources/">Browse all resources</a>
@@ -87,7 +87,7 @@
           <section>
             <h2>How it works</h2>
             <ol class="resource-steps">
-              <li>Save the Gemini API key in tenant settings and configure the Gemini runtime URL and offerings.</li>
+              <li>Keep the Gemini transport and offerings in providers.yml, then save the Gemini API key in tenant settings.</li>
 <li>Select provider=gemini or set Gemini as a tenant default.</li>
 <li>Send canonical messages through /v2 or compatibility text requests.</li>
 <li>Keep max_tokens within configured Gemini output limits.</li>
@@ -168,7 +168,7 @@
             <ul class="resource-list">
               <li>Gemini dictation is not exposed through /dictate in this repo.</li>
 <li>Web search is not marked supported for Gemini in the current proxy catalog.</li>
-<li>The Gemini model list must be maintained in config.yml.</li>
+<li>The Gemini model list must be maintained in providers.yml.</li>
             </ul>
           </section>
 

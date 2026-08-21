@@ -22,7 +22,10 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `provider catalog`: The canonical YAML file that defines all supported models, providers, provider offerings, controls, limits, and prices.
 - `provider connection`: Tenant values for the credential fields and setting fields in one provider definition.
 - `provider definition`: One provider record in the provider catalog.
+- `provider field`: One credential input or setting input in a provider definition.
 - `provider offering`: One exact model that one provider makes available as a route.
+- `provider profile`: Tenant settings for one provider, such as the selected text model and system prompt.
+- `provider transport`: One provider route that defines an endpoint, authentication, protocol adapter, and lifecycle.
 - `request intent`: The tenant-bound semantic inputs that one idempotency key identifies.
 - `structured request`: A canonical text request that requires one caller JSON Schema for its output.
 - `production acceptance`: Evidence that the production runtime satisfies the checks that an issue specifies.

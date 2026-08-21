@@ -7,29 +7,14 @@ usage() {
 
 Builds the current llm-proxy binary, verifies each available provider key
 through the authenticated management operation, and only then runs its live
-text smoke test. Media mode verifies the five current image providers and then
-runs canonical image requests for their selected catalog routes. The preflight mode builds a temporary
-managed configuration and verifies authenticated routing through a local
-provider connection.
+text smoke test. Provider identifiers, field environment bindings, and image
+routes come from configs/providers.yml. The preflight mode builds a temporary
+managed configuration and verifies authenticated routing through a local provider connection.
 
 Required environment:
   At least one provider API key, unless no-op skip behavior is desired.
 
-Provider key variables:
-  OPENAI_API_KEY
-  DEEPSEEK_API_KEY
-  DASHSCOPE_API_KEY
-  MOONSHOT_API_KEY
-  MINIMAX_API_KEY
-  SILICONFLOW_API_KEY
-  ZAI_API_KEY
-  GEMINI_API_KEY
-  ANTHROPIC_API_KEY
-  MODEL_API_KEY
-  XAI_API_KEY
-
 Optional environment:
-  DASHSCOPE_BASE_URL          Required workspace URL when DashScope is selected.
   LIVE_ENV_FILE              Path to a dotenv file to parse before discovery.
   LLM_PROXY_LIVE_PROVIDERS   Comma or space separated provider list. If set,
                              every listed provider must have its key.
@@ -42,28 +27,19 @@ Optional environment:
   GO                         Go binary. Default: go.
 
 Options:
-  --media                    Run the paid OpenAI, Anthropic, Gemini, Moonshot,
-                             and xAI image matrix. LLM_PROXY_LIVE_PROVIDERS can
-                             select a subset. LLM_PROXY_LIVE_ALL_MODELS=true
-                             runs every selected provider image route.
+  --media                    Run paid image routes from the public catalog.
+                             LLM_PROXY_LIVE_PROVIDERS can select a subset.
+                             LLM_PROXY_LIVE_ALL_MODELS=true runs every selected
+                             provider image route.
 
   --preflight                Verify the disposable managed config without an
                              external provider call.
   --write-config <path>      Write the disposable managed config and exit
                              without building the proxy or calling providers.
 
-Per-provider model overrides:
-  LLM_PROXY_LIVE_OPENAI_MODEL
-  LLM_PROXY_LIVE_DEEPSEEK_MODEL
-  LLM_PROXY_LIVE_DASHSCOPE_MODEL
-  LLM_PROXY_LIVE_MOONSHOT_MODEL
-  LLM_PROXY_LIVE_MINIMAX_MODEL
-  LLM_PROXY_LIVE_SILICONFLOW_MODEL
-  LLM_PROXY_LIVE_ZAI_MODEL
-  LLM_PROXY_LIVE_GEMINI_MODEL
-  LLM_PROXY_LIVE_ANTHROPIC_MODEL
-  LLM_PROXY_LIVE_META_MODEL
-  LLM_PROXY_LIVE_XAI_MODEL'
+Provider fields use the environment bindings declared in configs/providers.yml.
+Per-provider model overrides use LLM_PROXY_LIVE_<PROVIDER_ID>_MODEL, with the
+provider identifier converted to uppercase and hyphens converted to underscores.'
 }
 
 env_or_default() {
@@ -136,38 +112,12 @@ for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlin
   done <"${parsed_path}"
 }
 
-provider_key_variable() {
-  case "$1" in
-    openai) printf "%s\n" "OPENAI_API_KEY" ;;
-    deepseek) printf "%s\n" "DEEPSEEK_API_KEY" ;;
-    dashscope) printf "%s\n" "DASHSCOPE_API_KEY" ;;
-    moonshot) printf "%s\n" "MOONSHOT_API_KEY" ;;
-    minimax) printf "%s\n" "MINIMAX_API_KEY" ;;
-    siliconflow) printf "%s\n" "SILICONFLOW_API_KEY" ;;
-    zai) printf "%s\n" "ZAI_API_KEY" ;;
-    gemini) printf "%s\n" "GEMINI_API_KEY" ;;
-    anthropic) printf "%s\n" "ANTHROPIC_API_KEY" ;;
-    meta) printf "%s\n" "MODEL_API_KEY" ;;
-    xai) printf "%s\n" "XAI_API_KEY" ;;
-    *) return 1 ;;
-  esac
-}
-
 provider_model_override() {
-  case "$1" in
-    openai) env_or_default LLM_PROXY_LIVE_OPENAI_MODEL "" ;;
-    deepseek) env_or_default LLM_PROXY_LIVE_DEEPSEEK_MODEL "" ;;
-    dashscope) env_or_default LLM_PROXY_LIVE_DASHSCOPE_MODEL "" ;;
-    moonshot) env_or_default LLM_PROXY_LIVE_MOONSHOT_MODEL "" ;;
-    minimax) env_or_default LLM_PROXY_LIVE_MINIMAX_MODEL "" ;;
-    siliconflow) env_or_default LLM_PROXY_LIVE_SILICONFLOW_MODEL "" ;;
-    zai) env_or_default LLM_PROXY_LIVE_ZAI_MODEL "" ;;
-    gemini) env_or_default LLM_PROXY_LIVE_GEMINI_MODEL "" ;;
-    anthropic) env_or_default LLM_PROXY_LIVE_ANTHROPIC_MODEL "" ;;
-    meta) env_or_default LLM_PROXY_LIVE_META_MODEL "" ;;
-    xai) env_or_default LLM_PROXY_LIVE_XAI_MODEL "" ;;
-    *) return 1 ;;
-  esac
+  local provider_name
+  local override_name
+  provider_name="$(printf '%s' "$1" | tr '[:lower:]-' '[:upper:]_')"
+  override_name="LLM_PROXY_LIVE_${provider_name}_MODEL"
+  env_or_default "${override_name}" ""
 }
 
 provider_default_model() {
@@ -273,14 +223,69 @@ print("\n".join(models))
 }
 
 validate_provider_name() {
-  provider_key_variable "$1" >/dev/null
+  python3 -c '
+import json
+import pathlib
+import sys
+
+discovery = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+matches = [provider for provider in discovery.get("providers", []) if provider.get("id") == sys.argv[2]]
+raise SystemExit(0 if len(matches) == 1 else 1)
+' "${PROVIDER_DISCOVERY_PATH}" "$1"
 }
 
-provider_has_key() {
+provider_missing_environment() {
   local provider="$1"
-  local key_variable
-  key_variable="$(provider_key_variable "${provider}")"
-  [[ -n "${!key_variable:-}" ]]
+  python3 -c '
+import json
+import os
+import pathlib
+import sys
+
+discovery = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+matches = [candidate for candidate in discovery.get("providers", []) if candidate.get("id") == sys.argv[2]]
+if len(matches) != 1:
+    print("catalog_provider_invalid")
+    raise SystemExit(0)
+fields = matches[0].get("fields")
+if not isinstance(fields, list) or not fields:
+    print("catalog_fields_invalid")
+    raise SystemExit(0)
+for field in fields:
+    if not isinstance(field, dict) or not isinstance(field.get("required"), bool):
+        print("catalog_field_invalid")
+        continue
+    if field["required"] is not True:
+        continue
+    identifier = field.get("id")
+    environment = field.get("environment")
+    if not isinstance(identifier, str) or not identifier or not isinstance(environment, str) or not environment:
+        print("catalog_field_binding_invalid")
+    elif not os.environ.get(environment):
+        print(environment)
+' "${PROVIDER_DISCOVERY_PATH}" "${provider}"
+}
+
+provider_has_connection() {
+  [[ -z "$(provider_missing_environment "$1")" ]]
+}
+
+catalog_provider_ids() {
+  python3 -c '
+import json
+import pathlib
+import sys
+
+discovery = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+providers = discovery.get("providers", [])
+if not isinstance(providers, list) or not providers:
+    raise SystemExit(1)
+for provider in providers:
+    identifier = provider.get("id")
+    if not isinstance(identifier, str) or not identifier:
+        raise SystemExit(1)
+    print(identifier)
+' "${PROVIDER_DISCOVERY_PATH}"
 }
 
 discover_live_providers() {
@@ -292,8 +297,8 @@ discover_live_providers() {
         echo "error: unknown live provider: ${selected_provider}" >&2
         exit 1
       }
-      if ! provider_has_key "${selected_provider}"; then
-        echo "error: ${selected_provider} requested but $(provider_key_variable "${selected_provider}") is not set" >&2
+      if ! provider_has_connection "${selected_provider}"; then
+        echo "error: ${selected_provider} requested but required catalog environment is not set: $(provider_missing_environment "${selected_provider}")" >&2
         exit 1
       fi
       LIVE_PROVIDERS+=("${selected_provider}")
@@ -301,11 +306,12 @@ discover_live_providers() {
     return
   fi
 
-  for selected_provider in "${SUPPORTED_PROVIDERS[@]}"; do
-    if provider_has_key "${selected_provider}"; then
+  while IFS= read -r selected_provider; do
+    [[ -n "${selected_provider}" ]] || continue
+    if provider_has_connection "${selected_provider}"; then
       LIVE_PROVIDERS+=("${selected_provider}")
     fi
-  done
+  done < <(catalog_provider_ids)
 }
 
 redact_log() {
@@ -316,37 +322,29 @@ redact_log() {
 }
 
 write_managed_live_config() {
-  awk -v port="${PORT}" -v preflight_provider_url="${PREFLIGHT_PROVIDER_URL:-}" '
+  awk -v port="${PORT}" '
     /^  port: / && replaced == 0 {
       print "  port: " port
       replaced = 1
       next
     }
-    /^  openai:$/ {
-      in_openai = 1
-      print
-      next
-    }
-    in_openai == 1 && /^    base_url: / {
-      if (preflight_provider_url != "") {
-        print "    base_url: " preflight_provider_url
-        preflight_replaced++
-      } else {
-        print
-      }
-      in_openai = 0
-      next
-    }
-    in_openai == 1 && /^  [a-z]/ {
-      in_openai = 0
-    }
     { print }
-    END {
-      if (preflight_provider_url != "" && preflight_replaced != 1) {
-        exit 1
-      }
-    }
   ' "${ROOT_DIR}/configs/config.yml" >"${CONFIG_PATH}"
+  cp "${ROOT_DIR}/configs/providers.yml" "${PROVIDER_CATALOG_PATH}"
+  if [[ -n "${PREFLIGHT_PROVIDER_URL:-}" ]]; then
+    python3 -c '
+import pathlib
+import sys
+
+catalog_path = pathlib.Path(sys.argv[1])
+document = catalog_path.read_text(encoding="utf-8")
+needle = "            default_base_url: https://api.openai.com/v1\n            path: /responses"
+replacement = f"            default_base_url: {sys.argv[2]}\n            path: /responses"
+if document.count(needle) != 1:
+    raise SystemExit("OpenAI preflight transport is not unique")
+catalog_path.write_text(document.replace(needle, replacement, 1), encoding="utf-8")
+' "${PROVIDER_CATALOG_PATH}" "${PREFLIGHT_PROVIDER_URL}"
+  fi
 }
 
 start_managed_preflight_provider() {
@@ -614,12 +612,10 @@ verification_failure_code() {
 verify_provider_key() {
   local provider="$1"
   local requested_model="${2:-}"
-  local key_variable
   local model
   local request_path
   local response_path
   local http_status
-  key_variable="$(provider_key_variable "${provider}")"
   if [[ -n "${requested_model}" ]]; then
     model="${requested_model}"
   else
@@ -633,17 +629,27 @@ import os
 import pathlib
 import sys
 
-base_url = os.environ["DASHSCOPE_BASE_URL"] if sys.argv[4] == "dashscope" else ""
+discovery = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+matches = [provider for provider in discovery.get("providers", []) if provider.get("id") == sys.argv[2]]
+if len(matches) != 1:
+    raise SystemExit(1)
+fields = {}
+for field in matches[0].get("fields", []):
+    environment = field.get("environment")
+    value = os.environ.get(environment, "") if isinstance(environment, str) and environment else ""
+    if field.get("required") is True and not value:
+        raise SystemExit(1)
+    if value:
+        fields[field["id"]] = value
 pathlib.Path(sys.argv[3]).write_text(
     json.dumps({
-        "api_key": os.environ[sys.argv[1]],
-        "base_url": base_url,
-        "text_model": sys.argv[2],
+        "fields": fields,
+        "text_model": sys.argv[4],
         "system_prompt": "",
     }, separators=(",", ":")),
     encoding="utf-8",
 )
-' "${key_variable}" "${model}" "${request_path}" "${provider}"
+' "${PROVIDER_DISCOVERY_PATH}" "${provider}" "${request_path}" "${model}"
   chmod 600 "${request_path}"
 
   http_status="$(
@@ -654,7 +660,7 @@ pathlib.Path(sys.argv[3]).write_text(
       --data-binary "@${request_path}" \
       -o "${response_path}" \
       -w "%{http_code}" \
-      "http://127.0.0.1:${PORT}/api/management/tenants/${TENANT_ID}/provider-keys/${provider}"
+      "http://127.0.0.1:${PORT}/api/management/tenants/${TENANT_ID}/provider-connections/${provider}"
   )"
   if [[ "${http_status}" != "200" ]]; then
     echo "error: live provider verification failed: provider=${provider} model=${model} status=${http_status} error=$(verification_failure_code "${response_path}")" >&2
@@ -873,8 +879,6 @@ if [[ "${MEDIA_ONLY}" == "true" && ( "${PREFLIGHT_ONLY}" == "true" || -n "${WRIT
   exit 1
 fi
 
-SUPPORTED_PROVIDERS=(openai deepseek dashscope moonshot minimax siliconflow zai gemini anthropic meta xai)
-MEDIA_PROVIDERS=(openai anthropic gemini moonshot xai)
 LIVE_PROVIDERS=()
 IMAGE_PROVIDERS=()
 IMAGE_MODELS=()
@@ -885,6 +889,7 @@ PREFLIGHT_PROVIDER_PID=""
 PREFLIGHT_PROVIDER_LOG_PATH=""
 PREFLIGHT_PROVIDER_URL=""
 PREFLIGHT_PROVIDER_API_KEY=""
+PROVIDER_DISCOVERY_PATH="${TMP_DIR}/provider-discovery.json"
 
 cleanup() {
   local exit_status=$?
@@ -910,21 +915,6 @@ if [[ -n "${LIVE_ENV_FILE:-}" ]]; then
   load_env_file "${LIVE_ENV_FILE}"
 fi
 
-if [[ "${PREFLIGHT_ONLY}" != "true" && -z "${WRITE_CONFIG_PATH}" ]]; then
-  if [[ "${MEDIA_ONLY}" == "true" && -z "${LLM_PROXY_LIVE_PROVIDERS:-}" ]]; then
-    LLM_PROXY_LIVE_PROVIDERS="$(IFS=,; builtin printf '%s' "${MEDIA_PROVIDERS[*]}")"
-  fi
-  discover_live_providers
-  if [[ "${#LIVE_PROVIDERS[@]}" -eq 0 ]]; then
-    echo "live provider smoke skipped: no provider API keys found"
-    exit 0
-  fi
-fi
-if [[ " ${LIVE_PROVIDERS[*]} " == *" dashscope "* && -z "${DASHSCOPE_BASE_URL:-}" ]]; then
-  echo "error: DASHSCOPE_BASE_URL is required when DashScope is selected" >&2
-  exit 1
-fi
-export DASHSCOPE_BASE_URL="${DASHSCOPE_BASE_URL:-https://dashscope.invalid}"
 LIVE_ALL_MODELS="$(env_or_default LLM_PROXY_LIVE_ALL_MODELS false)"
 if [[ "${LIVE_ALL_MODELS}" != "true" && "${LIVE_ALL_MODELS}" != "false" ]]; then
   echo "error: LLM_PROXY_LIVE_ALL_MODELS must be true or false" >&2
@@ -940,8 +930,10 @@ LIVE_TIMEOUT="$(env_or_default LLM_PROXY_LIVE_TIMEOUT 45)"
 if [[ -n "${WRITE_CONFIG_PATH}" ]]; then
   mkdir -p "$(dirname "${WRITE_CONFIG_PATH}")"
   CONFIG_PATH="$(cd "$(dirname "${WRITE_CONFIG_PATH}")" && pwd)/$(basename "${WRITE_CONFIG_PATH}")"
+  PROVIDER_CATALOG_PATH="$(dirname "${CONFIG_PATH}")/providers.yml"
 else
   CONFIG_PATH="${TMP_DIR}/config.yml"
+  PROVIDER_CATALOG_PATH="${TMP_DIR}/providers.yml"
 fi
 LOG_PATH="${TMP_DIR}/llm-proxy.log"
 PUBLIC_CAPABILITIES_RESPONSE_PATH="${TMP_DIR}/public-capabilities.json"
@@ -976,6 +968,18 @@ fi
 cd "${ROOT_DIR}"
 GOEXPERIMENT= CGO_ENABLED=0 "${GO_BIN}" build -o "${BINARY_PATH}" ./cmd/cli
 
+if ! GOEXPERIMENT= "${BINARY_PATH}" --config "${CONFIG_PATH}" --provider-catalog-only >"${PROVIDER_DISCOVERY_PATH}"; then
+  echo "error: live provider catalog discovery failed" >&2
+  exit 1
+fi
+if [[ "${PREFLIGHT_ONLY}" != "true" ]]; then
+  discover_live_providers
+  if [[ "${#LIVE_PROVIDERS[@]}" -eq 0 ]]; then
+    echo "live provider smoke skipped: no complete provider environment bindings found"
+    exit 0
+  fi
+fi
+
 GOEXPERIMENT= "${BINARY_PATH}" --config "${CONFIG_PATH}" >"${LOG_PATH}" 2>&1 &
 PROXY_PID="$!"
 wait_for_proxy
@@ -987,6 +991,19 @@ if [[ "${PREFLIGHT_ONLY}" == "true" ]]; then
 fi
 if [[ "${MEDIA_ONLY}" == "true" ]]; then
   fetch_public_capabilities
+  if [[ -z "${LLM_PROXY_LIVE_PROVIDERS:-}" ]]; then
+    catalog_image_providers=()
+    for live_provider in "${LIVE_PROVIDERS[@]}"; do
+      if provider_catalog_image_models "${live_provider}" >/dev/null 2>&1; then
+        catalog_image_providers+=("${live_provider}")
+      fi
+    done
+    LIVE_PROVIDERS=("${catalog_image_providers[@]}")
+    if [[ "${#LIVE_PROVIDERS[@]}" -eq 0 ]]; then
+      echo "live provider image smoke skipped: no catalog image provider has complete environment bindings"
+      exit 0
+    fi
+  fi
   for live_provider in "${LIVE_PROVIDERS[@]}"; do
     if [[ "${LIVE_ALL_MODELS}" == "true" ]]; then
       if ! live_models="$(provider_catalog_image_models "${live_provider}")"; then

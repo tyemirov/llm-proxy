@@ -5,7 +5,8 @@ Status: current implementation contract.
 ## Purpose
 
 LLM Proxy exposes one authenticated dictation endpoint for supported audio transcription providers.
-Client applications use one tenant key. LLM Proxy owns provider credentials, provider URLs, model catalogs, routing, and error normalization.
+Client applications use one tenant key. LLM Proxy owns provider credentials,
+provider transports, the provider catalog, routing, and error normalization.
 
 ## Public API Contract
 
@@ -22,15 +23,18 @@ The endpoint returns `400`, `403`, `413`, `429`, `499`, `502`, `503`, or `504` w
 
 ## Provider Contract
 
-| Provider selector | Models | Configuration URL |
+| Provider selector | Models | Provider transport |
 |---|---|---|
-| `openai` | `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | `providers.openai.transcriptions_url` |
-| `siliconflow` | `sensevoice-small` | `providers.siliconflow.transcriptions_url` |
-| `zai` | `glm-asr-2512` | `providers.zai.transcriptions_url` |
-| `xai` | `xai-stt` | `providers.xai.transcriptions_url` |
+| `openai` | `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | OpenAI `dictation` transport |
+| `siliconflow` | `sensevoice-small` | SiliconFlow `dictation` transport |
+| `zai` | `glm-asr-2512` | Z.AI `dictation` transport |
+| `xai` | `xai-stt` | xAI `dictation` transport |
 
 OpenAI is the default dictation provider. Its default model is `gpt-4o-mini-transcribe`.
-The selected provider supplies its configured transcription URL and server-side API key.
+The selected provider offering references one transport in
+[`configs/providers.yml`](../../configs/providers.yml). The transport supplies
+the endpoint and authentication field. The tenant provider connection supplies
+the credential value.
 
 OpenAI, SiliconFlow, and Z.AI receive the selected model in the upstream multipart request.
 xAI uses its configured STT endpoint and does not receive an upstream multipart model field.

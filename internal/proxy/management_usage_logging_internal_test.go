@@ -206,10 +206,11 @@ func TestManagedUsageWriterKeepsPublicResponsesIndependentFromPersistence(t *tes
 		providerAPIKey = "sk-managed-usage-provider"
 	)
 	providerKeyCipher := internalManagedProviderKeyCipher()
-	encryptedProviderAPIKey, encryptionError := providerKeyCipher.encrypt(
+	encryptedProviderAPIKey, encryptionError := providerKeyCipher.encryptConnection(
 		bytes.NewReader(bytes.Repeat([]byte{7}, providerKeyCipher.aeadCipher.NonceSize())),
 		tenantIDValue,
 		ProviderNameOpenAI,
+		CatalogCredentialAPIKey,
 		providerAPIKey,
 	)
 	if encryptionError != nil {
@@ -224,13 +225,13 @@ func TestManagedUsageWriterKeepsPublicResponsesIndependentFromPersistence(t *tes
 	tenantRecord.DefaultModel = ModelNameGPT41
 	tenantRecord.DefaultDictationProvider = ProviderNameOpenAI
 	tenantRecord.DefaultDictationModel = DefaultDictationModel
-	tenantRecord.ProviderAPIKeys = []managedProviderAPIKeyRecord{{
-		TenantID:        tenantIDValue,
-		ProviderID:      ProviderNameOpenAI,
-		EncryptedAPIKey: encryptedProviderAPIKey,
-		TextModel:       ModelNameGPT41,
-		CreatedAt:       timestamp,
-		UpdatedAt:       timestamp,
+	tenantRecord.ProviderConnections = []managedProviderConnectionRecord{{
+		TenantID: tenantIDValue, ProviderID: ProviderNameOpenAI, FieldID: CatalogCredentialAPIKey,
+		Value: encryptedProviderAPIKey, CreatedAt: timestamp, UpdatedAt: timestamp,
+	}}
+	tenantRecord.ProviderProfiles = []managedProviderProfileRecord{{
+		TenantID: tenantIDValue, ProviderID: ProviderNameOpenAI, TextModel: ModelNameGPT41,
+		CreatedAt: timestamp, UpdatedAt: timestamp,
 	}}
 	baseDatabase := newFakeManagedTenantDatabase()
 	baseDatabase.tenantsByID[tenantIDValue] = tenantRecord
@@ -263,6 +264,7 @@ func TestManagedUsageWriterKeepsPublicResponsesIndependentFromPersistence(t *tes
 		QueueSize:                  1,
 		MaxPromptBytes:             1024,
 		Endpoints:                  endpoints,
+		ProviderCatalog:            internalTestProviderCatalog(internalManagedUsageWriterProviderModels()),
 		ModelCatalog:               internalManagedUsageWriterProviderModels(),
 		upstreamRateLimits:         upstreamRateLimits{rules: map[string]upstreamRateLimitRule{}},
 		managementSessionValidator: sessionValidator,

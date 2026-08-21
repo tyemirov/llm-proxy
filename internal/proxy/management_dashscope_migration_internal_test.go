@@ -130,19 +130,19 @@ func TestManagedDashScopeSettingsMigrationRemovesIncompleteSettingsAndPreservesU
 	if migrationError := initializeManagedTenantSchema(fixture.database, fixture.providerKeyCipher, fixture.providers); migrationError != nil {
 		t.Fatalf("migrate DashScope settings: %v", migrationError)
 	}
-	if !managedTableHasColumn(fixture.database.Migrator(), managedProviderKeyTable, managedProviderBaseURLColumn) {
-		t.Fatal("provider base URL column was not added")
+	if fixture.database.Migrator().HasTable(managedProviderKeyTable) {
+		t.Fatal("predecessor provider table remains after connection migration")
 	}
 	var tenantRecord managedTenantRecord
-	if queryError := fixture.database.Preload("ProviderAPIKeys").Where(&managedTenantRecord{TenantID: fixture.tenant.TenantID}).First(&tenantRecord).Error; queryError != nil {
+	if queryError := fixture.database.Preload("ProviderConnections").Preload("ProviderProfiles").Where(&managedTenantRecord{TenantID: fixture.tenant.TenantID}).First(&tenantRecord).Error; queryError != nil {
 		t.Fatalf("load migrated DashScope tenant: %v", queryError)
 	}
 	expectedDefaults := TenantDefaults{
 		Provider: ProviderNameDeepSeek, Model: ModelNameDeepSeekV4Flash,
 		SystemPrompt: fixture.tenant.DefaultSystemPrompt,
 	}
-	if tenantRecord.defaults() != expectedDefaults || !tenantRecord.UpdatedAt.Equal(fixture.tenant.UpdatedAt) || len(tenantRecord.ProviderAPIKeys) != 1 || tenantRecord.ProviderAPIKeys[0].ProviderID != ProviderNameDeepSeek {
-		t.Fatalf("migrated DashScope tenant=%+v provider_keys=%+v", tenantRecord, tenantRecord.ProviderAPIKeys)
+	if tenantRecord.defaults() != expectedDefaults || !tenantRecord.UpdatedAt.Equal(fixture.tenant.UpdatedAt) || len(tenantRecord.ProviderConnections) != 1 || len(tenantRecord.ProviderProfiles) != 1 || tenantRecord.ProviderConnections[0].ProviderID != ProviderNameDeepSeek || tenantRecord.ProviderProfiles[0].ProviderID != ProviderNameDeepSeek {
+		t.Fatalf("migrated DashScope tenant=%+v connections=%+v profiles=%+v", tenantRecord, tenantRecord.ProviderConnections, tenantRecord.ProviderProfiles)
 	}
 	var historicalUsage []managedUsageEventRecord
 	if queryError := fixture.database.Where(&managedUsageEventRecord{ProviderID: ProviderNameDashScope}).Order("id").Find(&historicalUsage).Error; queryError != nil || !slices.Equal(historicalUsage, []managedUsageEventRecord{fixture.usage}) {

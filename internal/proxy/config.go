@@ -50,40 +50,27 @@ const (
 
 // Configuration holds runtime settings.
 type Configuration struct {
-	Management                   ManagementConfiguration
-	OpenAIBaseURL                string
-	OpenAITranscriptionsURL      string
-	DeepSeekBaseURL              string
-	DashScopeBaseURL             string
-	MoonshotBaseURL              string
-	MiniMaxBaseURL               string
-	SiliconFlowBaseURL           string
-	SiliconFlowTranscriptionsURL string
-	ZAIBaseURL                   string
-	ZAITranscriptionsURL         string
-	GeminiBaseURL                string
-	AnthropicBaseURL             string
-	MetaBaseURL                  string
-	XAIBaseURL                   string
-	XAITranscriptionsURL         string
-	Port                         int
-	LogLevel                     string
-	WorkerCount                  int
-	QueueSize                    int
-	RequestTimeoutSeconds        int
-	MaxRequestTimeoutSeconds     int
-	MaxPromptBytes               int64
-	MaxAssetBytes                int64
-	AssetRetentionSeconds        int
-	AssetStorePath               string
-	MaxInputAudioBytes           int64
-	UpstreamRateLimits           []UpstreamRateLimitConfiguration
-	Endpoints                    *Endpoints
-	ModelCatalog                 ModelCatalog
-	upstreamRateLimits           upstreamRateLimits
-	managementSessionValidator   *managementSessionValidator
-	requestTimeoutPolicy         requestTimeoutPolicy
-	validated                    bool
+	Management                 ManagementConfiguration
+	Port                       int
+	LogLevel                   string
+	WorkerCount                int
+	QueueSize                  int
+	RequestTimeoutSeconds      int
+	MaxRequestTimeoutSeconds   int
+	MaxPromptBytes             int64
+	MaxAssetBytes              int64
+	AssetRetentionSeconds      int
+	AssetStorePath             string
+	MaxInputAudioBytes         int64
+	UpstreamRateLimits         []UpstreamRateLimitConfiguration
+	Endpoints                  *Endpoints
+	ProviderCatalog            *ProviderCatalog
+	ProviderConnectionValues   map[string]map[string]string
+	ModelCatalog               ModelCatalog
+	upstreamRateLimits         upstreamRateLimits
+	managementSessionValidator *managementSessionValidator
+	requestTimeoutPolicy       requestTimeoutPolicy
+	validated                  bool
 }
 
 // ManagementConfiguration holds authenticated browser UI and self-service tenant settings.
@@ -112,6 +99,14 @@ type ManagementConfiguration struct {
 
 // NewConfiguration returns a normalized runtime configuration after validating startup invariants.
 func NewConfiguration(configuration Configuration) (Configuration, error) {
+	if configuration.ProviderCatalog != nil {
+		configuration.ModelCatalog = configuration.ProviderCatalog.ModelCatalog()
+		connectionValues, connectionValuesError := configuration.ProviderCatalog.validatedConnectionValues(configuration.ProviderConnectionValues)
+		if connectionValuesError != nil {
+			return Configuration{}, connectionValuesError
+		}
+		configuration.ProviderConnectionValues = connectionValues
+	}
 	configuration.ApplyTunables()
 	timeoutPolicy, timeoutPolicyError := newRequestTimeoutPolicy(configuration.RequestTimeoutSeconds, configuration.MaxRequestTimeoutSeconds)
 	if timeoutPolicyError != nil {
@@ -149,8 +144,8 @@ func validateConfig(configuration Configuration) error {
 	if managementValidationError := validateManagementConfiguration(configuration.Management); managementValidationError != nil {
 		return managementValidationError
 	}
-	if _, modelCatalogError := validateModelCatalog(configuration.ModelCatalog); modelCatalogError != nil {
-		return modelCatalogError
+	if configuration.ProviderCatalog == nil {
+		return fmt.Errorf("%w: field=provider_catalog", ErrInvalidModelCatalog)
 	}
 	return nil
 }
@@ -188,63 +183,6 @@ func (configuration *Configuration) ApplyTunables() {
 	}
 	if configuration.MaxInputAudioBytes <= 0 {
 		configuration.MaxInputAudioBytes = DefaultMaxInputAudioBytes
-	}
-	configuration.OpenAIBaseURL = strings.TrimSpace(configuration.OpenAIBaseURL)
-	if strings.TrimSpace(configuration.OpenAIBaseURL) == constants.EmptyString {
-		configuration.OpenAIBaseURL = defaultOpenAIBaseURL
-	}
-	configuration.OpenAITranscriptionsURL = strings.TrimSpace(configuration.OpenAITranscriptionsURL)
-	if strings.TrimSpace(configuration.OpenAITranscriptionsURL) == constants.EmptyString {
-		configuration.OpenAITranscriptionsURL = defaultTranscriptionsURL
-	}
-	configuration.DeepSeekBaseURL = strings.TrimSpace(configuration.DeepSeekBaseURL)
-	if strings.TrimSpace(configuration.DeepSeekBaseURL) == constants.EmptyString {
-		configuration.DeepSeekBaseURL = defaultDeepSeekBaseURL
-	}
-	configuration.DashScopeBaseURL = strings.TrimSpace(configuration.DashScopeBaseURL)
-	configuration.MoonshotBaseURL = strings.TrimSpace(configuration.MoonshotBaseURL)
-	if strings.TrimSpace(configuration.MoonshotBaseURL) == constants.EmptyString {
-		configuration.MoonshotBaseURL = defaultMoonshotBaseURL
-	}
-	configuration.MiniMaxBaseURL = strings.TrimSpace(configuration.MiniMaxBaseURL)
-	if strings.TrimSpace(configuration.MiniMaxBaseURL) == constants.EmptyString {
-		configuration.MiniMaxBaseURL = defaultMiniMaxBaseURL
-	}
-	configuration.SiliconFlowBaseURL = strings.TrimSpace(configuration.SiliconFlowBaseURL)
-	if strings.TrimSpace(configuration.SiliconFlowBaseURL) == constants.EmptyString {
-		configuration.SiliconFlowBaseURL = defaultSiliconFlowBaseURL
-	}
-	configuration.SiliconFlowTranscriptionsURL = strings.TrimSpace(configuration.SiliconFlowTranscriptionsURL)
-	if strings.TrimSpace(configuration.SiliconFlowTranscriptionsURL) == constants.EmptyString {
-		configuration.SiliconFlowTranscriptionsURL = strings.TrimRight(configuration.SiliconFlowBaseURL, "/") + "/audio/transcriptions"
-	}
-	configuration.ZAIBaseURL = strings.TrimSpace(configuration.ZAIBaseURL)
-	if strings.TrimSpace(configuration.ZAIBaseURL) == constants.EmptyString {
-		configuration.ZAIBaseURL = defaultZAIBaseURL
-	}
-	configuration.ZAITranscriptionsURL = strings.TrimSpace(configuration.ZAITranscriptionsURL)
-	if strings.TrimSpace(configuration.ZAITranscriptionsURL) == constants.EmptyString {
-		configuration.ZAITranscriptionsURL = defaultZAITranscriptionsURL
-	}
-	configuration.GeminiBaseURL = strings.TrimSpace(configuration.GeminiBaseURL)
-	if strings.TrimSpace(configuration.GeminiBaseURL) == constants.EmptyString {
-		configuration.GeminiBaseURL = defaultGeminiBaseURL
-	}
-	configuration.AnthropicBaseURL = strings.TrimSpace(configuration.AnthropicBaseURL)
-	if strings.TrimSpace(configuration.AnthropicBaseURL) == constants.EmptyString {
-		configuration.AnthropicBaseURL = defaultAnthropicBaseURL
-	}
-	configuration.MetaBaseURL = strings.TrimSpace(configuration.MetaBaseURL)
-	if strings.TrimSpace(configuration.MetaBaseURL) == constants.EmptyString {
-		configuration.MetaBaseURL = defaultMetaBaseURL
-	}
-	configuration.XAIBaseURL = strings.TrimSpace(configuration.XAIBaseURL)
-	if strings.TrimSpace(configuration.XAIBaseURL) == constants.EmptyString {
-		configuration.XAIBaseURL = defaultXAIBaseURL
-	}
-	configuration.XAITranscriptionsURL = strings.TrimSpace(configuration.XAITranscriptionsURL)
-	if strings.TrimSpace(configuration.XAITranscriptionsURL) == constants.EmptyString {
-		configuration.XAITranscriptionsURL = defaultXAITranscriptionsURL
 	}
 }
 

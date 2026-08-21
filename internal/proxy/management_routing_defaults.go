@@ -105,7 +105,7 @@ func reconcileManagedRoutingDefaults(providers *providerRegistry, providerSettin
 }
 
 func newManagedRoutingProviders(providers *providerRegistry, providerSettings map[providerID]managedProviderSettings) ([]managedRoutingProvider, error) {
-	keyedProviderIdentifiers := managedKeyedProviderIdentifiers(providerSettings)
+	keyedProviderIdentifiers := managedKeyedProviderIdentifiers(providers, providerSettings)
 	routingProviders := make([]managedRoutingProvider, 0, len(keyedProviderIdentifiers))
 	for _, providerIdentifier := range keyedProviderIdentifiers {
 		settings := providerSettings[providerIdentifier]
@@ -119,6 +119,20 @@ func newManagedRoutingProviders(providers *providerRegistry, providerSettings ma
 		})
 	}
 	return routingProviders, nil
+}
+
+func managedRoutingProvidersFromValidatedSettings(providers *providerRegistry, providerSettings map[providerID]managedProviderSettings) []managedRoutingProvider {
+	providerIdentifiers := managedKeyedProviderIdentifiers(providers, providerSettings)
+	routingProviders := make([]managedRoutingProvider, 0, len(providerIdentifiers))
+	for _, providerIdentifier := range providerIdentifiers {
+		definition := providers.definitions[providerIdentifier]
+		settings := providerSettings[providerIdentifier]
+		routingProviders = append(routingProviders, managedRoutingProvider{
+			definition: definition,
+			textModel:  definition.textModels[strings.ToLower(strings.TrimSpace(settings.textModel))],
+		})
+	}
+	return routingProviders
 }
 
 func reconcileManagedRoutingDefaultsWithProviders(current managedRoutingDefaults, routingProviders []managedRoutingProvider) managedRoutingDefaults {
@@ -176,10 +190,11 @@ func reconcileManagedRoutingDefaultsAfterProviderTextModelChange(reconciled mana
 	return managedRoutingDefaults{tenantDefaults: updated}
 }
 
-func managedKeyedProviderIdentifiers(providerSettings map[providerID]managedProviderSettings) []providerID {
+func managedKeyedProviderIdentifiers(providers *providerRegistry, providerSettings map[providerID]managedProviderSettings) []providerID {
 	identifiers := make([]providerID, 0, len(providerSettings))
 	for providerIdentifier, settings := range providerSettings {
-		if strings.TrimSpace(settings.apiKey) != constants.EmptyString {
+		definition, found := providers.definitions[providerIdentifier]
+		if !found || settings.hasRequiredConnectionFields(definition) {
 			identifiers = append(identifiers, providerIdentifier)
 		}
 	}

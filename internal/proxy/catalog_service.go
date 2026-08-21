@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -21,52 +22,52 @@ const (
 
 // CatalogControl declares one route-specific request control.
 type CatalogControl struct {
-	ID               string   `json:"id" mapstructure:"id"`
-	Kind             string   `json:"kind" mapstructure:"kind"`
-	Values           []string `json:"values" mapstructure:"values"`
-	Minimum          *int     `json:"minimum" mapstructure:"minimum"`
-	Maximum          *int     `json:"maximum" mapstructure:"maximum"`
-	AccountDependent bool     `json:"account_dependent" mapstructure:"account_dependent"`
+	ID               string   `json:"id" mapstructure:"id" yaml:"id"`
+	Kind             string   `json:"kind" mapstructure:"kind" yaml:"kind"`
+	Values           []string `json:"values" mapstructure:"values" yaml:"values,omitempty"`
+	Minimum          *int     `json:"minimum" mapstructure:"minimum" yaml:"minimum,omitempty"`
+	Maximum          *int     `json:"maximum" mapstructure:"maximum" yaml:"maximum,omitempty"`
+	AccountDependent bool     `json:"account_dependent" mapstructure:"account_dependent" yaml:"account_dependent,omitempty"`
 }
 
 // CatalogLimit declares one fixed or account-dependent route limit.
 type CatalogLimit struct {
-	ID               string `json:"id" mapstructure:"id"`
-	Value            *int   `json:"value" mapstructure:"value"`
-	Unit             string `json:"unit" mapstructure:"unit"`
-	AccountDependent bool   `json:"account_dependent" mapstructure:"account_dependent"`
+	ID               string `json:"id" mapstructure:"id" yaml:"id"`
+	Value            *int   `json:"value" mapstructure:"value" yaml:"value,omitempty"`
+	Unit             string `json:"unit" mapstructure:"unit" yaml:"unit"`
+	AccountDependent bool   `json:"account_dependent" mapstructure:"account_dependent" yaml:"account_dependent,omitempty"`
 }
 
 // CatalogPriceConditions identifies one exact published billing condition set.
 type CatalogPriceConditions struct {
-	Resolution     string `json:"resolution" mapstructure:"resolution"`
-	GeneratedAudio string `json:"generated_audio" mapstructure:"generated_audio"`
-	InputMedia     string `json:"input_media" mapstructure:"input_media"`
-	OutputMedia    string `json:"output_media" mapstructure:"output_media"`
-	Duration       string `json:"duration" mapstructure:"duration"`
-	Quantity       string `json:"quantity" mapstructure:"quantity"`
-	Quality        string `json:"quality" mapstructure:"quality"`
-	Mode           string `json:"mode" mapstructure:"mode"`
-	APIVersion     string `json:"api_version" mapstructure:"api_version"`
-	AvatarType     string `json:"avatar_type" mapstructure:"avatar_type"`
-	BillingMode    string `json:"billing_mode" mapstructure:"billing_mode"`
-	BillingOutcome string `json:"billing_outcome" mapstructure:"billing_outcome"`
+	Resolution     string `json:"resolution" mapstructure:"resolution" yaml:"resolution,omitempty"`
+	GeneratedAudio string `json:"generated_audio" mapstructure:"generated_audio" yaml:"generated_audio,omitempty"`
+	InputMedia     string `json:"input_media" mapstructure:"input_media" yaml:"input_media,omitempty"`
+	OutputMedia    string `json:"output_media" mapstructure:"output_media" yaml:"output_media,omitempty"`
+	Duration       string `json:"duration" mapstructure:"duration" yaml:"duration,omitempty"`
+	Quantity       string `json:"quantity" mapstructure:"quantity" yaml:"quantity,omitempty"`
+	Quality        string `json:"quality" mapstructure:"quality" yaml:"quality,omitempty"`
+	Mode           string `json:"mode" mapstructure:"mode" yaml:"mode,omitempty"`
+	APIVersion     string `json:"api_version" mapstructure:"api_version" yaml:"api_version,omitempty"`
+	AvatarType     string `json:"avatar_type" mapstructure:"avatar_type" yaml:"avatar_type,omitempty"`
+	BillingMode    string `json:"billing_mode" mapstructure:"billing_mode" yaml:"billing_mode,omitempty"`
+	BillingOutcome string `json:"billing_outcome" mapstructure:"billing_outcome" yaml:"billing_outcome,omitempty"`
 }
 
 // CatalogPriceRate is one exact published billing component.
 type CatalogPriceRate struct {
-	Component  string                 `json:"component" mapstructure:"component"`
-	Currency   string                 `json:"currency" mapstructure:"currency"`
-	Rate       float64                `json:"rate" mapstructure:"rate"`
-	Unit       string                 `json:"unit" mapstructure:"unit"`
-	Conditions CatalogPriceConditions `json:"conditions" mapstructure:"conditions"`
+	Component  string                 `json:"component" mapstructure:"component" yaml:"component"`
+	Currency   string                 `json:"currency" mapstructure:"currency" yaml:"currency"`
+	Rate       float64                `json:"rate" mapstructure:"rate" yaml:"rate"`
+	Unit       string                 `json:"unit" mapstructure:"unit" yaml:"unit"`
+	Conditions CatalogPriceConditions `json:"conditions" mapstructure:"conditions" yaml:"conditions"`
 }
 
 // CatalogMinimumCharge declares one published request minimum.
 type CatalogMinimumCharge struct {
-	Currency string  `json:"currency" mapstructure:"currency"`
-	Amount   float64 `json:"amount" mapstructure:"amount"`
-	Unit     string  `json:"unit" mapstructure:"unit"`
+	Currency string  `json:"currency" mapstructure:"currency" yaml:"currency"`
+	Amount   float64 `json:"amount" mapstructure:"amount" yaml:"amount"`
+	Unit     string  `json:"unit" mapstructure:"unit" yaml:"unit"`
 }
 
 // CatalogPriceDescriptor owns pricing for one provider, model, and operation.
@@ -365,7 +366,7 @@ func validateCatalogLimits(limits []CatalogLimit, field string) error {
 }
 
 func validateVideoOffering(offering ProviderOffering, field string) error {
-	if offering.Provider != ProviderNameXAI || offering.WireContract != "xai_videos_generations" || offering.ExecutionLifecycle != string(textExecutionLifecyclePollableResource) {
+	if offering.WireContract != CatalogProtocolXAIVideosGenerations || offering.ExecutionLifecycle != string(textExecutionLifecyclePollableResource) {
 		return fmt.Errorf("%w: field=%s reason=unsupported_video_route", ErrInvalidModelCatalog, field)
 	}
 	if offering.RequestProfile != constants.EmptyString || offering.WebSearch || offering.OutputTokenLimit != 0 || offering.ReasoningEffort != nil || len(offering.MediaInputs) != 0 {
@@ -406,7 +407,7 @@ func validateCatalogPrices(prices []CatalogPriceDescriptor, catalog validatedMod
 		}
 		seenRates := map[string]struct{}{}
 		for rateIndex, rate := range descriptor.Rates {
-			if strings.TrimSpace(rate.Component) == constants.EmptyString || rate.Component != strings.TrimSpace(rate.Component) || rate.Currency != CatalogCurrencyUSD || rate.Rate < 0 || strings.TrimSpace(rate.Unit) == constants.EmptyString || rate.Unit != strings.TrimSpace(rate.Unit) {
+			if strings.TrimSpace(rate.Component) == constants.EmptyString || rate.Component != strings.TrimSpace(rate.Component) || rate.Currency != CatalogCurrencyUSD || math.IsNaN(rate.Rate) || math.IsInf(rate.Rate, 0) || rate.Rate < 0 || strings.TrimSpace(rate.Unit) == constants.EmptyString || rate.Unit != strings.TrimSpace(rate.Unit) {
 				return fmt.Errorf("%w: field=%s.rates[%d]", ErrInvalidModelCatalog, field, rateIndex)
 			}
 			rateIdentifier := fmt.Sprintf("%s\x00%#v", rate.Component, rate.Conditions)
@@ -415,7 +416,7 @@ func validateCatalogPrices(prices []CatalogPriceDescriptor, catalog validatedMod
 			}
 			seenRates[rateIdentifier] = struct{}{}
 		}
-		if descriptor.MinimumCharge != nil && (descriptor.MinimumCharge.Currency != CatalogCurrencyUSD || descriptor.MinimumCharge.Amount < 0 || strings.TrimSpace(descriptor.MinimumCharge.Unit) == constants.EmptyString || descriptor.MinimumCharge.Unit != strings.TrimSpace(descriptor.MinimumCharge.Unit)) {
+		if descriptor.MinimumCharge != nil && (descriptor.MinimumCharge.Currency != CatalogCurrencyUSD || math.IsNaN(descriptor.MinimumCharge.Amount) || math.IsInf(descriptor.MinimumCharge.Amount, 0) || descriptor.MinimumCharge.Amount < 0 || strings.TrimSpace(descriptor.MinimumCharge.Unit) == constants.EmptyString || descriptor.MinimumCharge.Unit != strings.TrimSpace(descriptor.MinimumCharge.Unit)) {
 			return fmt.Errorf("%w: field=%s.minimum_charge", ErrInvalidModelCatalog, field)
 		}
 		catalog.prices[identifier] = descriptor

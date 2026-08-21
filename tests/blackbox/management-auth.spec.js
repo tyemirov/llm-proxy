@@ -211,7 +211,7 @@ test("public Log In opens the authenticated app and the TAuth session survives u
   await providerEditor.getByRole("textbox", { name: "OpenAI API key" }).fill("sk-local-blackbox-provider-key");
   const providerSaveResponsePromise = page.waitForResponse(
     (response) =>
-      response.url() === `${stack.llmProxyOrigin}/api/management/tenants/${firstTenantID}/provider-keys/openai` &&
+      response.url() === `${stack.llmProxyOrigin}/api/management/tenants/${firstTenantID}/provider-connections/openai` &&
       response.request().method() === "PUT",
   );
   await page.keyboard.press("Tab");

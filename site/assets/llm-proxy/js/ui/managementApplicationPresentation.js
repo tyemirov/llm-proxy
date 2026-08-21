@@ -32,7 +32,7 @@ export function createManagementApplicationPresentationResponsibility() {
     },
 
     get hasSavedProviderKey() {
-      return this.providers.some((provider) => provider.has_key);
+      return this.providers.some((provider) => provider.configured);
     },
 
     get settingsRequired() {

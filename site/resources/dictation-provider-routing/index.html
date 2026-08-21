@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Dictation provider routing for OpenAI, Z.AI, Grok, and SiliconFlow</title>
-    <meta name="description" content="Select dictation-capable providers through /dictate while keeping transcription URLs server-side.">
+    <meta name="description" content="Select dictation-capable providers through /dictate while catalog transports keep provider endpoints server-side.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/dictation-provider-routing/">
     <meta property="og:title" content="Dictation provider routing for OpenAI, Z.AI, Grok, and SiliconFlow">
-    <meta property="og:description" content="Select dictation-capable providers through /dictate while keeping transcription URLs server-side.">
+    <meta property="og:description" content="Select dictation-capable providers through /dictate while catalog transports keep provider endpoints server-side.">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/dictation-provider-routing/">
     <meta name="twitter:card" content="summary">
@@ -27,9 +27,9 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Dictation provider routing for OpenAI, Z.AI, Grok, and SiliconFlow","description":"Select dictation-capable providers through /dictate while keeping transcription URLs server-side.","url":"https://llm-proxy.mprlab.com/resources/dictation-provider-routing/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/dictation-provider-routing/","about":["LLM Proxy","Dictation","dictation provider routing"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Dictation provider routing for OpenAI, Z.AI, Grok, and SiliconFlow","description":"Select dictation-capable providers through /dictate while catalog transports keep provider endpoints server-side.","url":"https://llm-proxy.mprlab.com/resources/dictation-provider-routing/","datePublished":"2026-07-06","dateModified":"2026-08-20","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/dictation-provider-routing/","about":["LLM Proxy","Dictation","dictation provider routing"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Dictation provider routing for OpenAI, Z.AI, Grok, and SiliconFlow","item":"https://llm-proxy.mprlab.com/resources/dictation-provider-routing/"}]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of dictation provider routing?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy exposes dictation-capable providers through configured catalogs and provider-specific transcription URLs while preserving one /dictate endpoint."}},{"@type":"Question","name":"Who should read this dictation resource?","acceptedAnswer":{"@type":"Answer","text":"Teams testing transcription providers behind one proxy endpoint."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Audio transcription proxy API behind tenant secrets, which covers audio transcription proxy API."}}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of dictation provider routing?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy resolves each dictation route through the provider catalog while preserving one /dictate endpoint."}},{"@type":"Question","name":"Who should read this dictation resource?","acceptedAnswer":{"@type":"Answer","text":"Teams testing transcription providers behind one proxy endpoint."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Audio transcription proxy API behind tenant secrets, which covers audio transcription proxy API."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body class="resource-page">
@@ -65,9 +65,9 @@
           <header class="resource-hero">
             <p class="eyebrow">Dictation</p>
             <h1>Dictation provider routing for OpenAI, Z.AI, Grok, and SiliconFlow</h1>
-            <p class="resource-deck">Select dictation-capable providers through /dictate while keeping transcription URLs server-side.</p>
+            <p class="resource-deck">Select dictation-capable providers through /dictate while catalog transports keep provider endpoints server-side.</p>
             <p class="resource-audience">Teams testing transcription providers behind one proxy endpoint.</p>
-            <p class="resource-byline">Reviewed 2026-07-11 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <p class="resource-byline">Reviewed 2026-08-20 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
             <div class="resource-actions">
               <a class="resource-button" href="/docs/">Open API reference</a>
               <a class="resource-link" href="/resources/">Browse all resources</a>
@@ -81,13 +81,13 @@
 
           <section>
             <h2>How LLM Proxy helps</h2>
-            <p>LLM Proxy exposes dictation-capable providers through configured catalogs and provider-specific transcription URLs while preserving one /dictate endpoint.</p>
+            <p>LLM Proxy resolves each dictation route through the provider catalog while preserving one /dictate endpoint.</p>
           </section>
 
           <section>
             <h2>How it works</h2>
             <ol class="resource-steps">
-              <li>Configure dictation catalogs for OpenAI, SiliconFlow, Z.AI, or xAI as needed.</li>
+              <li>Declare dictation transports and offerings in providers.yml.</li>
 <li>Send multipart audio to /dictate with key=&lt;tenant secret&gt;.</li>
 <li>Omit provider/model for tenant defaults or select a dictation-capable provider and model.</li>
 <li>Receive JSON text output from the proxy.</li>
@@ -115,8 +115,8 @@
 
 
                         <tr>
-                          <td>Transcription URL config</td>
-                          <td>Each dictation-capable provider owns an explicit transcriptions_url.</td>
+                          <td>Catalog transport</td>
+                          <td>Each dictation-capable provider owns an explicit transport endpoint.</td>
                           <td>Client apps do not hardcode provider STT URLs.</td>
                         </tr>
 
@@ -171,7 +171,7 @@
 
                     <details>
                       <summary>What is the main job of dictation provider routing?</summary>
-                      <p>LLM Proxy exposes dictation-capable providers through configured catalogs and provider-specific transcription URLs while preserving one /dictate endpoint.</p>
+                      <p>LLM Proxy resolves each dictation route through the provider catalog while preserving one /dictate endpoint.</p>
                     </details>
 
 

@@ -151,11 +151,14 @@ does not add MiniMax-specific reasoning, tools, streaming, or media controls.
 
 ## Configuration
 
-Runtime service configuration comes from `config.yml`; env vars and `.env`
-files are interpolation inputs only for `${NAME}` placeholders in that YAML.
-The loader rejects unknown keys and missing placeholders before the proxy
-starts. Client keys, provider API keys, and tenant routing defaults are
-tenant-owned management state and are not runtime configuration fields.
+Runtime service configuration comes from `config.yml`. The provider catalog
+comes from the sibling `providers.yml`. The loader validates the provider
+catalog before it validates service configuration.
+
+Environment variables and `.env` files supply placeholder values for
+`config.yml`. They also supply optional provider field values through catalog
+environment bindings. Client keys and tenant routing defaults remain
+tenant-owned management state.
 
 Shared config fields:
 
@@ -191,53 +194,17 @@ Shared config fields:
 - `management.provider_key_encryption_key`
 - `management.management_api_origin`
 - `management.proxy_origin`
-Provider runtime URLs:
 
-- `providers.openai.base_url`, `providers.openai.transcriptions_url`
-- `providers.meta.base_url`
-- `providers.deepseek.base_url`
-- `providers.dashscope.base_url`
-- `providers.moonshot.base_url`
-- `providers.minimax.base_url`
-- `providers.siliconflow.base_url`, `providers.siliconflow.transcriptions_url`
-- `providers.zai.base_url`, `providers.zai.transcriptions_url`
-- `providers.gemini.base_url`
-- `providers.anthropic.base_url`
-- `providers.xai.base_url`, `providers.xai.transcriptions_url`
+The provider catalog owns provider identities, fields, transports, models,
+offerings, limits, controls, and prices. Static endpoint bases and paths also
+belong to the provider catalog. The managed DashScope `base_url` provider field
+supplies its tenant-specific workspace URL.
 
-The managed DashScope provider setting supplies the tenant-specific workspace
-base URL together with its API key.
+See [Provider Catalog](../provider-catalog.md) for the complete field mapping,
+adapter mapping, validation contract, and one-file provider procedure.
 
-Normalized model catalog:
-
-- `catalog.revision`
-- `catalog.operations[].id`, `input_artifacts`, and `output_artifacts`
-- `catalog.providers[].id` and `catalog.providers[].label`
-- `catalog.providers[].credential_kinds`
-- `catalog.publishers[].id` and `catalog.publishers[].label`
-- `catalog.families[].id`, `publisher`, and `label`
-- `catalog.models[].id`, `publisher`, `family`, and `version`
-- `catalog.models[].operations` and `catalog.models[].media_inputs`
-- `catalog.offerings[].provider`, `model`, and `provider_model`
-- `catalog.offerings[].operations` and `default_operations`
-- `catalog.offerings[].wire_contract` and `execution_lifecycle`
-- `catalog.offerings[].output_token_limit` and `media_inputs`
-- `catalog.offerings[].media_limits[].id`, `media_type`, `transport`, `status`,
-  `value`, `unit`, `scope`, `source`, and `last_verified`
-- `catalog.offerings[].reasoning_effort`
-- `catalog.offerings[].request_profile` and `web_search`
-- `catalog.offerings[].controls` and `limits`
-- `catalog.prices[].provider`, `model`, `operation`, availability, rates,
-  exact conditions, minimum charge, source, and verification date
-
-The model catalog is runtime config data. Code owns provider selectors,
-aliases, allowed wire and lifecycle pairs, endpoint shapes, adapters, and
-stable OpenAI request profiles. `config.yml` owns normalized model identity and
-provider offerings. Provider-native model identifiers exist only in offerings.
-
-The README model-capability table mirrors `config.yml`; refresh those two
-catalog representations together and do not hardcode model ids in provider
-transports. Moonshot's current Kimi Chat Completions routes receive
+The README model-capability table describes the same provider catalog.
+Moonshot's current Kimi Chat Completions routes receive
 `max_completion_tokens` when a caller supplies the proxy `max_tokens` value.
 Kimi K3 maps exact proxy reasoning efforts `low`, `high`, and `max` to the
 top-level provider field. Omission keeps Moonshot's default. Kimi K2.6 and
@@ -251,15 +218,14 @@ public response or log.
 All seven MiniMax M2 routes map public `max_tokens` to
 `max_completion_tokens` and carry a configured 204800-token output ceiling.
 GLM-5.2 uses the international Z.AI Chat Completions endpoint. Its
-128K output maximum is catalog metadata; optional `thinking` and
-provider-native `reasoning_effort` controls are not exposed directly. The
+128K output maximum is catalog metadata. The proxy does not expose optional
+`thinking` or provider-native `reasoning_effort` controls. The
 canonical proxy `reasoning_effort` request field is validated against the exact
 resolved provider/model capability and translated only through its configured
-adapter. A supplied value must be nonblank and exact and takes precedence over
-the tenant routing default; an omitted value uses that default. The current
-mapping is the OpenAI Responses reasoning adapter, so a blank or unsupported
-effort fails closed for GLM and generic OpenAI-compatible routes instead of
-being ignored or leaked downstream.
+adapter. A supplied value must be nonblank and exact. It takes precedence over
+the tenant routing default. An omitted value uses that default. The current
+mapping is the OpenAI Responses reasoning adapter. A blank or unsupported
+effort stops before a GLM or generic OpenAI-compatible request.
 
 OpenAI `request_profile` values select stable payload shapes:
 
@@ -416,11 +382,11 @@ omission keeps the existing tenant/provider-default behavior.
 
 ## Managed Provider Credential Verification
 
-Every nonempty `api_key` submitted to
-`PUT /api/management/tenants/:tenant_id/provider-keys/:provider` is an
-unverified new or replacement credential. The handler resolves ownership,
-provider, exact text model, wire contract, and execution lifecycle. It then
-performs one fixed, non-user-content probe through the canonical transport:
+`PUT /api/management/tenants/:tenant_id/provider-connections/:provider` accepts
+an exact map of catalog-defined provider fields. A nonempty credential value is
+an unverified new or replacement credential. A changed setting can require
+verification with the retained credential. The handler uses the selected
+provider transport for one fixed, non-user-content probe:
 
 - OpenAI Responses uses one synchronous, non-stored `POST /responses` with
   `background: false`, `store: false`, and a 16-token output limit.
@@ -449,13 +415,13 @@ map to the documented provider-neutral error. Candidate keys, probe content,
 authenticated URLs, and raw upstream bodies never enter logs, responses,
 profiles, or usage rows.
 
-Only successful verification enters the existing atomic provider-key
-transaction. The transaction encrypts the credential and saves the submitted
-model and system prompt. It reconciles routing defaults and returns the
-complete profile.
-Every failure leaves a new provider unkeyed or preserves the prior verified
-replacement credential, settings, and defaults unchanged. An empty `api_key`
-is the canonical retain-existing-key settings update and bypasses verification.
+Only successful verification enters the provider connection transaction. The
+transaction encrypts each secret provider field. It saves nonsecret provider
+fields and the separate provider profile. It reconciles routing defaults and
+returns the complete tenant profile.
+
+Every failure preserves the prior connection, profile, and defaults. A blank
+saved secret field retains the current encrypted value.
 
 Settings starts this operation automatically when a paste updates the selected
 provider key. It announces `Verifying key`, leaves only that input available
@@ -471,27 +437,27 @@ prior key, and exposes an explicit retry.
 
 `PUT /api/management/tenants/:tenant_id/defaults` requires every field and
 accepts only complete text and dictation provider/model pairs. Each nonempty
-pair must name a provider with a saved tenant key; dictation also requires that
+pair must name a provider with a configured connection. Dictation also requires that
 provider's declared dictation capability. The text pair is both empty only when
-the tenant has no provider key, and the dictation pair is both empty only when
-none of its keyed providers supports dictation. `reasoning_effort` is explicit;
+the tenant has no provider connection. The dictation pair is both empty only when
+none of its configured providers supports dictation. `reasoning_effort` is explicit;
 empty means unset and a nonempty value must be in the selected exact text
 provider/model capability list. The handler resolves the text pair before
 validating effort and constructs all defaults before the database write, so a
 partial, unkeyed, unknown, unsupported, cross-provider pair or incompatible
 effort fails with `400 managed_routing_defaults_invalid` and leaves the prior
-defaults unchanged. The profile response exposes key eligibility through
-`providers[].has_key` and capabilities through `providers[].text_models[]`; it
+defaults unchanged. The profile response exposes eligibility through
+`providers[].configured` and capabilities through `providers[].text_models[]`. It
 has no provider-level reasoning capability or global option list. A malformed
 profile is an app-integrity failure in the browser, not a UI repair
 opportunity.
 
-Saving or removing a provider key reconciles routing defaults in the same
-database transaction. An eligible current pair is preserved. Otherwise the
-first keyed provider by canonical provider id becomes the text default using
-its saved text model, and the first keyed dictation-capable provider becomes the
-dictation default using its configured dictation model. A missing eligible
-provider clears that pair and also clears reasoning effort when text is unset.
+Saving or removing a provider connection reconciles routing defaults in the same
+database transaction. The transaction preserves an eligible current pair.
+Otherwise, the first configured provider becomes the text default with its
+saved text model. The first configured dictation provider becomes the dictation
+default with its configured model. A missing eligible provider clears that
+pair. A missing text provider also clears reasoning effort.
 
 Startup requires all persisted pairs to be canonical, catalog-valid, and backed
 by saved tenant keys; it never retains a fallback, compatibility read, or
@@ -531,6 +497,12 @@ identity. The transaction updates provider settings and current routing
 defaults. It verifies timestamps and historical usage records before it records
 the new schema version.
 Current-version startup rejects `zhipu`, `glm`, and other noncanonical routes.
+
+The bounded schema-version-9 migration replaces provider-key rows with provider
+connection records and provider profile records. It maps predecessor columns
+through each current provider definition. It re-encrypts credentials with the
+provider field identity as associated data. It verifies all values and
+timestamps before it removes the predecessor table.
 
 `server.workers` limits concurrent upstream provider HTTP operations, not whole
 client request lifecycles. `server.queue_size` limits the number of additional
@@ -580,7 +552,7 @@ execution and discovers selected provider keys. A paid run starts a disposable
 management database with ephemeral encryption/session material, creates one
 local managed tenant and client secret, verifies each available key through the
 same provider-settings operation above, and runs that provider's smoke request
-only after the verification returns a keyed profile. Verification payloads,
+only after the verification returns a configured tenant profile. Verification payloads,
 session material, and provider/proxy response bodies remain in the private
 temporary directory and are removed at exit. `--write-config` and `--preflight`
 retain the non-paid managed-only configuration and make no provider
@@ -624,8 +596,8 @@ failure without a response prints none. This paid check remains outside
 `make ci`, runs all nine cases even after an earlier failure, and never prints
 a tenant secret or response body.
 
-Startup validates the mandatory management configuration, provider endpoints,
-and normalized model catalog. Catalog validation rejects invalid identities,
+Startup validates the mandatory management configuration and provider catalog.
+Catalog validation rejects invalid identities,
 references, route pairs, defaults, and capabilities. Obsolete
 `management.enabled`, top-level `tenants`, and provider `api_key` fields are
 unknown configuration keys. Managed tenants own client keys, provider
@@ -657,7 +629,20 @@ MPR UI is the sole browser authentication authority. Application JavaScript list
 
 DNS must leave `llm-proxy.mprlab.com` pointed at GitHub Pages and point `llm-proxy-api.mprlab.com` at the MPR gateway; the gateway route for `llm-proxy.mprlab.com` must be removed or moved so the backend only owns the API hostname. Management APIs under `/api/management` validate the configured TAuth session cookie locally with issuer `tauth` unless `management.jwt_issuer` overrides it.
 
-Provider API keys are accepted only through authenticated, tenant-scoped management endpoints. Every nonempty new or replacement credential is operationally verified against its exact provider and selected text model before it is encrypted at rest with AES-GCM using the required `management.provider_key_encryption_key`. Normal save, tenant-profile, and administrator responses return only masked status. The sole raw-key response is the explicit owner-authenticated `POST /api/management/tenants/:tenant_id/provider-keys/:provider/reveal` action, which requires the configured management origin and returns `Cache-Control: no-store`. Each provider-key record also stores that provider's selected text model and provider-specific system prompt. Managed text requests that select a provider and omit `model` use the saved provider text model, and provider-selected requests without request-level system instructions use the saved provider system prompt. The bounded F014 migration rejects plaintext or corrupt legacy rows and re-encrypts valid keys with the preserved opaque tenant id as AES-GCM associated data. This is an encrypted-at-rest guarantee for database dumps, backups, and direct storage access, not a user-only decryption or zero-knowledge guarantee.
+Provider connection values are accepted only through authenticated,
+tenant-scoped management endpoints. The service verifies each new credential
+with its exact provider transport and selected text model. It encrypts every
+secret provider field with `management.provider_key_encryption_key`.
+
+Normal responses return masked secret state. The owner can reveal one secret
+through
+`POST /api/management/tenants/:tenant_id/provider-connections/:provider/fields/:field/reveal`.
+That action requires the configured management origin and returns
+`Cache-Control: no-store`.
+
+Provider profile records store the selected text model and provider system
+prompt. Provider connection records store only catalog field values. Current
+schema reads use only these two generic record types.
 
 Management requires `management.database_path` and
 `management.provider_key_encryption_key`. Persistence uses the pure-Go GORM
@@ -700,7 +685,10 @@ Schema version 5 converts affected provider-native model values to canonical
 exact model identifiers. It preserves tenant timestamps and historical usage
 records. Current startup rejects invalid canonical routes.
 
-Server/runtime settings, backend auth validation, browser-facing MPR UI/TAuth settings, provider base URLs, transcription URLs, and model catalogs remain config-file-owned. Database access must use GORM model APIs without raw SQL. Generated llm-proxy client secrets are returned once and stored as SHA-256 digests. Managed tenants authenticate the same public proxy endpoints with `key=<generated secret>` and use only their own saved provider credentials.
+Server and management settings remain in `config.yml`. Provider definitions,
+static endpoints, exact models, and offerings remain in `providers.yml`.
+Database access uses GORM model APIs without raw SQL. Generated client secrets
+are returned once and stored as SHA-256 digests.
 
 The shared header has one application-owned notification region followed by the MPR-owned identity control in the `aux` slot. Scoped flex ordering keeps every visible notice immediately left of the avatar or Sign in control, and the application clears each notice after 10 seconds; MPR UI remains the only owner of sign-in, session, and avatar-menu behavior.
 
@@ -739,16 +727,16 @@ that response or structured provider-failure logs.
 
 ## Implementation Notes
 
-- Provider/model validation happens at the HTTP edge through a provider registry built from the configured model catalogs.
-- OpenAI keeps the existing Responses API adapter and derives Responses and Models URLs from `providers.openai.base_url`; audio transcription uses `providers.openai.transcriptions_url`. The adapter polls documented pending states, normalizes only `incomplete/max_output_tokens` for shared continuation, and rejects failed, cancelled, other incomplete, missing, or unknown states.
+- Provider/model validation happens at the HTTP edge through a registry built from the provider catalog.
+- OpenAI selects Responses, Models, and dictation endpoints from catalog-defined provider transports. The Responses adapter polls documented pending states.
 - Non-OpenAI compatible text providers use a shared Chat Completions adapter. It normalizes `finish_reason=length` for shared continuation and requires `finish_reason=stop` to complete content or reasoning text.
-- Meta uses the shared OpenAI-compatible Chat Completions adapter against `providers.meta.base_url`; its proxy contract is text-only and has no Responses fallback.
+- Meta uses the shared OpenAI-compatible Chat Completions adapter and its catalog-defined endpoint. Its proxy contract is text-only.
 - Anthropic uses a native Messages adapter. It maps `system` messages to the top-level `system` parameter. It maps other messages to `messages[]`.
 - Anthropic sends declared image inputs as ordered base64 content blocks. `max_tokens` continues through the shared coordinator.
-- Gemini uses a native Interactions adapter against
-  `providers.gemini.base_url`; `incomplete` continues through the shared
-  coordinator as a new interaction, while `completed` with visible model text
-  succeeds. Gemini 3.x uses stored background polling; Gemini 2.5 uses a
+- Gemini uses a native Interactions adapter against its catalog-defined
+  endpoint. `incomplete` continues through the shared
+  coordinator as a new interaction. `completed` with visible model text
+  succeeds. Gemini 3.x uses stored background polling. Gemini 2.5 uses a
   non-stored synchronous request. For exact models whose catalog declares the
   capability, ordered image and audio attachments become typed interaction
   content after the message text. The adapter selects inline `data` or Files
@@ -760,7 +748,7 @@ that response or structured provider-failure logs.
   `model_output` steps, and system messages as `system_instruction`.
 - OpenAI-compatible Chat Completions adapters remain text-only and reject media declarations at startup.
 - OpenAI Responses receives text-only single prompts unchanged. Requests with images use role-preserving typed content blocks.
-- Dictation routing reuses the multipart transcription adapter with provider-specific URLs. OpenAI, SiliconFlow, and Z.AI send a multipart `model` field. xAI STT omits the multipart `model` field. Only providers that support `/dictate` expose transcription URL config fields.
+- Dictation routing uses catalog-defined transports and the multipart transcription adapter. OpenAI, SiliconFlow, and Z.AI send a multipart `model` field. xAI STT omits it.
 - Response formatting keeps existing text/XML/CSV bodies and existing JSON `request`, `response`, and normalized `usage` fields. JSON responses also include OpenRouter-style `object`, `model`, and `choices[].message.content` metadata, plus caller-visible request `messages` with provided `order` values. Server-injected tenant default system prompts are sent upstream but not echoed in response metadata.
 
 ## Test Strategy

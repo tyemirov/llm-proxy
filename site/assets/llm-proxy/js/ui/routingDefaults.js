@@ -40,7 +40,7 @@ export function createRoutingDefaultsResponsibility() {
     },
 
     get keyedTextProviders() {
-      return this.providers.filter((/** @type {import("../types.d.js").ProviderProfile} */ provider) => provider.has_key);
+      return this.providers.filter((/** @type {import("../types.d.js").ProviderProfile} */ provider) => provider.configured);
     },
 
     get hasKeyedTextProviders() {

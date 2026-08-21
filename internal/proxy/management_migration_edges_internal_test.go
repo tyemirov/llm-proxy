@@ -494,6 +494,10 @@ func TestVerifyManagedTenantMigrationRejectsMismatches(t *testing.T) {
 func TestMigrateLegacyManagedTenantSchemaRollsBackTransactionalFailures(t *testing.T) {
 	cipher := internalManagedProviderKeyCipher()
 	providers := internalManagementProviderRegistry()
+	invalidConnectionProviders := internalManagementProviderRegistry()
+	invalidOpenAIDefinition := invalidConnectionProviders.definitions[providerID(ProviderNameOpenAI)]
+	invalidOpenAIDefinition.fields["second_key"] = ProviderCatalogField{ID: "second_key", Kind: CatalogProviderFieldKindCredential}
+	invalidConnectionProviders.definitions[providerID(ProviderNameOpenAI)] = invalidOpenAIDefinition
 	now := time.Date(2026, 7, 25, 19, 0, 0, 0, time.UTC)
 	seedFixture := func(subTest *testing.T) string {
 		databasePath := filepath.Join(subTest.TempDir(), "transaction.db")
@@ -546,6 +550,7 @@ func TestMigrateLegacyManagedTenantSchemaRollsBackTransactionalFailures(t *testi
 		name      string
 		open      func(*testing.T, string) *gorm.DB
 		configure func(*testing.T, *gorm.DB)
+		providers *providerRegistry
 	}{
 		{
 			name: "rename index",
@@ -602,9 +607,16 @@ func TestMigrateLegacyManagedTenantSchemaRollsBackTransactionalFailures(t *testi
 			},
 		},
 		{
+			name:      "provider connection data",
+			providers: invalidConnectionProviders,
+		},
+		{
 			name: "drop legacy table",
 			open: func(subTest *testing.T, databasePath string) *gorm.DB {
-				return openDatabase(subTest, failingManagedDropDialector{Dialector: sqlite.Open(databasePath)})
+				return openDatabase(subTest, failingManagedTargetDropDialector{
+					Dialector: sqlite.Open(databasePath),
+					target:    legacyProviderKeyMigrationTable,
+				})
 			},
 		},
 	}
@@ -620,7 +632,11 @@ func TestMigrateLegacyManagedTenantSchemaRollsBackTransactionalFailures(t *testi
 			if testCase.configure != nil {
 				testCase.configure(subTest, database)
 			}
-			migrationError := migrateLegacyManagedTenantSchema(database, cipher, providers)
+			migrationProviders := providers
+			if testCase.providers != nil {
+				migrationProviders = testCase.providers
+			}
+			migrationError := migrateLegacyManagedTenantSchema(database, cipher, migrationProviders)
 			if migrationError == nil {
 				subTest.Fatal("transactional migration unexpectedly succeeded")
 			}
@@ -723,4 +739,27 @@ type failingManagedDropMigrator struct {
 
 func (migrator failingManagedDropMigrator) DropTable(...interface{}) error {
 	return errInternalTestDatabase
+}
+
+type failingManagedTargetDropDialector struct {
+	gorm.Dialector
+	target string
+}
+
+func (dialector failingManagedTargetDropDialector) Migrator(database *gorm.DB) gorm.Migrator {
+	return failingManagedTargetDropMigrator{Migrator: dialector.Dialector.Migrator(database), target: dialector.target}
+}
+
+type failingManagedTargetDropMigrator struct {
+	gorm.Migrator
+	target string
+}
+
+func (migrator failingManagedTargetDropMigrator) DropTable(values ...interface{}) error {
+	for _, value := range values {
+		if tableName, correctType := value.(string); correctType && tableName == migrator.target {
+			return errInternalTestDatabase
+		}
+	}
+	return migrator.Migrator.DropTable(values...)
 }

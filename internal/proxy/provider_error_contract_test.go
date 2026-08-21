@@ -64,7 +64,7 @@ func TestProviderErrorContractSanitizesEveryTextTransport(t *testing.T) {
 			wantCode:           llmproxycontract.ErrorCodeProviderError,
 			truncateBody:       true,
 			configure: func(configuration *proxy.Configuration, baseURL string) {
-				configuration.OpenAIBaseURL = baseURL
+				configuration.Endpoints.SetProviderBaseURL(proxy.ProviderNameOpenAI, baseURL)
 			},
 		},
 		{
@@ -77,7 +77,7 @@ func TestProviderErrorContractSanitizesEveryTextTransport(t *testing.T) {
 			wantRetryable:      true,
 			wantRetryAfter:     stringPointer("120"),
 			configure: func(configuration *proxy.Configuration, baseURL string) {
-				configuration.AnthropicBaseURL = baseURL
+				configuration.Endpoints.SetProviderBaseURL(proxy.ProviderNameAnthropic, baseURL)
 			},
 		},
 		{
@@ -90,7 +90,7 @@ func TestProviderErrorContractSanitizesEveryTextTransport(t *testing.T) {
 			wantRetryable:      true,
 			wantRetryAfter:     &retryAfterDate,
 			configure: func(configuration *proxy.Configuration, baseURL string) {
-				configuration.GeminiBaseURL = baseURL
+				configuration.Endpoints.SetProviderBaseURL(proxy.ProviderNameGemini, baseURL)
 			},
 		},
 		{
@@ -104,7 +104,7 @@ func TestProviderErrorContractSanitizesEveryTextTransport(t *testing.T) {
 			wantRetryAfter:     stringPointer("11"),
 			truncateBody:       true,
 			configure: func(configuration *proxy.Configuration, baseURL string) {
-				configuration.MetaBaseURL = baseURL
+				configuration.Endpoints.SetProviderBaseURL(proxy.ProviderNameMeta, baseURL)
 			},
 		},
 		{
@@ -117,7 +117,7 @@ func TestProviderErrorContractSanitizesEveryTextTransport(t *testing.T) {
 			wantRetryable:      true,
 			wantRetryAfter:     stringPointer("7"),
 			configure: func(configuration *proxy.Configuration, baseURL string) {
-				configuration.MoonshotBaseURL = baseURL
+				configuration.Endpoints.SetProviderBaseURL(proxy.ProviderNameMoonshot, baseURL)
 			},
 		},
 	}
@@ -174,7 +174,7 @@ func TestProviderErrorContractRepresentsProtocolFailureWithoutInventingUpstreamS
 	t.Cleanup(upstreamServer.Close)
 
 	configuration := providerErrorTestConfiguration()
-	configuration.AnthropicBaseURL = upstreamServer.URL
+	configuration.Endpoints.SetProviderBaseURL(proxy.ProviderNameAnthropic, upstreamServer.URL)
 	router, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -211,7 +211,7 @@ func TestProviderErrorContractPreservesOpenAIPollFailureMetadata(t *testing.T) {
 	t.Cleanup(upstreamServer.Close)
 
 	configuration := providerErrorTestConfiguration()
-	configuration.OpenAIBaseURL = upstreamServer.URL
+	configuration.Endpoints.SetProviderBaseURL(proxy.ProviderNameOpenAI, upstreamServer.URL)
 	router, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -242,7 +242,7 @@ func TestProviderErrorContractAppliesToDictation(t *testing.T) {
 	t.Cleanup(upstreamServer.Close)
 
 	configuration := providerErrorTestConfiguration()
-	configuration.OpenAITranscriptionsURL = upstreamServer.URL
+	configuration.Endpoints.SetProviderTransportURL(proxy.ProviderNameOpenAI, "dictation", upstreamServer.URL)
 	configuration.MaxInputAudioBytes = 1024
 	router, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
 	if buildError != nil {
@@ -285,7 +285,7 @@ func TestProviderErrorContractLogsOnlySafeCorrelationMetadata(t *testing.T) {
 	observedCore, observedLogs := observer.New(zap.DebugLevel)
 	configuration := providerErrorTestConfiguration()
 	configuration.LogLevel = proxy.LogLevelDebug
-	configuration.OpenAIBaseURL = upstreamServer.URL
+	configuration.Endpoints.SetProviderBaseURL(proxy.ProviderNameOpenAI, upstreamServer.URL)
 	router, buildError := buildRouterWithCatalogs(t, configuration, zap.New(observedCore).Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -330,6 +330,7 @@ func providerErrorTestConfiguration() proxy.Configuration {
 		WorkerCount:           1,
 		QueueSize:             1,
 		RequestTimeoutSeconds: TestTimeout,
+		Endpoints:             proxy.NewEndpoints(),
 	}
 }
 

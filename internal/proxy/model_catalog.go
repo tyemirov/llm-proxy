@@ -43,9 +43,9 @@ type ModelCatalog struct {
 
 // ModelOperationKind declares one operation and its possible artifact types.
 type ModelOperationKind struct {
-	ID              string   `json:"id" mapstructure:"id"`
-	InputArtifacts  []string `json:"input_artifacts" mapstructure:"input_artifacts"`
-	OutputArtifacts []string `json:"output_artifacts" mapstructure:"output_artifacts"`
+	ID              string   `json:"id" mapstructure:"id" yaml:"id"`
+	InputArtifacts  []string `json:"input_artifacts" mapstructure:"input_artifacts" yaml:"input_artifacts"`
+	OutputArtifacts []string `json:"output_artifacts" mapstructure:"output_artifacts" yaml:"output_artifacts"`
 }
 
 // CatalogProvider declares one provider that can own provider offerings.
@@ -57,16 +57,16 @@ type CatalogProvider struct {
 
 // ModelPublisher declares the organization or community that publishes models.
 type ModelPublisher struct {
-	ID    string `mapstructure:"id"`
-	Label string `mapstructure:"label"`
+	ID    string `mapstructure:"id" yaml:"id"`
+	Label string `mapstructure:"label" yaml:"label"`
 }
 
 // ModelFamily groups exact models from one publisher.
 type ModelFamily struct {
-	ID           string `mapstructure:"id"`
-	Publisher    string `mapstructure:"publisher"`
-	Label        string `mapstructure:"label"`
-	WeightAccess string `mapstructure:"weight_access"`
+	ID           string `mapstructure:"id" yaml:"id"`
+	Publisher    string `mapstructure:"publisher" yaml:"publisher"`
+	Label        string `mapstructure:"label" yaml:"label"`
+	WeightAccess string `mapstructure:"weight_access" yaml:"weight_access"`
 }
 
 const (
@@ -78,12 +78,12 @@ const (
 
 // ExactModel declares provider-independent identity and model capabilities.
 type ExactModel struct {
-	ID          string   `mapstructure:"id"`
-	Publisher   string   `mapstructure:"publisher"`
-	Family      string   `mapstructure:"family"`
-	Version     string   `mapstructure:"version"`
-	Operations  []string `mapstructure:"operations"`
-	MediaInputs []string `mapstructure:"media_inputs"`
+	ID          string   `mapstructure:"id" yaml:"id"`
+	Publisher   string   `mapstructure:"publisher" yaml:"publisher"`
+	Family      string   `mapstructure:"family" yaml:"family"`
+	Version     string   `mapstructure:"version" yaml:"version"`
+	Operations  []string `mapstructure:"operations" yaml:"operations"`
+	MediaInputs []string `mapstructure:"media_inputs" yaml:"media_inputs"`
 }
 
 // ProviderOffering declares one provider route for one exact model.
@@ -91,6 +91,7 @@ type ProviderOffering struct {
 	Provider           string                     `mapstructure:"provider"`
 	Model              string                     `mapstructure:"model"`
 	ProviderModel      string                     `mapstructure:"provider_model"`
+	Transport          string                     `mapstructure:"transport"`
 	Operations         []string                   `mapstructure:"operations"`
 	DefaultOperations  []string                   `mapstructure:"default_operations"`
 	WireContract       string                     `mapstructure:"wire_contract"`
@@ -108,8 +109,8 @@ type ProviderOffering struct {
 // ReasoningEffortCapability declares the configured upstream mapping for one
 // exact provider offering.
 type ReasoningEffortCapability struct {
-	Adapter string   `mapstructure:"adapter"`
-	Efforts []string `mapstructure:"efforts"`
+	Adapter string   `mapstructure:"adapter" yaml:"adapter"`
+	Efforts []string `mapstructure:"efforts" yaml:"efforts"`
 }
 
 type validatedModelCatalog struct {
@@ -121,26 +122,6 @@ type validatedModelCatalog struct {
 	models     map[string]ExactModel
 	offerings  map[string]ProviderOffering
 	prices     map[string]CatalogPriceDescriptor
-}
-
-var providerTextRouteCapabilities = map[string]map[textRouteCapabilities]struct{}{
-	ProviderNameOpenAI:      {openAIResponsesPollableRouteCapabilities: {}},
-	ProviderNameDeepSeek:    {openAIChatCompletionsSynchronousRouteCapabilities: {}},
-	ProviderNameDashScope:   {openAIChatCompletionsSynchronousRouteCapabilities: {}},
-	ProviderNameMoonshot:    {openAIChatCompletionsSynchronousRouteCapabilities: {}},
-	ProviderNameMiniMax:     {openAIChatCompletionsSynchronousRouteCapabilities: {}},
-	ProviderNameSiliconFlow: {openAIChatCompletionsSynchronousRouteCapabilities: {}},
-	ProviderNameZAI:         {openAIChatCompletionsSynchronousRouteCapabilities: {}},
-	ProviderNameGemini: {
-		geminiInteractionsPollableRouteCapabilities:    {},
-		geminiInteractionsSynchronousRouteCapabilities: {},
-	},
-	ProviderNameAnthropic: {anthropicMessagesSynchronousRouteCapabilities: {}},
-	ProviderNameMeta:      {openAIChatCompletionsSynchronousRouteCapabilities: {}},
-	ProviderNameXAI: {
-		openAIChatCompletionsSynchronousRouteCapabilities: {},
-		openAIResponsesSynchronousRouteCapabilities:       {},
-	},
 }
 
 func validateModelCatalog(catalog ModelCatalog) (validatedModelCatalog, error) {
@@ -199,17 +180,7 @@ func validateCatalogProviders(providers []CatalogProvider, validated map[string]
 		if credentialError := validateCredentialKinds(provider.CredentialKinds, fmt.Sprintf("catalog.providers[%d].credential_kinds", index)); credentialError != nil {
 			return credentialError
 		}
-		if _, supported := providerTextRouteCapabilities[identifier]; !supported {
-			return fmt.Errorf("%w: field=catalog.providers[%d].id provider=%s reason=unknown", ErrInvalidModelCatalog, index, identifier)
-		}
 		validated[identifier] = provider
-	}
-	if len(validated) != len(providerTextRouteCapabilities) {
-		for identifier := range providerTextRouteCapabilities {
-			if _, found := validated[identifier]; !found {
-				return fmt.Errorf("%w: field=catalog.providers provider=%s reason=missing", ErrInvalidModelCatalog, identifier)
-			}
-		}
 	}
 	return nil
 }
@@ -440,13 +411,13 @@ func validateTextOffering(offering ProviderOffering, fieldPrefix string) error {
 	if capabilityError != nil {
 		return capabilityError
 	}
-	if _, allowed := providerTextRouteCapabilities[offering.Provider][capabilities]; !allowed {
+	if _, allowed := textRouteAdapters[capabilities]; !allowed {
 		return fmt.Errorf("%w: provider=%s model=%s wire_contract=%s execution_lifecycle=%s", ErrInvalidModelCatalog, offering.Provider, offering.Model, offering.WireContract, offering.ExecutionLifecycle)
 	}
-	if offering.WebSearch && offering.Provider != ProviderNameOpenAI {
+	if offering.WebSearch && capabilities.wireContract != textWireContractOpenAIResponses {
 		return fmt.Errorf("%w: field=%s.web_search provider=%s", ErrInvalidModelCatalog, fieldPrefix, offering.Provider)
 	}
-	if offering.Provider == ProviderNameAnthropic && offering.OutputTokenLimit <= 0 {
+	if capabilities.wireContract == textWireContractAnthropicMessages && offering.OutputTokenLimit <= 0 {
 		return fmt.Errorf("%w: field=%s.output_token_limit provider=%s", ErrInvalidModelCatalog, fieldPrefix, offering.Provider)
 	}
 	if profileError := validateOfferingRequestProfile(offering); profileError != nil {
@@ -459,11 +430,11 @@ func validateTextOffering(offering ProviderOffering, fieldPrefix string) error {
 	if reasoningEffort != nil {
 		switch reasoningEffort.adapter {
 		case reasoningEffortAdapterOpenAIResponses:
-			if offering.Provider != ProviderNameOpenAI || modelRequestProfile(offering.RequestProfile) != requestProfileOpenAIResponsesReasoningTools {
+			if capabilities.wireContract != textWireContractOpenAIResponses || modelRequestProfile(offering.RequestProfile) != requestProfileOpenAIResponsesReasoningTools {
 				return fmt.Errorf("%w: field=%s.reasoning_effort adapter=%s", ErrInvalidModelCatalog, fieldPrefix, reasoningEffort.adapter)
 			}
-		case reasoningEffortAdapterMoonshotChatCompletions:
-			if offering.Provider != ProviderNameMoonshot || offering.Model != ModelNameMoonshotKimiK3 || capabilities != openAIChatCompletionsSynchronousRouteCapabilities || offering.RequestProfile != constants.EmptyString {
+		case reasoningEffortAdapterOpenAIChatCompletions:
+			if capabilities != openAIChatCompletionsSynchronousRouteCapabilities || offering.RequestProfile != constants.EmptyString {
 				return fmt.Errorf("%w: field=%s.reasoning_effort adapter=%s", ErrInvalidModelCatalog, fieldPrefix, reasoningEffort.adapter)
 			}
 		}
@@ -584,13 +555,10 @@ func validatedReasoningEffortCapability(rawCapability *ReasoningEffortCapability
 
 func validateOfferingRequestProfile(offering ProviderOffering) error {
 	requestProfile := strings.TrimSpace(offering.RequestProfile)
-	if offering.Provider != ProviderNameOpenAI {
-		if requestProfile != constants.EmptyString {
-			return fmt.Errorf("%w: provider=%s profile=%s", ErrInvalidModelCatalog, offering.Provider, requestProfile)
-		}
+	if requestProfile == constants.EmptyString {
 		return nil
 	}
-	if requestProfile == constants.EmptyString || !knownModelRequestProfile(modelRequestProfile(requestProfile)) {
+	if textWireContract(offering.WireContract) != textWireContractOpenAIResponses || !knownModelRequestProfile(modelRequestProfile(requestProfile)) {
 		return fmt.Errorf("%w: provider=%s profile=%s", ErrInvalidModelCatalog, offering.Provider, requestProfile)
 	}
 	return nil
@@ -642,15 +610,6 @@ func configuredReasoningEffortCapability(configuration *ReasoningEffortCapabilit
 func offeringSupportsOperation(offering ProviderOffering, operation string) bool {
 	for _, configuredOperation := range offering.Operations {
 		if configuredOperation == operation {
-			return true
-		}
-	}
-	return false
-}
-
-func offeringDefaultsOperation(offering ProviderOffering, operation string) bool {
-	for _, defaultOperation := range offering.DefaultOperations {
-		if defaultOperation == operation {
 			return true
 		}
 	}

@@ -1,0 +1,3790 @@
+schema_version: 1
+operations:
+    - id: text
+      input_artifacts:
+        - text
+        - image
+        - audio
+      output_artifacts:
+        - text
+    - id: dictation
+      input_artifacts:
+        - audio
+      output_artifacts:
+        - text
+    - id: video_generation
+      input_artifacts:
+        - text
+        - image
+      output_artifacts:
+        - video
+publishers:
+    - id: openai
+      label: OpenAI
+    - id: deepseek
+      label: DeepSeek
+    - id: alibaba
+      label: Alibaba
+    - id: moonshot
+      label: Moonshot AI
+    - id: minimax
+      label: MiniMax
+    - id: funaudio
+      label: FunAudioLLM
+    - id: zai
+      label: Z.AI
+    - id: google
+      label: Google
+    - id: anthropic
+      label: Anthropic
+    - id: meta
+      label: Meta
+    - id: xai
+      label: xAI
+families:
+    - id: gpt-4
+      publisher: openai
+      label: GPT-4
+      weight_access: proprietary
+    - id: gpt-5
+      publisher: openai
+      label: GPT-5
+      weight_access: proprietary
+    - id: gpt-transcribe
+      publisher: openai
+      label: GPT Transcribe
+      weight_access: proprietary
+    - id: deepseek-v4
+      publisher: deepseek
+      label: DeepSeek V4
+      weight_access: open_weights
+    - id: deepseek-v3
+      publisher: deepseek
+      label: DeepSeek V3
+      weight_access: open_weights
+    - id: deepseek-r1
+      publisher: deepseek
+      label: DeepSeek R1
+      weight_access: open_weights
+    - id: qwen
+      publisher: alibaba
+      label: Qwen
+      weight_access: proprietary
+    - id: kimi-k2
+      publisher: moonshot
+      label: Kimi K2
+      weight_access: open_weights
+    - id: kimi-k3
+      publisher: moonshot
+      label: Kimi K3
+      weight_access: open_weights
+    - id: minimax-m2
+      publisher: minimax
+      label: MiniMax M2
+      weight_access: open_weights
+    - id: sensevoice
+      publisher: funaudio
+      label: SenseVoice
+      weight_access: open_weights
+    - id: glm-5
+      publisher: zai
+      label: GLM-5
+      weight_access: open_weights
+    - id: glm-asr
+      publisher: zai
+      label: GLM ASR
+      weight_access: open_weights
+    - id: gemini
+      publisher: google
+      label: Gemini
+      weight_access: proprietary
+    - id: claude-fable
+      publisher: anthropic
+      label: Claude Fable
+      weight_access: proprietary
+    - id: claude-sonnet
+      publisher: anthropic
+      label: Claude Sonnet
+      weight_access: proprietary
+    - id: claude-opus
+      publisher: anthropic
+      label: Claude Opus
+      weight_access: proprietary
+    - id: claude-haiku
+      publisher: anthropic
+      label: Claude Haiku
+      weight_access: proprietary
+    - id: muse-spark
+      publisher: meta
+      label: Muse Spark
+      weight_access: proprietary
+    - id: grok
+      publisher: xai
+      label: Grok
+      weight_access: proprietary
+    - id: grok-build
+      publisher: xai
+      label: Grok Build
+      weight_access: proprietary
+    - id: grok-code
+      publisher: xai
+      label: Grok Code
+      weight_access: proprietary
+    - id: grok-imagine
+      publisher: xai
+      label: Grok Imagine
+      weight_access: proprietary
+    - id: xai-stt
+      publisher: xai
+      label: xAI STT
+      weight_access: proprietary
+models:
+    - id: gpt-4o-mini
+      publisher: openai
+      family: gpt-4
+      version: gpt-4o-mini
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: gpt-4o
+      publisher: openai
+      family: gpt-4
+      version: gpt-4o
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: gpt-4.1
+      publisher: openai
+      family: gpt-4
+      version: gpt-4.1
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: gpt-5-mini
+      publisher: openai
+      family: gpt-5
+      version: gpt-5-mini
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: gpt-5
+      publisher: openai
+      family: gpt-5
+      version: gpt-5
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: gpt-5.5
+      publisher: openai
+      family: gpt-5
+      version: gpt-5.5
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: gpt-5.5-pro
+      publisher: openai
+      family: gpt-5
+      version: gpt-5.5-pro
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: gpt-5.6
+      publisher: openai
+      family: gpt-5
+      version: gpt-5.6
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: gpt-5.6-sol
+      publisher: openai
+      family: gpt-5
+      version: gpt-5.6-sol
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: gpt-5.6-terra
+      publisher: openai
+      family: gpt-5
+      version: gpt-5.6-terra
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: gpt-5.6-luna
+      publisher: openai
+      family: gpt-5
+      version: gpt-5.6-luna
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: gpt-4o-mini-transcribe
+      publisher: openai
+      family: gpt-transcribe
+      version: gpt-4o-mini-transcribe
+      operations:
+        - dictation
+      media_inputs: []
+    - id: gpt-4o-transcribe
+      publisher: openai
+      family: gpt-transcribe
+      version: gpt-4o-transcribe
+      operations:
+        - dictation
+      media_inputs: []
+    - id: deepseek-v4-flash
+      publisher: deepseek
+      family: deepseek-v4
+      version: deepseek-v4-flash
+      operations:
+        - text
+      media_inputs: []
+    - id: deepseek-v4-pro
+      publisher: deepseek
+      family: deepseek-v4
+      version: deepseek-v4-pro
+      operations:
+        - text
+      media_inputs: []
+    - id: deepseek-chat
+      publisher: deepseek
+      family: deepseek-v3
+      version: deepseek-chat
+      operations:
+        - text
+      media_inputs: []
+    - id: deepseek-reasoner
+      publisher: deepseek
+      family: deepseek-r1
+      version: deepseek-reasoner
+      operations:
+        - text
+      media_inputs: []
+    - id: qwen-plus
+      publisher: alibaba
+      family: qwen
+      version: qwen-plus
+      operations:
+        - text
+      media_inputs: []
+    - id: qwen3.7-max
+      publisher: alibaba
+      family: qwen
+      version: qwen3.7-max
+      operations:
+        - text
+      media_inputs: []
+    - id: qwen3.7-plus
+      publisher: alibaba
+      family: qwen
+      version: qwen3.7-plus
+      operations:
+        - text
+      media_inputs: []
+    - id: qwen3.6-flash
+      publisher: alibaba
+      family: qwen
+      version: qwen3.6-flash
+      operations:
+        - text
+      media_inputs: []
+    - id: kimi-k2.6
+      publisher: moonshot
+      family: kimi-k2
+      version: kimi-k2.6
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: kimi-k3
+      publisher: moonshot
+      family: kimi-k3
+      version: kimi-k3
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: kimi-k2.7-code
+      publisher: moonshot
+      family: kimi-k2
+      version: kimi-k2.7-code
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: kimi-k2.7-code-highspeed
+      publisher: moonshot
+      family: kimi-k2
+      version: kimi-k2.7-code-highspeed
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: minimax-m2.7
+      publisher: minimax
+      family: minimax-m2
+      version: minimax-m2.7
+      operations:
+        - text
+      media_inputs: []
+    - id: minimax-m2.7-highspeed
+      publisher: minimax
+      family: minimax-m2
+      version: minimax-m2.7-highspeed
+      operations:
+        - text
+      media_inputs: []
+    - id: minimax-m2.5
+      publisher: minimax
+      family: minimax-m2
+      version: minimax-m2.5
+      operations:
+        - text
+      media_inputs: []
+    - id: minimax-m2.5-highspeed
+      publisher: minimax
+      family: minimax-m2
+      version: minimax-m2.5-highspeed
+      operations:
+        - text
+      media_inputs: []
+    - id: minimax-m2.1
+      publisher: minimax
+      family: minimax-m2
+      version: minimax-m2.1
+      operations:
+        - text
+      media_inputs: []
+    - id: minimax-m2.1-highspeed
+      publisher: minimax
+      family: minimax-m2
+      version: minimax-m2.1-highspeed
+      operations:
+        - text
+      media_inputs: []
+    - id: minimax-m2
+      publisher: minimax
+      family: minimax-m2
+      version: minimax-m2
+      operations:
+        - text
+      media_inputs: []
+    - id: sensevoice-small
+      publisher: funaudio
+      family: sensevoice
+      version: sensevoice-small
+      operations:
+        - dictation
+      media_inputs: []
+    - id: glm-5.1
+      publisher: zai
+      family: glm-5
+      version: glm-5.1
+      operations:
+        - text
+      media_inputs: []
+    - id: glm-5.2
+      publisher: zai
+      family: glm-5
+      version: glm-5.2
+      operations:
+        - text
+      media_inputs: []
+    - id: glm-asr-2512
+      publisher: zai
+      family: glm-asr
+      version: glm-asr-2512
+      operations:
+        - dictation
+      media_inputs: []
+    - id: gemini-3.5-flash
+      publisher: google
+      family: gemini
+      version: gemini-3.5-flash
+      operations:
+        - text
+      media_inputs:
+        - image
+        - audio
+    - id: gemini-3.1-pro-preview
+      publisher: google
+      family: gemini
+      version: gemini-3.1-pro-preview
+      operations:
+        - text
+      media_inputs:
+        - image
+        - audio
+    - id: gemini-3-flash-preview
+      publisher: google
+      family: gemini
+      version: gemini-3-flash-preview
+      operations:
+        - text
+      media_inputs:
+        - image
+        - audio
+    - id: gemini-3.1-flash-lite
+      publisher: google
+      family: gemini
+      version: gemini-3.1-flash-lite
+      operations:
+        - text
+      media_inputs:
+        - image
+        - audio
+    - id: gemini-2.5-flash
+      publisher: google
+      family: gemini
+      version: gemini-2.5-flash
+      operations:
+        - text
+      media_inputs:
+        - image
+        - audio
+    - id: gemini-2.5-flash-lite
+      publisher: google
+      family: gemini
+      version: gemini-2.5-flash-lite
+      operations:
+        - text
+      media_inputs:
+        - image
+        - audio
+    - id: gemini-2.5-pro
+      publisher: google
+      family: gemini
+      version: gemini-2.5-pro
+      operations:
+        - text
+      media_inputs:
+        - image
+        - audio
+    - id: claude-fable-5
+      publisher: anthropic
+      family: claude-fable
+      version: claude-fable-5
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: claude-sonnet-5
+      publisher: anthropic
+      family: claude-sonnet
+      version: claude-sonnet-5
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: claude-opus-4-8
+      publisher: anthropic
+      family: claude-opus
+      version: claude-opus-4-8
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: claude-sonnet-4-6
+      publisher: anthropic
+      family: claude-sonnet
+      version: claude-sonnet-4-6
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: claude-haiku-4-5-20251001
+      publisher: anthropic
+      family: claude-haiku
+      version: claude-haiku-4-5-20251001
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: claude-haiku-4-5
+      publisher: anthropic
+      family: claude-haiku
+      version: claude-haiku-4-5
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: claude-sonnet-4-5-20250929
+      publisher: anthropic
+      family: claude-sonnet
+      version: claude-sonnet-4-5-20250929
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: claude-sonnet-4-5
+      publisher: anthropic
+      family: claude-sonnet
+      version: claude-sonnet-4-5
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: claude-opus-4-1-20250805
+      publisher: anthropic
+      family: claude-opus
+      version: claude-opus-4-1-20250805
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: claude-opus-4-1
+      publisher: anthropic
+      family: claude-opus
+      version: claude-opus-4-1
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: muse-spark-1.1
+      publisher: meta
+      family: muse-spark
+      version: muse-spark-1.1
+      operations:
+        - text
+      media_inputs: []
+    - id: grok-4.3
+      publisher: xai
+      family: grok
+      version: grok-4.3
+      operations:
+        - text
+      media_inputs: []
+    - id: grok-4.3-latest
+      publisher: xai
+      family: grok
+      version: grok-4.3-latest
+      operations:
+        - text
+      media_inputs: []
+    - id: grok-4.5
+      publisher: xai
+      family: grok
+      version: grok-4.5
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: grok-4.20-0309-reasoning
+      publisher: xai
+      family: grok
+      version: grok-4.20-0309-reasoning
+      operations:
+        - text
+      media_inputs: []
+    - id: grok-4.20-0309-non-reasoning
+      publisher: xai
+      family: grok
+      version: grok-4.20-0309-non-reasoning
+      operations:
+        - text
+      media_inputs: []
+    - id: grok-latest
+      publisher: xai
+      family: grok
+      version: grok-latest
+      operations:
+        - text
+      media_inputs: []
+    - id: grok-build-0.1
+      publisher: xai
+      family: grok-build
+      version: grok-build-0.1
+      operations:
+        - text
+      media_inputs: []
+    - id: grok-code-fast
+      publisher: xai
+      family: grok-code
+      version: grok-code-fast
+      operations:
+        - text
+      media_inputs: []
+    - id: grok-code-fast-1
+      publisher: xai
+      family: grok-code
+      version: grok-code-fast-1
+      operations:
+        - text
+      media_inputs: []
+    - id: grok-code-fast-1-0825
+      publisher: xai
+      family: grok-code
+      version: grok-code-fast-1-0825
+      operations:
+        - text
+      media_inputs: []
+    - id: grok-imagine-video-1.5
+      publisher: xai
+      family: grok-imagine
+      version: grok-imagine-video-1.5
+      operations:
+        - video_generation
+      media_inputs: []
+    - id: xai-stt
+      publisher: xai
+      family: xai-stt
+      version: xai-stt
+      operations:
+        - dictation
+      media_inputs: []
+providers:
+    - id: openai
+      label: OpenAI
+      fields:
+        - id: api_key
+          label: OpenAI API key
+          kind: credential
+          type: opaque
+          required: true
+          default: ""
+          secret: true
+          validation:
+            minimum_length: 1
+          environment: OPENAI_API_KEY
+      transports:
+        - id: text
+          endpoint:
+            method: POST
+            default_base_url: https://api.openai.com/v1
+            path: /responses
+          authentication:
+            kind: bearer
+            field: api_key
+            header: Authorization
+            prefix: 'Bearer '
+          request_protocol: openai_responses
+          response_protocol: openai_responses
+          usage_mapping: openai_responses
+          lifecycle: pollable_resource
+          protocol_parameters:
+            model_field: model
+            token_field: max_output_tokens
+            output_fields:
+                - output[].content[].text
+            finish_rules:
+                complete:
+                    - completed
+                continue:
+                    - incomplete:max_output_tokens
+            continuation_rules:
+                - append_visible_assistant_output
+                - request_missing_suffix
+            error_rules:
+                - cancelled
+                - failed
+                - refusal
+                - unknown_status
+            usage_fields:
+                input: usage.input_tokens
+                output: usage.output_tokens
+                total: usage.total_tokens
+        - id: dictation
+          endpoint:
+            method: POST
+            default_base_url: https://api.openai.com/v1
+            path: /audio/transcriptions
+          authentication:
+            kind: bearer
+            field: api_key
+            header: Authorization
+            prefix: 'Bearer '
+          request_protocol: multipart_transcription
+          response_protocol: multipart_transcription
+          usage_mapping: multipart_transcription
+          lifecycle: synchronous_completion
+          protocol_parameters:
+            model_field: model
+            token_field: ""
+            output_fields:
+                - text
+            finish_rules:
+                complete:
+                    - http_2xx
+                continue: []
+            continuation_rules: []
+            error_rules:
+                - malformed_response
+                - provider_error
+            usage_fields:
+                input: ""
+                output: ""
+                total: ""
+      offerings:
+        - model: gpt-4o-mini
+          upstream_model: gpt-4o-mini
+          transport: text
+          operations:
+            - text
+          request_profile: openai_responses_temperature
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://developers.openai.com/api/docs/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: gpt-4o
+          upstream_model: gpt-4o
+          transport: text
+          operations:
+            - text
+          request_profile: openai_responses_temperature_tools
+          web_search: true
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://developers.openai.com/api/docs/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: gpt-4.1
+          upstream_model: gpt-4.1
+          transport: text
+          operations:
+            - text
+          default_operations:
+            - text
+          request_profile: openai_responses_temperature_tools
+          web_search: true
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://developers.openai.com/api/docs/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: gpt-5-mini
+          upstream_model: gpt-5-mini
+          transport: text
+          operations:
+            - text
+          request_profile: openai_responses_reasoning_tools
+          reasoning_effort:
+            adapter: openai_responses
+            efforts:
+                - minimal
+                - low
+                - medium
+                - high
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://developers.openai.com/api/docs/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: gpt-5
+          upstream_model: gpt-5
+          transport: text
+          operations:
+            - text
+          request_profile: openai_responses_reasoning_tools
+          web_search: true
+          reasoning_effort:
+            adapter: openai_responses
+            efforts:
+                - minimal
+                - low
+                - medium
+                - high
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://developers.openai.com/api/docs/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: gpt-5.5
+          upstream_model: gpt-5.5
+          transport: text
+          operations:
+            - text
+          request_profile: openai_responses_reasoning_tools
+          web_search: true
+          reasoning_effort:
+            adapter: openai_responses
+            efforts:
+                - none
+                - low
+                - medium
+                - high
+                - xhigh
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://developers.openai.com/api/docs/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: gpt-5.5-pro
+          upstream_model: gpt-5.5-pro
+          transport: text
+          operations:
+            - text
+          request_profile: openai_responses_reasoning_tools
+          web_search: true
+          reasoning_effort:
+            adapter: openai_responses
+            efforts:
+                - medium
+                - high
+                - xhigh
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://developers.openai.com/api/docs/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: gpt-5.6
+          upstream_model: gpt-5.6
+          transport: text
+          operations:
+            - text
+          request_profile: openai_responses_reasoning_tools
+          web_search: true
+          reasoning_effort:
+            adapter: openai_responses
+            efforts:
+                - none
+                - low
+                - medium
+                - high
+                - xhigh
+                - max
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://developers.openai.com/api/docs/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: gpt-5.6-sol
+          upstream_model: gpt-5.6-sol
+          transport: text
+          operations:
+            - text
+          request_profile: openai_responses_reasoning_tools
+          web_search: true
+          reasoning_effort:
+            adapter: openai_responses
+            efforts:
+                - none
+                - low
+                - medium
+                - high
+                - xhigh
+                - max
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://developers.openai.com/api/docs/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: gpt-5.6-terra
+          upstream_model: gpt-5.6-terra
+          transport: text
+          operations:
+            - text
+          request_profile: openai_responses_reasoning_tools
+          web_search: true
+          reasoning_effort:
+            adapter: openai_responses
+            efforts:
+                - none
+                - low
+                - medium
+                - high
+                - xhigh
+                - max
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://developers.openai.com/api/docs/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: gpt-5.6-luna
+          upstream_model: gpt-5.6-luna
+          transport: text
+          operations:
+            - text
+          request_profile: openai_responses_reasoning_tools
+          web_search: true
+          reasoning_effort:
+            adapter: openai_responses
+            efforts:
+                - none
+                - low
+                - medium
+                - high
+                - xhigh
+                - max
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 512000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 1500
+              unit: files
+              scope: request
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://developers.openai.com/api/docs/guides/images-vision
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://developers.openai.com/api/docs/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: gpt-4o-mini-transcribe
+          upstream_model: gpt-4o-mini-transcribe
+          transport: dictation
+          operations:
+            - dictation
+          default_operations:
+            - dictation
+          prices:
+            - operation: dictation
+              available: false
+              source: https://developers.openai.com/api/docs/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: gpt-4o-transcribe
+          upstream_model: gpt-4o-transcribe
+          transport: dictation
+          operations:
+            - dictation
+          prices:
+            - operation: dictation
+              available: false
+              source: https://developers.openai.com/api/docs/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+    - id: deepseek
+      label: DeepSeek
+      fields:
+        - id: api_key
+          label: DeepSeek API key
+          kind: credential
+          type: opaque
+          required: true
+          default: ""
+          secret: true
+          validation:
+            minimum_length: 1
+          environment: DEEPSEEK_API_KEY
+      transports:
+        - id: text
+          endpoint:
+            method: POST
+            default_base_url: https://api.deepseek.com
+            path: /chat/completions
+          authentication:
+            kind: bearer
+            field: api_key
+            header: Authorization
+            prefix: 'Bearer '
+          request_protocol: openai_chat_completions
+          response_protocol: openai_chat_completions
+          usage_mapping: openai_chat_completions
+          lifecycle: synchronous_completion
+          protocol_parameters:
+            model_field: model
+            token_field: max_tokens
+            output_fields:
+                - choices[].message.content
+            finish_rules:
+                complete:
+                    - stop
+                continue:
+                    - length
+            continuation_rules:
+                - append_visible_assistant_output
+                - request_missing_suffix
+            error_rules:
+                - content_filter
+                - tool_calls
+                - unknown_finish_reason
+            usage_fields:
+                input: usage.prompt_tokens
+                output: usage.completion_tokens
+                total: usage.total_tokens
+      offerings:
+        - model: deepseek-v4-flash
+          upstream_model: deepseek-v4-flash
+          transport: text
+          operations:
+            - text
+          default_operations:
+            - text
+          prices:
+            - operation: text
+              available: false
+              source: https://api-docs.deepseek.com/quick_start/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: deepseek-v4-pro
+          upstream_model: deepseek-v4-pro
+          transport: text
+          operations:
+            - text
+          prices:
+            - operation: text
+              available: false
+              source: https://api-docs.deepseek.com/quick_start/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: deepseek-chat
+          upstream_model: deepseek-chat
+          transport: text
+          operations:
+            - text
+          prices:
+            - operation: text
+              available: false
+              source: https://api-docs.deepseek.com/quick_start/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: deepseek-reasoner
+          upstream_model: deepseek-reasoner
+          transport: text
+          operations:
+            - text
+          prices:
+            - operation: text
+              available: false
+              source: https://api-docs.deepseek.com/quick_start/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+    - id: dashscope
+      label: DashScope
+      aliases:
+        - qwen
+      fields:
+        - id: api_key
+          label: DashScope API key
+          kind: credential
+          type: opaque
+          required: true
+          default: ""
+          secret: true
+          validation:
+            minimum_length: 1
+          environment: DASHSCOPE_API_KEY
+        - id: base_url
+          label: DashScope API URL
+          kind: setting
+          type: url
+          required: true
+          default: ""
+          secret: false
+          validation:
+            pattern: ^https://[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.ap-southeast-1\.maas\.aliyuncs\.com/compatible-mode/v1$
+            allowed_schemes:
+                - https
+          environment: DASHSCOPE_BASE_URL
+      transports:
+        - id: text
+          endpoint:
+            method: POST
+            setting_field: base_url
+            path: /chat/completions
+          authentication:
+            kind: bearer
+            field: api_key
+            header: Authorization
+            prefix: 'Bearer '
+          request_protocol: openai_chat_completions
+          response_protocol: openai_chat_completions
+          usage_mapping: openai_chat_completions
+          lifecycle: synchronous_completion
+          protocol_parameters:
+            model_field: model
+            token_field: max_tokens
+            output_fields:
+                - choices[].message.content
+            finish_rules:
+                complete:
+                    - stop
+                continue:
+                    - length
+            continuation_rules:
+                - append_visible_assistant_output
+                - request_missing_suffix
+            error_rules:
+                - content_filter
+                - tool_calls
+                - unknown_finish_reason
+            usage_fields:
+                input: usage.prompt_tokens
+                output: usage.completion_tokens
+                total: usage.total_tokens
+      offerings:
+        - model: qwen-plus
+          upstream_model: qwen-plus
+          transport: text
+          operations:
+            - text
+          default_operations:
+            - text
+          prices:
+            - operation: text
+              available: false
+              source: https://www.alibabacloud.com/help/en/model-studio/model-pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: qwen3.7-max
+          upstream_model: qwen3.7-max
+          transport: text
+          operations:
+            - text
+          output_token_limit: 65536
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 65536
+          limits:
+            - id: context_tokens
+              value: 1000000
+              unit: tokens
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: 2.5
+                  unit: USD/1M tokens
+                  conditions:
+                    mode: thinking_or_non_thinking;input_tokens_0_to_1000000
+                    billing_mode: pay_as_you_go_list
+                - component: output_tokens
+                  currency: USD
+                  rate: 7.5
+                  unit: USD/1M tokens
+                  conditions:
+                    mode: thinking_or_non_thinking;input_tokens_0_to_1000000
+                    billing_mode: pay_as_you_go_list
+              source: https://www.alibabacloud.com/help/en/model-studio/model-pricing
+              last_verified: "2026-08-13"
+        - model: qwen3.7-plus
+          upstream_model: qwen3.7-plus
+          transport: text
+          operations:
+            - text
+          output_token_limit: 65536
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 65536
+          limits:
+            - id: context_tokens
+              value: 1000000
+              unit: tokens
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: 0.4
+                  unit: USD/1M tokens
+                  conditions:
+                    mode: thinking_or_non_thinking;input_tokens_0_to_256000
+                    billing_mode: pay_as_you_go_list
+                - component: output_tokens
+                  currency: USD
+                  rate: 1.6
+                  unit: USD/1M tokens
+                  conditions:
+                    mode: thinking_or_non_thinking;input_tokens_0_to_256000
+                    billing_mode: pay_as_you_go_list
+              source: https://www.alibabacloud.com/help/en/model-studio/model-pricing
+              last_verified: "2026-08-13"
+        - model: qwen3.6-flash
+          upstream_model: qwen3.6-flash
+          transport: text
+          operations:
+            - text
+          output_token_limit: 65536
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 65536
+          limits:
+            - id: context_tokens
+              value: 1000000
+              unit: tokens
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: 0.25
+                  unit: USD/1M tokens
+                  conditions:
+                    mode: thinking_or_non_thinking;input_tokens_0_to_256000
+                    billing_mode: pay_as_you_go_list
+                - component: output_tokens
+                  currency: USD
+                  rate: 1.5
+                  unit: USD/1M tokens
+                  conditions:
+                    mode: thinking_or_non_thinking;input_tokens_0_to_256000
+                    billing_mode: pay_as_you_go_list
+              source: https://www.alibabacloud.com/help/en/model-studio/model-pricing
+              last_verified: "2026-08-13"
+    - id: moonshot
+      label: Moonshot
+      aliases:
+        - kimi
+      fields:
+        - id: api_key
+          label: Moonshot API key
+          kind: credential
+          type: opaque
+          required: true
+          default: ""
+          secret: true
+          validation:
+            minimum_length: 1
+          environment: MOONSHOT_API_KEY
+      transports:
+        - id: text
+          endpoint:
+            method: POST
+            default_base_url: https://api.moonshot.ai/v1
+            path: /chat/completions
+          authentication:
+            kind: bearer
+            field: api_key
+            header: Authorization
+            prefix: 'Bearer '
+          request_protocol: openai_chat_completions
+          response_protocol: openai_chat_completions
+          usage_mapping: openai_chat_completions
+          lifecycle: synchronous_completion
+          protocol_parameters:
+            model_field: model
+            token_field: max_completion_tokens
+            output_fields:
+                - choices[].message.content
+            finish_rules:
+                complete:
+                    - stop
+                continue:
+                    - length
+            continuation_rules:
+                - append_visible_assistant_output
+                - request_missing_suffix
+            error_rules:
+                - content_filter
+                - tool_calls
+                - unknown_finish_reason
+            usage_fields:
+                input: usage.prompt_tokens
+                output: usage.completion_tokens
+                total: usage.total_tokens
+      offerings:
+        - model: kimi-k2.6
+          upstream_model: kimi-k2.6
+          transport: text
+          operations:
+            - text
+          default_operations:
+            - text
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 100000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+              last_verified: "2026-08-13"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: unbounded
+              unit: files
+              scope: request
+              source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+              last_verified: "2026-08-13"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+              last_verified: "2026-08-13"
+          prices:
+            - operation: text
+              available: false
+              source: https://platform.moonshot.ai/docs/pricing/chat
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: kimi-k3
+          upstream_model: kimi-k3
+          transport: text
+          operations:
+            - text
+          reasoning_effort:
+            adapter: openai_chat_completions
+            efforts:
+                - low
+                - high
+                - max
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 100000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+              last_verified: "2026-08-13"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: unbounded
+              unit: files
+              scope: request
+              source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+              last_verified: "2026-08-13"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+              last_verified: "2026-08-13"
+          prices:
+            - operation: text
+              available: false
+              source: https://platform.moonshot.ai/docs/pricing/chat
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: kimi-k2.7-code
+          upstream_model: kimi-k2.7-code
+          transport: text
+          operations:
+            - text
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 100000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+              last_verified: "2026-08-13"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: unbounded
+              unit: files
+              scope: request
+              source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+              last_verified: "2026-08-13"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+              last_verified: "2026-08-13"
+          prices:
+            - operation: text
+              available: false
+              source: https://platform.moonshot.ai/docs/pricing/chat
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: kimi-k2.7-code-highspeed
+          upstream_model: kimi-k2.7-code-highspeed
+          transport: text
+          operations:
+            - text
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 100000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+              last_verified: "2026-08-13"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: unbounded
+              unit: files
+              scope: request
+              source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+              last_verified: "2026-08-13"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+              last_verified: "2026-08-13"
+          prices:
+            - operation: text
+              available: false
+              source: https://platform.moonshot.ai/docs/pricing/chat
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+    - id: minimax
+      label: MiniMax
+      fields:
+        - id: api_key
+          label: MiniMax API key
+          kind: credential
+          type: opaque
+          required: true
+          default: ""
+          secret: true
+          validation:
+            minimum_length: 1
+          environment: MINIMAX_API_KEY
+      transports:
+        - id: text
+          endpoint:
+            method: POST
+            default_base_url: https://api.minimax.io/v1
+            path: /chat/completions
+          authentication:
+            kind: bearer
+            field: api_key
+            header: Authorization
+            prefix: 'Bearer '
+          request_protocol: openai_chat_completions
+          response_protocol: openai_chat_completions
+          usage_mapping: openai_chat_completions
+          lifecycle: synchronous_completion
+          protocol_parameters:
+            model_field: model
+            token_field: max_completion_tokens
+            output_fields:
+                - choices[].message.content
+            finish_rules:
+                complete:
+                    - stop
+                continue:
+                    - length
+            continuation_rules:
+                - append_visible_assistant_output
+                - request_missing_suffix
+            error_rules:
+                - content_filter
+                - tool_calls
+                - unknown_finish_reason
+            usage_fields:
+                input: usage.prompt_tokens
+                output: usage.completion_tokens
+                total: usage.total_tokens
+      offerings:
+        - model: minimax-m2.7
+          upstream_model: MiniMax-M2.7
+          transport: text
+          operations:
+            - text
+          default_operations:
+            - text
+          output_token_limit: 204800
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 204800
+          limits:
+            - id: context_tokens
+              value: 204800
+              unit: tokens
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: 0.3
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                - component: output_tokens
+                  currency: USD
+                  rate: 1.2
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: 0.06
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                - component: prompt_cache_write_tokens
+                  currency: USD
+                  rate: 0.375
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+              source: https://platform.minimax.io/docs/guides/pricing-paygo
+              last_verified: "2026-08-13"
+        - model: minimax-m2.7-highspeed
+          upstream_model: MiniMax-M2.7-highspeed
+          transport: text
+          operations:
+            - text
+          output_token_limit: 204800
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 204800
+          limits:
+            - id: context_tokens
+              value: 204800
+              unit: tokens
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: 0.6
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                - component: output_tokens
+                  currency: USD
+                  rate: 2.4
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: 0.06
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                - component: prompt_cache_write_tokens
+                  currency: USD
+                  rate: 0.375
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+              source: https://platform.minimax.io/docs/guides/pricing-paygo
+              last_verified: "2026-08-13"
+        - model: minimax-m2.5
+          upstream_model: MiniMax-M2.5
+          transport: text
+          operations:
+            - text
+          output_token_limit: 204800
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 204800
+          limits:
+            - id: context_tokens
+              value: 204800
+              unit: tokens
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: 0.3
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                - component: output_tokens
+                  currency: USD
+                  rate: 1.2
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: 0.03
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                - component: prompt_cache_write_tokens
+                  currency: USD
+                  rate: 0.375
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+              source: https://platform.minimax.io/docs/guides/pricing-paygo
+              last_verified: "2026-08-13"
+        - model: minimax-m2.5-highspeed
+          upstream_model: MiniMax-M2.5-highspeed
+          transport: text
+          operations:
+            - text
+          output_token_limit: 204800
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 204800
+          limits:
+            - id: context_tokens
+              value: 204800
+              unit: tokens
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: 0.6
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                - component: output_tokens
+                  currency: USD
+                  rate: 2.4
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: 0.03
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                - component: prompt_cache_write_tokens
+                  currency: USD
+                  rate: 0.375
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+              source: https://platform.minimax.io/docs/guides/pricing-paygo
+              last_verified: "2026-08-13"
+        - model: minimax-m2.1
+          upstream_model: MiniMax-M2.1
+          transport: text
+          operations:
+            - text
+          output_token_limit: 204800
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 204800
+          limits:
+            - id: context_tokens
+              value: 204800
+              unit: tokens
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: 0.3
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                - component: output_tokens
+                  currency: USD
+                  rate: 1.2
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: 0.03
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                - component: prompt_cache_write_tokens
+                  currency: USD
+                  rate: 0.375
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+              source: https://platform.minimax.io/docs/guides/pricing-paygo
+              last_verified: "2026-08-13"
+        - model: minimax-m2.1-highspeed
+          upstream_model: MiniMax-M2.1-highspeed
+          transport: text
+          operations:
+            - text
+          output_token_limit: 204800
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 204800
+          limits:
+            - id: context_tokens
+              value: 204800
+              unit: tokens
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: 0.6
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                - component: output_tokens
+                  currency: USD
+                  rate: 2.4
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: 0.03
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                - component: prompt_cache_write_tokens
+                  currency: USD
+                  rate: 0.375
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+              source: https://platform.minimax.io/docs/guides/pricing-paygo
+              last_verified: "2026-08-13"
+        - model: minimax-m2
+          upstream_model: MiniMax-M2
+          transport: text
+          operations:
+            - text
+          output_token_limit: 204800
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 204800
+          limits:
+            - id: context_tokens
+              value: 204800
+              unit: tokens
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: 0.3
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                - component: output_tokens
+                  currency: USD
+                  rate: 1.2
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: 0.03
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                - component: prompt_cache_write_tokens
+                  currency: USD
+                  rate: 0.375
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+              source: https://platform.minimax.io/docs/guides/pricing-paygo
+              last_verified: "2026-08-13"
+    - id: siliconflow
+      label: SiliconFlow
+      fields:
+        - id: api_key
+          label: SiliconFlow API key
+          kind: credential
+          type: opaque
+          required: true
+          default: ""
+          secret: true
+          validation:
+            minimum_length: 1
+          environment: SILICONFLOW_API_KEY
+      transports:
+        - id: text
+          endpoint:
+            method: POST
+            default_base_url: https://api.siliconflow.com/v1
+            path: /chat/completions
+          authentication:
+            kind: bearer
+            field: api_key
+            header: Authorization
+            prefix: 'Bearer '
+          request_protocol: openai_chat_completions
+          response_protocol: openai_chat_completions
+          usage_mapping: openai_chat_completions
+          lifecycle: synchronous_completion
+          protocol_parameters:
+            model_field: model
+            token_field: max_tokens
+            output_fields:
+                - choices[].message.content
+            finish_rules:
+                complete:
+                    - stop
+                continue:
+                    - length
+            continuation_rules:
+                - append_visible_assistant_output
+                - request_missing_suffix
+            error_rules:
+                - content_filter
+                - tool_calls
+                - unknown_finish_reason
+            usage_fields:
+                input: usage.prompt_tokens
+                output: usage.completion_tokens
+                total: usage.total_tokens
+        - id: dictation
+          endpoint:
+            method: POST
+            default_base_url: https://api.siliconflow.com/v1
+            path: /audio/transcriptions
+          authentication:
+            kind: bearer
+            field: api_key
+            header: Authorization
+            prefix: 'Bearer '
+          request_protocol: multipart_transcription
+          response_protocol: multipart_transcription
+          usage_mapping: multipart_transcription
+          lifecycle: synchronous_completion
+          protocol_parameters:
+            model_field: model
+            token_field: ""
+            output_fields:
+                - text
+            finish_rules:
+                complete:
+                    - http_2xx
+                continue: []
+            continuation_rules: []
+            error_rules:
+                - malformed_response
+                - provider_error
+            usage_fields:
+                input: ""
+                output: ""
+                total: ""
+      offerings:
+        - model: deepseek-reasoner
+          upstream_model: deepseek-ai/DeepSeek-R1
+          transport: text
+          operations:
+            - text
+          default_operations:
+            - text
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.siliconflow.com/en/userguide/introduction/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: sensevoice-small
+          upstream_model: FunAudioLLM/SenseVoiceSmall
+          transport: dictation
+          operations:
+            - dictation
+          default_operations:
+            - dictation
+          prices:
+            - operation: dictation
+              available: false
+              source: https://docs.siliconflow.com/en/userguide/introduction/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+    - id: zai
+      label: Z.AI
+      fields:
+        - id: api_key
+          label: Z.AI API key
+          kind: credential
+          type: opaque
+          required: true
+          default: ""
+          secret: true
+          validation:
+            minimum_length: 1
+          environment: ZAI_API_KEY
+      transports:
+        - id: text
+          endpoint:
+            method: POST
+            default_base_url: https://api.z.ai/api/paas/v4
+            path: /chat/completions
+          authentication:
+            kind: bearer
+            field: api_key
+            header: Authorization
+            prefix: 'Bearer '
+          request_protocol: openai_chat_completions
+          response_protocol: openai_chat_completions
+          usage_mapping: openai_chat_completions
+          lifecycle: synchronous_completion
+          protocol_parameters:
+            model_field: model
+            token_field: max_tokens
+            output_fields:
+                - choices[].message.content
+            finish_rules:
+                complete:
+                    - stop
+                continue:
+                    - length
+            continuation_rules:
+                - append_visible_assistant_output
+                - request_missing_suffix
+            error_rules:
+                - content_filter
+                - tool_calls
+                - unknown_finish_reason
+            usage_fields:
+                input: usage.prompt_tokens
+                output: usage.completion_tokens
+                total: usage.total_tokens
+        - id: dictation
+          endpoint:
+            method: POST
+            default_base_url: https://api.z.ai/api/paas/v4
+            path: /audio/transcriptions
+          authentication:
+            kind: bearer
+            field: api_key
+            header: Authorization
+            prefix: 'Bearer '
+          request_protocol: multipart_transcription
+          response_protocol: multipart_transcription
+          usage_mapping: multipart_transcription
+          lifecycle: synchronous_completion
+          protocol_parameters:
+            model_field: model
+            token_field: ""
+            output_fields:
+                - text
+            finish_rules:
+                complete:
+                    - http_2xx
+                continue: []
+            continuation_rules: []
+            error_rules:
+                - malformed_response
+                - provider_error
+            usage_fields:
+                input: ""
+                output: ""
+                total: ""
+      offerings:
+        - model: glm-5.1
+          upstream_model: glm-5.1
+          transport: text
+          operations:
+            - text
+          default_operations:
+            - text
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.z.ai/guides/overview/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: glm-5.2
+          upstream_model: glm-5.2
+          transport: text
+          operations:
+            - text
+          output_token_limit: 131072
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.z.ai/guides/overview/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: glm-asr-2512
+          upstream_model: glm-asr-2512
+          transport: dictation
+          operations:
+            - dictation
+          default_operations:
+            - dictation
+          prices:
+            - operation: dictation
+              available: false
+              source: https://docs.z.ai/guides/overview/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+    - id: gemini
+      label: Gemini
+      fields:
+        - id: api_key
+          label: Gemini API key
+          kind: credential
+          type: opaque
+          required: true
+          default: ""
+          secret: true
+          validation:
+            minimum_length: 1
+          environment: GEMINI_API_KEY
+      transports:
+        - id: text_pollable
+          endpoint:
+            method: POST
+            default_base_url: https://generativelanguage.googleapis.com/v1beta
+            path: /interactions
+          authentication:
+            kind: header
+            field: api_key
+            header: x-goog-api-key
+            prefix: ""
+          headers:
+            - name: Api-Revision
+              value: "2026-05-20"
+          request_protocol: gemini_interactions
+          response_protocol: gemini_interactions
+          usage_mapping: gemini_interactions
+          lifecycle: pollable_resource
+          protocol_parameters:
+            model_field: model
+            token_field: generation_config.max_output_tokens
+            output_fields:
+                - outputs[].text
+            finish_rules:
+                complete:
+                    - completed
+                continue:
+                    - incomplete
+            continuation_rules:
+                - append_visible_assistant_output
+                - request_missing_suffix
+            error_rules:
+                - blocked
+                - cancelled
+                - failed
+                - unknown_status
+            usage_fields:
+                input: usage.input_tokens
+                output: usage.output_tokens
+                total: usage.total_tokens
+        - id: text_synchronous
+          endpoint:
+            method: POST
+            default_base_url: https://generativelanguage.googleapis.com/v1beta
+            path: /interactions
+          authentication:
+            kind: header
+            field: api_key
+            header: x-goog-api-key
+            prefix: ""
+          headers:
+            - name: Api-Revision
+              value: "2026-05-20"
+          request_protocol: gemini_interactions
+          response_protocol: gemini_interactions
+          usage_mapping: gemini_interactions
+          lifecycle: synchronous_completion
+          protocol_parameters:
+            model_field: model
+            token_field: generation_config.max_output_tokens
+            output_fields:
+                - outputs[].text
+            finish_rules:
+                complete:
+                    - completed
+                continue:
+                    - incomplete
+            continuation_rules:
+                - append_visible_assistant_output
+                - request_missing_suffix
+            error_rules:
+                - blocked
+                - cancelled
+                - failed
+                - unknown_status
+            usage_fields:
+                input: usage.input_tokens
+                output: usage.output_tokens
+                total: usage.total_tokens
+      offerings:
+        - model: gemini-3.5-flash
+          upstream_model: gemini-3.5-flash
+          transport: text_pollable
+          operations:
+            - text
+          output_token_limit: 65536
+          media_inputs:
+            - image
+            - audio
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://ai.google.dev/gemini-api/docs/file-input-methods
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 3600
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/image-understanding
+              last_verified: "2026-08-11"
+            - id: audio_count
+              media_type: audio
+              transport: any
+              status: unknown
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/audio
+              last_verified: "2026-08-11"
+            - id: image_file_bytes
+              media_type: image
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-08-11"
+            - id: audio_file_bytes
+              media_type: audio
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://ai.google.dev/gemini-api/docs/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: gemini-3.1-pro-preview
+          upstream_model: gemini-3.1-pro-preview
+          transport: text_pollable
+          operations:
+            - text
+          output_token_limit: 65536
+          media_inputs:
+            - image
+            - audio
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://ai.google.dev/gemini-api/docs/file-input-methods
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 3600
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/image-understanding
+              last_verified: "2026-08-11"
+            - id: audio_count
+              media_type: audio
+              transport: any
+              status: unknown
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/audio
+              last_verified: "2026-08-11"
+            - id: image_file_bytes
+              media_type: image
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-08-11"
+            - id: audio_file_bytes
+              media_type: audio
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://ai.google.dev/gemini-api/docs/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: gemini-3-flash-preview
+          upstream_model: gemini-3-flash-preview
+          transport: text_pollable
+          operations:
+            - text
+          output_token_limit: 65536
+          media_inputs:
+            - image
+            - audio
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://ai.google.dev/gemini-api/docs/file-input-methods
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 3600
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/image-understanding
+              last_verified: "2026-08-11"
+            - id: audio_count
+              media_type: audio
+              transport: any
+              status: unknown
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/audio
+              last_verified: "2026-08-11"
+            - id: image_file_bytes
+              media_type: image
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-08-11"
+            - id: audio_file_bytes
+              media_type: audio
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://ai.google.dev/gemini-api/docs/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: gemini-3.1-flash-lite
+          upstream_model: gemini-3.1-flash-lite
+          transport: text_pollable
+          operations:
+            - text
+          output_token_limit: 65536
+          media_inputs:
+            - image
+            - audio
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://ai.google.dev/gemini-api/docs/file-input-methods
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 3600
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/image-understanding
+              last_verified: "2026-08-11"
+            - id: audio_count
+              media_type: audio
+              transport: any
+              status: unknown
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/audio
+              last_verified: "2026-08-11"
+            - id: image_file_bytes
+              media_type: image
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-08-11"
+            - id: audio_file_bytes
+              media_type: audio
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://ai.google.dev/gemini-api/docs/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: gemini-2.5-flash
+          upstream_model: gemini-2.5-flash
+          transport: text_synchronous
+          operations:
+            - text
+          default_operations:
+            - text
+          output_token_limit: 65536
+          media_inputs:
+            - image
+            - audio
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://ai.google.dev/gemini-api/docs/file-input-methods
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 3600
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/image-understanding
+              last_verified: "2026-08-11"
+            - id: audio_count
+              media_type: audio
+              transport: any
+              status: unknown
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/audio
+              last_verified: "2026-08-11"
+            - id: image_file_bytes
+              media_type: image
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-08-11"
+            - id: audio_file_bytes
+              media_type: audio
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://ai.google.dev/gemini-api/docs/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: gemini-2.5-flash-lite
+          upstream_model: gemini-2.5-flash-lite
+          transport: text_synchronous
+          operations:
+            - text
+          output_token_limit: 65536
+          media_inputs:
+            - image
+            - audio
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://ai.google.dev/gemini-api/docs/file-input-methods
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 3600
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/image-understanding
+              last_verified: "2026-08-11"
+            - id: audio_count
+              media_type: audio
+              transport: any
+              status: unknown
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/audio
+              last_verified: "2026-08-11"
+            - id: image_file_bytes
+              media_type: image
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-08-11"
+            - id: audio_file_bytes
+              media_type: audio
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://ai.google.dev/gemini-api/docs/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: gemini-2.5-pro
+          upstream_model: gemini-2.5-pro
+          transport: text_synchronous
+          operations:
+            - text
+          output_token_limit: 65536
+          media_inputs:
+            - image
+            - audio
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://ai.google.dev/gemini-api/docs/file-input-methods
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 3600
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/image-understanding
+              last_verified: "2026-08-11"
+            - id: audio_count
+              media_type: audio
+              transport: any
+              status: unknown
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/audio
+              last_verified: "2026-08-11"
+            - id: image_file_bytes
+              media_type: image
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-08-11"
+            - id: audio_file_bytes
+              media_type: audio
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://ai.google.dev/gemini-api/docs/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+    - id: anthropic
+      label: Anthropic
+      aliases:
+        - claude
+      fields:
+        - id: api_key
+          label: Anthropic API key
+          kind: credential
+          type: opaque
+          required: true
+          default: ""
+          secret: true
+          validation:
+            minimum_length: 1
+          environment: ANTHROPIC_API_KEY
+      transports:
+        - id: text
+          endpoint:
+            method: POST
+            default_base_url: https://api.anthropic.com
+            path: /v1/messages
+          authentication:
+            kind: header
+            field: api_key
+            header: x-api-key
+            prefix: ""
+          headers:
+            - name: anthropic-version
+              value: "2023-06-01"
+          request_protocol: anthropic_messages
+          response_protocol: anthropic_messages
+          usage_mapping: anthropic_messages
+          lifecycle: synchronous_completion
+          protocol_parameters:
+            model_field: model
+            token_field: max_tokens
+            output_fields:
+                - content[].text
+            finish_rules:
+                complete:
+                    - end_turn
+                    - stop_sequence
+                continue:
+                    - max_tokens
+            continuation_rules:
+                - append_visible_assistant_output
+                - request_missing_suffix
+            error_rules:
+                - pause_turn
+                - refusal
+                - tool_use
+                - unknown_stop_reason
+            usage_fields:
+                input: usage.input_tokens
+                output: usage.output_tokens
+                total: derived_input_plus_output
+      offerings:
+        - model: claude-fable-5
+          upstream_model: claude-fable-5
+          transport: text
+          operations:
+            - text
+          output_token_limit: 128000
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 32000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 600
+              unit: files
+              scope: request
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 10000000
+              unit: bytes
+              scope: attachment_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.anthropic.com/en/docs/about-claude/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: claude-sonnet-5
+          upstream_model: claude-sonnet-5
+          transport: text
+          operations:
+            - text
+          output_token_limit: 128000
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 32000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 600
+              unit: files
+              scope: request
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 10000000
+              unit: bytes
+              scope: attachment_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.anthropic.com/en/docs/about-claude/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: claude-opus-4-8
+          upstream_model: claude-opus-4-8
+          transport: text
+          operations:
+            - text
+          output_token_limit: 128000
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 32000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 600
+              unit: files
+              scope: request
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 10000000
+              unit: bytes
+              scope: attachment_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.anthropic.com/en/docs/about-claude/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: claude-sonnet-4-6
+          upstream_model: claude-sonnet-4-6
+          transport: text
+          operations:
+            - text
+          default_operations:
+            - text
+          output_token_limit: 64000
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 32000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 600
+              unit: files
+              scope: request
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 10000000
+              unit: bytes
+              scope: attachment_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.anthropic.com/en/docs/about-claude/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: claude-haiku-4-5-20251001
+          upstream_model: claude-haiku-4-5-20251001
+          transport: text
+          operations:
+            - text
+          output_token_limit: 64000
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 32000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 100
+              unit: files
+              scope: request
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 10000000
+              unit: bytes
+              scope: attachment_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.anthropic.com/en/docs/about-claude/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: claude-haiku-4-5
+          upstream_model: claude-haiku-4-5
+          transport: text
+          operations:
+            - text
+          output_token_limit: 64000
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 32000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 100
+              unit: files
+              scope: request
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 10000000
+              unit: bytes
+              scope: attachment_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.anthropic.com/en/docs/about-claude/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: claude-sonnet-4-5-20250929
+          upstream_model: claude-sonnet-4-5-20250929
+          transport: text
+          operations:
+            - text
+          output_token_limit: 64000
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 32000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 100
+              unit: files
+              scope: request
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 10000000
+              unit: bytes
+              scope: attachment_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.anthropic.com/en/docs/about-claude/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: claude-sonnet-4-5
+          upstream_model: claude-sonnet-4-5
+          transport: text
+          operations:
+            - text
+          output_token_limit: 64000
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 32000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 100
+              unit: files
+              scope: request
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 10000000
+              unit: bytes
+              scope: attachment_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.anthropic.com/en/docs/about-claude/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: claude-opus-4-1-20250805
+          upstream_model: claude-opus-4-1-20250805
+          transport: text
+          operations:
+            - text
+          output_token_limit: 32000
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 32000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 100
+              unit: files
+              scope: request
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 10000000
+              unit: bytes
+              scope: attachment_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.anthropic.com/en/docs/about-claude/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: claude-opus-4-1
+          upstream_model: claude-opus-4-1
+          transport: text
+          operations:
+            - text
+          output_token_limit: 32000
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 32000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 100
+              unit: files
+              scope: request
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 10000000
+              unit: bytes
+              scope: attachment_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.anthropic.com/en/docs/about-claude/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+    - id: meta
+      label: Meta
+      fields:
+        - id: api_key
+          label: Meta API key
+          kind: credential
+          type: opaque
+          required: true
+          default: ""
+          secret: true
+          validation:
+            minimum_length: 1
+          environment: MODEL_API_KEY
+      transports:
+        - id: text
+          endpoint:
+            method: POST
+            default_base_url: https://api.meta.ai/v1
+            path: /chat/completions
+          authentication:
+            kind: bearer
+            field: api_key
+            header: Authorization
+            prefix: 'Bearer '
+          request_protocol: openai_chat_completions
+          response_protocol: openai_chat_completions
+          usage_mapping: openai_chat_completions
+          lifecycle: synchronous_completion
+          protocol_parameters:
+            model_field: model
+            token_field: max_completion_tokens
+            output_fields:
+                - choices[].message.content
+            finish_rules:
+                complete:
+                    - stop
+                continue:
+                    - length
+            continuation_rules:
+                - append_visible_assistant_output
+                - request_missing_suffix
+            error_rules:
+                - content_filter
+                - tool_calls
+                - unknown_finish_reason
+            usage_fields:
+                input: usage.prompt_tokens
+                output: usage.completion_tokens
+                total: usage.total_tokens
+      offerings:
+        - model: muse-spark-1.1
+          upstream_model: muse-spark-1.1
+          transport: text
+          operations:
+            - text
+          default_operations:
+            - text
+          prices:
+            - operation: text
+              available: false
+              source: https://dev.meta.ai/docs/pricing-rate-limits
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+    - id: xai
+      label: xAI
+      fields:
+        - id: api_key
+          label: xAI API key
+          kind: credential
+          type: opaque
+          required: true
+          default: ""
+          secret: true
+          validation:
+            minimum_length: 1
+          environment: XAI_API_KEY
+      transports:
+        - id: text_chat_completions
+          endpoint:
+            method: POST
+            default_base_url: https://api.x.ai/v1
+            path: /chat/completions
+          authentication:
+            kind: bearer
+            field: api_key
+            header: Authorization
+            prefix: 'Bearer '
+          request_protocol: openai_chat_completions
+          response_protocol: openai_chat_completions
+          usage_mapping: openai_chat_completions
+          lifecycle: synchronous_completion
+          protocol_parameters:
+            model_field: model
+            token_field: max_tokens
+            output_fields:
+                - choices[].message.content
+            finish_rules:
+                complete:
+                    - stop
+                continue:
+                    - length
+            continuation_rules:
+                - append_visible_assistant_output
+                - request_missing_suffix
+            error_rules:
+                - content_filter
+                - tool_calls
+                - unknown_finish_reason
+            usage_fields:
+                input: usage.prompt_tokens
+                output: usage.completion_tokens
+                total: usage.total_tokens
+        - id: text_responses
+          endpoint:
+            method: POST
+            default_base_url: https://api.x.ai/v1
+            path: /responses
+          authentication:
+            kind: bearer
+            field: api_key
+            header: Authorization
+            prefix: 'Bearer '
+          request_protocol: openai_responses
+          response_protocol: openai_responses
+          usage_mapping: openai_responses
+          lifecycle: synchronous_completion
+          protocol_parameters:
+            model_field: model
+            token_field: max_output_tokens
+            output_fields:
+                - output[].content[].text
+            finish_rules:
+                complete:
+                    - completed
+                continue:
+                    - incomplete:max_output_tokens
+            continuation_rules:
+                - append_visible_assistant_output
+                - request_missing_suffix
+            error_rules:
+                - cancelled
+                - failed
+                - refusal
+                - unknown_status
+            usage_fields:
+                input: usage.input_tokens
+                output: usage.output_tokens
+                total: usage.total_tokens
+        - id: video_generation
+          endpoint:
+            method: POST
+            default_base_url: https://api.x.ai/v1
+            path: /videos/generations
+          authentication:
+            kind: bearer
+            field: api_key
+            header: Authorization
+            prefix: 'Bearer '
+          request_protocol: xai_videos_generations
+          response_protocol: xai_videos_generations
+          usage_mapping: xai_videos_generations
+          lifecycle: pollable_resource
+          protocol_parameters:
+            model_field: model
+            token_field: ""
+            output_fields:
+                - data[].url
+            finish_rules:
+                complete:
+                    - completed
+                continue:
+                    - pending
+            continuation_rules: []
+            error_rules:
+                - failed
+                - unknown_status
+            usage_fields:
+                input: ""
+                output: ""
+                total: ""
+        - id: dictation
+          endpoint:
+            method: POST
+            default_base_url: https://api.x.ai/v1
+            path: /stt
+          authentication:
+            kind: bearer
+            field: api_key
+            header: Authorization
+            prefix: 'Bearer '
+          request_protocol: multipart_transcription
+          response_protocol: multipart_transcription
+          usage_mapping: multipart_transcription
+          lifecycle: synchronous_completion
+          protocol_parameters:
+            model_field: ""
+            token_field: ""
+            output_fields:
+                - text
+            finish_rules:
+                complete:
+                    - http_2xx
+                continue: []
+            continuation_rules: []
+            error_rules:
+                - malformed_response
+                - provider_error
+            usage_fields:
+                input: ""
+                output: ""
+                total: ""
+      offerings:
+        - model: grok-4.3
+          upstream_model: grok-4.3
+          transport: text_chat_completions
+          operations:
+            - text
+          default_operations:
+            - text
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.x.ai/developers/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: grok-4.3-latest
+          upstream_model: grok-4.3-latest
+          transport: text_chat_completions
+          operations:
+            - text
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.x.ai/developers/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: grok-4.5
+          upstream_model: grok-4.5
+          transport: text_responses
+          operations:
+            - text
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://docs.x.ai/developers/model-capabilities/images/understanding
+              last_verified: "2026-08-11"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: unbounded
+              unit: files
+              scope: request
+              source: https://docs.x.ai/developers/model-capabilities/images/understanding
+              last_verified: "2026-08-11"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 20971520
+              unit: bytes
+              scope: attachment
+              source: https://docs.x.ai/developers/model-capabilities/images/understanding
+              last_verified: "2026-08-11"
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.x.ai/developers/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: grok-4.20-0309-reasoning
+          upstream_model: grok-4.20-0309-reasoning
+          transport: text_chat_completions
+          operations:
+            - text
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.x.ai/developers/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: grok-4.20-0309-non-reasoning
+          upstream_model: grok-4.20-0309-non-reasoning
+          transport: text_chat_completions
+          operations:
+            - text
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.x.ai/developers/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: grok-latest
+          upstream_model: grok-latest
+          transport: text_chat_completions
+          operations:
+            - text
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.x.ai/developers/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: grok-build-0.1
+          upstream_model: grok-build-0.1
+          transport: text_chat_completions
+          operations:
+            - text
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.x.ai/developers/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: grok-code-fast
+          upstream_model: grok-code-fast
+          transport: text_chat_completions
+          operations:
+            - text
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.x.ai/developers/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: grok-code-fast-1
+          upstream_model: grok-code-fast-1
+          transport: text_chat_completions
+          operations:
+            - text
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.x.ai/developers/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: grok-code-fast-1-0825
+          upstream_model: grok-code-fast-1-0825
+          transport: text_chat_completions
+          operations:
+            - text
+          prices:
+            - operation: text
+              available: false
+              source: https://docs.x.ai/developers/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: grok-imagine-video-1.5
+          upstream_model: grok-imagine-video-1.5
+          transport: video_generation
+          operations:
+            - video_generation
+          default_operations:
+            - video_generation
+          controls:
+            - id: aspect_ratio
+              kind: enum
+              values:
+                - "1:1"
+                - "16:9"
+                - "9:16"
+                - "4:3"
+                - "3:4"
+                - "3:2"
+                - "2:3"
+            - id: duration_seconds
+              kind: integer
+              minimum: 1
+              maximum: 15
+            - id: resolution
+              kind: enum
+              values:
+                - 480p
+                - 720p
+                - 1080p
+            - id: start_image
+              kind: boolean
+          limits:
+            - id: concurrent_requests
+              unit: requests
+              account_dependent: true
+          prices:
+            - operation: video_generation
+              available: true
+              rates:
+                - component: output_video
+                  currency: USD
+                  rate: 0.08
+                  unit: USD/output_second
+                  conditions:
+                    resolution: 480p
+                    duration: output
+                - component: output_video
+                  currency: USD
+                  rate: 0.14
+                  unit: USD/output_second
+                  conditions:
+                    resolution: 720p
+                    duration: output
+                - component: output_video
+                  currency: USD
+                  rate: 0.25
+                  unit: USD/output_second
+                  conditions:
+                    resolution: 1080p
+                    duration: output
+                - component: input_image
+                  currency: USD
+                  rate: 0.01
+                  unit: USD/input_image
+                  conditions:
+                    input_media: image
+                    quantity: input_image
+              source: https://docs.x.ai/developers/pricing
+              last_verified: "2026-08-08"
+        - model: xai-stt
+          upstream_model: xai-stt
+          transport: dictation
+          operations:
+            - dictation
+          default_operations:
+            - dictation
+          prices:
+            - operation: dictation
+              available: false
+              source: https://docs.x.ai/developers/pricing
+              last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.

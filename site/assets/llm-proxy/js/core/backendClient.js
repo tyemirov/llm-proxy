@@ -156,17 +156,16 @@ export function fetchAdminUsers() {
 /**
  * @param {string} tenantID
  * @param {string} provider
- * @param {string} apiKey
- * @param {string} baseURL
+ * @param {Record<string, string>} fields
  * @param {string} textModel
  * @param {string} systemPrompt
  * @param {AbortSignal} [signal]
  * @returns {Promise<import("../types.d.js").ManagementTenantProfile>}
  */
-export function saveProviderKey(tenantID, provider, apiKey, baseURL, textModel, systemPrompt, signal) {
-  return requestJSON(`${managementTenantPath(tenantID)}/provider-keys/${encodeURIComponent(provider)}`, {
+export function saveProviderConnection(tenantID, provider, fields, textModel, systemPrompt, signal) {
+  return requestJSON(`${managementTenantPath(tenantID)}/provider-connections/${encodeURIComponent(provider)}`, {
     method: "PUT",
-    body: { api_key: apiKey, base_url: baseURL, text_model: textModel, system_prompt: systemPrompt },
+    body: { fields, text_model: textModel, system_prompt: systemPrompt },
     signal,
   });
 }
@@ -177,8 +176,8 @@ export function saveProviderKey(tenantID, provider, apiKey, baseURL, textModel, 
  * @param {AbortSignal} [signal]
  * @returns {Promise<import("../types.d.js").ManagementTenantProfile>}
  */
-export function removeProviderKey(tenantID, provider, signal) {
-  return requestJSON(`${managementTenantPath(tenantID)}/provider-keys/${encodeURIComponent(provider)}`, {
+export function removeProviderConnection(tenantID, provider, signal) {
+  return requestJSON(`${managementTenantPath(tenantID)}/provider-connections/${encodeURIComponent(provider)}`, {
     method: "DELETE",
     signal,
   });
@@ -187,11 +186,12 @@ export function removeProviderKey(tenantID, provider, signal) {
 /**
  * @param {string} tenantID
  * @param {string} provider
+ * @param {string} field
  * @param {AbortSignal} [signal]
- * @returns {Promise<import("../types.d.js").ProviderKeyReveal>}
+ * @returns {Promise<import("../types.d.js").ProviderFieldReveal>}
  */
-export function revealProviderKey(tenantID, provider, signal) {
-  return requestJSON(`${managementTenantPath(tenantID)}/provider-keys/${encodeURIComponent(provider)}/reveal`, {
+export function revealProviderConnectionField(tenantID, provider, field, signal) {
+  return requestJSON(`${managementTenantPath(tenantID)}/provider-connections/${encodeURIComponent(provider)}/fields/${encodeURIComponent(field)}/reveal`, {
     method: "POST",
     signal,
   });

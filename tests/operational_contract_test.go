@@ -1599,9 +1599,69 @@ func TestOperationalLiveHarnessVerifiesEachKeyBeforeItsSmokeRequest(testingInsta
 	if verificationOffset < 0 || smokeOffset <= verificationOffset {
 		testingInstance.Fatalf("live operations were not verification then smoke: %s", capture)
 	}
-	expectedPayload := `payload {"api_key":"` + providerKey + `","base_url":"","text_model":"gpt-4.1","system_prompt":""}`
+	expectedPayload := `payload {"fields":{"api_key":"` + providerKey + `"},"text_model":"gpt-4.1","system_prompt":""}`
 	if !strings.Contains(capture, expectedPayload) {
 		testingInstance.Fatalf("live verification payload mismatch: %s", capture)
+	}
+	assertOperationalProxyChildStopped(testingInstance, fixture.proxyPIDPath)
+}
+
+func TestOperationalLiveHarnessDiscoversCatalogOnlyProviderFields(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixture := newOperationalLiveHarnessFixture(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	environmentFile := filepath.Join(fixtureRoot, "live.env")
+	operationCapture := filepath.Join(fixtureRoot, "operations.log")
+	const (
+		providerKey = "test-live-catalog-token"
+		providerURL = "https://catalog-test.example/v1"
+		providerID  = "catalog-test"
+		modelID     = "catalog-test-model"
+	)
+	writeOperationalFile(
+		testingInstance,
+		environmentFile,
+		"CATALOG_TEST_TOKEN="+providerKey+"\nCATALOG_TEST_URL="+providerURL+"\n",
+		0o600,
+	)
+	discoveryFixture := `{"schema_version":1,"providers":[{"id":"catalog-test","fields":[{"id":"access_token","kind":"credential","required":true,"environment":"CATALOG_TEST_TOKEN"},{"id":"gateway_url","kind":"setting","required":true,"environment":"CATALOG_TEST_URL"}]}]}`
+	command := exec.Command(filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"))
+	command.Dir = repositoryRoot
+	command.Env = []string{
+		"PATH=" + fixture.toolDirectory + string(os.PathListSeparator) + os.Getenv("PATH"),
+		"GO=" + filepath.Join(fixture.toolDirectory, "go"),
+		"LLM_PROXY_LIVE_PORT=" + strconv.Itoa(operationalLoopbackPort(testingInstance)),
+		"PROXY_PID_CAPTURE=" + fixture.proxyPIDPath,
+		"LIVE_ENV_FILE=" + environmentFile,
+		"LLM_PROXY_LIVE_PROVIDERS=" + providerID,
+		"LLM_PROXY_LIVE_CATALOG_TEST_MODEL=" + modelID,
+		"PROVIDER_DISCOVERY_FIXTURE=" + discoveryFixture,
+		"LIVE_OPERATION_CAPTURE=" + operationCapture,
+	}
+	output, commandError := command.CombinedOutput()
+	if commandError != nil {
+		testingInstance.Fatalf("catalog-only live provider harness failed: %v\n%s", commandError, output)
+	}
+	outputText := string(output)
+	for _, expected := range []string{
+		"live provider verification passed: provider=" + providerID + " model=" + modelID + " status=200",
+		"live provider smoke passed: provider=" + providerID + " model=" + modelID + " status=200",
+	} {
+		if !strings.Contains(outputText, expected) {
+			testingInstance.Fatalf("catalog-only live provider output omitted %q: %s", expected, output)
+		}
+	}
+	if strings.Contains(outputText, providerKey) || strings.Contains(outputText, "live-generated-secret") {
+		testingInstance.Fatalf("catalog-only live provider output exposed credential material: %s", output)
+	}
+	captureBytes, readError := os.ReadFile(operationCapture)
+	if readError != nil {
+		testingInstance.Fatalf("read catalog-only live provider capture: %v", readError)
+	}
+	capture := string(captureBytes)
+	expectedPayload := `payload {"fields":{"access_token":"` + providerKey + `","gateway_url":"` + providerURL + `"},"text_model":"` + modelID + `","system_prompt":""}`
+	if !strings.Contains(capture, "provider-connections/"+providerID) || !strings.Contains(capture, expectedPayload) {
+		testingInstance.Fatalf("catalog-only live provider did not use discovered fields: %s", capture)
 	}
 	assertOperationalProxyChildStopped(testingInstance, fixture.proxyPIDPath)
 }
@@ -1712,8 +1772,8 @@ func TestOperationalLiveHarnessRunsCatalogSelectedImageMatrixAfterVerification(t
 		testingInstance.Fatalf("live provider image matrix failed: %v\n%s", commandError, output)
 	}
 	outputText := string(output)
-	expectedModels := []string{"gpt-4.1", "claude-sonnet-4-6", "gemini-2.5-flash", "kimi-k2.6", "kimi-k2.7-code", "kimi-k2.7-code-highspeed", "kimi-k3", "grok-4.5"}
-	expectedProviders := []string{"openai", "anthropic", "gemini", "moonshot", "moonshot", "moonshot", "moonshot", "xai"}
+	expectedModels := []string{"gpt-4.1", "kimi-k2.6", "kimi-k2.7-code", "kimi-k2.7-code-highspeed", "kimi-k3", "gemini-2.5-flash", "claude-sonnet-4-6", "grok-4.5"}
+	expectedProviders := []string{"openai", "moonshot", "moonshot", "moonshot", "moonshot", "gemini", "anthropic", "xai"}
 	for index, provider := range expectedProviders {
 		expectedVerification := "live provider verification passed: provider=" + provider + " model=" + expectedModels[index] + " status=200"
 		expectedSuccess := "live provider image smoke passed: provider=" + provider + " model=" + expectedModels[index] + " status=200"
@@ -1910,6 +1970,14 @@ done
 builtin printf '%s\n' \
   '#!/usr/bin/env bash' \
   'set -euo pipefail' \
+  'if [[ " $* " == *" --provider-catalog-only "* ]]; then' \
+  '  if [[ -n "${PROVIDER_DISCOVERY_FIXTURE:-}" ]]; then' \
+  '    builtin printf "%s\n" "${PROVIDER_DISCOVERY_FIXTURE}"' \
+  '  else' \
+  '    builtin printf "%s\n" '\''{"schema_version":1,"providers":[{"id":"openai","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"OPENAI_API_KEY"}]},{"id":"deepseek","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"DEEPSEEK_API_KEY"}]},{"id":"dashscope","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"DASHSCOPE_API_KEY"},{"id":"base_url","kind":"setting","required":true,"environment":"DASHSCOPE_BASE_URL"}]},{"id":"moonshot","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"MOONSHOT_API_KEY"}]},{"id":"minimax","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"MINIMAX_API_KEY"}]},{"id":"siliconflow","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"SILICONFLOW_API_KEY"}]},{"id":"zai","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"ZAI_API_KEY"}]},{"id":"gemini","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"GEMINI_API_KEY"}]},{"id":"anthropic","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"ANTHROPIC_API_KEY"}]},{"id":"meta","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"MODEL_API_KEY"}]},{"id":"xai","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"XAI_API_KEY"}]}]}'\''' \
+  '  fi' \
+  '  exit 0' \
+  'fi' \
   'builtin printf "%s\n" "$$" >"${PROXY_PID_CAPTURE:?}"' \
   'exec sleep 60' >"${output_path}"
 chmod +x "${output_path}"
@@ -1978,7 +2046,7 @@ case "${request_url}" in
     builtin printf '%s' '{"secret":"live-generated-secret","profile":{"providers":[{"id":"openai","text_default_model":"gpt-4.1"},{"id":"anthropic","text_default_model":"claude-sonnet-4-6"},{"id":"gemini","text_default_model":"gemini-2.5-flash"},{"id":"moonshot","text_default_model":"kimi-k2.6"},{"id":"minimax","text_default_model":"minimax-m2.7"},{"id":"xai","text_default_model":"grok-4.3"},{"id":"deepseek","text_default_model":"deepseek-v4-flash"}]}}' >"${output_path}"
     builtin printf '%s' 200
     ;;
-  */api/management/tenants/tenant-live/provider-keys/*)
+  */api/management/tenants/tenant-live/provider-connections/*)
     if [[ -n "${PREFLIGHT_PROVIDER_URL:-}" ]]; then
       if [[ -n "${CURL_PREFLIGHT_BLOCK_PATH:-}" ]]; then
         builtin printf '%s\n' ready >"${CURL_PREFLIGHT_BLOCK_PATH}"

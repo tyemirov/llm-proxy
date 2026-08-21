@@ -1427,7 +1427,7 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		}))
 		subTest.Cleanup(upstreamServer.Close)
 		router := coverageRouter(subTest, proxy.Configuration{
-			DashScopeBaseURL:      upstreamServer.URL,
+			Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDashScope),
 			LogLevel:              proxy.LogLevelInfo,
 			WorkerCount:           1,
 			QueueSize:             1,
@@ -1470,7 +1470,7 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 				}))
 				caseTest.Cleanup(upstreamServer.Close)
 				router := coverageRouter(caseTest, proxy.Configuration{
-					DeepSeekBaseURL:       upstreamServer.URL,
+					Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek),
 					LogLevel:              proxy.LogLevelInfo,
 					WorkerCount:           1,
 					QueueSize:             1,
@@ -1493,7 +1493,7 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		})}
 		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
 		router := coverageRouter(subTest, proxy.Configuration{
-			DeepSeekBaseURL:       "https://deepseek.invalid",
+			Endpoints:             providerEndpoints("https://deepseek.invalid", proxy.ProviderNameDeepSeek),
 			LogLevel:              proxy.LogLevelInfo,
 			WorkerCount:           1,
 			QueueSize:             1,
@@ -1520,7 +1520,7 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		for _, testCase := range testCases {
 			subTest.Run(testCase.name, func(caseTest *testing.T) {
 				router := coverageRouter(caseTest, proxy.Configuration{
-					DeepSeekBaseURL:       testCase.baseURL,
+					Endpoints:             providerEndpoints(testCase.baseURL, proxy.ProviderNameDeepSeek),
 					LogLevel:              proxy.LogLevelInfo,
 					WorkerCount:           1,
 					QueueSize:             1,
@@ -1551,7 +1551,7 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		}))
 		subTest.Cleanup(upstreamServer.Close)
 		router := coverageRouter(subTest, proxy.Configuration{
-			DeepSeekBaseURL:       upstreamServer.URL,
+			Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek),
 			LogLevel:              proxy.LogLevelInfo,
 			WorkerCount:           1,
 			QueueSize:             1,
@@ -1576,7 +1576,7 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		})}
 		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
 		router := coverageRouter(subTest, proxy.Configuration{
-			DeepSeekBaseURL:       "https://deepseek.invalid",
+			Endpoints:             providerEndpoints("https://deepseek.invalid", proxy.ProviderNameDeepSeek),
 			LogLevel:              proxy.LogLevelInfo,
 			WorkerCount:           1,
 			QueueSize:             1,
@@ -1606,7 +1606,7 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		})}
 		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
 		router := coverageRouter(subTest, proxy.Configuration{
-			DeepSeekBaseURL:       "https://deepseek.invalid",
+			Endpoints:             providerEndpoints("https://deepseek.invalid", proxy.ProviderNameDeepSeek),
 			LogLevel:              proxy.LogLevelInfo,
 			WorkerCount:           1,
 			QueueSize:             1,
@@ -2005,6 +2005,20 @@ func TestCoveragePublicCapabilityRESTSurface(t *testing.T) {
 	serveError := proxy.ServePublicCapabilities(capabilityCatalog, -1, proxy.LogLevelInfo)
 	if serveError == nil {
 		t.Fatal("ServePublicCapabilities error=nil want non-nil")
+	}
+}
+
+func TestCoverageConfigurationRejectsMissingProviderCatalog(t *testing.T) {
+	_, configurationError := proxy.NewConfiguration(proxy.Configuration{
+		AssetStorePath: t.TempDir(),
+		Management:     proxy.ManagedRouterTestManagementConfiguration(),
+	})
+	if configurationError == nil || !strings.Contains(configurationError.Error(), "field=provider_catalog") {
+		t.Fatalf("configuration error=%v want missing provider catalog", configurationError)
+	}
+	_, catalogError := proxy.NewPublicCapabilityCatalog(proxy.Configuration{})
+	if catalogError == nil || !strings.Contains(catalogError.Error(), "field=provider_catalog") {
+		t.Fatalf("public capability catalog error=%v want missing provider catalog", catalogError)
 	}
 }
 

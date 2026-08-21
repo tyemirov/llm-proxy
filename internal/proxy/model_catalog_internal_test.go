@@ -1,6 +1,25 @@
 package proxy
 
-import "slices"
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
+	"slices"
+)
+
+func internalCanonicalProviderCatalog() *ProviderCatalog {
+	_, sourceFile, _, _ := runtime.Caller(0)
+	document, readError := os.ReadFile(filepath.Join(filepath.Dir(sourceFile), "..", "..", "configs", "providers.yml"))
+	if readError != nil {
+		panic(readError)
+	}
+	catalog, catalogError := ParseProviderCatalog(document)
+	if catalogError != nil {
+		panic(catalogError)
+	}
+	return catalog
+}
 
 func internalTestModelCatalog(offerings ...ProviderOffering) ModelCatalog {
 	providers := []CatalogProvider{
@@ -72,6 +91,112 @@ func internalTestModelCatalog(offerings ...ProviderOffering) ModelCatalog {
 		Models:    models,
 		Offerings: offerings,
 		Prices:    prices,
+	}
+}
+
+func internalTestProviderCatalog(modelCatalog ModelCatalog) *ProviderCatalog {
+	providerLabels := map[string]string{}
+	for _, provider := range modelCatalog.Providers {
+		providerLabels[provider.ID] = provider.Label
+	}
+	prices := map[string][]ProviderCatalogPrice{}
+	for _, price := range modelCatalog.Prices {
+		key := price.Provider + "\x00" + price.Model
+		prices[key] = append(prices[key], ProviderCatalogPrice{
+			Operation: price.Operation, Available: price.Available, Rates: price.Rates,
+			MinimumCharge: price.MinimumCharge, Source: price.Source,
+			LastVerified: price.LastVerified, UnavailableReason: price.UnavailableReason,
+		})
+	}
+	providerIndexes := map[string]int{}
+	transportIDs := map[string]string{}
+	schema := ProviderCatalogSchema{
+		SchemaVersion: ProviderCatalogSchemaVersion,
+		Operations:    modelCatalog.Operations,
+		Publishers:    modelCatalog.Publishers,
+		Families:      modelCatalog.Families,
+		Models:        modelCatalog.Models,
+	}
+	empty := ""
+	for _, offering := range modelCatalog.Offerings {
+		providerIndex, found := providerIndexes[offering.Provider]
+		if !found {
+			providerIndex = len(schema.Providers)
+			providerIndexes[offering.Provider] = providerIndex
+			schema.Providers = append(schema.Providers, ProviderCatalogProvider{
+				ID: offering.Provider, Label: providerLabels[offering.Provider],
+				Fields: []ProviderCatalogField{{
+					ID: CatalogCredentialAPIKey, Label: "Test API key", Kind: CatalogProviderFieldKindCredential,
+					Type: CatalogProviderFieldTypeOpaque, Required: true, Default: &empty, Secret: true,
+					Validation: ProviderCatalogFieldValidation{MinimumLength: 1},
+				}},
+			})
+		}
+		provider := &schema.Providers[providerIndex]
+		transportKey := offering.Provider + "\x00" + offering.WireContract + "\x00" + offering.ExecutionLifecycle
+		transportID, transportFound := transportIDs[transportKey]
+		if !transportFound {
+			transportID = fmt.Sprintf("transport-%d", len(provider.Transports)+1)
+			transportIDs[transportKey] = transportID
+			transport := internalTestProviderTransport(transportID, offering)
+			provider.Transports = append(provider.Transports, transport)
+		}
+		provider.Offerings = append(provider.Offerings, ProviderCatalogOffering{
+			Model: offering.Model, UpstreamModel: offering.ProviderModel, Transport: transportID,
+			Operations: offering.Operations, DefaultOperations: offering.DefaultOperations,
+			RequestProfile: offering.RequestProfile, WebSearch: offering.WebSearch,
+			OutputTokenLimit: offering.OutputTokenLimit, ReasoningEffort: offering.ReasoningEffort,
+			MediaInputs: offering.MediaInputs, MediaLimits: offering.MediaLimits,
+			Controls: offering.Controls, Limits: offering.Limits,
+			Prices: prices[offering.Provider+"\x00"+offering.Model],
+		})
+	}
+	catalog, catalogError := NewProviderCatalog(schema)
+	if catalogError != nil {
+		panic(catalogError)
+	}
+	return catalog
+}
+
+func newInternalTestProviderRegistry(configuration Configuration) *providerRegistry {
+	configuration.ProviderCatalog = internalTestProviderCatalog(configuration.ModelCatalog)
+	return newProviderRegistry(configuration)
+}
+
+func internalTestProviderTransport(identifier string, offering ProviderOffering) ProviderCatalogTransport {
+	protocol := offering.WireContract
+	for _, provider := range internalCanonicalProviderCatalog().schema.Providers {
+		for _, template := range provider.Transports {
+			if template.RequestProtocol != protocol {
+				continue
+			}
+			template.ID = identifier
+			template.Endpoint = ProviderCatalogEndpoint{
+				Method: CatalogEndpointMethodPost, DefaultBaseURL: "https://provider.example", Path: internalTestProviderProtocolPath(protocol),
+			}
+			template.Lifecycle = offering.ExecutionLifecycle
+			return template
+		}
+	}
+	return ProviderCatalogTransport{ID: identifier, RequestProtocol: protocol}
+}
+
+func internalTestProviderProtocolPath(protocol string) string {
+	switch protocol {
+	case CatalogProtocolOpenAIResponses:
+		return "/responses"
+	case CatalogProtocolOpenAIChatCompletions:
+		return "/chat/completions"
+	case CatalogProtocolAnthropicMessages:
+		return "/v1/messages"
+	case CatalogProtocolGeminiInteractions:
+		return "/interactions"
+	case CatalogProtocolMultipartTranscription:
+		return "/audio/transcriptions"
+	case CatalogProtocolXAIVideosGenerations:
+		return "/videos/generations"
+	default:
+		return "/unsupported"
 	}
 }
 

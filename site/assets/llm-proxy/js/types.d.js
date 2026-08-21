@@ -27,12 +27,35 @@
 
 /**
  * @typedef {{
+ *   minimum_length?: number,
+ *   pattern?: string,
+ *   allowed_schemes?: string[]
+ * }} ProviderFieldValidation
+ */
+
+/**
+ * @typedef {{
+ *   id: string,
+ *   label: string,
+ *   kind: "credential" | "setting",
+ *   type: "opaque" | "url",
+ *   required: boolean,
+ *   default: string,
+ *   secret: boolean,
+ *   validation: ProviderFieldValidation,
+ *   configured: boolean,
+ *   value?: string,
+ *   masked_value?: string
+ * }} ProviderFieldProfile
+ */
+
+/**
+ * @typedef {{
  *   id: string,
  *   label: string,
  *   aliases: string[],
- *   has_key: boolean,
- *   masked_key?: string,
- *   base_url: string,
+ *   configured: boolean,
+ *   fields: ProviderFieldProfile[],
  *   text_model: string,
  *   system_prompt: string,
  *   text_default_model: string,
@@ -46,15 +69,14 @@
 /**
  * @typedef {{
  *   providerID: string,
- *   keyInput: string,
- *   keyVisible: boolean,
- *   keyDirty: boolean,
- *   baseURL: string,
+ *   fieldInputs: Record<string, string>,
+ *   fieldDirty: Record<string, boolean>,
+ *   fieldVisible: Record<string, boolean>,
  *   textModel: string,
  *   systemPrompt: string,
  *   dirty: boolean,
  *   editVersion: number,
- *   revealPending: boolean,
+ *   revealPendingField: string,
  *   revealVersion: number
  * }} ProviderEditorSession
  */
@@ -71,8 +93,9 @@
 
 /**
  * @typedef {{
- *   api_key: string
- * }} ProviderKeyReveal
+ *   field_id: string,
+ *   value: string
+ * }} ProviderFieldReveal
  */
 
 /**

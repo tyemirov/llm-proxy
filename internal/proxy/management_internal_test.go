@@ -231,7 +231,7 @@ func TestManagedUsageSummaryBucketsAndOrdering(t *testing.T) {
 }
 
 func TestTextRequestDefaultsForProviderInternalEdges(t *testing.T) {
-	providers := newProviderRegistry(Configuration{
+	providers := newInternalTestProviderRegistry(Configuration{
 		ModelCatalog: internalTestModelCatalog(
 			internalTestOffering(ProviderNameOpenAI, ModelNameGPT41, []string{ModelOperationText}, []string{ModelOperationText}),
 			internalTestOffering(ProviderNameOpenAI, ModelNameGPT55, []string{ModelOperationText}, nil),

@@ -12,7 +12,7 @@ func TestManagedRoutingDefaultsRejectNonCanonicalPairs(t *testing.T) {
 		deepSeekTextModel     = "deepseek-text"
 		siliconDictationModel = "silicon-stt"
 	)
-	providers := newProviderRegistry(Configuration{
+	providers := newInternalTestProviderRegistry(Configuration{
 		ModelCatalog: internalTestModelCatalog(
 			internalTestOffering(ProviderNameOpenAI, openAITextModel, []string{ModelOperationText}, []string{ModelOperationText}),
 			internalTestOffering(ProviderNameOpenAI, openAIDictationModel, []string{ModelOperationDictation}, []string{ModelOperationDictation}),
@@ -28,7 +28,7 @@ func TestManagedRoutingDefaultsRejectNonCanonicalPairs(t *testing.T) {
 		DictationModel:    openAIDictationModel,
 	}
 	providerSettings := map[providerID]managedProviderSettings{
-		newProviderID(ProviderNameOpenAI): {apiKey: "sk-openai", textModel: openAITextModel},
+		newProviderID(ProviderNameOpenAI): internalManagedProviderSettings("sk-openai", "", openAITextModel, ""),
 	}
 	if _, validationError := validatePersistedManagedRoutingDefaults(providers, providerSettings, TenantDefaults{
 		Provider:          "OPENAI",
@@ -54,20 +54,20 @@ func TestManagedRoutingDefaultsRejectNonCanonicalPairs(t *testing.T) {
 		t.Fatalf("reasoning without text default error=%v", validationError)
 	}
 	if _, validationError := validatePersistedManagedRoutingDefaults(providers, map[providerID]managedProviderSettings{
-		newProviderID("missing"): {apiKey: "sk-missing", textModel: "missing-model"},
+		newProviderID("missing"): internalManagedProviderSettings("sk-missing", "", "missing-model", ""),
 	}, TenantDefaults{}); !errors.Is(validationError, errManagedRoutingDefaultsInvalid) {
 		t.Fatalf("unknown keyed provider error=%v", validationError)
 	}
 	if _, validationError := validatePersistedManagedRoutingDefaults(providers, map[providerID]managedProviderSettings{
-		newProviderID(ProviderNameDeepSeek): {apiKey: "sk-deepseek", textModel: deepSeekTextModel},
+		newProviderID(ProviderNameDeepSeek): internalManagedProviderSettings("sk-deepseek", "", deepSeekTextModel, ""),
 	}, canonical); !errors.Is(validationError, errManagedRoutingDefaultsInvalid) {
 		t.Fatalf("unkeyed default provider error=%v", validationError)
 	}
 
 	reconciled, reconciliationError := reconcileManagedRoutingDefaults(providers, map[providerID]managedProviderSettings{
-		newProviderID(ProviderNameOpenAI):      {apiKey: "sk-openai", textModel: openAITextModel},
-		newProviderID(ProviderNameDeepSeek):    {apiKey: "sk-deepseek", textModel: deepSeekTextModel},
-		newProviderID(ProviderNameSiliconFlow): {apiKey: " ", textModel: "silicon-text"},
+		newProviderID(ProviderNameOpenAI):      internalManagedProviderSettings("sk-openai", "", openAITextModel, ""),
+		newProviderID(ProviderNameDeepSeek):    internalManagedProviderSettings("sk-deepseek", "", deepSeekTextModel, ""),
+		newProviderID(ProviderNameSiliconFlow): internalManagedProviderSettings(" ", "", "silicon-text", ""),
 	}, defaultManagedRoutingDefaults())
 	if reconciliationError != nil {
 		t.Fatalf("reconcile keyed providers: %v", reconciliationError)
@@ -83,7 +83,7 @@ func TestManagedRoutingDefaultsRejectNonCanonicalPairs(t *testing.T) {
 	}
 
 	textOnly, reconciliationError := reconcileManagedRoutingDefaults(providers, map[providerID]managedProviderSettings{
-		newProviderID(ProviderNameDeepSeek): {apiKey: "sk-deepseek", textModel: deepSeekTextModel},
+		newProviderID(ProviderNameDeepSeek): internalManagedProviderSettings("sk-deepseek", "", deepSeekTextModel, ""),
 	}, defaultManagedRoutingDefaults())
 	if reconciliationError != nil {
 		t.Fatalf("reconcile text-only provider: %v", reconciliationError)

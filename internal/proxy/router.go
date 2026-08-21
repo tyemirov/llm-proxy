@@ -94,10 +94,6 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 		structuredLogger = zap.NewNop().Sugar()
 	}
 
-	if configuration.Endpoints == nil {
-		configuration.Endpoints = NewEndpointsForURLs(configuration.OpenAIBaseURL, configuration.OpenAITranscriptionsURL)
-	}
-
 	providers := newProviderRegistry(configuration)
 	capabilityCatalog := newPublicCapabilityCatalog(configuration)
 

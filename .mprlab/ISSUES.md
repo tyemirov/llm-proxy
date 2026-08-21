@@ -847,7 +847,7 @@ retain satisfied historical dependencies.
   - Run `make ci` after the last application change.
   Blocked: A Z.AI credential is not available in this workspace. The operator
   must supply `ZAI_API_KEY` and authorize the two paid live calls.
-- [ ] [I223] (P0) {I216,I221} Load all supported providers and models from one catalog file.
+- [x] [I223] (P0) {I216,I221} Load all supported providers and models from one catalog file.
   Goal:
   Make `configs/providers.yml` the only source that defines supported providers,
   exact models, provider offerings, operations, controls, limits, and prices.
@@ -855,8 +855,8 @@ retain satisfied historical dependencies.
   catalog. Provider onboarding changes only this file when current protocol
   adapters can represent the complete provider contract.
   Evidence:
-  - The current catalog has 11 providers, 57 exact models, 58 provider
-    offerings, and 58 price records.
+  - The current catalog has 11 providers, 66 exact models, 67 provider
+    offerings, and 67 price records.
   - Provider data also exists in Go types, registry branches, persistence,
     management APIs, UI forms, environment variables, and live-test lists.
   - Current provider offerings use six request protocols and two execution
@@ -934,8 +934,8 @@ retain satisfied historical dependencies.
   - Derive live-provider discovery and environment checks from the provider
     catalog.
   Deliverables:
-  - Add `configs/providers.yml` with all 11 providers, 57 exact models, 58
-    provider offerings, and 58 price records.
+  - Add `configs/providers.yml` with all 11 providers, 66 exact models, 67
+    provider offerings, and 67 price records.
   - Add the schema types, parser, semantic validator, immutable registry, and
     safe data projections.
   - Replace provider-specific runtime, management, persistence, UI, routing,
@@ -947,8 +947,8 @@ retain satisfied historical dependencies.
   Validation:
   - When no satisfactory baseline result applies, run `make ci` before
     application changes.
-  - Prove exact catalog counts for 11 providers, 57 exact models, 58 provider
-    offerings, and 58 price records.
+  - Prove exact catalog counts for 11 providers, 66 exact models, 67 provider
+    offerings, and 67 price records.
   - Prove startup rejection for each invalid schema and reference condition.
   - Add a test provider definition that uses an existing protocol adapter.
   - Prove the test provider appears in routing, management, UI schema,
@@ -960,6 +960,18 @@ retain satisfied historical dependencies.
   - Prove the test provider requires no provider-specific production source
     change.
   - After the last application change, run `make ci`.
+  Resolution:
+  - Added strict schema version 1 in `configs/providers.yml`. It defines 11
+    providers, 66 exact models, 67 offerings, and 67 prices.
+  - Catalog validation now compiles one immutable registry. Routing, key
+    verification, management, persistence, public capabilities, browser forms,
+    environment loading, and live discovery use this registry.
+  - Added generic encrypted provider connection records and the bounded schema
+    version 9 migration. Current reads no longer use provider-specific columns.
+  - A synthetic provider proves onboarding through an existing adapter without
+    production provider code.
+  - Updated documentation, OpenAPI, and generated public resources. The final
+    `make ci` passed all 11 gates with 100.0% Go statement coverage.
 - [ ] [I041] (P1) Migrate xAI text routes to Responses without OpenAI background assumptions.
   Goal:
   Move Grok models off xAI's deprecated Chat Completions surface while

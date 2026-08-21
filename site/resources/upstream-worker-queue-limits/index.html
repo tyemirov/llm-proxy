@@ -27,7 +27,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Upstream worker and queue limits for LLM traffic","description":"Use shared worker and queue controls to bound upstream HTTP operations for text and dictation.","url":"https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/","about":["LLM Proxy","Reliability","upstream worker queue limits"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Upstream worker and queue limits for LLM traffic","description":"Use shared worker and queue controls to bound upstream HTTP operations for text and dictation.","url":"https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/","datePublished":"2026-07-06","dateModified":"2026-08-20","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/","about":["LLM Proxy","Reliability","upstream worker queue limits"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Upstream worker and queue limits for LLM traffic","item":"https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of upstream worker queue limits?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy combines server.workers and server.queue_size concurrency bounds with server.upstream_rate_limits rolling-window rules applied at actual upstream admission."}},{"@type":"Question","name":"Who should read this reliability resource?","acceptedAnswer":{"@type":"Answer","text":"Operators who need predictable capacity limits for provider HTTP calls."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is OpenAI background response polling without client loops, which covers OpenAI background response polling."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
@@ -67,7 +67,7 @@
             <h1>Upstream worker and queue limits for LLM traffic</h1>
             <p class="resource-deck">Use shared worker and queue controls to bound upstream HTTP operations for text and dictation.</p>
             <p class="resource-audience">Operators who need predictable capacity limits for provider HTTP calls.</p>
-            <p class="resource-byline">Reviewed 2026-07-11 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <p class="resource-byline">Reviewed 2026-08-20 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
             <div class="resource-actions">
               <a class="resource-button" href="/docs/">Open API reference</a>
               <a class="resource-link" href="/resources/">Browse all resources</a>
@@ -220,7 +220,7 @@
 
                     <a class="resource-related" href="/resources/model-catalog-configuration/">
                       <span>Configuration</span>
-                      <strong>LLM model catalog configuration in config.yml</strong>
+                      <strong>LLM provider catalog configuration in providers.yml</strong>
                     </a>
 
             </div>

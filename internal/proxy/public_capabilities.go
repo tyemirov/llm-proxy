@@ -102,10 +102,11 @@ const (
 // NewPublicCapabilityCatalog validates and projects the runtime catalog into a
 // deterministic public representation.
 func NewPublicCapabilityCatalog(configuration Configuration) (PublicCapabilityCatalog, error) {
-	configuration.ApplyTunables()
-	if _, catalogError := validateModelCatalog(configuration.ModelCatalog); catalogError != nil {
-		return PublicCapabilityCatalog{}, catalogError
+	if configuration.ProviderCatalog == nil {
+		return PublicCapabilityCatalog{}, fmt.Errorf("%w: field=provider_catalog", ErrInvalidModelCatalog)
 	}
+	configuration.ModelCatalog = configuration.ProviderCatalog.ModelCatalog()
+	configuration.ApplyTunables()
 	return newPublicCapabilityCatalog(configuration), nil
 }
 

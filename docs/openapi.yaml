@@ -573,23 +573,19 @@ paths:
           $ref: '#/components/responses/ManagementNotFound'
         '500':
           $ref: '#/components/responses/ManagementInternalError'
-  /api/management/tenants/{tenant_id}/provider-keys/{provider}:
+  /api/management/tenants/{tenant_id}/provider-connections/{provider}:
     put:
-      operationId: putManagementProviderKey
-      summary: Verify and save provider settings and a provider credential
+      operationId: putManagementProviderConnection
+      summary: Verify and save catalog-defined provider connection fields
       description: >-
-        A nonempty api_key verifies the selected provider, text model, base URL,
-        wire contract, and execution lifecycle. Synchronous routes use one
-        provider request. Pollable Gemini routes create and retrieve one stored
-        background interaction. The verifier cancels active work and deletes
-        the interaction before persistence. Changing a saved DashScope base_url
-        also verifies the retained key against the new URL. Only complete
-        verification atomically persists the credential and submitted settings.
-        It also reconciles routing defaults and returns a keyed profile.
-        Rejection and unconfirmed outcomes do not mutate provider state or
-        managed usage. An empty api_key retains the existing verified
-        credential. The operation returns 409 without a mutation when that
-        credential changes before persistence.
+        The fields object must contain the exact fields for the path provider.
+        A blank saved secret retains its existing value. A nonempty secret
+        replaces it. The service verifies new credentials, changed settings,
+        and changed models through the selected provider transport. Pollable
+        transports complete their observable resource lifecycle before the
+        atomic persistence operation. Rejection and unconfirmed outcomes do not
+        mutate provider state or managed usage. The operation returns 409 when
+        a retained secret changes before persistence.
       tags:
         - Management
       security:
@@ -600,7 +596,7 @@ paths:
         - $ref: '#/components/parameters/ProviderPath'
         - $ref: '#/components/parameters/OptionalOrigin'
       requestBody:
-        $ref: '#/components/requestBodies/ProviderKeyRequest'
+        $ref: '#/components/requestBodies/ProviderConnectionRequest'
       responses:
         '200':
           $ref: '#/components/responses/TenantProfileSuccess'
@@ -627,8 +623,8 @@ paths:
         '504':
           $ref: '#/components/responses/ProviderKeyVerificationTimedOut'
     delete:
-      operationId: deleteManagementProviderKey
-      summary: Remove provider settings and a provider credential
+      operationId: deleteManagementProviderConnection
+      summary: Remove all saved fields and settings for one provider
       tags:
         - Management
       security:
@@ -653,11 +649,13 @@ paths:
           $ref: '#/components/responses/ManagementUnsupportedMediaType'
         '500':
           $ref: '#/components/responses/ManagementInternalError'
-  /api/management/tenants/{tenant_id}/provider-keys/{provider}/reveal:
+  /api/management/tenants/{tenant_id}/provider-connections/{provider}/fields/{field}/reveal:
     post:
-      operationId: revealManagementProviderKey
-      summary: Reveal one saved provider credential
-      description: This credentialed action requires the exact configured public Origin in addition to the TAuth session.
+      operationId: revealManagementProviderConnectionField
+      summary: Reveal one saved secret provider field
+      description: >-
+        The provider definition must declare the path field as secret. This
+        credentialed action also requires the exact configured public Origin.
       tags:
         - Management
       security:
@@ -666,12 +664,13 @@ paths:
       parameters:
         - $ref: '#/components/parameters/TenantID'
         - $ref: '#/components/parameters/ProviderPath'
+        - $ref: '#/components/parameters/ProviderFieldPath'
         - $ref: '#/components/parameters/RequiredOrigin'
       requestBody:
         $ref: '#/components/requestBodies/EmptyJSONRequest'
       responses:
         '200':
-          $ref: '#/components/responses/ProviderKeyRevealSuccess'
+          $ref: '#/components/responses/ProviderFieldRevealSuccess'
         '400':
           $ref: '#/components/responses/ManagementBadRequest'
         '401':
@@ -891,6 +890,14 @@ components:
       schema:
         type: string
         minLength: 1
+    ProviderFieldPath:
+      name: field
+      in: path
+      required: true
+      description: Canonical secret field identifier from the selected provider definition.
+      schema:
+        type: string
+        minLength: 1
     UsageInterval:
       name: interval
       in: query
@@ -991,12 +998,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/TenantNameRequest'
-    ProviderKeyRequest:
+    ProviderConnectionRequest:
       required: true
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ProviderKeyRequest'
+            $ref: '#/components/schemas/ProviderConnectionRequest'
     DefaultsRequest:
       required: true
       content:
@@ -1339,15 +1346,15 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/AdminUsersSummary'
-    ProviderKeyRevealSuccess:
-      description: The saved provider credential. Never persist or log this response.
+    ProviderFieldRevealSuccess:
+      description: The saved secret provider field. Never persist or log this response.
       headers:
         Cache-Control:
           $ref: '#/components/headers/NoStore'
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ProviderKeyReveal'
+            $ref: '#/components/schemas/ProviderFieldReveal'
     TenantSecretSuccess:
       description: The newly generated tenant client secret and current profile. The secret is returned only by this response.
       headers:
@@ -2561,21 +2568,23 @@ components:
         name:
           type: string
           minLength: 1
-    ProviderKeyRequest:
+    ProviderConnectionRequest:
       type: object
       additionalProperties: false
       required:
-        - api_key
-        - base_url
+        - fields
         - text_model
         - system_prompt
       properties:
-        api_key:
-          type: string
-          description: An unverified new or replacement provider key. A nonempty value is verified against the exact path provider, selected text_model, and submitted base_url before any persistence. Send an empty string to retain the tenant's existing verified credential; an empty value is rejected when no credential exists.
-        base_url:
-          type: string
-          description: Exact tenant-owned Singapore Model Studio URL for dashscope. It must use https://{resource-id}.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1. It must be empty for every other provider.
+        fields:
+          type: object
+          minProperties: 1
+          properties: {}
+          additionalProperties:
+            type: string
+          description: >-
+            Exact map of catalog field identifiers to submitted values. Blank
+            saved secret values retain their encrypted current values.
         text_model:
           type: string
           minLength: 1
@@ -2594,16 +2603,16 @@ components:
       properties:
         provider:
           type: string
-          description: Canonical keyed text-provider id, or empty together with model when the tenant has no saved provider key.
+          description: Canonical configured text provider, or empty with model when no provider connection exists.
         model:
           type: string
-          description: Canonical model for provider, or empty together with provider when the tenant has no saved provider key.
+          description: Canonical model for provider, or empty with provider when no provider connection exists.
         dictation_provider:
           type: string
-          description: Canonical keyed dictation-capable provider id, or empty together with dictation_model when no keyed provider supports dictation.
+          description: Canonical configured dictation provider, or empty with dictation_model when no configured provider supports dictation.
         dictation_model:
           type: string
-          description: Canonical model for dictation_provider, or empty together with dictation_provider when no keyed provider supports dictation.
+          description: Canonical dictation model, or empty with dictation_provider when no configured provider supports dictation.
         system_prompt:
           type: string
         reasoning_effort:
@@ -2719,13 +2728,13 @@ components:
       properties:
         provider:
           type: string
-          description: Canonical keyed text-provider id, or empty when the tenant has no saved provider key.
+          description: Canonical configured text provider, or empty when no provider connection exists.
         model:
           type: string
           description: Canonical text model paired with provider, or empty when provider is empty.
         dictation_provider:
           type: string
-          description: Canonical keyed dictation-capable provider id, or empty when no keyed provider supports dictation.
+          description: Canonical configured dictation provider, or empty when no configured provider supports dictation.
         dictation_model:
           type: string
           description: Canonical dictation model paired with dictation_provider, or empty when dictation_provider is empty.
@@ -2740,8 +2749,8 @@ components:
         - id
         - label
         - aliases
-        - has_key
-        - base_url
+        - configured
+        - fields
         - text_model
         - system_prompt
         - text_default_model
@@ -2757,13 +2766,13 @@ components:
           type: array
           items:
             type: string
-        has_key:
+        configured:
           type: boolean
-        masked_key:
-          type: string
-        base_url:
-          type: string
-          description: Saved tenant-owned DashScope API URL, or empty for an unconfigured DashScope provider and every other provider.
+        fields:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ProviderField'
         text_model:
           type: string
         system_prompt:
@@ -2782,6 +2791,112 @@ components:
           type: array
           items:
             type: string
+    ProviderField:
+      type: object
+      additionalProperties: false
+      allOf:
+        - if:
+            properties:
+              secret:
+                const: false
+            required:
+              - secret
+          then:
+            required:
+              - value
+            not:
+              required:
+                - masked_value
+        - if:
+            properties:
+              secret:
+                const: true
+              configured:
+                const: true
+            required:
+              - secret
+              - configured
+          then:
+            required:
+              - masked_value
+            not:
+              required:
+                - value
+        - if:
+            properties:
+              secret:
+                const: true
+              configured:
+                const: false
+            required:
+              - secret
+              - configured
+          then:
+            not:
+              anyOf:
+                - required:
+                    - value
+                - required:
+                    - masked_value
+      required:
+        - id
+        - label
+        - kind
+        - type
+        - required
+        - default
+        - secret
+        - validation
+        - configured
+      properties:
+        id:
+          type: string
+          minLength: 1
+        label:
+          type: string
+          minLength: 1
+        kind:
+          type: string
+          enum:
+            - credential
+            - setting
+        type:
+          type: string
+          enum:
+            - opaque
+            - url
+        required:
+          type: boolean
+        default:
+          type: string
+        secret:
+          type: boolean
+        validation:
+          $ref: '#/components/schemas/ProviderFieldValidation'
+        configured:
+          type: boolean
+        value:
+          type: string
+          description: Current nonsecret value. Secret fields never expose this property in profile responses.
+        masked_value:
+          type: string
+          description: Safe placeholder for a configured secret. Nonsecret and unconfigured secret fields omit this property.
+    ProviderFieldValidation:
+      type: object
+      additionalProperties: false
+      properties:
+        minimum_length:
+          type: integer
+          minimum: 1
+        pattern:
+          type: string
+          minLength: 1
+        allowed_schemes:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            minLength: 1
     TextModel:
       type: object
       additionalProperties: false
@@ -2834,13 +2949,17 @@ components:
           minLength: 1
         profile:
           $ref: '#/components/schemas/TenantProfile'
-    ProviderKeyReveal:
+    ProviderFieldReveal:
       type: object
       additionalProperties: false
       required:
-        - api_key
+        - field_id
+        - value
       properties:
-        api_key:
+        field_id:
+          type: string
+          minLength: 1
+        value:
           type: string
           minLength: 1
     UsageAggregate:

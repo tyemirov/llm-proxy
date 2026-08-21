@@ -31,7 +31,7 @@ const landingAuthRouteModuleRevision = "20260808b113";
 const removedApplicationPath = "/manage/";
 const defaultTenantID = "tenant_1";
 const managementDefaultTenantPath = `/api/management/tenants/${defaultTenantID}`;
-const managementProviderKeysPath = `${managementDefaultTenantPath}/provider-keys`;
+const managementProviderKeysPath = `${managementDefaultTenantPath}/provider-connections`;
 const faviconPath = "/assets/llm-proxy/img/favicon.svg";
 const appIconPath = "/assets/llm-proxy/img/llm-proxy-icon.svg";
 const resourcesPath = "/resources/";
@@ -253,7 +253,9 @@ const landingModifiedDate = "2026-08-08";
 const seoContentModifiedDate = "2026-07-11";
 const seoCurrentContentModifiedDate = "2026-07-22";
 const seoUsageContentModifiedDate = "2026-07-26";
-const seoClientDocumentationModifiedDate = landingModifiedDate;
+const seoProviderCatalogModifiedDate = "2026-08-20";
+const seoClientDocumentationPublishedDate = landingModifiedDate;
+const seoClientDocumentationModifiedDate = seoProviderCatalogModifiedDate;
 const seoSecretRotationModifiedDate = "2026-07-26";
 const obsoletePublicTermPattern = new RegExp(["work", "space"].join(""), "i");
 const settingsLayerViewports = Object.freeze([
@@ -572,10 +574,10 @@ test("public landing explains the product and exposes the generated capability c
     '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=content_copy,delete,help,key,visibility,visibility_off&amp;display=block">',
   );
   expect(managementHTML).toContain(
-    '<span class="material-symbols-outlined" x-show="!providerKeyVisible" aria-hidden="true">visibility</span>',
+    '<span class="material-symbols-outlined" x-show="!providerFieldVisible(field)" aria-hidden="true">visibility</span>',
   );
   expect(managementHTML).toContain(
-    '<span class="material-symbols-outlined" x-show="providerKeyVisible" aria-hidden="true">visibility_off</span>',
+    '<span class="material-symbols-outlined" x-show="providerFieldVisible(field)" aria-hidden="true">visibility_off</span>',
   );
 
   const removedApplicationResponse = await request.get(`${baseURL}${removedApplicationPath}`);
@@ -607,32 +609,31 @@ test("public landing explains the product and exposes the generated capability c
     '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=content_copy,delete,help,key,visibility,visibility_off&amp;display=block">',
   );
   expect(html).toContain(
-    '<span class="material-symbols-outlined" x-show="!providerKeyVisible" aria-hidden="true">visibility</span>',
+    '<span class="material-symbols-outlined" x-show="!providerFieldVisible(field)" aria-hidden="true">visibility</span>',
   );
   expect(html).toContain(
-    '<span class="material-symbols-outlined" x-show="providerKeyVisible" aria-hidden="true">visibility_off</span>',
+    '<span class="material-symbols-outlined" x-show="providerFieldVisible(field)" aria-hidden="true">visibility_off</span>',
   );
-  expect(html).toContain('<span class="material-symbols-outlined" aria-hidden="true">delete</span>');
-  expect(html).toContain('class="icon-only danger provider-key-remove"');
+  expect(html).toContain('class="danger provider-key-remove"');
   expect(html).not.toContain("provider-editor-actions");
-  expect(html).not.toContain('<svg x-show="!providerKeyVisible"');
-  expect(html).not.toContain('<svg x-show="providerKeyVisible"');
+  expect(html).not.toContain('<svg x-show="!providerFieldVisible(field)"');
+  expect(html).not.toContain('<svg x-show="providerFieldVisible(field)"');
   const providerSelectorOffset = html.indexOf('<label class="provider-selector">');
-  const providerKeyFieldOffset = html.indexOf("<provider-key-field>");
+  const providerConnectionFieldsOffset = html.indexOf("<provider-connection-fields>");
   const providerVisibilityOffset = html.indexOf('class="icon-only provider-key-visibility-toggle"');
   const textModelOffset = html.indexOf('x-on:change="handleSelectedProviderTextModelChange($event)"');
-  const providerRemovalOffset = html.indexOf('class="icon-only danger provider-key-remove"');
+  const providerRemovalOffset = html.indexOf('class="danger provider-key-remove"');
   expect(providerSelectorOffset).toBeGreaterThan(-1);
-  expect(providerSelectorOffset).toBeLessThan(providerKeyFieldOffset);
-  expect(providerKeyFieldOffset).toBeLessThan(providerVisibilityOffset);
+  expect(providerSelectorOffset).toBeLessThan(providerConnectionFieldsOffset);
+  expect(providerConnectionFieldsOffset).toBeLessThan(providerVisibilityOffset);
   expect(providerVisibilityOffset).toBeLessThan(providerRemovalOffset);
   expect(providerRemovalOffset).toBeLessThan(textModelOffset);
   expect(html).toContain('<h2 id="provider-settings-title" class="eyebrow" x-text="copy.providersEyebrow"></h2>');
   expect(html).not.toContain('x-text="copy.providersTitle"');
   expect(html).toContain('role="alertdialog"');
   expect(html).toContain('x-on:click="requestSelectedProviderKeyRemoval()"');
-  expect(html).toContain('x-show="selectedProvider.has_key || selectedProviderKeyHasInput"');
-  expect(html).toContain('x-on:paste="handleSelectedProviderKeyPaste()"');
+  expect(html).toContain('x-show="selectedProvider.configured || selectedProviderHasConnectionInput"');
+  expect(html).toContain('x-on:paste="handleProviderFieldPaste(field)"');
   expect(html).toContain('x-on:change="autosaveSelectedProvider()"');
   expect(html).toContain('role="status" aria-live="polite"');
   expect(html).toContain('x-show="providerKeyVerificationPending"');
@@ -755,7 +756,8 @@ test("public landing explains the product and exposes the generated capability c
   const providerCredentialsResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/providerCredentials.js`);
   expect(providerCredentialsResponse.status()).toBe(httpOK);
   const providerCredentialsJavaScript = await providerCredentialsResponse.text();
-  expect(providerCredentialsJavaScript).toContain("revealSelectedProviderKey");
+  expect(providerCredentialsJavaScript).toContain("revealProviderField");
+  expect(providerCredentialsJavaScript).toContain("requestRevealProviderConnectionField");
   expect(providerCredentialsJavaScript).toContain("removeProviderKey");
   expect(providerCredentialsJavaScript).not.toContain("requestSaveProviderKey");
 
@@ -798,6 +800,8 @@ test("public landing explains the product and exposes the generated capability c
   expect(constantsJavaScript).not.toContain('saveProviderKey: "Save key"');
   expect(constantsJavaScript).not.toContain('updateProviderKey: "Update key"');
   expect(constantsJavaScript).not.toContain('saveDefaults: "Save defaults"');
+  expect(constantsJavaScript).not.toContain("providerBaseURL");
+  expect(constantsJavaScript).not.toContain("providerKeySuffix");
 
   const stylesheetResponse = await request.get(`${baseURL}/assets/llm-proxy/styles.css`);
   expect(stylesheetResponse.status()).toBe(httpOK);
@@ -1601,12 +1605,14 @@ test("SEO resource pages are crawlable from the public site", async ({ request }
       title: "Switch OpenAI, Claude, and Gemini behind one endpoint",
       audience: "Startups and product teams",
       evidence: "for provider in openai anthropic gemini; do",
+      modifiedDate: seoProviderCatalogModifiedDate,
     },
     {
       path: "/resources/internal-ai-gateway-for-product-tools/",
       title: "Internal AI gateway for durable product integrations",
       audience: "Institutional engineering and platform teams",
       evidence: "$PRODUCT_TOOL_CLIENT_KEY",
+      modifiedDate: landingModifiedDate,
     },
   ];
   for (const resourceExpectation of audienceResourceExpectations) {
@@ -1618,7 +1624,9 @@ test("SEO resource pages are crawlable from the public site", async ({ request }
     expect(audienceResourceHTML).toContain(resourceExpectation.evidence);
     expect(audienceResourceHTML).toContain("<strong>Quick verdict</strong>");
     expect(audienceResourceHTML).toContain("<h2>Repository evidence</h2>");
-    expect(audienceResourceHTML).toContain(`"dateModified":"${landingModifiedDate}"`);
+    expect(audienceResourceHTML).toContain(
+      `"dateModified":"${resourceExpectation.modifiedDate}"`,
+    );
     expect(audienceResourceHTML).toContain('href="https://github.com/tyemirov" rel="author"');
   }
 });
@@ -1632,11 +1640,12 @@ test("SEO client-authentication guide documents the credential and configuration
     '<link rel="canonical" href="https://llm-proxy.mprlab.com/resources/llm-proxy-client-authentication/">',
   );
   expect(pageHTML).toContain(`"dateModified":"${seoClientDocumentationModifiedDate}"`);
-  expect(pageHTML).toContain(`"datePublished":"${seoClientDocumentationModifiedDate}"`);
+  expect(pageHTML).toContain(`"datePublished":"${seoClientDocumentationPublishedDate}"`);
   expect(pageHTML).toContain("curl -X POST");
   expect(pageHTML).toContain("/v2?key=mysecret&amp;provider=deepseek");
   expect(pageHTML).toContain("no user-level or system-level YAML lookup");
   expect(pageHTML).toContain("LLM_PROXY_BASE_URL and LLM_PROXY_SECRET");
+  expect(pageHTML).toContain("config.yml and providers.yml belong to the service runtime");
   expect(pageHTML).toContain("configured MPR UI and TAuth session");
   expect(pageHTML).toContain(`"label":"GitHub","href":"${repositoryURL}"`);
   expect(pageHTML).toContain('href="/resources/tenant-secret-ai-gateway/"');
@@ -1763,6 +1772,7 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
       `<lastmod>${seoContentModifiedDate}</lastmod>`,
       `<lastmod>${seoCurrentContentModifiedDate}</lastmod>`,
       `<lastmod>${seoUsageContentModifiedDate}</lastmod>`,
+      `<lastmod>${seoProviderCatalogModifiedDate}</lastmod>`,
       `<lastmod>${seoClientDocumentationModifiedDate}</lastmod>`,
       `<lastmod>${landingModifiedDate}</lastmod>`,
     ]),
@@ -1771,7 +1781,7 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
     `<loc>https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/</loc>\n    <lastmod>${landingModifiedDate}</lastmod>`,
   );
   expect(sitemapXML).toContain(
-    `<loc>https://llm-proxy.mprlab.com/resources/multi-tenant-ownership-migration/</loc>\n    <lastmod>${landingModifiedDate}</lastmod>`,
+    `<loc>https://llm-proxy.mprlab.com/resources/multi-tenant-ownership-migration/</loc>\n    <lastmod>${seoProviderCatalogModifiedDate}</lastmod>`,
   );
   expect(sitemapXML).toContain(
     `<loc>https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/</loc>\n    <lastmod>${seoUsageContentModifiedDate}</lastmod>`,
@@ -1950,7 +1960,7 @@ test("tenant switching requires discard and clears one-time and revealed credent
   const providerSaveRequested = new Promise((resolve) => {
     providerSaveStarted = resolve;
   });
-  await page.route(`${baseURL}/api/management/tenants/tenant_1/provider-keys/openai`, async (route) => {
+  await page.route(`${baseURL}/api/management/tenants/tenant_1/provider-connections/openai`, async (route) => {
     if (route.request().method() !== "PUT") {
       await route.fallback();
       return;
@@ -2254,7 +2264,6 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await expect(providerVisibilityButton).toHaveAttribute("aria-pressed", "false");
   const providerRemovalButton = providerEditor.getByRole("button", { name: "Remove provider key and settings" });
   await expect(providerRemovalButton).toBeVisible();
-  await expect(providerRemovalButton.locator(".material-symbols-outlined")).toHaveText("delete");
   await expect(providerModelSelector).toHaveValue("gpt-4.1");
   await expect(providerEditor.locator("#provider-system-prompt-input")).toHaveValue("Use concise answers.");
 
@@ -2832,7 +2841,7 @@ test("a newer pasted key cancels the stale verification and applies only the new
   await installAssetRoutes(page);
   await installManagementRoutes(page, { savedProviderIDs: [] });
   await page.route(providerKeyEndpointURL("openai"), async (route) => {
-    const submittedKey = route.request().postDataJSON().api_key;
+    const submittedKey = route.request().postDataJSON().fields.api_key;
     submittedKeys.push(submittedKey);
     if (submittedKey === staleProviderKey) {
       staleVerificationStarted();
@@ -2888,9 +2897,8 @@ test("DashScope waits for its tenant workspace URL before saving the provider ke
 	]);
 	const workspaceInput = providerEditor.getByRole("textbox", { name: "DashScope API URL" });
 	await expect(workspaceInput).toBeVisible();
-	await expect(providerEditor).toContainText("Use the Singapore Model Studio URL paired with this API key.");
 	const providerKeyInput = providerEditor.getByRole("textbox", { name: "DashScope API key" });
-	await expect(providerEditor.locator("provider-base-url-field + provider-key-field")).toBeVisible();
+	await expect(providerEditor.locator("provider-connection-field")).toHaveCount(2);
 	await pasteProviderKey(providerKeyInput, "sk-tenant-dashscope");
 	await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 	expect(providerSettingsRequests).toEqual([]);
@@ -2898,8 +2906,10 @@ test("DashScope waits for its tenant workspace URL before saving the provider ke
 	await workspaceInput.press("Tab");
 
 	await expect.poll(() => providerSettingsRequests).toEqual([{
-		api_key: "sk-tenant-dashscope",
-		base_url: workspaceURL,
+		fields: {
+			api_key: "sk-tenant-dashscope",
+			base_url: workspaceURL,
+		},
 		text_model: "qwen-plus",
 		system_prompt: "",
 	}]);
@@ -3069,7 +3079,7 @@ test("provider selection autosaves its exact editor while transient removal stay
   expect(providerMutations.at(-1)).toMatchObject({
     method: "PUT",
     url: providerKeyEndpointURL("xai"),
-    payload: { api_key: firstGrokKey, base_url: "", text_model: "grok-4.3", system_prompt: "" },
+    payload: { fields: { api_key: firstGrokKey }, text_model: "grok-4.3", system_prompt: "" },
   });
   const metaKeyInput = providerEditor.getByRole("textbox", { name: "Meta API key" });
   await expect(metaKeyInput).toHaveValue("****meta");
@@ -3089,7 +3099,7 @@ test("provider selection autosaves its exact editor while transient removal stay
   expect(providerMutations.at(-1)).toMatchObject({
     method: "PUT",
     url: providerKeyEndpointURL("xai"),
-    payload: { api_key: secondGrokKey, base_url: "", text_model: "grok-4.3", system_prompt: "" },
+    payload: { fields: { api_key: secondGrokKey }, text_model: "grok-4.3", system_prompt: "" },
   });
   const deepSeekKeyInput = providerEditor.getByRole("textbox", { name: "DeepSeek API key" });
   await expect(deepSeekKeyInput).toHaveValue("****5678");
@@ -3125,7 +3135,7 @@ test("provider selection autosaves its exact editor while transient removal stay
   await cancelRemovalButton.click();
   await expect(removalConfirmation).toBeHidden();
   await expect(settingsDialog).not.toHaveAttribute("inert", "inert");
-  await expect(providerRemovalButton).toBeFocused();
+  await expect(providerSelector).toBeFocused();
   expect(providerMutations.filter((mutation) => mutation.method === "DELETE")).toHaveLength(0);
 
   await providerRemovalButton.click();
@@ -3296,7 +3306,6 @@ test("saved provider keys reveal, edit, and clear without browser persistence", 
   await expect(visibilitySymbols.nth(0)).toBeVisible();
   await expect(visibilitySymbols.nth(1)).toHaveText("visibility_off");
   await expect(visibilitySymbols.nth(1)).toBeHidden();
-  await expect(providerEditor.getByRole("button", { name: "Remove provider key and settings" }).locator(".material-symbols-outlined")).toHaveText("delete");
   await expect(settingsDialog.locator("example-list")).not.toContainText(revealedProviderKey);
 
   const visibilityBoxBeforePress = await providerVisibilityButton.boundingBox();
@@ -3336,8 +3345,7 @@ test("saved provider keys reveal, edit, and clear without browser persistence", 
   await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
   await expect(providerEditor.getByRole("button", { name: "Show key" })).toBeVisible();
   expect(savedProviderSettingsPayloads.at(-1)).toEqual({
-    api_key: editedProviderKey,
-    base_url: "",
+    fields: { api_key: editedProviderKey },
     text_model: "gpt-4.1",
     system_prompt: "Use concise answers.",
   });
@@ -3348,8 +3356,7 @@ test("saved provider keys reveal, edit, and clear without browser persistence", 
   await providerModelSelector.selectOption("gpt-4o-mini");
   await expect.poll(() => savedProviderSettingsPayloads.length).toBe(2);
   expect(savedProviderSettingsPayloads.at(-1)).toEqual({
-    api_key: "",
-    base_url: "",
+    fields: { api_key: "" },
     text_model: "gpt-4o-mini",
     system_prompt: "Use concise answers.",
   });
@@ -3372,8 +3379,7 @@ test("saved provider keys reveal, edit, and clear without browser persistence", 
   await page.keyboard.press("Tab");
   await expect.poll(() => savedProviderSettingsPayloads.length).toBe(3);
   expect(savedProviderSettingsPayloads.at(-1)).toEqual({
-    api_key: "",
-    base_url: "",
+    fields: { api_key: "" },
     text_model: "gpt-4o-mini",
     system_prompt: "Use autosaved provider guidance.",
   });
@@ -3483,7 +3489,7 @@ test("late provider-key reveals cannot populate a reopened editor", async ({ pag
   await page.route(providerKeyEndpointURL("openai", "reveal"), async (route) => {
     revealStarted();
     await revealFulfilled;
-    await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: { api_key: delayedProviderKey } });
+    await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: { field_id: "api_key", value: delayedProviderKey } });
   });
 
   await page.goto(`${baseURL}${applicationPath}`);
@@ -4072,9 +4078,9 @@ test("malformed routing-default profiles become app data integrity errors", asyn
   await expect(page.getByRole("dialog", { name: "Settings" })).toBeHidden();
 });
 
-test("malformed provider base URLs become app data integrity errors", async ({ page }) => {
+test("malformed provider fields become app data integrity errors", async ({ page }) => {
   await installAssetRoutes(page);
-  await installManagementRoutes(page, { malformedProviderBaseURL: true });
+  await installManagementRoutes(page, { malformedProviderField: true });
 
   await page.goto(`${baseURL}${applicationPath}`);
 
@@ -4330,8 +4336,7 @@ test("fresh authenticated users receive one client key and must add a provider k
   await expect(providerEditor.getByRole("button", { name: /^(Save|Update) key$/ })).toHaveCount(0);
   expect(providerMutations).toEqual([
     {
-      api_key: "sk-fresh-openai",
-      base_url: "",
+      fields: { api_key: "sk-fresh-openai" },
       text_model: "gpt-4.1",
       system_prompt: "Use concise answers.",
     },
@@ -5771,7 +5776,7 @@ async function installMultiTenantRoutes(page, options = {}) {
     const path = requestURL.pathname;
     state.requests.push({ method: request.method(), path });
     const relativePath = path.slice("/api/management/tenants/".length);
-    const [tenantID, resource, providerID, action] = relativePath.split("/");
+    const [tenantID, resource, providerID, fieldCollection, fieldID, action] = relativePath.split("/");
     const profile = state.profiles.get(tenantID);
     if (!profile) {
       await route.fulfill({ status: 404 });
@@ -5832,43 +5837,40 @@ async function installMultiTenantRoutes(page, options = {}) {
       await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
       return;
     }
-    if (resource === "provider-keys") {
+    if (resource === "provider-connections") {
       const provider = profile.providers.find((candidateProvider) => candidateProvider.id === providerID);
       if (!provider) {
         await route.fulfill({ status: 404 });
         return;
       }
       const providerKeys = state.providerKeys.get(tenantID);
-      if (action === "reveal" && request.method() === "POST") {
-        if (!provider.has_key || !providerKeys[providerID]) {
+      if (fieldCollection === "fields" && action === "reveal" && request.method() === "POST") {
+        const field = provider.fields.find((candidateField) => candidateField.id === fieldID);
+        if (!field?.secret || !field.configured || !providerKeys[providerID]) {
           await route.fulfill({ status: 404 });
           return;
         }
         await route.fulfill({
           headers: { "Cache-Control": "no-store" },
-          json: { api_key: providerKeys[providerID] },
+          json: { field_id: fieldID, value: providerKeys[providerID] },
         });
         return;
       }
-      if (!action && request.method() === "PUT") {
+      if (!fieldCollection && request.method() === "PUT") {
         const settings = request.postDataJSON();
-        if (settings.api_key) {
-          providerKeys[providerID] = settings.api_key;
+        if (settings.fields.api_key) {
+          providerKeys[providerID] = settings.fields.api_key;
         }
-        provider.has_key = true;
-        provider.masked_key = "saved";
-        provider.base_url = settings.base_url;
+        applyFixtureProviderConnection(provider, settings.fields, "saved");
         provider.text_model = settings.text_model;
         provider.system_prompt = settings.system_prompt;
         reconcileManagementProfileRoutingDefaults(profile);
         await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
         return;
       }
-      if (!action && request.method() === "DELETE") {
+      if (!fieldCollection && request.method() === "DELETE") {
         delete providerKeys[providerID];
-        provider.has_key = false;
-        delete provider.masked_key;
-        provider.base_url = "";
+        clearFixtureProviderConnection(provider);
         reconcileManagementProfileRoutingDefaults(profile);
         await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
         return;
@@ -5895,8 +5897,7 @@ async function installMultiTenantRoutes(page, options = {}) {
     createdTenantSequence += 1;
     const profile = managementTenantProfile(tenantID, name, false);
     for (const provider of profile.providers) {
-      provider.has_key = false;
-      delete provider.masked_key;
+      clearFixtureProviderConnection(provider);
     }
     reconcileManagementProfileRoutingDefaults(profile);
     state.order.push(tenantID);
@@ -5952,7 +5953,7 @@ async function installMultiTenantRoutes(page, options = {}) {
 
 /**
  * @param {import("@playwright/test").Page} page
- * @param {{ usageStatus?: number, admin?: boolean, hasSecret?: boolean, generatedSecret?: string, profileStatus?: number, profileStatuses?: number[], profileError?: string, malformedProviderBaseURL?: boolean, malformedRoutingDefaults?: boolean, maskedKeys?: Record<string, string>, providerKeys?: Record<string, string>, savedProviderIDs?: string[] }} options
+ * @param {{ usageStatus?: number, admin?: boolean, hasSecret?: boolean, generatedSecret?: string, profileStatus?: number, profileStatuses?: number[], profileError?: string, malformedProviderField?: boolean, malformedRoutingDefaults?: boolean, maskedKeys?: Record<string, string>, providerKeys?: Record<string, string>, savedProviderIDs?: string[] }} options
  * @returns {Promise<void>}
  */
 async function installManagementRoutes(page, options = {}) {
@@ -5966,11 +5967,14 @@ async function installManagementRoutes(page, options = {}) {
   };
   if (options.savedProviderIDs) {
     for (const provider of profile.providers) {
-      provider.has_key = options.savedProviderIDs.includes(provider.id);
-      if (provider.has_key) {
-        provider.masked_key = provider.masked_key || "sk-...saved";
+      if (options.savedProviderIDs.includes(provider.id)) {
+        const fieldValues = Object.fromEntries(provider.fields.map((field) => [
+          field.id,
+          field.secret ? `sk-owner-${provider.id}` : fixtureProviderSettingValue(provider.id, field),
+        ]));
+        applyFixtureProviderConnection(provider, fieldValues, "sk-...saved");
       } else {
-        delete provider.masked_key;
+        clearFixtureProviderConnection(provider);
       }
     }
     reconcileManagementProfileRoutingDefaults(profile);
@@ -5980,15 +5984,19 @@ async function installManagementRoutes(page, options = {}) {
     if (!provider) {
       throw new Error(`management_fixture_provider_missing:${providerID}`);
     }
-    provider.masked_key = maskedKey;
+    const secretField = provider.fields.find((field) => field.secret);
+    if (!secretField) {
+      throw new Error(`management_fixture_provider_secret_field_missing:${providerID}`);
+    }
+    secretField.masked_value = maskedKey;
   }
   if (options.malformedRoutingDefaults) {
     profile.providers.push({
       id: "anthropic",
       label: "Anthropic",
       aliases: [],
-      has_key: false,
-      base_url: "",
+      configured: false,
+      fields: [providerAPIKeyField("Anthropic API key")],
       text_model: "claude-sonnet-5",
       system_prompt: "",
       text_default_model: "claude-sonnet-5",
@@ -5998,12 +6006,16 @@ async function installManagementRoutes(page, options = {}) {
     });
     profile.tenant.defaults.provider = "anthropic";
   }
-  if (options.malformedProviderBaseURL) {
+  if (options.malformedProviderField) {
     const dashScopeProvider = profile.providers.find((provider) => provider.id === "dashscope");
     if (!dashScopeProvider) {
       throw new Error("management_fixture_provider_missing:dashscope");
     }
-    Reflect.deleteProperty(dashScopeProvider, "base_url");
+    const baseURLField = dashScopeProvider.fields.find((field) => field.id === "base_url");
+    if (!baseURLField) {
+      throw new Error("management_fixture_provider_field_missing:dashscope:base_url");
+    }
+    Reflect.deleteProperty(baseURLField, "value");
   }
   await page.route(`${baseURL}/api/management/account`, async (route) => {
     await route.fulfill({
@@ -6068,29 +6080,31 @@ async function installManagementRoutes(page, options = {}) {
   await page.route(`${baseURL}${managementProviderKeysPath}/**`, async (route) => {
     const request = route.request();
     const providerPath = new URL(request.url()).pathname.slice(`${managementProviderKeysPath}/`.length);
-    const [providerID, action] = providerPath.split("/");
+    const [providerID, fieldCollection, fieldID, action] = providerPath.split("/");
     const provider = profile.providers.find((candidateProvider) => candidateProvider.id === providerID);
     if (!provider) {
       await route.fulfill({ status: 404 });
       return;
     }
-    if (action === "reveal") {
-      if (!provider.has_key) {
+    if (fieldCollection === "fields" && action === "reveal") {
+      const field = provider.fields.find((candidateField) => candidateField.id === fieldID);
+      if (!field?.secret || !field.configured) {
         await route.fulfill({ status: 404 });
         return;
       }
-      await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: { api_key: providerKeys[providerID] } });
+      await route.fulfill({
+        headers: { "Cache-Control": "no-store" },
+        json: { field_id: fieldID, value: providerKeys[providerID] },
+      });
       return;
     }
-    if (request.method() === "PUT") {
+    if (!fieldCollection && request.method() === "PUT") {
       const providerSettings = request.postDataJSON();
       const previousTextModel = provider.text_model;
-      if (providerSettings.api_key) {
-        providerKeys[providerID] = providerSettings.api_key;
+      if (providerSettings.fields.api_key) {
+        providerKeys[providerID] = providerSettings.fields.api_key;
       }
-      provider.has_key = true;
-      provider.masked_key = "sk-...saved";
-      provider.base_url = providerSettings.base_url;
+      applyFixtureProviderConnection(provider, providerSettings.fields, "sk-...saved");
       provider.text_model = providerSettings.text_model;
       provider.system_prompt = providerSettings.system_prompt;
       reconcileManagementProfileRoutingDefaults(profile);
@@ -6100,11 +6114,9 @@ async function installManagementRoutes(page, options = {}) {
       await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
       return;
     }
-    if (request.method() === "DELETE") {
+    if (!fieldCollection && request.method() === "DELETE") {
       delete providerKeys[providerID];
-      provider.has_key = false;
-      delete provider.masked_key;
-      provider.base_url = "";
+      clearFixtureProviderConnection(provider);
       reconcileManagementProfileRoutingDefaults(profile);
       await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
       return;
@@ -6119,7 +6131,7 @@ async function installManagementRoutes(page, options = {}) {
  */
 function reconcileManagementProfileRoutingDefaults(profile) {
   const keyedProviders = profile.providers
-    .filter((provider) => provider.has_key)
+    .filter((provider) => provider.configured)
     .toSorted((first, second) => first.id.localeCompare(second.id));
   const currentTextProvider = keyedProviders.find((provider) => provider.id === profile.tenant.defaults.provider);
   if (!currentTextProvider) {
@@ -6164,7 +6176,7 @@ function reconcileManagementProfileAfterProviderTextModelChange(profile, provide
  * @returns {string}
  */
 function providerKeyEndpointURL(providerID, action = "") {
-	return `${baseURL}${managementProviderKeysPath}/${providerID}${action ? `/${action}` : ""}`;
+	return `${baseURL}${managementProviderKeysPath}/${providerID}${action ? `/fields/api_key/${action}` : ""}`;
 }
 
 /**
@@ -6261,6 +6273,95 @@ async function staticSiteHandler(request, response) {
 }
 
 /**
+ * @param {string} label
+ * @param {boolean} [configured]
+ * @param {string} [maskedValue]
+ * @returns {object}
+ */
+function providerAPIKeyField(label, configured = false, maskedValue = "") {
+  return {
+    id: "api_key",
+    label,
+    kind: "credential",
+    type: "opaque",
+    required: true,
+    default: "",
+    secret: true,
+    validation: { minimum_length: 1 },
+    configured,
+    ...(configured ? { masked_value: maskedValue } : {}),
+  };
+}
+
+/** @returns {object} */
+function dashScopeBaseURLField() {
+  return {
+    id: "base_url",
+    label: "DashScope API URL",
+    kind: "setting",
+    type: "url",
+    required: true,
+    default: "",
+    secret: false,
+    validation: {
+      pattern: "^https://[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.ap-southeast-1\\.maas\\.aliyuncs\\.com/compatible-mode/v1$",
+      allowed_schemes: ["https"],
+    },
+    configured: false,
+    value: "",
+  };
+}
+
+/**
+ * @param {string} providerID
+ * @param {object} field
+ * @returns {string}
+ */
+function fixtureProviderSettingValue(providerID, field) {
+  if (providerID === "dashscope" && field.id === "base_url") {
+    return "https://fixture.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1";
+  }
+  if (field.default) {
+    return field.default;
+  }
+  throw new Error(`management_fixture_provider_setting_missing:${providerID}:${field.id}`);
+}
+
+/**
+ * @param {object} provider
+ * @param {Record<string, string>} fieldValues
+ * @param {string} maskedValue
+ */
+function applyFixtureProviderConnection(provider, fieldValues, maskedValue) {
+  for (const field of provider.fields) {
+    const value = String(fieldValues[field.id] ?? "");
+    if (field.secret) {
+      if (value) {
+        field.configured = true;
+        field.masked_value = maskedValue;
+      }
+      continue;
+    }
+    field.value = value;
+    field.configured = value !== "";
+  }
+  provider.configured = provider.fields.every((field) => !field.required || field.configured);
+}
+
+/** @param {object} provider */
+function clearFixtureProviderConnection(provider) {
+  provider.configured = false;
+  for (const field of provider.fields) {
+    field.configured = false;
+    if (field.secret) {
+      Reflect.deleteProperty(field, "masked_value");
+    } else {
+      field.value = field.default;
+    }
+  }
+}
+
+/**
  * @param {boolean} isAdmin
  * @param {boolean} hasSecret
  * @returns {object}
@@ -6287,8 +6388,8 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         id: "anthropic",
         label: "Anthropic",
         aliases: ["claude"],
-        has_key: false,
-        base_url: "",
+        configured: false,
+        fields: [providerAPIKeyField("Anthropic API key")],
         text_model: "claude-sonnet-4-6",
         system_prompt: "",
         text_default_model: "claude-sonnet-4-6",
@@ -6300,9 +6401,8 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         id: "openai",
         label: "OpenAI",
         aliases: [],
-        has_key: true,
-        masked_key: "sk-...1234",
-        base_url: "",
+        configured: true,
+        fields: [providerAPIKeyField("OpenAI API key", true, "sk-...1234")],
         text_model: "gpt-4.1",
         system_prompt: "Use concise answers.",
         text_default_model: "gpt-4.1",
@@ -6353,9 +6453,8 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         id: "deepseek",
         label: "DeepSeek",
         aliases: [],
-        has_key: true,
-        masked_key: "sk-...5678",
-        base_url: "",
+        configured: true,
+        fields: [providerAPIKeyField("DeepSeek API key", true, "sk-...5678")],
         text_model: "deepseek-chat",
         system_prompt: "",
         text_default_model: "deepseek-chat",
@@ -6367,8 +6466,8 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         id: "dashscope",
         label: "DashScope",
         aliases: ["qwen"],
-        has_key: false,
-        base_url: "",
+        configured: false,
+        fields: [providerAPIKeyField("DashScope API key"), dashScopeBaseURLField()],
         text_model: "qwen-plus",
         system_prompt: "",
         text_default_model: "qwen-plus",
@@ -6385,9 +6484,8 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         id: "meta",
         label: "Meta",
         aliases: [],
-        has_key: true,
-        masked_key: "sk-...meta",
-        base_url: "",
+        configured: true,
+        fields: [providerAPIKeyField("Meta API key", true, "sk-...meta")],
         text_model: "muse-spark-1.1",
         system_prompt: "",
         text_default_model: "muse-spark-1.1",
@@ -6399,8 +6497,8 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         id: "minimax",
         label: "MiniMax",
         aliases: [],
-        has_key: false,
-        base_url: "",
+        configured: false,
+        fields: [providerAPIKeyField("MiniMax API key")],
         text_model: "minimax-m2.7",
         system_prompt: "",
         text_default_model: "minimax-m2.7",
@@ -6420,8 +6518,8 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         id: "moonshot",
         label: "Moonshot",
         aliases: ["kimi"],
-        has_key: false,
-        base_url: "",
+        configured: false,
+        fields: [providerAPIKeyField("Moonshot API key")],
         text_model: "kimi-k2.6",
         system_prompt: "",
         text_default_model: "kimi-k2.6",
@@ -6444,8 +6542,8 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         id: "xai",
         label: "xAI",
         aliases: ["xai"],
-        has_key: false,
-        base_url: "",
+        configured: false,
+        fields: [providerAPIKeyField("xAI API key")],
         text_model: "grok-4.3",
         system_prompt: "",
         text_default_model: "grok-4.3",
@@ -6458,8 +6556,8 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         id: "zai",
         label: "Z.AI",
         aliases: [],
-        has_key: false,
-        base_url: "",
+        configured: false,
+        fields: [providerAPIKeyField("Z.AI API key")],
         text_model: "glm-5.1",
         system_prompt: "",
         text_default_model: "glm-5.1",

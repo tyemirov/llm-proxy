@@ -16,6 +16,14 @@ import (
 	"go.uber.org/zap"
 )
 
+func providerEndpoints(rawBaseURL string, providers ...string) *proxy.Endpoints {
+	endpoints := proxy.NewEndpoints()
+	for _, provider := range providers {
+		endpoints.SetProviderBaseURL(provider, rawBaseURL)
+	}
+	return endpoints
+}
+
 // Constants used in tests.
 const (
 	modelIDGPT4o                   = proxy.ModelNameGPT4o
@@ -121,12 +129,12 @@ func TestIntegration_OmitsDisallowedParameters(testingInstance *testing.T) {
 
 func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance *testing.T) {
 	catalog, catalogError := proxy.NewPublicCapabilityCatalog(proxy.Configuration{
-		ModelCatalog: testfixtures.ModelCatalog(testingInstance),
+		ProviderCatalog: testfixtures.ProviderCatalog(testingInstance),
 	})
 	if catalogError != nil {
 		testingInstance.Fatalf("NewPublicCapabilityCatalog error: %v", catalogError)
 	}
-	if catalog.Revision == "" || len(catalog.Operations) != 3 || len(catalog.Prices) != len(catalog.Offerings) || catalog.Counts.Providers != 11 || catalog.Counts.ModelPublishers != 11 || catalog.Counts.ModelFamilies != len(catalog.Families) || catalog.Counts.ExactModels != len(catalog.Models) || catalog.Counts.ProviderOfferings != len(catalog.Offerings) || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
+	if catalog.Revision == "" || len(catalog.Operations) != 3 || len(catalog.Prices) != 67 || len(catalog.Prices) != len(catalog.Offerings) || catalog.Counts.Providers != 11 || catalog.Counts.ModelPublishers != 11 || catalog.Counts.ModelFamilies != 24 || catalog.Counts.ModelFamilies != len(catalog.Families) || catalog.Counts.ExactModels != 66 || catalog.Counts.ExactModels != len(catalog.Models) || catalog.Counts.ProviderOfferings != 67 || catalog.Counts.ProviderOfferings != len(catalog.Offerings) || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
 		testingInstance.Fatalf("catalog summary=%+v", catalog)
 	}
 	weightAccessFound := map[string]bool{}
@@ -287,7 +295,7 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 
 func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstance *testing.T) {
 	catalog, catalogError := proxy.NewPublicCapabilityCatalog(proxy.Configuration{
-		ModelCatalog: testfixtures.ModelCatalog(testingInstance),
+		ProviderCatalog: testfixtures.ProviderCatalog(testingInstance),
 	})
 	if catalogError != nil {
 		testingInstance.Fatalf("NewPublicCapabilityCatalog error: %v", catalogError)
@@ -388,8 +396,8 @@ func TestPublicCapabilityRESTResourceProjectsChangedCatalogWithoutPrivateConfig(
 	tenant := testfixtures.StandardManagedTenant(privateSecret)
 	tenant.ProviderKeys[proxy.ProviderNameOpenAI] = privateAPIKey
 	router, buildError := testfixtures.BuildManagedRouter(testingInstance, proxy.Configuration{
-		OpenAIBaseURL: privateBaseURL,
-		ModelCatalog:  catalogs,
+		Endpoints:       providerEndpoints(privateBaseURL, proxy.ProviderNameOpenAI),
+		ProviderCatalog: testfixtures.ProviderCatalogFromModelCatalog(testingInstance, catalogs),
 	}, zap.NewNop().Sugar(), tenant)
 	if buildError != nil {
 		testingInstance.Fatalf("BuildRouter error: %v", buildError)
@@ -439,28 +447,28 @@ func TestPublicCapabilityCatalogRejectsNoncanonicalRuntimeRegistries(testingInst
 			mutate: func(catalogs *proxy.ModelCatalog) {
 				catalogs.Providers[0].ID = "OpenAI"
 			},
-			expectedError: "reason=not_canonical",
+			expectedError: "field=providers[0].label",
 		},
 		{
 			name: "unknown provider identifier",
 			mutate: func(catalogs *proxy.ModelCatalog) {
 				catalogs.Providers[0].ID = "future"
 			},
-			expectedError: "reason=unknown",
+			expectedError: "field=providers[0].label",
 		},
 		{
 			name: "incomplete provider registry",
 			mutate: func(catalogs *proxy.ModelCatalog) {
 				catalogs.Providers = slices.Delete(catalogs.Providers, 9, 10)
 			},
-			expectedError: "field=catalog.providers provider=meta reason=missing",
+			expectedError: "field=providers[9].label",
 		},
 		{
 			name: "invalid model catalog",
 			mutate: func(catalogs *proxy.ModelCatalog) {
 				catalogs.Offerings[0].Model = "missing-model"
 			},
-			expectedError: "reason=dangling_reference",
+			expectedError: "field=providers[0].offerings[0].prices",
 		},
 		{
 			name: "missing media limits",
@@ -492,7 +500,10 @@ func TestPublicCapabilityCatalogRejectsNoncanonicalRuntimeRegistries(testingInst
 		testingInstance.Run(testCase.name, func(subTestInstance *testing.T) {
 			catalogs := testfixtures.ModelCatalog(subTestInstance)
 			testCase.mutate(&catalogs)
-			_, catalogError := proxy.NewPublicCapabilityCatalog(proxy.Configuration{ModelCatalog: catalogs})
+			providerCatalog, catalogError := testfixtures.NewProviderCatalogFromModelCatalog(catalogs)
+			if catalogError == nil {
+				_, catalogError = proxy.NewPublicCapabilityCatalog(proxy.Configuration{ProviderCatalog: providerCatalog})
+			}
 			if catalogError == nil || !strings.Contains(catalogError.Error(), testCase.expectedError) {
 				subTestInstance.Fatalf("error=%v want contains %q", catalogError, testCase.expectedError)
 			}

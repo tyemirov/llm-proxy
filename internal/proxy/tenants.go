@@ -64,14 +64,35 @@ func normalizedTenantDefaults(rawDefaults TenantDefaults) tenantDefaults {
 }
 
 type managedProviderSettings struct {
-	apiKey        string
-	apiKeyVersion managedProviderKeyVersion
-	baseURL       string
-	textModel     string
-	systemPrompt  string
+	connectionValues   map[string]string
+	connectionVersions map[string]managedProviderConnectionVersion
+	configuredFields   map[string]bool
+	textModel          string
+	systemPrompt       string
 }
 
-type managedProviderKeyVersion [sha256.Size]byte
+type managedProviderConnectionVersion [sha256.Size]byte
+
+func (settings managedProviderSettings) connectionValue(fieldIdentifier string) string {
+	return strings.TrimSpace(settings.connectionValues[fieldIdentifier])
+}
+
+func (settings managedProviderSettings) connectionVersion(fieldIdentifier string) managedProviderConnectionVersion {
+	return settings.connectionVersions[fieldIdentifier]
+}
+
+func (settings managedProviderSettings) fieldConfigured(fieldIdentifier string) bool {
+	return settings.configuredFields[fieldIdentifier]
+}
+
+func (settings managedProviderSettings) hasRequiredConnectionFields(definition providerDefinition) bool {
+	for fieldIdentifier, field := range definition.fields {
+		if field.Required && settings.connectionValue(fieldIdentifier) == "" {
+			return false
+		}
+	}
+	return true
+}
 
 type tenant struct {
 	identifier       tenantID

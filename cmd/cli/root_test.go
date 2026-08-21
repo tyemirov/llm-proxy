@@ -1,11 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -15,28 +16,16 @@ import (
 )
 
 const (
-	testConfigFileName = "config.yml"
-	testDotEnvFileName = ".env"
+	testConfigFileName          = "config.yml"
+	testProviderCatalogFileName = "providers.yml"
+	testDotEnvFileName          = ".env"
 )
 
 func TestRootCommandRunsConfiguredProxyFromConfigFile(t *testing.T) {
+	originalProcessEnvironment := processEnvironment
+	processEnvironment = func() []string { return nil }
+	t.Cleanup(func() { processEnvironment = originalProcessEnvironment })
 	tempDir := t.TempDir()
-	providerValues := defaultProviderYAMLValues()
-	providerValues.OpenAIBaseURL = "https://openai.example/v1"
-	providerValues.OpenAITranscriptionsURL = "https://openai.example/v1/audio/transcriptions"
-	providerValues.DeepSeekBaseURL = "https://deepseek.example"
-	providerValues.DashScopeBaseURL = "https://dashscope.example"
-	providerValues.MoonshotBaseURL = "https://moonshot.example"
-	providerValues.MiniMaxBaseURL = "https://minimax.example"
-	providerValues.SiliconFlowBaseURL = "https://siliconflow.example"
-	providerValues.SiliconFlowTranscriptionsURL = "https://siliconflow.example/audio/transcriptions"
-	providerValues.ZAIBaseURL = "https://zai.example"
-	providerValues.ZAITranscriptionsURL = "https://zai.example/audio/transcriptions"
-	providerValues.GeminiBaseURL = "https://gemini.example"
-	providerValues.AnthropicBaseURL = "https://anthropic.example"
-	providerValues.MetaBaseURL = "https://meta.example/v1"
-	providerValues.XAIBaseURL = "https://xai.example"
-	providerValues.XAITranscriptionsURL = "https://xai.example/stt"
 	configPath := writeTestConfig(t, tempDir, `
 server:
   port: 18080
@@ -72,11 +61,13 @@ management:
   provider_key_encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
   management_api_origin: "https://llm-proxy-api.example"
   proxy_origin: "https://llm-proxy-api.example"
-`+completeProvidersYAML(providerValues))
+`)
 	writeTestDotEnv(t, tempDir, `
 P411_TAUTH_JWT_SIGNING_KEY=tauth-signing-key
 P411_MANAGEMENT_DATABASE_PATH=/var/lib/llm-proxy/management.sqlite
 P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+OPENAI_API_KEY=sk-openai-catalog-binding
+DASHSCOPE_BASE_URL=https://workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1
 `)
 
 	var capturedConfiguration proxy.Configuration
@@ -89,14 +80,14 @@ P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlh
 	if executeError != nil {
 		t.Fatalf("ExecuteC error: %v", executeError)
 	}
-	if capturedConfiguration.OpenAIBaseURL != "https://openai.example/v1" {
-		t.Fatalf("openAIBaseURL=%q", capturedConfiguration.OpenAIBaseURL)
+	if capturedConfiguration.ProviderCatalog == nil || capturedConfiguration.ProviderCatalog.SchemaVersion() != proxy.ProviderCatalogSchemaVersion {
+		t.Fatalf("provider catalog=%v", capturedConfiguration.ProviderCatalog)
 	}
-	if capturedConfiguration.OpenAITranscriptionsURL != "https://openai.example/v1/audio/transcriptions" {
-		t.Fatalf("openAITranscriptionsURL=%q", capturedConfiguration.OpenAITranscriptionsURL)
+	if capturedConfiguration.ProviderConnectionValues[proxy.ProviderNameOpenAI][proxy.CatalogCredentialAPIKey] != "sk-openai-catalog-binding" {
+		t.Fatalf("openai environment binding was not loaded")
 	}
-	if capturedConfiguration.DeepSeekBaseURL != "https://deepseek.example" {
-		t.Fatalf("deepSeekBaseURL=%q", capturedConfiguration.DeepSeekBaseURL)
+	if capturedConfiguration.ProviderConnectionValues[proxy.ProviderNameDashScope]["base_url"] != "https://workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1" {
+		t.Fatalf("dashscope environment binding=%q", capturedConfiguration.ProviderConnectionValues[proxy.ProviderNameDashScope]["base_url"])
 	}
 	if capturedConfiguration.Port != 18080 {
 		t.Fatalf("port=%d", capturedConfiguration.Port)
@@ -149,27 +140,6 @@ P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlh
 	}
 	if capturedConfiguration.Management.ManagementAPIOrigin != "https://llm-proxy-api.example" || capturedConfiguration.Management.ProxyOrigin != "https://llm-proxy-api.example" {
 		t.Fatalf("management api origins=%q %q", capturedConfiguration.Management.ManagementAPIOrigin, capturedConfiguration.Management.ProxyOrigin)
-	}
-	if capturedConfiguration.MiniMaxBaseURL != "https://minimax.example" {
-		t.Fatalf("miniMax base URL=%q", capturedConfiguration.MiniMaxBaseURL)
-	}
-	if capturedConfiguration.GeminiBaseURL != "https://gemini.example" {
-		t.Fatalf("geminiBaseURL=%q", capturedConfiguration.GeminiBaseURL)
-	}
-	if capturedConfiguration.AnthropicBaseURL != "https://anthropic.example" {
-		t.Fatalf("anthropicBaseURL=%q", capturedConfiguration.AnthropicBaseURL)
-	}
-	if capturedConfiguration.MetaBaseURL != "https://meta.example/v1" {
-		t.Fatalf("meta base URL=%q", capturedConfiguration.MetaBaseURL)
-	}
-	if capturedConfiguration.ZAITranscriptionsURL != "https://zai.example/audio/transcriptions" {
-		t.Fatalf("zaiTranscriptionsURL=%q", capturedConfiguration.ZAITranscriptionsURL)
-	}
-	if capturedConfiguration.XAIBaseURL != "https://xai.example" {
-		t.Fatalf("grokBaseURL=%q", capturedConfiguration.XAIBaseURL)
-	}
-	if capturedConfiguration.XAITranscriptionsURL != "https://xai.example/stt" {
-		t.Fatalf("grokTranscriptionsURL=%q", capturedConfiguration.XAITranscriptionsURL)
 	}
 	deepSeekDefault, deepSeekDefaultFound := configuredDefaultOffering(capturedConfiguration.ModelCatalog, proxy.ProviderNameDeepSeek, proxy.ModelOperationText)
 	if !deepSeekDefaultFound || deepSeekDefault.Model != "deepseek-v4-flash" {
@@ -281,7 +251,7 @@ func TestRootCommandRejectsInvalidManagementUsageQueueSize(t *testing.T) {
 			configPath := writeTestConfig(subTest, subTest.TempDir(), `
 management:
   usage_queue_size: `+configuredValue+`
-`+completeProvidersYAML(defaultProviderYAMLValues()))
+`)
 			withServeProxy(subTest, failingServeProxy(subTest))
 
 			executeError := executeRootCommand(subTest, "--config", configPath)
@@ -349,7 +319,7 @@ management:
   provider_key_encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
   management_api_origin: "https://llm-proxy.example"
   proxy_origin: "https://llm-proxy.example"
-`+completeProvidersYAML(defaultProviderYAMLValues()))
+`)
 	withServeProxy(t, failingServeProxy(t))
 
 	executeError := executeRootCommand(t, "--config", configPath)
@@ -376,6 +346,9 @@ management:
 }
 
 func TestRootCommandLoadsPackagedConfigWithManagementEnvironment(t *testing.T) {
+	originalProcessEnvironment := processEnvironment
+	processEnvironment = func() []string { return nil }
+	t.Cleanup(func() { processEnvironment = originalProcessEnvironment })
 	tempDir := t.TempDir()
 	packagedConfigPath := filepath.Join("..", "..", "configs", "config.yml")
 	packagedConfig, readError := os.ReadFile(packagedConfigPath)
@@ -386,6 +359,7 @@ func TestRootCommandLoadsPackagedConfigWithManagementEnvironment(t *testing.T) {
 	if writeError := os.WriteFile(configPath, packagedConfig, 0600); writeError != nil {
 		t.Fatalf("write packaged config copy: %v", writeError)
 	}
+	writeTestProviderCatalog(t, tempDir, canonicalProviderCatalogYAML())
 	writeTestDotEnv(t, tempDir, `
 LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN=https://llm-proxy.mprlab.com
 LLM_PROXY_MANAGEMENT_UI_DESCRIPTION=LLM Proxy
@@ -406,7 +380,7 @@ LLM_PROXY_MANAGEMENT_DATABASE_PATH=llm-proxy-management.sqlite
 LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 LLM_PROXY_MANAGEMENT_API_ORIGIN=https://llm-proxy-api.mprlab.com
 LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=https://llm-proxy-api.mprlab.com
-DASHSCOPE_BASE_URL=https://workspace.example.invalid/compatible-mode/v1
+DASHSCOPE_BASE_URL=https://workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1
 `)
 
 	var capturedConfiguration proxy.Configuration
@@ -448,9 +422,6 @@ DASHSCOPE_BASE_URL=https://workspace.example.invalid/compatible-mode/v1
 	if capturedConfiguration.Management.ManagementAPIOrigin != "https://llm-proxy-api.mprlab.com" || capturedConfiguration.Management.ProxyOrigin != "https://llm-proxy-api.mprlab.com" {
 		t.Fatalf("management api origins=%q %q", capturedConfiguration.Management.ManagementAPIOrigin, capturedConfiguration.Management.ProxyOrigin)
 	}
-	if capturedConfiguration.MetaBaseURL != "https://api.meta.ai/v1" {
-		t.Fatalf("meta base URL=%q", capturedConfiguration.MetaBaseURL)
-	}
 	metaOfferings := configuredProviderOfferings(capturedConfiguration.ModelCatalog, proxy.ProviderNameMeta)
 	metaDefault, metaDefaultFound := configuredDefaultOffering(capturedConfiguration.ModelCatalog, proxy.ProviderNameMeta, proxy.ModelOperationText)
 	if !metaDefaultFound || metaDefault.Model != proxy.ModelNameMuseSpark11 || len(metaOfferings) != 1 || metaOfferings[0].Model != proxy.ModelNameMuseSpark11 {
@@ -468,7 +439,7 @@ server:
   max_input_audio_bytes: 26214400
 management:
   google_client_id: "${PUBLIC_CAPABILITY_MODE_IGNORES_PRIVATE_PLACEHOLDERS}"
-`+completeProvidersYAML(defaultProviderYAMLValues()))
+`)
 	withServeProxy(t, failingServeProxy(t))
 	var capturedConfiguration publicCapabilityAPIConfiguration
 	withServePublicCapabilityAPI(t, func(catalog proxy.PublicCapabilityCatalog, port int, logLevel string) error {
@@ -512,145 +483,191 @@ server:
 	}
 }
 
+func TestRootCommandReturnsPublicCapabilityCatalogProjectionError(t *testing.T) {
+	configPath := writeTestConfig(t, t.TempDir(), "server:\n  port: 9191")
+	expectedError := errors.New("catalog projection stopped")
+	originalConstructor := newPublicCapabilityCatalog
+	newPublicCapabilityCatalog = func(proxy.Configuration) (proxy.PublicCapabilityCatalog, error) {
+		return proxy.PublicCapabilityCatalog{}, expectedError
+	}
+	t.Cleanup(func() { newPublicCapabilityCatalog = originalConstructor })
+	withServeProxy(t, failingServeProxy(t))
+	withServePublicCapabilityAPI(t, func(proxy.PublicCapabilityCatalog, int, string) error {
+		t.Fatal("public capability API must not start")
+		return nil
+	})
+
+	executeError := executeRootCommand(t, "--config", configPath, "--public-capabilities-only")
+	if executeError == nil || !strings.Contains(executeError.Error(), expectedError.Error()) {
+		t.Fatalf("error=%v want=%v", executeError, expectedError)
+	}
+}
+
+func TestRootCommandPrintsCatalogDerivedLiveDiscovery(t *testing.T) {
+	configPath := writeTestConfig(t, t.TempDir(), completeManagementYAML())
+	var output bytes.Buffer
+	originalOutput := rootCmd.OutOrStdout()
+	rootCmd.SetOut(&output)
+	t.Cleanup(func() { rootCmd.SetOut(originalOutput) })
+	withServeProxy(t, failingServeProxy(t))
+
+	if executeError := executeRootCommand(t, "--config", configPath, "--provider-catalog-only"); executeError != nil {
+		t.Fatalf("ExecuteC error: %v", executeError)
+	}
+	var discovery providerCatalogDiscovery
+	if decodeError := json.Unmarshal(output.Bytes(), &discovery); decodeError != nil {
+		t.Fatalf("decode provider discovery: %v", decodeError)
+	}
+	if discovery.SchemaVersion != proxy.ProviderCatalogSchemaVersion || len(discovery.Providers) != 11 {
+		t.Fatalf("provider discovery=%+v", discovery)
+	}
+	dashScopeFound := false
+	for _, provider := range discovery.Providers {
+		if provider.ID != proxy.ProviderNameDashScope {
+			continue
+		}
+		dashScopeFound = len(provider.Fields) == 2 && provider.Fields[0].Environment == "DASHSCOPE_API_KEY" && provider.Fields[1].Environment == "DASHSCOPE_BASE_URL"
+	}
+	if !dashScopeFound {
+		t.Fatalf("DashScope discovery=%+v", discovery.Providers)
+	}
+	for _, privateCatalogFragment := range []string{"default_base_url", "authentication", "upstream_model"} {
+		if strings.Contains(output.String(), privateCatalogFragment) {
+			t.Fatalf("provider discovery exposed %q", privateCatalogFragment)
+		}
+	}
+}
+
+func TestRootCommandRejectsInvalidCatalogModeSelection(t *testing.T) {
+	configPath := writeTestConfig(t, t.TempDir(), completeManagementYAML())
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath, "--public-capabilities-only", "--provider-catalog-only")
+	if executeError == nil || !strings.Contains(executeError.Error(), "mutually exclusive") {
+		t.Fatalf("error=%v want mutually exclusive catalog modes", executeError)
+	}
+}
+
+func TestRootCommandRejectsMissingProviderCatalogInDiscoveryMode(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, testConfigFileName)
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath, "--provider-catalog-only")
+	if executeError == nil || !strings.Contains(executeError.Error(), "provider_catalog_read_failed") {
+		t.Fatalf("error=%v want provider catalog read failure", executeError)
+	}
+}
+
+func TestRootCommandRejectsMissingRuntimeConfigAfterCatalogLoad(t *testing.T) {
+	tempDir := t.TempDir()
+	writeTestProviderCatalog(t, tempDir, canonicalProviderCatalogYAML())
+	configPath := filepath.Join(tempDir, "missing.yml")
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath)
+	if executeError == nil || !strings.Contains(executeError.Error(), "config_file_read_failed") {
+		t.Fatalf("error=%v want runtime config read failure", executeError)
+	}
+}
+
+func TestRootCommandRejectsInvalidCatalogEnvironmentBinding(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := writeTestConfig(t, tempDir, completeManagementYAML())
+	writeTestDotEnv(t, tempDir, "DASHSCOPE_BASE_URL=ftp://workspace.invalid")
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath)
+	if executeError == nil || !strings.Contains(executeError.Error(), "provider=dashscope field=base_url") {
+		t.Fatalf("error=%v want invalid DashScope catalog binding", executeError)
+	}
+}
+
 func TestRootCommandRejectsInvalidPublicCapabilityConfig(t *testing.T) {
 	testCases := []struct {
 		name          string
-		config        func(*testing.T, string) string
+		prepare       func(*testing.T, string) string
 		expectedError string
 	}{
 		{
-			name: "missing file",
-			config: func(subTest *testing.T, tempDir string) string {
+			name: "missing config file",
+			prepare: func(subTest *testing.T, tempDir string) string {
+				writeTestProviderCatalog(subTest, tempDir, canonicalProviderCatalogYAML())
 				return filepath.Join(tempDir, "missing.yml")
 			},
 			expectedError: "missing.yml",
 		},
 		{
-			name: "malformed yaml",
-			config: func(subTest *testing.T, tempDir string) string {
-				return writeTestConfig(subTest, tempDir, `server: [`)
+			name: "missing provider catalog",
+			prepare: func(subTest *testing.T, tempDir string) string {
+				configPath := writeTestConfig(subTest, tempDir, "server:\n  port: 9191")
+				if removeError := os.Remove(filepath.Join(tempDir, testProviderCatalogFileName)); removeError != nil {
+					subTest.Fatalf("remove provider catalog: %v", removeError)
+				}
+				return configPath
+			},
+			expectedError: "provider_catalog_read_failed",
+		},
+		{
+			name: "malformed provider catalog",
+			prepare: func(subTest *testing.T, tempDir string) string {
+				configPath := writeTestConfig(subTest, tempDir, "server:\n  port: 9191")
+				writeTestProviderCatalog(subTest, tempDir, "schema_version: [")
+				return configPath
+			},
+			expectedError: "provider_catalog_invalid",
+		},
+		{
+			name: "malformed config",
+			prepare: func(subTest *testing.T, tempDir string) string {
+				return writeTestConfig(subTest, tempDir, "server: [")
 			},
 			expectedError: "did not find expected node content",
 		},
 		{
 			name: "missing server",
-			config: func(subTest *testing.T, tempDir string) string {
-				return writeTestConfig(subTest, tempDir, completeLiteralRuntimeYAML())
+			prepare: func(subTest *testing.T, tempDir string) string {
+				return writeTestConfig(subTest, tempDir, completeManagementYAML())
 			},
 			expectedError: "field=server",
 		},
 		{
-			name: "missing providers",
-			config: func(subTest *testing.T, tempDir string) string {
-				return writeTestConfig(subTest, tempDir, `server:
-  port: 9191
-`+canonicalModelCatalogYAML())
-			},
-			expectedError: "field=providers",
-		},
-		{
-			name: "missing catalog",
-			config: func(subTest *testing.T, tempDir string) string {
-				providersYAML, _, catalogFound := strings.Cut(completeLiteralRuntimeYAML(), "\ncatalog:")
-				if !catalogFound {
-					subTest.Fatal("canonical catalog fixture is missing")
-				}
-				return writeTestConfig(subTest, tempDir, "server:\n  port: 9191\n"+providersYAML)
-			},
-			expectedError: "field=catalog",
-		},
-		{
 			name: "unknown server field",
-			config: func(subTest *testing.T, tempDir string) string {
-				return writeTestConfig(subTest, tempDir, `server:
-  port: 9191
-  future_option: true
-`+completeLiteralRuntimeYAML())
+			prepare: func(subTest *testing.T, tempDir string) string {
+				return writeTestConfig(subTest, tempDir, "server:\n  port: 9191\n  future_option: true")
 			},
 			expectedError: "field=server",
 		},
 		{
 			name: "nonpositive port",
-			config: func(subTest *testing.T, tempDir string) string {
-				return writeTestConfig(subTest, tempDir, `server:
-  port: 0
-`+completeLiteralRuntimeYAML())
+			prepare: func(subTest *testing.T, tempDir string) string {
+				return writeTestConfig(subTest, tempDir, "server:\n  port: 0")
 			},
 			expectedError: "server.port must be positive",
 		},
 		{
-			name: "unknown provider field",
-			config: func(subTest *testing.T, tempDir string) string {
-				providerYAML := strings.Replace(completeLiteralRuntimeYAML(), "\n  deepseek:", "\n    future_option: true\n  deepseek:", 1)
-				return writeTestConfig(subTest, tempDir, "server:\n  port: 9191\n"+providerYAML)
-			},
-			expectedError: "field=providers",
-		},
-		{
-			name: "unknown catalog field",
-			config: func(subTest *testing.T, tempDir string) string {
-				providerYAML := strings.Replace(completeLiteralRuntimeYAML(), "\n  publishers:", "\n  future_option: true\n  publishers:", 1)
-				return writeTestConfig(subTest, tempDir, "server:\n  port: 9191\n"+providerYAML)
-			},
-			expectedError: "field=catalog",
-		},
-		{
-			name: "retired qwen cloud provider",
-			config: func(subTest *testing.T, tempDir string) string {
-				providerYAML := strings.Replace(completeLiteralRuntimeYAML(), "\n  moonshot:", `
-  qwencloud:
-    base_url: "https://retired.example.invalid/v1"
-    text:
-      default_model: "qwen3.8-max-preview"
-      models:
-        - id: "qwen3.8-max-preview"
-          wire_contract: "openai_chat_completions"
-          execution_lifecycle: "synchronous_completion"
-  moonshot:`, 1)
-				return writeTestConfig(subTest, tempDir, "server:\n  port: 9191\n"+providerYAML)
-			},
-			expectedError: "field=providers",
-		},
-		{
-			name: "retired zhipu provider",
-			config: func(subTest *testing.T, tempDir string) string {
-				providerYAML := strings.Replace(completeLiteralRuntimeYAML(), "\n  gemini:", `
-  zhipu:
-    base_url: "https://open.bigmodel.cn/api/paas/v4"
-    transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
-  gemini:`, 1)
-				return writeTestConfig(subTest, tempDir, "server:\n  port: 9191\n"+providerYAML)
-			},
-			expectedError: "field=providers",
-		},
-		{
 			name: "nonpositive timeout",
-			config: func(subTest *testing.T, tempDir string) string {
-				return writeTestConfig(subTest, tempDir, `server:
-  port: 9191
-  max_request_timeout_seconds: 0
-`+completeLiteralRuntimeYAML())
+			prepare: func(subTest *testing.T, tempDir string) string {
+				return writeTestConfig(subTest, tempDir, "server:\n  port: 9191\n  max_request_timeout_seconds: 0")
 			},
 			expectedError: "server.max_request_timeout_seconds must be positive",
 		},
 		{
 			name: "invalid provider catalog",
-			config: func(subTest *testing.T, tempDir string) string {
-				providerYAML := strings.Replace(completeLiteralRuntimeYAML(), "  - provider: openai\n    model: gpt-4o-mini\n", "  - provider: openai\n    model: missing-model\n", 1)
-				return writeTestConfig(subTest, tempDir, `server:
-  port: 9191
-`+providerYAML)
+			prepare: func(subTest *testing.T, tempDir string) string {
+				configPath := writeTestConfig(subTest, tempDir, "server:\n  port: 9191")
+				writeTestProviderCatalog(subTest, tempDir, strings.Replace(canonicalProviderCatalogYAML(), "          transport: text", "          transport: missing", 1))
+				return configPath
 			},
-			expectedError: "invalid_model_catalog",
+			expectedError: "transport=missing",
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(subTest *testing.T) {
-			tempDir := subTest.TempDir()
-			configPath := testCase.config(subTest, tempDir)
+			configPath := testCase.prepare(subTest, subTest.TempDir())
 			withServeProxy(subTest, failingServeProxy(subTest))
-			withServePublicCapabilityAPI(subTest, func(catalog proxy.PublicCapabilityCatalog, port int, logLevel string) error {
+			withServePublicCapabilityAPI(subTest, func(proxy.PublicCapabilityCatalog, int, string) error {
 				subTest.Fatal("public capability API must not start")
 				return errors.New("unexpected public capability API serve")
 			})
@@ -667,7 +684,7 @@ func TestRootCommandUsesDefaultConfigPathForBlankConfigFlag(t *testing.T) {
 	withServeProxy(t, failingServeProxy(t))
 
 	executeError := executeRootCommand(t, "--config", "")
-	if executeError == nil || !strings.Contains(executeError.Error(), "path=config.yml") {
+	if executeError == nil || !strings.Contains(executeError.Error(), "path=providers.yml") {
 		t.Fatalf("error=%v want default config path", executeError)
 	}
 }
@@ -677,8 +694,6 @@ func TestRootCommandRejectsUnreadableDotEnv(t *testing.T) {
 	configPath := writeTestConfig(t, tempDir, `
 server:
   log_level: info
-providers:
-  openai:
 `)
 	if mkdirError := os.Mkdir(filepath.Join(tempDir, testDotEnvFileName), 0700); mkdirError != nil {
 		t.Fatalf("create dotenv directory: %v", mkdirError)
@@ -738,14 +753,13 @@ func TestRootCommandRejectsObsoleteTenantConfiguration(t *testing.T) {
 
 func TestRootCommandRejectsStaleProviderLevelReasoningEffortDeclaration(t *testing.T) {
 	tempDir := t.TempDir()
-	providersYAML := strings.Replace(completeLiteralRuntimeYAML(), `    base_url: "https://api.openai.com/v1"`, `    base_url: "https://api.openai.com/v1"
-    reasoning_effort: high`, 1)
-	configPath := writeTestConfig(t, tempDir, `
-`+providersYAML)
+	configPath := writeTestConfig(t, tempDir, completeManagementYAML())
+	providerCatalog := strings.Replace(canonicalProviderCatalogYAML(), "      label: OpenAI\n      fields:", "      label: OpenAI\n      reasoning_effort: high\n      fields:", 1)
+	writeTestProviderCatalog(t, tempDir, providerCatalog)
 	withServeProxy(t, failingServeProxy(t))
 
 	executeError := executeRootCommand(t, "--config", configPath)
-	if executeError == nil || !strings.Contains(executeError.Error(), "config_file_parse_failed") || !strings.Contains(executeError.Error(), "reasoning_effort") {
+	if executeError == nil || !strings.Contains(executeError.Error(), "provider_catalog_invalid") || !strings.Contains(executeError.Error(), "reasoning_effort") {
 		t.Fatalf("error=%v want stale provider-level reasoning effort rejection", executeError)
 	}
 }
@@ -829,512 +843,73 @@ server:
 	}
 }
 
-func TestRootCommandRejectsIncompleteProviderConfig(t *testing.T) {
+func TestRootCommandRejectsInvalidProviderCatalog(t *testing.T) {
 	testCases := []struct {
 		name          string
-		providersYAML string
+		mutate        func(string) string
 		expectedError string
 	}{
 		{
-			name: "missing provider base url",
-			providersYAML: `
-providers:
-  openai:
-    base_url: "https://api.openai.com/v1"
-    transcriptions_url: "https://api.openai.com/v1/audio/transcriptions"
-  deepseek:
-    base_url: "https://api.deepseek.com"
-  dashscope:
-    base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
-  moonshot:
-    base_url: "https://api.moonshot.ai/v1"
-  siliconflow:
-    base_url: "https://api.siliconflow.com/v1"
-    transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
-  zai:
-    base_url: "https://api.z.ai/api/paas/v4"
-  gemini:
-    base_url: "https://generativelanguage.googleapis.com/v1beta"
-  anthropic:
-    base_url: "https://api.anthropic.com"
-  meta:
-    base_url: "https://api.meta.ai/v1"
-  xai:
-    base_url: ""
-    transcriptions_url: "https://api.x.ai/v1/stt"
-`,
-			expectedError: "provider_base_url_required: provider=xai field=providers.xai.base_url",
+			name:          "malformed yaml",
+			mutate:        func(string) string { return "schema_version: [" },
+			expectedError: "provider_catalog_invalid",
 		},
 		{
-			name: "missing openai transcriptions url",
-			providersYAML: `
-providers:
-  openai:
-    base_url: "https://api.openai.com/v1"
-    transcriptions_url: ""
-  deepseek:
-    base_url: "https://api.deepseek.com"
-  dashscope:
-    base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
-  moonshot:
-    base_url: "https://api.moonshot.ai/v1"
-  siliconflow:
-    base_url: "https://api.siliconflow.com/v1"
-    transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
-  zai:
-    base_url: "https://api.z.ai/api/paas/v4"
-    transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
-  gemini:
-    base_url: "https://generativelanguage.googleapis.com/v1beta"
-  anthropic:
-    base_url: "https://api.anthropic.com"
-  meta:
-    base_url: "https://api.meta.ai/v1"
-  xai:
-    base_url: "https://api.x.ai/v1"
-    transcriptions_url: "https://api.x.ai/v1/stt"
-`,
-			expectedError: "provider_transcriptions_url_required: provider=openai field=providers.openai.transcriptions_url",
+			name: "unsupported schema version",
+			mutate: func(document string) string {
+				return strings.Replace(document, "schema_version: 1", "schema_version: 2", 1)
+			},
+			expectedError: "field=schema_version value=2",
 		},
 		{
-			name: "missing siliconflow transcriptions url",
-			providersYAML: `
-providers:
-  openai:
-    base_url: "https://api.openai.com/v1"
-    transcriptions_url: "https://api.openai.com/v1/audio/transcriptions"
-  deepseek:
-    base_url: "https://api.deepseek.com"
-  dashscope:
-    base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
-  moonshot:
-    base_url: "https://api.moonshot.ai/v1"
-  siliconflow:
-    base_url: "https://api.siliconflow.com/v1"
-    transcriptions_url: ""
-  zai:
-    base_url: "https://api.z.ai/api/paas/v4"
-    transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
-  gemini:
-    base_url: "https://generativelanguage.googleapis.com/v1beta"
-  anthropic:
-    base_url: "https://api.anthropic.com"
-  meta:
-    base_url: "https://api.meta.ai/v1"
-  xai:
-    base_url: "https://api.x.ai/v1"
-    transcriptions_url: "https://api.x.ai/v1/stt"
-`,
-			expectedError: "provider_transcriptions_url_required: provider=siliconflow field=providers.siliconflow.transcriptions_url",
+			name: "unknown field",
+			mutate: func(document string) string {
+				return strings.Replace(document, "schema_version: 1", "schema_version: 1\nfuture_option: true", 1)
+			},
+			expectedError: "field future_option not found",
 		},
 		{
-			name: "missing zai transcriptions url",
-			providersYAML: `
-providers:
-  openai:
-    base_url: "https://api.openai.com/v1"
-    transcriptions_url: "https://api.openai.com/v1/audio/transcriptions"
-  deepseek:
-    base_url: "https://api.deepseek.com"
-  dashscope:
-    base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
-  moonshot:
-    base_url: "https://api.moonshot.ai/v1"
-  siliconflow:
-    base_url: "https://api.siliconflow.com/v1"
-    transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
-  zai:
-    base_url: "https://api.z.ai/api/paas/v4"
-    transcriptions_url: ""
-  gemini:
-    base_url: "https://generativelanguage.googleapis.com/v1beta"
-  anthropic:
-    base_url: "https://api.anthropic.com"
-  meta:
-    base_url: "https://api.meta.ai/v1"
-  xai:
-    base_url: "https://api.x.ai/v1"
-    transcriptions_url: "https://api.x.ai/v1/stt"
-`,
-			expectedError: "provider_transcriptions_url_required: provider=zai field=providers.zai.transcriptions_url",
+			name: "duplicate environment binding",
+			mutate: func(document string) string {
+				return strings.Replace(document, "environment: DEEPSEEK_API_KEY", "environment: OPENAI_API_KEY", 1)
+			},
+			expectedError: "environment=OPENAI_API_KEY",
 		},
 		{
-			name: "missing xai transcriptions url",
-			providersYAML: `
-providers:
-  openai:
-    base_url: "https://api.openai.com/v1"
-    transcriptions_url: "https://api.openai.com/v1/audio/transcriptions"
-  deepseek:
-    base_url: "https://api.deepseek.com"
-  dashscope:
-    base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
-  moonshot:
-    base_url: "https://api.moonshot.ai/v1"
-  siliconflow:
-    base_url: "https://api.siliconflow.com/v1"
-    transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
-  zai:
-    base_url: "https://api.z.ai/api/paas/v4"
-    transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
-  gemini:
-    base_url: "https://generativelanguage.googleapis.com/v1beta"
-  anthropic:
-    base_url: "https://api.anthropic.com"
-  meta:
-    base_url: "https://api.meta.ai/v1"
-  xai:
-    base_url: "https://api.x.ai/v1"
-    transcriptions_url: ""
-`,
-			expectedError: "provider_transcriptions_url_required: provider=xai field=providers.xai.transcriptions_url",
+			name: "dangling transport",
+			mutate: func(document string) string {
+				return strings.Replace(document, "          transport: text", "          transport: missing", 1)
+			},
+			expectedError: "transport=missing",
 		},
 		{
-			name:          "missing provider text default",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameDashScope, proxy.ModelNameDashScopeQwenPlus, func(string) string { return "" }),
-			expectedError: "provider=dashscope operation=text default_count=0",
+			name: "unknown protocol",
+			mutate: func(document string) string {
+				return strings.Replace(document, "request_protocol: openai_responses", "request_protocol: future_protocol", 1)
+			},
+			expectedError: "reason=unsupported_protocol",
 		},
 		{
-			name:          "missing non-default provider text offering",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameDashScope, proxy.ModelNameDashScopeQwen37Max, func(string) string { return "" }),
-			expectedError: "model=qwen3.7-max operation=text reason=missing_provider_offering",
+			name: "dangling authentication field",
+			mutate: func(document string) string {
+				return strings.Replace(document, "            field: api_key", "            field: missing", 1)
+			},
+			expectedError: "field_id=missing",
 		},
 		{
-			name:          "empty catalog providers",
-			providersYAML: mutateCatalogSectionYAML(completeLiteralRuntimeYAML(), "providers", func(string) string { return "  providers: []" }),
-			expectedError: "field=catalog.providers",
-		},
-		{
-			name: "duplicate catalog provider",
-			providersYAML: mutateCatalogRecordYAML(completeLiteralRuntimeYAML(), "providers", proxy.ProviderNameDeepSeek, func(block string) string {
-				return strings.Replace(block, "  - id: deepseek", "  - id: openai", 1)
-			}),
-			expectedError: "duplicate_identifier=openai",
-		},
-		{
-			name: "blank catalog provider label",
-			providersYAML: mutateCatalogRecordYAML(completeLiteralRuntimeYAML(), "providers", proxy.ProviderNameOpenAI, func(block string) string {
-				return strings.Replace(block, "    label: OpenAI", "    label: ''", 1)
-			}),
-			expectedError: "field=catalog.providers[0].label",
-		},
-		{
-			name:          "empty catalog publishers",
-			providersYAML: mutateCatalogSectionYAML(completeLiteralRuntimeYAML(), "publishers", func(string) string { return "  publishers: []" }),
-			expectedError: "field=catalog.publishers",
-		},
-		{
-			name: "noncanonical catalog publisher",
-			providersYAML: mutateCatalogRecordYAML(completeLiteralRuntimeYAML(), "publishers", proxy.ProviderNameOpenAI, func(block string) string {
-				return strings.Replace(block, "  - id: openai", "  - id: OpenAI", 1)
-			}),
-			expectedError: "field=catalog.publishers[0].id",
-		},
-		{
-			name: "duplicate catalog publisher",
-			providersYAML: mutateCatalogRecordYAML(completeLiteralRuntimeYAML(), "publishers", proxy.ProviderNameDeepSeek, func(block string) string {
-				return strings.Replace(block, "  - id: deepseek", "  - id: openai", 1)
-			}),
-			expectedError: "duplicate_identifier=openai",
-		},
-		{
-			name: "blank catalog publisher label",
-			providersYAML: mutateCatalogRecordYAML(completeLiteralRuntimeYAML(), "publishers", proxy.ProviderNameOpenAI, func(block string) string {
-				return strings.Replace(block, "    label: OpenAI", "    label: ''", 1)
-			}),
-			expectedError: "field=catalog.publishers[0].label",
-		},
-		{
-			name:          "empty catalog families",
-			providersYAML: mutateCatalogSectionYAML(completeLiteralRuntimeYAML(), "families", func(string) string { return "  families: []" }),
-			expectedError: "field=catalog.families",
-		},
-		{
-			name: "noncanonical catalog family",
-			providersYAML: mutateCatalogRecordYAML(completeLiteralRuntimeYAML(), "families", "gpt-4", func(block string) string {
-				return strings.Replace(block, "  - id: gpt-4", "  - id: GPT-4", 1)
-			}),
-			expectedError: "field=catalog.families[0].id",
-		},
-		{
-			name: "duplicate catalog family",
-			providersYAML: mutateCatalogRecordYAML(completeLiteralRuntimeYAML(), "families", "gpt-5", func(block string) string {
-				return strings.Replace(block, "  - id: gpt-5", "  - id: gpt-4", 1)
-			}),
-			expectedError: "duplicate_identifier=gpt-4",
-		},
-		{
-			name: "catalog family dangling publisher",
-			providersYAML: mutateCatalogRecordYAML(completeLiteralRuntimeYAML(), "families", "gpt-4", func(block string) string {
-				return strings.Replace(block, "    publisher: openai", "    publisher: missing", 1)
-			}),
-			expectedError: "publisher=missing reason=dangling_reference",
-		},
-		{
-			name: "blank catalog family label",
-			providersYAML: mutateCatalogRecordYAML(completeLiteralRuntimeYAML(), "families", "gpt-4", func(block string) string {
-				return strings.Replace(block, "    label: GPT-4", "    label: ''", 1)
-			}),
-			expectedError: "field=catalog.families[0].label",
-		},
-		{
-			name: "unknown catalog family weight access",
-			providersYAML: mutateCatalogRecordYAML(completeLiteralRuntimeYAML(), "families", "gpt-4", func(block string) string {
-				return strings.Replace(block, "    weight_access: proprietary", "    weight_access: unknown", 1)
-			}),
-			expectedError: "field=catalog.families[0].weight_access value=unknown",
-		},
-		{
-			name:          "empty exact models",
-			providersYAML: mutateCatalogSectionYAML(completeLiteralRuntimeYAML(), "models", func(string) string { return "  models: []" }),
-			expectedError: "field=catalog.models",
-		},
-		{
-			name: "exact model dangling publisher",
-			providersYAML: mutateExactModelYAML(completeLiteralRuntimeYAML(), proxy.ModelNameGPT4oMini, func(block string) string {
-				return strings.Replace(block, "    publisher: openai", "    publisher: missing", 1)
-			}),
-			expectedError: "publisher=missing reason=dangling_reference",
-		},
-		{
-			name: "exact model family publisher mismatch",
-			providersYAML: mutateExactModelYAML(completeLiteralRuntimeYAML(), proxy.ModelNameGPT4oMini, func(block string) string {
-				return strings.Replace(block, "    family: gpt-4", "    family: qwen", 1)
-			}),
-			expectedError: "family=qwen publisher=openai reason=dangling_reference",
-		},
-		{
-			name: "blank exact model version",
-			providersYAML: mutateExactModelYAML(completeLiteralRuntimeYAML(), proxy.ModelNameGPT4oMini, func(block string) string {
-				return strings.Replace(block, "    version: gpt-4o-mini", "    version: ''", 1)
-			}),
-			expectedError: "field=catalog.models[0].version",
-		},
-		{
-			name: "duplicate exact model operation",
-			providersYAML: mutateExactModelYAML(completeLiteralRuntimeYAML(), proxy.ModelNameGPT4oMini, func(block string) string {
-				return strings.Replace(block, "    - text", "    - text\n    - text", 1)
-			}),
-			expectedError: "duplicate=text",
-		},
-		{
-			name:          "empty provider offerings",
-			providersYAML: mutateCatalogSectionYAML(completeLiteralRuntimeYAML(), "offerings", func(string) string { return "  offerings: []" }),
-			expectedError: "field=catalog.offerings",
-		},
-		{
-			name: "offering dangling provider",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameOpenAI, proxy.ModelNameGPT4oMini, func(block string) string {
-				return strings.Replace(block, "  - provider: openai", "  - provider: missing", 1)
-			}),
-			expectedError: "provider=missing reason=dangling_reference",
-		},
-		{
-			name: "blank provider native model",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameOpenAI, proxy.ModelNameGPT4oMini, func(block string) string {
-				return strings.Replace(block, "    provider_model: gpt-4o-mini", "    provider_model: ''", 1)
-			}),
-			expectedError: "field=catalog.offerings[0].provider_model",
-		},
-		{
-			name: "duplicate provider route",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameOpenAI, proxy.ModelNameGPT4oMini, func(block string) string {
-				return block + block
-			}),
-			expectedError: "route_conflict=openai:gpt-4o-mini",
-		},
-		{
-			name: "duplicate provider native model",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameOpenAI, proxy.ModelNameGPT4o, func(block string) string {
-				return strings.Replace(block, "    provider_model: gpt-4o", "    provider_model: gpt-4o-mini", 1)
-			}),
-			expectedError: "provider_native_model_conflict=gpt-4o-mini",
-		},
-		{
-			name: "invalid provider offering operation",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameOpenAI, proxy.ModelNameGPT4oMini, func(block string) string {
-				return strings.Replace(block, "    - text", "    - image", 1)
-			}),
-			expectedError: "operation=image",
-		},
-		{
-			name: "provider operation unsupported by exact model",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameOpenAI, proxy.ModelNameGPT4oMini, func(block string) string {
-				return strings.Replace(block, "    - text", "    - dictation", 1)
-			}),
-			expectedError: "operation=dictation reason=unsupported_by_model",
-		},
-		{
-			name: "provider default operation unsupported by offering",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameOpenAI, proxy.ModelNameGPT4oMini, func(block string) string {
-				return strings.Replace(block, "    wire_contract:", "    default_operations:\n    - dictation\n    wire_contract:", 1)
-			}),
-			expectedError: "default_operations operation=dictation reason=unsupported_by_offering",
-		},
-		{
-			name: "offering media unsupported by exact model",
-			providersYAML: mutateExactModelYAML(completeLiteralRuntimeYAML(), proxy.ModelNameGemini35Flash, func(block string) string {
-				return strings.Replace(block, "    - image\n", "", 1)
-			}),
-			expectedError: "media_input=image reason=unsupported_by_model",
-		},
-		{
-			name: "duplicate provider offering media input",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameGemini, proxy.ModelNameGemini35Flash, func(block string) string {
-				return strings.Replace(block, "    - image\n", "    - image\n    - image\n", 1)
-			}),
-			expectedError: "duplicate=image",
-		},
-		{
-			name:          "missing meta base url",
-			providersYAML: strings.Replace(completeLiteralRuntimeYAML(), "base_url: \"https://api.meta.ai/v1\"", "base_url: \"\"", 1),
-			expectedError: "provider_base_url_required: provider=meta field=providers.meta.base_url",
-		},
-		{
-			name: "blank provider text default model",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameOpenAI, proxy.ModelNameGPT41, func(block string) string {
-				return strings.Replace(block, "    default_operations:\n    - text\n", "", 1)
-			}),
-			expectedError: "provider=openai operation=text default_count=0",
-		},
-		{
-			name: "blank keyed gemini text default model",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameGemini, proxy.ModelNameGemini25Flash, func(block string) string {
-				return strings.Replace(block, "    default_operations:\n    - text\n", "", 1)
-			}),
-			expectedError: "provider=gemini operation=text default_count=0",
-		},
-		{
-			name: "blank provider dictation default model",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameOpenAI, proxy.DefaultDictationModel, func(block string) string {
-				return strings.Replace(block, "    default_operations:\n    - dictation", "    default_operations:\n    - ''", 1)
-			}),
-			expectedError: "default_operations",
-		},
-		{
-			name:          "blank provider model id",
-			providersYAML: mutateExactModelYAML(completeLiteralRuntimeYAML(), proxy.ModelNameGPT4oMini, func(block string) string { return strings.Replace(block, "  - id: gpt-4o-mini", "  - id: ''", 1) }),
-			expectedError: "field=catalog.models[0].id",
-		},
-		{
-			name:          "duplicate provider model id",
-			providersYAML: mutateExactModelYAML(completeLiteralRuntimeYAML(), proxy.ModelNameGPT4o, func(block string) string { return strings.Replace(block, "  - id: gpt-4o", "  - id: gpt-4o-mini", 1) }),
-			expectedError: "duplicate_identifier=gpt-4o-mini",
-		},
-		{
-			name: "default provider model missing from catalog",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameOpenAI, proxy.ModelNameGPT41, func(block string) string {
-				return strings.Replace(block, "    model: gpt-4.1", "    model: gpt-not-configured", 1)
-			}),
-			expectedError: "model=gpt-not-configured reason=dangling_reference",
-		},
-		{
-			name:          "negative provider output token limit",
-			providersYAML: strings.Replace(completeLiteralRuntimeYAML(), "output_token_limit: 65536", "output_token_limit: -1", 1),
-			expectedError: "output_token_limit",
-		},
-		{
-			name: "anthropic output token limit required",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameAnthropic, proxy.ModelNameClaudeSonnet46, func(block string) string {
-				return strings.Replace(block, "    output_token_limit: 64000", "    output_token_limit: 0", 1)
-			}),
-			expectedError: "output_token_limit provider=anthropic",
-		},
-		{
-			name: "missing text wire contract",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameOpenAI, proxy.ModelNameGPT4oMini, func(block string) string {
-				return strings.Replace(block, "    wire_contract: openai_responses\n", "", 1)
-			}),
-			expectedError: "field=catalog.offerings[0].wire_contract",
-		},
-		{
-			name: "missing text execution lifecycle",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameOpenAI, proxy.ModelNameGPT4oMini, func(block string) string {
-				return strings.Replace(block, "    execution_lifecycle: pollable_resource\n", "", 1)
-			}),
-			expectedError: "field=catalog.offerings[0].execution_lifecycle",
-		},
-		{
-			name:          "unknown text wire contract",
-			providersYAML: strings.Replace(completeLiteralRuntimeYAML(), "wire_contract: openai_responses", "wire_contract: future_responses", 1),
-			expectedError: "wire_contract=future_responses",
-		},
-		{
-			name:          "unknown text execution lifecycle",
-			providersYAML: strings.Replace(completeLiteralRuntimeYAML(), "execution_lifecycle: pollable_resource", "execution_lifecycle: deferred_once", 1),
-			expectedError: "execution_lifecycle=deferred_once",
-		},
-		{
-			name:          "contradictory openai lifecycle",
-			providersYAML: strings.Replace(completeLiteralRuntimeYAML(), "execution_lifecycle: pollable_resource", "execution_lifecycle: synchronous_completion", 1),
-			expectedError: "provider=openai model=gpt-4o-mini wire_contract=openai_responses execution_lifecycle=synchronous_completion",
-		},
-		{
-			name:          "provider incompatible wire contract",
-			providersYAML: strings.Replace(completeLiteralRuntimeYAML(), "wire_contract: openai_chat_completions", "wire_contract: anthropic_messages", 1),
-			expectedError: "provider=deepseek",
-		},
-		{
-			name: "dictation wire contract",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameOpenAI, proxy.DefaultDictationModel, func(block string) string {
-				return strings.Replace(block, "wire_contract: multipart_transcription", "wire_contract: openai_responses", 1)
-			}),
-			expectedError: "unsupported_dictation_route",
-		},
-		{
-			name: "dictation execution lifecycle",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameOpenAI, proxy.DefaultDictationModel, func(block string) string {
-				return strings.Replace(block, "execution_lifecycle: synchronous_completion", "execution_lifecycle: pollable_resource", 1)
-			}),
-			expectedError: "unsupported_dictation_route",
-		},
-		{
-			name:          "blank openai request profile",
-			providersYAML: strings.Replace(completeLiteralRuntimeYAML(), "request_profile: openai_responses_temperature", "request_profile: ''", 1),
-			expectedError: "field=catalog.offerings[0].request_profile",
-		},
-		{
-			name:          "invalid openai request profile",
-			providersYAML: strings.Replace(completeLiteralRuntimeYAML(), "request_profile: openai_responses_temperature", "request_profile: future_profile", 1),
-			expectedError: "field=catalog.offerings[0].request_profile",
-		},
-		{
-			name:          "retired openai base request profile",
-			providersYAML: strings.Replace(completeLiteralRuntimeYAML(), "request_profile: openai_responses_temperature", "request_profile: openai_responses_base", 1),
-			expectedError: "field=catalog.offerings[0].request_profile",
-		},
-		{
-			name: "non openai request profile",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameDeepSeek, proxy.ModelNameDeepSeekV4Flash, func(block string) string {
-				return strings.Replace(block, "    wire_contract:", "    request_profile: openai_responses_temperature\n    wire_contract:", 1)
-			}),
-			expectedError: "provider=deepseek profile=openai_responses_temperature",
-		},
-		{
-			name: "non openai web search",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameDeepSeek, proxy.ModelNameDeepSeekV4Flash, func(block string) string {
-				return strings.Replace(block, "    wire_contract:", "    web_search: true\n    wire_contract:", 1)
-			}),
-			expectedError: "web_search provider=deepseek",
-		},
-		{
-			name: "dictation web search",
-			providersYAML: mutateCatalogOfferingYAML(completeLiteralRuntimeYAML(), proxy.ProviderNameOpenAI, proxy.DefaultDictationModel, func(block string) string {
-				return strings.Replace(block, "    operations:\n", "    web_search: true\n    operations:\n", 1)
-			}),
-			expectedError: "text_capabilities_on_dictation_route",
+			name: "invalid media limit",
+			mutate: func(document string) string {
+				return strings.Replace(document, "              value: 512000000", "              value: -1", 1)
+			},
+			expectedError: "media_limits[0].value",
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(subTest *testing.T) {
 			tempDir := subTest.TempDir()
-			providersYAML := withCurrentProviderBaseURLFixtures(testCase.providersYAML)
-			if !strings.Contains(providersYAML, "\ncatalog:") {
-				providersYAML += canonicalModelCatalogYAML()
-			}
-			configPath := writeTestConfig(subTest, tempDir, `
-`+providersYAML)
+			configPath := writeTestConfig(subTest, tempDir, completeManagementYAML())
+			writeTestProviderCatalog(subTest, tempDir, testCase.mutate(canonicalProviderCatalogYAML()))
 			withServeProxy(subTest, failingServeProxy(subTest))
 
 			executeError := executeRootCommand(subTest, "--config", configPath)
@@ -1345,19 +920,6 @@ providers:
 	}
 }
 
-func withCurrentProviderBaseURLFixtures(providersYAML string) string {
-	if !strings.Contains(providersYAML, "\nmanagement:") {
-		providersYAML = completeManagementYAML() + providersYAML
-	}
-	if !strings.Contains(providersYAML, "\n  minimax:") {
-		providersYAML = strings.Replace(providersYAML, "\n  siliconflow:", `
-  minimax:
-    base_url: "https://api.minimax.io/v1"
-  siliconflow:`, 1)
-	}
-	return providersYAML
-}
-
 func executeRootCommand(t *testing.T, arguments ...string) error {
 	t.Helper()
 	rootCmd.SetArgs(arguments)
@@ -1366,6 +928,7 @@ func executeRootCommand(t *testing.T, arguments ...string) error {
 	resetConfigFlag(t)
 	runtimeConfiguration = proxy.Configuration{}
 	publicCapabilityConfiguration = publicCapabilityAPIConfiguration{}
+	providerCatalogOnlyConfiguration = providerCatalogDiscovery{}
 	return executeError
 }
 
@@ -1373,6 +936,7 @@ func resetConfigFlag(t *testing.T) {
 	t.Helper()
 	resetStringFlag(t, flagConfig, defaultConfigPath)
 	resetBoolFlag(t, flagPublicCapabilitiesOnly, false)
+	resetBoolFlag(t, flagProviderCatalogOnly, false)
 }
 
 func resetStringFlag(t *testing.T, flagName string, flagValue string) {
@@ -1402,6 +966,7 @@ func withServeProxy(t *testing.T, replacement func(proxy.Configuration, *zap.Sug
 		resetConfigFlag(t)
 		runtimeConfiguration = proxy.Configuration{}
 		publicCapabilityConfiguration = publicCapabilityAPIConfiguration{}
+		providerCatalogOnlyConfiguration = providerCatalogDiscovery{}
 	})
 	serveProxy = replacement
 }
@@ -1414,6 +979,7 @@ func withServePublicCapabilityAPI(t *testing.T, replacement func(proxy.PublicCap
 		rootCmd.SetArgs(nil)
 		resetConfigFlag(t)
 		publicCapabilityConfiguration = publicCapabilityAPIConfiguration{}
+		providerCatalogOnlyConfiguration = providerCatalogDiscovery{}
 	})
 	servePublicCapabilityAPI = replacement
 }
@@ -1428,11 +994,33 @@ func failingServeProxy(t *testing.T) func(proxy.Configuration, *zap.SugaredLogge
 
 func writeTestConfig(t *testing.T, tempDir string, configContent string) string {
 	t.Helper()
+	providerCatalogPath := filepath.Join(tempDir, testProviderCatalogFileName)
+	if _, statError := os.Stat(providerCatalogPath); os.IsNotExist(statError) {
+		writeTestProviderCatalog(t, tempDir, canonicalProviderCatalogYAML())
+	} else if statError != nil {
+		t.Fatalf("inspect provider catalog: %v", statError)
+	}
 	configPath := filepath.Join(tempDir, testConfigFileName)
 	if writeError := os.WriteFile(configPath, []byte(strings.TrimSpace(configContent)+"\n"), 0600); writeError != nil {
 		t.Fatalf("write config: %v", writeError)
 	}
 	return configPath
+}
+
+func writeTestProviderCatalog(t *testing.T, tempDir string, catalogContent string) {
+	t.Helper()
+	providerCatalogPath := filepath.Join(tempDir, testProviderCatalogFileName)
+	if writeError := os.WriteFile(providerCatalogPath, []byte(strings.TrimSpace(catalogContent)+"\n"), 0600); writeError != nil {
+		t.Fatalf("write provider catalog: %v", writeError)
+	}
+}
+
+func canonicalProviderCatalogYAML() string {
+	catalogBytes, readError := os.ReadFile(filepath.Join("..", "..", "configs", testProviderCatalogFileName))
+	if readError != nil {
+		panic(fmt.Sprintf("read canonical provider catalog: %v", readError))
+	}
+	return string(catalogBytes)
 }
 
 func writeTestDotEnv(t *testing.T, tempDir string, dotEnvContent string) {
@@ -1463,7 +1051,7 @@ func configuredDefaultOffering(catalog proxy.ModelCatalog, provider string, oper
 }
 
 func completeLiteralRuntimeYAML() string {
-	return completeManagementYAML() + completeProvidersYAML(defaultProviderYAMLValues())
+	return completeManagementYAML()
 }
 
 func completeManagementYAML() string {
@@ -1489,180 +1077,4 @@ management:
   management_api_origin: "https://llm-proxy-api.example"
   proxy_origin: "https://llm-proxy-api.example"
 `
-}
-
-type providerYAMLValues struct {
-	OpenAIBaseURL                string
-	OpenAITranscriptionsURL      string
-	DeepSeekBaseURL              string
-	DashScopeBaseURL             string
-	MoonshotBaseURL              string
-	MiniMaxBaseURL               string
-	SiliconFlowBaseURL           string
-	SiliconFlowTranscriptionsURL string
-	ZAIBaseURL                   string
-	ZAITranscriptionsURL         string
-	GeminiBaseURL                string
-	AnthropicBaseURL             string
-	MetaBaseURL                  string
-	XAIBaseURL                   string
-	XAITranscriptionsURL         string
-}
-
-func defaultProviderYAMLValues() providerYAMLValues {
-	return providerYAMLValues{
-		OpenAIBaseURL:                "https://api.openai.com/v1",
-		OpenAITranscriptionsURL:      "https://api.openai.com/v1/audio/transcriptions",
-		DeepSeekBaseURL:              "https://api.deepseek.com",
-		DashScopeBaseURL:             "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-		MoonshotBaseURL:              "https://api.moonshot.ai/v1",
-		MiniMaxBaseURL:               "https://api.minimax.io/v1",
-		SiliconFlowBaseURL:           "https://api.siliconflow.com/v1",
-		SiliconFlowTranscriptionsURL: "https://api.siliconflow.com/v1/audio/transcriptions",
-		ZAIBaseURL:                   "https://api.z.ai/api/paas/v4",
-		ZAITranscriptionsURL:         "https://api.z.ai/api/paas/v4/audio/transcriptions",
-		GeminiBaseURL:                "https://generativelanguage.googleapis.com/v1beta",
-		AnthropicBaseURL:             "https://api.anthropic.com",
-		MetaBaseURL:                  "https://api.meta.ai/v1",
-		XAIBaseURL:                   "https://api.x.ai/v1",
-		XAITranscriptionsURL:         "https://api.x.ai/v1/stt",
-	}
-}
-
-func completeProvidersYAML(values providerYAMLValues) string {
-	providersYAML := fmt.Sprintf(`
-providers:
-  openai:
-    base_url: "%s"
-    transcriptions_url: "%s"
-  deepseek:
-    base_url: "%s"
-  dashscope:
-    base_url: "%s"
-  moonshot:
-    base_url: "%s"
-  minimax:
-    base_url: "%s"
-  siliconflow:
-    base_url: "%s"
-    transcriptions_url: "%s"
-  zai:
-    base_url: "%s"
-    transcriptions_url: "%s"
-  gemini:
-    base_url: "%s"
-  anthropic:
-    base_url: "%s"
-  meta:
-    base_url: "%s"
-  xai:
-    base_url: "%s"
-    transcriptions_url: "%s"
-`,
-		values.OpenAIBaseURL,
-		values.OpenAITranscriptionsURL,
-		values.DeepSeekBaseURL,
-		values.DashScopeBaseURL,
-		values.MoonshotBaseURL,
-		values.MiniMaxBaseURL,
-		values.SiliconFlowBaseURL,
-		values.SiliconFlowTranscriptionsURL,
-		values.ZAIBaseURL,
-		values.ZAITranscriptionsURL,
-		values.GeminiBaseURL,
-		values.AnthropicBaseURL,
-		values.MetaBaseURL,
-		values.XAIBaseURL,
-		values.XAITranscriptionsURL,
-	)
-	return providersYAML + canonicalModelCatalogYAML()
-}
-
-func canonicalModelCatalogYAML() string {
-	_, currentFile, _, callerOK := runtime.Caller(0)
-	if !callerOK {
-		panic("locate CLI test fixture")
-	}
-	configBytes, readError := os.ReadFile(filepath.Join(filepath.Dir(currentFile), "..", "..", "configs", "config.yml"))
-	if readError != nil {
-		panic(fmt.Sprintf("read canonical model catalog: %v", readError))
-	}
-	_, catalogYAML, catalogFound := strings.Cut(string(configBytes), "\ncatalog:\n")
-	if !catalogFound {
-		panic("canonical model catalog is missing")
-	}
-	return "\ncatalog:\n" + catalogYAML
-}
-
-func mutateCatalogOfferingYAML(configurationYAML string, provider string, model string, mutate func(string) string) string {
-	marker := "\n  - provider: " + provider + "\n    model: " + model + "\n"
-	start := strings.Index(configurationYAML, marker)
-	if start < 0 {
-		panic("catalog offering fixture is missing: " + provider + "/" + model)
-	}
-	end := strings.Index(configurationYAML[start+len(marker):], "\n  - provider:")
-	if end < 0 {
-		end = len(configurationYAML)
-	} else {
-		end += start + len(marker)
-	}
-	return configurationYAML[:start] + mutate(configurationYAML[start:end]) + configurationYAML[end:]
-}
-
-func mutateExactModelYAML(configurationYAML string, model string, mutate func(string) string) string {
-	marker := "\n  - id: " + model + "\n    publisher:"
-	start := strings.Index(configurationYAML, marker)
-	if start < 0 {
-		panic("exact model fixture is missing: " + model)
-	}
-	end := strings.Index(configurationYAML[start+len(marker):], "\n  - id:")
-	if end < 0 {
-		end = strings.Index(configurationYAML[start+len(marker):], "\n  offerings:")
-	}
-	if end < 0 {
-		end = len(configurationYAML)
-	} else {
-		end += start + len(marker)
-	}
-	return configurationYAML[:start] + mutate(configurationYAML[start:end]) + configurationYAML[end:]
-}
-
-func mutateCatalogSectionYAML(configurationYAML string, section string, mutate func(string) string) string {
-	sectionOrder := []string{"providers", "publishers", "families", "models", "offerings"}
-	sectionIndex := slices.Index(sectionOrder, section)
-	if sectionIndex < 0 {
-		panic("unknown catalog section fixture: " + section)
-	}
-	marker := "\n  " + section + ":"
-	start := strings.Index(configurationYAML, marker)
-	if start < 0 {
-		panic("catalog section fixture is missing: " + section)
-	}
-	end := len(configurationYAML)
-	if sectionIndex+1 < len(sectionOrder) {
-		nextMarker := "\n  " + sectionOrder[sectionIndex+1] + ":"
-		nextStart := strings.Index(configurationYAML[start+len(marker):], nextMarker)
-		if nextStart < 0 {
-			panic("next catalog section fixture is missing: " + sectionOrder[sectionIndex+1])
-		}
-		end = start + len(marker) + nextStart
-	}
-	return configurationYAML[:start+1] + mutate(configurationYAML[start+1:end]) + configurationYAML[end:]
-}
-
-func mutateCatalogRecordYAML(configurationYAML string, section string, identifier string, mutate func(string) string) string {
-	return mutateCatalogSectionYAML(configurationYAML, section, func(sectionYAML string) string {
-		marker := "\n  - id: " + identifier + "\n"
-		start := strings.Index(sectionYAML, marker)
-		if start < 0 {
-			panic("catalog record fixture is missing: " + section + "/" + identifier)
-		}
-		end := strings.Index(sectionYAML[start+len(marker):], "\n  - id:")
-		if end < 0 {
-			end = len(sectionYAML)
-		} else {
-			end += start + len(marker)
-		}
-		return sectionYAML[:start] + mutate(sectionYAML[start:end]) + sectionYAML[end:]
-	})
 }

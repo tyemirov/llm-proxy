@@ -2,10 +2,12 @@
 
 import { readFile, writeFile } from "node:fs/promises";
 import net from "node:net";
+import path from "node:path";
 
 const loopbackHost = "127.0.0.1";
 const sourcePortLine = "  port: 8080";
 const privateConfigMode = 0o600;
+const providerCatalogFileName = "providers.yml";
 
 const [sourceConfigPath, outputConfigPath, ...unexpectedArguments] = process.argv.slice(2);
 if (!sourceConfigPath || !outputConfigPath || unexpectedArguments.length !== 0) {
@@ -14,12 +16,18 @@ if (!sourceConfigPath || !outputConfigPath || unexpectedArguments.length !== 0) 
 
 const capabilityPort = await reserveLoopbackPort();
 const sourceConfig = await readFile(sourceConfigPath, "utf8");
+const sourceProviderCatalogPath = path.join(path.dirname(sourceConfigPath), providerCatalogFileName);
+const providerCatalog = await readFile(sourceProviderCatalogPath);
 if (sourceConfig.split(sourcePortLine).length !== 2) {
   throw new Error(`public_capability_test_config_port_source_invalid: ${sourceConfigPath}`);
 }
 const capabilityConfig = sourceConfig.replace(sourcePortLine, `  port: ${capabilityPort}`);
 await writeFile(outputConfigPath, capabilityConfig, {
   encoding: "utf8",
+  flag: "wx",
+  mode: privateConfigMode,
+});
+await writeFile(path.join(path.dirname(outputConfigPath), providerCatalogFileName), providerCatalog, {
   flag: "wx",
   mode: privateConfigMode,
 });
