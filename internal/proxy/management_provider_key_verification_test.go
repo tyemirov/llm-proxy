@@ -181,7 +181,8 @@ func TestManagementPollableGeminiProviderKeyVerificationCompletesStoredLifecycle
 		interactionIdentifier = "verification-interaction"
 	)
 	databasePath := t.TempDir() + "/managed-tenants.db"
-	requestSequence := make([]string, 0, 4)
+	requestSequence := make([]string, 0, 5)
+	retrieveCount := 0
 	var fixtureDatabaseProvider func() (*managedProviderKeyFixture, error)
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		assertGeminiInteractionHeaders(t, request, candidateKey)
@@ -200,6 +201,11 @@ func TestManagementPollableGeminiProviderKeyVerificationCompletesStoredLifecycle
 			}
 			writeGeminiInteractionSnapshot(t, responseWriter, interactionIdentifier, "in_progress", "", nil)
 		case http.MethodGet + " " + testGeminiInteractionsPath + "/" + interactionIdentifier:
+			retrieveCount++
+			if retrieveCount == 1 {
+				http.Error(responseWriter, "resource is not visible", http.StatusForbidden)
+				return
+			}
 			writeGeminiInteractionSnapshot(t, responseWriter, interactionIdentifier, "in_progress", "", nil)
 		case http.MethodPost + " " + testGeminiInteractionsPath + "/" + interactionIdentifier + "/cancel":
 			writeGeminiInteractionDeleted(t, responseWriter)
@@ -254,6 +260,7 @@ func TestManagementPollableGeminiProviderKeyVerificationCompletesStoredLifecycle
 	}
 	expectedSequence := []string{
 		http.MethodPost + " " + testGeminiInteractionsPath,
+		http.MethodGet + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
 		http.MethodGet + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
 		http.MethodPost + " " + testGeminiInteractionsPath + "/" + interactionIdentifier + "/cancel",
 		http.MethodDelete + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
@@ -388,6 +395,7 @@ func TestManagementPollableGeminiProviderKeyVerificationRejectsRetrievalAndPrese
 	expectedSequence := []string{
 		verifiedKey + " " + http.MethodPost + " " + testGeminiInteractionsPath,
 		candidateKey + " " + http.MethodPost + " " + testGeminiInteractionsPath,
+		candidateKey + " " + http.MethodGet + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
 		candidateKey + " " + http.MethodGet + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
 		candidateKey + " " + http.MethodPost + " " + testGeminiInteractionsPath + "/" + interactionIdentifier + "/cancel",
 		candidateKey + " " + http.MethodDelete + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,

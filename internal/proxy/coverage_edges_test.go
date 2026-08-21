@@ -799,6 +799,53 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		}
 	})
 
+	t.Run("first missing response becomes visible through shared lifecycle", func(subTest *testing.T) {
+		pollCount := 0
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			switch {
+			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
+				_, _ = responseWriter.Write([]byte(`{"id":"visible-after-create","status":"queued"}`))
+			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/visible-after-create":
+				pollCount++
+				if pollCount == 1 {
+					http.Error(responseWriter, "resource is not visible", http.StatusNotFound)
+					return
+				}
+				_, _ = responseWriter.Write([]byte(`{"id":"visible-after-create","status":"completed","output_text":"visible response"}`))
+			default:
+				http.NotFound(responseWriter, httpRequest)
+			}
+		})
+		queryParameters := url.Values{}
+		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusOK || body != "visible response" || pollCount != 2 {
+			subTest.Fatalf("status=%d body=%q polls=%d", statusCode, body, pollCount)
+		}
+	})
+
+	t.Run("cancellation stops first visibility reconciliation", func(subTest *testing.T) {
+		requestCount := 0
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			requestCount++
+			responseWriter.Header().Set("Content-Type", "application/json")
+			if httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/" {
+				_, _ = responseWriter.Write([]byte(`{"id":"cancel-visibility","status":"queued"}`))
+				return
+			}
+			if httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/cancel-visibility" {
+				http.Error(responseWriter, "resource is not visible", http.StatusForbidden)
+				return
+			}
+			http.NotFound(responseWriter, httpRequest)
+		})
+		queryParameters := url.Values{}
+		statusCode, _, _ := performCoverageTextRequestWithTimeout(subTest, router, queryParameters, "", coverageShortRequestTimeout)
+		if statusCode != 499 || requestCount != 2 {
+			subTest.Fatalf("status=%d requests=%d", statusCode, requestCount)
+		}
+	})
+
 	t.Run("queued response uses latest final poll token usage snapshot", func(subTest *testing.T) {
 		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")

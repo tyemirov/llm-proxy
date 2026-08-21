@@ -155,7 +155,14 @@ func (verifier *operationalProviderKeyVerifier) verifyPollableGeminiCredential(v
 		return providerKeyVerificationProviderError(verificationContext, createError)
 	}
 
-	retrievedSnapshot, retrieveError := geminiClient.getInteraction(verificationContext, "", provider.textBaseURL, createdSnapshot.identifier, verifier.logger)
+	lifecycle := pollableResourceLifecycle[geminiInteractionSnapshot]{
+		observe: func(observationContext context.Context) (geminiInteractionSnapshot, error) {
+			return geminiClient.getInteraction(observationContext, "", provider.textBaseURL, createdSnapshot.identifier, verifier.logger)
+		},
+		isPending:         geminiInteractionSnapshot.isPending,
+		recordObservation: func(geminiInteractionSnapshot, error, pollableResourceRetryDecision) {},
+	}
+	retrievedSnapshot, retrieveError := lifecycle.observeCreated(verificationContext)
 	if retrieveError != nil {
 		return providerKeyVerificationProviderError(verificationContext, retrieveError)
 	}

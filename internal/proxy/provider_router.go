@@ -5,12 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/tyemirov/llm-proxy/internal/utils"
 	"go.uber.org/zap"
 )
 
-const completionContinuationInstruction = "Continue exactly where the previous response stopped. Return only the missing suffix without repeating any completed text."
+const (
+	completionContinuationInstruction = "Continue exactly where the previous response stopped. Return only the missing suffix without repeating any completed text."
+	completionContinuationInterval    = 500 * time.Millisecond
+)
 
 type providerRouter struct {
 	openAIClient    *OpenAIClient
@@ -75,7 +79,7 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 		request.messages = completionContinuationMessages(originalMessages, accumulatedText.String())
 		request.maxTokens = continuationMaxTokens(request.maxTokens, request.model, generation.text)
 		request.chatCompletionContinuation = generation.chatCompletionContinuation
-		if waitError := waitForRequestTelemetryPhase(requestContext, responsePollInterval, requestTelemetryPhaseContinuationWait); waitError != nil {
+		if waitError := waitForRequestTelemetryPhase(requestContext, completionContinuationInterval, requestTelemetryPhaseContinuationWait); waitError != nil {
 			return textGenerationResult{
 				text:  strings.TrimSpace(accumulatedText.String()),
 				usage: accumulatedUsage,

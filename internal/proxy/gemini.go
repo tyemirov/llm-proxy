@@ -202,15 +202,22 @@ func (client *geminiInteractionsClient) generateText(parentContext context.Conte
 		}
 	}()
 
-	for snapshot.isPending() {
-		if waitError := waitForRequestTelemetryPhase(parentContext, responsePollInterval, requestTelemetryPhaseProviderPollWait); waitError != nil {
-			return textGenerationResult{usage: latestUsage}, parentContext.Err()
+	if snapshot.isPending() {
+		lifecycle := pollableResourceLifecycle[geminiInteractionSnapshot]{
+			observe: func(observationContext context.Context) (geminiInteractionSnapshot, error) {
+				return client.getInteraction(observationContext, apiKey, baseURL, interactionIdentifier, structuredLogger)
+			},
+			isPending: geminiInteractionSnapshot.isPending,
+			recordObservation: func(polledSnapshot geminiInteractionSnapshot, pollError error, _ pollableResourceRetryDecision) {
+				if polledSnapshot.usage != nil {
+					latestUsage = polledSnapshot.usage
+				}
+				if pollError == nil {
+					cleanupMode = polledSnapshot.cleanupMode()
+				}
+			},
 		}
-
-		polledSnapshot, pollError := client.getInteraction(parentContext, apiKey, baseURL, interactionIdentifier, structuredLogger)
-		if polledSnapshot.usage != nil {
-			latestUsage = polledSnapshot.usage
-		}
+		polledSnapshot, pollError := lifecycle.observeUntilTerminal(parentContext)
 		if pollError != nil {
 			if parentContext.Err() != nil {
 				return textGenerationResult{usage: latestUsage}, parentContext.Err()
@@ -218,7 +225,6 @@ func (client *geminiInteractionsClient) generateText(parentContext context.Conte
 			return textGenerationResult{usage: latestUsage}, pollError
 		}
 		snapshot = polledSnapshot
-		cleanupMode = snapshot.cleanupMode()
 	}
 
 	snapshot.usage = latestUsage

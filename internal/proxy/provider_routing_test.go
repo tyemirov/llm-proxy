@@ -1330,6 +1330,10 @@ func TestProviderRoutingSupportsGeminiInteractionsWithBackgroundPolling(t *testi
 		case request.Method == http.MethodGet && request.URL.Path == testGeminiInteractionsPath+"/"+interactionIdentifier:
 			pollCount++
 			if pollCount == 1 {
+				http.Error(responseWriter, "resource is not visible", http.StatusForbidden)
+				return
+			}
+			if pollCount == 2 {
 				writeGeminiInteractionSnapshot(t, responseWriter, "", "in_progress", "", &testGeminiInteractionUsage{Input: 12, Total: 12})
 				return
 			}
@@ -1407,6 +1411,7 @@ func TestProviderRoutingSupportsGeminiInteractionsWithBackgroundPolling(t *testi
 	}
 	expectedRequests := []string{
 		http.MethodPost + " " + testGeminiInteractionsPath,
+		http.MethodGet + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
 		http.MethodGet + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
 		http.MethodGet + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
 		http.MethodDelete + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,

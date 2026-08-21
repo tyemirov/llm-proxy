@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/tyemirov/llm-proxy/internal/constants"
@@ -44,7 +43,6 @@ func NewOpenAIClient(httpClient HTTPDoer, endpoints *Endpoints) *OpenAIClient {
 
 const (
 	synthesisInstructionPrimary = "Now synthesize the final answer with concise citations."
-	responsePollInterval        = 500 * time.Millisecond
 )
 
 // hasFinalMessage checks if the response payload contains the terminal assistant message.
@@ -370,54 +368,55 @@ func (client *OpenAIClient) startContinuationResponse(parentContext context.Cont
 	return newID, nil
 }
 
-// pollResponseUntilDone repeatedly fetches a response until it is complete or the request context expires.
+// pollResponseUntilDone observes a response until it is complete or the request context expires.
 func (client *OpenAIClient) pollResponseUntilDone(parentContext context.Context, openAIKey string, responseIdentifier string, latestUsage *tokenUsage, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, reasoningEffort string, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	for {
-		responseSnapshot, responseComplete, fetchError := client.fetchResponseByID(parentContext, openAIKey, responseIdentifier, structuredLogger)
-		recordOpenAIProgress(parentContext, structuredLogger, telemetryProgressKindOpenAIPoll, responseSnapshot, fetchError)
-		if responseSnapshot.usage != nil {
-			latestUsage = responseSnapshot.usage
-		}
-		if fetchError != nil {
-			if parentContext.Err() != nil {
-				return textGenerationResult{usage: latestUsage}, parentContext.Err()
+	lifecycle := pollableResourceLifecycle[openAIResponseSnapshot]{
+		observe: func(observationContext context.Context) (openAIResponseSnapshot, error) {
+			return client.fetchResponseByID(observationContext, openAIKey, responseIdentifier, structuredLogger)
+		},
+		isPending: openAIResponseSnapshot.isPending,
+		recordObservation: func(responseSnapshot openAIResponseSnapshot, fetchError error, retryDecision pollableResourceRetryDecision) {
+			recordOpenAIProgressWithRetryDecision(parentContext, structuredLogger, telemetryProgressKindOpenAIPoll, responseSnapshot, fetchError, retryDecision)
+			if responseSnapshot.usage != nil {
+				latestUsage = responseSnapshot.usage
 			}
-			return textGenerationResult{usage: latestUsage}, fetchError
-		}
-		if responseComplete {
-			responseSnapshot.usage = latestUsage
-			return client.resolveTerminalOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
-		}
-		if waitError := waitForRequestTelemetryPhase(parentContext, responsePollInterval, requestTelemetryPhaseProviderPollWait); waitError != nil {
+		},
+	}
+	responseSnapshot, fetchError := lifecycle.observeUntilTerminal(parentContext)
+	if fetchError != nil {
+		if parentContext.Err() != nil {
 			return textGenerationResult{usage: latestUsage}, parentContext.Err()
 		}
+		return textGenerationResult{usage: latestUsage}, fetchError
 	}
+	responseSnapshot.usage = latestUsage
+	return client.resolveTerminalOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
 }
 
-// fetchResponseByID retrieves a response by identifier and reports whether the response is complete.
-func (client *OpenAIClient) fetchResponseByID(parentContext context.Context, openAIKey string, responseIdentifier string, structuredLogger *zap.SugaredLogger) (openAIResponseSnapshot, bool, error) {
+// fetchResponseByID retrieves and validates a response by identifier.
+func (client *OpenAIClient) fetchResponseByID(parentContext context.Context, openAIKey string, responseIdentifier string, structuredLogger *zap.SugaredLogger) (openAIResponseSnapshot, error) {
 	resourceURL := client.endpoints.GetResponsesURL() + "/" + responseIdentifier
 	httpRequest, buildError := buildAuthorizedJSONRequest(parentContext, http.MethodGet, resourceURL, openAIKey, nil)
 	if buildError != nil {
-		return openAIResponseSnapshot{}, false, buildError
+		return openAIResponseSnapshot{}, buildError
 	}
 
 	_, responseBytes, _, _, requestError := client.performResponsesRequest(httpRequest, structuredLogger, logEventOpenAIPollError)
 	if requestError != nil {
-		return openAIResponseSnapshot{}, false, requestError
+		return openAIResponseSnapshot{}, requestError
 	}
 
 	responseSnapshot, snapshotError := newOpenAIResponseSnapshot(responseBytes)
 	if snapshotError != nil {
-		return responseSnapshot, false, errors.New(errorOpenAIAPI)
+		return responseSnapshot, errors.New(errorOpenAIAPI)
 	}
 	if responseSnapshot.isTerminal() {
-		return responseSnapshot, true, nil
+		return responseSnapshot, nil
 	}
 	if !responseSnapshot.isPending() {
-		return responseSnapshot, false, errors.New(errorOpenAIAPI)
+		return responseSnapshot, errors.New(errorOpenAIAPI)
 	}
-	return responseSnapshot, false, nil
+	return responseSnapshot, nil
 }
 
 // --- Final, Corrected Response Parser ---

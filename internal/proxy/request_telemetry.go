@@ -173,12 +173,16 @@ func (telemetry *requestTelemetry) recordOpenAIProgress(structuredLogger *zap.Su
 }
 
 func recordOpenAIProgress(requestContext context.Context, structuredLogger *zap.SugaredLogger, progressKind string, snapshot openAIResponseSnapshot, progressError error) {
+	recordOpenAIProgressWithRetryDecision(requestContext, structuredLogger, progressKind, snapshot, progressError, pollableResourceDoNotRetry)
+}
+
+func recordOpenAIProgressWithRetryDecision(requestContext context.Context, structuredLogger *zap.SugaredLogger, progressKind string, snapshot openAIResponseSnapshot, progressError error, retryDecision pollableResourceRetryDecision) {
 	telemetry := requestTelemetryFromContext(requestContext)
 	telemetry.recordOpenAIProgress(
 		structuredLogger,
 		progressKind,
 		normalizedOpenAIState(snapshot.status),
-		openAICompletionSignal(snapshot, progressError),
+		openAICompletionSignal(snapshot, progressError, retryDecision),
 		len([]byte(snapshot.text)),
 	)
 }
@@ -192,9 +196,12 @@ func normalizedOpenAIState(state string) string {
 	}
 }
 
-func openAICompletionSignal(snapshot openAIResponseSnapshot, progressError error) string {
+func openAICompletionSignal(snapshot openAIResponseSnapshot, progressError error, retryDecision pollableResourceRetryDecision) string {
 	if errors.Is(progressError, context.Canceled) || errors.Is(progressError, context.DeadlineExceeded) {
 		return telemetryCompletionCanceled
+	}
+	if retryDecision == pollableResourceRetryVisibility {
+		return telemetryCompletionPending
 	}
 	if progressError != nil {
 		return telemetryCompletionFailure
