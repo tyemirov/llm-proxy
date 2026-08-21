@@ -180,7 +180,7 @@ func TestManagementTenantConfigurationSecretAndUsageIsolation(t *testing.T) {
 	}))
 	defer upstreamServer.Close()
 
-	router := newManagementRouter(t, proxy.Configuration{OpenAIBaseURL: upstreamServer.URL})
+	router := newManagementRouter(t, proxy.Configuration{Endpoints: providerEndpoints(upstreamServer.URL, proxy.ProviderNameOpenAI)})
 	ownerCookie := managementSessionCookie(t, "configuration-owner")
 	otherOwnerCookie := managementSessionCookie(t, "configuration-other-owner")
 	account := requestManagementAccount(t, router, ownerCookie)
@@ -234,7 +234,7 @@ func TestManagementTenantConfigurationSecretAndUsageIsolation(t *testing.T) {
 
 	foreignRevealRequest := authenticatedProviderKeyRevealRequest(
 		http.MethodPost,
-		managementTenantTestPath(secondTenantID, "/provider-keys/openai/reveal"),
+		managementTenantTestPath(secondTenantID, "/provider-connections/openai/fields/api_key/reveal"),
 		otherOwnerCookie,
 		"http://localhost:8080",
 	)
@@ -327,7 +327,7 @@ func saveManagementProviderKey(t *testing.T, router http.Handler, sessionCookie 
 	t.Helper()
 	request := authenticatedJSONRequest(
 		http.MethodPut,
-		managementTenantTestPath(tenantID, "/provider-keys/openai"),
+		managementTenantTestPath(tenantID, "/provider-connections/openai"),
 		managementProviderKeyRequestBody(t, apiKey, model, systemPrompt),
 		sessionCookie,
 	)

@@ -124,7 +124,7 @@ func TestIntegrationRequestTelemetryTracksProviderNeutralContinuation(testingIns
 	var upstreamCalls atomic.Int64
 	observedCore, observedLogs := observer.New(zapcore.InfoLevel)
 	configuration := timeoutContractConfiguration(2, 3)
-	configuration.MetaBaseURL = "https://meta-telemetry.invalid"
+	configuration.Endpoints = integrationProviderEndpoints("https://meta-telemetry.invalid", proxy.ProviderNameMeta)
 	router := timeoutContractRouter(
 		testingInstance,
 		requestTimeoutHTTPDoer(func(request *http.Request) (*http.Response, error) {
@@ -358,7 +358,7 @@ func TestIntegrationRequestTelemetrySeparatesAdmissionAndRateLimitWait(testingIn
 	testingInstance.Run("rate-limit wait", func(subTest *testing.T) {
 		observedCore, observedLogs := observer.New(zapcore.InfoLevel)
 		configuration := timeoutContractConfiguration(2, 3)
-		configuration.OpenAIBaseURL = "https://telemetry-rate.invalid/v1"
+		configuration.Endpoints = integrationProviderEndpoints("https://telemetry-rate.invalid/v1", proxy.ProviderNameOpenAI)
 		configuration.UpstreamRateLimits = []proxy.UpstreamRateLimitConfiguration{{
 			Origin:      "https://telemetry-rate.invalid",
 			MaxRequests: 1,

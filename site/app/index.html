@@ -692,40 +692,49 @@
                               </template>
                             </select>
                           </label>
-                          <provider-base-url-field x-show="selectedProvider.id === 'dashscope'">
-                            <label for="provider-base-url-input" x-text="copy.providerBaseURL"></label>
-                            <input
-                              id="provider-base-url-input"
-                              type="url"
-                              autocomplete="url"
-                              required
-                              x-bind:value="providerEditorSession.baseURL"
-                              x-on:input="handleSelectedProviderBaseURLInput($event)"
-                              x-on:change="autosaveSelectedProvider()"
-                              x-bind:disabled="settingsControlsDisabled || providerKeyRevealPending"
-                            >
-                            <p class="field-hint" x-text="copy.providerBaseURLHint"></p>
-                          </provider-base-url-field>
-                          <provider-key-field>
-                            <label for="provider-api-key-input">
-                              <span x-text="selectedProvider.label + copy.providerKeySuffix"></span>
-                            </label>
-                            <provider-key-input>
-                              <input id="provider-api-key-input" x-ref="providerKeyInput" type="text" autocomplete="off" x-bind:value="selectedProviderKeyInputValue" x-on:paste="handleSelectedProviderKeyPaste()" x-on:input="handleSelectedProviderKeyInput($event)" x-on:change="autosaveSelectedProvider()" x-bind:readonly="selectedProviderKeyInputReadOnly" x-bind:disabled="busy || settingsClosePending || providerKeyRevealPending">
-                              <button type="button" class="icon-only provider-key-visibility-toggle" x-show="selectedProvider.has_key || selectedProviderKeyHasInput" x-on:mousedown.prevent x-on:click="handleSelectedProviderKeyAction()" x-bind:disabled="settingsControlsDisabled || providerAutosavePending || providerKeyRevealPending" x-bind:title="selectedProviderKeyActionCopy" x-bind:aria-label="selectedProviderKeyActionCopy" x-bind:aria-pressed="providerKeyVisible">
-                                <span class="material-symbols-outlined" x-show="!providerKeyVisible" aria-hidden="true">visibility</span>
-                                <span class="material-symbols-outlined" x-show="providerKeyVisible" aria-hidden="true">visibility_off</span>
-                              </button>
-                              <button type="button" class="icon-only danger provider-key-remove" x-ref="providerKeyRemove" x-show="selectedProvider.has_key || selectedProviderKeyHasInput" x-on:mousedown.prevent x-on:click="requestSelectedProviderKeyRemoval()" x-bind:disabled="settingsControlsDisabled || providerAutosavePending || providerKeyRevealPending" x-bind:title="copy.removeProviderKey" x-bind:aria-label="copy.removeProviderKey">
-                                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
-                              </button>
-                            </provider-key-input>
-                            <p class="field-hint provider-key-verification-pending" role="status" aria-live="polite" x-cloak x-show="providerKeyVerificationPending" x-text="copy.providerKeyVerifying"></p>
-                            <provider-key-verification-error class="field-error" role="alert" x-cloak x-show="providerKeyVerificationFailed">
-                              <span x-text="providerKeyVerificationFailure"></span>
-                              <button type="button" x-on:click="retrySelectedProviderKeyVerification()" x-bind:disabled="settingsControlsDisabled" x-text="copy.providerKeyRetry"></button>
-                            </provider-key-verification-error>
-                          </provider-key-field>
+                          <provider-connection-fields>
+                            <template x-for="field in selectedProvider.fields" x-bind:key="field.id">
+                              <provider-connection-field>
+                                <label x-bind:for="'provider-field-' + field.id" x-text="field.label"></label>
+                                <provider-connection-input>
+                                  <input
+                                    x-bind:id="'provider-field-' + field.id"
+                                    x-bind:type="field.type === 'url' ? 'url' : 'text'"
+                                    x-bind:autocomplete="field.type === 'url' ? 'url' : 'off'"
+                                    x-bind:required="field.required"
+                                    x-bind:minlength="field.validation.minimum_length || null"
+                                    x-bind:pattern="field.validation.pattern || null"
+                                    x-bind:value="providerFieldInputValue(field)"
+                                    x-on:paste="handleProviderFieldPaste(field)"
+                                    x-on:input="handleProviderFieldInput(field, $event)"
+                                    x-on:change="autosaveSelectedProvider()"
+                                    x-bind:readonly="providerFieldInputReadOnly(field)"
+                                    x-bind:disabled="busy || settingsClosePending || providerKeyRevealPending"
+                                  >
+                                  <button
+                                    type="button"
+                                    class="icon-only provider-key-visibility-toggle"
+                                    x-show="field.secret && (field.configured || providerFieldHasInput(field))"
+                                    x-on:mousedown.prevent
+                                    x-on:click="handleProviderFieldAction(field)"
+                                    x-bind:disabled="settingsControlsDisabled || providerAutosavePending || providerKeyRevealPending"
+                                    x-bind:title="providerFieldActionCopy(field)"
+                                    x-bind:aria-label="providerFieldActionCopy(field)"
+                                    x-bind:aria-pressed="providerFieldVisible(field)"
+                                  >
+                                    <span class="material-symbols-outlined" x-show="!providerFieldVisible(field)" aria-hidden="true">visibility</span>
+                                    <span class="material-symbols-outlined" x-show="providerFieldVisible(field)" aria-hidden="true">visibility_off</span>
+                                  </button>
+                                </provider-connection-input>
+                              </provider-connection-field>
+                            </template>
+                          </provider-connection-fields>
+                          <button type="button" class="danger provider-key-remove" x-show="selectedProvider.configured || selectedProviderHasConnectionInput" x-on:mousedown.prevent x-on:click="requestSelectedProviderKeyRemoval()" x-bind:disabled="settingsControlsDisabled || providerAutosavePending || providerKeyRevealPending" x-bind:title="copy.removeProviderKey" x-text="copy.removeProviderKey"></button>
+                          <p class="field-hint provider-key-verification-pending" role="status" aria-live="polite" x-cloak x-show="providerKeyVerificationPending" x-text="copy.providerKeyVerifying"></p>
+                          <provider-key-verification-error class="field-error" role="alert" x-cloak x-show="providerKeyVerificationFailed">
+                            <span x-text="providerKeyVerificationFailure"></span>
+                            <button type="button" x-on:click="retrySelectedProviderKeyVerification()" x-bind:disabled="settingsControlsDisabled" x-text="copy.providerKeyRetry"></button>
+                          </provider-key-verification-error>
                           <provider-model-field>
                             <div class="field-label-with-help">
                               <label id="provider-default-model-label" for="provider-default-model-select" x-text="copy.providerTextModel"></label>

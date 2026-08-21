@@ -1,6 +1,6 @@
 # LLM Proxy SEO Resource Cluster Report
 
-Generated: 2026-08-08
+Generated: 2026-08-20
 
 ## Repo Analysis Report
 
@@ -21,7 +21,7 @@ Generated: 2026-08-08
 - Primary users: AI-assisted builders, startups and product teams, institutional platform and engineering teams, and internal-tool developers.
 - Secondary users: Managed end users who sign in, receive a client key, save provider keys, copy request examples, and inspect usage.
 - Primary job-to-be-done: Keep one durable application integration while provider and model choice changes behind a validated routing boundary.
-- Installation or usage model: Run the Go backend from config.yml; publish the static landing and authenticated app at /app/ from site/ to GitHub Pages; call GET /, POST /, POST /v2, or POST /dictate with key=<tenant secret>.
+- Installation or usage model: The Go backend reads config.yml and its sibling providers.yml. The static site publishes landing and authenticated pages. Clients call GET /, POST /, POST /v2, or POST /dictate with key=<tenant secret>.
 - Current maturity: Implemented repo contract with Go/Python/frontend validation and documented release/deploy workflows.
 
 ### Product Capabilities
@@ -92,7 +92,7 @@ Generated: 2026-08-08
 | 9 | Switch OpenAI, Claude, and Gemini behind one endpoint | Startups and product teams comparing native model families without maintaining three product integrations. | OpenAI Responses, Anthropic Messages, and Gemini Interactions use different authentication, payload, model-limit, lifecycle, and response contracts. | OpenAI Claude Gemini one endpoint | Provider routing | /resources/openai-claude-gemini-one-endpoint/ | Low | Refresh as cornerstone |
 | 10 | OpenAI background response polling without client loops | Backend teams with long OpenAI prompts that should not require client polling logic. | Long OpenAI Responses work can push polling, resume tokens, or streaming complexity into every caller if the gateway does not own the lifecycle. | OpenAI background response polling | Reliability | /resources/openai-background-response-polling/ | Low | Maintain existing resource |
 | 11 | Upstream worker and queue limits for LLM traffic | Operators who need predictable capacity limits for provider HTTP calls. | Unlimited upstream calls can exhaust provider quotas or local resources, while long OpenAI polling sleeps should not occupy scarce worker capacity. | upstream worker queue limits | Reliability | /resources/upstream-worker-queue-limits/ | Low | Maintain existing resource |
-| 12 | LLM model catalog configuration in config.yml | Operators maintaining provider model availability without changing application code. | Model lists change faster than client release cycles. Hardcoded model IDs in callers make provider updates brittle. | LLM model catalog configuration | Configuration | /resources/model-catalog-configuration/ | Low | Maintain existing resource |
+| 12 | LLM provider catalog configuration in providers.yml | Operators maintaining provider model availability without changing application code. | Model lists change faster than client release cycles. Hardcoded model IDs in callers make provider updates brittle. | LLM model catalog configuration | Configuration | /resources/model-catalog-configuration/ | Low | Maintain existing resource |
 | 13 | Provider default model selection for omitted models | Client developers and operators who want explicit defaults without hardcoding a model in every request. | If clients omit model, each provider route needs a clear rule. Otherwise requests can accidentally inherit a stale model from the wrong provider. | provider default model selection | Configuration | /resources/provider-default-model-selection/ | Low | Maintain existing resource |
 | 14 | OpenAI web search guardrails in an LLM proxy | Teams that need controlled search-enabled model calls without making web search a universal flag. | A generic web_search flag can be misleading when only some providers and models support a search tool. | OpenAI web search guardrails | API contract | /resources/openai-web-search-guardrails/ | Low | Maintain existing resource |
 | 15 | Normalized token usage metadata across providers | Teams that need operational usage signals without parsing every provider's response shape. | Providers report usage differently, and response format choices can make token accounting disappear from caller code. | normalized token usage metadata | Usage | /resources/normalized-token-usage-metadata/ | Low | Maintain existing resource |
@@ -150,8 +150,8 @@ Generated: 2026-08-08
 | Page | Allowed claims | Forbidden claims | Differentiation | Repository evidence | CTA | Canonical path | Significant update |
 |---|---|---|---|---|---|---|---|
 | Integrate once through one multi-provider LLM proxy | One canonical POST /v2 contract, direct HTTP, official Go, Python, and CLI clients, explicit supported-route selection, server-side provider credentials, and a generated current capability matrix. | Universal upstream feature parity, automatic fallback, benchmark leadership, savings, provider longevity, model-onboarding time, or hosted uptime guarantees. | This is the integrate-once cornerstone: it explains how the client contract stays stable while provider and model routing change. | README.md, verified 2026-08-08 | Compare integration options | /resources/multi-provider-llm-proxy/ | 2026-08-08 |
-| Switch OpenAI, Claude, and Gemini behind one endpoint | One canonical messages body, native OpenAI Responses, Anthropic Messages, and Gemini Interactions adapters, explicit route selection, blocking caller behavior, and current catalog validation. | Identical upstream behavior, identical capabilities, provider performance rankings, automatic fallback, availability guarantees, or universal model access. | This page is a concrete three-provider comparison for product teams; it explains which contract stays shared and which behavior remains route-specific. | README.md, verified 2026-08-08 | Explore supported models | /resources/openai-claude-gemini-one-endpoint/ | 2026-08-08 |
-| Transactional multi-tenant account ownership migration | Bounded preflight, atomic migration, preserved tenant ids and usage, and tenant-bound provider-key re-encryption. | Performance, pricing, compliance, benchmark, and zero-downtime claims. | Operator runbook for the one-tenant-per-user ownership upgrade, distinct from general GORM persistence guidance. | internal/proxy/management_store.go, verified 2026-08-08 | Read the migration runbook | /resources/multi-tenant-ownership-migration/ | 2026-08-08 |
+| Switch OpenAI, Claude, and Gemini behind one endpoint | One canonical messages body, native OpenAI Responses, Anthropic Messages, and Gemini Interactions adapters, explicit route selection, blocking caller behavior, and current catalog validation. | Identical upstream behavior, identical capabilities, provider performance rankings, automatic fallback, availability guarantees, or universal model access. | This page is a concrete three-provider comparison for product teams. It explains which contract stays shared and which behavior remains route-specific. | README.md, verified 2026-08-20 | Explore supported models | /resources/openai-claude-gemini-one-endpoint/ | 2026-08-20 |
+| Transactional multi-tenant account ownership migration | Bounded preflight, atomic migration, preserved tenant ids and usage, and tenant-bound provider-key re-encryption. | Performance, pricing, compliance, benchmark, and zero-downtime claims. | Operator runbook for the one-tenant-per-user ownership upgrade, distinct from general GORM persistence guidance. | internal/proxy/management_store.go, verified 2026-08-20 | Read the migration runbook | /resources/multi-tenant-ownership-migration/ | 2026-08-20 |
 | Internal AI gateway for durable product integrations | One tenant-client-key boundary, canonical messages integration, server-side provider keys, managed routing defaults, route validation, official clients, and content-free usage summaries. | Complete AI governance, compliance certification, data residency, procurement guarantees, hosted availability, or replacement of organizational security controls. | This page addresses institutional ownership and operating boundaries across many applications rather than provider comparison or individual developer setup. | README.md, verified 2026-08-08 | Read the authentication guide | /resources/internal-ai-gateway-for-product-tools/ | 2026-08-08 |
 
 ## Site Integration And Discoverability
@@ -164,7 +164,7 @@ Generated: 2026-08-08
 
 ## Evaluation Report
 
-Independent quality and risk evaluation: 2026-08-08
+Independent quality and risk evaluation: 2026-08-20
 
 | Category | Score | Notes |
 |---|---:|---|

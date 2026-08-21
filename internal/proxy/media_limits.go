@@ -38,15 +38,15 @@ const (
 
 // CatalogMediaLimit declares one provider-offering media admission rule.
 type CatalogMediaLimit struct {
-	ID           string `json:"id" mapstructure:"id"`
-	MediaType    string `json:"media_type" mapstructure:"media_type"`
-	Transport    string `json:"transport" mapstructure:"transport"`
-	Status       string `json:"status" mapstructure:"status"`
-	Value        *int64 `json:"value" mapstructure:"value"`
-	Unit         string `json:"unit" mapstructure:"unit"`
-	Scope        string `json:"scope" mapstructure:"scope"`
-	Source       string `json:"source" mapstructure:"source"`
-	LastVerified string `json:"last_verified" mapstructure:"last_verified"`
+	ID           string `json:"id" mapstructure:"id" yaml:"id"`
+	MediaType    string `json:"media_type" mapstructure:"media_type" yaml:"media_type"`
+	Transport    string `json:"transport" mapstructure:"transport" yaml:"transport"`
+	Status       string `json:"status" mapstructure:"status" yaml:"status"`
+	Value        *int64 `json:"value" mapstructure:"value" yaml:"value,omitempty"`
+	Unit         string `json:"unit" mapstructure:"unit" yaml:"unit"`
+	Scope        string `json:"scope" mapstructure:"scope" yaml:"scope"`
+	Source       string `json:"source" mapstructure:"source" yaml:"source"`
+	LastVerified string `json:"last_verified" mapstructure:"last_verified" yaml:"last_verified"`
 }
 
 func cloneCatalogMediaLimits(limits []CatalogMediaLimit) []CatalogMediaLimit {

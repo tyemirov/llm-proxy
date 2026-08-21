@@ -11,6 +11,8 @@ import (
 
 var errPublicCapabilityConfig = errors.New("public_capability_config_failed")
 
+var newPublicCapabilityCatalog = proxy.NewPublicCapabilityCatalog
+
 type publicCapabilityAPIConfiguration struct {
 	Catalog  proxy.PublicCapabilityCatalog
 	Port     int
@@ -19,6 +21,10 @@ type publicCapabilityAPIConfiguration struct {
 
 func loadPublicCapabilityAPIConfiguration(rawConfigPath string) (publicCapabilityAPIConfiguration, error) {
 	configPath := normalizedConfigPath(rawConfigPath)
+	providerCatalog, catalogLoadError := loadProviderCatalog(configPath)
+	if catalogLoadError != nil {
+		return publicCapabilityAPIConfiguration{}, fmt.Errorf("%w: %v", errPublicCapabilityConfig, catalogLoadError)
+	}
 	configBytes, readError := readConfigBytes(configPath)
 	if readError != nil {
 		return publicCapabilityAPIConfiguration{}, fmt.Errorf("%w: path=%s: %v", errPublicCapabilityConfig, configPath, readError)
@@ -32,14 +38,6 @@ func loadPublicCapabilityAPIConfiguration(rawConfigPath string) (publicCapabilit
 	if serverReader == nil {
 		return publicCapabilityAPIConfiguration{}, fmt.Errorf("%w: path=%s field=server", errPublicCapabilityConfig, configPath)
 	}
-	providersReader := configReader.Sub("providers")
-	if providersReader == nil {
-		return publicCapabilityAPIConfiguration{}, fmt.Errorf("%w: path=%s field=providers", errPublicCapabilityConfig, configPath)
-	}
-	catalogReader := configReader.Sub("catalog")
-	if catalogReader == nil {
-		return publicCapabilityAPIConfiguration{}, fmt.Errorf("%w: path=%s field=catalog", errPublicCapabilityConfig, configPath)
-	}
 	var serverConfig serverConfiguration
 	if unmarshalError := serverReader.UnmarshalExact(&serverConfig); unmarshalError != nil {
 		return publicCapabilityAPIConfiguration{}, fmt.Errorf("%w: path=%s field=server: %v", errPublicCapabilityConfig, configPath, unmarshalError)
@@ -47,20 +45,12 @@ func loadPublicCapabilityAPIConfiguration(rawConfigPath string) (publicCapabilit
 	if serverConfig.Port <= 0 {
 		return publicCapabilityAPIConfiguration{}, fmt.Errorf("%w: path=%s: server.port must be positive", errPublicCapabilityConfig, configPath)
 	}
-	var providersConfig providersConfiguration
-	if unmarshalError := providersReader.UnmarshalExact(&providersConfig); unmarshalError != nil {
-		return publicCapabilityAPIConfiguration{}, fmt.Errorf("%w: path=%s field=providers: %v", errPublicCapabilityConfig, configPath, unmarshalError)
-	}
-	var catalogConfig proxy.ModelCatalog
-	if unmarshalError := catalogReader.UnmarshalExact(&catalogConfig); unmarshalError != nil {
-		return publicCapabilityAPIConfiguration{}, fmt.Errorf("%w: path=%s field=catalog: %v", errPublicCapabilityConfig, configPath, unmarshalError)
-	}
 	maxRequestTimeoutSeconds, timeoutError := configuredPositiveInteger(serverConfig.MaxRequestTimeoutSeconds, proxy.DefaultMaxRequestTimeoutSeconds, "server.max_request_timeout_seconds")
 	if timeoutError != nil {
 		return publicCapabilityAPIConfiguration{}, fmt.Errorf("%w: path=%s: %v", errPublicCapabilityConfig, configPath, timeoutError)
 	}
-	capabilityCatalog, catalogError := proxy.NewPublicCapabilityCatalog(proxy.Configuration{
-		ModelCatalog:             catalogConfig,
+	capabilityCatalog, catalogError := newPublicCapabilityCatalog(proxy.Configuration{
+		ProviderCatalog:          providerCatalog,
 		MaxPromptBytes:           serverConfig.MaxPromptBytes,
 		MaxInputAudioBytes:       serverConfig.MaxInputAudioBytes,
 		MaxRequestTimeoutSeconds: maxRequestTimeoutSeconds,

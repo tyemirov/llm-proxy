@@ -42,6 +42,7 @@ func TestStructuredRequestConvergesAcrossSubmitReplayAndReconciliation(testingIn
 	testingInstance.Cleanup(upstream.Close)
 	endpoints := proxy.NewEndpoints()
 	endpoints.SetResponsesURL(upstream.URL)
+	endpoints.SetProviderBaseURL(proxy.ProviderNameDeepSeek, upstream.URL)
 	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
 	tenantConfiguration.ID = "structured"
 	tenantConfiguration.Defaults.Model = proxy.ModelNameGPT55
@@ -91,8 +92,7 @@ func TestStructuredRequestRejectsInvalidContractsBeforeProviderDispatch(testingI
 	tenantConfiguration.Defaults.Provider = proxy.ProviderNameDeepSeek
 	tenantConfiguration.Defaults.Model = proxy.ModelNameDeepSeekV4Flash
 	router, buildError := buildRouterWithManagedTenant(testingInstance, proxy.Configuration{
-		DeepSeekBaseURL: upstream.URL,
-		WorkerCount:     1, QueueSize: 2, RequestTimeoutSeconds: TestTimeout, Endpoints: endpoints,
+		WorkerCount: 1, QueueSize: 2, RequestTimeoutSeconds: TestTimeout, Endpoints: endpoints,
 		AssetStorePath: testingInstance.TempDir(), AssetRetentionSeconds: 3600,
 	}, coverageLogger(), tenantConfiguration)
 	if buildError != nil {

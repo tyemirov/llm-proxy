@@ -6,14 +6,13 @@ import {
   NOTICE_KINDS,
   PROVIDER_KEY_VERIFICATION_ERRORS,
 } from "../constants.js?v=20260811c131";
-import { saveProviderKey as requestSaveProviderKey } from "../core/backendClient.js?v=20260811c131";
+import { saveProviderConnection as requestSaveProviderConnection } from "../core/backendClient.js?v=20260811c131";
 import {
   isAbortError,
   profileFailureMessage,
 } from "../core/managementProfile.js?v=20260811c131";
 
 const EMPTY_STRING = "";
-const DASH_SCOPE_PROVIDER_ID = "dashscope";
 
 /** @typedef {ReturnType<typeof import("./managementApplicationState.js").createManagementApplicationState>} ManagementApplicationState */
 /** @typedef {ManagementApplicationState & {
@@ -64,13 +63,10 @@ export function createProviderSettingsResponsibility() {
           return false;
         }
         const editorSession = this.providerEditorSession;
-        const apiKey = editorSession.keyDirty ? editorSession.keyInput.trim() : EMPTY_STRING;
-        if (!provider.has_key && !apiKey) {
+        const fields = providerConnectionFields(provider, editorSession);
+        if (!provider.configured && !requiredProviderFieldsHaveValues(provider, fields)) {
           editorSession.dirty = false;
           return true;
-        }
-        if (provider.id === DASH_SCOPE_PROVIDER_ID && editorSession.baseURL.trim() === EMPTY_STRING) {
-          return false;
         }
         const providerID = provider.id;
         const revealVersion = editorSession.revealVersion;
@@ -81,7 +77,8 @@ export function createProviderSettingsResponsibility() {
         if (!lifetimeController) {
           return false;
         }
-        const verifiesCandidate = apiKey !== EMPTY_STRING || editorSession.baseURL.trim() !== provider.base_url;
+        const verifiesConnectionFields = Object.values(editorSession.fieldDirty).some(Boolean);
+        const verifiesCandidate = verifiesConnectionFields || editorSession.textModel !== provider.text_model;
         let requestSignal = lifetimeController.signal;
         /** @type {AbortController | null} */
         let verificationController = null;
@@ -92,7 +89,7 @@ export function createProviderSettingsResponsibility() {
           const candidateVerificationController = new AbortController();
           verificationController = candidateVerificationController;
           this.providerKeyVerificationController = candidateVerificationController;
-          this.providerKeyVerificationPending = true;
+          this.providerKeyVerificationPending = verifiesConnectionFields;
           this.providerKeyVerificationFailure = EMPTY_STRING;
           const abortForTenantLifetime = () => {
             candidateVerificationController.abort();
@@ -110,11 +107,10 @@ export function createProviderSettingsResponsibility() {
         editorSession.dirty = false;
         try {
           const profileApplied = await this.enqueueProfileMutation(appVersion, async () => {
-            const updatedProfile = await requestSaveProviderKey(
+            const updatedProfile = await requestSaveProviderConnection(
               tenantID,
               providerID,
-              apiKey,
-              editorSession.baseURL.trim(),
+              fields,
               editorSession.textModel,
               editorSession.systemPrompt,
               requestSignal,
@@ -147,7 +143,7 @@ export function createProviderSettingsResponsibility() {
                 ? providerKeyVerificationError(requestError)
                 : null;
               const failureMessage = verificationError
-                ? providerKeyVerificationFailureMessage(verificationError, provider.has_key)
+                ? providerKeyVerificationFailureMessage(verificationError, provider.configured)
                 : profileFailureMessage(requestError);
               this.providerKeyVerificationFailure = verificationError ? failureMessage : EMPTY_STRING;
               this.setSettingsNotice(NOTICE_KINDS.ERROR, failureMessage);
@@ -184,6 +180,28 @@ export function createProviderSettingsResponsibility() {
       );
     },
   });
+}
+
+/**
+ * @param {import("../types.d.js").ProviderProfile} provider
+ * @param {import("../types.d.js").ProviderEditorSession} editorSession
+ * @returns {Record<string, string>}
+ */
+function providerConnectionFields(provider, editorSession) {
+  return Object.fromEntries(provider.fields.map((field) => [
+    field.id,
+    field.secret && !editorSession.fieldDirty[field.id]
+      ? EMPTY_STRING
+      : String(editorSession.fieldInputs[field.id] ?? EMPTY_STRING).trim(),
+  ]));
+}
+
+/**
+ * @param {import("../types.d.js").ProviderProfile} provider
+ * @param {Record<string, string>} fields
+ */
+function requiredProviderFieldsHaveValues(provider, fields) {
+  return provider.fields.every((field) => !field.required || fields[field.id] !== EMPTY_STRING);
 }
 
 /** @param {unknown} requestError */

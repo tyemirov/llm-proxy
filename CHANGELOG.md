@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Removed schema versioning from the selected application manifest.
 - Added provider-enforced JSON Schema output and tenant-bound durable reconciliation for canonical `POST /v2` requests.
 - Added all seven documented MiniMax M2 text routes with current limits and standard PAYG prices.
 - Added Qwen 3.7 Max, Qwen 3.7 Plus, and Qwen 3.6 Flash text routes for Singapore DashScope workspaces.

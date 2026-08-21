@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -30,51 +31,82 @@ type textModelSummary struct {
 }
 
 func newProviderRegistry(configuration Configuration) *providerRegistry {
-	definitions := configuredProviderDefinitions(configuration)
-	for _, provider := range configuration.ModelCatalog.Providers {
+	definitions := make(map[providerID]providerDefinition, len(configuration.ProviderCatalog.schema.Providers))
+	for _, provider := range configuration.ProviderCatalog.schema.Providers {
 		identifier := providerID(provider.ID)
-		definition := definitions[identifier]
-		definition.label = provider.Label
-		definitions[identifier] = definition
-	}
-	for _, offering := range configuration.ModelCatalog.Offerings {
-		identifier := providerID(offering.Provider)
-		definition := definitions[identifier]
-		if offeringSupportsOperation(offering, ModelOperationText) {
-			routeCapabilities := textRouteCapabilities{
-				wireContract:       textWireContract(offering.WireContract),
-				executionLifecycle: textExecutionLifecycle(offering.ExecutionLifecycle),
-			}
-			definition.textModels[strings.ToLower(offering.Model)] = textModelDefinition{
-				identifier:          modelID(offering.Model),
-				providerIdentifier:  modelID(offering.ProviderModel),
-				wireContract:        routeCapabilities.wireContract,
-				executionLifecycle:  routeCapabilities.executionLifecycle,
-				routeAdapter:        textRouteAdapters[routeCapabilities],
-				requestProfile:      modelRequestProfile(offering.RequestProfile),
-				supportsWebSearch:   offering.WebSearch,
-				outputTokenLimit:    offering.OutputTokenLimit,
-				hasOutputTokenLimit: offering.OutputTokenLimit > 0,
-				reasoningEffort:     configuredReasoningEffortCapability(offering.ReasoningEffort),
-				mediaInputs:         configuredMediaInputSet(offering.MediaInputs),
-				mediaLimits:         cloneCatalogMediaLimits(offering.MediaLimits),
-			}
-			if offeringDefaultsOperation(offering, ModelOperationText) {
-				definition.defaultTextModel = modelID(offering.Model)
+		definition := providerDefinition{
+			identifier:          identifier,
+			label:               provider.Label,
+			aliases:             append([]string(nil), provider.Aliases...),
+			fields:              make(map[string]ProviderCatalogField, len(provider.Fields)),
+			fieldOrder:          make([]string, 0, len(provider.Fields)),
+			connectionValues:    make(map[string]string, len(provider.Fields)),
+			transports:          make(map[string]providerTransportDefinition, len(provider.Transports)),
+			textModels:          map[string]textModelDefinition{},
+			transcriptionModels: map[string]dictationModelDefinition{},
+		}
+		for _, field := range provider.Fields {
+			definition.fields[field.ID] = field
+			definition.fieldOrder = append(definition.fieldOrder, field.ID)
+			definition.connectionValues[field.ID] = *field.Default
+		}
+		for fieldIdentifier, value := range configuration.ProviderConnectionValues[provider.ID] {
+			definition.connectionValues[fieldIdentifier] = value
+		}
+		for _, transport := range provider.Transports {
+			definition.transports[transport.ID] = providerTransportDefinition{
+				identifier:         transport.ID,
+				endpoint:           transport.Endpoint,
+				authentication:     transport.Authentication,
+				headers:            append([]ProviderCatalogHeader(nil), transport.Headers...),
+				requestProtocol:    transport.RequestProtocol,
+				responseProtocol:   transport.ResponseProtocol,
+				usageMapping:       transport.UsageMapping,
+				lifecycle:          textExecutionLifecycle(transport.Lifecycle),
+				protocolParameters: transport.ProtocolParameters,
 			}
 		}
-		if offeringSupportsOperation(offering, ModelOperationDictation) {
-			definition.transcriptionModels[strings.ToLower(offering.Model)] = dictationModelDefinition{
-				identifier:         modelID(offering.Model),
-				providerIdentifier: modelID(offering.ProviderModel),
+		for _, offering := range provider.Offerings {
+			transport := definition.transports[offering.Transport]
+			if slices.Contains(offering.Operations, ModelOperationText) {
+				routeCapabilities := textRouteCapabilities{
+					wireContract:       textWireContract(transport.requestProtocol),
+					executionLifecycle: transport.lifecycle,
+				}
+				definition.textModels[strings.ToLower(offering.Model)] = textModelDefinition{
+					identifier:          modelID(offering.Model),
+					providerIdentifier:  modelID(offering.UpstreamModel),
+					transportIdentifier: offering.Transport,
+					wireContract:        routeCapabilities.wireContract,
+					executionLifecycle:  routeCapabilities.executionLifecycle,
+					routeAdapter:        textRouteAdapters[routeCapabilities],
+					requestProfile:      modelRequestProfile(offering.RequestProfile),
+					supportsWebSearch:   offering.WebSearch,
+					outputTokenLimit:    offering.OutputTokenLimit,
+					hasOutputTokenLimit: offering.OutputTokenLimit > 0,
+					reasoningEffort:     configuredReasoningEffortCapability(offering.ReasoningEffort),
+					mediaInputs:         configuredMediaInputSet(offering.MediaInputs),
+					mediaLimits:         cloneCatalogMediaLimits(offering.MediaLimits),
+				}
+				if slices.Contains(offering.DefaultOperations, ModelOperationText) {
+					definition.defaultTextModel = modelID(offering.Model)
+				}
 			}
-			definition.supportsDictation = true
-			if offeringDefaultsOperation(offering, ModelOperationDictation) {
-				definition.defaultTranscriptionModel = modelID(offering.Model)
+			if slices.Contains(offering.Operations, ModelOperationDictation) {
+				definition.transcriptionModels[strings.ToLower(offering.Model)] = dictationModelDefinition{
+					identifier:          modelID(offering.Model),
+					providerIdentifier:  modelID(offering.UpstreamModel),
+					transportIdentifier: offering.Transport,
+				}
+				definition.supportsDictation = true
+				if slices.Contains(offering.DefaultOperations, ModelOperationDictation) {
+					definition.defaultTranscriptionModel = modelID(offering.Model)
+				}
 			}
 		}
 		definitions[identifier] = definition
 	}
+	applyDefaultEndpointOverrides(configuration.ProviderCatalog.schema, definitions, configuration.Endpoints)
 
 	registry := &providerRegistry{
 		definitions: definitions,
@@ -92,70 +124,54 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 	return registry
 }
 
-func configuredProviderDefinitions(configuration Configuration) map[providerID]providerDefinition {
-	return map[providerID]providerDefinition{
-		providerID(ProviderNameOpenAI): {
-			identifier: providerID(ProviderNameOpenAI), transcriptionsURL: configuration.OpenAITranscriptionsURL,
-			transcriptionModelField: keyModel, textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{},
-		},
-		providerID(ProviderNameDeepSeek): {
-			identifier: providerID(ProviderNameDeepSeek), textBaseURL: configuration.DeepSeekBaseURL,
-			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
-		},
-		providerID(ProviderNameDashScope): {
-			identifier: providerID(ProviderNameDashScope), aliases: []string{providerAliasQwen}, textBaseURL: configuration.DashScopeBaseURL,
-			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
-		},
-		providerID(ProviderNameMoonshot): {
-			identifier: providerID(ProviderNameMoonshot), aliases: []string{providerAliasKimi}, textBaseURL: configuration.MoonshotBaseURL,
-			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxCompletionTokens,
-		},
-		providerID(ProviderNameMiniMax): {
-			identifier: providerID(ProviderNameMiniMax), textBaseURL: configuration.MiniMaxBaseURL,
-			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxCompletionTokens,
-		},
-		providerID(ProviderNameSiliconFlow): {
-			identifier: providerID(ProviderNameSiliconFlow), textBaseURL: configuration.SiliconFlowBaseURL,
-			transcriptionsURL: configuration.SiliconFlowTranscriptionsURL, transcriptionModelField: keyModel,
-			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
-		},
-		providerID(ProviderNameZAI): {
-			identifier: providerID(ProviderNameZAI), textBaseURL: configuration.ZAIBaseURL,
-			transcriptionsURL: configuration.ZAITranscriptionsURL, transcriptionModelField: keyModel,
-			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
-		},
-		providerID(ProviderNameGemini): {
-			identifier: providerID(ProviderNameGemini), textBaseURL: configuration.GeminiBaseURL,
-			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{},
-		},
-		providerID(ProviderNameAnthropic): {
-			identifier: providerID(ProviderNameAnthropic), aliases: []string{providerAliasClaude}, textBaseURL: configuration.AnthropicBaseURL,
-			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{},
-		},
-		providerID(ProviderNameMeta): {
-			identifier: providerID(ProviderNameMeta), textBaseURL: configuration.MetaBaseURL,
-			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxCompletionTokens,
-		},
-		providerID(ProviderNameXAI): {
-			identifier: providerID(ProviderNameXAI), textBaseURL: configuration.XAIBaseURL,
-			transcriptionsURL: configuration.XAITranscriptionsURL, transcriptionModelField: constants.EmptyString,
-			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
-		},
+func applyDefaultEndpointOverrides(schema ProviderCatalogSchema, definitions map[providerID]providerDefinition, endpoints *Endpoints) {
+	if endpoints == nil {
+		return
+	}
+	operationEndpoints := map[string]string{
+		ModelOperationText:      endpoints.GetResponsesURL(),
+		ModelOperationDictation: endpoints.GetTranscriptionsURL(),
+	}
+	overriddenOperations := map[string]struct{}{}
+	for _, provider := range schema.Providers {
+		definition := definitions[providerID(provider.ID)]
+		for transportIdentifier, transport := range definition.transports {
+			if endpointURL := endpoints.providerTransportEndpoint(provider.ID, transportIdentifier, transport.endpoint); endpointURL != constants.EmptyString {
+				transport.endpointURLOverride = endpointURL
+				definition.transports[transportIdentifier] = transport
+			}
+		}
+		for _, offering := range provider.Offerings {
+			for _, operation := range offering.DefaultOperations {
+				if _, overridden := overriddenOperations[operation]; overridden {
+					continue
+				}
+				endpointURL := operationEndpoints[operation]
+				if strings.TrimSpace(endpointURL) == constants.EmptyString {
+					continue
+				}
+				transport := definition.transports[offering.Transport]
+				if transport.endpoint.SettingField != constants.EmptyString {
+					continue
+				}
+				if transport.endpointURLOverride == constants.EmptyString {
+					transport.endpointURLOverride = endpointURL
+					definition.transports[offering.Transport] = transport
+				}
+				overriddenOperations[operation] = struct{}{}
+			}
+		}
+		definitions[definition.identifier] = definition
 	}
 }
 
 func (registry *providerRegistry) forTenant(requestTenant tenant) *providerRegistry {
 	definitions := make(map[providerID]providerDefinition, len(registry.definitions))
 	for identifier, definition := range registry.definitions {
-		definition.textAPIKey = constants.EmptyString
-		definition.transcriptionAPIKey = constants.EmptyString
+		definition.connectionValues = cloneStringMap(definition.connectionValues)
 		if providerSettings, configured := requestTenant.providerSettings[identifier]; configured {
-			definition.textAPIKey = providerSettings.apiKey
-			if providerSettings.baseURL != constants.EmptyString {
-				definition.textBaseURL = providerSettings.baseURL
-			}
-			if definition.supportsDictation {
-				definition.transcriptionAPIKey = providerSettings.apiKey
+			for fieldIdentifier, value := range providerSettings.connectionValues {
+				definition.connectionValues[fieldIdentifier] = value
 			}
 		}
 		definitions[identifier] = definition
@@ -164,6 +180,14 @@ func (registry *providerRegistry) forTenant(requestTenant tenant) *providerRegis
 		definitions: definitions,
 		aliases:     registry.aliases,
 	}
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	cloned := make(map[string]string, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func (registry *providerRegistry) canonicalProviderID(rawProvider string) (providerID, error) {
@@ -235,7 +259,7 @@ func (registry *providerRegistry) resolveTextRequest(rawProvider string, rawMode
 	if resolutionError != nil {
 		return providerDefinition{}, textModelDefinition{}, resolutionError
 	}
-	if definition.credentialFor(endpointKindText) == constants.EmptyString {
+	if definition.credentialFor(endpointKindText) == constants.EmptyString || definition.textEndpointURL == constants.EmptyString {
 		return providerDefinition{}, textModelDefinition{}, fmt.Errorf("%w: provider=%s endpoint=%s", ErrProviderNotConfigured, definition.identifier.string(), endpointKindText)
 	}
 	return definition, resolvedModel, nil
@@ -261,6 +285,7 @@ func (registry *providerRegistry) resolveTextModel(rawProvider string, rawModel 
 	if webSearchEnabled && !resolvedModel.supportsWebSearch {
 		return providerDefinition{}, textModelDefinition{}, fmt.Errorf("%w: provider=%s model=%s capability=web_search", ErrUnsupportedCapability, definition.identifier.string(), resolvedModel.string())
 	}
+	definition, _ = definition.resolvedTransport(resolvedModel.transportIdentifier)
 	return definition, resolvedModel, nil
 }
 
@@ -269,7 +294,7 @@ func (registry *providerRegistry) resolveDictationRequest(rawProvider string, ra
 	if resolutionError != nil {
 		return providerDefinition{}, modelID(""), resolutionError
 	}
-	if definition.credentialFor(endpointKindDictation) == constants.EmptyString {
+	if definition.credentialFor(endpointKindDictation) == constants.EmptyString || definition.transcriptionsURL == constants.EmptyString {
 		return providerDefinition{}, modelID(""), fmt.Errorf("%w: provider=%s endpoint=%s", ErrProviderNotConfigured, definition.identifier.string(), endpointKindDictation)
 	}
 	return definition, resolvedModel, nil
@@ -295,6 +320,7 @@ func (registry *providerRegistry) resolveDictationModel(rawProvider string, rawM
 	if modelError != nil {
 		return providerDefinition{}, modelID(""), modelError
 	}
+	definition, _ = definition.resolvedTransport(definition.transcriptionModels[strings.ToLower(resolvedModel.string())].transportIdentifier)
 	return definition, resolvedModel, nil
 }
 

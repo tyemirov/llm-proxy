@@ -2,6 +2,8 @@ package proxy
 
 import (
 	"strings"
+
+	"github.com/tyemirov/llm-proxy/internal/constants"
 )
 
 const (
@@ -33,20 +35,6 @@ const (
 	providerAliasQwen   = "qwen"
 	providerAliasKimi   = "kimi"
 	providerAliasClaude = "claude"
-)
-
-const (
-	defaultDeepSeekBaseURL      = "https://api.deepseek.com"
-	defaultMoonshotBaseURL      = "https://api.moonshot.ai/v1"
-	defaultMiniMaxBaseURL       = "https://api.minimax.io/v1"
-	defaultSiliconFlowBaseURL   = "https://api.siliconflow.com/v1"
-	defaultZAIBaseURL           = "https://api.z.ai/api/paas/v4"
-	defaultZAITranscriptionsURL = "https://api.z.ai/api/paas/v4/audio/transcriptions"
-	defaultGeminiBaseURL        = "https://generativelanguage.googleapis.com/v1beta"
-	defaultAnthropicBaseURL     = "https://api.anthropic.com"
-	defaultMetaBaseURL          = "https://api.meta.ai/v1"
-	defaultXAIBaseURL           = "https://api.x.ai/v1"
-	defaultXAITranscriptionsURL = "https://api.x.ai/v1/stt"
 )
 
 const (
@@ -233,9 +221,9 @@ const (
 type reasoningEffortAdapter string
 
 const (
-	reasoningEffortAdapterNone                    reasoningEffortAdapter = ""
-	reasoningEffortAdapterOpenAIResponses         reasoningEffortAdapter = "openai_responses"
-	reasoningEffortAdapterMoonshotChatCompletions reasoningEffortAdapter = "moonshot_chat_completions"
+	reasoningEffortAdapterNone                  reasoningEffortAdapter = ""
+	reasoningEffortAdapterOpenAIResponses       reasoningEffortAdapter = "openai_responses"
+	reasoningEffortAdapterOpenAIChatCompletions reasoningEffortAdapter = "openai_chat_completions"
 )
 
 type reasoningEffortCapability struct {
@@ -255,7 +243,7 @@ var reasoningEffortAdapterSupportedValues = map[reasoningEffortAdapter]map[strin
 		"xhigh":   {},
 		"max":     {},
 	},
-	reasoningEffortAdapterMoonshotChatCompletions: {
+	reasoningEffortAdapterOpenAIChatCompletions: {
 		"low":  {},
 		"high": {},
 		"max":  {},
@@ -287,6 +275,7 @@ func (capability *reasoningEffortCapability) supports(effort string) bool {
 type textModelDefinition struct {
 	identifier          modelID
 	providerIdentifier  modelID
+	transportIdentifier string
 	wireContract        textWireContract
 	executionLifecycle  textExecutionLifecycle
 	routeAdapter        textRouteAdapter
@@ -316,8 +305,14 @@ type providerDefinition struct {
 	identifier                providerID
 	label                     string
 	aliases                   []string
+	fields                    map[string]ProviderCatalogField
+	fieldOrder                []string
+	connectionValues          map[string]string
+	transports                map[string]providerTransportDefinition
+	activeTransport           providerTransportDefinition
 	textAPIKey                string
 	textBaseURL               string
+	textEndpointURL           string
 	transcriptionAPIKey       string
 	transcriptionsURL         string
 	defaultTextModel          modelID
@@ -330,8 +325,46 @@ type providerDefinition struct {
 }
 
 type dictationModelDefinition struct {
-	identifier         modelID
-	providerIdentifier modelID
+	identifier          modelID
+	providerIdentifier  modelID
+	transportIdentifier string
+}
+
+type providerTransportDefinition struct {
+	identifier          string
+	endpoint            ProviderCatalogEndpoint
+	authentication      ProviderCatalogAuthentication
+	headers             []ProviderCatalogHeader
+	requestProtocol     string
+	responseProtocol    string
+	usageMapping        string
+	lifecycle           textExecutionLifecycle
+	protocolParameters  ProviderCatalogProtocolParameters
+	endpointURLOverride string
+}
+
+func (definition providerDefinition) resolvedTransport(transportIdentifier string) (providerDefinition, bool) {
+	transport, found := definition.transports[transportIdentifier]
+	if !found {
+		return providerDefinition{}, false
+	}
+	baseURL := transport.endpoint.DefaultBaseURL
+	if transport.endpoint.SettingField != constants.EmptyString {
+		baseURL = definition.connectionValues[transport.endpoint.SettingField]
+	}
+	definition.activeTransport = transport
+	definition.textBaseURL = strings.TrimRight(baseURL, "/")
+	definition.textEndpointURL = definition.textBaseURL + transport.endpoint.Path
+	if transport.endpointURLOverride != constants.EmptyString {
+		definition.textEndpointURL = transport.endpointURLOverride
+		definition.textBaseURL = strings.TrimSuffix(transport.endpointURLOverride, transport.endpoint.Path)
+	}
+	definition.textAPIKey = definition.connectionValues[transport.authentication.Field]
+	definition.transcriptionAPIKey = definition.textAPIKey
+	definition.transcriptionsURL = definition.textEndpointURL
+	definition.transcriptionModelField = transport.protocolParameters.ModelField
+	definition.chatTokenLimitParameter = chatCompletionTokenLimitParameter(transport.protocolParameters.TokenField)
+	return definition, true
 }
 
 func (definition providerDefinition) credentialFor(endpoint endpointKind) string {

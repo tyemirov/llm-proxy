@@ -40,14 +40,25 @@ type providerKeyVerificationProfile struct {
 	Tenant struct {
 		Defaults managementTenantDefaultsTestResponse `json:"defaults"`
 	} `json:"tenant"`
-	Providers []struct {
-		ID           string `json:"id"`
-		HasKey       bool   `json:"has_key"`
-		MaskedKey    string `json:"masked_key"`
-		BaseURL      string `json:"base_url"`
-		TextModel    string `json:"text_model"`
-		SystemPrompt string `json:"system_prompt"`
-	} `json:"providers"`
+	Providers []providerKeyVerificationProvider `json:"providers"`
+}
+
+type providerKeyVerificationProvider struct {
+	ID           string                                `json:"id"`
+	Configured   bool                                  `json:"configured"`
+	Fields       []providerKeyVerificationProfileField `json:"fields"`
+	TextModel    string                                `json:"text_model"`
+	SystemPrompt string                                `json:"system_prompt"`
+	HasKey       bool                                  `json:"-"`
+	MaskedKey    string                                `json:"-"`
+	BaseURL      string                                `json:"-"`
+}
+
+type providerKeyVerificationProfileField struct {
+	ID          string `json:"id"`
+	Configured  bool   `json:"configured"`
+	Value       string `json:"value"`
+	MaskedValue string `json:"masked_value"`
 }
 
 type failingVerificationReadCloser struct{}
@@ -220,8 +231,7 @@ func TestManagementPollableGeminiProviderKeyVerificationCompletesStoredLifecycle
 	}
 	t.Cleanup(func() { _ = fixtureSQLDatabase.Close() })
 	fixtureDatabaseProvider = func() (*managedProviderKeyFixture, error) {
-		var record managedProviderKeyFixture
-		queryError := fixtureDatabase.Where("tenant_id = ? AND provider_id = ?", tenantID, proxy.ProviderNameGemini).First(&record).Error
+		record, queryError := loadManagedProviderKeyFixture(fixtureDatabase, tenantID, proxy.ProviderNameGemini)
 		if queryError != nil {
 			return nil, queryError
 		}
@@ -330,8 +340,8 @@ func TestManagementPollableGeminiProviderKeyVerificationRejectsRetrievalAndPrese
 		t.Fatalf("open managed fixture SQL database: %v", fixtureDatabaseError)
 	}
 	t.Cleanup(func() { _ = fixtureSQLDatabase.Close() })
-	var beforeReplacement managedProviderKeyFixture
-	if queryError := fixtureDatabase.Where("tenant_id = ? AND provider_id = ?", tenantID, proxy.ProviderNameGemini).First(&beforeReplacement).Error; queryError != nil {
+	beforeReplacement, queryError := loadManagedProviderKeyFixture(fixtureDatabase, tenantID, proxy.ProviderNameGemini)
+	if queryError != nil {
 		t.Fatalf("load provider record before replacement: %v", queryError)
 	}
 
@@ -349,8 +359,8 @@ func TestManagementPollableGeminiProviderKeyVerificationRejectsRetrievalAndPrese
 	if replacementResponse.Code != http.StatusUnprocessableEntity || strings.TrimSpace(replacementResponse.Body.String()) != "provider_key_rejected" {
 		t.Fatalf("replacement status=%d body=%q", replacementResponse.Code, replacementResponse.Body.String())
 	}
-	var afterReplacement managedProviderKeyFixture
-	if queryError := fixtureDatabase.Where("tenant_id = ? AND provider_id = ?", tenantID, proxy.ProviderNameGemini).First(&afterReplacement).Error; queryError != nil {
+	afterReplacement, queryError := loadManagedProviderKeyFixture(fixtureDatabase, tenantID, proxy.ProviderNameGemini)
+	if queryError != nil {
 		t.Fatalf("load provider record after replacement: %v", queryError)
 	}
 	if beforeReplacement.EncryptedAPIKey != afterReplacement.EncryptedAPIKey ||
@@ -366,7 +376,7 @@ func TestManagementPollableGeminiProviderKeyVerificationRejectsRetrievalAndPrese
 	}
 	revealRequest := authenticatedProviderKeyRevealRequest(
 		http.MethodPost,
-		managementTenantTestPath(tenantID, "/provider-keys/gemini/reveal"),
+		managementTenantTestPath(tenantID, "/provider-connections/gemini/fields/api_key/reveal"),
 		sessionCookie,
 		"http://localhost:8080",
 	)
@@ -774,7 +784,7 @@ func TestManagementXAIResponsesVerificationUsesTheXAIEndpoint(t *testing.T) {
 	t.Cleanup(xAIServer.Close)
 
 	configuration := providerKeyVerificationConfiguration(openAIServer.URL)
-	configuration.XAIBaseURL = xAIServer.URL
+	configuration.Endpoints.SetProviderBaseURL(proxy.ProviderNameXAI, xAIServer.URL)
 	router := newOperationalProviderKeyVerificationRouter(
 		t,
 		configuration,
@@ -1048,8 +1058,8 @@ func TestManagementProviderKeyVerificationPreservesVerifiedReplacementAndCoversT
 		}
 
 		fixtureDatabase := openManagedFixtureDatabase(subTest, databasePath)
-		var beforeReplacement managedProviderKeyFixture
-		if queryError := fixtureDatabase.Where("tenant_id = ? AND provider_id = ?", tenantID, proxy.ProviderNameDeepSeek).First(&beforeReplacement).Error; queryError != nil {
+		beforeReplacement, queryError := loadManagedProviderKeyFixture(fixtureDatabase, tenantID, proxy.ProviderNameDeepSeek)
+		if queryError != nil {
 			subTest.Fatalf("load provider record before replacement: %v", queryError)
 		}
 		replacementResponse := putManagementProviderKey(
@@ -1066,8 +1076,8 @@ func TestManagementProviderKeyVerificationPreservesVerifiedReplacementAndCoversT
 		if replacementResponse.Code != http.StatusUnprocessableEntity || strings.TrimSpace(replacementResponse.Body.String()) != "provider_key_rejected" {
 			subTest.Fatalf("replacement status=%d body=%q", replacementResponse.Code, replacementResponse.Body.String())
 		}
-		var afterReplacement managedProviderKeyFixture
-		if queryError := fixtureDatabase.Where("tenant_id = ? AND provider_id = ?", tenantID, proxy.ProviderNameDeepSeek).First(&afterReplacement).Error; queryError != nil {
+		afterReplacement, queryError := loadManagedProviderKeyFixture(fixtureDatabase, tenantID, proxy.ProviderNameDeepSeek)
+		if queryError != nil {
 			subTest.Fatalf("load provider record after replacement: %v", queryError)
 		}
 		if beforeReplacement.EncryptedAPIKey != afterReplacement.EncryptedAPIKey ||
@@ -1087,7 +1097,7 @@ func TestManagementProviderKeyVerificationPreservesVerifiedReplacementAndCoversT
 		}
 		revealRequest := authenticatedProviderKeyRevealRequest(
 			http.MethodPost,
-			managementTenantTestPath(tenantID, "/provider-keys/deepseek/reveal"),
+			managementTenantTestPath(tenantID, "/provider-connections/deepseek/fields/api_key/reveal"),
 			sessionCookie,
 			"http://localhost:8080",
 		)
@@ -1189,7 +1199,7 @@ func TestManagementProviderKeyVerificationPreservesVerifiedReplacementAndCoversT
 
 	t.Run("invalid verification URL", func(subTest *testing.T) {
 		configuration := providerKeyVerificationConfiguration("https://provider.invalid")
-		configuration.GeminiBaseURL = "://"
+		configuration.Endpoints.SetProviderBaseURL(proxy.ProviderNameGemini, "://")
 		router := newOperationalProviderKeyVerificationRouter(
 			subTest,
 			configuration,
@@ -1242,17 +1252,18 @@ func TestManagementProviderKeyVerificationPreservesVerifiedReplacementAndCoversT
 
 func providerKeyVerificationConfiguration(upstreamURL string) proxy.Configuration {
 	return proxy.Configuration{
-		OpenAIBaseURL:      upstreamURL,
-		DeepSeekBaseURL:    upstreamURL,
-		DashScopeBaseURL:   upstreamURL,
-		MoonshotBaseURL:    upstreamURL,
-		MiniMaxBaseURL:     upstreamURL,
-		SiliconFlowBaseURL: upstreamURL,
-		ZAIBaseURL:         upstreamURL,
-		GeminiBaseURL:      upstreamURL,
-		AnthropicBaseURL:   upstreamURL,
-		MetaBaseURL:        upstreamURL,
-		XAIBaseURL:         upstreamURL,
+		Endpoints: providerEndpoints(upstreamURL,
+			proxy.ProviderNameOpenAI,
+			proxy.ProviderNameDeepSeek,
+			proxy.ProviderNameMoonshot,
+			proxy.ProviderNameMiniMax,
+			proxy.ProviderNameSiliconFlow,
+			proxy.ProviderNameZAI,
+			proxy.ProviderNameGemini,
+			proxy.ProviderNameAnthropic,
+			proxy.ProviderNameMeta,
+			proxy.ProviderNameXAI,
+		),
 	}
 }
 
@@ -1280,7 +1291,7 @@ func putManagementProviderKeyWithBaseURL(t *testing.T, router http.Handler, sess
 	t.Helper()
 	request := authenticatedJSONRequest(
 		http.MethodPut,
-		managementTenantTestPath(tenantID, "/provider-keys/"+url.PathEscape(provider)),
+		managementTenantTestPath(tenantID, "/provider-connections/"+url.PathEscape(provider)),
 		managementProviderKeyRequestBodyWithBaseURL(t, apiKey, baseURL, model, systemPrompt),
 		sessionCookie,
 	).WithContext(requestContext)
@@ -1307,17 +1318,22 @@ func decodeProviderKeyVerificationProfile(t *testing.T, responseBytes []byte) pr
 	if decodeError := json.Unmarshal(responseBytes, &profile); decodeError != nil {
 		t.Fatalf("decode provider verification profile: %v", decodeError)
 	}
+	for providerIndex := range profile.Providers {
+		provider := &profile.Providers[providerIndex]
+		provider.HasKey = provider.Configured
+		for _, field := range provider.Fields {
+			switch field.ID {
+			case proxy.CatalogCredentialAPIKey:
+				provider.MaskedKey = field.MaskedValue
+			case "base_url":
+				provider.BaseURL = field.Value
+			}
+		}
+	}
 	return profile
 }
 
-func verificationProfileProvider(t *testing.T, profile providerKeyVerificationProfile, provider string) struct {
-	ID           string `json:"id"`
-	HasKey       bool   `json:"has_key"`
-	MaskedKey    string `json:"masked_key"`
-	BaseURL      string `json:"base_url"`
-	TextModel    string `json:"text_model"`
-	SystemPrompt string `json:"system_prompt"`
-} {
+func verificationProfileProvider(t *testing.T, profile providerKeyVerificationProfile, provider string) providerKeyVerificationProvider {
 	t.Helper()
 	for _, candidateProvider := range profile.Providers {
 		if candidateProvider.ID == provider {
@@ -1325,14 +1341,7 @@ func verificationProfileProvider(t *testing.T, profile providerKeyVerificationPr
 		}
 	}
 	t.Fatalf("profile missing provider=%s", provider)
-	return struct {
-		ID           string `json:"id"`
-		HasKey       bool   `json:"has_key"`
-		MaskedKey    string `json:"masked_key"`
-		BaseURL      string `json:"base_url"`
-		TextModel    string `json:"text_model"`
-		SystemPrompt string `json:"system_prompt"`
-	}{}
+	return providerKeyVerificationProvider{}
 }
 
 func assertProviderKeyVerificationRequest(t *testing.T, request *http.Request, transportCase providerKeyVerificationTransportCase, candidateKey string) {

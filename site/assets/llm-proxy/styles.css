@@ -79,9 +79,9 @@ request-example,
 provider-editor,
 provider-settings-fields,
 provider-model-field,
-provider-base-url-field,
-provider-key-field,
-provider-key-input,
+provider-connection-fields,
+provider-connection-field,
+provider-connection-input,
 provider-key-verification-error,
 provider-removal-overlay,
 provider-removal-dialog,
@@ -936,15 +936,23 @@ request-example + request-example {
 
 provider-settings-fields {
   display: grid;
-  grid-template-columns: minmax(8.5rem, 0.8fr) minmax(14rem, 1.55fr) minmax(10rem, 1.2fr);
+  grid-template-columns: minmax(8.5rem, 0.8fr) minmax(14rem, 1.55fr) auto minmax(10rem, 1.2fr);
   align-items: end;
   gap: 0.55rem;
 }
 
-provider-key-field {
+provider-connection-fields {
+  display: grid;
+  gap: 0.55rem;
+}
+
+provider-connection-field {
   display: grid;
   min-width: 0;
   gap: 0.25rem;
+  color: var(--llm-muted);
+  font-size: 0.76rem;
+  font-weight: 600;
 }
 
 provider-settings-fields > label {
@@ -960,40 +968,23 @@ provider-model-field {
   font-weight: 600;
 }
 
-provider-base-url-field {
-  display: grid;
-  grid-column: 1 / -1;
-  min-width: 0;
-  gap: 0.25rem;
-  color: var(--llm-muted);
-  font-size: 0.76rem;
-  font-weight: 600;
-}
-
-provider-base-url-field input {
-  min-width: 0;
-  width: 100%;
-  min-height: 30px;
-  block-size: 30px;
-}
-
 .field-label-with-help > label {
   display: block;
 }
 
-provider-key-input {
+provider-connection-input {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) repeat(2, 30px);
+  grid-template-columns: minmax(0, 1fr) 30px;
   align-items: center;
   gap: 0.35rem;
 }
 
-provider-key-input input {
+provider-connection-input input {
   min-width: 0;
   width: 100%;
 }
 
-provider-key-input input[readonly] {
+provider-connection-input input[readonly] {
   color: var(--llm-muted);
 }
 
@@ -1022,7 +1013,7 @@ provider-key-verification-error button {
 }
 
 .provider-selector select,
-provider-key-input input,
+provider-connection-input input,
 provider-settings-fields > label select,
 provider-model-field > select,
 .provider-key-visibility-toggle,
@@ -1050,12 +1041,6 @@ provider-model-field > select,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-}
-
-.provider-key-remove .material-symbols-outlined {
-  display: block;
-  font-size: 1.125rem;
-  line-height: 1;
 }
 
 .provider-section-header h2.eyebrow {

@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Strict YAML config placeholders for LLM Proxy</title>
-    <meta name="description" content="Use config.yml as the only service config source and env only for strict placeholder expansion.">
+    <meta name="description" content="Use config.yml for service settings, providers.yml for provider definitions, and env only for declared values.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/strict-yaml-config-placeholders/">
     <meta property="og:title" content="Strict YAML config placeholders for LLM Proxy">
-    <meta property="og:description" content="Use config.yml as the only service config source and env only for strict placeholder expansion.">
+    <meta property="og:description" content="Use config.yml for service settings, providers.yml for provider definitions, and env only for declared values.">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/strict-yaml-config-placeholders/">
     <meta name="twitter:card" content="summary">
@@ -27,9 +27,9 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Strict YAML config placeholders for LLM Proxy","description":"Use config.yml as the only service config source and env only for strict placeholder expansion.","url":"https://llm-proxy.mprlab.com/resources/strict-yaml-config-placeholders/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/strict-yaml-config-placeholders/","about":["LLM Proxy","Configuration","strict YAML config placeholders"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Strict YAML config placeholders for LLM Proxy","description":"Use config.yml for service settings, providers.yml for provider definitions, and env only for declared values.","url":"https://llm-proxy.mprlab.com/resources/strict-yaml-config-placeholders/","datePublished":"2026-07-06","dateModified":"2026-08-20","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/strict-yaml-config-placeholders/","about":["LLM Proxy","Configuration","strict YAML config placeholders"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Strict YAML config placeholders for LLM Proxy","item":"https://llm-proxy.mprlab.com/resources/strict-yaml-config-placeholders/"}]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of strict YAML config placeholders?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy reads service configuration from config.yml, expands ${NAME} placeholders from env or a sibling .env file, rejects unknown YAML keys, and fails startup for missing required placeholders."}},{"@type":"Question","name":"Who should read this configuration resource?","acceptedAnswer":{"@type":"Answer","text":"Operators who want predictable startup behavior and no hidden runtime defaults."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is LLM model catalog configuration in config.yml, which covers LLM model catalog configuration."}}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of strict YAML config placeholders?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy reads service settings from config.yml and provider definitions from providers.yml. It expands declared environment values and rejects unknown YAML keys."}},{"@type":"Question","name":"Who should read this configuration resource?","acceptedAnswer":{"@type":"Answer","text":"Operators who want predictable startup behavior and no hidden runtime defaults."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is LLM provider catalog configuration in providers.yml, which covers LLM model catalog configuration."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body class="resource-page">
@@ -65,9 +65,9 @@
           <header class="resource-hero">
             <p class="eyebrow">Configuration</p>
             <h1>Strict YAML config placeholders for LLM Proxy</h1>
-            <p class="resource-deck">Use config.yml as the only service config source and env only for strict placeholder expansion.</p>
+            <p class="resource-deck">Use config.yml for service settings, providers.yml for provider definitions, and env only for declared values.</p>
             <p class="resource-audience">Operators who want predictable startup behavior and no hidden runtime defaults.</p>
-            <p class="resource-byline">Reviewed 2026-07-11 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <p class="resource-byline">Reviewed 2026-08-20 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
             <div class="resource-actions">
               <a class="resource-button" href="/docs/">Open API reference</a>
               <a class="resource-link" href="/resources/">Browse all resources</a>
@@ -81,13 +81,14 @@
 
           <section>
             <h2>How LLM Proxy helps</h2>
-            <p>LLM Proxy reads service configuration from config.yml, expands ${NAME} placeholders from env or a sibling .env file, rejects unknown YAML keys, and fails startup for missing required placeholders.</p>
+            <p>LLM Proxy reads service settings from config.yml and provider definitions from providers.yml. It expands declared environment values and rejects unknown YAML keys.</p>
           </section>
 
           <section>
             <h2>How it works</h2>
             <ol class="resource-steps">
               <li>Put service configuration in config.yml.</li>
+<li>Put provider definitions and environment bindings in providers.yml.</li>
 <li>Use process environment or a sibling .env only to satisfy placeholders.</li>
 <li>Avoid ${NAME:-default}; the loader supports plain ${NAME}.</li>
 <li>Let startup fail when required placeholders or unknown keys are present.</li>
@@ -108,9 +109,9 @@
                 <tbody>
 
                         <tr>
-                          <td>Single config file</td>
-                          <td>Runtime code receives only validated config values.</td>
-                          <td>Flags and env are not alternate service config sources.</td>
+                          <td>Explicit YAML owners</td>
+                          <td>Runtime code receives one validated service config and one validated provider catalog.</td>
+                          <td>Flags and env are not alternate schema sources.</td>
                         </tr>
 
 
@@ -171,7 +172,7 @@
 
                     <details>
                       <summary>What is the main job of strict YAML config placeholders?</summary>
-                      <p>LLM Proxy reads service configuration from config.yml, expands ${NAME} placeholders from env or a sibling .env file, rejects unknown YAML keys, and fails startup for missing required placeholders.</p>
+                      <p>LLM Proxy reads service settings from config.yml and provider definitions from providers.yml. It expands declared environment values and rejects unknown YAML keys.</p>
                     </details>
 
 
@@ -195,7 +196,7 @@
 
                     <details>
                       <summary>What should I read next?</summary>
-                      <p>A closely related resource is LLM model catalog configuration in config.yml, which covers LLM model catalog configuration.</p>
+                      <p>A closely related resource is LLM provider catalog configuration in providers.yml, which covers LLM model catalog configuration.</p>
                     </details>
 
             </div>
@@ -207,7 +208,7 @@
 
                     <a class="resource-related" href="/resources/model-catalog-configuration/">
                       <span>Configuration</span>
-                      <strong>LLM model catalog configuration in config.yml</strong>
+                      <strong>LLM provider catalog configuration in providers.yml</strong>
                     </a>
 
 

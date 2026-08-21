@@ -2,8 +2,8 @@
 
 import { COPY, NOTICE_KINDS } from "../constants.js?v=20260811c131";
 import {
-  removeProviderKey as requestRemoveProviderKey,
-  revealProviderKey as requestRevealProviderKey,
+  removeProviderConnection as requestRemoveProviderConnection,
+  revealProviderConnectionField as requestRevealProviderConnectionField,
 } from "../core/backendClient.js?v=20260811c131";
 import {
   isAbortError,
@@ -12,9 +12,9 @@ import {
 } from "../core/managementProfile.js?v=20260811c131";
 
 const EMPTY_STRING = "";
-const MASKED_PROVIDER_KEY_PREFIX = "****";
-const MASKED_PROVIDER_KEY_FINAL_CHARACTER_COUNT = 4;
-const SAVED_PROVIDER_KEY_MASK = "saved";
+const MASKED_PROVIDER_FIELD_PREFIX = "****";
+const MASKED_PROVIDER_FIELD_FINAL_CHARACTER_COUNT = 4;
+const SAVED_PROVIDER_FIELD_MASK = "saved";
 
 /** @typedef {ReturnType<typeof import("./managementApplicationState.js").createManagementApplicationState>} ManagementApplicationState */
 /** @typedef {ManagementApplicationState & import("../types.d.js").AlpineMagic & {
@@ -39,15 +39,11 @@ function providerCredentialsResponsibility(responsibility) {
   return responsibility;
 }
 
-/** Create provider credential entry, reveal, verification, and removal behavior. */
+/** Create catalog-field entry, reveal, verification, and provider removal behavior. */
 export function createProviderCredentialsResponsibility() {
   return providerCredentialsResponsibility({
-    get providerKeyVisible() {
-      return this.providerEditorSession.keyVisible;
-    },
-
     get providerKeyRevealPending() {
-      return this.providerEditorSession.revealPending;
+      return this.providerEditorSession.revealPendingField !== EMPTY_STRING;
     },
 
     get providerKeyVerificationFailed() {
@@ -58,80 +54,93 @@ export function createProviderCredentialsResponsibility() {
       return this.providerRemovalConfirmationProviderID !== EMPTY_STRING;
     },
 
-    get selectedProviderKeyHasInput() {
-      return this.providerEditorSession.keyInput !== EMPTY_STRING;
+    get selectedProviderHasConnectionInput() {
+      return Object.values(this.providerEditorSession.fieldInputs).some((value) => value.trim() !== EMPTY_STRING);
     },
 
-    get selectedProviderKeyInputValue() {
-      const provider = this.selectedProvider;
-      if (!provider) {
-        return EMPTY_STRING;
-      }
-      const providerKeyInput = this.providerEditorSession.keyInput;
-      if (this.providerKeyVisible || (!provider.has_key && !providerKeyInput)) {
-        return providerKeyInput;
-      }
-      const providerMaskedKey = String(provider.masked_key || EMPTY_STRING);
-      if (!providerKeyInput && providerMaskedKey === SAVED_PROVIDER_KEY_MASK) {
-        return MASKED_PROVIDER_KEY_PREFIX;
-      }
-      return maskedProviderKey(providerKeyInput || providerMaskedKey);
+    /** @param {import("../types.d.js").ProviderFieldProfile} field */
+    providerFieldVisible(field) {
+      return Boolean(this.providerEditorSession.fieldVisible[field.id]);
     },
 
-    get selectedProviderKeyInputReadOnly() {
-      const provider = this.selectedProvider;
-      if (!provider) {
-        return false;
+    /** @param {import("../types.d.js").ProviderFieldProfile} field */
+    providerFieldHasInput(field) {
+      return String(this.providerEditorSession.fieldInputs[field.id] ?? EMPTY_STRING) !== EMPTY_STRING;
+    },
+
+    /** @param {import("../types.d.js").ProviderFieldProfile} field */
+    providerFieldInputValue(field) {
+      const input = String(this.providerEditorSession.fieldInputs[field.id] ?? EMPTY_STRING);
+      if (!field.secret || this.providerFieldVisible(field) || (!field.configured && input === EMPTY_STRING)) {
+        return input;
       }
-      return Boolean(!this.providerKeyVisible && (provider.has_key || this.selectedProviderKeyHasInput));
+      const maskedValue = String(field.masked_value || EMPTY_STRING);
+      if (input === EMPTY_STRING && maskedValue === SAVED_PROVIDER_FIELD_MASK) {
+        return MASKED_PROVIDER_FIELD_PREFIX;
+      }
+      return maskedProviderField(input || maskedValue);
     },
 
-    get selectedProviderKeyActionCopy() {
-      return this.providerKeyVisible ? COPY.hideProviderKey : COPY.showProviderKey;
+    /** @param {import("../types.d.js").ProviderFieldProfile} field */
+    providerFieldInputReadOnly(field) {
+      return Boolean(field.secret && !this.providerFieldVisible(field) && (field.configured || this.providerFieldHasInput(field)));
     },
 
-    async handleSelectedProviderKeyAction() {
-      const provider = this.selectedProvider;
-      if (!provider) {
+    /** @param {import("../types.d.js").ProviderFieldProfile} field */
+    providerFieldActionCopy(field) {
+      return this.providerFieldVisible(field) ? COPY.hideProviderKey : COPY.showProviderKey;
+    },
+
+    /** @param {import("../types.d.js").ProviderFieldProfile} field */
+    async handleProviderFieldAction(field) {
+      if (!field.secret) {
         return;
       }
-      if (this.selectedProviderKeyHasInput) {
-        this.providerEditorSession.keyVisible = !this.providerKeyVisible;
+      if (this.providerFieldHasInput(field)) {
+        this.providerEditorSession.fieldVisible[field.id] = !this.providerFieldVisible(field);
         return;
       }
-      if (provider.has_key) {
-        await this.revealSelectedProviderKey();
+      if (field.configured) {
+        await this.revealProviderField(field);
       }
     },
 
-    /** @param {Event} event */
-    handleSelectedProviderKeyInput(event) {
+    /**
+     * @param {import("../types.d.js").ProviderFieldProfile} field
+     * @param {Event} event
+     */
+    handleProviderFieldInput(field, event) {
       const provider = this.selectedProvider;
-      if (!provider) {
+      if (!provider || !provider.fields.some((candidate) => candidate.id === field.id)) {
         return;
       }
       this.abortProviderKeyVerification();
       this.providerKeyVerificationFailure = EMPTY_STRING;
-      const keyInput = /** @type {HTMLInputElement} */ (event.target);
-      this.providerEditorSession.keyInput = keyInput.value;
-      this.providerEditorSession.keyVisible = true;
-      this.providerEditorSession.keyDirty = true;
+      const input = /** @type {HTMLInputElement} */ (event.target);
+      this.providerEditorSession.fieldInputs[field.id] = input.value;
+      this.providerEditorSession.fieldVisible[field.id] = field.secret;
+      this.providerEditorSession.fieldDirty[field.id] = true;
       this.markSelectedProviderDirty();
     },
 
-    handleSelectedProviderKeyPaste() {
+    /** @param {import("../types.d.js").ProviderFieldProfile} field */
+    handleProviderFieldPaste(field) {
+      if (!field.secret) {
+        return;
+      }
       this.$nextTick(() => {
-        void this.verifyPastedProviderKey();
+        void this.verifyPastedProviderField(field.id);
       });
     },
 
-    async verifyPastedProviderKey() {
+    /** @param {string} fieldID */
+    async verifyPastedProviderField(fieldID) {
       if (this.providerAutosavePromise) {
         await this.providerAutosavePromise;
       }
       if (
-        this.providerEditorSession.keyDirty &&
-        this.providerEditorSession.keyInput.trim() !== EMPTY_STRING
+        this.providerEditorSession.fieldDirty[fieldID] &&
+        String(this.providerEditorSession.fieldInputs[fieldID] ?? EMPTY_STRING).trim() !== EMPTY_STRING
       ) {
         await this.autosaveSelectedProvider();
       }
@@ -142,12 +151,14 @@ export function createProviderCredentialsResponsibility() {
       await this.autosaveSelectedProvider();
     },
 
-    async revealSelectedProviderKey() {
+    /** @param {import("../types.d.js").ProviderFieldProfile} field */
+    async revealProviderField(field) {
       const provider = this.selectedProvider;
-      if (!provider || !provider.has_key || this.providerKeyRevealPending) {
+      if (!provider || !field.secret || !field.configured || this.providerKeyRevealPending) {
         return;
       }
       const revealProviderID = provider.id;
+      const revealFieldID = field.id;
       const revealVersion = this.providerEditorSession.revealVersion + 1;
       const tenantID = this.settingsTenantID;
       const appVersion = this.appVersion;
@@ -156,24 +167,32 @@ export function createProviderCredentialsResponsibility() {
         return;
       }
       this.providerEditorSession.revealVersion = revealVersion;
-      this.providerEditorSession.revealPending = true;
+      this.providerEditorSession.revealPendingField = revealFieldID;
       try {
-        const revealResponse = await requestRevealProviderKey(tenantID, revealProviderID, lifetimeController.signal);
-        if (!this.canApplyProviderKeyReveal(tenantID, appVersion, revealProviderID, revealVersion)) {
+        const revealResponse = await requestRevealProviderConnectionField(
+          tenantID,
+          revealProviderID,
+          revealFieldID,
+          lifetimeController.signal,
+        );
+        if (
+          revealResponse.field_id !== revealFieldID ||
+          !this.canApplyProviderFieldReveal(tenantID, appVersion, revealProviderID, revealFieldID, revealVersion)
+        ) {
           return;
         }
-        this.providerEditorSession.keyInput = revealResponse.api_key;
-        this.providerEditorSession.keyVisible = true;
+        this.providerEditorSession.fieldInputs[revealFieldID] = revealResponse.value;
+        this.providerEditorSession.fieldVisible[revealFieldID] = true;
       } catch (requestError) {
         if (
           !isAbortError(requestError) &&
-          this.canApplyProviderKeyReveal(tenantID, appVersion, revealProviderID, revealVersion)
+          this.canApplyProviderFieldReveal(tenantID, appVersion, revealProviderID, revealFieldID, revealVersion)
         ) {
           this.setSettingsNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
         }
       } finally {
         if (revealVersion === this.providerEditorSession.revealVersion) {
-          this.providerEditorSession.revealPending = false;
+          this.providerEditorSession.revealPendingField = EMPTY_STRING;
         }
       }
     },
@@ -182,14 +201,16 @@ export function createProviderCredentialsResponsibility() {
      * @param {string} tenantID
      * @param {number} appVersion
      * @param {string} providerID
+     * @param {string} fieldID
      * @param {number} revealVersion
      */
-    canApplyProviderKeyReveal(tenantID, appVersion, providerID, revealVersion) {
+    canApplyProviderFieldReveal(tenantID, appVersion, providerID, fieldID, revealVersion) {
       return (
         this.settingsOpen &&
         this.settingsTenantID === tenantID &&
         this.appVersion === appVersion &&
         this.selectedProviderID === providerID &&
+        this.providerEditorSession.revealPendingField === fieldID &&
         this.providerEditorSession.revealVersion === revealVersion
       );
     },
@@ -211,11 +232,8 @@ export function createProviderCredentialsResponsibility() {
       if (!provider) {
         return;
       }
-      if (!provider.has_key) {
+      if (!provider.configured) {
         this.clearProviderKeyMaterial();
-        this.$nextTick(() => {
-          this.$refs.providerKeyInput.focus();
-        });
         return;
       }
       this.providerRemovalConfirmationProviderID = provider.id;
@@ -231,7 +249,7 @@ export function createProviderCredentialsResponsibility() {
     cancelProviderKeyRemoval() {
       this.dismissProviderKeyRemovalConfirmation();
       this.$nextTick(() => {
-        this.$refs.providerKeyRemove.focus();
+        this.$refs.providerSelector.focus();
       });
     },
 
@@ -272,7 +290,7 @@ export function createProviderCredentialsResponsibility() {
       }
       try {
         await this.runProfileMutation(
-          async () => requestRemoveProviderKey(tenantID, provider.id, lifetimeController.signal),
+          async () => requestRemoveProviderConnection(tenantID, provider.id, lifetimeController.signal),
           COPY.providerKeyRemoved,
         );
       } finally {
@@ -282,7 +300,7 @@ export function createProviderCredentialsResponsibility() {
   });
 }
 
-/** @param {string} keyValue */
-function maskedProviderKey(keyValue) {
-  return `${MASKED_PROVIDER_KEY_PREFIX}${keyValue.slice(-MASKED_PROVIDER_KEY_FINAL_CHARACTER_COUNT)}`;
+/** @param {string} fieldValue */
+function maskedProviderField(fieldValue) {
+  return `${MASKED_PROVIDER_FIELD_PREFIX}${fieldValue.slice(-MASKED_PROVIDER_FIELD_FINAL_CHARACTER_COUNT)}`;
 }

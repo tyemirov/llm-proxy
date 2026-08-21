@@ -72,16 +72,17 @@ export async function startLocalManagementStack() {
     if (llmProxyConfig === packagedLLMProxyConfig) {
       throw new Error("llm_proxy_blackbox_port_contract_missing");
     }
-    const portConfiguredLLMProxyConfig = llmProxyConfig;
-    llmProxyConfig = llmProxyConfig.replace(
-      "    base_url: https://api.openai.com/v1\n",
-      `    base_url: ${frontendOrigin}/v1\n`,
+    const packagedProviderCatalog = await readFile(path.join(repoRoot, "configs/providers.yml"), "utf8");
+    const providerCatalog = packagedProviderCatalog.replace(
+      "            default_base_url: https://api.openai.com/v1\n            path: /responses\n",
+      `            default_base_url: ${frontendOrigin}/v1\n            path: /responses\n`,
     );
-    if (llmProxyConfig === portConfiguredLLMProxyConfig) {
-      throw new Error("llm_proxy_blackbox_openai_base_url_contract_missing");
+    if (providerCatalog === packagedProviderCatalog) {
+      throw new Error("llm_proxy_blackbox_openai_transport_contract_missing");
     }
     const llmProxyConfigPath = path.join(temporaryDirectory, "llm-proxy-config.yml");
     await writeFile(llmProxyConfigPath, llmProxyConfig, { mode: 0o600 });
+    await writeFile(path.join(temporaryDirectory, "providers.yml"), providerCatalog, { mode: 0o600 });
 
     const tAuthProcess = startService("tauth", tAuthBinaryPath, ["--config", tAuthConfigPath]);
     serviceProcesses.push(tAuthProcess);

@@ -121,9 +121,9 @@ func TestManagedTenantSQLiteOwnershipMigrationPreservesAndRebindsData(t *testing
 	}
 	migrator := database.database.Migrator()
 	if managedTableHasColumn(migrator, managedTenantTable, "user_id") || !managedTableHasColumn(migrator, managedTenantTable, "owner_user_id") ||
-		managedTableHasColumn(migrator, managedProviderKeyTable, "user_id") || managedTableHasColumn(migrator, managedUsageEventTable, "user_id") {
+		migrator.HasTable(managedProviderKeyTable) || managedTableHasColumn(migrator, managedUsageEventTable, "user_id") {
 		tenantColumns, _ := migrator.ColumnTypes(managedTenantTable)
-		providerColumns, _ := migrator.ColumnTypes(managedProviderKeyTable)
+		providerColumns, _ := migrator.ColumnTypes(managedProviderConnectionTable)
 		usageColumns, _ := migrator.ColumnTypes(managedUsageEventTable)
 		t.Fatalf("unexpected ownership columns tenant=%v provider=%v usage=%v", managedColumnNames(tenantColumns), managedColumnNames(providerColumns), managedColumnNames(usageColumns))
 	}
@@ -148,14 +148,14 @@ func TestManagedTenantSQLiteOwnershipMigrationPreservesAndRebindsData(t *testing
 		!firstRecord.CreatedAt.Equal(firstTenant.CreatedAt) || !firstRecord.UpdatedAt.Equal(firstTenant.UpdatedAt) {
 		t.Fatalf("migrated first tenant=%+v", firstRecord)
 	}
-	if len(firstRecord.ProviderAPIKeys) != 1 || firstRecord.ProviderAPIKeys[0].EncryptedAPIKey == firstCiphertext {
-		t.Fatalf("migrated provider key=%+v", firstRecord.ProviderAPIKeys)
+	if len(firstRecord.ProviderConnections) != 1 || len(firstRecord.ProviderProfiles) != 1 || firstRecord.ProviderConnections[0].Value == firstCiphertext {
+		t.Fatalf("migrated provider connections=%+v profiles=%+v", firstRecord.ProviderConnections, firstRecord.ProviderProfiles)
 	}
-	firstAPIKey, firstDecryptionError := providerKeyCipher.decrypt(firstRecord.ProviderAPIKeys[0])
+	firstAPIKey, firstDecryptionError := providerKeyCipher.decryptConnection(firstRecord.ProviderConnections[0])
 	if firstDecryptionError != nil || firstAPIKey != "sk-first" {
 		t.Fatalf("migrated API key=%q error=%v", firstAPIKey, firstDecryptionError)
 	}
-	if _, oldBindingError := providerKeyCipher.decryptValue(firstRecord.ProviderAPIKeys[0].EncryptedAPIKey, firstTenant.UserID, ProviderNameOpenAI); !errors.Is(oldBindingError, errManagedProviderKeyDecryption) {
+	if _, oldBindingError := providerKeyCipher.decryptValue(firstRecord.ProviderConnections[0].Value, firstTenant.UserID, ProviderNameOpenAI); !errors.Is(oldBindingError, errManagedProviderKeyDecryption) {
 		t.Fatalf("new ciphertext accepted old user binding: %v", oldBindingError)
 	}
 	var usageRecords []managedUsageEventRecord
@@ -240,12 +240,12 @@ func TestManagedTenantSQLiteOwnershipMigrationCanonicalizesConfirmedRouteIdentit
 		DictationProvider: ProviderNameSiliconFlow, DictationModel: "sensevoice-small",
 		SystemPrompt: "preserve native prompt",
 	}
-	if migratedTenant.defaults() != expectedDefaults || len(migratedTenant.ProviderAPIKeys) != 2 || !migratedTenant.UpdatedAt.Equal(legacyTenant.UpdatedAt) {
+	if migratedTenant.defaults() != expectedDefaults || len(migratedTenant.ProviderConnections) != 2 || len(migratedTenant.ProviderProfiles) != 2 || !migratedTenant.UpdatedAt.Equal(legacyTenant.UpdatedAt) {
 		t.Fatalf("migrated native legacy tenant=%+v", migratedTenant)
 	}
 	modelsByProvider := map[string]string{}
-	for _, providerKey := range migratedTenant.ProviderAPIKeys {
-		modelsByProvider[providerKey.ProviderID] = providerKey.TextModel
+	for _, profile := range migratedTenant.ProviderProfiles {
+		modelsByProvider[profile.ProviderID] = profile.TextModel
 	}
 	if modelsByProvider[ProviderNameMiniMax] != ModelNameMiniMaxM27 || modelsByProvider[ProviderNameSiliconFlow] != ModelNameSiliconFlowDeepSeek {
 		t.Fatalf("migrated native legacy provider models=%v", modelsByProvider)
@@ -328,7 +328,7 @@ func TestManagedTenantKeyedRoutingDefaultsMigrationReconcilesExistingTenants(t *
 		t.Fatalf("migrate keyed defaults: %v", migrationError)
 	}
 	var migratedTenant managedTenantRecord
-	if queryError := database.Preload("ProviderAPIKeys").Where(&managedTenantRecord{TenantID: tenantRecord.TenantID}).First(&migratedTenant).Error; queryError != nil {
+	if queryError := database.Preload("ProviderConnections").Preload("ProviderProfiles").Where(&managedTenantRecord{TenantID: tenantRecord.TenantID}).First(&migratedTenant).Error; queryError != nil {
 		t.Fatalf("load migrated tenant: %v", queryError)
 	}
 	expectedDefaults := TenantDefaults{
@@ -418,7 +418,7 @@ func TestManagedTenantModelIdentityMigrationCanonicalizesCurrentRoutesAndPreserv
 		t.Fatalf("migrate model identity: %v", migrationError)
 	}
 	var migratedTenants []managedTenantRecord
-	if queryError := database.Preload("ProviderAPIKeys").Order("tenant_id").Find(&migratedTenants).Error; queryError != nil {
+	if queryError := database.Preload("ProviderConnections").Preload("ProviderProfiles").Order("tenant_id").Find(&migratedTenants).Error; queryError != nil {
 		t.Fatalf("load migrated tenants: %v", queryError)
 	}
 	if len(migratedTenants) != 2 {
@@ -431,17 +431,17 @@ func TestManagedTenantModelIdentityMigrationCanonicalizesCurrentRoutesAndPreserv
 		DictationProvider: ProviderNameSiliconFlow, DictationModel: "sensevoice-small",
 		SystemPrompt: "preserve native tenant prompt",
 	}
-	if migratedNativeTenant.defaults() != expectedNativeDefaults || !migratedNativeTenant.UpdatedAt.Equal(nativeTenant.UpdatedAt) || len(migratedNativeTenant.ProviderAPIKeys) != 2 {
-		t.Fatalf("migrated native tenant=%+v keys=%+v", migratedNativeTenant, migratedNativeTenant.ProviderAPIKeys)
+	if migratedNativeTenant.defaults() != expectedNativeDefaults || !migratedNativeTenant.UpdatedAt.Equal(nativeTenant.UpdatedAt) || len(migratedNativeTenant.ProviderConnections) != 2 || len(migratedNativeTenant.ProviderProfiles) != 2 {
+		t.Fatalf("migrated native tenant=%+v connections=%+v profiles=%+v", migratedNativeTenant, migratedNativeTenant.ProviderConnections, migratedNativeTenant.ProviderProfiles)
 	}
 	modelsByProvider := map[string]string{}
-	for _, providerKey := range migratedNativeTenant.ProviderAPIKeys {
-		modelsByProvider[providerKey.ProviderID] = providerKey.TextModel
+	for _, profile := range migratedNativeTenant.ProviderProfiles {
+		modelsByProvider[profile.ProviderID] = profile.TextModel
 	}
 	if modelsByProvider[ProviderNameMiniMax] != ModelNameMiniMaxM27 || modelsByProvider[ProviderNameSiliconFlow] != ModelNameSiliconFlowDeepSeek {
 		t.Fatalf("migrated provider models=%v", modelsByProvider)
 	}
-	if migratedCanonicalTenant.defaults() != canonicalTenant.defaults() || len(migratedCanonicalTenant.ProviderAPIKeys) != 1 || migratedCanonicalTenant.ProviderAPIKeys[0].TextModel != ModelNameDeepSeekV4Flash {
+	if migratedCanonicalTenant.defaults() != canonicalTenant.defaults() || len(migratedCanonicalTenant.ProviderConnections) != 1 || len(migratedCanonicalTenant.ProviderProfiles) != 1 || migratedCanonicalTenant.ProviderProfiles[0].TextModel != ModelNameDeepSeekV4Flash {
 		t.Fatalf("canonical tenant changed=%+v", migratedCanonicalTenant)
 	}
 	var migratedUsage []managedUsageEventRecord
@@ -553,7 +553,7 @@ func TestManagedTenantQwenCloudRetirementMigrationReconcilesCurrentTenants(t *te
 		t.Fatalf("migrate qwen cloud retirement: %v", migrationError)
 	}
 	var migratedTenants []managedTenantRecord
-	if queryError := database.Preload("ProviderAPIKeys").Order("tenant_id").Find(&migratedTenants).Error; queryError != nil {
+	if queryError := database.Preload("ProviderConnections").Preload("ProviderProfiles").Order("tenant_id").Find(&migratedTenants).Error; queryError != nil {
 		t.Fatalf("load migrated tenants: %v", queryError)
 	}
 	if len(migratedTenants) != 2 {
@@ -565,12 +565,12 @@ func TestManagedTenantQwenCloudRetirementMigrationReconcilesCurrentTenants(t *te
 		Provider: ProviderNameDeepSeek, Model: ModelNameDeepSeekV4Flash,
 		SystemPrompt: "retain mixed tenant prompt",
 	}
-	if migratedMixed.defaults() != expectedMixedDefaults || !migratedMixed.UpdatedAt.Equal(mixedTenant.UpdatedAt) || len(migratedMixed.ProviderAPIKeys) != 1 {
-		t.Fatalf("migrated mixed tenant=%+v keys=%+v", migratedMixed, migratedMixed.ProviderAPIKeys)
+	if migratedMixed.defaults() != expectedMixedDefaults || !migratedMixed.UpdatedAt.Equal(mixedTenant.UpdatedAt) || len(migratedMixed.ProviderConnections) != 1 || len(migratedMixed.ProviderProfiles) != 1 {
+		t.Fatalf("migrated mixed tenant=%+v connections=%+v profiles=%+v", migratedMixed, migratedMixed.ProviderConnections, migratedMixed.ProviderProfiles)
 	}
 	expectedQwenOnlyDefaults := TenantDefaults{SystemPrompt: "retain tenant prompt"}
-	if migratedQwenOnly.defaults() != expectedQwenOnlyDefaults || !migratedQwenOnly.UpdatedAt.Equal(qwenOnlyTenant.UpdatedAt) || len(migratedQwenOnly.ProviderAPIKeys) != 0 {
-		t.Fatalf("migrated qwen-only tenant=%+v keys=%+v", migratedQwenOnly, migratedQwenOnly.ProviderAPIKeys)
+	if migratedQwenOnly.defaults() != expectedQwenOnlyDefaults || !migratedQwenOnly.UpdatedAt.Equal(qwenOnlyTenant.UpdatedAt) || len(migratedQwenOnly.ProviderConnections) != 0 || len(migratedQwenOnly.ProviderProfiles) != 0 {
+		t.Fatalf("migrated qwen-only tenant=%+v connections=%+v profiles=%+v", migratedQwenOnly, migratedQwenOnly.ProviderConnections, migratedQwenOnly.ProviderProfiles)
 	}
 	var migratedUsage managedUsageEventRecord
 	if queryError := database.First(&migratedUsage, historicalUsage.ID).Error; queryError != nil || migratedUsage != historicalUsage {
@@ -600,7 +600,7 @@ func TestManagedTenantQwenCloudRetirementMigrationReconcilesCurrentTenants(t *te
 	configuration := Configuration{
 		Management:  ManagementConfiguration{},
 		WorkerCount: 1, QueueSize: 1, MaxPromptBytes: 1024,
-		Endpoints: endpoints, ModelCatalog: internalManagedUsageWriterProviderModels(),
+		Endpoints: endpoints, ProviderCatalog: internalTestProviderCatalog(internalManagedUsageWriterProviderModels()), ModelCatalog: internalManagedUsageWriterProviderModels(),
 		upstreamRateLimits:   upstreamRateLimits{rules: map[string]upstreamRateLimitRule{}},
 		requestTimeoutPolicy: timeoutPolicy, validated: true,
 	}
@@ -641,12 +641,15 @@ func TestManagedTenantCurrentSchemaRejectsRetiredQwenCloudShapes(t *testing.T) {
 		{
 			name: "managed provider settings",
 			seed: func(t *testing.T, database *gorm.DB, providerKeyCipher managedProviderKeyCipher, tenantRecord managedTenantRecord) {
-				encryptedKey, encryptionError := providerKeyCipher.encrypt(bytes.NewReader(bytes.Repeat([]byte{9}, providerKeyCipher.aeadCipher.NonceSize())), tenantRecord.TenantID, retiredQwenCloudProviderIdentifier, "sk-retired")
+				encryptedKey, encryptionError := providerKeyCipher.encryptConnection(bytes.NewReader(bytes.Repeat([]byte{9}, providerKeyCipher.aeadCipher.NonceSize())), tenantRecord.TenantID, retiredQwenCloudProviderIdentifier, CatalogCredentialAPIKey, "sk-retired")
 				if encryptionError != nil {
 					t.Fatalf("encrypt retired key: %v", encryptionError)
 				}
-				if createError := database.Create(&managedProviderAPIKeyRecord{TenantID: tenantRecord.TenantID, ProviderID: retiredQwenCloudProviderIdentifier, EncryptedAPIKey: encryptedKey, TextModel: retiredQwenCloudModelIdentifier, SystemPrompt: "retired prompt", CreatedAt: tenantRecord.CreatedAt, UpdatedAt: tenantRecord.UpdatedAt}).Error; createError != nil {
+				if createError := database.Create(&managedProviderConnectionRecord{TenantID: tenantRecord.TenantID, ProviderID: retiredQwenCloudProviderIdentifier, FieldID: CatalogCredentialAPIKey, Value: encryptedKey, CreatedAt: tenantRecord.CreatedAt, UpdatedAt: tenantRecord.UpdatedAt}).Error; createError != nil {
 					t.Fatalf("seed retired provider settings: %v", createError)
+				}
+				if createError := database.Create(&managedProviderProfileRecord{TenantID: tenantRecord.TenantID, ProviderID: retiredQwenCloudProviderIdentifier, TextModel: retiredQwenCloudModelIdentifier, SystemPrompt: "retired prompt", CreatedAt: tenantRecord.CreatedAt, UpdatedAt: tenantRecord.UpdatedAt}).Error; createError != nil {
+					t.Fatalf("seed retired provider profile: %v", createError)
 				}
 			},
 		},
@@ -822,23 +825,7 @@ func openLegacyManagedTenantDatabaseWithDialector(t *testing.T, dialector gorm.D
 }
 
 func internalManagementProviderRegistry() *providerRegistry {
-	return newProviderRegistry(Configuration{
-		OpenAITranscriptionsURL: "https://openai.example/transcriptions",
-		ModelCatalog: internalTestModelCatalog(
-			internalTestOffering(ProviderNameOpenAI, ModelNameGPT41, []string{ModelOperationText}, []string{ModelOperationText}),
-			internalTestOffering(ProviderNameOpenAI, ModelNameGPT55, []string{ModelOperationText}, nil),
-			internalTestOffering(ProviderNameOpenAI, DefaultDictationModel, []string{ModelOperationDictation}, []string{ModelOperationDictation}),
-			internalTestOffering(ProviderNameDeepSeek, ModelNameDeepSeekV4Flash, []string{ModelOperationText}, []string{ModelOperationText}),
-			internalTestOffering(ProviderNameDashScope, ModelNameDashScopeQwenPlus, []string{ModelOperationText}, []string{ModelOperationText}),
-			internalTestOffering(ProviderNameMiniMax, ModelNameMiniMaxM27, []string{ModelOperationText}, []string{ModelOperationText}),
-			internalTestOffering(ProviderNameSiliconFlow, ModelNameSiliconFlowDeepSeek, []string{ModelOperationText}, []string{ModelOperationText}),
-			internalTestOffering(ProviderNameSiliconFlow, "sensevoice-small", []string{ModelOperationDictation}, []string{ModelOperationDictation}),
-			internalTestOffering(ProviderNameZAI, ModelNameZAIGLM, []string{ModelOperationText}, []string{ModelOperationText}),
-			internalTestOffering(ProviderNameZAI, "glm-asr-2512", []string{ModelOperationDictation}, []string{ModelOperationDictation}),
-			internalTestOffering(ProviderNameXAI, ModelNameGrok43, []string{ModelOperationText}, []string{ModelOperationText}),
-			internalTestOffering(ProviderNameXAI, "xai-stt", []string{ModelOperationDictation}, []string{ModelOperationDictation}),
-		),
-	})
+	return newProviderRegistry(Configuration{ProviderCatalog: internalCanonicalProviderCatalog()})
 }
 
 func (record *legacyManagedTenantRecord) applyDefaults(defaults managedRoutingDefaults) {

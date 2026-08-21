@@ -424,7 +424,7 @@ func TestIntegrationUpstreamRateLimitsAreIndependentByOrigin(testingInstance *te
 	testingInstance.Cleanup(secondUpstreamServer.Close)
 
 	configuration := rateLimitIntegrationConfiguration(firstUpstreamServer.URL)
-	configuration.DashScopeBaseURL = secondUpstreamServer.URL
+	configuration.Endpoints.SetProviderBaseURL(proxy.ProviderNameDashScope, secondUpstreamServer.URL)
 	configuration.UpstreamRateLimits = []proxy.UpstreamRateLimitConfiguration{
 		{Origin: firstUpstreamServer.URL, MaxRequests: 1, Interval: "2s"},
 		{Origin: secondUpstreamServer.URL, MaxRequests: 1, Interval: "2s"},
@@ -599,15 +599,17 @@ func TestIntegrationUpstreamRateLimitCancellationReturnsGatewayTimeoutAndLogs(te
 }
 
 func rateLimitIntegrationConfiguration(upstreamURL string) proxy.Configuration {
+	endpoints := proxy.NewEndpoints()
+	endpoints.SetProviderBaseURL(proxy.ProviderNameOpenAI, upstreamURL+"/v1")
+	endpoints.SetProviderTransportURL(proxy.ProviderNameOpenAI, "dictation", upstreamURL+rateLimitDictationPath)
+	endpoints.SetProviderBaseURL(proxy.ProviderNameDeepSeek, upstreamURL)
+	endpoints.SetProviderBaseURL(proxy.ProviderNameDashScope, upstreamURL)
 	return proxy.Configuration{
-		OpenAIBaseURL:           upstreamURL + "/v1",
-		OpenAITranscriptionsURL: upstreamURL + rateLimitDictationPath,
-		DeepSeekBaseURL:         upstreamURL,
-		DashScopeBaseURL:        upstreamURL,
-		LogLevel:                logLevelDebug,
-		WorkerCount:             rateLimitConcurrentRequestCount,
-		QueueSize:               rateLimitConcurrentRequestCount,
-		RequestTimeoutSeconds:   rateLimitRequestTimeoutSeconds,
+		Endpoints:             endpoints,
+		LogLevel:              logLevelDebug,
+		WorkerCount:           rateLimitConcurrentRequestCount,
+		QueueSize:             rateLimitConcurrentRequestCount,
+		RequestTimeoutSeconds: rateLimitRequestTimeoutSeconds,
 	}
 }
 

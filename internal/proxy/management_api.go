@@ -18,8 +18,8 @@ const (
 	managementAccountPath               = "/account"
 	managementTenantsPath               = "/tenants"
 	managementTenantPath                = managementTenantsPath + "/:tenant_id"
-	managementProviderKeysPath          = "/provider-keys/:provider"
-	managementProviderKeyRevealPath     = managementProviderKeysPath + "/reveal"
+	managementProviderConnectionsPath   = "/provider-connections/:provider"
+	managementProviderFieldRevealPath   = managementProviderConnectionsPath + "/fields/:field/reveal"
 	managementDefaultsPath              = "/defaults"
 	managementSecretsPath               = "/secrets"
 	managementUsagePath                 = "/usage"
@@ -97,19 +97,38 @@ type managementTenantDefaultsResponse struct {
 }
 
 type managementProviderResponse struct {
-	ID                    string                        `json:"id"`
-	Label                 string                        `json:"label"`
-	Aliases               []string                      `json:"aliases"`
-	HasKey                bool                          `json:"has_key"`
-	MaskedKey             string                        `json:"masked_key,omitempty"`
-	BaseURL               string                        `json:"base_url"`
-	TextModel             string                        `json:"text_model"`
-	SystemPrompt          string                        `json:"system_prompt"`
-	TextDefaultModel      string                        `json:"text_default_model"`
-	TextModels            []managementTextModelResponse `json:"text_models"`
-	SupportsDictation     bool                          `json:"supports_dictation"`
-	DictationDefaultModel string                        `json:"dictation_default_model,omitempty"`
-	DictationModels       []string                      `json:"dictation_models"`
+	ID                    string                            `json:"id"`
+	Label                 string                            `json:"label"`
+	Aliases               []string                          `json:"aliases"`
+	Configured            bool                              `json:"configured"`
+	Fields                []managementProviderFieldResponse `json:"fields"`
+	TextModel             string                            `json:"text_model"`
+	SystemPrompt          string                            `json:"system_prompt"`
+	TextDefaultModel      string                            `json:"text_default_model"`
+	TextModels            []managementTextModelResponse     `json:"text_models"`
+	SupportsDictation     bool                              `json:"supports_dictation"`
+	DictationDefaultModel string                            `json:"dictation_default_model,omitempty"`
+	DictationModels       []string                          `json:"dictation_models"`
+}
+
+type managementProviderFieldResponse struct {
+	ID          string                                    `json:"id"`
+	Label       string                                    `json:"label"`
+	Kind        string                                    `json:"kind"`
+	Type        string                                    `json:"type"`
+	Required    bool                                      `json:"required"`
+	Default     string                                    `json:"default"`
+	Secret      bool                                      `json:"secret"`
+	Validation  managementProviderFieldValidationResponse `json:"validation"`
+	Configured  bool                                      `json:"configured"`
+	Value       *string                                   `json:"value,omitempty"`
+	MaskedValue string                                    `json:"masked_value,omitempty"`
+}
+
+type managementProviderFieldValidationResponse struct {
+	MinimumLength  int      `json:"minimum_length,omitempty"`
+	Pattern        string   `json:"pattern,omitempty"`
+	AllowedSchemes []string `json:"allowed_schemes,omitempty"`
 }
 
 type managementTextModelResponse struct {
@@ -133,8 +152,9 @@ type managementSecretResponse struct {
 	Profile managementTenantProfileResponse `json:"profile"`
 }
 
-type managementProviderKeyRevealResponse struct {
-	APIKey string `json:"api_key"`
+type managementProviderFieldRevealResponse struct {
+	FieldID string `json:"field_id"`
+	Value   string `json:"value"`
 }
 
 type managementUsageSummaryResponse struct {
@@ -246,11 +266,10 @@ type managementTenantNameRequest struct {
 	Name string `json:"name"`
 }
 
-type managementProviderKeyRequest struct {
-	APIKey       string `json:"api_key"`
-	BaseURL      string `json:"base_url"`
-	TextModel    string `json:"text_model"`
-	SystemPrompt string `json:"system_prompt"`
+type managementProviderConnectionRequest struct {
+	Fields       map[string]string `json:"fields"`
+	TextModel    string            `json:"text_model"`
+	SystemPrompt string            `json:"system_prompt"`
 }
 
 type managementDefaultsRequest struct {
@@ -294,9 +313,9 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	tenantGroup.DELETE("", service.deleteTenantHandler())
 	tenantGroup.GET(managementUsagePath, service.usageHandler())
 	tenantGroup.GET(managementUsageFailuresPath, service.usageFailuresHandler())
-	tenantGroup.PUT(managementProviderKeysPath, service.saveProviderKeyHandler())
-	tenantGroup.DELETE(managementProviderKeysPath, service.removeProviderKeyHandler())
-	tenantGroup.POST(managementProviderKeyRevealPath, service.managementCredentialedActionMiddleware(), service.revealProviderKeyHandler())
+	tenantGroup.PUT(managementProviderConnectionsPath, service.saveProviderConnectionsHandler())
+	tenantGroup.DELETE(managementProviderConnectionsPath, service.removeProviderConnectionsHandler())
+	tenantGroup.POST(managementProviderFieldRevealPath, service.managementCredentialedActionMiddleware(), service.revealProviderFieldHandler())
 	tenantGroup.PUT(managementDefaultsPath, service.updateDefaultsHandler())
 	tenantGroup.POST(managementSecretsPath, service.generateSecretHandler())
 }
@@ -592,7 +611,7 @@ func (service *managementService) adminUsersHandler() gin.HandlerFunc {
 	}
 }
 
-func (service *managementService) saveProviderKeyHandler() gin.HandlerFunc {
+func (service *managementService) saveProviderConnectionsHandler() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		tenantIdentifier, identifierValid := managementTenantIdentifierFromContext(ginContext)
 		if !identifierValid {
@@ -604,14 +623,9 @@ func (service *managementService) saveProviderKeyHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusBadRequest, providerError.Error())
 			return
 		}
-		var request managementProviderKeyRequest
+		var request managementProviderConnectionRequest
 		if decodeError := decodeManagementJSON(ginContext, &request); decodeError != nil {
 			ginContext.String(http.StatusBadRequest, decodeError.Error())
-			return
-		}
-		provider, textModel, providerSettingsError := service.resolveManagedProviderSettings(providerIdentifier, request)
-		if providerSettingsError != nil {
-			ginContext.String(http.StatusBadRequest, providerSettingsError.Error())
 			return
 		}
 		currentSnapshot, storeError := service.store.tenantProfile(principal, tenantIdentifier)
@@ -619,19 +633,25 @@ func (service *managementService) saveProviderKeyHandler() gin.HandlerFunc {
 			writeManagementStoreError(ginContext, storeError)
 			return
 		}
-		verificationAPIKey := strings.TrimSpace(request.APIKey)
-		var verifiedAPIKeyVersion *managedProviderKeyVersion
-		if currentSettings, configured := currentSnapshot.providerSettings[providerIdentifier]; verificationAPIKey == constants.EmptyString && configured && providerIdentifier.string() == ProviderNameDashScope && currentSettings.baseURL != provider.textBaseURL {
-			verificationAPIKey = currentSettings.apiKey
-			verifiedAPIKeyVersion = &currentSettings.apiKeyVersion
+		currentSettings, configured := currentSnapshot.providerSettings[providerIdentifier]
+		provider, textModel, connectionValues, verifyConnection, providerSettingsError := service.resolveManagedProviderConnectionSettings(providerIdentifier, request, currentSettings, configured)
+		if providerSettingsError != nil {
+			ginContext.String(http.StatusBadRequest, providerSettingsError.Error())
+			return
 		}
-		if verificationAPIKey != constants.EmptyString {
-			if verificationError := service.keyVerifier.verify(ginContext.Request.Context(), provider, textModel, verificationAPIKey); verificationError != nil {
+		verifiedVersions := map[string]managedProviderConnectionVersion{}
+		if verifyConnection {
+			credentialField := provider.activeTransport.authentication.Field
+			credential := connectionValues[credentialField]
+			if verificationError := service.keyVerifier.verify(ginContext.Request.Context(), provider, textModel, credential); verificationError != nil {
 				writeProviderKeyVerificationError(ginContext, verificationError)
 				return
 			}
+			if configured && request.Fields[credentialField] == constants.EmptyString {
+				verifiedVersions[credentialField] = currentSettings.connectionVersion(credentialField)
+			}
 		}
-		snapshot, storeError := service.store.saveProviderKeyWithVerifiedVersion(ginContext.Request.Context(), principal, tenantIdentifier, providerIdentifier, request.APIKey, request.BaseURL, request.TextModel, request.SystemPrompt, verifiedAPIKeyVersion)
+		snapshot, storeError := service.store.saveProviderConnections(ginContext.Request.Context(), principal, tenantIdentifier, providerIdentifier, request.Fields, request.TextModel, request.SystemPrompt, verifiedVersions)
 		if storeError != nil {
 			writeManagementStoreError(ginContext, storeError)
 			return
@@ -640,7 +660,7 @@ func (service *managementService) saveProviderKeyHandler() gin.HandlerFunc {
 	}
 }
 
-func (service *managementService) removeProviderKeyHandler() gin.HandlerFunc {
+func (service *managementService) removeProviderConnectionsHandler() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		tenantIdentifier, identifierValid := managementTenantIdentifierFromContext(ginContext)
 		if !identifierValid {
@@ -652,7 +672,7 @@ func (service *managementService) removeProviderKeyHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusBadRequest, providerError.Error())
 			return
 		}
-		snapshot, storeError := service.store.removeProviderKey(principal, tenantIdentifier, providerIdentifier)
+		snapshot, storeError := service.store.removeProviderConnections(principal, tenantIdentifier, providerIdentifier)
 		if storeError != nil {
 			writeManagementStoreError(ginContext, storeError)
 			return
@@ -661,7 +681,7 @@ func (service *managementService) removeProviderKeyHandler() gin.HandlerFunc {
 	}
 }
 
-func (service *managementService) revealProviderKeyHandler() gin.HandlerFunc {
+func (service *managementService) revealProviderFieldHandler() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		ginContext.Header(headerCacheControl, cacheControlNoStore)
 		tenantIdentifier, identifierValid := managementTenantIdentifierFromContext(ginContext)
@@ -673,7 +693,14 @@ func (service *managementService) revealProviderKeyHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusBadRequest, providerError.Error())
 			return
 		}
-		apiKey, revealError := service.store.revealProviderKey(managementPrincipalFromContext(ginContext), tenantIdentifier, providerIdentifier)
+		fieldIdentifier := strings.TrimSpace(ginContext.Param("field"))
+		definition := service.providers.definitions[providerIdentifier]
+		field, knownField := definition.fields[fieldIdentifier]
+		if fieldIdentifier == constants.EmptyString || !knownField || !field.Secret {
+			ginContext.String(http.StatusBadRequest, errManagementBadRequest.Error())
+			return
+		}
+		value, revealError := service.store.revealProviderConnectionField(managementPrincipalFromContext(ginContext), tenantIdentifier, providerIdentifier, fieldIdentifier)
 		if revealError != nil {
 			if errors.Is(revealError, errManagedProviderKeyNotFound) || errors.Is(revealError, errManagedTenantNotFound) {
 				ginContext.AbortWithStatus(http.StatusNotFound)
@@ -682,7 +709,7 @@ func (service *managementService) revealProviderKeyHandler() gin.HandlerFunc {
 			ginContext.AbortWithStatus(http.StatusInternalServerError)
 			return
 		}
-		ginContext.JSON(http.StatusOK, managementProviderKeyRevealResponse{APIKey: apiKey})
+		ginContext.JSON(http.StatusOK, managementProviderFieldRevealResponse{FieldID: fieldIdentifier, Value: value})
 	}
 }
 
@@ -824,7 +851,8 @@ func (service *managementService) providerResponses(providerSettings map[provide
 	responses := make([]managementProviderResponse, 0, len(summaries))
 	for _, summary := range summaries {
 		providerIdentifier := providerID(summary.identifier)
-		settings, hasKey := providerSettings[providerIdentifier]
+		definition := service.providers.definitions[providerIdentifier]
+		settings, configured := providerSettings[providerIdentifier]
 		textModels := make([]managementTextModelResponse, 0, len(summary.textModels))
 		for _, model := range summary.textModels {
 			textModels = append(textModels, managementTextModelResponse{
@@ -836,8 +864,8 @@ func (service *managementService) providerResponses(providerSettings map[provide
 			ID:                    summary.identifier,
 			Label:                 summary.label,
 			Aliases:               append([]string{}, summary.aliases...),
-			HasKey:                hasKey,
-			BaseURL:               constants.EmptyString,
+			Configured:            configured && settings.hasRequiredConnectionFields(definition),
+			Fields:                make([]managementProviderFieldResponse, 0, len(definition.fieldOrder)),
 			TextModel:             summary.textDefaultModel,
 			SystemPrompt:          constants.EmptyString,
 			TextDefaultModel:      summary.textDefaultModel,
@@ -846,9 +874,32 @@ func (service *managementService) providerResponses(providerSettings map[provide
 			DictationDefaultModel: summary.dictationDefaultModel,
 			DictationModels:       summary.dictationModels,
 		}
-		if hasKey {
-			response.MaskedKey = maskedAPIKey(settings.apiKey)
-			response.BaseURL = settings.baseURL
+		for _, fieldIdentifier := range definition.fieldOrder {
+			field := definition.fields[fieldIdentifier]
+			fieldResponse := managementProviderFieldResponse{
+				ID: field.ID, Label: field.Label, Kind: field.Kind, Type: field.Type,
+				Required: field.Required, Default: *field.Default, Secret: field.Secret,
+				Validation: managementProviderFieldValidationResponse{
+					MinimumLength:  field.Validation.MinimumLength,
+					Pattern:        field.Validation.Pattern,
+					AllowedSchemes: append([]string(nil), field.Validation.AllowedSchemes...),
+				},
+				Configured: configured && settings.fieldConfigured(fieldIdentifier),
+			}
+			value := *field.Default
+			if configured {
+				value = settings.connectionValue(fieldIdentifier)
+			}
+			if field.Secret {
+				if fieldResponse.Configured {
+					fieldResponse.MaskedValue = maskedAPIKey(value)
+				}
+			} else {
+				fieldResponse.Value = &value
+			}
+			response.Fields = append(response.Fields, fieldResponse)
+		}
+		if configured {
 			response.TextModel = settings.textModel
 			response.SystemPrompt = settings.systemPrompt
 		}
@@ -881,23 +932,31 @@ func managementReasoningEffortCapabilityResponseFor(capability *reasoningEffortC
 	}
 }
 
-func (service *managementService) resolveManagedProviderSettings(providerIdentifier providerID, request managementProviderKeyRequest) (providerDefinition, textModelDefinition, error) {
-	baseURL, baseURLError := managedProviderBaseURL(providerIdentifier, request.BaseURL)
-	if baseURLError != nil {
-		return providerDefinition{}, textModelDefinition{}, fmt.Errorf("%w: provider=%s field=base_url", errManagementBadRequest, providerIdentifier.string())
+func (service *managementService) resolveManagedProviderConnectionSettings(providerIdentifier providerID, request managementProviderConnectionRequest, currentSettings managedProviderSettings, configured bool) (providerDefinition, textModelDefinition, map[string]string, bool, error) {
+	definition := service.providers.definitions[providerIdentifier]
+	connectionValues, valuesError := validatedManagedProviderConnectionValues(definition, request.Fields, currentSettings, configured)
+	if valuesError != nil {
+		return providerDefinition{}, textModelDefinition{}, nil, false, fmt.Errorf("%w: provider=%s", errManagementBadRequest, providerIdentifier.string())
 	}
 	textModel := strings.TrimSpace(request.TextModel)
 	if textModel == constants.EmptyString {
-		return providerDefinition{}, textModelDefinition{}, fmt.Errorf("%w: provider=%s field=text_model", errManagementBadRequest, providerIdentifier.string())
+		return providerDefinition{}, textModelDefinition{}, nil, false, fmt.Errorf("%w: provider=%s field=text_model", errManagementBadRequest, providerIdentifier.string())
 	}
 	provider, resolvedTextModel, validationError := service.providers.resolveTextModel(providerIdentifier.string(), textModel, providerIdentifier.string(), textModel, false)
 	if validationError != nil {
-		return providerDefinition{}, textModelDefinition{}, fmt.Errorf("%w: %v", errManagementDefaults, validationError)
+		return providerDefinition{}, textModelDefinition{}, nil, false, fmt.Errorf("%w: %v", errManagementDefaults, validationError)
 	}
-	if baseURL != constants.EmptyString {
-		provider.textBaseURL = baseURL
+	provider.connectionValues = cloneStringMap(connectionValues)
+	provider, _ = provider.resolvedTransport(resolvedTextModel.transportIdentifier)
+	verifyConnection := !configured || currentSettings.textModel != textModel
+	for fieldIdentifier, field := range definition.fields {
+		if field.Secret {
+			verifyConnection = verifyConnection || request.Fields[fieldIdentifier] != constants.EmptyString
+			continue
+		}
+		verifyConnection = verifyConnection || !configured || currentSettings.connectionValue(fieldIdentifier) != connectionValues[fieldIdentifier]
 	}
-	return provider, resolvedTextModel, nil
+	return provider, resolvedTextModel, connectionValues, verifyConnection, nil
 }
 
 func (service *managementService) validateManagedRoutingDefaults(providerSettings map[providerID]managedProviderSettings, defaults managedRoutingDefaults) error {

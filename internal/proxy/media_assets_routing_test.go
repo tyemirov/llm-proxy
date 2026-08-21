@@ -482,8 +482,8 @@ func mediaAssetRouterWithMaxPrompt(t *testing.T, geminiBaseURL string, assetRoot
 	secondTenant.ID = "tenant-b"
 	secondTenant.Defaults = defaults
 	configuration := proxy.Configuration{
-		GeminiBaseURL: geminiBaseURL,
-		WorkerCount:   2, QueueSize: 4, RequestTimeoutSeconds: 10, MaxPromptBytes: maxPromptBytes,
+		Endpoints:   providerEndpoints(geminiBaseURL, proxy.ProviderNameGemini),
+		WorkerCount: 2, QueueSize: 4, RequestTimeoutSeconds: 10, MaxPromptBytes: maxPromptBytes,
 		MaxAssetBytes: 10 * 1024 * 1024, AssetRetentionSeconds: retentionSeconds, AssetStorePath: assetRoot,
 		ModelCatalog: catalog,
 	}

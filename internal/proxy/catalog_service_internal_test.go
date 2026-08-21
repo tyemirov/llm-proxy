@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"math"
 	"strings"
 	"testing"
 )
@@ -245,7 +246,9 @@ func TestCatalogCapabilityValidationRejectsIncompleteContracts(t *testing.T) {
 	}
 	invalidVideo := validVideo
 	invalidVideo.Provider = ProviderNameOpenAI
-	assertError(t, validateVideoOffering(invalidVideo, "video"), "unsupported_video_route")
+	if validationError := validateVideoOffering(invalidVideo, "video"); validationError != nil {
+		t.Fatalf("generic video provider error=%v", validationError)
+	}
 	invalidVideo = validVideo
 	invalidVideo.WebSearch = true
 	assertError(t, validateVideoOffering(invalidVideo, "video"), "text_capabilities_on_video_route")
@@ -296,12 +299,22 @@ func TestCatalogPriceValidationRejectsAmbiguousRecords(t *testing.T) {
 	invalid = freshPrice()
 	invalid.Rates[0].Currency = "EUR"
 	assertError(t, []CatalogPriceDescriptor{invalid}, newCatalog(), ".rates[0]")
+	for _, invalidRate := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		invalid = freshPrice()
+		invalid.Rates[0].Rate = invalidRate
+		assertError(t, []CatalogPriceDescriptor{invalid}, newCatalog(), ".rates[0]")
+	}
 	invalid = freshPrice()
 	invalid.Rates = append(invalid.Rates, validRate)
 	assertError(t, []CatalogPriceDescriptor{invalid}, newCatalog(), "reason=ambiguous")
 	invalid = freshPrice()
 	invalid.MinimumCharge = &CatalogMinimumCharge{Currency: "EUR", Amount: 1, Unit: "EUR/request"}
 	assertError(t, []CatalogPriceDescriptor{invalid}, newCatalog(), ".minimum_charge")
+	for _, invalidAmount := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		invalid = freshPrice()
+		invalid.MinimumCharge = &CatalogMinimumCharge{Currency: CatalogCurrencyUSD, Amount: invalidAmount, Unit: "USD/request"}
+		assertError(t, []CatalogPriceDescriptor{invalid}, newCatalog(), ".minimum_charge")
+	}
 	missingOperationCatalog := newCatalog()
 	multipleOperations := validOffering
 	multipleOperations.Operations = []string{ModelOperationVideoGeneration, ModelOperationText}

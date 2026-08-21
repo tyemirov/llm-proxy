@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -34,9 +33,10 @@ const (
 
 // ManagedTenant describes one tenant provisioned through the management contract for a router test.
 type ManagedTenant struct {
-	Secret       string
-	Defaults     proxy.TenantDefaults
-	ProviderKeys map[string]string
+	Secret         string
+	Defaults       proxy.TenantDefaults
+	ProviderKeys   map[string]string
+	ProviderFields map[string]map[string]string
 }
 
 // StandardManagedTenant returns the common managed tenant used by black-box tests.
@@ -57,6 +57,9 @@ func StandardManagedTenant(secret string) ManagedTenant {
 			proxy.ProviderNameMeta:        "sk-meta",
 			proxy.ProviderNameXAI:         "sk-xai",
 		},
+		ProviderFields: map[string]map[string]string{
+			proxy.ProviderNameDashScope: {"base_url": managedRouterDashScopeURL},
+		},
 	}
 }
 
@@ -66,14 +69,7 @@ func BuildManagedRouter(testingInstance testing.TB, configuration proxy.Configur
 	databasePath := "file:managed-router-" + rand.Text() + "?mode=memory&cache=shared"
 	configuration.Management = managedRouterConfiguration(databasePath)
 	originalHTTPClient := proxy.HTTPClient
-	fixtureHTTPClient := originalHTTPClient
-	if dashScopeTargetURL, rewrittenConfiguration, rewriteError := managedDashScopeFixtureConfiguration(configuration); rewriteError != nil {
-		return nil, rewriteError
-	} else if dashScopeTargetURL != nil {
-		configuration = rewrittenConfiguration
-		fixtureHTTPClient = managedDashScopeFixtureDoer{next: originalHTTPClient, targetURL: dashScopeTargetURL}
-	}
-	proxy.HTTPClient = managedProviderVerificationDoer{next: fixtureHTTPClient}
+	proxy.HTTPClient = managedProviderVerificationDoer{next: originalHTTPClient}
 	defer func() { proxy.HTTPClient = originalHTTPClient }()
 	configuration = WithModelCatalog(testingInstance, configuration)
 	bootstrapConfiguration := configuration
@@ -93,10 +89,7 @@ func BuildManagedRouter(testingInstance testing.TB, configuration proxy.Configur
 		return nil, accountError
 	}
 	for provider, apiKey := range tenant.ProviderKeys {
-		if provider == proxy.ProviderNameDashScope && strings.TrimSpace(configuration.DashScopeBaseURL) == "" {
-			continue
-		}
-		providerError := saveManagedProviderKey(bootstrapRouter, sessionCookie, tenantID, provider, apiKey, configuration.DashScopeBaseURL)
+		providerError := saveManagedProviderKey(bootstrapRouter, sessionCookie, tenantID, configuration.ProviderCatalog, provider, apiKey, tenant.ProviderFields[provider])
 		if providerError != nil {
 			proxy.HTTPClient = originalHTTPClient
 			return nil, providerError
@@ -124,19 +117,6 @@ func BuildManagedRouter(testingInstance testing.TB, configuration proxy.Configur
 		return nil, buildError
 	}
 	return router, nil
-}
-
-func managedDashScopeFixtureConfiguration(configuration proxy.Configuration) (*url.URL, proxy.Configuration, error) {
-	baseURL := strings.TrimSpace(configuration.DashScopeBaseURL)
-	if baseURL == "" || strings.HasSuffix(baseURL, ".ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1") {
-		return nil, configuration, nil
-	}
-	targetURL, parseError := url.Parse(baseURL)
-	if parseError != nil {
-		return nil, proxy.Configuration{}, parseError
-	}
-	configuration.DashScopeBaseURL = managedRouterDashScopeURL
-	return targetURL, configuration, nil
 }
 
 func managedRouterConfiguration(databasePath string) proxy.ManagementConfiguration {
@@ -201,16 +181,29 @@ func managedRouterTenantID(router http.Handler, sessionCookie *http.Cookie) (str
 	return payload.Tenants[0].ID, nil
 }
 
-func saveManagedProviderKey(router http.Handler, sessionCookie *http.Cookie, tenantID string, provider string, apiKey string, dashScopeBaseURL string) error {
-	body := map[string]string{"api_key": apiKey, "text_model": managedProviderModel(provider)}
-	if provider == proxy.ProviderNameDashScope {
-		body["base_url"] = dashScopeBaseURL
+func saveManagedProviderKey(router http.Handler, sessionCookie *http.Cookie, tenantID string, catalog *proxy.ProviderCatalog, provider string, apiKey string, configuredFields map[string]string) error {
+	fields := map[string]string{}
+	for _, providerDefinition := range catalog.Schema().Providers {
+		if providerDefinition.ID != provider {
+			continue
+		}
+		for _, field := range providerDefinition.Fields {
+			if field.Kind == proxy.CatalogProviderFieldKindCredential {
+				fields[field.ID] = apiKey
+				continue
+			}
+			if value := configuredFields[field.ID]; value != "" {
+				fields[field.ID] = value
+			}
+		}
+		break
 	}
+	body := map[string]any{"fields": fields, "text_model": managedProviderModel(provider)}
 	encodedBody, encodeError := json.Marshal(body)
 	if encodeError != nil {
 		return encodeError
 	}
-	request := httptest.NewRequest(http.MethodPut, "/api/management/tenants/"+tenantID+"/provider-keys/"+provider, bytes.NewReader(encodedBody))
+	request := httptest.NewRequest(http.MethodPut, "/api/management/tenants/"+tenantID+"/provider-connections/"+provider, bytes.NewReader(encodedBody))
 	request.Header.Set("Content-Type", "application/json")
 	request.AddCookie(sessionCookie)
 	response := httptest.NewRecorder()
@@ -292,25 +285,6 @@ func managedProviderModel(provider string) string {
 
 type managedProviderVerificationDoer struct {
 	next proxy.HTTPDoer
-}
-
-type managedDashScopeFixtureDoer struct {
-	next      proxy.HTTPDoer
-	targetURL *url.URL
-}
-
-func (doer managedDashScopeFixtureDoer) Do(request *http.Request) (*http.Response, error) {
-	if request.URL.Host != "managed-router-fixture.ap-southeast-1.maas.aliyuncs.com" {
-		return doer.next.Do(request)
-	}
-	requestCopy := request.Clone(request.Context())
-	requestURL := *request.URL
-	requestURL.Scheme = doer.targetURL.Scheme
-	requestURL.Host = doer.targetURL.Host
-	requestURL.Path = strings.TrimRight(doer.targetURL.Path, "/") + strings.TrimPrefix(request.URL.Path, "/compatible-mode/v1")
-	requestURL.RawPath = ""
-	requestCopy.URL = &requestURL
-	return doer.next.Do(requestCopy)
 }
 
 func (doer managedProviderVerificationDoer) Do(request *http.Request) (*http.Response, error) {

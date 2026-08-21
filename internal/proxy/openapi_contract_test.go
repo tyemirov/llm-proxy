@@ -256,7 +256,7 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"contract response"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":2,"total_tokens":5}}`))
 	}))
 	t.Cleanup(upstreamServer.Close)
-	router := newManagementRouter(t, proxy.Configuration{DeepSeekBaseURL: upstreamServer.URL})
+	router := newManagementRouter(t, proxy.Configuration{Endpoints: providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek)})
 	sessionCookie := managementSessionCookie(t, "openapi-contract-user")
 
 	capabilitiesRequest := httptest.NewRequest(http.MethodGet, proxy.PublicCapabilitiesPath, nil)
@@ -302,23 +302,23 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 	tenantPath := "/api/management/tenants/" + url.PathEscape(tenantID)
 
 	providerKeyBody := []byte(managementProviderKeyRequestBody(t, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, ""))
-	providerKeyRequest := authenticatedJSONRequest(http.MethodPut, tenantPath+"/provider-keys/deepseek", string(providerKeyBody), sessionCookie)
-	assertOpenAPIRequest(t, contract, "/api/management/tenants/{tenant_id}/provider-keys/{provider}", providerKeyRequest, providerKeyBody)
+	providerKeyRequest := authenticatedJSONRequest(http.MethodPut, tenantPath+"/provider-connections/deepseek", string(providerKeyBody), sessionCookie)
+	assertOpenAPIRequest(t, contract, "/api/management/tenants/{tenant_id}/provider-connections/{provider}", providerKeyRequest, providerKeyBody)
 	providerKeyResponse := httptest.NewRecorder()
 	router.ServeHTTP(providerKeyResponse, providerKeyRequest)
-	assertOpenAPIResponse(t, contract, "/api/management/tenants/{tenant_id}/provider-keys/{provider}", http.MethodPut, providerKeyResponse)
+	assertOpenAPIResponse(t, contract, "/api/management/tenants/{tenant_id}/provider-connections/{provider}", http.MethodPut, providerKeyResponse)
 
 	retainedProviderKeyBody := []byte(managementProviderKeyRequestBody(t, "", proxy.ModelNameDeepSeekV4Flash, "Retain the existing key."))
 	retainedProviderKeyRequest := authenticatedJSONRequest(
 		http.MethodPut,
-		tenantPath+"/provider-keys/deepseek",
+		tenantPath+"/provider-connections/deepseek",
 		string(retainedProviderKeyBody),
 		sessionCookie,
 	)
-	assertOpenAPIRequest(t, contract, "/api/management/tenants/{tenant_id}/provider-keys/{provider}", retainedProviderKeyRequest, retainedProviderKeyBody)
+	assertOpenAPIRequest(t, contract, "/api/management/tenants/{tenant_id}/provider-connections/{provider}", retainedProviderKeyRequest, retainedProviderKeyBody)
 	retainedProviderKeyResponse := httptest.NewRecorder()
 	router.ServeHTTP(retainedProviderKeyResponse, retainedProviderKeyRequest)
-	assertOpenAPIResponse(t, contract, "/api/management/tenants/{tenant_id}/provider-keys/{provider}", http.MethodPut, retainedProviderKeyResponse)
+	assertOpenAPIResponse(t, contract, "/api/management/tenants/{tenant_id}/provider-connections/{provider}", http.MethodPut, retainedProviderKeyResponse)
 
 	secretBody := []byte(`{}`)
 	secretRequest := authenticatedJSONRequest(http.MethodPost, tenantPath+"/secrets", string(secretBody), sessionCookie)

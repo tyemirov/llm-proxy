@@ -11,35 +11,34 @@ import (
 )
 
 type fakeManagedTenantDatabase struct {
-	usersByID                   map[string]managedUserRecord
-	tenantsByID                 map[string]managedTenantRecord
-	usageEvents                 []managedUsageEventRecord
-	userByIDErrors              []error
-	usersError                  error
-	saveUserError               error
-	createUserAndTenantErrors   []error
-	tenantByOwnerAndIDErrors    []error
-	tenantByTenantIDError       error
-	tenantBySecretDigestErrors  []error
-	tenantBySecretDigestRecord  *managedTenantRecord
-	tenantIDExistsErrors        []error
-	tenantIDExistsResults       []bool
-	tenantNameExistsErrors      []error
-	tenantNameExistsResults     []bool
-	createTenantErrors          []error
-	saveTenantErrors            []error
-	deleteTenantErrors          []error
-	providerKeysError           error
-	saveProviderKeyErrors       []error
-	deleteProviderKeyErrors     []error
-	createUsageEventError       error
-	earliestUsageEventError     error
-	streamUsageEventsError      error
-	usageEventsSinceError       error
-	usageFailuresError          error
-	usageEventsQueryPeriodStart time.Time
-	usageEventsQueryPeriodEnd   time.Time
-	usageEventsQueryMode        string
+	usersByID                       map[string]managedUserRecord
+	tenantsByID                     map[string]managedTenantRecord
+	usageEvents                     []managedUsageEventRecord
+	userByIDErrors                  []error
+	usersError                      error
+	saveUserError                   error
+	createUserAndTenantErrors       []error
+	tenantByOwnerAndIDErrors        []error
+	tenantByTenantIDError           error
+	tenantBySecretDigestErrors      []error
+	tenantBySecretDigestRecord      *managedTenantRecord
+	tenantIDExistsErrors            []error
+	tenantIDExistsResults           []bool
+	tenantNameExistsErrors          []error
+	tenantNameExistsResults         []bool
+	createTenantErrors              []error
+	saveTenantErrors                []error
+	deleteTenantErrors              []error
+	saveProviderConnectionsErrors   []error
+	deleteProviderConnectionsErrors []error
+	createUsageEventError           error
+	earliestUsageEventError         error
+	streamUsageEventsError          error
+	usageEventsSinceError           error
+	usageFailuresError              error
+	usageEventsQueryPeriodStart     time.Time
+	usageEventsQueryPeriodEnd       time.Time
+	usageEventsQueryMode            string
 }
 
 func newFakeManagedTenantDatabase() *fakeManagedTenantDatabase {
@@ -192,6 +191,8 @@ func (database *fakeManagedTenantDatabase) saveTenant(record managedTenantRecord
 		return gorm.ErrRecordNotFound
 	}
 	record.ProviderAPIKeys = append([]managedProviderAPIKeyRecord(nil), existing.ProviderAPIKeys...)
+	record.ProviderConnections = append([]managedProviderConnectionRecord(nil), existing.ProviderConnections...)
+	record.ProviderProfiles = append([]managedProviderProfileRecord(nil), existing.ProviderProfiles...)
 	database.tenantsByID[record.TenantID] = cloneManagedTenantRecord(record)
 	return nil
 }
@@ -218,63 +219,61 @@ func (database *fakeManagedTenantDatabase) deleteTenant(ownerUserID string, tena
 	return nil
 }
 
-func (database *fakeManagedTenantDatabase) providerKeys() ([]managedProviderAPIKeyRecord, error) {
-	if database.providerKeysError != nil {
-		return nil, database.providerKeysError
-	}
-	records := []managedProviderAPIKeyRecord{}
-	for _, tenantRecord := range database.tenantsByID {
-		records = append(records, tenantRecord.ProviderAPIKeys...)
-	}
-	return records, nil
-}
-
-func (database *fakeManagedTenantDatabase) saveProviderKey(requestContext context.Context, ownerUserID string, record managedProviderAPIKeyRecord, defaults managedRoutingDefaults, updatedAt time.Time) error {
+func (database *fakeManagedTenantDatabase) saveProviderConnections(requestContext context.Context, ownerUserID string, records []managedProviderConnectionRecord, profile managedProviderProfileRecord, defaults managedRoutingDefaults, updatedAt time.Time) error {
 	if contextError := requestContext.Err(); contextError != nil {
 		return contextError
 	}
-	if saveError, configured := popFakeError(&database.saveProviderKeyErrors); configured && saveError != nil {
+	if saveError, configured := popFakeError(&database.saveProviderConnectionsErrors); configured && saveError != nil {
 		return saveError
 	}
-	tenantRecord, found := database.tenantsByID[record.TenantID]
+	tenantRecord, found := database.tenantsByID[profile.TenantID]
 	if !found || tenantRecord.OwnerUserID != ownerUserID {
 		return gorm.ErrRecordNotFound
 	}
-	providerRecords := make([]managedProviderAPIKeyRecord, 0, len(tenantRecord.ProviderAPIKeys)+1)
-	replaced := false
-	for _, existingRecord := range tenantRecord.ProviderAPIKeys {
-		if existingRecord.ProviderID == record.ProviderID {
-			providerRecords = append(providerRecords, record)
-			replaced = true
-		} else {
-			providerRecords = append(providerRecords, existingRecord)
+	connections := make([]managedProviderConnectionRecord, 0, len(tenantRecord.ProviderConnections)+len(records))
+	for _, existing := range tenantRecord.ProviderConnections {
+		if existing.ProviderID != profile.ProviderID {
+			connections = append(connections, existing)
 		}
 	}
-	if !replaced {
-		providerRecords = append(providerRecords, record)
+	connections = append(connections, records...)
+	profiles := make([]managedProviderProfileRecord, 0, len(tenantRecord.ProviderProfiles)+1)
+	for _, existing := range tenantRecord.ProviderProfiles {
+		if existing.ProviderID != profile.ProviderID {
+			profiles = append(profiles, existing)
+		}
 	}
-	tenantRecord.ProviderAPIKeys = providerRecords
+	profiles = append(profiles, profile)
+	tenantRecord.ProviderConnections = connections
+	tenantRecord.ProviderProfiles = profiles
 	tenantRecord.applyRoutingDefaults(defaults)
 	tenantRecord.UpdatedAt = updatedAt
-	database.tenantsByID[record.TenantID] = cloneManagedTenantRecord(tenantRecord)
+	database.tenantsByID[profile.TenantID] = cloneManagedTenantRecord(tenantRecord)
 	return nil
 }
 
-func (database *fakeManagedTenantDatabase) deleteProviderKey(ownerUserID string, tenantID string, providerID string, defaults managedRoutingDefaults, updatedAt time.Time) error {
-	if deleteError, configured := popFakeError(&database.deleteProviderKeyErrors); configured && deleteError != nil {
+func (database *fakeManagedTenantDatabase) deleteProviderConnections(ownerUserID string, tenantID string, providerID string, defaults managedRoutingDefaults, updatedAt time.Time) error {
+	if deleteError, configured := popFakeError(&database.deleteProviderConnectionsErrors); configured && deleteError != nil {
 		return deleteError
 	}
 	tenantRecord, found := database.tenantsByID[tenantID]
 	if !found || tenantRecord.OwnerUserID != ownerUserID {
 		return gorm.ErrRecordNotFound
 	}
-	providerRecords := make([]managedProviderAPIKeyRecord, 0, len(tenantRecord.ProviderAPIKeys))
-	for _, existingRecord := range tenantRecord.ProviderAPIKeys {
-		if existingRecord.ProviderID != providerID {
-			providerRecords = append(providerRecords, existingRecord)
+	connections := tenantRecord.ProviderConnections[:0]
+	for _, existing := range tenantRecord.ProviderConnections {
+		if existing.ProviderID != providerID {
+			connections = append(connections, existing)
 		}
 	}
-	tenantRecord.ProviderAPIKeys = providerRecords
+	profiles := tenantRecord.ProviderProfiles[:0]
+	for _, existing := range tenantRecord.ProviderProfiles {
+		if existing.ProviderID != providerID {
+			profiles = append(profiles, existing)
+		}
+	}
+	tenantRecord.ProviderConnections = connections
+	tenantRecord.ProviderProfiles = profiles
 	tenantRecord.applyRoutingDefaults(defaults)
 	tenantRecord.UpdatedAt = updatedAt
 	database.tenantsByID[tenantID] = cloneManagedTenantRecord(tenantRecord)
@@ -461,6 +460,8 @@ func cloneManagedUserRecord(record managedUserRecord) managedUserRecord {
 
 func cloneManagedTenantRecord(record managedTenantRecord) managedTenantRecord {
 	record.ProviderAPIKeys = append([]managedProviderAPIKeyRecord(nil), record.ProviderAPIKeys...)
+	record.ProviderConnections = append([]managedProviderConnectionRecord(nil), record.ProviderConnections...)
+	record.ProviderProfiles = append([]managedProviderProfileRecord(nil), record.ProviderProfiles...)
 	record.UsageEvents = append([]managedUsageEventRecord(nil), record.UsageEvents...)
 	if record.SecretDigest != nil {
 		digest := *record.SecretDigest
@@ -514,6 +515,38 @@ func fakeUserWithTenant(database *fakeManagedTenantDatabase, principal managemen
 	}
 	database.tenantsByID[tenantIDValue] = fakeTenantRecord(principal.userID, tenantIDValue, tenantName, timestamp)
 	return identifier
+}
+
+func saveInternalProviderConnections(store *managedTenantStore, requestContext context.Context, principal managementPrincipal, tenantIdentifier managedTenantIdentifier, providerIdentifier providerID, apiKey string, baseURL string, textModel string, systemPrompt string) (managedTenantSnapshot, error) {
+	definition := store.routingDefaults.definitions[providerIdentifier]
+	fields := make(map[string]string, len(definition.fields))
+	for fieldIdentifier, field := range definition.fields {
+		switch {
+		case field.Kind == CatalogProviderFieldKindCredential:
+			fields[fieldIdentifier] = apiKey
+		case fieldIdentifier == "base_url":
+			fields[fieldIdentifier] = baseURL
+		default:
+			fields[fieldIdentifier] = *field.Default
+		}
+	}
+	return store.saveProviderConnections(requestContext, principal, tenantIdentifier, providerIdentifier, fields, textModel, systemPrompt, nil)
+}
+
+func internalManagedProviderSettings(apiKey string, baseURL string, textModel string, systemPrompt string) managedProviderSettings {
+	values := map[string]string{CatalogCredentialAPIKey: apiKey}
+	configuredFields := map[string]bool{CatalogCredentialAPIKey: apiKey != ""}
+	if baseURL != "" {
+		values["base_url"] = baseURL
+		configuredFields["base_url"] = true
+	}
+	return managedProviderSettings{
+		connectionValues:   values,
+		connectionVersions: map[string]managedProviderConnectionVersion{},
+		configuredFields:   configuredFields,
+		textModel:          textModel,
+		systemPrompt:       systemPrompt,
+	}
 }
 
 func assertManagedError(t testingT, actual error, expected error) {

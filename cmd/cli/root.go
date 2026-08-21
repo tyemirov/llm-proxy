@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
@@ -13,12 +14,14 @@ const (
 	defaultConfigPath             = "config.yml"
 	flagConfig                    = "config"
 	flagPublicCapabilitiesOnly    = "public-capabilities-only"
+	flagProviderCatalogOnly       = "provider-catalog-only"
 	logEventStarting              = "starting proxy"
 	logEventStartingPublicCatalog = "starting public capability API"
 )
 
 var runtimeConfiguration proxy.Configuration
 var publicCapabilityConfiguration publicCapabilityAPIConfiguration
+var providerCatalogOnlyConfiguration providerCatalogDiscovery
 var serveProxy = proxy.Serve
 var servePublicCapabilityAPI = proxy.ServePublicCapabilities
 var loadConfiguration = loadRuntimeConfiguration
@@ -51,6 +54,18 @@ var rootCmd = &cobra.Command{
 	PreRunE: func(command *cobra.Command, arguments []string) error {
 		configPath, _ := command.Flags().GetString(flagConfig)
 		publicCapabilitiesOnly, _ := command.Flags().GetBool(flagPublicCapabilitiesOnly)
+		providerCatalogOnly, _ := command.Flags().GetBool(flagProviderCatalogOnly)
+		if publicCapabilitiesOnly && providerCatalogOnly {
+			return fmt.Errorf("%s and %s are mutually exclusive", flagPublicCapabilitiesOnly, flagProviderCatalogOnly)
+		}
+		if providerCatalogOnly {
+			discovery, loadError := loadProviderCatalogDiscovery(configPath)
+			if loadError != nil {
+				return loadError
+			}
+			providerCatalogOnlyConfiguration = discovery
+			return nil
+		}
 		if publicCapabilitiesOnly {
 			configuration, loadError := loadPublicCapabilityAPIConfiguration(configPath)
 			if loadError != nil {
@@ -68,6 +83,10 @@ var rootCmd = &cobra.Command{
 	},
 	RunE: func(command *cobra.Command, arguments []string) error {
 		publicCapabilitiesOnly, _ := command.Flags().GetBool(flagPublicCapabilitiesOnly)
+		providerCatalogOnly, _ := command.Flags().GetBool(flagProviderCatalogOnly)
+		if providerCatalogOnly {
+			return writeProviderCatalogDiscovery(command.OutOrStdout(), providerCatalogOnlyConfiguration)
+		}
 		logLevel := runtimeConfiguration.LogLevel
 		if publicCapabilitiesOnly {
 			logLevel = publicCapabilityConfiguration.LogLevel
@@ -109,4 +128,5 @@ func loggerForLevel(logLevel string) *zap.Logger {
 func init() {
 	rootCmd.Flags().String(flagConfig, defaultConfigPath, "path to authoritative config.yml")
 	rootCmd.Flags().Bool(flagPublicCapabilitiesOnly, false, "serve only the public capability REST resource")
+	rootCmd.Flags().Bool(flagProviderCatalogOnly, false, "print provider field discovery data and exit")
 }

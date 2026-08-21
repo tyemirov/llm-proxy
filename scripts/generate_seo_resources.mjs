@@ -16,6 +16,7 @@ const REPORT_PATH = "docs/marketing/seo-resource-cluster-report.md";
 const RESOURCE_PUBLISHED_DATE = "2026-07-06";
 const RESOURCE_DEFAULT_MODIFIED_DATE = "2026-07-11";
 const CURRENT_PUBLIC_CONTENT_MODIFIED_DATE = "2026-08-08";
+const PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE = "2026-08-20";
 const LANDING_MODIFIED_DATE = CURRENT_PUBLIC_CONTENT_MODIFIED_DATE;
 const PRODUCT_NAME = "LLM Proxy";
 const API_DOCUMENTATION_PATH = "/docs/";
@@ -402,7 +403,7 @@ if (!this.hasSecret) {
     ],
     repoExample: {
       source: "README.md",
-      verifiedOn: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE,
+      verifiedOn: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
       code: `for provider in openai anthropic gemini; do
   curl -X POST \
     "https://llm-proxy-api.mprlab.com/v2?key=$LLM_PROXY_SECRET&provider=$provider" \
@@ -438,7 +439,7 @@ done`,
     publicationBrief: {
       allowedClaims: "One canonical messages body, native OpenAI Responses, Anthropic Messages, and Gemini Interactions adapters, explicit route selection, blocking caller behavior, and current catalog validation.",
       forbiddenClaims: "Identical upstream behavior, identical capabilities, provider performance rankings, automatic fallback, availability guarantees, or universal model access.",
-      differentiation: "This page is a concrete three-provider comparison for product teams; it explains which contract stays shared and which behavior remains route-specific.",
+      differentiation: "This page is a concrete three-provider comparison for product teams. It explains which contract stays shared and which behavior remains route-specific.",
     },
   }),
   page({
@@ -475,6 +476,7 @@ done`,
   page({
     slug: "upstream-worker-queue-limits",
     category: "Reliability",
+    modifiedDate: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
     primaryKeyword: "upstream worker queue limits",
     title: "Upstream worker and queue limits for LLM traffic",
     description: "Use shared worker and queue controls to bound upstream HTTP operations for text and dictation.",
@@ -507,17 +509,19 @@ done`,
   page({
     slug: "model-catalog-configuration",
     category: "Configuration",
+    modifiedDate: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
     primaryKeyword: "LLM model catalog configuration",
-    title: "LLM model catalog configuration in config.yml",
-    description: "Keep exact model identity and provider offerings in normalized runtime config.",
+    title: "LLM provider catalog configuration in providers.yml",
+    description: "Keep exact models, provider offerings, transports, capabilities, and prices in one validated YAML catalog.",
     audience: "Operators maintaining provider model availability without changing application code.",
     problem: "Model lists change faster than client release cycles. Hardcoded model IDs in callers make provider updates brittle.",
-    solution: "LLM Proxy keeps publishers, families, exact models, providers, and provider offerings in normalized runtime configuration.",
+    solution: "LLM Proxy keeps publishers, families, exact models, providers, transports, offerings, capabilities, and prices in configs/providers.yml.",
     steps: [
-      "Declare each publisher, family, exact model, provider, and provider offering in config.yml.",
+      "Declare each publisher, family, exact model, provider, transport, and offering in providers.yml.",
       "Declare operation defaults on provider offerings.",
       "Add request profiles, web_search flags, and limits only to supported offerings.",
-      "Restart the service after changing runtime config.",
+      "Add one price record for each offering operation.",
+      "Restart the service after changing the provider catalog.",
     ],
     features: [
       ["Normalized identity", "Exact models remain independent from provider-native identifiers.", "One exact model can have multiple provider offerings."],
@@ -525,7 +529,7 @@ done`,
       ["Offering metadata", "Output token limits and OpenAI request profiles are explicit.", "Known ceilings can be rejected before upstream calls."],
     ],
     examples: [
-      ["Gemini catalog update", "An operator adds a Gemini exact model and provider offering to config.yml."],
+      ["Gemini catalog update", "An operator adds a Gemini exact model and provider offering to providers.yml."],
       ["Claude default change", "A tenant selects a configured Claude default without changing client calls."],
       ["OpenAI web-search gate", "Only OpenAI model entries marked with web_search expose that request option."],
     ],
@@ -538,6 +542,7 @@ done`,
   page({
     slug: "provider-default-model-selection",
     category: "Configuration",
+    modifiedDate: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
     primaryKeyword: "provider default model selection",
     title: "Provider default model selection for omitted models",
     description: "Let omitted model fields resolve through tenant defaults or selected-provider configured defaults.",
@@ -545,7 +550,7 @@ done`,
     problem: "If clients omit model, each provider route needs a clear rule. Otherwise requests can accidentally inherit a stale model from the wrong provider.",
     solution: "LLM Proxy resolves omitted model through the tenant default when provider is omitted, otherwise through the selected provider's configured default.",
     steps: [
-      "Mark one text offering as the default for each provider in config.yml.",
+      "Mark one text offering as the default for each provider in providers.yml.",
       "Set tenant defaults for omitted-provider requests.",
       "Send provider only when a request needs a provider override.",
       "Omit model in bundled clients when the caller wants provider defaults.",
@@ -569,6 +574,7 @@ done`,
   page({
     slug: "openai-web-search-guardrails",
     category: "API contract",
+    modifiedDate: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
     primaryKeyword: "OpenAI web search guardrails",
     title: "OpenAI web search guardrails in an LLM proxy",
     description: "Expose web_search only when the selected OpenAI model is configured to support it.",
@@ -576,7 +582,7 @@ done`,
     problem: "A generic web_search flag can be misleading when only some providers and models support a search tool.",
     solution: "LLM Proxy accepts web_search per request but enables it only for OpenAI model catalog entries marked with web_search support.",
     steps: [
-      "Mark supported OpenAI model entries with web_search: true in config.yml.",
+      "Mark supported OpenAI offerings with web_search: true in providers.yml.",
       "Send exact web_search=true only when the selected route supports it.",
       "Expect unsupported provider/model combinations to fail before an upstream call.",
       "Keep non-OpenAI providers on normal text routing.",
@@ -904,20 +910,22 @@ GET /api/management/tenants/:tenant_id/usage?interval=30d`,
   page({
     slug: "strict-yaml-config-placeholders",
     category: "Configuration",
+    modifiedDate: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
     primaryKeyword: "strict YAML config placeholders",
     title: "Strict YAML config placeholders for LLM Proxy",
-    description: "Use config.yml as the only service config source and env only for strict placeholder expansion.",
+    description: "Use config.yml for service settings, providers.yml for provider definitions, and env only for declared values.",
     audience: "Operators who want predictable startup behavior and no hidden runtime defaults.",
     problem: "Services that merge flags, env, defaults, and files can start with surprising configuration. Missing secrets may appear only when traffic arrives.",
-    solution: "LLM Proxy reads service configuration from config.yml, expands ${NAME} placeholders from env or a sibling .env file, rejects unknown YAML keys, and fails startup for missing required placeholders.",
+    solution: "LLM Proxy reads service settings from config.yml and provider definitions from providers.yml. It expands declared environment values and rejects unknown YAML keys.",
     steps: [
       "Put service configuration in config.yml.",
+      "Put provider definitions and environment bindings in providers.yml.",
       "Use process environment or a sibling .env only to satisfy placeholders.",
       "Avoid ${NAME:-default}; the loader supports plain ${NAME}.",
       "Let startup fail when required placeholders or unknown keys are present.",
     ],
     features: [
-      ["Single config file", "Runtime code receives only validated config values.", "Flags and env are not alternate service config sources."],
+      ["Explicit YAML owners", "Runtime code receives one validated service config and one validated provider catalog.", "Flags and env are not alternate schema sources."],
       ["Strict placeholders", "Missing placeholders fail startup.", "Configuration errors are visible before traffic."],
       ["Unknown-key rejection", "Stale or misspelled YAML keys fail instead of being ignored.", "Forward-only config stays clean."],
     ],
@@ -965,7 +973,7 @@ GET /api/management/tenants/:tenant_id/usage?interval=30d`,
     ],
     repoExample: {
       source: "internal/proxy/management_store.go",
-      verifiedOn: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE,
+      verifiedOn: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
       code: `dataset, preflightError := preflightLegacyManagedTenantSchema(database, providerKeyCipher, providers)
 if preflightError != nil {
 \treturn preflightError
@@ -1006,7 +1014,7 @@ return database.Transaction(func(transaction *gorm.DB) error {`,
   page({
     slug: "gorm-managed-tenant-persistence",
     category: "Configuration",
-    modifiedDate: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE,
+    modifiedDate: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
     primaryKeyword: "GORM managed tenant persistence",
     title: "GORM-managed tenant persistence for LLM Proxy",
     description: "Persist TAuth accounts, isolated tenants, provider settings, generated secret digests, defaults, and usage through GORM.",
@@ -1031,7 +1039,7 @@ return database.Transaction(func(transaction *gorm.DB) error {`,
     limitations: [
       "The current persistence engine is SQLite; other database engines are outside the contract.",
       "Storage access failures can affect management state and dashboard access.",
-      "Provider transport config and model catalogs still live in config.yml.",
+      "Provider transports and model definitions live in providers.yml.",
     ],
   }),
   evidencedPage({
@@ -1073,7 +1081,7 @@ return database.Transaction(func(transaction *gorm.DB) error {`,
     ],
     repoExample: {
       source: "README.md",
-      verifiedOn: CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE,
+      verifiedOn: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
       code: `curl -X POST \\
   -H "Content-Type: application/json" \\
   --data '{"messages":[{"role":"user","content":"Summarize this","order":2},{"role":"system","content":"Be concise.","order":1}],"model":"deepseek-v4-flash","max_tokens":4096}' \\
@@ -1083,7 +1091,7 @@ return database.Transaction(func(transaction *gorm.DB) error {`,
     faq: [
       {
         question: "Does the LLM Proxy client load user-level or system-level YAML?",
-        answer: "No. The installable client uses explicit flags or LLM_PROXY_BASE_URL and LLM_PROXY_SECRET, and its optional file-based provider/model input is an application-owned JSON model profile. config.yml belongs to the service runtime.",
+        answer: "No. The client uses explicit flags or LLM_PROXY_BASE_URL and LLM_PROXY_SECRET. Its optional file input is an application-owned JSON model profile. config.yml and providers.yml belong to the service runtime.",
       },
       {
         question: "What authenticates a public text request?",
@@ -1333,21 +1341,22 @@ text = client.post_messages(
   page({
     slug: "dictation-provider-routing",
     category: "Dictation",
+    modifiedDate: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
     primaryKeyword: "dictation provider routing",
     title: "Dictation provider routing for OpenAI, Z.AI, Grok, and SiliconFlow",
-    description: "Select dictation-capable providers through /dictate while keeping transcription URLs server-side.",
+    description: "Select dictation-capable providers through /dictate while catalog transports keep provider endpoints server-side.",
     audience: "Teams testing transcription providers behind one proxy endpoint.",
     problem: "Speech providers use different URLs, models, and multipart details. Client apps should not carry those differences.",
-    solution: "LLM Proxy exposes dictation-capable providers through configured catalogs and provider-specific transcription URLs while preserving one /dictate endpoint.",
+    solution: "LLM Proxy resolves each dictation route through the provider catalog while preserving one /dictate endpoint.",
     steps: [
-      "Configure dictation catalogs for OpenAI, SiliconFlow, Z.AI, or xAI as needed.",
+      "Declare dictation transports and offerings in providers.yml.",
       "Send multipart audio to /dictate with key=<tenant secret>.",
       "Omit provider/model for tenant defaults or select a dictation-capable provider and model.",
       "Receive JSON text output from the proxy.",
     ],
     features: [
       ["Dictation catalogs", "Supported providers declare default dictation models and model lists.", "Unknown models fail at the request edge."],
-      ["Transcription URL config", "Each dictation-capable provider owns an explicit transcriptions_url.", "Client apps do not hardcode provider STT URLs."],
+      ["Catalog transport", "Each dictation-capable provider owns an explicit transport endpoint.", "Client apps do not hardcode provider STT URLs."],
       ["Provider-specific multipart handling", "The backend handles details such as whether a model field is sent.", "Grok/xAI STT omits the multipart model field."],
     ],
     examples: [
@@ -1364,14 +1373,15 @@ text = client.post_messages(
   page({
     slug: "openai-compatible-provider-gateway",
     category: "Provider routing",
+    modifiedDate: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
     primaryKeyword: "OpenAI-compatible provider gateway",
     title: "OpenAI-compatible provider gateway",
     description: "Route Meta Muse Spark, DeepSeek, DashScope Qwen, Kimi, MiniMax, SiliconFlow, Z.AI, and Grok text calls through one compatible adapter.",
     audience: "Teams adopting OpenAI-compatible chat providers without rewriting every caller.",
     problem: "OpenAI-compatible providers share a broad shape but still need different base URLs, keys, defaults, and availability rules.",
-    solution: "LLM Proxy uses a shared compatible chat adapter while keeping provider URLs and the model catalog in config and keeping keys and defaults in tenant settings.",
+    solution: "LLM Proxy uses one compatible chat adapter. Provider transports and offerings stay in providers.yml, while tenant values stay in management storage.",
     steps: [
-      "Configure provider runtime URLs and normalized offerings, then save the API key in tenant settings.",
+      "Declare provider transports and normalized offerings in providers.yml, then save tenant connection values in Settings.",
       "Use provider selectors such as meta, deepseek, dashscope, moonshot, minimax, siliconflow, zai, or xai.",
       "Send GET, compatibility POST, or canonical /v2 requests.",
       "Let omitted model use the selected provider's configured default.",
@@ -1390,12 +1400,13 @@ text = client.post_messages(
     limitations: [
       "Meta support is text-only; the proxy does not expose Meta dictation, web search, tools, multimodal inputs, or a Responses fallback.",
       "Each provider needs a saved tenant key before serving tenant traffic.",
-      "Provider base URLs should stay explicit in config.",
+      "Provider endpoints must stay explicit in the provider catalog.",
     ],
   }),
   page({
     slug: "gemini-interactions-proxy",
     category: "Provider routing",
+    modifiedDate: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
     primaryKeyword: "Gemini Interactions proxy",
     title: "Gemini Interactions proxy for shared LLM calls",
     description: "Run model-specific Gemini Interactions lifecycles while callers keep one blocking proxy request.",
@@ -1403,7 +1414,7 @@ text = client.post_messages(
     problem: "Gemini models differ between stored background Interactions and non-stored synchronous Interactions, which shared proxy callers should not have to coordinate.",
     solution: "LLM Proxy selects the configured model lifecycle, polls and cleans up Gemini 3.x resources, and resolves Gemini 2.5 synchronously behind one blocking caller request.",
     steps: [
-      "Save the Gemini API key in tenant settings and configure the Gemini runtime URL and offerings.",
+      "Keep the Gemini transport and offerings in providers.yml, then save the Gemini API key in tenant settings.",
       "Select provider=gemini or set Gemini as a tenant default.",
       "Send canonical messages through /v2 or compatibility text requests.",
       "Keep max_tokens within configured Gemini output limits.",
@@ -1422,12 +1433,13 @@ text = client.post_messages(
     limitations: [
       "Gemini dictation is not exposed through /dictate in this repo.",
       "Web search is not marked supported for Gemini in the current proxy catalog.",
-      "The Gemini model list must be maintained in config.yml.",
+      "The Gemini model list must be maintained in providers.yml.",
     ],
   }),
   page({
     slug: "anthropic-claude-messages-proxy",
     category: "Provider routing",
+    modifiedDate: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
     primaryKeyword: "Anthropic Claude Messages proxy",
     title: "Anthropic Claude Messages proxy for /v2 callers",
     description: "Route shared messages to Anthropic's native Messages API without changing client contracts.",
@@ -1435,7 +1447,7 @@ text = client.post_messages(
     problem: "Anthropic Messages has native system and max_tokens requirements that differ from OpenAI-compatible chat routes.",
     solution: "LLM Proxy maps shared messages into Anthropic's native Messages API, translates system messages to the top-level system field, and sends configured output limits when needed.",
     steps: [
-      "Save the Anthropic API key in tenant settings and configure the Claude runtime URL and model catalog.",
+      "Keep the Anthropic transport and Claude offerings in providers.yml, then save the Anthropic API key in tenant settings.",
       "Select provider=anthropic or use the claude alias.",
       "Send messages through /v2 with user and optional system messages.",
       "Let omitted max_tokens use the selected Claude model's configured output limit.",
@@ -1674,14 +1686,16 @@ text = client.post_messages(
   page({
     slug: "local-and-hosted-llm-proxy-config-profiles",
     category: "Deployment",
+    modifiedDate: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
     primaryKeyword: "local and hosted LLM proxy config",
     title: "Local and hosted LLM Proxy config profiles",
     description: "Use the same strict config contract locally and in hosted split-origin deployments.",
     audience: "Operators who need local development and production profiles to stay aligned.",
     problem: "Local profiles often accumulate defaults, fallback values, or alternate config paths that do not match hosted runtime behavior.",
-    solution: "LLM Proxy uses config.yml plus strict placeholder expansion for both local and hosted profiles, with ignored .env values supplying environment-specific secrets and database paths.",
+    solution: "LLM Proxy uses config.yml with a sibling providers.yml for local and hosted profiles. Ignored .env values supply environment-specific values.",
     steps: [
       "Keep config.yml as the canonical service configuration.",
+      "Keep providers.yml as the canonical provider catalog.",
       "Use configs/.env locally for ignored placeholder values.",
       "Use deployment secrets for hosted LLM_PROXY_MANAGEMENT_* values.",
       "Run repo Makefile targets to validate config and tests.",
@@ -2538,7 +2552,7 @@ Generated: ${currentResourceModifiedDate}
 - Primary users: AI-assisted builders, startups and product teams, institutional platform and engineering teams, and internal-tool developers.
 - Secondary users: Managed end users who sign in, receive a client key, save provider keys, copy request examples, and inspect usage.
 - Primary job-to-be-done: Keep one durable application integration while provider and model choice changes behind a validated routing boundary.
-- Installation or usage model: Run the Go backend from config.yml; publish the static landing and authenticated app at /app/ from site/ to GitHub Pages; call GET /, POST /, POST /v2, or POST /dictate with key=<tenant secret>.
+- Installation or usage model: The Go backend reads config.yml and its sibling providers.yml. The static site publishes landing and authenticated pages. Clients call GET /, POST /, POST /v2, or POST /dictate with key=<tenant secret>.
 - Current maturity: Implemented repo contract with Go/Python/frontend validation and documented release/deploy workflows.
 
 ### Product Capabilities

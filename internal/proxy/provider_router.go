@@ -89,9 +89,11 @@ func (router *providerRouter) generateTextAttempt(requestContext context.Context
 }
 
 func (openAIResponsesTextRouteAdapter) generateText(requestContext context.Context, router *providerRouter, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	return router.openAIClient.openAIRequest(
+	httpClient := newProviderTransportHTTPDoer(router.openAIClient.httpClient, request.provider, request.provider.credentialFor(endpointKindText))
+	client := NewOpenAIClient(httpClient, newEndpointsForResponsesURL(request.provider.textEndpointURL))
+	return client.openAIRequest(
 		requestContext,
-		request.provider.credentialFor(endpointKindText),
+		"",
 		request.model,
 		request.messages,
 		request.webSearchEnabled,
@@ -103,10 +105,12 @@ func (openAIResponsesTextRouteAdapter) generateText(requestContext context.Conte
 }
 
 func (openAIResponsesSynchronousTextRouteAdapter) generateText(requestContext context.Context, router *providerRouter, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	return router.openAIClient.xAIResponsesRequest(
+	httpClient := newProviderTransportHTTPDoer(router.openAIClient.httpClient, request.provider, request.provider.credentialFor(endpointKindText))
+	client := NewOpenAIClient(httpClient, router.openAIClient.endpoints)
+	return client.xAIResponsesRequest(
 		requestContext,
-		request.provider.credentialFor(endpointKindText),
-		request.provider.textBaseURL,
+		"",
+		request.provider.textEndpointURL,
 		request.model,
 		request.messages,
 		request.maxTokens,
@@ -116,10 +120,12 @@ func (openAIResponsesSynchronousTextRouteAdapter) generateText(requestContext co
 }
 
 func (openAIChatCompletionsTextRouteAdapter) generateText(requestContext context.Context, router *providerRouter, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	return router.chatClient.generateText(
+	httpClient := newProviderTransportHTTPDoer(router.chatClient.httpClient, request.provider, request.provider.credentialFor(endpointKindText))
+	client := newOpenAICompatibleChatClient(httpClient)
+	return client.generateText(
 		requestContext,
-		request.provider.credentialFor(endpointKindText),
-		request.provider.textBaseURL,
+		"",
+		request.provider.textEndpointURL,
 		request.model,
 		request.messages,
 		request.maxTokens,
@@ -131,9 +137,11 @@ func (openAIChatCompletionsTextRouteAdapter) generateText(requestContext context
 }
 
 func (geminiInteractionsTextRouteAdapter) generateText(requestContext context.Context, router *providerRouter, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	return router.geminiClient.generateText(
+	httpClient := newProviderTransportHTTPDoer(router.geminiClient.httpClient, request.provider, request.provider.credentialFor(endpointKindText))
+	client := newGeminiInteractionsClient(httpClient)
+	return client.generateText(
 		requestContext,
-		request.provider.credentialFor(endpointKindText),
+		"",
 		request.provider.textBaseURL,
 		request.model,
 		request.messages,
@@ -145,10 +153,12 @@ func (geminiInteractionsTextRouteAdapter) generateText(requestContext context.Co
 }
 
 func (anthropicMessagesTextRouteAdapter) generateText(requestContext context.Context, router *providerRouter, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	return router.anthropicClient.generateText(
+	httpClient := newProviderTransportHTTPDoer(router.anthropicClient.httpClient, request.provider, request.provider.credentialFor(endpointKindText))
+	client := newAnthropicMessagesClient(httpClient)
+	return client.generateText(
 		requestContext,
-		request.provider.credentialFor(endpointKindText),
-		request.provider.textBaseURL,
+		"",
+		request.provider.textEndpointURL,
 		request.model,
 		request.messages,
 		request.maxTokens,
@@ -177,15 +187,13 @@ func continuationMaxTokens(currentMaxTokens *int, model textModelDefinition, lat
 }
 
 func (router *providerRouter) transcribeAudio(requestContext context.Context, request dictationRequestParameters, structuredLogger *zap.SugaredLogger) (string, error) {
-	transcriptionsURL := request.provider.transcriptionsURL
-	if request.provider.identifier == providerID(ProviderNameOpenAI) {
-		transcriptionsURL = router.openAIClient.endpoints.GetTranscriptionsURL()
-	}
 	providerModel := request.provider.transcriptionModels[strings.ToLower(request.model.string())].providerIdentifier
-	return router.openAIClient.transcribeAudioWithURL(
+	httpClient := newProviderTransportHTTPDoer(router.openAIClient.httpClient, request.provider, request.provider.credentialFor(endpointKindDictation))
+	client := NewOpenAIClient(httpClient, router.openAIClient.endpoints)
+	return client.transcribeAudioWithURL(
 		requestContext,
-		request.provider.credentialFor(endpointKindDictation),
-		transcriptionsURL,
+		"",
+		request.provider.transcriptionsURL,
 		request.provider.transcriptionModelField,
 		providerModel.string(),
 		request.fileName,

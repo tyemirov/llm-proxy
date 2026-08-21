@@ -69,7 +69,7 @@ func newAnthropicMessagesClient(httpClient HTTPDoer) *anthropicMessagesClient {
 	}
 }
 
-func (client *anthropicMessagesClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, structuredOutput *structuredOutputSchema, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *anthropicMessagesClient) generateText(parentContext context.Context, apiKey string, endpointURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, structuredOutput *structuredOutputSchema, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	if mediaLimitError := validateInlineMessageMediaBeforeSerialization(modelIdentifier, messages); mediaLimitError != nil {
 		return textGenerationResult{}, mediaLimitError
 	}
@@ -89,8 +89,7 @@ func (client *anthropicMessagesClient) generateText(parentContext context.Contex
 		return textGenerationResult{}, mediaLimitError
 	}
 
-	requestURL := strings.TrimRight(baseURL, "/") + "/v1/messages"
-	httpRequest, buildError := http.NewRequestWithContext(parentContext, http.MethodPost, requestURL, bytes.NewReader(payloadBytes))
+	httpRequest, buildError := http.NewRequestWithContext(parentContext, http.MethodPost, endpointURL, bytes.NewReader(payloadBytes))
 	if buildError != nil {
 		structuredLogger.Errorw(logEventBuildHTTPRequest, constants.LogFieldError, buildError)
 		return textGenerationResult{}, buildError

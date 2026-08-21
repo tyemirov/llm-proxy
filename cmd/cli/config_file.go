@@ -21,25 +21,24 @@ const (
 )
 
 var (
-	errConfigFileRead            = errors.New("config_file_read_failed")
-	errConfigFileParse           = errors.New("config_file_parse_failed")
-	errConfigEnvironmentRead     = errors.New("config_environment_read_failed")
-	errConfigPlaceholderMissing  = errors.New("config_placeholder_missing")
-	errConfigInvalid             = errors.New("config_invalid")
-	errProviderBaseURLRequired   = errors.New("provider_base_url_required")
-	errTranscriptionsURLRequired = errors.New("provider_transcriptions_url_required")
-	placeholderPattern           = regexp.MustCompile(`\$\{([^}]+)\}`)
-	placeholderNamePattern       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	readConfigBytes              = os.ReadFile
-	readDotEnvFile               = gotenv.Read
-	processEnvironment           = os.Environ
+	errConfigFileRead           = errors.New("config_file_read_failed")
+	errConfigFileParse          = errors.New("config_file_parse_failed")
+	errConfigEnvironmentRead    = errors.New("config_environment_read_failed")
+	errProviderCatalogRead      = errors.New("provider_catalog_read_failed")
+	errProviderCatalogInvalid   = errors.New("provider_catalog_invalid")
+	errConfigPlaceholderMissing = errors.New("config_placeholder_missing")
+	errConfigInvalid            = errors.New("config_invalid")
+	placeholderPattern          = regexp.MustCompile(`\$\{([^}]+)\}`)
+	placeholderNamePattern      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	readConfigBytes             = os.ReadFile
+	readProviderCatalogBytes    = os.ReadFile
+	readDotEnvFile              = gotenv.Read
+	processEnvironment          = os.Environ
 )
 
 type fileConfiguration struct {
 	Server     serverConfiguration     `mapstructure:"server"`
 	Management managementConfiguration `mapstructure:"management"`
-	Providers  providersConfiguration  `mapstructure:"providers"`
-	Catalog    proxy.ModelCatalog      `mapstructure:"catalog"`
 }
 
 type serverConfiguration struct {
@@ -85,31 +84,12 @@ type managementConfiguration struct {
 	ProxyOrigin              string   `mapstructure:"proxy_origin"`
 }
 
-type providersConfiguration struct {
-	OpenAI      transcribingProviderConfiguration `mapstructure:"openai"`
-	DeepSeek    providerConfiguration             `mapstructure:"deepseek"`
-	DashScope   providerConfiguration             `mapstructure:"dashscope"`
-	Moonshot    providerConfiguration             `mapstructure:"moonshot"`
-	MiniMax     providerConfiguration             `mapstructure:"minimax"`
-	SiliconFlow transcribingProviderConfiguration `mapstructure:"siliconflow"`
-	ZAI         transcribingProviderConfiguration `mapstructure:"zai"`
-	Gemini      providerConfiguration             `mapstructure:"gemini"`
-	Anthropic   providerConfiguration             `mapstructure:"anthropic"`
-	Meta        providerConfiguration             `mapstructure:"meta"`
-	XAI         transcribingProviderConfiguration `mapstructure:"xai"`
-}
-
-type providerConfiguration struct {
-	BaseURL string `mapstructure:"base_url"`
-}
-
-type transcribingProviderConfiguration struct {
-	BaseURL           string `mapstructure:"base_url"`
-	TranscriptionsURL string `mapstructure:"transcriptions_url"`
-}
-
 func loadRuntimeConfiguration(rawConfigPath string) (proxy.Configuration, error) {
 	configPath := normalizedConfigPath(rawConfigPath)
+	providerCatalog, catalogError := loadProviderCatalog(configPath)
+	if catalogError != nil {
+		return proxy.Configuration{}, catalogError
+	}
 	configBytes, readError := readConfigBytes(configPath)
 	if readError != nil {
 		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigFileRead, configPath, readError)
@@ -117,6 +97,10 @@ func loadRuntimeConfiguration(rawConfigPath string) (proxy.Configuration, error)
 	expansionEnvironment, environmentError := configurationExpansionEnvironment(configPath)
 	if environmentError != nil {
 		return proxy.Configuration{}, environmentError
+	}
+	providerConnectionValues, bindingError := providerCatalog.ResolveEnvironmentBindings(expansionEnvironment)
+	if bindingError != nil {
+		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigInvalid, configPath, bindingError)
 	}
 	expandedConfig, expansionError := expandConfigPlaceholders(string(configBytes), expansionEnvironment)
 	if expansionError != nil {
@@ -136,11 +120,24 @@ func loadRuntimeConfiguration(rawConfigPath string) (proxy.Configuration, error)
 	if unmarshalError := configReader.UnmarshalExact(&parsedConfiguration); unmarshalError != nil {
 		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigFileParse, configPath, unmarshalError)
 	}
-	runtimeConfig, configError := parsedConfiguration.toProxyConfiguration()
+	runtimeConfig, configError := parsedConfiguration.toProxyConfiguration(providerCatalog, providerConnectionValues)
 	if configError != nil {
 		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigInvalid, configPath, configError)
 	}
 	return runtimeConfig, nil
+}
+
+func loadProviderCatalog(configPath string) (*proxy.ProviderCatalog, error) {
+	providerCatalogPath := filepath.Join(filepath.Dir(configPath), "providers.yml")
+	document, readError := readProviderCatalogBytes(providerCatalogPath)
+	if readError != nil {
+		return nil, fmt.Errorf("%w: path=%s: %v", errProviderCatalogRead, providerCatalogPath, readError)
+	}
+	catalog, parseError := proxy.ParseProviderCatalog(document)
+	if parseError != nil {
+		return nil, fmt.Errorf("%w: path=%s: %v", errProviderCatalogInvalid, providerCatalogPath, parseError)
+	}
+	return catalog, nil
 }
 
 func validateExplicitPositiveIntegerConfiguration(configReader *viper.Viper) error {
@@ -213,10 +210,7 @@ func expandConfigPlaceholders(configContent string, expansionEnvironment map[str
 	return expandedConfig.String(), nil
 }
 
-func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configuration, error) {
-	if configurationValidationError := configuration.validateCompleteConfiguration(); configurationValidationError != nil {
-		return proxy.Configuration{}, configurationValidationError
-	}
+func (configuration fileConfiguration) toProxyConfiguration(providerCatalog *proxy.ProviderCatalog, providerConnectionValues map[string]map[string]string) (proxy.Configuration, error) {
 	requestTimeoutSeconds, timeoutError := configuredPositiveInteger(configuration.Server.RequestTimeoutSeconds, proxy.DefaultRequestTimeoutSeconds, "server.request_timeout_seconds")
 	if timeoutError != nil {
 		return proxy.Configuration{}, timeoutError
@@ -230,35 +224,21 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		return proxy.Configuration{}, usageQueueError
 	}
 	return proxy.NewConfiguration(proxy.Configuration{
-		Management:                   managementProxyConfiguration(configuration.Management, usageQueueSize),
-		OpenAIBaseURL:                configuration.Providers.OpenAI.BaseURL,
-		OpenAITranscriptionsURL:      configuration.Providers.OpenAI.TranscriptionsURL,
-		DeepSeekBaseURL:              configuration.Providers.DeepSeek.BaseURL,
-		DashScopeBaseURL:             configuration.Providers.DashScope.BaseURL,
-		MoonshotBaseURL:              configuration.Providers.Moonshot.BaseURL,
-		MiniMaxBaseURL:               configuration.Providers.MiniMax.BaseURL,
-		SiliconFlowBaseURL:           configuration.Providers.SiliconFlow.BaseURL,
-		SiliconFlowTranscriptionsURL: configuration.Providers.SiliconFlow.TranscriptionsURL,
-		ZAIBaseURL:                   configuration.Providers.ZAI.BaseURL,
-		ZAITranscriptionsURL:         configuration.Providers.ZAI.TranscriptionsURL,
-		GeminiBaseURL:                configuration.Providers.Gemini.BaseURL,
-		AnthropicBaseURL:             configuration.Providers.Anthropic.BaseURL,
-		MetaBaseURL:                  configuration.Providers.Meta.BaseURL,
-		XAIBaseURL:                   configuration.Providers.XAI.BaseURL,
-		XAITranscriptionsURL:         configuration.Providers.XAI.TranscriptionsURL,
-		Port:                         configuration.Server.Port,
-		LogLevel:                     configuration.Server.LogLevel,
-		WorkerCount:                  configuration.Server.Workers,
-		QueueSize:                    configuration.Server.QueueSize,
-		RequestTimeoutSeconds:        requestTimeoutSeconds,
-		MaxRequestTimeoutSeconds:     maxRequestTimeoutSeconds,
-		MaxPromptBytes:               configuration.Server.MaxPromptBytes,
-		MaxAssetBytes:                configuration.Server.MaxAssetBytes,
-		AssetRetentionSeconds:        configuration.Server.AssetRetentionSeconds,
-		AssetStorePath:               configuration.Server.AssetStorePath,
-		MaxInputAudioBytes:           configuration.Server.MaxInputAudioBytes,
-		UpstreamRateLimits:           proxyUpstreamRateLimitConfigurations(configuration.Server.UpstreamRateLimits),
-		ModelCatalog:                 configuration.Catalog,
+		Management:               managementProxyConfiguration(configuration.Management, usageQueueSize),
+		ProviderCatalog:          providerCatalog,
+		ProviderConnectionValues: providerConnectionValues,
+		Port:                     configuration.Server.Port,
+		LogLevel:                 configuration.Server.LogLevel,
+		WorkerCount:              configuration.Server.Workers,
+		QueueSize:                configuration.Server.QueueSize,
+		RequestTimeoutSeconds:    requestTimeoutSeconds,
+		MaxRequestTimeoutSeconds: maxRequestTimeoutSeconds,
+		MaxPromptBytes:           configuration.Server.MaxPromptBytes,
+		MaxAssetBytes:            configuration.Server.MaxAssetBytes,
+		AssetRetentionSeconds:    configuration.Server.AssetRetentionSeconds,
+		AssetStorePath:           configuration.Server.AssetStorePath,
+		MaxInputAudioBytes:       configuration.Server.MaxInputAudioBytes,
+		UpstreamRateLimits:       proxyUpstreamRateLimitConfigurations(configuration.Server.UpstreamRateLimits),
 	})
 }
 
@@ -306,52 +286,4 @@ func managementProxyConfiguration(configuration managementConfiguration, usageQu
 		ManagementAPIOrigin:      configuration.ManagementAPIOrigin,
 		ProxyOrigin:              configuration.ProxyOrigin,
 	}
-}
-
-func (configuration fileConfiguration) validateCompleteConfiguration() error {
-	if providerValidationError := configuration.Providers.validateCompleteProviderConfiguration(); providerValidationError != nil {
-		return providerValidationError
-	}
-	return nil
-}
-
-func (configuration providersConfiguration) validateCompleteProviderConfiguration() error {
-	requiredBaseURLs := []struct {
-		providerName string
-		fieldName    string
-		baseURL      string
-	}{
-		{providerName: proxy.ProviderNameOpenAI, fieldName: "providers.openai.base_url", baseURL: configuration.OpenAI.BaseURL},
-		{providerName: proxy.ProviderNameDeepSeek, fieldName: "providers.deepseek.base_url", baseURL: configuration.DeepSeek.BaseURL},
-		{providerName: proxy.ProviderNameMoonshot, fieldName: "providers.moonshot.base_url", baseURL: configuration.Moonshot.BaseURL},
-		{providerName: proxy.ProviderNameMiniMax, fieldName: "providers.minimax.base_url", baseURL: configuration.MiniMax.BaseURL},
-		{providerName: proxy.ProviderNameSiliconFlow, fieldName: "providers.siliconflow.base_url", baseURL: configuration.SiliconFlow.BaseURL},
-		{providerName: proxy.ProviderNameZAI, fieldName: "providers.zai.base_url", baseURL: configuration.ZAI.BaseURL},
-		{providerName: proxy.ProviderNameGemini, fieldName: "providers.gemini.base_url", baseURL: configuration.Gemini.BaseURL},
-		{providerName: proxy.ProviderNameAnthropic, fieldName: "providers.anthropic.base_url", baseURL: configuration.Anthropic.BaseURL},
-		{providerName: proxy.ProviderNameMeta, fieldName: "providers.meta.base_url", baseURL: configuration.Meta.BaseURL},
-		{providerName: proxy.ProviderNameXAI, fieldName: "providers.xai.base_url", baseURL: configuration.XAI.BaseURL},
-	}
-	for _, requiredBaseURL := range requiredBaseURLs {
-		if strings.TrimSpace(requiredBaseURL.baseURL) == constants.EmptyString {
-			return fmt.Errorf("%w: provider=%s field=%s", errProviderBaseURLRequired, requiredBaseURL.providerName, requiredBaseURL.fieldName)
-		}
-	}
-
-	requiredTranscriptionsURLs := []struct {
-		providerName      string
-		fieldName         string
-		transcriptionsURL string
-	}{
-		{providerName: proxy.ProviderNameOpenAI, fieldName: "providers.openai.transcriptions_url", transcriptionsURL: configuration.OpenAI.TranscriptionsURL},
-		{providerName: proxy.ProviderNameSiliconFlow, fieldName: "providers.siliconflow.transcriptions_url", transcriptionsURL: configuration.SiliconFlow.TranscriptionsURL},
-		{providerName: proxy.ProviderNameZAI, fieldName: "providers.zai.transcriptions_url", transcriptionsURL: configuration.ZAI.TranscriptionsURL},
-		{providerName: proxy.ProviderNameXAI, fieldName: "providers.xai.transcriptions_url", transcriptionsURL: configuration.XAI.TranscriptionsURL},
-	}
-	for _, requiredTranscriptionsURL := range requiredTranscriptionsURLs {
-		if strings.TrimSpace(requiredTranscriptionsURL.transcriptionsURL) == constants.EmptyString {
-			return fmt.Errorf("%w: provider=%s field=%s", errTranscriptionsURLRequired, requiredTranscriptionsURL.providerName, requiredTranscriptionsURL.fieldName)
-		}
-	}
-	return nil
 }

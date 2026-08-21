@@ -6,9 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"net/http"
-	"net/url"
-	"strings"
 	"testing"
 	"time"
 
@@ -17,25 +14,6 @@ import (
 )
 
 const managedRouterTestDashScopeBaseURL = "https://managed-router-test.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
-
-type managedRouterTestHTTPDoer struct {
-	next               HTTPDoer
-	dashScopeTargetURL *url.URL
-}
-
-func (httpDoer managedRouterTestHTTPDoer) Do(httpRequest *http.Request) (*http.Response, error) {
-	if httpRequest.URL.Scheme != "https" || httpRequest.URL.Host != "managed-router-test.ap-southeast-1.maas.aliyuncs.com" {
-		return httpDoer.next.Do(httpRequest)
-	}
-	requestCopy := httpRequest.Clone(httpRequest.Context())
-	requestURL := *httpRequest.URL
-	requestURL.Scheme = httpDoer.dashScopeTargetURL.Scheme
-	requestURL.Host = httpDoer.dashScopeTargetURL.Host
-	requestURL.Path = strings.TrimRight(httpDoer.dashScopeTargetURL.Path, "/") + strings.TrimPrefix(httpRequest.URL.Path, "/compatible-mode/v1")
-	requestURL.RawPath = ""
-	requestCopy.URL = &requestURL
-	return httpDoer.next.Do(requestCopy)
-}
 
 // ManagedTenantTestConfiguration describes one managed tenant used by router tests.
 type ManagedTenantTestConfiguration struct {
@@ -77,22 +55,26 @@ func BuildRouterWithManagedTenantForTest(testingInstance testing.TB, configurati
 // BuildRouterWithManagedTenantsForTest builds a router with explicit managed tenant records.
 func BuildRouterWithManagedTenantsForTest(testingInstance testing.TB, configuration Configuration, structuredLogger *zap.SugaredLogger, tenantConfigurations []ManagedTenantTestConfiguration) (*gin.Engine, error) {
 	testingInstance.Helper()
-	originalHTTPClient := HTTPClient
-	if strings.TrimSpace(configuration.DashScopeBaseURL) != "" {
-		if _, baseURLError := managedProviderBaseURL(providerID(ProviderNameDashScope), configuration.DashScopeBaseURL); baseURLError != nil {
-			dashScopeTargetURL, parseError := url.Parse(configuration.DashScopeBaseURL)
-			if parseError != nil {
-				return nil, parseError
-			}
-			HTTPClient = managedRouterTestHTTPDoer{next: originalHTTPClient, dashScopeTargetURL: dashScopeTargetURL}
-			defer func() { HTTPClient = originalHTTPClient }()
-			configuration.DashScopeBaseURL = managedRouterTestDashScopeBaseURL
+	if configuration.ProviderCatalog == nil {
+		if len(configuration.ModelCatalog.Offerings) == 0 {
+			configuration.ProviderCatalog = internalCanonicalProviderCatalog()
+		} else {
+			configuration.ProviderCatalog = internalTestProviderCatalog(configuration.ModelCatalog)
 		}
 	}
+	configuration.Endpoints = managedRouterTestEndpointOverrides(configuration)
 	configuration.Management = managedRouterTestManagementConfiguration()
 	return buildRouter(configuration, structuredLogger, func(_ ManagementConfiguration, providers *providerRegistry) (*managedTenantStore, error) {
 		return newManagedRouterTestStore(configuration, providers, tenantConfigurations)
 	})
+}
+
+func managedRouterTestEndpointOverrides(configuration Configuration) *Endpoints {
+	endpoints := configuration.Endpoints
+	if endpoints == nil {
+		endpoints = NewEndpoints()
+	}
+	return endpoints
 }
 
 func managedRouterTestManagementConfiguration() ManagementConfiguration {
@@ -160,26 +142,44 @@ func newManagedRouterTestStore(configuration Configuration, providers *providerR
 			if providerError != nil {
 				return nil, providerError
 			}
-			baseURL := ""
-			if providerIDValue.string() == ProviderNameDashScope {
-				baseURL = configuration.DashScopeBaseURL
-				if baseURL == "" {
+			definition := providers.definitions[providerIDValue]
+			connections := make([]managedProviderConnectionRecord, 0, len(definition.fields))
+			connectionComplete := true
+			for fieldIdentifier, field := range definition.fields {
+				value := *field.Default
+				if field.Kind == CatalogProviderFieldKindCredential {
+					value = apiKey
+				} else if fieldIdentifier == "base_url" {
+					value = managedRouterTestDashScopeBaseURL
+				}
+				if value == "" {
+					connectionComplete = connectionComplete && !field.Required
 					continue
 				}
+				storedValue := value
+				if field.Secret {
+					encryptedValue, encryptionError := providerKeyCipher.encryptConnection(rand.Reader, identifier, providerIDValue.string(), fieldIdentifier, value)
+					if encryptionError != nil {
+						return nil, encryptionError
+					}
+					storedValue = encryptedValue
+				}
+				connections = append(connections, managedProviderConnectionRecord{
+					TenantID: identifier, ProviderID: providerIDValue.string(), FieldID: fieldIdentifier,
+					Value: storedValue, CreatedAt: now, UpdatedAt: now,
+				})
 			}
-			encryptedAPIKey, encryptionError := providerKeyCipher.encrypt(rand.Reader, identifier, providerIDValue.string(), apiKey)
-			if encryptionError != nil {
-				return nil, encryptionError
+			if !connectionComplete {
+				continue
 			}
-			record.ProviderAPIKeys = append(record.ProviderAPIKeys, managedProviderAPIKeyRecord{
-				TenantID:        identifier,
-				ProviderID:      providerIDValue.string(),
-				EncryptedAPIKey: encryptedAPIKey,
-				BaseURL:         baseURL,
-				TextModel:       tenantConfiguration.ProviderTextModels[providerIDValue.string()],
-				SystemPrompt:    tenantConfiguration.ProviderSystemPrompts[providerIDValue.string()],
-				CreatedAt:       now,
-				UpdatedAt:       now,
+			textModel := tenantConfiguration.ProviderTextModels[providerIDValue.string()]
+			if textModel == "" {
+				textModel = definition.defaultTextModel.string()
+			}
+			record.ProviderConnections = append(record.ProviderConnections, connections...)
+			record.ProviderProfiles = append(record.ProviderProfiles, managedProviderProfileRecord{
+				TenantID: identifier, ProviderID: providerIDValue.string(), TextModel: textModel,
+				SystemPrompt: tenantConfiguration.ProviderSystemPrompts[providerIDValue.string()], CreatedAt: now, UpdatedAt: now,
 			})
 		}
 		database.usersByID[record.OwnerUserID] = managedUserRecord{UserID: record.OwnerUserID, CreatedAt: now, UpdatedAt: now}

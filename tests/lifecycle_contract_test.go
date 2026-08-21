@@ -30,7 +30,7 @@ var expectedSiblingGatewayWrapper = strings.Join([]string{
 	"\t\tMPRLAB_APP_ROOT=\"$${application_root}\"",
 }, "\n")
 
-func TestOperationalRepositoryOwnsSchemaV4Lifecycle(testingInstance *testing.T) {
+func TestOperationalRepositoryOwnsVersionlessLifecycle(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	manifestPath := filepath.Join(repositoryRoot, filepath.FromSlash(lifecycleManifestRelativePath))
 	manifestBytes, readError := os.ReadFile(manifestPath)
@@ -49,9 +49,6 @@ func TestOperationalRepositoryOwnsSchemaV4Lifecycle(testingInstance *testing.T) 
 	if !available {
 		testingInstance.Fatalf("lifecycle manifest has no mprlab_resources mapping: %#v", document)
 	}
-	if schemaVersion, schemaAvailable := resourcesDocument["schema_version"].(int); !schemaAvailable || schemaVersion != 4 {
-		testingInstance.Fatalf("unexpected lifecycle schema version: %#v", resourcesDocument["schema_version"])
-	}
 	if owner, ownerAvailable := resourcesDocument["owner"].(string); !ownerAvailable || owner != "llm-proxy" {
 		testingInstance.Fatalf("unexpected lifecycle owner: %#v", resourcesDocument["owner"])
 	}
@@ -62,8 +59,13 @@ func TestOperationalRepositoryOwnsSchemaV4Lifecycle(testingInstance *testing.T) 
 	if _, dependenciesAvailable := resourcesDocument["dependencies"]; dependenciesAvailable {
 		testingInstance.Fatalf("lifecycle manifest must not declare top-level dependencies: %#v", resourcesDocument["dependencies"])
 	}
-	if len(resourcesDocument) != 4 {
-		testingInstance.Fatalf("lifecycle manifest must contain only schema_version, owner, release, and resources: %#v", resourcesDocument)
+	resourceKeys := make([]string, 0, len(resourcesDocument))
+	for key := range resourcesDocument {
+		resourceKeys = append(resourceKeys, key)
+	}
+	slices.Sort(resourceKeys)
+	if !slices.Equal(resourceKeys, []string{"owner", "release", "resources"}) {
+		testingInstance.Fatalf("lifecycle manifest must contain only owner, release, and resources: %#v", resourcesDocument)
 	}
 
 	resources, resourcesAvailable := resourcesDocument["resources"].([]any)
@@ -238,7 +240,7 @@ func TestOperationalRepositoryOwnsSchemaV4Lifecycle(testingInstance *testing.T) 
 		}
 	}
 	for _, forbiddenContract := range []string{
-		"schema_version: 1",
+		"schema_version:",
 		"environment_files:",
 		"profiles:",
 		"secret:",

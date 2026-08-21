@@ -791,7 +791,7 @@ func TestV2RouteMIMERejectionClosesTheResolvedAsset(t *testing.T) {
 	requestTenant := tenant{
 		identifier: tenantID("media-owner"),
 		providerSettings: map[providerID]managedProviderSettings{
-			providerID(ProviderNameXAI): {apiKey: "xai-test-key"},
+			providerID(ProviderNameXAI): internalManagedProviderSettings("xai-test-key", "", ModelNameGrok43, ""),
 		},
 	}
 	assetStore := newTenantAssetStore(t.TempDir(), 1024, 60)
@@ -811,16 +811,7 @@ func TestV2RouteMIMERejectionClosesTheResolvedAsset(t *testing.T) {
 	}
 	t.Cleanup(func() { assetOpen = previousAssetOpen })
 
-	offering := ProviderOffering{
-		Provider: ProviderNameXAI, Model: ModelNameGrok45, ProviderModel: ModelNameGrok45,
-		Operations: []string{ModelOperationText}, DefaultOperations: []string{ModelOperationText},
-		WireContract: string(textWireContractOpenAIResponses), ExecutionLifecycle: string(textExecutionLifecycleSynchronousCompletion),
-		MediaInputs: []string{string(messageMediaTypeImage)},
-	}
-	providers := newProviderRegistry(Configuration{
-		XAIBaseURL:   "https://provider.test",
-		ModelCatalog: ModelCatalog{Offerings: []ProviderOffering{offering}},
-	})
+	providers := newProviderRegistry(Configuration{ProviderCatalog: internalCanonicalProviderCatalog()})
 	validator := newModelValidator(providers.forTenant(requestTenant))
 	attachmentBytes, _ := json.Marshal([]chatMessageAttachmentPayload{{
 		Type: string(messageMediaTypeImage), MIMEType: messageImageMIMEWebP,

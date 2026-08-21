@@ -70,7 +70,10 @@ func NewTestRouter(t *testing.T, serverURL string) *gin.Engine {
 
 func buildRouterWithCatalogs(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger) (*gin.Engine, error) {
 	testingInstance.Helper()
-	configuration = withModelCatalog(testingInstance, configuration)
+	configuration, catalogError := configurationWithCatalogs(testingInstance, configuration)
+	if catalogError != nil {
+		return nil, catalogError
+	}
 	management := configuration.Management
 	if management.PublicOrigin != "" || management.UIDescription != "" || management.TAuthURL != "" || management.DatabasePath != "" || management.ProviderKeyEncryptionKey != "" || management.DatabaseDialector != nil {
 		return proxy.BuildRouter(configuration, structuredLogger)
@@ -80,21 +83,84 @@ func buildRouterWithCatalogs(testingInstance testing.TB, configuration proxy.Con
 
 func buildRouterWithManagedTenant(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger, tenantConfiguration proxy.ManagedTenantTestConfiguration) (*gin.Engine, error) {
 	testingInstance.Helper()
-	return proxy.BuildRouterWithManagedTenantForTest(testingInstance, withModelCatalog(testingInstance, configuration), structuredLogger, tenantConfiguration)
+	configuration, catalogError := configurationWithCatalogs(testingInstance, configuration)
+	if catalogError != nil {
+		return nil, catalogError
+	}
+	return proxy.BuildRouterWithManagedTenantForTest(testingInstance, configuration, structuredLogger, tenantConfiguration)
 }
 
 func newConfigurationWithCatalogs(testingInstance testing.TB, configuration proxy.Configuration) (proxy.Configuration, error) {
 	testingInstance.Helper()
 	configuration.Management = proxy.ManagedRouterTestManagementConfiguration()
-	return proxy.NewConfiguration(withModelCatalog(testingInstance, configuration))
+	if configuration.ProviderCatalog == nil {
+		if len(configuration.ModelCatalog.Offerings) == 0 {
+			configuration.ProviderCatalog = testfixtures.ProviderCatalog(testingInstance)
+		} else {
+			catalog, catalogError := testfixtures.NewProviderCatalogFromModelCatalog(configuration.ModelCatalog)
+			if catalogError != nil {
+				return proxy.Configuration{}, catalogError
+			}
+			configuration.ProviderCatalog = catalog
+		}
+	}
+	configuration.Endpoints = withProviderEndpointOverrides(configuration)
+	return proxy.NewConfiguration(configuration)
 }
 
 func withModelCatalog(testingInstance testing.TB, configuration proxy.Configuration) proxy.Configuration {
 	testingInstance.Helper()
-	if len(configuration.ModelCatalog.Offerings) == 0 {
-		configuration.ModelCatalog = testfixtures.ModelCatalog(testingInstance)
+	configuration, catalogError := configurationWithCatalogs(testingInstance, configuration)
+	if catalogError != nil {
+		testingInstance.Fatalf("compile test provider catalog: %v", catalogError)
 	}
 	return configuration
+}
+
+func configurationWithCatalogs(testingInstance testing.TB, configuration proxy.Configuration) (proxy.Configuration, error) {
+	testingInstance.Helper()
+	if configuration.ProviderCatalog == nil {
+		if len(configuration.ModelCatalog.Offerings) == 0 {
+			configuration.ProviderCatalog = testfixtures.ProviderCatalog(testingInstance)
+		} else {
+			catalog, catalogError := testfixtures.NewProviderCatalogFromModelCatalog(configuration.ModelCatalog)
+			if catalogError != nil {
+				return proxy.Configuration{}, catalogError
+			}
+			configuration.ProviderCatalog = catalog
+		}
+	}
+	configuration.Endpoints = withProviderEndpointOverrides(configuration)
+	return configuration, nil
+}
+
+func withProviderEndpointOverrides(configuration proxy.Configuration) *proxy.Endpoints {
+	endpoints := configuration.Endpoints
+	if endpoints == nil {
+		endpoints = proxy.NewEndpoints()
+	}
+	return endpoints
+}
+
+func providerEndpoints(rawBaseURL string, providers ...string) *proxy.Endpoints {
+	endpoints := proxy.NewEndpoints()
+	for _, provider := range providers {
+		endpoints.SetProviderBaseURL(provider, rawBaseURL)
+	}
+	return endpoints
+}
+
+func providerEndpointOverrides(baseURLs map[string]string, transportURLs map[string]map[string]string) *proxy.Endpoints {
+	endpoints := proxy.NewEndpoints()
+	for provider, rawBaseURL := range baseURLs {
+		endpoints.SetProviderBaseURL(provider, rawBaseURL)
+	}
+	for provider, providerTransports := range transportURLs {
+		for transport, rawURL := range providerTransports {
+			endpoints.SetProviderTransportURL(provider, transport, rawURL)
+		}
+	}
+	return endpoints
 }
 
 func catalogOfferingsForProvider(catalog proxy.ModelCatalog, provider string, operation string) []proxy.ProviderOffering {

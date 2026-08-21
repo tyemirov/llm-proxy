@@ -172,6 +172,14 @@ func integrationConfiguration(testingInstance testing.TB, configuration proxy.Co
 	return configuration
 }
 
+func integrationProviderEndpoints(rawBaseURL string, providers ...string) *proxy.Endpoints {
+	endpoints := proxy.NewEndpoints()
+	for _, provider := range providers {
+		endpoints.SetProviderBaseURL(provider, rawBaseURL)
+	}
+	return endpoints
+}
+
 func buildIntegrationRouter(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger) (*gin.Engine, error) {
 	testingInstance.Helper()
 	return testfixtures.BuildManagedRouter(testingInstance, integrationConfiguration(testingInstance, configuration), structuredLogger, testfixtures.StandardManagedTenant(integrationServiceSecret))

@@ -151,7 +151,7 @@ func TestManagedTenantStoreCipherAndSnapshotEdges(t *testing.T) {
 	}, providers); !errors.Is(storeError, errManagedTenantStoreOpen) {
 		t.Fatalf("invalid encryption key error=%v", storeError)
 	}
-	invalidDefaultsProviders := newProviderRegistry(Configuration{
+	invalidDefaultsProviders := newInternalTestProviderRegistry(Configuration{
 		ModelCatalog: internalTestModelCatalog(
 			internalTestOffering(ProviderNameDeepSeek, ModelNameDeepSeekV4Flash, []string{ModelOperationText}, []string{ModelOperationText}),
 		),
@@ -204,15 +204,15 @@ func TestManagedTenantStoreCipherAndSnapshotEdges(t *testing.T) {
 		EncryptedAPIKey: managedProviderKeyCiphertextPrefix + base64.StdEncoding.EncodeToString(append(blankNonce, blankCiphertext...)),
 	}
 	store := newManagedTenantStoreWithDatabase(newFakeManagedTenantDatabase())
-	settings, settingsError := store.providerSettingsMap([]managedProviderAPIKeyRecord{
+	settings, settingsError := managedProviderSettingsFromRecords(cipher, []managedProviderAPIKeyRecord{
 		{TenantID: "tenant", ProviderID: "", EncryptedAPIKey: "ignored"},
 		blankRecord,
 		validRecord,
 	})
-	if settingsError != nil || settings[newProviderID(ProviderNameOpenAI)].apiKey != "sk-key" || settings[newProviderID(ProviderNameOpenAI)].textModel != ModelNameGPT41 {
+	if settingsError != nil || settings[newProviderID(ProviderNameOpenAI)].connectionValue(CatalogCredentialAPIKey) != "sk-key" || settings[newProviderID(ProviderNameOpenAI)].textModel != ModelNameGPT41 {
 		t.Fatalf("settings=%+v error=%v", settings, settingsError)
 	}
-	if _, settingsError := store.providerSettingsMap([]managedProviderAPIKeyRecord{{
+	if _, settingsError := managedProviderSettingsFromRecords(cipher, []managedProviderAPIKeyRecord{{
 		TenantID: "tenant", ProviderID: ProviderNameOpenAI, EncryptedAPIKey: "invalid",
 	}}); !errors.Is(settingsError, errManagedProviderKeyDecryption) {
 		t.Fatalf("settings decrypt error=%v", settingsError)
@@ -221,7 +221,7 @@ func TestManagedTenantStoreCipherAndSnapshotEdges(t *testing.T) {
 	if encryptionError != nil {
 		t.Fatalf("encrypt DashScope settings: %v", encryptionError)
 	}
-	if _, settingsError := store.providerSettingsMap([]managedProviderAPIKeyRecord{{
+	if _, settingsError := managedProviderSettingsFromRecords(cipher, []managedProviderAPIKeyRecord{{
 		TenantID: "tenant", ProviderID: ProviderNameDashScope, EncryptedAPIKey: dashScopeEncrypted, TextModel: ModelNameDashScopeQwenPlus,
 	}}); !errors.Is(settingsError, errManagedProviderBaseURLInvalid) {
 		t.Fatalf("incomplete DashScope settings error=%v", settingsError)
@@ -229,9 +229,13 @@ func TestManagedTenantStoreCipherAndSnapshotEdges(t *testing.T) {
 
 	now := time.Date(2026, 7, 25, 12, 0, 0, 0, time.UTC)
 	brokenRecord := fakeTenantRecord("owner", "tenant", "Default", now)
-	brokenRecord.ProviderAPIKeys = []managedProviderAPIKeyRecord{{
-		TenantID: "tenant", ProviderID: ProviderNameOpenAI, EncryptedAPIKey: "invalid",
+	brokenRecord.ProviderConnections = []managedProviderConnectionRecord{{
+		TenantID: "tenant", ProviderID: ProviderNameOpenAI, FieldID: CatalogCredentialAPIKey, Value: "invalid",
 	}}
+	brokenRecord.ProviderProfiles = []managedProviderProfileRecord{{
+		TenantID: "tenant", ProviderID: ProviderNameOpenAI, TextModel: ModelNameGPT41,
+	}}
+	store.routingDefaults = providers
 	if _, snapshotError := store.snapshot(brokenRecord); !errors.Is(snapshotError, errManagedProviderKeyDecryption) {
 		t.Fatalf("snapshot error=%v", snapshotError)
 	}
@@ -240,7 +244,6 @@ func TestManagedTenantStoreCipherAndSnapshotEdges(t *testing.T) {
 	}
 	invalidDefaultsRecord := fakeTenantRecord("owner", "tenant", "Default", now)
 	invalidDefaultsRecord.DefaultProvider = "missing"
-	store.routingDefaults = providers
 	if _, tenantError := store.tenant(invalidDefaultsRecord, sha256.Sum256([]byte("secret"))); !errors.Is(tenantError, errManagedRoutingDefaultsInvalid) {
 		t.Fatalf("tenant routing error=%v", tenantError)
 	}
@@ -581,63 +584,63 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 	store := newManagedTenantStoreWithDatabase(database)
 	store.routingDefaults = internalManagementProviderRegistry()
 	store.now = func() time.Time { return now }
-	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameDashScope), "sk-key", "https://invalid.example/v1", ModelNameDashScopeQwenPlus, ""); !errors.Is(saveError, errManagedProviderBaseURLInvalid) {
+	if _, saveError := saveInternalProviderConnections(store, context.Background(), principal, identifier, newProviderID(ProviderNameDashScope), "sk-key", "https://invalid.example/v1", ModelNameDashScopeQwenPlus, ""); !errors.Is(saveError, errManagedProviderKeyInvalid) {
 		t.Fatalf("provider base URL error=%v", saveError)
 	}
 
-	if _, saveError := store.saveProviderKey(context.Background(), principal, "missing", newProviderID(ProviderNameOpenAI), "sk-key", "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantNotFound) {
+	if _, saveError := saveInternalProviderConnections(store, context.Background(), principal, "missing", newProviderID(ProviderNameOpenAI), "sk-key", "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantNotFound) {
 		t.Fatalf("provider tenant error=%v", saveError)
 	}
-	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), " ", "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedProviderKeyInvalid) {
+	if _, saveError := saveInternalProviderConnections(store, context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), " ", "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedProviderKeyInvalid) {
 		t.Fatalf("blank provider error=%v", saveError)
 	}
 	store.randomReader = strings.NewReader("")
-	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedProviderKeyEncryption) {
+	if _, saveError := saveInternalProviderConnections(store, context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedProviderKeyEncryption) {
 		t.Fatalf("provider encryption error=%v", saveError)
 	}
 	store.randomReader = bytes.NewReader(bytes.Repeat([]byte{1}, 256))
-	database.saveProviderKeyErrors = []error{errInternalTestDatabase}
-	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantStorePersist) {
+	database.saveProviderConnectionsErrors = []error{errInternalTestDatabase}
+	if _, saveError := saveInternalProviderConnections(store, context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantStorePersist) {
 		t.Fatalf("provider persistence error=%v", saveError)
 	}
-	snapshot, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", "", ModelNameGPT41, "provider system")
-	if saveError != nil || snapshot.providerSettings[newProviderID(ProviderNameOpenAI)].apiKey != "sk-key" {
+	snapshot, saveError := saveInternalProviderConnections(store, context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", "", ModelNameGPT41, "provider system")
+	if saveError != nil || snapshot.providerSettings[newProviderID(ProviderNameOpenAI)].connectionValue(CatalogCredentialAPIKey) != "sk-key" {
 		t.Fatalf("provider snapshot=%+v error=%v", snapshot, saveError)
 	}
-	originalCiphertext := database.tenantsByID[identifier.string()].ProviderAPIKeys[0].EncryptedAPIKey
-	snapshot, saveError = store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "", "", ModelNameGPT55, "updated system")
-	if saveError != nil || snapshot.providerSettings[newProviderID(ProviderNameOpenAI)].textModel != ModelNameGPT55 || database.tenantsByID[identifier.string()].ProviderAPIKeys[0].EncryptedAPIKey != originalCiphertext {
+	originalCiphertext := database.tenantsByID[identifier.string()].ProviderConnections[0].Value
+	snapshot, saveError = saveInternalProviderConnections(store, context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "", "", ModelNameGPT55, "updated system")
+	if saveError != nil || snapshot.providerSettings[newProviderID(ProviderNameOpenAI)].textModel != ModelNameGPT55 || database.tenantsByID[identifier.string()].ProviderConnections[0].Value != originalCiphertext {
 		t.Fatalf("updated snapshot=%+v error=%v", snapshot, saveError)
 	}
 	database.tenantByOwnerAndIDErrors = []error{nil, errInternalTestDatabase}
-	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "", "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantStorePersist) {
+	if _, saveError := saveInternalProviderConnections(store, context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "", "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantStorePersist) {
 		t.Fatalf("provider reload error=%v", saveError)
 	}
 
-	if _, revealError := store.revealProviderKey(principal, "missing", newProviderID(ProviderNameOpenAI)); !errors.Is(revealError, errManagedTenantNotFound) {
+	if _, revealError := store.revealProviderConnectionField(principal, "missing", newProviderID(ProviderNameOpenAI), CatalogCredentialAPIKey); !errors.Is(revealError, errManagedTenantNotFound) {
 		t.Fatalf("reveal tenant error=%v", revealError)
 	}
-	if _, revealError := store.revealProviderKey(principal, identifier, newProviderID(ProviderNameDeepSeek)); !errors.Is(revealError, errManagedProviderKeyNotFound) {
+	if _, revealError := store.revealProviderConnectionField(principal, identifier, newProviderID(ProviderNameDeepSeek), CatalogCredentialAPIKey); !errors.Is(revealError, errManagedProviderKeyNotFound) {
 		t.Fatalf("reveal missing key error=%v", revealError)
 	}
 	record := database.tenantsByID[identifier.string()]
-	record.ProviderAPIKeys[0].EncryptedAPIKey = "invalid"
+	record.ProviderConnections[0].Value = "invalid"
 	database.tenantsByID[identifier.string()] = record
-	if _, revealError := store.revealProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI)); !errors.Is(revealError, errManagedProviderKeyDecryption) {
+	if _, revealError := store.revealProviderConnectionField(principal, identifier, newProviderID(ProviderNameOpenAI), CatalogCredentialAPIKey); !errors.Is(revealError, errManagedProviderKeyDecryption) {
 		t.Fatalf("reveal decryption error=%v", revealError)
 	}
-	record.ProviderAPIKeys[0].EncryptedAPIKey = originalCiphertext
+	record.ProviderConnections[0].Value = originalCiphertext
 	database.tenantsByID[identifier.string()] = record
 
-	database.deleteProviderKeyErrors = []error{errInternalTestDatabase}
-	if _, removeError := store.removeProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI)); !errors.Is(removeError, errManagedTenantStorePersist) {
+	database.deleteProviderConnectionsErrors = []error{errInternalTestDatabase}
+	if _, removeError := store.removeProviderConnections(principal, identifier, newProviderID(ProviderNameOpenAI)); !errors.Is(removeError, errManagedTenantStorePersist) {
 		t.Fatalf("remove persistence error=%v", removeError)
 	}
 	database.tenantByOwnerAndIDErrors = []error{errInternalTestDatabase}
-	if _, removeError := store.removeProviderKey(principal, identifier, newProviderID(ProviderNameDeepSeek)); !errors.Is(removeError, errManagedTenantStorePersist) {
+	if _, removeError := store.removeProviderConnections(principal, identifier, newProviderID(ProviderNameDeepSeek)); !errors.Is(removeError, errManagedTenantStorePersist) {
 		t.Fatalf("remove reload error=%v", removeError)
 	}
-	if _, removeError := store.removeProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI)); removeError != nil {
+	if _, removeError := store.removeProviderConnections(principal, identifier, newProviderID(ProviderNameOpenAI)); removeError != nil {
 		t.Fatalf("remove provider error=%v", removeError)
 	}
 
@@ -722,14 +725,18 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 	database.tenantBySecretDigestRecord = nil
 	digestText := hex.EncodeToString(digest[:])
 	record.SecretDigest = &digestText
-	record.ProviderAPIKeys = []managedProviderAPIKeyRecord{{
-		TenantID: identifier.string(), ProviderID: ProviderNameOpenAI, EncryptedAPIKey: "invalid",
+	record.ProviderConnections = []managedProviderConnectionRecord{{
+		TenantID: identifier.string(), ProviderID: ProviderNameOpenAI, FieldID: CatalogCredentialAPIKey, Value: "invalid",
+	}}
+	record.ProviderProfiles = []managedProviderProfileRecord{{
+		TenantID: identifier.string(), ProviderID: ProviderNameOpenAI, TextModel: ModelNameGPT41,
 	}}
 	database.tenantsByID[identifier.string()] = record
 	if _, authenticated := store.authenticate(context.Background(), rawSecret); authenticated {
 		t.Fatal("tenant with invalid provider key authenticated")
 	}
-	record.ProviderAPIKeys = nil
+	record.ProviderConnections = nil
+	record.ProviderProfiles = nil
 	database.tenantsByID[identifier.string()] = record
 
 	store.mutex.mutations.Lock()
@@ -864,53 +871,170 @@ func TestManagedTenantStoreProviderRoutingReconciliationErrors(t *testing.T) {
 	store.now = func() time.Time { return now }
 
 	record := database.tenantsByID[identifier.string()]
-	record.ProviderAPIKeys = []managedProviderAPIKeyRecord{{
-		TenantID:        record.TenantID,
-		ProviderID:      ProviderNameOpenAI,
-		EncryptedAPIKey: "invalid",
-		TextModel:       ModelNameGPT41,
+	record.ProviderConnections = []managedProviderConnectionRecord{{
+		TenantID: record.TenantID, ProviderID: ProviderNameOpenAI, FieldID: CatalogCredentialAPIKey, Value: "invalid",
+	}}
+	record.ProviderProfiles = []managedProviderProfileRecord{{
+		TenantID: record.TenantID, ProviderID: ProviderNameOpenAI, TextModel: ModelNameGPT41,
 	}}
 	database.tenantsByID[identifier.string()] = record
-	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameDeepSeek), "sk-deepseek", "", ModelNameDeepSeekV4Flash, ""); !errors.Is(saveError, errManagedProviderKeyDecryption) {
+	if _, saveError := saveInternalProviderConnections(store, context.Background(), principal, identifier, newProviderID(ProviderNameDeepSeek), "sk-deepseek", "", ModelNameDeepSeekV4Flash, ""); !errors.Is(saveError, errManagedProviderKeyDecryption) {
 		t.Fatalf("save provider decryption error=%v", saveError)
 	}
-	if _, removeError := store.removeProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI)); !errors.Is(removeError, errManagedProviderKeyDecryption) {
+	if _, removeError := store.removeProviderConnections(principal, identifier, newProviderID(ProviderNameOpenAI)); !errors.Is(removeError, errManagedProviderKeyDecryption) {
 		t.Fatalf("remove provider decryption error=%v", removeError)
 	}
 
-	record.ProviderAPIKeys = nil
+	record.ProviderConnections = nil
+	record.ProviderProfiles = nil
 	record.DefaultProvider = "missing"
 	record.DefaultModel = ""
 	database.tenantsByID[identifier.string()] = record
-	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-openai", "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedRoutingDefaultsInvalid) {
+	if _, saveError := saveInternalProviderConnections(store, context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-openai", "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedRoutingDefaultsInvalid) {
 		t.Fatalf("save invalid defaults error=%v", saveError)
 	}
-	if _, removeError := store.removeProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI)); !errors.Is(removeError, errManagedRoutingDefaultsInvalid) {
+	if _, removeError := store.removeProviderConnections(principal, identifier, newProviderID(ProviderNameOpenAI)); !errors.Is(removeError, errManagedRoutingDefaultsInvalid) {
 		t.Fatalf("remove invalid defaults error=%v", removeError)
 	}
 
 	record.DefaultProvider = ""
-	encryptedUnknownKey, encryptionError := store.providerKeyCipher.encrypt(
+	encryptedUnknownKey, encryptionError := store.providerKeyCipher.encryptConnection(
 		bytes.NewReader(bytes.Repeat([]byte{5}, store.providerKeyCipher.aeadCipher.NonceSize())),
 		record.TenantID,
 		"missing",
+		CatalogCredentialAPIKey,
 		"sk-missing",
 	)
 	if encryptionError != nil {
 		t.Fatalf("encrypt unknown provider: %v", encryptionError)
 	}
-	record.ProviderAPIKeys = []managedProviderAPIKeyRecord{{
-		TenantID:        record.TenantID,
-		ProviderID:      "missing",
-		EncryptedAPIKey: encryptedUnknownKey,
-		TextModel:       "missing-model",
+	record.ProviderConnections = []managedProviderConnectionRecord{{
+		TenantID: record.TenantID, ProviderID: "missing", FieldID: CatalogCredentialAPIKey, Value: encryptedUnknownKey,
+	}}
+	record.ProviderProfiles = []managedProviderProfileRecord{{
+		TenantID: record.TenantID, ProviderID: "missing", TextModel: "missing-model",
 	}}
 	database.tenantsByID[identifier.string()] = record
-	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-openai", "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedRoutingDefaultsInvalid) {
+	if _, saveError := saveInternalProviderConnections(store, context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-openai", "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedProviderKeyInvalid) {
 		t.Fatalf("save reconciliation error=%v", saveError)
 	}
-	if _, removeError := store.removeProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI)); !errors.Is(removeError, errManagedRoutingDefaultsInvalid) {
+	if _, removeError := store.removeProviderConnections(principal, identifier, newProviderID(ProviderNameOpenAI)); !errors.Is(removeError, errManagedProviderKeyInvalid) {
 		t.Fatalf("remove reconciliation error=%v", removeError)
+	}
+}
+
+func TestManagedProviderConnectionCipherRejectsInvalidValues(t *testing.T) {
+	cipher := internalManagedProviderKeyCipher()
+	if _, encryptionError := cipher.encryptConnection(strings.NewReader(strings.Repeat("n", cipher.aeadCipher.NonceSize())), "tenant", ProviderNameOpenAI, CatalogCredentialAPIKey, " "); !errors.Is(encryptionError, errManagedProviderKeyInvalid) {
+		t.Fatalf("blank connection encryption error=%v", encryptionError)
+	}
+	for _, value := range []string{managedProviderKeyCiphertextPrefix + "not-base64", managedProviderKeyCiphertextPrefix + base64.StdEncoding.EncodeToString([]byte("short"))} {
+		if _, decryptionError := cipher.decryptConnection(managedProviderConnectionRecord{TenantID: "tenant", ProviderID: ProviderNameOpenAI, FieldID: CatalogCredentialAPIKey, Value: value}); !errors.Is(decryptionError, errManagedProviderKeyDecryption) {
+			t.Fatalf("invalid connection ciphertext=%q error=%v", value, decryptionError)
+		}
+	}
+	encryptedValue, encryptionError := cipher.encryptConnection(
+		strings.NewReader(strings.Repeat("n", cipher.aeadCipher.NonceSize())),
+		"tenant",
+		ProviderNameOpenAI,
+		CatalogCredentialAPIKey,
+		"sk-key",
+	)
+	if encryptionError != nil {
+		t.Fatalf("encrypt connection fixture: %v", encryptionError)
+	}
+	if _, decryptionError := cipher.decryptConnection(managedProviderConnectionRecord{TenantID: "tenant", ProviderID: ProviderNameOpenAI, FieldID: "other", Value: encryptedValue}); !errors.Is(decryptionError, errManagedProviderKeyDecryption) {
+		t.Fatalf("connection ownership mismatch error=%v", decryptionError)
+	}
+}
+
+func TestManagedProviderConnectionValueValidationEdges(t *testing.T) {
+	definition := internalManagementProviderRegistry().definitions[providerID(ProviderNameOpenAI)]
+	if _, valuesError := validatedManagedProviderConnectionValues(definition, map[string]string{}, managedProviderSettings{}, false); !errors.Is(valuesError, errManagedProviderKeyInvalid) {
+		t.Fatalf("connection field count error=%v", valuesError)
+	}
+	if _, valuesError := validatedManagedProviderConnectionValues(definition, map[string]string{"future": "value"}, managedProviderSettings{}, false); !errors.Is(valuesError, errManagedProviderKeyInvalid) {
+		t.Fatalf("unknown connection field error=%v", valuesError)
+	}
+	empty := ""
+	optionalDefinition := providerDefinition{
+		identifier: "optional-provider",
+		fields: map[string]ProviderCatalogField{
+			"optional_url": {
+				ID: "optional_url", Kind: CatalogProviderFieldKindSetting, Type: CatalogProviderFieldTypeURL,
+				Default: &empty, Validation: ProviderCatalogFieldValidation{AllowedSchemes: []string{"https"}},
+			},
+		},
+	}
+	values, valuesError := validatedManagedProviderConnectionValues(optionalDefinition, map[string]string{"optional_url": ""}, managedProviderSettings{}, false)
+	if valuesError != nil || values["optional_url"] != "" {
+		t.Fatalf("optional connection values=%v error=%v", values, valuesError)
+	}
+}
+
+func TestManagedTenantStoreOmitsDefaultNonsecretConnectionValues(t *testing.T) {
+	now := time.Date(2026, 8, 20, 18, 0, 0, 0, time.UTC)
+	principal := managementPrincipal{userID: "default-setting-owner", userEmail: "owner@example.com"}
+	database := newFakeManagedTenantDatabase()
+	identifier := fakeUserWithTenant(database, principal, "default-setting", "Default", now)
+	store := newManagedTenantStoreWithDatabase(database)
+	store.routingDefaults = internalManagementProviderRegistry()
+	empty := ""
+	definition := store.routingDefaults.definitions[providerID(ProviderNameOpenAI)]
+	definition.fields["optional_url"] = ProviderCatalogField{
+		ID: "optional_url", Kind: CatalogProviderFieldKindSetting, Type: CatalogProviderFieldTypeURL,
+		Default: &empty, Validation: ProviderCatalogFieldValidation{AllowedSchemes: []string{"https"}},
+	}
+	definition.fieldOrder = append(definition.fieldOrder, "optional_url")
+	store.routingDefaults.definitions[providerID(ProviderNameOpenAI)] = definition
+	store.randomReader = bytes.NewReader(bytes.Repeat([]byte{4}, 128))
+	store.now = func() time.Time { return now }
+
+	if _, saveError := saveInternalProviderConnections(store, context.Background(), principal, identifier, providerID(ProviderNameOpenAI), "sk-key", "", ModelNameGPT41, ""); saveError != nil {
+		t.Fatalf("save provider with default setting: %v", saveError)
+	}
+	record := database.tenantsByID[identifier.string()]
+	if len(record.ProviderConnections) != 1 || record.ProviderConnections[0].FieldID != CatalogCredentialAPIKey {
+		t.Fatalf("persisted default provider connections=%+v", record.ProviderConnections)
+	}
+}
+
+func TestManagedProviderConnectionProjectionRejectsPersistedDrift(t *testing.T) {
+	cipher := internalManagedProviderKeyCipher()
+	providers := internalManagementProviderRegistry()
+	now := time.Date(2026, 8, 20, 18, 30, 0, 0, time.UTC)
+	encryptedKey, encryptionError := cipher.encryptConnection(
+		strings.NewReader(strings.Repeat("p", cipher.aeadCipher.NonceSize())),
+		"tenant",
+		ProviderNameOpenAI,
+		CatalogCredentialAPIKey,
+		"sk-key",
+	)
+	if encryptionError != nil {
+		t.Fatalf("encrypt persisted connection fixture: %v", encryptionError)
+	}
+	validProfile := managedProviderProfileRecord{TenantID: "tenant", ProviderID: ProviderNameOpenAI, TextModel: ModelNameGPT41, CreatedAt: now, UpdatedAt: now}
+	validConnection := managedProviderConnectionRecord{TenantID: "tenant", ProviderID: ProviderNameOpenAI, FieldID: CatalogCredentialAPIKey, Value: encryptedKey, CreatedAt: now, UpdatedAt: now}
+	testCases := []struct {
+		name        string
+		registry    *providerRegistry
+		connections []managedProviderConnectionRecord
+		profiles    []managedProviderProfileRecord
+	}{
+		{name: "registry missing", connections: []managedProviderConnectionRecord{validConnection}, profiles: []managedProviderProfileRecord{validProfile}},
+		{name: "profile identifier", registry: providers, profiles: []managedProviderProfileRecord{{ProviderID: " OpenAI", TextModel: ModelNameGPT41}}},
+		{name: "profile duplicate", registry: providers, profiles: []managedProviderProfileRecord{validProfile, validProfile}},
+		{name: "profile model", registry: providers, profiles: []managedProviderProfileRecord{{TenantID: "tenant", ProviderID: ProviderNameOpenAI, TextModel: "missing"}}},
+		{name: "connection identity", registry: providers, profiles: []managedProviderProfileRecord{validProfile}, connections: []managedProviderConnectionRecord{{TenantID: "tenant", ProviderID: ProviderNameOpenAI, FieldID: "future", Value: "value"}}},
+		{name: "connection value", registry: providers, profiles: []managedProviderProfileRecord{{TenantID: "tenant", ProviderID: ProviderNameDashScope, TextModel: ModelNameDashScopeQwenPlus}}, connections: []managedProviderConnectionRecord{{TenantID: "tenant", ProviderID: ProviderNameDashScope, FieldID: "base_url", Value: "invalid"}}},
+		{name: "required field", registry: providers, profiles: []managedProviderProfileRecord{validProfile}},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if _, projectionError := managedProviderSettingsFromConnectionRecords(cipher, testCase.registry, testCase.connections, testCase.profiles); projectionError == nil {
+				t.Fatal("persisted provider drift was accepted")
+			}
+		})
 	}
 }
 

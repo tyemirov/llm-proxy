@@ -81,7 +81,7 @@ func TestOpenAIResponsesCompleteTruncatedOutputAndRecordOneSuccessAtPublicV2Boun
 	defer upstreamServer.Close()
 
 	databasePath := filepath.Join(testingInstance.TempDir(), "openai-terminal-events.db")
-	router := newManagementRouterWithDatabasePath(testingInstance, proxy.Configuration{OpenAIBaseURL: upstreamServer.URL}, databasePath)
+	router := newManagementRouterWithDatabasePath(testingInstance, proxy.Configuration{Endpoints: providerEndpoints(upstreamServer.URL, proxy.ProviderNameOpenAI)}, databasePath)
 	ownerCookie := managementSessionCookie(testingInstance, "openai-terminal-owner")
 	tenantIdentifier := managementDefaultTenantTestID(testingInstance, router, ownerCookie)
 	saveManagementProviderKey(testingInstance, router, ownerCookie, tenantIdentifier, testManagementOpenAIKey, proxy.ModelNameGPT41, "")
@@ -187,7 +187,7 @@ func TestOpenAIPolledIncompleteUsesLatestSnapshotThenCompletesAtPublicV2Boundary
 	defer upstreamServer.Close()
 
 	databasePath := filepath.Join(testingInstance.TempDir(), "openai-polled-usage.db")
-	router := newManagementRouterWithDatabasePath(testingInstance, proxy.Configuration{OpenAIBaseURL: upstreamServer.URL}, databasePath)
+	router := newManagementRouterWithDatabasePath(testingInstance, proxy.Configuration{Endpoints: providerEndpoints(upstreamServer.URL, proxy.ProviderNameOpenAI)}, databasePath)
 	ownerCookie := managementSessionCookie(testingInstance, "openai-polled-usage-owner")
 	tenantIdentifier := managementDefaultTenantTestID(testingInstance, router, ownerCookie)
 	saveManagementProviderKey(testingInstance, router, ownerCookie, tenantIdentifier, testManagementOpenAIKey, proxy.ModelNameGPT41, "")
@@ -287,9 +287,7 @@ func TestProviderCompletionSignalsRecoverPartialTextAndAggregateUsageAtPublicV2B
 
 	databasePath := filepath.Join(testingInstance.TempDir(), "provider-completion-events.db")
 	router := newManagementRouterWithDatabasePath(testingInstance, proxy.Configuration{
-		DeepSeekBaseURL:  upstreamServer.URL,
-		GeminiBaseURL:    upstreamServer.URL,
-		AnthropicBaseURL: upstreamServer.URL,
+		Endpoints: providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek, proxy.ProviderNameGemini, proxy.ProviderNameAnthropic),
 	}, databasePath)
 	ownerCookie := managementSessionCookie(testingInstance, "provider-completion-owner")
 	tenantIdentifier := managementDefaultTenantTestID(testingInstance, router, ownerCookie)
@@ -297,7 +295,7 @@ func TestProviderCompletionSignalsRecoverPartialTextAndAggregateUsageAtPublicV2B
 		testingInstance.Helper()
 		request := authenticatedJSONRequest(
 			http.MethodPut,
-			managementTenantTestPath(tenantIdentifier, "/provider-keys/"+providerIdentifier),
+			managementTenantTestPath(tenantIdentifier, "/provider-connections/"+providerIdentifier),
 			managementProviderKeyRequestBody(testingInstance, apiKey, modelIdentifier, ""),
 			ownerCookie,
 		)
@@ -391,12 +389,12 @@ func TestCompletionCoordinatorDeadlineRecordsAccumulatedUsageAsOneTimeout(testin
 	defer upstreamServer.Close()
 
 	databasePath := filepath.Join(testingInstance.TempDir(), "completion-timeout.db")
-	router := newManagementRouterWithDatabasePath(testingInstance, proxy.Configuration{DeepSeekBaseURL: upstreamServer.URL}, databasePath)
+	router := newManagementRouterWithDatabasePath(testingInstance, proxy.Configuration{Endpoints: providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek)}, databasePath)
 	ownerCookie := managementSessionCookie(testingInstance, "completion-timeout-owner")
 	tenantIdentifier := managementDefaultTenantTestID(testingInstance, router, ownerCookie)
 	saveProviderRequest := authenticatedJSONRequest(
 		http.MethodPut,
-		managementTenantTestPath(tenantIdentifier, "/provider-keys/"+proxy.ProviderNameDeepSeek),
+		managementTenantTestPath(tenantIdentifier, "/provider-connections/"+proxy.ProviderNameDeepSeek),
 		managementProviderKeyRequestBody(testingInstance, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, ""),
 		ownerCookie,
 	)
@@ -669,15 +667,15 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 
 	databasePath := filepath.Join(t.TempDir(), "failure-events.db")
 	router := newManagementRouterWithDatabasePath(t, proxy.Configuration{
-		DeepSeekBaseURL: upstreamServer.URL,
-		MaxPromptBytes:  64,
+		Endpoints:      providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek),
+		MaxPromptBytes: 64,
 	}, databasePath)
 	ownerCookie := managementSessionCookie(t, "failure-pagination-owner")
 	tenantPath := managementDefaultTenantTestPath(t, router, ownerCookie, "")
 
 	saveKeyRequest := authenticatedJSONRequest(
 		http.MethodPut,
-		tenantPath+"/provider-keys/deepseek",
+		tenantPath+"/provider-connections/deepseek",
 		managementProviderKeyRequestBody(t, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, ""),
 		ownerCookie,
 	)
@@ -688,7 +686,7 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 	}
 	saveDictationKeyRequest := authenticatedJSONRequest(
 		http.MethodPut,
-		tenantPath+"/provider-keys/openai",
+		tenantPath+"/provider-connections/openai",
 		managementProviderKeyRequestBody(t, testManagementOpenAIKey, proxy.ModelNameGPT41, ""),
 		ownerCookie,
 	)

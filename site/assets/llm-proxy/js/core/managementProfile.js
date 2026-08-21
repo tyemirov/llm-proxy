@@ -35,7 +35,7 @@ export function createAppRoutingDefaults(profile) {
   for (const provider of providers) {
     assertProviderCatalog(provider);
   }
-  const keyedTextProviders = providers.filter((provider) => provider.has_key);
+  const keyedTextProviders = providers.filter((provider) => provider.configured);
   let textModel = null;
   if (keyedTextProviders.length === 0) {
     if (defaults.provider !== EMPTY_STRING || defaults.model !== EMPTY_STRING || defaults.reasoning_effort !== EMPTY_STRING) {
@@ -232,13 +232,22 @@ function assertProviderCatalog(provider) {
     !provider ||
     typeof provider.id !== "string" ||
     !provider.id ||
-    typeof provider.has_key !== "boolean" ||
-    typeof provider.base_url !== "string" ||
+    typeof provider.configured !== "boolean" ||
+    !Array.isArray(provider.fields) ||
+    provider.fields.length === 0 ||
     !Array.isArray(provider.text_models) ||
     !provider.text_models.some((model) => model && model.id === provider.text_default_model) ||
     !provider.text_models.some((model) => model && model.id === provider.text_model)
   ) {
     throw new Error(APP_INTEGRITY_ERROR);
+  }
+  const fieldIDs = new Set();
+  for (const field of provider.fields) {
+    assertProviderField(field);
+    if (fieldIDs.has(field.id)) {
+      throw new Error(APP_INTEGRITY_ERROR);
+    }
+    fieldIDs.add(field.id);
   }
   if (Object.hasOwn(provider, "reasoning_effort")) {
     throw new Error(APP_INTEGRITY_ERROR);
@@ -255,6 +264,36 @@ function assertProviderCatalog(provider) {
       typeof provider.dictation_default_model !== "string" ||
       !provider.dictation_models.includes(provider.dictation_default_model))
   ) {
+    throw new Error(APP_INTEGRITY_ERROR);
+  }
+}
+
+/** @param {import("../types.d.js").ProviderFieldProfile} field */
+function assertProviderField(field) {
+  if (
+    !field ||
+    typeof field.id !== "string" ||
+    field.id === EMPTY_STRING ||
+    typeof field.label !== "string" ||
+    field.label === EMPTY_STRING ||
+    !["credential", "setting"].includes(field.kind) ||
+    !["opaque", "url"].includes(field.type) ||
+    typeof field.required !== "boolean" ||
+    typeof field.default !== "string" ||
+    typeof field.secret !== "boolean" ||
+    !field.validation ||
+    typeof field.validation !== "object" ||
+    typeof field.configured !== "boolean"
+  ) {
+    throw new Error(APP_INTEGRITY_ERROR);
+  }
+  if (field.secret) {
+    if (Object.hasOwn(field, "value") || (field.configured && typeof field.masked_value !== "string")) {
+      throw new Error(APP_INTEGRITY_ERROR);
+    }
+    return;
+  }
+  if (typeof field.value !== "string" || Object.hasOwn(field, "masked_value")) {
     throw new Error(APP_INTEGRITY_ERROR);
   }
 }

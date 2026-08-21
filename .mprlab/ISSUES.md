@@ -25,6 +25,35 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B146] (P1) Bound the complete hosted CI job.
+  Goal:
+  Hosted CI completes the current canonical gate on GitHub-hosted runners.
+  Evidence:
+  - Expected: Hosted CI completes all 11 gates and prints the success receipt.
+  - Actual: Runs `32437201144` and `32448302006` reached the final gate.
+    The shell watchdog then killed `make ci` at exactly 350 seconds.
+  - The completed gates used 333 seconds in run `32448302006` attempt 3.
+    The final gate then used 17 seconds to build the current proxy binary.
+  Requirements:
+  - Keep one execution limit in the hosted workflow.
+  - Apply the execution limit to the complete GitHub Actions job.
+  - Set the job execution limit to 10 minutes.
+  - Keep the canonical `make ci` command and all 11 gates.
+  - Keep the hosted Playwright package declaration.
+  Validation:
+  - Prove the exact hosted workflow contract through the public Make test.
+  - Run `make ci` after the last workflow or test change.
+  - Prove one hosted run completes all 11 gates and prints the success receipt.
+
+  Resolution:
+  - The workflow now applies one 10-minute limit to the complete hosted job.
+  - The CI step invokes `make ci` without a second shell execution limit.
+  - The focused Make contract test passed.
+  - A local `make ci` passed all 11 gates in 169 seconds with 100.0%
+    Go statement coverage.
+  - Hosted run `32450200399` passed all 11 gates. The canonical gate used 350
+    seconds, and the complete job used 6 minutes and 46 seconds.
+
 - [x] [B145] (P1) Keep failed request usage on one model route.
   Goal:
   Usage reports show the model route that the request contract selects.
@@ -544,6 +573,31 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [x] [I230] (P0) Use the permanent versionless selected application manifest.
+  Goal:
+  The selected application manifest uses one permanent contract without a
+  schema number.
+  Requirements:
+  - Remove `schema_version` from `.mprlab/deploy/resources.yml`.
+  - Require only `owner`, `release`, and `resources` at the manifest root.
+  - Reject each numbered selected application manifest form.
+  - Keep independent schema contracts unchanged.
+  - Keep local orchestration separate from the production manifest.
+  Validation:
+  - Run `make ci` after the last repository change.
+  - Run the gateway `plan-app-release` target against the committed branch.
+
+  Resolution:
+  - The selected application manifest now has no schema number.
+  - The compiled lifecycle test rejects a `schema_version` field.
+  - Current operator documents describe the permanent versionless contract.
+  - The final repository validation passed.
+  - Hosted GitHub `Test` attempt 1 ended with exit 137 when the workflow's
+    outer 350-second timeout stopped gate 10 after gates 1 through 9 passed.
+    Attempt 2 completed successfully at `2026-08-20T23:19:58Z`.
+  - Gateway commit `753c727` planned release for application commit
+    `490acd7` with 218 tasks passed, 4 changed, and 0 failed.
+
 - [x] [I229] (P0) Add schema-constrained, resumable semantic-review requests.
   Goal:
   Let Creative Director submit one semantic-review inference with a declared
@@ -847,7 +901,7 @@ retain satisfied historical dependencies.
   - Run `make ci` after the last application change.
   Blocked: A Z.AI credential is not available in this workspace. The operator
   must supply `ZAI_API_KEY` and authorize the two paid live calls.
-- [ ] [I223] (P0) {I216,I221} Load all supported providers and models from one catalog file.
+- [x] [I223] (P0) {I216,I221} Load all supported providers and models from one catalog file.
   Goal:
   Make `configs/providers.yml` the only source that defines supported providers,
   exact models, provider offerings, operations, controls, limits, and prices.
@@ -855,8 +909,8 @@ retain satisfied historical dependencies.
   catalog. Provider onboarding changes only this file when current protocol
   adapters can represent the complete provider contract.
   Evidence:
-  - The current catalog has 11 providers, 57 exact models, 58 provider
-    offerings, and 58 price records.
+  - The current catalog has 11 providers, 66 exact models, 67 provider
+    offerings, and 67 price records.
   - Provider data also exists in Go types, registry branches, persistence,
     management APIs, UI forms, environment variables, and live-test lists.
   - Current provider offerings use six request protocols and two execution
@@ -934,8 +988,8 @@ retain satisfied historical dependencies.
   - Derive live-provider discovery and environment checks from the provider
     catalog.
   Deliverables:
-  - Add `configs/providers.yml` with all 11 providers, 57 exact models, 58
-    provider offerings, and 58 price records.
+  - Add `configs/providers.yml` with all 11 providers, 66 exact models, 67
+    provider offerings, and 67 price records.
   - Add the schema types, parser, semantic validator, immutable registry, and
     safe data projections.
   - Replace provider-specific runtime, management, persistence, UI, routing,
@@ -947,8 +1001,8 @@ retain satisfied historical dependencies.
   Validation:
   - When no satisfactory baseline result applies, run `make ci` before
     application changes.
-  - Prove exact catalog counts for 11 providers, 57 exact models, 58 provider
-    offerings, and 58 price records.
+  - Prove exact catalog counts for 11 providers, 66 exact models, 67 provider
+    offerings, and 67 price records.
   - Prove startup rejection for each invalid schema and reference condition.
   - Add a test provider definition that uses an existing protocol adapter.
   - Prove the test provider appears in routing, management, UI schema,
@@ -960,6 +1014,18 @@ retain satisfied historical dependencies.
   - Prove the test provider requires no provider-specific production source
     change.
   - After the last application change, run `make ci`.
+  Resolution:
+  - Added strict schema version 1 in `configs/providers.yml`. It defines 11
+    providers, 66 exact models, 67 offerings, and 67 prices.
+  - Catalog validation now compiles one immutable registry. Routing, key
+    verification, management, persistence, public capabilities, browser forms,
+    environment loading, and live discovery use this registry.
+  - Added generic encrypted provider connection records and the bounded schema
+    version 9 migration. Current reads no longer use provider-specific columns.
+  - A synthetic provider proves onboarding through an existing adapter without
+    production provider code.
+  - Updated documentation, OpenAPI, and generated public resources. The final
+    `make ci` passed all 11 gates with 100.0% Go statement coverage.
 - [ ] [I041] (P1) Migrate xAI text routes to Responses without OpenAI background assumptions.
   Goal:
   Move Grok models off xAI's deprecated Chat Completions surface while

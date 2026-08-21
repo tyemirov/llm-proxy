@@ -266,68 +266,24 @@ no provider job ids and provides no durable retry or resume behavior.
 ## Configuration
 
 The service reads service configuration from `config.yml`. The default path is
-`config.yml` in the current working directory; use `--config /path/config.yml`
-only to select a different file. Command-line flags and environment variables
-are not service configuration sources.
+`config.yml` in the current working directory. Use `--config /path/config.yml`
+to select a different file.
+
+The loader also reads `providers.yml` from the selected configuration
+directory. That file is the only source for supported providers, exact models,
+provider offerings, operations, controls, limits, and prices.
 
 Before parsing YAML, the loader expands `${NAME}` placeholders from process
 environment variables and from an optional `.env` file in the same directory as
 the selected config file. Process environment values override `.env` values.
-Missing placeholders fail startup except when an `api_key` value is exactly one
-missing placeholder; that exact missing provider credential expands to an empty
-string so non-default providers can stay disabled. The loader does not mutate
-process environment, and all runtime code receives only the validated config
-value.
+Missing placeholders in `config.yml` fail startup. The loader does not mutate
+the process environment. Runtime code receives only validated configuration.
 
-The complete default configuration is in
-[configs/config.yml](configs/config.yml). The following excerpt shows the
-normalized catalog relationships. It omits unrelated providers and models.
-
-```yaml
-providers:
-  deepseek:
-    base_url: "https://api.deepseek.com"
-  siliconflow:
-    base_url: "https://api.siliconflow.com/v1"
-    transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
-catalog:
-  providers:
-    - id: deepseek
-      label: DeepSeek
-    - id: siliconflow
-      label: SiliconFlow
-  publishers:
-    - id: deepseek
-      label: DeepSeek
-  families:
-    - id: deepseek-r1
-      publisher: deepseek
-      label: DeepSeek R1
-  models:
-    - id: deepseek-reasoner
-      publisher: deepseek
-      family: deepseek-r1
-      version: deepseek-reasoner
-      operations:
-        - text
-  offerings:
-    - provider: deepseek
-      model: deepseek-reasoner
-      provider_model: deepseek-reasoner
-      operations:
-        - text
-      wire_contract: openai_chat_completions
-      execution_lifecycle: synchronous_completion
-    - provider: siliconflow
-      model: deepseek-reasoner
-      provider_model: deepseek-ai/DeepSeek-R1
-      operations:
-        - text
-      default_operations:
-        - text
-      wire_contract: openai_chat_completions
-      execution_lifecycle: synchronous_completion
-```
+The complete service configuration is in
+[configs/config.yml](configs/config.yml). The complete provider catalog is in
+[configs/providers.yml](configs/providers.yml). See the
+[provider catalog reference](docs/provider-catalog.md) for its field mapping
+and provider procedure.
 
 `server.workers` is not the number of client requests that may be connected at
 once. It is the upstream provider HTTP concurrency limit shared by text
@@ -367,7 +323,7 @@ Provider selectors and aliases are accepted anywhere the public API accepts
 `provider`. Omitted text models use the authenticated tenant default when
 `provider` is omitted. Otherwise, they use the selected provider offering that
 declares the text default. This table describes current runtime capabilities
-through `llm-proxy` and the defaults in [configs/config.yml](configs/config.yml).
+through `llm-proxy` and the defaults in [configs/providers.yml](configs/providers.yml).
 Upstream providers may expose additional speech APIs that need separate proxy
 adapters before they are available through `/dictate`.
 
@@ -398,60 +354,28 @@ when the provider offering has a code-owned transport.
 | `grok-4.5` | xAI | `image` |
 | Every other configured model | Its configured provider | None |
 
-### Model catalog schema
+### Provider catalog
 
-The normalized `catalog` has one immutable `revision` and seven related lists:
+The versioned [provider catalog](docs/provider-catalog.md) has root records for
+operations, publishers, families, exact models, and provider definitions. Each
+provider definition owns its fields, transports, provider offerings, and
+prices.
 
-- `operations` defines operation identifiers and their input and output artifact kinds.
-- `providers` identifies each provider that can own an offering and its credential kinds.
-- `publishers` identifies each organization or community that publishes models.
-- `families` groups exact models under one publisher.
-- `models` defines each provider-independent exact model.
-- `offerings` defines each provider route for one exact model.
-- `prices` defines one typed available or unavailable price descriptor for each offering operation.
+The loader rejects unknown fields and unsupported schema versions. It also
+rejects invalid identities, references, defaults, protocols, capabilities,
+limits, and prices.
 
-An exact model owns its canonical identifier, publisher, family, version,
-operations, and media inputs. A provider offering owns its provider-native
-model identifier, operations, defaults, wire contract, lifecycle, limits, and
-route-specific capabilities.
+The current snapshot contains 11 providers, 66 exact models, 67 provider
+offerings, and 67 price records. The application compiles one immutable
+registry from this snapshot.
 
-Controls declare canonical boolean, integer, or enum inputs. Limits declare
-fixed bounds or account-dependent capacity. Prices declare components, USD
-rates, units, exact condition tuples, an optional minimum charge, an official
-source, and a verification date. Price selection succeeds only for an exact
-component and condition match. Missing or conflicting matches return a typed
-unavailable result. Managed usage remains execution telemetry and is not a
-pricing or billing record.
+Each provider offering references one exact model and one provider transport.
+The transport selects one reusable protocol adapter. Provider identifiers do
+not select protocol code.
 
-A request route contains a canonical provider identifier and exact model
-identifier. The registry resolves that pair to one provider offering. The
-provider adapter receives `provider_model` only after this lookup. Public REST
-data and management profiles do not expose `provider_model` or offering
-defaults.
-
-Each provider must have one catalog provider record. Each exact model must have
-one valid publisher and family. Each offering must reference one catalog
-provider and one exact model. Startup rejects duplicate identifiers, dangling
-references, duplicate route pairs, unsupported operations, and incompatible
-provider capabilities.
-
-One provider operation default is required for each supported provider
-operation. Defaults belong to provider offerings through
-`default_operations`. Managed tenant defaults remain canonical provider and
-exact model pairs.
-
-`wire_contract` and `execution_lifecycle` are required for every offering. Text
-wire contracts are
-`openai_responses`, `openai_chat_completions`,
-`gemini_interactions`, and `anthropic_messages`. Dictation uses
-`multipart_transcription`, and xAI video generation uses
-`xai_videos_generations`. Lifecycle values are `synchronous_completion` and
-`pollable_resource`.
-
-`output_token_limit`, `web_search`, `request_profile`,
-`reasoning_effort`, and offering `media_inputs` are route-specific
-capabilities. The exact model `media_inputs` value must equal the combined
-media input set of its offerings.
+Public resources omit credential fields, setting fields, authentication data,
+environment names, and upstream model identifiers. Management resources return
+safe field definitions and masked connection state.
 
 OpenAI offerings use `request_profile` to select a stable payload shape:
 
@@ -497,8 +421,8 @@ Provider-specific details:
 
 * OpenAI is the only provider currently exposed with `web_search` support.
   This support applies only to catalog entries with `web_search: true`.
-  OpenAI derives Responses and Models endpoint URLs from `providers.openai.base_url`.
-  Dictation uses `providers.openai.transcriptions_url` and the same API key.
+  OpenAI derives each endpoint from its provider transports in `providers.yml`.
+  Text and dictation use the same catalog-defined credential field.
   Each catalog model with image input sends ordered Data URLs through OpenAI Responses.
   The adapter uses `detail: auto` for each image.
 * OpenAI-compatible text providers send chat completion requests with
@@ -548,11 +472,8 @@ Provider-specific details:
   [model reference](https://dev.meta.ai/docs/getting-started/models),
   [Chat Completions reference](https://dev.meta.ai/docs/features/chat-completion),
   and [pricing and rate-limit documentation](https://dev.meta.ai/docs/getting-started/pricing-rate-limits).
-* Only dictation-capable providers expose `transcriptions_url` fields:
-  OpenAI uses `providers.openai.transcriptions_url`, SiliconFlow uses
-  `providers.siliconflow.transcriptions_url`, Z.AI uses
-  `providers.zai.transcriptions_url`, and xAI uses
-  `providers.xai.transcriptions_url`.
+* Each dictation-capable provider has a `multipart_transcription` transport in
+  `providers.yml`. That transport owns the exact endpoint and model-field rule.
 * Gemini text requests use native `POST /interactions` against the configured
   `v1beta` base URL with `x-goog-api-key` and
   `Api-Revision: 2026-05-20`. Gemini 3.x sends `background: true` and
@@ -585,27 +506,23 @@ Provider-specific details:
   `end_turn` or `stop_sequence` completes the assembled answer.
   Tool use, paused turns, refusals, and unknown reasons remain upstream failures.
   Each catalog model with image input sends ordered base64 image blocks before the message text.
-* Z.AI dictation uses GLM-ASR through
-  `providers.zai.transcriptions_url` with the selected configured dictation
-  model.
+* Z.AI dictation uses the catalog-defined GLM-ASR transport with the selected
+  exact dictation model.
 * Most xAI text models use xAI's OpenAI-compatible `/chat/completions` API at
   `https://api.x.ai/v1`. The `grok-4.5` route uses synchronous `/responses`
   with `store: false`. Its image blocks use `detail: high`. Grok/xAI dictation
-  uses xAI STT through `providers.xai.transcriptions_url`. The upstream STT
-  endpoint does not receive a `model` multipart field.
+  uses the catalog-defined xAI STT transport. The upstream STT endpoint does
+  not receive a `model` multipart field.
 
 All client keys, provider API keys, and tenant defaults are tenant-owned
 management state. An explicit request for a provider without a saved tenant
 credential returns `503 provider not configured`. An omitted provider resolves
 through the authenticated tenant's saved default and requires a saved
-credential for that route. Provider `base_url` values are explicit config
-values, except the DashScope workspace base URL, which is saved with the
-tenant-managed key. Dictation-capable provider `transcriptions_url` values are
-explicit config values and are required for OpenAI, SiliconFlow, Z.AI, and
-Grok/xAI. The normalized catalog must contain all supported providers and each
-supported text or dictation route. The `management` configuration is mandatory.
-Obsolete `management.enabled`, top-level `tenants`, and provider `api_key`
-fields are unknown YAML keys and fail startup.
+credential for that route. Static provider base URLs and paths belong to
+`providers.yml`. DashScope instead references a tenant-owned `base_url` provider
+field. The provider catalog must contain every supported provider and route.
+The `management` configuration is mandatory. Provider blocks in `config.yml`
+are unknown YAML keys and fail startup.
 
 ### Self-service management UI
 
@@ -652,7 +569,7 @@ selection and the final route display. The capability catalog supplies
 one all-characteristics search surface, disclosed match-all capability filters,
 sortable table headers, a live result count, and reset. Node exists only in the
 Pages build stage; the published artifact is static and has no runtime renderer
-or environment-expansion path. A missing or invalid provider/model catalog, management config
+or environment-expansion path. A missing or invalid provider catalog, management config
 attribute, or landing catalog marker fails the site build. That single
 API-served YAML points browser management API
 calls, generated usage examples, and MPR UI/TAuth at the configured origins.
@@ -730,7 +647,7 @@ Required hosted values are profile-specific:
 | `management.jwt_signing_key` | Internal signing key used to validate the TAuth session cookie. |
 | `management.jwt_issuer` | JWT issuer, normally `tauth`. |
 | `management.session_cookie_name` | Exact app/environment TAuth session cookie name. |
-| `management.database_path` | Required SQLite database location for tenant-owned provider keys, defaults, generated-secret digests, and usage events. The pure-Go GORM SQLite runtime enables WAL journaling and a five-second busy timeout so `CGO_ENABLED=0` builds remain valid and readers can proceed alongside a writer. |
+| `management.database_path` | Required SQLite location for provider connections, provider profiles, defaults, generated-secret digests, and usage events. |
 | `management.usage_queue_size` | Positive capacity of the process-local FIFO for asynchronous managed usage persistence. Defaults to `1024`; this queue is independent from `server.queue_size`. |
 | `management.provider_key_encryption_key` | Required base64-encoded 32-byte key used for AES-GCM encryption of tenant-owned provider API keys at rest. Generate with `openssl rand -base64 32` and store it with backend deployment secrets. |
 | `management.management_api_origin` | Browser-facing management API origin served from `/config-ui.yaml` under `llmProxy.managementApiOrigin`. |
@@ -756,18 +673,18 @@ selected tenant has no llm-proxy client key, the frontend creates one through
 `POST /api/management/tenants/:tenant_id/secrets` and presents the one-time
 value masked in the read-only Key field with explicit Show and Copy actions.
 Settings opens automatically and cannot be dismissed until the profile has both
-that client key and at least one persisted managed provider key. Only
-`tenant.has_secret` and `providers[].has_key` satisfy this setup gate; a typed
-provider-key draft or a credential in local dotenv configuration does not.
+that client key and at least one configured provider connection. Only
+`tenant.has_secret` and `providers[].configured` satisfy this setup gate. A
+typed credential draft or a static environment value does not satisfy it.
 DashScope also requires the tenant's exact Singapore Model Studio workspace
-URL. Pasting into the selected provider's API-key field immediately starts one
-server-side operational verification. The operation uses the exact provider,
-selected text model, and base URL. It does not wait for blur, provider
+URL. Pasting into a credential provider field immediately starts one server-side
+operational verification. The operation uses the exact provider, text model,
+and submitted provider fields. It does not wait for blur, provider
 switching, Settings close, or a separate action. While the attempt is active,
 Settings announces `Verifying key` and keeps the key input available. It locks
 tenant, provider, model, reveal, remove, routing, and close actions. A newer paste or a
 tenant, provider, model, editor, or authentication context change cancels or
-invalidates the prior request. Other provider-key edits still autosave through
+invalidates the prior request. Other provider field edits still autosave through
 the same verify-before-persist operation when the user leaves the field,
 switches providers, or closes Settings.
 
@@ -778,10 +695,10 @@ it once. The verifier cancels an active interaction and deletes every stored
 interaction before it accepts the credential. Every request uses the shared
 upstream worker, queue, origin-rate-limit, and management request boundaries.
 The verifier does not retry, start a continuation, or record managed usage.
-Only an accepted credential, model, base URL, and lifecycle combination enters
-the provider-key transaction. That transaction encrypts the key and saves its
-submitted base URL, model, and system prompt,
-reconciles routing defaults, and returns the complete keyed profile. When the
+Only an accepted provider connection and model enter the provider connection
+transaction. That transaction encrypts each secret field and saves each setting
+field. It also saves the provider profile, reconciles routing defaults, and
+returns the complete tenant profile. When the
 saved provider text model changes, that transaction can update the active text
 route. It does this only when the same provider owns that route. It also clears
 a reasoning effort when the new model does not support it. A different active
@@ -795,8 +712,8 @@ None saves the candidate. A first failure leaves the provider unkeyed, while a
 failed replacement leaves the previously verified encrypted key, provider
 settings, and routing defaults active. The current editor retains only the
 rejected draft for correction or explicit retry and states which of those two
-outcomes applies. An empty `api_key` remains the exact retain-existing-key
-settings update. A DashScope workspace URL change verifies the retained key
+outcomes applies. An empty saved secret field retains its existing value. A
+DashScope workspace URL change verifies the retained key
 against the new URL before persistence. Settings remains open until the user
 closes it explicitly.
 Text and dictation provider/model defaults plus reasoning effort autosave on
@@ -809,7 +726,7 @@ key is created or replaced during that wait, Settings stays open so the one-time
 value can be copied before a second explicit close. A failed save retains the
 edited values for retry. Feedback caused by Settings activity appears in the
 Settings title row; page-level activity feedback remains in the MPR header.
-Removing the last managed provider key makes Settings
+Removing the last configured provider connection makes Settings
 mandatory again, while a failed automatic client-key request remains retryable
 through Create key.
 
@@ -825,7 +742,8 @@ SQLite is the sole runtime source of truth; there is no application
 authentication cache, replica, dual read, or invalidation path. Runtime
 connections use WAL journaling and a five-second busy timeout. Managed
 authentication uses the caller context and one read-only GORM transaction to
-load the tenant and provider-key records from a consistent SQLite snapshot.
+load the tenant, provider connection, and provider profile records from one
+consistent SQLite snapshot.
 Authentication and single usage-event inserts do not acquire the process-wide
 management mutation lock; management flows retain that lock where they
 coordinate state transitions, while their existing GORM transactions own
@@ -847,11 +765,11 @@ before it is encrypted at rest with AES-GCM and persisted. Normal save,
 profile, and administrator responses return only masked key status. The sole
 raw-key response is the explicit
 owner-authenticated
-`POST /api/management/tenants/:tenant_id/provider-keys/:provider/reveal`
+`POST /api/management/tenants/:tenant_id/provider-connections/:provider/fields/:field/reveal`
 management action, which requires the configured management origin and returns
-`Cache-Control: no-store`. Provider-key records also store the selected text
-model, provider-specific system prompt, and tenant-owned DashScope workspace
-URL. Managed text requests that
+`Cache-Control: no-store`. Provider connection records store catalog field
+values. Separate provider profile records store the selected text model and
+provider-specific system prompt. Managed text requests that
 select a provider and omit `model` use the saved provider text model; when
 request-level system instructions are omitted, the provider-specific system
 prompt is injected before routing upstream. The F014 ownership migration accepts
@@ -859,10 +777,10 @@ only already-encrypted legacy provider-key rows, decrypts them with their prior
 user binding, and re-encrypts them with the preserved opaque tenant id as
 AES-GCM associated data. Plaintext, corrupt, orphaned, or non-canonical rows
 fail startup before the migration transaction begins. The backend decrypts
-provider keys only inside the runtime
-path that routes requests to upstream providers and the explicit owner reveal action,
-so this protects database dumps, backups, and direct storage access; it is not a user-only decryption or
-zero-knowledge guarantee. Generated tenant secrets are returned once and the
+secret provider fields only in the provider request path and the explicit owner
+reveal action. This protects database dumps, backups, and direct storage access.
+It is not a user-only decryption or zero-knowledge guarantee. Generated tenant
+secrets are returned once and the
 database retains only their SHA-256 digest. Replacing a generated secret
 immediately makes future public proxy requests with the prior value return
 `403`. Deleting a non-final tenant removes its secret digest with the rest of
@@ -870,18 +788,18 @@ the tenant-owned state.
 
 Managed routing defaults contain complete canonical provider/model pairs plus a
 route-bound `reasoning_effort`. A provider is eligible only while that tenant
-has a saved API key for it. A provider default text model applies when a request
+has all required provider connection fields. A provider default text model applies when a request
 names that provider and omits a model. The tenant text routing pair applies when
 a request omits both provider and model. Settings explains both scopes through
 help tooltips. Choosing a text routing provider initializes its routing model
 from that provider's saved default, after which the routing model can be changed
-independently. The text pair is both empty only when no provider key is saved.
+independently. The text pair is both empty only when no provider connection exists.
 The dictation pair is both empty when none of the keyed providers supports
 dictation; in that state the Settings controls are disabled and no default
 dictation example is shown. Saving provider settings preserves an
 eligible current provider, while a changed provider text model also updates the
 active same-provider text default and clears an incompatible reasoning effort.
-A different active provider remains unchanged. Removing a provider key
+A different active provider remains unchanged. Removing a provider connection
 preserves an eligible current default and otherwise selects the first eligible
 provider by canonical provider id, using that provider's saved text model or
 configured dictation default model. The provider mutation and both reconciled
@@ -896,21 +814,20 @@ that exact route's declared list. A partial pair, unkeyed or unknown provider,
 unsupported dictation provider, cross-provider model, or incompatible effort
 returns `400 managed_routing_defaults_invalid` before any default is persisted.
 
-The profile exposes key eligibility through `providers[].has_key` and
-capability data only as
-`providers[].text_models[].reasoning_effort`; it has no global option list or
+The profile exposes connection eligibility through `providers[].configured`.
+It exposes capability data only through
+`providers[].text_models[].reasoning_effort`. It has no global option list or
 provider-level reasoning capability. The Settings routing selectors contain
-only keyed providers; dictation additionally requires declared dictation
-support. The form keeps Text provider, Text model, and Reasoning effort in one
-desktop row, clears an incompatible saved value on a model change, reports `Not
-supported` for routes without a declaration, and autosaves every
-routing-default change without a separate action. The browser rejects malformed
-profile data instead of repairing it. Public
-`GET /` accepts optional query `reasoning_effort`; JSON `POST /` and `POST /v2`
-accept the same optional field in their bodies. When omitted, the saved tenant
-default remains authoritative. An explicit value must be nonblank and exactly
-supported by the resolved provider/model route, otherwise the proxy returns
-`400` before an upstream call.
+only configured providers. Dictation also requires declared dictation support.
+The form keeps Text provider, Text model, and Reasoning effort in one desktop
+row. It clears an incompatible value after a model change. It reports `Not
+supported` for a route without a declaration. It autosaves each routing-default
+change without a separate action. The browser rejects malformed profile data.
+It does not repair that data. Public `GET /` accepts the optional
+`reasoning_effort` query. JSON `POST /` and `POST /v2` accept the same optional
+body field. When omitted, the saved tenant default remains authoritative. An
+explicit value must match the resolved provider offering. Otherwise, the proxy
+returns `400` before an upstream call.
 
 Management startup requires every persisted routing field to be canonical and
 catalog-valid and every nonempty provider default to have the tenant's saved
@@ -1098,16 +1015,24 @@ historical usage. The owner must then save the complete DashScope key and URL
 pair. The bounded schema-version-8 migration replaces the retired `zhipu`
 provider identity with `zai`. It preflights all provider settings and defaults,
 decrypts each affected key with `zhipu` associated data, and re-encrypts it with
-`zai` associated data. The transaction updates keys and current routing
+  `zai` associated data. The transaction updates keys and current routing
 defaults, preserves tenant timestamps and historical usage, and rejects
 conflicting, corrupt, or noncanonical stored values before mutation.
 
-Server/runtime settings, backend auth validation settings, fixed provider base
-URLs, transcription URLs, model catalogs, and browser-facing MPR UI/TAuth
-bootstrap settings remain config-file-owned. Each managed DashScope workspace
-URL is tenant-owned and is stored with that tenant's encrypted provider key,
-selected model, and system prompt. The GitHub Pages artifact is only the static
-shell. API-served browser config
+The bounded schema-version-9 migration replaces each provider-key row with
+provider connection records and one provider profile record. It maps every
+predecessor value through the current provider definition. It re-encrypts the
+credential with the provider field identity as associated data. The transaction
+verifies every value and timestamp before it removes the predecessor table.
+Current-schema reads use only provider connection records and provider profile
+records.
+
+Server settings and browser-facing MPR UI/TAuth bootstrap settings remain in
+`config.yml`. Provider definitions and static endpoints remain in
+`providers.yml`. Each managed DashScope workspace URL is tenant-owned and is
+stored as a provider connection value. The selected model and system prompt use
+a provider profile record. The GitHub Pages artifact is only the static shell.
+API-served browser config
 endpoints are projections of backend `config.yml`, not independent
 configuration sources.
 
@@ -1347,7 +1272,7 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make test-live-provider-media` | Verify OpenAI, Anthropic, Gemini, Moonshot, and xAI keys, then send one paid canonical image request through each provider. |
 | `make test-live-gemini` | Compatibility wrapper for `make test-live-providers` with `LLM_PROXY_LIVE_PROVIDERS=gemini`. |
 | `make live-test` | Send paid production `POST /v2` requests through the Default tenant using only `LLM_PROXY_SECRET`: echo checks for OpenAI, Anthropic, Meta, Gemini, and Moonshot, plus large completion cases for OpenAI, Anthropic, Meta, and Gemini. |
-| `make release` | Delegate this clean checkout and its schema-v4 resource declaration to the exact sibling `../mprlab-gateway` release transaction. |
+| `make release` | Delegate this clean checkout and its current resource declaration to the exact sibling `../mprlab-gateway` release transaction. |
 | `make publish` | Delegate publication of the exact sealed release to `../mprlab-gateway`; it does not rebuild or deploy. |
 | `make deploy` | Delegate convergence of only this app's declared runtime, route, health, Pages, and TAuth resources to `../mprlab-gateway`. |
 
@@ -1417,15 +1342,15 @@ The live harness parses `LIVE_ENV_FILE` as dotenv data without executing it as
 shell code. A paid run creates a disposable management database, encryption
 key, signed local session, tenant, and client secret under its private temporary
 directory. It submits each candidate once to
-`PUT /api/management/tenants/:tenant_id/provider-keys/:provider`, requires the
-safe `200` keyed-profile result, and only then sends that provider's smoke
+`PUT /api/management/tenants/:tenant_id/provider-connections/:provider`, requires the
+safe `200` tenant-profile result, and only then sends that provider's smoke
 request. Candidate payloads, session material, provider responses, and proxy
 responses are never printed, and the temporary state is removed at exit.
 
 The paid image matrix uses OpenAI, Anthropic, Gemini, Moonshot, and xAI by
 default. It requires all five provider keys. Set `LLM_PROXY_LIVE_PROVIDERS` to
 run a selected subset. The harness selects each image model from the validated
-public provider catalog. It uses the configured default when that model supports
+public provider catalog. It uses the catalog default when that model supports
 image input. Otherwise, it requires one exact image model for that provider.
 The key verification uses the selected image model.
 
@@ -1459,7 +1384,7 @@ LLM_PROXY_LIVE_PROVIDERS=openai,gemini \
 
 The non-paid `--preflight` mode creates an isolated managed user, tenant, and
 client key. It saves a generated OpenAI key through the management API. It then
-reloads the encrypted provider record and routes one prompt through a loopback
+reloads the encrypted provider connection and routes one prompt through a loopback
 Responses server. The `--write-config` mode writes the managed-only service
 configuration without building or starting the proxy. Inspect that config with
 `./scripts/test_live_providers.sh --write-config
@@ -2258,13 +2183,13 @@ multipart file part, `audio`; the obsolete `file` alias is rejected.
 
 ## Model catalog
 
-The default model catalog in [configs/config.yml](configs/config.yml)
+The provider catalog in [configs/providers.yml](configs/providers.yml)
 declares the LLM endpoint models below. The `/dictate` endpoint defaults to
-OpenAI's audio transcriptions API and also supports SiliconFlow, Z.AI, and
+OpenAI's audio transcriptions API. It also supports SiliconFlow, Z.AI, and
 Grok/xAI through their provider selectors. Not all configured models support
-tools; use a model marked `Yes` below for web search. A dash in the proxy
-`max_tokens` limit column means the proxy validates only that `max_tokens` is
-positive and lets the upstream provider enforce any provider-side model limit.
+tools. Use a model marked `Yes` below for web search. A dash in the proxy
+`max_tokens` column means that the proxy only requires a positive value. The
+upstream provider enforces its model limit.
 
 ### Reasoning-effort capabilities
 
@@ -2384,12 +2309,12 @@ were verified on 2026-08-13 against MiniMax's official references above.
 
 ### Dictation capabilities
 
-| Provider selector | Models | Credential field | Transcription URL field | Notes |
-|-------------------|--------|------------------|-------------------------|-------|
-| `openai` | `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | Tenant-managed API key | `providers.openai.transcriptions_url` | Default dictation provider and default model `gpt-4o-mini-transcribe`. |
-| `siliconflow` | `sensevoice-small` | Tenant-managed API key | `providers.siliconflow.transcriptions_url` | OpenAI-compatible audio transcription. |
-| `zai` | `glm-asr-2512` | Tenant-managed API key | `providers.zai.transcriptions_url` | Z.AI GLM-ASR; sends `model=glm-asr-2512`. |
-| `xai` | `xai-stt` | Tenant-managed API key | `providers.xai.transcriptions_url` | xAI STT. The proxy model name selects the provider but is not sent as a multipart `model` field. |
+| Provider selector | Models | Credential field | Provider transport | Notes |
+|-------------------|--------|------------------|--------------------|-------|
+| `openai` | `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | Tenant-managed API key | Catalog `dictation` transport | Default dictation provider and default model `gpt-4o-mini-transcribe`. |
+| `siliconflow` | `sensevoice-small` | Tenant-managed API key | Catalog `dictation` transport | OpenAI-compatible audio transcription. |
+| `zai` | `glm-asr-2512` | Tenant-managed API key | Catalog `dictation` transport | Z.AI GLM-ASR sends `model=glm-asr-2512`. |
+| `xai` | `xai-stt` | Tenant-managed API key | Catalog `dictation` transport | The upstream request omits the multipart `model` field. |
 
 ### Status codes
 

@@ -101,24 +101,28 @@ func TestIntegrationGatewayContextTimeoutCancelsUpstreamRequest(testingInstance 
 	testingInstance.Cleanup(func() { proxy.HTTPClient = previousHTTPClient })
 	endpoints.SetModelsURL(mockModelsURL)
 	endpoints.SetResponsesURL(mockResponsesURL)
+	for provider, rawBaseURL := range map[string]string{
+		proxy.ProviderNameDeepSeek:    "https://deepseek.invalid",
+		proxy.ProviderNameDashScope:   "https://dashscope.invalid",
+		proxy.ProviderNameMoonshot:    "https://moonshot.invalid",
+		proxy.ProviderNameSiliconFlow: "https://siliconflow.invalid",
+		proxy.ProviderNameZAI:         "https://zai.invalid",
+	} {
+		endpoints.SetProviderBaseURL(provider, rawBaseURL)
+	}
+	endpoints.SetProviderTransportURL(proxy.ProviderNameSiliconFlow, "dictation", "https://siliconflow.invalid/audio/transcriptions")
 
 	observedCore, observedLogs := observer.New(zapcore.DebugLevel)
 	loggerInstance := zap.New(observedCore)
 	testingInstance.Cleanup(func() { _ = loggerInstance.Sync() })
 	router, buildError := buildIntegrationRouter(testingInstance, proxy.Configuration{
-		LogLevel:                     logLevelDebug,
-		WorkerCount:                  1,
-		QueueSize:                    4,
-		RequestTimeoutSeconds:        gatewayContextProxyTimeout,
-		Endpoints:                    endpoints,
-		MaxPromptBytes:               proxy.DefaultMaxPromptBytes,
-		MaxInputAudioBytes:           proxy.DefaultMaxInputAudioBytes,
-		DeepSeekBaseURL:              "https://deepseek.invalid",
-		DashScopeBaseURL:             "https://dashscope.invalid",
-		MoonshotBaseURL:              "https://moonshot.invalid",
-		SiliconFlowBaseURL:           "https://siliconflow.invalid",
-		SiliconFlowTranscriptionsURL: "https://siliconflow.invalid/audio/transcriptions",
-		ZAIBaseURL:                   "https://zai.invalid",
+		LogLevel:              logLevelDebug,
+		WorkerCount:           1,
+		QueueSize:             4,
+		RequestTimeoutSeconds: gatewayContextProxyTimeout,
+		Endpoints:             endpoints,
+		MaxPromptBytes:        proxy.DefaultMaxPromptBytes,
+		MaxInputAudioBytes:    proxy.DefaultMaxInputAudioBytes,
 	}, loggerInstance.Sugar())
 	if buildError != nil {
 		testingInstance.Fatalf(buildRouterFailedFormat, buildError)

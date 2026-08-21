@@ -107,11 +107,12 @@ func (verifier *operationalProviderKeyVerifier) verify(parentContext context.Con
 	}
 
 	requestBuilder := providerKeyVerificationRequestBuilders[routeCapabilities]
-	httpRequest, buildError := requestBuilder(verificationContext, verifier.endpoints, provider, model, trimmedAPIKey)
+	httpRequest, buildError := requestBuilder(verificationContext, verifier.endpoints, provider, model, "")
 	if buildError != nil {
 		return errProviderKeyVerificationUnavailable
 	}
-	httpResponse, requestError := verifier.httpClient.Do(httpRequest)
+	httpClient := newProviderTransportHTTPDoer(verifier.httpClient, provider, trimmedAPIKey)
+	httpResponse, requestError := httpClient.Do(httpRequest)
 	if requestError != nil {
 		return providerKeyVerificationTransportError(verificationContext, requestError)
 	}
@@ -132,9 +133,10 @@ func (verifier *operationalProviderKeyVerifier) verify(parentContext context.Con
 }
 
 func (verifier *operationalProviderKeyVerifier) verifyPollableGeminiCredential(verificationContext context.Context, provider providerDefinition, model textModelDefinition, apiKey string) (verificationError error) {
-	geminiClient := newGeminiInteractionsClientWithHTTPPerformer(verifier.httpClient, performProviderKeyVerificationGeminiInteractionHTTP)
+	httpClient := newProviderTransportHTTPDoer(verifier.httpClient, provider, apiKey)
+	geminiClient := newGeminiInteractionsClientWithHTTPPerformer(httpClient, performProviderKeyVerificationGeminiInteractionHTTP)
 	payload := geminiProviderKeyVerificationPayload(model, true)
-	createdSnapshot, createError := geminiClient.createInteraction(verificationContext, apiKey, provider.textBaseURL, payload, verifier.logger)
+	createdSnapshot, createError := geminiClient.createInteraction(verificationContext, "", provider.textBaseURL, payload, verifier.logger)
 	if strings.TrimSpace(createdSnapshot.identifier) == "" {
 		if createError != nil {
 			return providerKeyVerificationProviderError(verificationContext, createError)
@@ -144,7 +146,7 @@ func (verifier *operationalProviderKeyVerifier) verifyPollableGeminiCredential(v
 
 	cleanupMode := createdSnapshot.cleanupMode()
 	defer func() {
-		cleanupError := geminiClient.releaseInteraction(verificationContext, apiKey, provider.textBaseURL, createdSnapshot.identifier, cleanupMode, verifier.logger)
+		cleanupError := geminiClient.releaseInteraction(verificationContext, "", provider.textBaseURL, createdSnapshot.identifier, cleanupMode, verifier.logger)
 		if verificationError == nil && cleanupError != nil {
 			verificationError = providerKeyVerificationProviderError(verificationContext, cleanupError)
 		}
@@ -153,7 +155,7 @@ func (verifier *operationalProviderKeyVerifier) verifyPollableGeminiCredential(v
 		return providerKeyVerificationProviderError(verificationContext, createError)
 	}
 
-	retrievedSnapshot, retrieveError := geminiClient.getInteraction(verificationContext, apiKey, provider.textBaseURL, createdSnapshot.identifier, verifier.logger)
+	retrievedSnapshot, retrieveError := geminiClient.getInteraction(verificationContext, "", provider.textBaseURL, createdSnapshot.identifier, verifier.logger)
 	if retrieveError != nil {
 		return providerKeyVerificationProviderError(verificationContext, retrieveError)
 	}
@@ -185,7 +187,7 @@ func readProviderKeyVerificationResponse(responseBody io.Reader) ([]byte, error)
 	return responseBytes, nil
 }
 
-func buildOpenAIProviderKeyVerificationRequest(requestContext context.Context, endpoints *Endpoints, _ providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {
+func buildOpenAIProviderKeyVerificationRequest(requestContext context.Context, _ *Endpoints, provider providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {
 	maxTokens := providerKeyVerificationMaxTokens
 	payload := buildRequestPayload(
 		model.providerString(),
@@ -199,7 +201,7 @@ func buildOpenAIProviderKeyVerificationRequest(requestContext context.Context, e
 		nil,
 	)
 	payloadBytes, _ := json.Marshal(payload)
-	return buildAuthorizedJSONRequest(requestContext, http.MethodPost, endpoints.GetResponsesURL(), apiKey, bytes.NewReader(payloadBytes))
+	return buildAuthorizedJSONRequest(requestContext, http.MethodPost, provider.textEndpointURL, apiKey, bytes.NewReader(payloadBytes))
 }
 
 func buildSynchronousResponsesProviderKeyVerificationRequest(requestContext context.Context, _ *Endpoints, provider providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {
@@ -215,8 +217,7 @@ func buildSynchronousResponsesProviderKeyVerificationRequest(requestContext cont
 		Store:           false,
 	}
 	payloadBytes, _ := json.Marshal(payload)
-	requestURL := strings.TrimRight(provider.textBaseURL, "/") + "/responses"
-	return buildAuthorizedJSONRequest(requestContext, http.MethodPost, requestURL, apiKey, bytes.NewReader(payloadBytes))
+	return buildAuthorizedJSONRequest(requestContext, http.MethodPost, provider.textEndpointURL, apiKey, bytes.NewReader(payloadBytes))
 }
 
 func buildChatProviderKeyVerificationRequest(requestContext context.Context, _ *Endpoints, provider providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {
@@ -235,8 +236,7 @@ func buildChatProviderKeyVerificationRequest(requestContext context.Context, _ *
 		payload.MaxCompletionTokens = &maxTokens
 	}
 	payloadBytes, _ := json.Marshal(payload)
-	requestURL := strings.TrimRight(provider.textBaseURL, "/") + "/chat/completions"
-	return buildAuthorizedJSONRequest(requestContext, http.MethodPost, requestURL, apiKey, bytes.NewReader(payloadBytes))
+	return buildAuthorizedJSONRequest(requestContext, http.MethodPost, provider.textEndpointURL, apiKey, bytes.NewReader(payloadBytes))
 }
 
 func buildGeminiProviderKeyVerificationRequest(requestContext context.Context, _ *Endpoints, provider providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {
@@ -280,10 +280,9 @@ func buildAnthropicProviderKeyVerificationRequest(requestContext context.Context
 		}},
 	}
 	payloadBytes, _ := json.Marshal(payload)
-	requestURL := strings.TrimRight(provider.textBaseURL, "/") + "/v1/messages"
 	return buildProviderKeyVerificationRequestWithHeaders(
 		requestContext,
-		requestURL,
+		provider.textEndpointURL,
 		payloadBytes,
 		map[string]string{
 			headerContentType:      mimeApplicationJSON,

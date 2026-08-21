@@ -35,8 +35,7 @@ func TestV2RoutesExactOrderedImageAndAudioAttachmentsThroughGemini(testingInstan
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
-		GeminiBaseURL:         upstreamServer.URL,
-		XAIBaseURL:            upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini, proxy.ProviderNameXAI),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -197,10 +196,7 @@ func TestV2RoutesExactOrderedImagesThroughProviderAdapters(testingInstance *test
 			defer upstreamServer.Close()
 
 			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
-				OpenAIBaseURL:         upstreamServer.URL,
-				AnthropicBaseURL:      upstreamServer.URL,
-				MoonshotBaseURL:       upstreamServer.URL,
-				XAIBaseURL:            upstreamServer.URL,
+				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameOpenAI, proxy.ProviderNameAnthropic, proxy.ProviderNameMoonshot, proxy.ProviderNameXAI),
 				LogLevel:              proxy.LogLevelInfo,
 				WorkerCount:           1,
 				QueueSize:             1,
@@ -294,10 +290,7 @@ func TestV2AppliesNewProviderMediaLimitsAtTheBoundary(testingInstance *testing.T
 			catalog := testfixtures.ModelCatalog(subTest)
 			setProviderMediaLimit(subTest, &catalog, testCase.provider, testCase.model, testCase.limitID, testCase.limitValue)
 			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
-				OpenAIBaseURL:         upstreamServer.URL,
-				AnthropicBaseURL:      upstreamServer.URL,
-				MoonshotBaseURL:       upstreamServer.URL,
-				XAIBaseURL:            upstreamServer.URL,
+				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameOpenAI, proxy.ProviderNameAnthropic, proxy.ProviderNameMoonshot, proxy.ProviderNameXAI),
 				ModelCatalog:          catalog,
 				LogLevel:              proxy.LogLevelInfo,
 				WorkerCount:           1,
@@ -412,10 +405,7 @@ func TestV2RejectsInvalidOrUnsupportedMediaBeforeUpstreamWork(testingInstance *t
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
-		DeepSeekBaseURL:       upstreamServer.URL,
-		GeminiBaseURL:         upstreamServer.URL,
-		MoonshotBaseURL:       upstreamServer.URL,
-		XAIBaseURL:            upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek, proxy.ProviderNameGemini, proxy.ProviderNameMoonshot, proxy.ProviderNameXAI),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -494,7 +484,7 @@ func TestCompatibilityMessagesRejectMediaAndV2IgnoresCompatibilityBodyLimit(test
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
-		GeminiBaseURL:         upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
 		MaxPromptBytes:        512,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,

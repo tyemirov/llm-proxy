@@ -64,12 +64,14 @@ func TestProviderRoutingUsesConfiguredOpenAIURLsForTextAndDictation(t *testing.T
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		OpenAIBaseURL:           upstreamServer.URL + "/text-api",
-		OpenAITranscriptionsURL: upstreamServer.URL + "/dictation-api/transcriptions",
-		LogLevel:                proxy.LogLevelInfo,
-		WorkerCount:             1,
-		QueueSize:               1,
-		RequestTimeoutSeconds:   TestTimeout,
+		Endpoints: providerEndpointOverrides(
+			map[string]string{proxy.ProviderNameOpenAI: upstreamServer.URL + "/text-api"},
+			map[string]map[string]string{proxy.ProviderNameOpenAI: {"dictation": upstreamServer.URL + "/dictation-api/transcriptions"}},
+		),
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -215,27 +217,32 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 	}))
 	t.Cleanup(upstreamServer.Close)
 
+	endpoints := proxy.NewEndpoints()
+	for _, provider := range []string{
+		proxy.ProviderNameOpenAI,
+		proxy.ProviderNameDeepSeek,
+		proxy.ProviderNameDashScope,
+		proxy.ProviderNameMoonshot,
+		proxy.ProviderNameMiniMax,
+		proxy.ProviderNameSiliconFlow,
+		proxy.ProviderNameZAI,
+		proxy.ProviderNameGemini,
+		proxy.ProviderNameAnthropic,
+		proxy.ProviderNameMeta,
+		proxy.ProviderNameXAI,
+	} {
+		endpoints.SetProviderBaseURL(provider, upstreamServer.URL)
+	}
+	for _, provider := range []string{proxy.ProviderNameOpenAI, proxy.ProviderNameSiliconFlow, proxy.ProviderNameZAI, proxy.ProviderNameXAI} {
+		endpoints.SetProviderTransportURL(provider, "dictation", upstreamServer.URL+"/audio/transcriptions")
+	}
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		OpenAIBaseURL:                upstreamServer.URL,
-		OpenAITranscriptionsURL:      upstreamServer.URL + "/audio/transcriptions",
-		DeepSeekBaseURL:              upstreamServer.URL,
-		DashScopeBaseURL:             upstreamServer.URL,
-		MoonshotBaseURL:              upstreamServer.URL,
-		MiniMaxBaseURL:               upstreamServer.URL,
-		SiliconFlowBaseURL:           upstreamServer.URL,
-		SiliconFlowTranscriptionsURL: upstreamServer.URL + "/audio/transcriptions",
-		ZAIBaseURL:                   upstreamServer.URL,
-		ZAITranscriptionsURL:         upstreamServer.URL + "/audio/transcriptions",
-		GeminiBaseURL:                upstreamServer.URL,
-		AnthropicBaseURL:             upstreamServer.URL,
-		MetaBaseURL:                  upstreamServer.URL,
-		XAIBaseURL:                   upstreamServer.URL,
-		XAITranscriptionsURL:         upstreamServer.URL + "/audio/transcriptions",
-		LogLevel:                     proxy.LogLevelInfo,
-		WorkerCount:                  1,
-		QueueSize:                    1,
-		RequestTimeoutSeconds:        TestTimeout,
-		ModelCatalog:                 catalogs,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
+		Endpoints:             endpoints,
+		ModelCatalog:          catalogs,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -315,7 +322,7 @@ func TestProviderRoutingSupportsDeepSeekChatCompletions(t *testing.T) {
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		DeepSeekBaseURL:       upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -414,12 +421,7 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 			subTest.Cleanup(upstreamServer.Close)
 
 			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
-				DashScopeBaseURL:      upstreamServer.URL,
-				MoonshotBaseURL:       upstreamServer.URL,
-				MiniMaxBaseURL:        upstreamServer.URL,
-				SiliconFlowBaseURL:    upstreamServer.URL,
-				ZAIBaseURL:            upstreamServer.URL,
-				XAIBaseURL:            upstreamServer.URL,
+				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDashScope, proxy.ProviderNameMoonshot, proxy.ProviderNameMiniMax, proxy.ProviderNameSiliconFlow, proxy.ProviderNameZAI, proxy.ProviderNameXAI),
 				LogLevel:              proxy.LogLevelInfo,
 				WorkerCount:           1,
 				QueueSize:             1,
@@ -485,7 +487,7 @@ func TestProviderRoutingMapsKimiK3ReasoningEffortWithoutExposingReasoningContent
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		MoonshotBaseURL:       upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameMoonshot),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -560,7 +562,7 @@ func TestProviderRoutingPreservesKimiReasoningDuringOutputContinuation(t *testin
 			subTest.Cleanup(upstreamServer.Close)
 
 			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
-				MoonshotBaseURL:       upstreamServer.URL,
+				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameMoonshot),
 				LogLevel:              proxy.LogLevelInfo,
 				WorkerCount:           1,
 				QueueSize:             1,
@@ -608,7 +610,7 @@ func TestProviderRoutingRejectsGLM52MaxTokensAboveModelLimit(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		ZAIBaseURL:            upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameZAI),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -649,7 +651,7 @@ func TestProviderRoutingRejectsCurrentQwenMaxTokensAboveModelLimit(t *testing.T)
 			defer upstreamServer.Close()
 
 			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
-				DashScopeBaseURL:      upstreamServer.URL,
+				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDashScope),
 				LogLevel:              proxy.LogLevelInfo,
 				WorkerCount:           1,
 				QueueSize:             1,
@@ -683,7 +685,7 @@ func TestProviderRoutingRejectsCurrentMiniMaxMaxTokensAboveModelLimit(t *testing
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		MiniMaxBaseURL:        upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameMiniMax),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -756,7 +758,7 @@ func TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints(t *testin
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		MetaBaseURL:           upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameMeta),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -918,7 +920,7 @@ func TestProviderRoutingUsesConfiguredTextModelCatalog(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		DeepSeekBaseURL:       upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -1095,7 +1097,7 @@ func TestProviderRoutingRejectsInvalidReasoningEffortCatalogCapabilities(t *test
 	}
 }
 
-func TestProviderRoutingRejectsMissingConfiguredProviderCatalog(t *testing.T) {
+func TestProviderCatalogRejectsOfferingWhoseProviderMetadataIsMissing(t *testing.T) {
 	baseConfiguration, configurationError := newConfigurationWithCatalogs(t, proxy.Configuration{})
 	if configurationError != nil {
 		t.Fatalf("NewConfiguration error: %v", configurationError)
@@ -1111,8 +1113,8 @@ func TestProviderRoutingRejectsMissingConfiguredProviderCatalog(t *testing.T) {
 	_, configurationError = newConfigurationWithCatalogs(t, proxy.Configuration{
 		ModelCatalog: configuredCatalogs,
 	})
-	if configurationError == nil || !strings.Contains(configurationError.Error(), "field=catalog.providers provider=deepseek reason=missing") {
-		t.Fatalf("error=%v want missing deepseek catalog", configurationError)
+	if configurationError == nil || !strings.Contains(configurationError.Error(), "field=providers[") || !strings.Contains(configurationError.Error(), ".label") {
+		t.Fatalf("error=%v want missing provider metadata", configurationError)
 	}
 }
 
@@ -1133,7 +1135,7 @@ func TestProviderRoutingTranslatesMaxTokensForOpenAICompatibleChat(t *testing.T)
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		DeepSeekBaseURL:       upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -1180,7 +1182,7 @@ func TestProviderRoutingSupportsMessagesJSONPostForOpenAICompatibleChat(t *testi
 	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
 	tenantConfiguration.ProviderSystemPrompts = map[string]string{proxy.ProviderNameDeepSeek: "Tenant system."}
 	router, buildError := buildRouterWithManagedTenant(t, proxy.Configuration{
-		DeepSeekBaseURL:       upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -1262,7 +1264,7 @@ func TestProviderRoutingSurfacesChatCompletionTokenUsage(t *testing.T) {
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		DeepSeekBaseURL:       upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -1342,7 +1344,7 @@ func TestProviderRoutingSupportsGeminiInteractionsWithBackgroundPolling(t *testi
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		GeminiBaseURL:         upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -1440,7 +1442,7 @@ func TestProviderRoutingIncreasesKnownGeminiBudgetAfterEmptyMaxTokensResponse(t 
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		GeminiBaseURL:         upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -1500,7 +1502,7 @@ func TestProviderRoutingUsesGeminiDefaultModelForJSONPosts(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		GeminiBaseURL:         upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -1598,6 +1600,7 @@ func TestProviderRoutingSelectsDefaultsByTenantSecret(t *testing.T) {
 
 	endpoints := proxy.NewEndpoints()
 	endpoints.SetResponsesURL(openAIServer.URL)
+	endpoints.SetProviderBaseURL(proxy.ProviderNameGemini, geminiServer.URL)
 	openAITenant := proxy.StandardManagedTenantTestConfiguration(openAITenantSecret)
 	openAITenant.ID = "openai"
 	openAITenant.Defaults.SystemPrompt = "openai tenant system"
@@ -1612,7 +1615,6 @@ func TestProviderRoutingSelectsDefaultsByTenantSecret(t *testing.T) {
 	}
 	geminiTenant.ProviderSystemPrompts = map[string]string{proxy.ProviderNameOpenAI: "gemini tenant openai system"}
 	router, buildError := proxy.BuildRouterWithManagedTenantsForTest(t, withModelCatalog(t, proxy.Configuration{
-		GeminiBaseURL:         geminiServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             3,
@@ -1698,7 +1700,7 @@ func TestProviderRoutingSupportsGeminiJSONPost(t *testing.T) {
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		GeminiBaseURL:         upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -1755,7 +1757,7 @@ func TestProviderRoutingSupportsMessagesJSONPostForGemini(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		GeminiBaseURL:         upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -1820,7 +1822,7 @@ func TestProviderRoutingSupportsAnthropicMessages(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		AnthropicBaseURL:      upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameAnthropic),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -1914,7 +1916,7 @@ func TestProviderRoutingAnthropicDefaultMaxTokensByModel(t *testing.T) {
 			defer upstreamServer.Close()
 
 			router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-				AnthropicBaseURL:      upstreamServer.URL,
+				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameAnthropic),
 				LogLevel:              proxy.LogLevelInfo,
 				WorkerCount:           1,
 				QueueSize:             1,
@@ -1960,7 +1962,7 @@ func TestProviderRoutingTranslatesMaxTokensForAnthropicMessages(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		AnthropicBaseURL:      upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameAnthropic),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -2007,7 +2009,7 @@ func TestProviderRoutingSupportsGrokChatCompletions(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		XAIBaseURL:            upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameXAI),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -2047,7 +2049,7 @@ func TestProviderRoutingRejectsGeminiJSONPostMaxTokensAboveModelLimit(t *testing
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		GeminiBaseURL:         upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -2080,7 +2082,7 @@ func TestProviderRoutingRejectsGeminiQueryMaxTokensAboveModelLimit(t *testing.T)
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		GeminiBaseURL:         upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -2116,7 +2118,7 @@ func TestProviderRoutingRejectsAnthropicMaxTokensAboveModelLimit(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		AnthropicBaseURL:      upstreamServer.URL,
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameAnthropic),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -2148,7 +2150,7 @@ func TestProviderRoutingRejectsAnthropicMaxTokensAboveModelLimit(t *testing.T) {
 func TestProviderRoutingRejectsGeminiUnsupportedAndInvalidRequests(t *testing.T) {
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		GeminiBaseURL:         "https://gemini.invalid",
+		Endpoints:             providerEndpoints("https://gemini.invalid", proxy.ProviderNameGemini),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -2200,9 +2202,11 @@ func TestProviderRoutingRejectsGeminiUnsupportedAndInvalidRequests(t *testing.T)
 
 func TestProviderRoutingRejectsAnthropicMetaAndGrokUnsupportedCapabilities(t *testing.T) {
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		AnthropicBaseURL:      "https://anthropic.invalid",
-		MetaBaseURL:           "https://meta.invalid",
-		XAIBaseURL:            "https://xai.invalid",
+		Endpoints: providerEndpointOverrides(map[string]string{
+			proxy.ProviderNameAnthropic: "https://anthropic.invalid",
+			proxy.ProviderNameMeta:      "https://meta.invalid",
+			proxy.ProviderNameXAI:       "https://xai.invalid",
+		}, nil),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -2258,7 +2262,7 @@ func TestProviderRoutingRejectsGeminiMissingCredential(t *testing.T) {
 	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
 	delete(tenantConfiguration.ProviderKeys, proxy.ProviderNameGemini)
 	router, buildError := buildRouterWithManagedTenant(t, proxy.Configuration{
-		GeminiBaseURL:         "https://gemini.invalid",
+		Endpoints:             providerEndpoints("https://gemini.invalid", proxy.ProviderNameGemini),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -2287,9 +2291,11 @@ func TestProviderRoutingRejectsAnthropicMetaAndGrokMissingCredentials(t *testing
 	delete(tenantConfiguration.ProviderKeys, proxy.ProviderNameMeta)
 	delete(tenantConfiguration.ProviderKeys, proxy.ProviderNameXAI)
 	router, buildError := buildRouterWithManagedTenant(t, proxy.Configuration{
-		AnthropicBaseURL:      "https://anthropic.invalid",
-		MetaBaseURL:           "https://meta.invalid",
-		XAIBaseURL:            "https://xai.invalid",
+		Endpoints: providerEndpointOverrides(map[string]string{
+			proxy.ProviderNameAnthropic: "https://anthropic.invalid",
+			proxy.ProviderNameMeta:      "https://meta.invalid",
+			proxy.ProviderNameXAI:       "https://xai.invalid",
+		}, nil),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -2357,7 +2363,7 @@ func TestProviderRoutingMapsGeminiProviderErrors(t *testing.T) {
 
 			logger := zap.NewNop()
 			router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-				GeminiBaseURL:         upstreamServer.URL,
+				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
 				LogLevel:              proxy.LogLevelInfo,
 				WorkerCount:           1,
 				QueueSize:             1,
@@ -2383,7 +2389,7 @@ func TestProviderRoutingMapsGeminiTransportErrors(t *testing.T) {
 	t.Run("invalid request URL", func(subTest *testing.T) {
 		logger := zap.NewNop()
 		router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-			GeminiBaseURL:         "http://[::1",
+			Endpoints:             providerEndpoints("http://[::1", proxy.ProviderNameGemini),
 			LogLevel:              proxy.LogLevelInfo,
 			WorkerCount:           1,
 			QueueSize:             1,
@@ -2410,7 +2416,7 @@ func TestProviderRoutingMapsGeminiTransportErrors(t *testing.T) {
 
 		logger := zap.NewNop()
 		router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-			GeminiBaseURL:         "https://gemini.invalid",
+			Endpoints:             providerEndpoints("https://gemini.invalid", proxy.ProviderNameGemini),
 			LogLevel:              proxy.LogLevelInfo,
 			WorkerCount:           1,
 			QueueSize:             1,
@@ -2457,7 +2463,7 @@ func TestProviderRoutingMapsAnthropicProviderErrors(t *testing.T) {
 			defer upstreamServer.Close()
 
 			router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-				AnthropicBaseURL:      upstreamServer.URL,
+				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameAnthropic),
 				LogLevel:              proxy.LogLevelInfo,
 				WorkerCount:           1,
 				QueueSize:             1,
@@ -2482,7 +2488,7 @@ func TestProviderRoutingMapsAnthropicProviderErrors(t *testing.T) {
 func TestProviderRoutingMapsAnthropicTransportErrors(t *testing.T) {
 	t.Run("invalid request URL", func(subTest *testing.T) {
 		router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-			AnthropicBaseURL:      "http://[::1",
+			Endpoints:             providerEndpoints("http://[::1", proxy.ProviderNameAnthropic),
 			LogLevel:              proxy.LogLevelInfo,
 			WorkerCount:           1,
 			QueueSize:             1,
@@ -2508,7 +2514,7 @@ func TestProviderRoutingMapsAnthropicTransportErrors(t *testing.T) {
 		subTest.Cleanup(func() { proxy.HTTPClient = originalHTTPClient })
 
 		router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-			AnthropicBaseURL:      "https://anthropic.invalid",
+			Endpoints:             providerEndpoints("https://anthropic.invalid", proxy.ProviderNameAnthropic),
 			LogLevel:              proxy.LogLevelInfo,
 			WorkerCount:           1,
 			QueueSize:             1,
@@ -2532,7 +2538,7 @@ func TestProviderRoutingMapsAnthropicTransportErrors(t *testing.T) {
 func TestProviderRoutingRejectsUnsupportedWebSearch(t *testing.T) {
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		DeepSeekBaseURL:       "https://deepseek.invalid",
+		Endpoints:             providerEndpoints("https://deepseek.invalid", proxy.ProviderNameDeepSeek),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -2557,7 +2563,7 @@ func TestProviderRoutingRejectsMissingProviderCredential(t *testing.T) {
 	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
 	delete(tenantConfiguration.ProviderKeys, proxy.ProviderNameDeepSeek)
 	router, buildError := buildRouterWithManagedTenant(t, proxy.Configuration{
-		DeepSeekBaseURL:       "https://deepseek.invalid",
+		Endpoints:             providerEndpoints("https://deepseek.invalid", proxy.ProviderNameDeepSeek),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -2644,12 +2650,14 @@ func TestProviderRoutingSupportsSiliconFlowDictation(t *testing.T) {
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		SiliconFlowTranscriptionsURL: upstreamServer.URL,
-		LogLevel:                     proxy.LogLevelInfo,
-		WorkerCount:                  1,
-		QueueSize:                    1,
-		RequestTimeoutSeconds:        TestTimeout,
-		MaxInputAudioBytes:           1024 * 1024,
+		Endpoints: providerEndpointOverrides(nil, map[string]map[string]string{
+			proxy.ProviderNameSiliconFlow: {"dictation": upstreamServer.URL},
+		}),
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
+		MaxInputAudioBytes:    1024 * 1024,
 	}, logger.Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -2700,7 +2708,9 @@ func TestProviderRoutingSupportsZAIAndGrokDictation(t *testing.T) {
 			expectedResponse: "zai dictation ok",
 			configuration: func(transcriptionsURL string) proxy.Configuration {
 				return proxy.Configuration{
-					ZAITranscriptionsURL:  transcriptionsURL,
+					Endpoints: providerEndpointOverrides(nil, map[string]map[string]string{
+						proxy.ProviderNameZAI: {"dictation": transcriptionsURL},
+					}),
 					LogLevel:              proxy.LogLevelInfo,
 					WorkerCount:           1,
 					QueueSize:             1,
@@ -2718,7 +2728,9 @@ func TestProviderRoutingSupportsZAIAndGrokDictation(t *testing.T) {
 			expectedResponse: "xai dictation ok",
 			configuration: func(transcriptionsURL string) proxy.Configuration {
 				return proxy.Configuration{
-					XAITranscriptionsURL:  transcriptionsURL,
+					Endpoints: providerEndpointOverrides(nil, map[string]map[string]string{
+						proxy.ProviderNameXAI: {"dictation": transcriptionsURL},
+					}),
 					LogLevel:              proxy.LogLevelInfo,
 					WorkerCount:           1,
 					QueueSize:             1,

@@ -71,15 +71,6 @@ export function createProviderEditorResponsibility() {
     },
 
     /** @param {Event} event */
-    handleSelectedProviderBaseURLInput(event) {
-      this.abortProviderKeyVerification();
-      this.providerKeyVerificationFailure = EMPTY_STRING;
-      const baseURLInput = /** @type {HTMLInputElement} */ (event.target);
-      this.providerEditorSession.baseURL = baseURLInput.value;
-      this.markSelectedProviderDirty();
-    },
-
-    /** @param {Event} event */
     handleSelectedProviderSystemPromptInput(event) {
       const systemPromptInput = /** @type {HTMLTextAreaElement} */ (event.target);
       this.providerEditorSession.systemPrompt = systemPromptInput.value;
@@ -100,7 +91,7 @@ export function createProviderEditorResponsibility() {
       this.providerEditorSession = createProviderEditorSession(
         providerID,
         this.providerEditorSession.revealVersion + 1,
-        provider ? provider.base_url : EMPTY_STRING,
+        provider ? provider.fields : [],
         provider ? provider.text_model : EMPTY_STRING,
         provider ? provider.system_prompt : EMPTY_STRING,
       );
@@ -116,23 +107,27 @@ export function createProviderEditorResponsibility() {
  *
  * @param {string} providerID
  * @param {number} revealVersion
- * @param {string} [baseURL]
+ * @param {import("../types.d.js").ProviderFieldProfile[]} [fields]
  * @param {string} [textModel]
  * @param {string} [systemPrompt]
  * @returns {import("../types.d.js").ProviderEditorSession}
  */
-export function createProviderEditorSession(providerID, revealVersion, baseURL = EMPTY_STRING, textModel = EMPTY_STRING, systemPrompt = EMPTY_STRING) {
+export function createProviderEditorSession(providerID, revealVersion, fields = [], textModel = EMPTY_STRING, systemPrompt = EMPTY_STRING) {
+  /** @type {Record<string, string>} */
+  const fieldInputs = {};
+  for (const field of fields) {
+    fieldInputs[field.id] = field.secret ? EMPTY_STRING : String(field.value);
+  }
   return {
     providerID,
-    keyInput: EMPTY_STRING,
-    keyVisible: false,
-    keyDirty: false,
-    baseURL,
+    fieldInputs,
+    fieldDirty: {},
+    fieldVisible: {},
     textModel,
     systemPrompt,
     dirty: false,
     editVersion: 0,
-    revealPending: false,
+    revealPendingField: EMPTY_STRING,
     revealVersion,
   };
 }

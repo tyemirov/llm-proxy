@@ -119,7 +119,7 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 	return client.resolveOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
 }
 
-func (client *OpenAIClient) xAIResponsesRequest(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, structuredOutput *structuredOutputSchema, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *OpenAIClient) xAIResponsesRequest(parentContext context.Context, apiKey string, endpointURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, structuredOutput *structuredOutputSchema, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	if mediaLimitError := validateInlineMessageMediaBeforeSerialization(modelIdentifier, messages); mediaLimitError != nil {
 		return textGenerationResult{}, mediaLimitError
 	}
@@ -144,8 +144,7 @@ func (client *OpenAIClient) xAIResponsesRequest(parentContext context.Context, a
 	if mediaLimitError := validateInlineMessageMediaRequestLimit(modelIdentifier, messages, payloadBytes); mediaLimitError != nil {
 		return textGenerationResult{}, mediaLimitError
 	}
-	requestURL := strings.TrimRight(baseURL, "/") + "/responses"
-	httpRequest, buildError := buildAuthorizedJSONRequest(parentContext, http.MethodPost, requestURL, apiKey, bytes.NewReader(payloadBytes))
+	httpRequest, buildError := buildAuthorizedJSONRequest(parentContext, http.MethodPost, endpointURL, apiKey, bytes.NewReader(payloadBytes))
 	if buildError != nil {
 		structuredLogger.Errorw(logEventBuildHTTPRequest, constants.LogFieldError, buildError)
 		return textGenerationResult{}, buildError

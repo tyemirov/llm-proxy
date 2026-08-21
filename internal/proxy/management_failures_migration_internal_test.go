@@ -645,17 +645,20 @@ func TestManagedXAIProviderMigrationCanonicalizesCurrentRoutesAndPreservesUsage(
 	if migrationError := initializeManagedTenantSchema(fixture.database, fixture.providerKeyCipher, fixture.providers); migrationError != nil {
 		t.Fatalf("migrate xAI provider: %v", migrationError)
 	}
-	var retiredCount int64
-	if countError := fixture.database.Model(&managedProviderAPIKeyRecord{}).Where(&managedProviderAPIKeyRecord{ProviderID: retiredGrokProviderIdentifier}).Count(&retiredCount).Error; countError != nil || retiredCount != 0 {
-		t.Fatalf("retired provider count=%d error=%v", retiredCount, countError)
+	if fixture.database.Migrator().HasTable(managedProviderKeyTable) {
+		t.Fatal("predecessor provider table remains after xAI connection migration")
 	}
-	var providerKey managedProviderAPIKeyRecord
-	if queryError := fixture.database.Where(&managedProviderAPIKeyRecord{TenantID: fixture.tenant.TenantID, ProviderID: ProviderNameXAI}).First(&providerKey).Error; queryError != nil {
-		t.Fatalf("load xAI provider key: %v", queryError)
+	var connection managedProviderConnectionRecord
+	if queryError := fixture.database.Where(&managedProviderConnectionRecord{TenantID: fixture.tenant.TenantID, ProviderID: ProviderNameXAI, FieldID: CatalogCredentialAPIKey}).First(&connection).Error; queryError != nil {
+		t.Fatalf("load xAI provider connection: %v", queryError)
 	}
-	apiKey, decryptError := fixture.providerKeyCipher.decrypt(providerKey)
-	if decryptError != nil || apiKey != "sk-grok" || providerKey.TextModel != fixture.providerKey.TextModel || providerKey.SystemPrompt != fixture.providerKey.SystemPrompt || !providerKey.CreatedAt.Equal(fixture.providerKey.CreatedAt) || !providerKey.UpdatedAt.Equal(fixture.providerKey.UpdatedAt) {
-		t.Fatalf("migrated provider key=%+v api_key=%q error=%v", providerKey, apiKey, decryptError)
+	var profile managedProviderProfileRecord
+	if queryError := fixture.database.Where(&managedProviderProfileRecord{TenantID: fixture.tenant.TenantID, ProviderID: ProviderNameXAI}).First(&profile).Error; queryError != nil {
+		t.Fatalf("load xAI provider profile: %v", queryError)
+	}
+	apiKey, decryptError := fixture.providerKeyCipher.decryptConnection(connection)
+	if decryptError != nil || apiKey != "sk-grok" || profile.TextModel != fixture.providerKey.TextModel || profile.SystemPrompt != fixture.providerKey.SystemPrompt || !connection.CreatedAt.Equal(fixture.providerKey.CreatedAt) || !connection.UpdatedAt.Equal(fixture.providerKey.UpdatedAt) || !profile.CreatedAt.Equal(fixture.providerKey.CreatedAt) || !profile.UpdatedAt.Equal(fixture.providerKey.UpdatedAt) {
+		t.Fatalf("migrated connection=%+v profile=%+v api_key=%q error=%v", connection, profile, apiKey, decryptError)
 	}
 	var tenantRecord managedTenantRecord
 	if queryError := fixture.database.Where(&managedTenantRecord{TenantID: fixture.tenant.TenantID}).First(&tenantRecord).Error; queryError != nil {
@@ -709,7 +712,7 @@ func TestManagedTenantRouteMigrationsComposeConfirmedPredecessorIdentities(t *te
 				t.Fatalf("migrate predecessor routes: %v", migrationError)
 			}
 			var tenantRecord managedTenantRecord
-			if queryError := fixture.database.Preload("ProviderAPIKeys").Where(&managedTenantRecord{TenantID: fixture.tenant.TenantID}).First(&tenantRecord).Error; queryError != nil {
+			if queryError := fixture.database.Preload("ProviderConnections").Preload("ProviderProfiles").Where(&managedTenantRecord{TenantID: fixture.tenant.TenantID}).First(&tenantRecord).Error; queryError != nil {
 				t.Fatalf("load migrated predecessor tenant: %v", queryError)
 			}
 			expectedDefaults := TenantDefaults{
@@ -717,12 +720,12 @@ func TestManagedTenantRouteMigrationsComposeConfirmedPredecessorIdentities(t *te
 				DictationProvider: ProviderNameXAI, DictationModel: "xai-stt",
 				SystemPrompt: "preserve tenant prompt",
 			}
-			if tenantRecord.defaults() != expectedDefaults || len(tenantRecord.ProviderAPIKeys) != 3 {
-				t.Fatalf("migrated predecessor tenant=%+v keys=%+v", tenantRecord, tenantRecord.ProviderAPIKeys)
+			if tenantRecord.defaults() != expectedDefaults || len(tenantRecord.ProviderConnections) != 3 || len(tenantRecord.ProviderProfiles) != 3 {
+				t.Fatalf("migrated predecessor tenant=%+v connections=%+v profiles=%+v", tenantRecord, tenantRecord.ProviderConnections, tenantRecord.ProviderProfiles)
 			}
 			modelsByProvider := map[string]string{}
-			for _, providerKey := range tenantRecord.ProviderAPIKeys {
-				modelsByProvider[providerKey.ProviderID] = providerKey.TextModel
+			for _, profile := range tenantRecord.ProviderProfiles {
+				modelsByProvider[profile.ProviderID] = profile.TextModel
 			}
 			if modelsByProvider[ProviderNameXAI] != ModelNameGrok43 || modelsByProvider[ProviderNameMiniMax] != ModelNameMiniMaxM27 || modelsByProvider[ProviderNameSiliconFlow] != ModelNameSiliconFlowDeepSeek {
 				t.Fatalf("migrated predecessor provider models=%v", modelsByProvider)
