@@ -157,7 +157,13 @@ func TestOperationalFrontendValidationPreparesPinnedDependencies(testingInstance
 			testingInstance.Fatalf("hosted CI duplicates Make-owned frontend setup %q", duplicateSetup)
 		}
 	}
-	if !strings.Contains(workflow, "run: timeout -k 350s -s SIGKILL 350s make ci PLAYWRIGHT_INSTALL_FLAGS=") {
+	if !strings.Contains(workflow, "    timeout-minutes: 10\n") {
+		testingInstance.Fatal("hosted CI does not bound the complete job")
+	}
+	if strings.Contains(workflow, "run: timeout ") {
+		testingInstance.Fatal("hosted CI duplicates the job execution limit in its shell command")
+	}
+	if !strings.Contains(workflow, "run: make ci PLAYWRIGHT_INSTALL_FLAGS=") {
 		testingInstance.Fatal("hosted CI does not declare its preinstalled Playwright OS packages")
 	}
 }

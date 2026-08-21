@@ -25,6 +25,26 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [ ] [B146] (P1) Bound the complete hosted CI job.
+  Goal:
+  Hosted CI completes the current canonical gate on GitHub-hosted runners.
+  Evidence:
+  - Expected: Hosted CI completes all 11 gates and prints the success receipt.
+  - Actual: Runs `32437201144` and `32448302006` reached the final gate.
+    The shell watchdog then killed `make ci` at exactly 350 seconds.
+  - The completed gates used 333 seconds in run `32448302006` attempt 3.
+    The final gate then used 17 seconds to build the current proxy binary.
+  Requirements:
+  - Keep one execution limit in the hosted workflow.
+  - Apply the execution limit to the complete GitHub Actions job.
+  - Set the job execution limit to 10 minutes.
+  - Keep the canonical `make ci` command and all 11 gates.
+  - Keep the hosted Playwright package declaration.
+  Validation:
+  - Prove the exact hosted workflow contract through the public Make test.
+  - Run `make ci` after the last workflow or test change.
+  - Prove one hosted run completes all 11 gates and prints the success receipt.
+
 - [x] [B145] (P1) Keep failed request usage on one model route.
   Goal:
   Usage reports show the model route that the request contract selects.
