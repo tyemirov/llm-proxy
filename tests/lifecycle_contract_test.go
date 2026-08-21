@@ -30,11 +30,8 @@ var expectedSiblingGatewayWrapper = strings.Join([]string{
 	"\t\tMPRLAB_APP_ROOT=\"$${application_root}\"",
 }, "\n")
 
-func TestOperationalRepositoryOwnsSchemaV5Lifecycle(testingInstance *testing.T) {
-	TestOperationalRepositoryOwnsVersionlessLifecycle(testingInstance)
-}
-
-func TestOperationalRepositoryOwnsVersionlessLifecycle(testingInstance *testing.T) {	repositoryRoot := operationalRepositoryRoot(testingInstance)
+func TestOperationalRepositoryOwnsVersionlessLifecycle(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	manifestPath := filepath.Join(repositoryRoot, filepath.FromSlash(lifecycleManifestRelativePath))
 	manifestBytes, readError := os.ReadFile(manifestPath)
 	if readError != nil {
@@ -52,9 +49,7 @@ func TestOperationalRepositoryOwnsVersionlessLifecycle(testingInstance *testing.
 	if !available {
 		testingInstance.Fatalf("lifecycle manifest has no mprlab_resources mapping: %#v", document)
 	}
-	if schemaVersion, schemaAvailable := resourcesDocument["schema_version"].(int); !schemaAvailable || schemaVersion != 5 {
-		testingInstance.Fatalf("unexpected lifecycle schema version: %#v", resourcesDocument["schema_version"])
-	}	if owner, ownerAvailable := resourcesDocument["owner"].(string); !ownerAvailable || owner != "llm-proxy" {
+	if owner, ownerAvailable := resourcesDocument["owner"].(string); !ownerAvailable || owner != "llm-proxy" {
 		testingInstance.Fatalf("unexpected lifecycle owner: %#v", resourcesDocument["owner"])
 	}
 	release, releaseAvailable := resourcesDocument["release"].(map[string]any)
