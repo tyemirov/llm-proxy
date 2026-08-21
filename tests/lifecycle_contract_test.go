@@ -168,6 +168,21 @@ func TestOperationalRepositoryOwnsVersionlessLifecycle(testingInstance *testing.
 	if !runtimeServiceAvailable {
 		testingInstance.Fatalf("runtime service is not a mapping: %#v", runtimeServices[0])
 	}
+	expectedRuntimeAssets := []any{
+		map[string]any{
+			"source": "configs/config.yml",
+			"target": "/app/config.yml",
+			"mode":   "0444",
+		},
+		map[string]any{
+			"source": "configs/providers.yml",
+			"target": "/app/providers.yml",
+			"mode":   "0444",
+		},
+	}
+	if !reflect.DeepEqual(runtimeService["assets"], expectedRuntimeAssets) {
+		testingInstance.Fatalf("unexpected runtime assets: %#v", runtimeService["assets"])
+	}
 	if _, environmentFilesAvailable := runtimeService["environment_files"]; environmentFilesAvailable {
 		testingInstance.Fatalf("runtime service retains environment_files: %#v", runtimeService["environment_files"])
 	}
@@ -224,8 +239,6 @@ func TestOperationalRepositoryOwnsVersionlessLifecycle(testingInstance *testing.
 	manifestText := string(manifestBytes)
 	for _, requiredContract := range []string{
 		"kind: private_values",
-		"source: configs/config.yml",
-		"target: /app/config.yml",
 		"name: mprlab-nginx-gateway_llm-proxy-data",
 		"name: llm-proxy.http",
 		"alias: llm-proxy",
