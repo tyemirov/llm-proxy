@@ -129,6 +129,12 @@ and lifecycle behavior. Provider identifiers do not select protocol code.
 | `multipart_transcription` | `synchronous_completion` |
 | `xai_videos_generations` | `pollable_resource` |
 
+The shared `pollable_resource` lifecycle owns post-create observation for all
+protocol adapters. It reads a created resource immediately. A first `403` or
+`404` starts one two-second visibility interval outside the upstream worker and
+one reconciliation read. The caller context bounds the interval. Other first
+read errors and all later read errors stop the lifecycle.
+
 The schema records each adapter contract in `protocol_parameters`. Startup
 compares those values with the selected protocol adapter. A mismatch stops
 startup.

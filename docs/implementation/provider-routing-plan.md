@@ -243,6 +243,13 @@ missing, unknown, contradictory, or provider-incompatible pairs and rejects
 these text-only fields on dictation entries. A future one-read deferred result
 must introduce a distinct lifecycle value.
 
+The shared `pollable_resource` lifecycle owns post-create observation. It reads
+the created resource immediately. A first `403` or `404` starts one two-second
+visibility interval outside the upstream worker and one reconciliation read.
+The caller context bounds this work. Other first read errors and all later read
+errors stop the lifecycle. Protocol adapters continue to own resource wire
+formats and provider status parsing.
+
 Every OpenAI Responses text request includes `background: true` and
 `store: true`. A nonblank response id is polled server-side only for the
 documented `queued` and `in_progress` pending states or for a proxy-initiated
@@ -398,17 +405,20 @@ provider transport for one fixed, non-user-content probe:
 - A synchronous Gemini model uses one non-stored `POST /interactions` request.
   It sends `background: false`, `store: false`, and a 16-token output limit.
 - A pollable Gemini model creates one stored background interaction. It then
-  retrieves the interaction once. It cancels active work and deletes the
-  stored interaction before it accepts the credential.
+  observes the interaction through the shared `pollable_resource` lifecycle.
+  It cancels active work and deletes the stored interaction before it accepts
+  the credential.
 - Anthropic uses one Messages request with `x-api-key`,
   `anthropic-version: 2023-06-01`, and `max_tokens: 16`.
 
 The verifier uses the management request context and the shared upstream
-worker, queue, and origin-rate-limit boundary. It does not retry, use an
-alternative endpoint, start a continuation, or record managed usage. A pollable
-Gemini probe uses the production adapter's create, retrieve, cancel, and delete
-operations. A transport success counts only when its canonical response is
-valid. Provider `4xx` credential or model rejection maps to
+worker, queue, and origin-rate-limit boundary. It can repeat only a first
+resource read that returns `403` or `404`. It does not retry a create, transport
+failure, later read, cancel, or delete. It does not use an alternative endpoint,
+start a continuation, or record managed usage. A pollable Gemini probe uses the
+production adapter's create, retrieve, cancel, and delete operations. A
+transport success counts only when its canonical response is valid. Provider
+`4xx` credential or model rejection maps to
 `422 provider_key_rejected`, except `408` and `429`. Upstream `504` also maps
 to timeout. Transport cancellation, deadline, outage, and malformed success
 map to the documented provider-neutral error. Candidate keys, probe content,
@@ -541,6 +551,9 @@ The `proxy provider progress` event records each OpenAI create/poll observation
 and each provider-neutral continuation attempt under the same request id. It
 uses an attempt or poll count, normalized provider state or completion signal,
 elapsed milliseconds, current output bytes, and accumulated output bytes.
+Only the first visibility `403` or `404` that starts reconciliation uses
+`pending`. A reconciliation or later-poll visibility error uses `failure`
+because it stops the lifecycle.
 Progress and terminal events never include provider resource ids, prompts,
 messages, generated text, provider bodies, credentials, cookies, or tenant
 secrets. The telemetry stays in structured logs; managed usage persistence,
