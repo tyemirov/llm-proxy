@@ -83,14 +83,21 @@ base URL, and serialize the request body as `"web_search": true` or
 `"web_search": false`.
 
 An ordinary request does not stream tokens, poll a job endpoint, or use a
-resume token. OpenAI Responses and Gemini 3.x Interactions use pollable upstream
+resume token.
+
+OpenAI Responses and Gemini 3-series Interactions use pollable upstream
 lifecycles. The proxy sends stored background requests and holds the client
 connection. It polls a nonblank resource id through `status=queued` and
-`status=in_progress`. Gemini 2.5 Interactions instead complete synchronously
-with `background: false` and `store: false`. A documented terminal status is
-resolved immediately, and a missing or unknown status is rejected rather than
-polled. Provider resource ids remain in the active request lifecycle. The proxy
-does not keep a durable provider job or expose a provider resource id.
+`status=in_progress`. The shared `pollable_resource` lifecycle makes the first
+resource read immediately. If that read returns `403` or `404` after a
+successful create, the lifecycle releases the upstream worker, waits two
+seconds under the request context, and reads the resource one more time. Other
+first-read errors and all later read errors remain final. Gemini 2.5
+Interactions instead complete synchronously with `background: false` and
+`store: false`. A documented terminal status is resolved immediately, and a
+missing or unknown status is rejected rather than polled. Provider resource
+ids remain in the active request lifecycle. The proxy does not keep a durable
+provider job or expose a provider resource id.
 
 Every current text route uses one provider-neutral completion coordinator.
 When an upstream attempt exhausts its output budget—OpenAI Responses
@@ -690,11 +697,14 @@ switches providers, or closes Settings.
 
 The verifier uses the selected route's exact lifecycle for one fixed,
 non-user-content probe. Synchronous routes make one provider request. A
-pollable Gemini route creates one stored background interaction and retrieves
-it once. The verifier cancels an active interaction and deletes every stored
-interaction before it accepts the credential. Every request uses the shared
-upstream worker, queue, origin-rate-limit, and management request boundaries.
-The verifier does not retry, start a continuation, or record managed usage.
+pollable Gemini route creates one stored background interaction and observes it
+through the shared `pollable_resource` lifecycle. The verifier cancels an
+active interaction and deletes every stored interaction before it accepts the
+credential. Every request uses the shared upstream worker, queue,
+origin-rate-limit, and management request boundaries. The verifier can repeat
+only a first resource read that returns `403` or `404`. It does not retry a
+create, transport failure, later read, cancel, or delete. It does not start a
+continuation or record managed usage.
 Only an accepted provider connection and model enter the provider connection
 transaction. That transaction encrypts each secret field and saves each setting
 field. It also saves the provider profile, reconciles routing defaults, and
