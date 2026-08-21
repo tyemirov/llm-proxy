@@ -54,6 +54,29 @@ retain satisfied historical dependencies.
   - Hosted run `32450200399` passed all 11 gates. The canonical gate used 350
     seconds, and the complete job used 6 minutes and 46 seconds.
 
+- [x] [B146] (P0) Use the current lifecycle manifest schema.
+  Goal:
+  The release command accepts the selected application manifest.
+  Expected result:
+  - The gateway accepts the manifest with schema version 5.
+  Actual result:
+  - The gateway rejects schema version 4 before the release operation starts.
+  Requirements:
+  - Set the selected application manifest to schema version 5.
+  - Keep all nonmobile resource shapes unchanged.
+  - Update the compiled lifecycle contract test for schema version 5.
+  Validation:
+  - Run the focused lifecycle contract test.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - Migrated the selected manifest to schema version 5.
+  - Kept each nonmobile resource shape unchanged.
+  - Updated the compiled lifecycle contract test for schema version 5.
+  - The focused lifecycle test passed.
+  - The baseline and final CI runs passed all 11 gates with 100 percent Go
+    statement coverage.
+  - Did not run release, publication, or deployment.
 - [x] [B145] (P1) Keep failed request usage on one model route.
   Goal:
   Usage reports show the model route that the request contract selects.
@@ -1937,6 +1960,137 @@ retain satisfied historical dependencies.
 
 ## Features
 
+- [ ] [F036] (P1) {I223} Add public provider-offering price comparison.
+  Goal:
+  Let landing-page visitors compare published prices and workload estimates for
+  compatible provider offerings. Use the authoritative provider catalog for
+  each rate, condition, source, and verification date.
+  Evidence:
+  - The public capability resource already contains one price descriptor for
+    each provider-offering operation.
+  - The public site renderer validates the complete price representation but
+    does not render it.
+  - Catalog revision `2026-08-13.i228.1` has 67 price records. Eleven records
+    contain available exact rates.
+  - Ten available records cover text. One available record covers video
+    generation.
+  - The other 56 records identify unavailable prices and provide official
+    source URLs.
+  - The landing page contains a route explorer and model matrix but no price
+    comparison.
+  Requirements:
+  - Complete I223 before this feature changes the provider catalog.
+  - Read prices from the same immutable catalog snapshot that owns routing and
+    public capabilities.
+  - Do not add page-owned rates, copied price files, runtime scraping, or
+    browser requests to provider price pages.
+  - Compare provider offerings. Do not merge different provider routes under
+    one exact model result.
+  - Show the catalog revision, official source, verification date, rate units,
+    conditions, and formula for each result.
+  - Keep currency, billing region, billing mode, and price units explicit.
+  - Replace combined free-text condition values with typed catalog fields
+    before a calculation uses them.
+  - Define typed token ranges, resolution, duration, quality, quantity, cache
+    state, and media state when they apply.
+  - Reject overlapping condition ranges and ambiguous price selections during
+    catalog validation.
+  - Treat `available: false` as unavailable. Never treat an unavailable price
+    as zero.
+  - Keep unavailable offerings visible in a separate evidence list with their
+    exact unavailable reason.
+  - Start in a published-rate view. Do not use a hidden default workload.
+  - Let a visitor enter workload values only for components used by the
+    selected operation.
+  - For text, accept input, output, cache-read, and cache-write token amounts
+    when applicable.
+  - For dictation, accept audio duration only when the selected rates use a
+    compatible duration unit.
+  - For video, accept output duration, resolution, input-image quantity, and
+    output quantity when applicable.
+  - Let the visitor select a per-request, per-thousand-request, or monthly
+    volume multiplier.
+  - Calculate each component separately. Show the exact sum and formula.
+  - Rank offerings only when all required components, units, and conditions
+    have exact matches.
+  - Do not rank prices with different units or incompatible conditions.
+  - Show a ranked chart only when two or more offerings are comparable.
+  - Show one eligible offering as rate evidence without a cheapest-price
+    claim.
+  - Filter by operation, provider, model family, weight access, and declared
+    capability.
+  - Preserve the current selected route when it remains eligible.
+  - Highlight a route-explorer selection in the price comparison when that
+    offering has price evidence.
+  - Keep comparison filters independent after the initial route highlight.
+  - Place a `Pricing` navigation link and a `#pricing` section before the model
+    matrix.
+  - Use a compact ranked horizontal bar chart on wide screens.
+  - Use stacked bar segments for separate price components.
+  - Put an exact currency value beside each bar. Do not require visual length
+    to communicate the value.
+  - Use a compact ranked list on narrow screens without horizontal page
+    overflow.
+  - Use the existing MPR color, border, type, spacing, and motion tokens.
+  - Use accent colors only to identify components, selection, freshness, and
+    unavailable state.
+  - Render a semantic price table and complete evidence without JavaScript.
+  - Use JavaScript only for filtering, calculations, chart updates, and route
+    selection synchronization.
+  - Keep keyboard operation, visible focus, live result announcements, and
+    reduced-motion behavior.
+  - Mark a price as `Review due` when `last_verified` is more than 30 days old.
+  - Exclude a review-due price from rankings. Keep its source and rates visible
+    as stale evidence.
+  - Add a repository command that reports current, due-soon, review-due, and
+    unavailable price records.
+  - Add a weekly repository workflow that runs the price review command.
+  - Report provider, model, operation, source, verification date, and remaining
+    freshness days for each record.
+  - Require reviewed official-source evidence before a rate or verification
+    date changes.
+  - Keep one current price contract. Use Git history for previous price
+    versions.
+  - Use this implementation sequence:
+    1. Complete the I223 provider catalog and its immutable public projection.
+    2. Normalize price conditions and import each available official rate.
+    3. Extend the static renderer with the semantic price section and evidence.
+    4. Add one checked custom element for comparison controls and calculations.
+    5. Add responsive chart presentation and route-selection synchronization.
+    6. Add public-contract, no-JavaScript, browser, and calculation coverage.
+    7. Add the price review command, weekly workflow, and operator guidance.
+  Deliverables:
+  - Add typed, machine-comparable price conditions to the provider catalog.
+  - Add each available official rate that the current provider contract can
+    represent exactly.
+  - Add generated semantic price markup to the public site renderer.
+  - Add the checked price comparison custom element and current module
+    revision.
+  - Add compact responsive styles to the landing-page stylesheet.
+  - Add the `Pricing` navigation link and route-selection integration.
+  - Add the price review command and weekly repository workflow.
+  - Update OpenAPI, README, provider catalog documentation, and generated site
+    documentation when their contracts change.
+  Validation:
+  - Prove every displayed rate matches the public catalog snapshot exactly.
+  - Prove each result shows its source, verification date, conditions, units,
+    catalog revision, and formula.
+  - Prove text calculations for available Dashscope and MiniMax offerings.
+  - Prove video calculations for the available xAI offering without a
+    cheapest-price claim.
+  - Prove unavailable, condition-mismatch, incompatible-unit, and review-due
+    records never enter a ranking.
+  - Prove the chart appears only for two or more comparable offerings.
+  - Prove operation, provider, family, weight-access, and capability filters.
+  - Prove route selection highlights the matching price evidence.
+  - Prove complete price content and source links without JavaScript.
+  - Prove keyboard operation, accessible names, live results, and visible
+    focus through the public browser entry point.
+  - Inspect the section at 1280, 900, and 390 pixels.
+  - Prove the page has no horizontal overflow at each inspected width.
+  - Prove reduced motion removes nonessential chart movement.
+  - Prove the price review command classifies each freshness state.
+  - Run `make ci` after the last application change.
 - [x] [F035] (P0) {F033} Add verified provider image routes.
   Goal:
   LLM Proxy routes canonical image and audio attachments only through Gemini.
