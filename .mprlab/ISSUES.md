@@ -49,7 +49,7 @@ retain satisfied historical dependencies.
   - The workflow now applies one 10-minute limit to the complete hosted job.
   - The CI step invokes `make ci` without a second shell execution limit.
   - The focused Make contract test passed.
-  - The final local `make ci` passed all 11 gates in 169 seconds with 100.0%
+  - A local `make ci` passed all 11 gates in 169 seconds with 100.0%
     Go statement coverage.
   - Hosted run `32450200399` passed all 11 gates. The canonical gate used 350
     seconds, and the complete job used 6 minutes and 46 seconds.

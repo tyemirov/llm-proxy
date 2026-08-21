@@ -157,7 +157,7 @@ func TestOperationalFrontendValidationPreparesPinnedDependencies(testingInstance
 			testingInstance.Fatalf("hosted CI duplicates Make-owned frontend setup %q", duplicateSetup)
 		}
 	}
-	if !strings.Contains(workflow, "    timeout-minutes: 10\n") {
+	if strings.Count(workflow, "timeout-minutes:") != 1 || !strings.Contains(workflow, "    timeout-minutes: 10\n") {
 		testingInstance.Fatal("hosted CI does not bound the complete job")
 	}
 	if strings.Contains(workflow, "run: timeout ") {
