@@ -51,15 +51,13 @@ type chatMessageCandidate struct {
 }
 
 func validateMessagesForResolvedTextRoute(model textModelDefinition, messages chatMessages) error {
-	if model.reasoningEffort == nil || model.reasoningEffort.adapter != reasoningEffortAdapterGeminiInteractions {
+	if model.wireContract != textWireContractGeminiInteractions {
 		return nil
 	}
-	terminalMessageIndex := len(messages) - 1
-	for messages[terminalMessageIndex].role == chatRoleSystem {
-		terminalMessageIndex--
-	}
-	if messages[terminalMessageIndex].role == chatRoleAssistant {
-		return fmt.Errorf("%w: terminal assistant message", ErrInvalidChatMessages)
+	for _, message := range messages {
+		if message.role == chatRoleAssistant {
+			return fmt.Errorf("%w: Gemini Interactions assistant history is unsupported", ErrInvalidChatMessages)
+		}
 	}
 	return nil
 }

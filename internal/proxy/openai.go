@@ -29,8 +29,9 @@ var (
 // OpenAIClient provides access to the OpenAI responses API with configurable
 // endpoints and tunable parameters.
 type OpenAIClient struct {
-	httpClient HTTPDoer
-	endpoints  *Endpoints
+	httpClient         HTTPDoer
+	endpoints          *Endpoints
+	resourceVisibility pollableResourceVisibilityPolicy
 }
 
 // NewOpenAIClient constructs an OpenAIClient initialized with the supplied components.
@@ -38,6 +39,14 @@ func NewOpenAIClient(httpClient HTTPDoer, endpoints *Endpoints) *OpenAIClient {
 	return &OpenAIClient{
 		httpClient: httpClient,
 		endpoints:  endpoints,
+	}
+}
+
+func newPollableOpenAIClient(httpClient HTTPDoer, endpoints *Endpoints, resourceVisibility pollableResourceVisibilityPolicy) *OpenAIClient {
+	return &OpenAIClient{
+		httpClient:         httpClient,
+		endpoints:          endpoints,
+		resourceVisibility: resourceVisibility,
 	}
 }
 
@@ -374,7 +383,8 @@ func (client *OpenAIClient) pollResponseUntilDone(parentContext context.Context,
 		observe: func(observationContext context.Context) (openAIResponseSnapshot, error) {
 			return client.fetchResponseByID(observationContext, openAIKey, responseIdentifier, structuredLogger)
 		},
-		isPending: openAIResponseSnapshot.isPending,
+		isPending:        openAIResponseSnapshot.isPending,
+		visibilityPolicy: client.resourceVisibility,
 		recordObservation: func(responseSnapshot openAIResponseSnapshot, fetchError error, retryDecision pollableResourceRetryDecision) {
 			recordOpenAIProgressWithRetryDecision(parentContext, structuredLogger, telemetryProgressKindOpenAIPoll, responseSnapshot, fetchError, retryDecision)
 			if responseSnapshot.usage != nil {

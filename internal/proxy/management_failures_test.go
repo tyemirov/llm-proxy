@@ -245,7 +245,7 @@ func TestOpenAIPolledIncompleteUsesLatestSnapshotThenCompletesAtPublicV2Boundary
 	}
 }
 
-func TestProviderCompletionSignalsRecoverPartialTextAndAggregateUsageAtPublicV2Boundary(testingInstance *testing.T) {
+func TestProviderCompletionSignalsHonorTransportContinuationPolicyAtPublicV2Boundary(testingInstance *testing.T) {
 	const (
 		chatPartialText      = "chat completion partial text"
 		geminiPartialText    = "gemini partial text"
@@ -306,18 +306,19 @@ func TestProviderCompletionSignalsRecoverPartialTextAndAggregateUsageAtPublicV2B
 		}
 	}
 	saveProviderKey(proxy.ProviderNameDeepSeek, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash)
-	saveProviderKey(proxy.ProviderNameGemini, "sk-user-gemini", proxy.ModelNameGemini25Flash)
+	saveProviderKey(proxy.ProviderNameGemini, "sk-user-gemini", proxy.ModelNameGemini35Flash)
 	saveProviderKey(proxy.ProviderNameAnthropic, "sk-user-anthropic", proxy.ModelNameClaudeSonnet46)
 	secret := generateManagementTenantSecret(testingInstance, router, ownerCookie, tenantIdentifier)
 
 	testCases := []struct {
-		provider    string
-		model       string
-		partialText string
+		provider       string
+		model          string
+		partialText    string
+		expectedStatus int
 	}{
-		{provider: proxy.ProviderNameDeepSeek, model: proxy.ModelNameDeepSeekV4Flash, partialText: chatPartialText},
-		{provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, partialText: geminiPartialText},
-		{provider: proxy.ProviderNameAnthropic, model: proxy.ModelNameClaudeSonnet46, partialText: anthropicPartialText},
+		{provider: proxy.ProviderNameDeepSeek, model: proxy.ModelNameDeepSeekV4Flash, partialText: chatPartialText, expectedStatus: http.StatusOK},
+		{provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini35Flash, partialText: geminiPartialText, expectedStatus: http.StatusBadGateway},
+		{provider: proxy.ProviderNameAnthropic, model: proxy.ModelNameClaudeSonnet46, partialText: anthropicPartialText, expectedStatus: http.StatusOK},
 	}
 	for _, testCase := range testCases {
 		requestBody, marshalError := json.Marshal(map[string]any{
@@ -332,9 +333,18 @@ func TestProviderCompletionSignalsRecoverPartialTextAndAggregateUsageAtPublicV2B
 		request.Header.Set("Content-Type", "application/json")
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, request)
-		if response.Code != http.StatusOK || response.Body.String() != testCase.partialText+completionText {
+		if response.Code != testCase.expectedStatus {
 			testingInstance.Fatalf("provider=%s status=%d body=%q", testCase.provider, response.Code, response.Body.String())
 		}
+		if testCase.expectedStatus == http.StatusOK && response.Body.String() != testCase.partialText+completionText {
+			testingInstance.Fatalf("provider=%s body=%q", testCase.provider, response.Body.String())
+		}
+		if testCase.expectedStatus != http.StatusOK && strings.Contains(response.Body.String(), testCase.partialText) {
+			testingInstance.Fatalf("provider=%s leaked partial text body=%q", testCase.provider, response.Body.String())
+		}
+	}
+	if !reflect.DeepEqual(upstreamRequestCounts, map[string]int{"chat": 2, "gemini": 1, "anthropic": 2}) {
+		testingInstance.Fatalf("upstream request counts=%v", upstreamRequestCounts)
 	}
 
 	type persistedProviderUsageEvent struct {
@@ -364,7 +374,7 @@ func TestProviderCompletionSignalsRecoverPartialTextAndAggregateUsageAtPublicV2B
 	}
 	expectedUsageEvents := []persistedProviderUsageEvent{
 		{Endpoint: "v2", Provider: proxy.ProviderNameDeepSeek, Model: proxy.ModelNameDeepSeekV4Flash, StatusCode: http.StatusOK, Success: true, OutcomeCode: "success", RequestTokens: 36, ResponseTokens: 54, TotalTokens: 90},
-		{Endpoint: "v2", Provider: proxy.ProviderNameGemini, Model: proxy.ModelNameGemini25Flash, StatusCode: http.StatusOK, Success: true, OutcomeCode: "success", RequestTokens: 46, ResponseTokens: 60, TotalTokens: 106},
+		{Endpoint: "v2", Provider: proxy.ProviderNameGemini, Model: proxy.ModelNameGemini35Flash, StatusCode: http.StatusBadGateway, Success: false, OutcomeCode: "upstream_error", RequestTokens: 41, ResponseTokens: 53, TotalTokens: 94},
 		{Endpoint: "v2", Provider: proxy.ProviderNameAnthropic, Model: proxy.ModelNameClaudeSonnet46, StatusCode: http.StatusOK, Success: true, OutcomeCode: "success", RequestTokens: 66, ResponseTokens: 70, TotalTokens: 136},
 	}
 	if !reflect.DeepEqual(usageEvents, expectedUsageEvents) {

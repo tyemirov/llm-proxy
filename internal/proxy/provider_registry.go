@@ -10,8 +10,16 @@ import (
 )
 
 type providerRegistry struct {
-	definitions map[providerID]providerDefinition
-	aliases     map[string]providerID
+	definitions     map[providerID]providerDefinition
+	aliases         map[string]providerID
+	modelMigrations map[int][]managedModelMigration
+}
+
+type managedModelMigration struct {
+	provider  string
+	operation string
+	source    string
+	target    string
 }
 
 type providerSummary struct {
@@ -63,6 +71,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 				responseProtocol:   transport.ResponseProtocol,
 				usageMapping:       transport.UsageMapping,
 				lifecycle:          textExecutionLifecycle(transport.Lifecycle),
+				resourceVisibility: pollableResourceVisibilityPolicyFromCatalog(transport.ResourceVisibility),
 				protocolParameters: transport.ProtocolParameters,
 			}
 		}
@@ -109,8 +118,15 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 	applyDefaultEndpointOverrides(configuration.ProviderCatalog.schema, definitions, configuration.Endpoints)
 
 	registry := &providerRegistry{
-		definitions: definitions,
-		aliases:     map[string]providerID{},
+		definitions:     definitions,
+		aliases:         map[string]providerID{},
+		modelMigrations: make(map[int][]managedModelMigration),
+	}
+	for _, migration := range configuration.ProviderCatalog.schema.ModelMigrations {
+		registry.modelMigrations[migration.ManagedSchemaVersion] = append(registry.modelMigrations[migration.ManagedSchemaVersion], managedModelMigration{
+			provider: migration.Provider, operation: migration.Operation,
+			source: migration.SourceModel, target: migration.TargetModel,
+		})
 	}
 	for identifier, definition := range definitions {
 		registry.aliases[identifier.string()] = identifier
@@ -177,9 +193,29 @@ func (registry *providerRegistry) forTenant(requestTenant tenant) *providerRegis
 		definitions[identifier] = definition
 	}
 	return &providerRegistry{
-		definitions: definitions,
-		aliases:     registry.aliases,
+		definitions:     definitions,
+		aliases:         registry.aliases,
+		modelMigrations: registry.modelMigrations,
 	}
+}
+
+func (registry *providerRegistry) modelMigrationsFor(schemaVersion int, provider string, operation string) []managedModelMigration {
+	var matches []managedModelMigration
+	for _, migration := range registry.modelMigrations[schemaVersion] {
+		if migration.provider == provider && migration.operation == operation {
+			matches = append(matches, migration)
+		}
+	}
+	return matches
+}
+
+func (registry *providerRegistry) modelMigrationTarget(schemaVersion int, provider string, operation string, source string) (string, bool) {
+	for _, migration := range registry.modelMigrationsFor(schemaVersion, provider, operation) {
+		if migration.source == source {
+			return migration.target, true
+		}
+	}
+	return source, false
 }
 
 func cloneStringMap(values map[string]string) map[string]string {

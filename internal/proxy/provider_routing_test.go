@@ -204,8 +204,7 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 		case "/v1/messages":
 			_, _ = responseWriter.Write([]byte(`{"id":"capability-message","type":"message","role":"assistant","content":[{"type":"text","text":"route ok"}],"stop_reason":"end_turn"}`))
 		case testGeminiInteractionsPath:
-			expectedBackground := !strings.HasPrefix(modelIdentifier, "gemini-2.5-")
-			if payload.Background != expectedBackground || payload.Store != expectedBackground {
+			if !payload.Background || !payload.Store {
 				t.Fatalf("Gemini model=%s payload=%v", modelIdentifier, payload)
 			}
 			interactionIdentifier := "capability-gemini-" + modelIdentifier
@@ -254,9 +253,6 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 			if providerName == proxy.ProviderNameGemini {
 				expected.wireContract = "gemini_interactions"
 				expected.executionLifecycle = "pollable_resource"
-				if strings.HasPrefix(offering.Model, "gemini-2.5-") {
-					expected.executionLifecycle = "synchronous_completion"
-				}
 			}
 			if providerName == proxy.ProviderNameXAI && offering.Model == proxy.ModelNameGrok45 {
 				expected.wireContract = "openai_responses"
@@ -357,6 +353,62 @@ func TestProviderRoutingSupportsDeepSeekChatCompletions(t *testing.T) {
 	messages, messagesOK := capturedPayload["messages"].([]any)
 	if !messagesOK || len(messages) != 3 {
 		t.Fatalf("continuation messages=%v", capturedPayload["messages"])
+	}
+}
+
+func TestProviderRoutingExpandsConfiguredContinuationTokenBudget(t *testing.T) {
+	requestCount := 0
+	var continuationPayload map[string]any
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		requestCount++
+		if request.Method != http.MethodPost || request.URL.Path != "/chat/completions" {
+			t.Fatalf("request=%s %s", request.Method, request.URL.Path)
+		}
+		requestBytes, readError := io.ReadAll(request.Body)
+		if readError != nil {
+			t.Fatalf("read body: %v", readError)
+		}
+		if requestCount == 1 {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":""},"finish_reason":"length"}]}`))
+			return
+		}
+		if unmarshalError := json.Unmarshal(requestBytes, &continuationPayload); unmarshalError != nil {
+			t.Fatalf("unmarshal continuation body: %v", unmarshalError)
+		}
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"continued"},"finish_reason":"stop"}]}`))
+	}))
+	defer upstreamServer.Close()
+
+	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDashScope),
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	queryParameters := url.Values{}
+	queryParameters.Set("key", TestSecret)
+	queryParameters.Set("prompt", TestPrompt)
+	queryParameters.Set("provider", proxy.ProviderNameDashScope)
+	queryParameters.Set("model", proxy.ModelNameDashScopeQwen37Max)
+	queryParameters.Set("max_tokens", "1000")
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil))
+
+	if responseRecorder.Code != http.StatusOK || strings.TrimSpace(responseRecorder.Body.String()) != "continued" {
+		t.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	if requestCount != 2 {
+		t.Fatalf("upstream requests=%d want=2", requestCount)
+	}
+	if continuationPayload["max_tokens"] != float64(2000) {
+		t.Fatalf("continuation max_tokens=%v want=2000", continuationPayload["max_tokens"])
 	}
 }
 
@@ -1376,6 +1428,7 @@ func TestProviderRoutingSupportsGeminiInteractionsWithBackgroundPolling(t *testi
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
+		ProviderCatalog:       testfixtures.ProviderCatalogWithResourceVisibilityInterval(t, proxy.ProviderNameGemini, testVisibilityRetryIntervalMS),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -1448,7 +1501,7 @@ func TestProviderRoutingSupportsGeminiInteractionsWithBackgroundPolling(t *testi
 	}
 }
 
-func TestProviderRoutingIncreasesKnownGeminiBudgetAfterEmptyMaxTokensResponse(t *testing.T) {
+func TestProviderRoutingDoesNotReplayGeminiIncompleteResponse(t *testing.T) {
 	var capturedPayloads []map[string]any
 	createCount := 0
 	deleteCount := 0
@@ -1465,11 +1518,10 @@ func TestProviderRoutingIncreasesKnownGeminiBudgetAfterEmptyMaxTokensResponse(t 
 		createCount++
 		payload := decodeGeminiInteractionRequest(t, request)
 		capturedPayloads = append(capturedPayloads, payload)
-		if createCount == 1 {
-			writeGeminiInteractionSnapshot(t, responseWriter, "continuation-1", "incomplete", "", nil)
-			return
+		if createCount != 1 {
+			t.Fatalf("Gemini Interactions creates=%d want=1", createCount)
 		}
-		writeGeminiInteractionSnapshot(t, responseWriter, "continuation-2", "completed", "gemini recovered", nil)
+		writeGeminiInteractionSnapshot(t, responseWriter, "continuation-1", "incomplete", "partial answer", nil)
 	}))
 	defer upstreamServer.Close()
 
@@ -1491,22 +1543,18 @@ func TestProviderRoutingIncreasesKnownGeminiBudgetAfterEmptyMaxTokensResponse(t 
 	)
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, request)
-	if responseRecorder.Code != http.StatusOK || responseRecorder.Body.String() != "gemini recovered" {
+	if responseRecorder.Code != http.StatusBadGateway || strings.Contains(responseRecorder.Body.String(), "partial answer") {
 		t.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
 	}
-	if len(capturedPayloads) != 2 {
-		t.Fatalf("payloads=%d want=2", len(capturedPayloads))
+	if len(capturedPayloads) != 1 {
+		t.Fatalf("payloads=%d want=1", len(capturedPayloads))
 	}
-	if deleteCount != 2 {
-		t.Fatalf("Gemini Interactions deletes=%d want=2", deleteCount)
+	if deleteCount != 1 {
+		t.Fatalf("Gemini Interactions deletes=%d want=1", deleteCount)
 	}
-	generationConfig, generationConfigOK := capturedPayloads[1]["generation_config"].(map[string]any)
-	if !generationConfigOK || generationConfig["max_output_tokens"] != float64(2000) {
-		t.Fatalf("continuation generation_config=%v", capturedPayloads[1]["generation_config"])
-	}
-	input, inputOK := capturedPayloads[1]["input"].([]any)
-	if !inputOK || len(input) != 2 || geminiInteractionStepText(t, input[1]) != "Continue exactly where the previous response stopped. Return only the missing suffix without repeating any completed text." {
-		t.Fatalf("continuation input=%v", capturedPayloads[1]["input"])
+	generationConfig, generationConfigOK := capturedPayloads[0]["generation_config"].(map[string]any)
+	if !generationConfigOK || generationConfig["max_output_tokens"] != float64(1000) {
+		t.Fatalf("generation_config=%v", capturedPayloads[0]["generation_config"])
 	}
 }
 
@@ -1525,7 +1573,7 @@ func TestProviderRoutingUsesGeminiDefaultModelForJSONPosts(t *testing.T) {
 		}
 		payload := decodeGeminiInteractionRequest(t, request)
 		modelIdentifier, _ := payload["model"].(string)
-		if payload["background"] != false || payload["store"] != false {
+		if payload["background"] != true || payload["store"] != true {
 			t.Fatalf("default Gemini payload=%v", payload)
 		}
 		capturedModels = append(capturedModels, modelIdentifier)
@@ -1575,7 +1623,7 @@ func TestProviderRoutingUsesGeminiDefaultModelForJSONPosts(t *testing.T) {
 			}
 		})
 	}
-	if !reflect.DeepEqual(capturedModels, []string{proxy.ModelNameGemini25Flash, proxy.ModelNameGemini25Flash}) || deleteCount != 0 {
+	if !reflect.DeepEqual(capturedModels, []string{proxy.ModelNameGemini35Flash, proxy.ModelNameGemini35Flash}) || deleteCount != 2 {
 		t.Fatalf("capturedModels=%v deletes=%d", capturedModels, deleteCount)
 	}
 }
@@ -1742,7 +1790,7 @@ func TestProviderRoutingSupportsGeminiJSONPost(t *testing.T) {
 		t.Fatalf(messageBuildRouterError, buildError)
 	}
 
-	requestBody := bytes.NewBufferString(`{"prompt":"hello json","model":"` + proxy.ModelNameGemini25Pro + `","system_prompt":"system json","max_tokens":222}`)
+	requestBody := bytes.NewBufferString(`{"prompt":"hello json","model":"` + proxy.ModelNameGemini35Flash + `","system_prompt":"system json","max_tokens":222}`)
 	request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&provider="+proxy.ProviderNameGemini, requestBody)
 	request.Header.Set("Content-Type", "application/json")
 	responseRecorder := httptest.NewRecorder()
@@ -1755,7 +1803,7 @@ func TestProviderRoutingSupportsGeminiJSONPost(t *testing.T) {
 	if strings.TrimSpace(responseRecorder.Body.String()) != "gemini json ok" {
 		t.Fatalf("body=%q want=%q", responseRecorder.Body.String(), "gemini json ok")
 	}
-	if capturedPath != testGeminiInteractionsPath || capturedPayload["model"] != proxy.ModelNameGemini25Pro || deleteCount != 0 || capturedPayload["background"] != false || capturedPayload["store"] != false {
+	if capturedPath != testGeminiInteractionsPath || capturedPayload["model"] != proxy.ModelNameGemini35Flash || deleteCount != 1 || capturedPayload["background"] != true || capturedPayload["store"] != true {
 		t.Fatalf("path=%s payload=%v deletes=%d", capturedPath, capturedPayload, deleteCount)
 	}
 	if capturedPayload["system_instruction"] != "system json" {
@@ -1799,7 +1847,7 @@ func TestProviderRoutingSupportsMessagesJSONPostForGemini(t *testing.T) {
 		t.Fatalf(messageBuildRouterError, buildError)
 	}
 
-	requestBody := bytes.NewBufferString(`{"messages":[{"role":"user","content":"Continue.","order":4},{"role":"assistant","content":"Hi.","order":3},{"role":"system","content":"Gemini system","order":1},{"role":"user","content":"Hello","order":2}],"model":"` + proxy.ModelNameGemini25Flash + `"}`)
+	requestBody := bytes.NewBufferString(`{"messages":[{"role":"user","content":"Continue.","order":4},{"role":"system","content":"Gemini system","order":1},{"role":"user","content":"Hello","order":2}],"model":"` + proxy.ModelNameGemini35Flash + `"}`)
 	request := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret+"&provider="+proxy.ProviderNameGemini, requestBody)
 	request.Header.Set("Content-Type", "application/json")
 	responseRecorder := httptest.NewRecorder()
@@ -1809,11 +1857,11 @@ func TestProviderRoutingSupportsMessagesJSONPostForGemini(t *testing.T) {
 	if responseRecorder.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
 	}
-	if capturedPayload["system_instruction"] != "Gemini system" || deleteCount != 0 || capturedPayload["background"] != false || capturedPayload["store"] != false {
+	if capturedPayload["system_instruction"] != "Gemini system" || deleteCount != 1 || capturedPayload["background"] != true || capturedPayload["store"] != true {
 		t.Fatalf("system_instruction=%v deletes=%d", capturedPayload["system_instruction"], deleteCount)
 	}
 	input, ok := capturedPayload["input"].([]any)
-	if !ok || len(input) != 3 {
+	if !ok || len(input) != 2 {
 		t.Fatalf("input=%v", capturedPayload["input"])
 	}
 	firstStep, ok := input[0].(map[string]any)
@@ -1821,138 +1869,12 @@ func TestProviderRoutingSupportsMessagesJSONPostForGemini(t *testing.T) {
 		t.Fatalf("firstStep=%v", input[0])
 	}
 	secondStep, ok := input[1].(map[string]any)
-	if !ok || secondStep["type"] != testGeminiInteractionModelStep || geminiInteractionStepText(t, secondStep) != "Hi." {
+	if !ok || secondStep["type"] != testGeminiInteractionUserStep || geminiInteractionStepText(t, secondStep) != "Continue." {
 		t.Fatalf("secondStep=%v", input[1])
 	}
 }
 
-func TestProviderRoutingMapsExactGeminiThinkingLevels(t *testing.T) {
-	capturedPayloads := make([]map[string]any, 0, 9)
-	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		assertGeminiInteractionHeaders(t, request, testGeminiKey)
-		if request.Method == http.MethodDelete {
-			writeGeminiInteractionDeleted(t, responseWriter)
-			return
-		}
-		if request.Method != http.MethodPost || request.URL.Path != testGeminiInteractionsPath {
-			t.Fatalf("unexpected Gemini Interactions request=%s %s", request.Method, request.URL.Path)
-		}
-		capturedPayloads = append(capturedPayloads, decodeGeminiInteractionRequest(t, request))
-		writeGeminiInteractionSnapshot(t, responseWriter, fmt.Sprintf("thinking-%d", len(capturedPayloads)), "completed", "OK", nil)
-	}))
-	defer upstreamServer.Close()
-
-	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
-		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
-		RequestTimeoutSeconds: TestTimeout,
-	}, zap.NewNop().Sugar())
-	if buildError != nil {
-		t.Fatalf(messageBuildRouterError, buildError)
-	}
-
-	testCases := []struct {
-		model   string
-		efforts []string
-	}{
-		{model: proxy.ModelNameGemini36Flash, efforts: []string{"minimal", "low", "medium", "high", ""}},
-		{model: proxy.ModelNameGemini37Flash, efforts: []string{"low", "medium", "high", ""}},
-	}
-	for _, testCase := range testCases {
-		for _, effort := range testCase.efforts {
-			query := url.Values{
-				"key":        {TestSecret},
-				"prompt":     {"Reply with exactly OK."},
-				"provider":   {proxy.ProviderNameGemini},
-				"model":      {testCase.model},
-				"max_tokens": {"65536"},
-			}
-			if effort != "" {
-				query.Set("reasoning_effort", effort)
-			}
-			response := httptest.NewRecorder()
-			router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/?"+query.Encode(), nil))
-			if response.Code != http.StatusOK || strings.TrimSpace(response.Body.String()) != "OK" {
-				t.Fatalf("model=%s effort=%q status=%d body=%q", testCase.model, effort, response.Code, response.Body.String())
-			}
-			generationConfig, ok := capturedPayloads[len(capturedPayloads)-1]["generation_config"].(map[string]any)
-			if !ok || generationConfig["max_output_tokens"] != float64(65536) {
-				t.Fatalf("model=%s effort=%q generation_config=%v", testCase.model, effort, generationConfig)
-			}
-			thinkingLevel, present := generationConfig["thinking_level"]
-			if effort == "" && present {
-				t.Fatalf("model=%s omitted thinking_level payload=%v", testCase.model, capturedPayloads[len(capturedPayloads)-1])
-			}
-			if effort != "" && thinkingLevel != effort {
-				t.Fatalf("model=%s thinking_level=%v want=%s", testCase.model, thinkingLevel, effort)
-			}
-		}
-	}
-
-	requestCount := len(capturedPayloads)
-	for _, invalid := range []struct {
-		model  string
-		effort string
-	}{
-		{model: proxy.ModelNameGemini36Flash, effort: "max"},
-		{model: proxy.ModelNameGemini37Flash, effort: "minimal"},
-	} {
-		request := httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=review&provider=gemini&model="+invalid.model+"&reasoning_effort="+invalid.effort, nil)
-		response := httptest.NewRecorder()
-		router.ServeHTTP(response, request)
-		if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "invalid reasoning_effort parameter") {
-			t.Fatalf("model=%s effort=%s status=%d body=%q", invalid.model, invalid.effort, response.Code, response.Body.String())
-		}
-	}
-	if len(capturedPayloads) != requestCount {
-		t.Fatalf("unsupported efforts reached upstream: before=%d after=%d", requestCount, len(capturedPayloads))
-	}
-}
-
-func TestProviderRoutingPreservesGeminiThinkingLevelDuringOutputContinuation(t *testing.T) {
-	capturedPayloads := make([]map[string]any, 0, 2)
-	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		assertGeminiInteractionHeaders(t, request, testGeminiKey)
-		if request.Method == http.MethodDelete {
-			writeGeminiInteractionDeleted(t, responseWriter)
-			return
-		}
-		capturedPayloads = append(capturedPayloads, decodeGeminiInteractionRequest(t, request))
-		if len(capturedPayloads) == 1 {
-			writeGeminiInteractionSnapshot(t, responseWriter, "thinking-partial", "incomplete", "partial ", nil)
-			return
-		}
-		writeGeminiInteractionSnapshot(t, responseWriter, "thinking-complete", "completed", "answer", nil)
-	}))
-	defer upstreamServer.Close()
-
-	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
-		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
-		RequestTimeoutSeconds: TestTimeout,
-	}, zap.NewNop().Sugar())
-	if buildError != nil {
-		t.Fatalf(messageBuildRouterError, buildError)
-	}
-	request := httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=review&provider=gemini&model="+proxy.ModelNameGemini37Flash+"&reasoning_effort=high", nil)
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || strings.TrimSpace(response.Body.String()) != "partial answer" || len(capturedPayloads) != 2 {
-		t.Fatalf("status=%d body=%q payloads=%d", response.Code, response.Body.String(), len(capturedPayloads))
-	}
-	for payloadIndex, payload := range capturedPayloads {
-		generationConfig, ok := payload["generation_config"].(map[string]any)
-		if !ok || generationConfig["thinking_level"] != "high" {
-			t.Fatalf("payload[%d] generation_config=%v", payloadIndex, payload["generation_config"])
-		}
-	}
-}
-
-func TestProviderRoutingRejectsTerminalAssistantOnlyForNewGeminiFlashRoutes(t *testing.T) {
+func TestProviderRoutingRejectsAssistantHistoryForAllGeminiRoutes(t *testing.T) {
 	upstreamRequests := 0
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		upstreamRequests++
@@ -1961,10 +1883,7 @@ func TestProviderRoutingRejectsTerminalAssistantOnlyForNewGeminiFlashRoutes(t *t
 			writeGeminiInteractionDeleted(t, responseWriter)
 			return
 		}
-		payload := decodeGeminiInteractionRequest(t, request)
-		if payload["model"] != proxy.ModelNameGemini35Flash && payload["model"] != proxy.ModelNameGemini36Flash {
-			t.Fatalf("terminal assistant reached model=%v", payload["model"])
-		}
+		_ = decodeGeminiInteractionRequest(t, request)
 		writeGeminiInteractionSnapshot(t, responseWriter, "older-prefill", "completed", "continued", nil)
 	}))
 	defer upstreamServer.Close()
@@ -1979,27 +1898,33 @@ func TestProviderRoutingRejectsTerminalAssistantOnlyForNewGeminiFlashRoutes(t *t
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
 	}
-	requests := []struct {
-		path string
-		body string
-	}{
-		{path: "/?key=" + TestSecret + "&provider=gemini", body: `{"messages":[{"role":"user","content":"Review."},{"role":"assistant","content":"Draft."}],"model":"` + proxy.ModelNameGemini36Flash + `"}`},
-		{path: "/v2?key=" + TestSecret + "&provider=gemini", body: `{"messages":[{"role":"user","content":"Review."},{"role":"assistant","content":"Draft."}],"model":"` + proxy.ModelNameGemini37Flash + `"}`},
-		{path: "/?key=" + TestSecret + "&provider=gemini", body: `{"messages":[{"role":"user","content":"Review."},{"role":"assistant","content":"Draft."},{"role":"system","content":"Be concise."}],"model":"` + proxy.ModelNameGemini36Flash + `"}`},
+	models := []string{
+		proxy.ModelNameGemini35Flash,
+		"gemini-3.1-pro-preview",
+		"gemini-3-flash-preview",
+		proxy.ModelNameGemini31FlashLite,
 	}
-	for _, testCase := range requests {
-		request := httptest.NewRequest(http.MethodPost, testCase.path, strings.NewReader(testCase.body))
+	for _, model := range models {
+		body := `{"messages":[{"role":"user","content":"Review."},{"role":"assistant","content":"Draft."},{"role":"user","content":"Continue."}],"model":"` + model + `"}`
+		request := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret+"&provider=gemini", strings.NewReader(body))
 		request.Header.Set("Content-Type", "application/json")
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, request)
 		if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "invalid messages parameter") {
-			t.Fatalf("path=%s status=%d body=%q", testCase.path, response.Code, response.Body.String())
+			t.Fatalf("model=%s status=%d body=%q", model, response.Code, response.Body.String())
 		}
 	}
-	if upstreamRequests != 0 {
-		t.Fatalf("new Gemini terminal assistant requests reached upstream=%d", upstreamRequests)
+	legacyRequest := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&provider=gemini", strings.NewReader(`{"messages":[{"role":"user","content":"Review."},{"role":"assistant","content":"Draft."}],"model":"`+proxy.ModelNameGemini35Flash+`"}`))
+	legacyRequest.Header.Set("Content-Type", "application/json")
+	legacyResponse := httptest.NewRecorder()
+	router.ServeHTTP(legacyResponse, legacyRequest)
+	if legacyResponse.Code != http.StatusBadRequest || !strings.Contains(legacyResponse.Body.String(), "invalid messages parameter") {
+		t.Fatalf("legacy status=%d body=%q", legacyResponse.Code, legacyResponse.Body.String())
 	}
-	userRequest := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&provider=gemini", strings.NewReader(`{"messages":[{"role":"user","content":"Review."}],"model":"`+proxy.ModelNameGemini36Flash+`"}`))
+	if upstreamRequests != 0 {
+		t.Fatalf("Gemini assistant history reached upstream=%d", upstreamRequests)
+	}
+	userRequest := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&provider=gemini", strings.NewReader(`{"messages":[{"role":"user","content":"Review."}],"model":"`+proxy.ModelNameGemini35Flash+`"}`))
 	userRequest.Header.Set("Content-Type", "application/json")
 	userResponse := httptest.NewRecorder()
 	router.ServeHTTP(userResponse, userRequest)
@@ -2007,13 +1932,6 @@ func TestProviderRoutingRejectsTerminalAssistantOnlyForNewGeminiFlashRoutes(t *t
 		t.Fatalf("new route status=%d body=%q upstream=%d", userResponse.Code, userResponse.Body.String(), upstreamRequests)
 	}
 
-	olderRequest := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret+"&provider=gemini", strings.NewReader(`{"messages":[{"role":"user","content":"Review."},{"role":"assistant","content":"Draft."}],"model":"`+proxy.ModelNameGemini35Flash+`"}`))
-	olderRequest.Header.Set("Content-Type", "application/json")
-	olderResponse := httptest.NewRecorder()
-	router.ServeHTTP(olderResponse, olderRequest)
-	if olderResponse.Code != http.StatusOK || strings.TrimSpace(olderResponse.Body.String()) != "continued" || upstreamRequests != 4 {
-		t.Fatalf("older route status=%d body=%q upstream=%d", olderResponse.Code, olderResponse.Body.String(), upstreamRequests)
-	}
 }
 
 func TestProviderRoutingSupportsAnthropicMessages(t *testing.T) {
@@ -2389,6 +2307,9 @@ func TestProviderRoutingRejectsGeminiUnsupportedAndInvalidRequests(t *testing.T)
 		expectedCode int
 	}{
 		{name: "unknown model", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=gemini&model=unknown", expectedCode: http.StatusBadRequest},
+		{name: "retired Gemini 2.5 Flash", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=gemini&model=gemini-2.5-flash", expectedCode: http.StatusBadRequest},
+		{name: "retired Gemini 2.5 Flash-Lite", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=gemini&model=gemini-2.5-flash-lite", expectedCode: http.StatusBadRequest},
+		{name: "retired Gemini 2.5 Pro", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=gemini&model=gemini-2.5-pro", expectedCode: http.StatusBadRequest},
 		{name: "unsupported web search", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=gemini&web_search=true", expectedCode: http.StatusBadRequest},
 		{name: "unsupported dictation", method: http.MethodPost, target: "/dictate?key=" + TestSecret + "&provider=gemini", expectedCode: http.StatusBadRequest},
 	}

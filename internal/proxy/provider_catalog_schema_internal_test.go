@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -48,6 +49,59 @@ func TestProviderCatalogSchemaRejectsEveryStructuralBoundary(t *testing.T) {
 		{name: "provider transports", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].Transports = nil }, expected: ".transports"},
 		{name: "provider offerings", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].Offerings = nil }, expected: ".offerings"},
 		{name: "offering transport", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].Offerings[0].Transport = "missing" }, expected: "reason=dangling_reference"},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			schema := internalCanonicalProviderCatalog().Schema()
+			testCase.mutate(&schema)
+			_, catalogError := NewProviderCatalog(schema)
+			assertInvalidProviderCatalogError(t, catalogError, testCase.expected)
+		})
+	}
+}
+
+func TestProviderCatalogModelMigrationValidationRejectsEveryInvalidShape(t *testing.T) {
+	testCases := []struct {
+		name     string
+		mutate   func(*ProviderCatalogSchema)
+		expected string
+	}{
+		{name: "schema version zero", mutate: func(schema *ProviderCatalogSchema) {
+			schema.ModelMigrations[0].ManagedSchemaVersion = 0
+		}, expected: ".managed_schema_version value=0"},
+		{name: "future schema version", mutate: func(schema *ProviderCatalogSchema) {
+			schema.ModelMigrations[0].ManagedSchemaVersion = managedTenantSchemaVersion + 1
+		}, expected: ".managed_schema_version value="},
+		{name: "provider", mutate: func(schema *ProviderCatalogSchema) {
+			schema.ModelMigrations[0].Provider = "Retired Provider"
+		}, expected: "reason=not_canonical"},
+		{name: "operation", mutate: func(schema *ProviderCatalogSchema) {
+			schema.ModelMigrations[0].Operation = ModelOperationVideoGeneration
+		}, expected: ".operation operation=video_generation"},
+		{name: "source", mutate: func(schema *ProviderCatalogSchema) {
+			schema.ModelMigrations[0].SourceModel = " source"
+		}, expected: ".source_model"},
+		{name: "current provider retirement", mutate: func(schema *ProviderCatalogSchema) {
+			schema.ModelMigrations[len(schema.ModelMigrations)-1].TargetModel = ""
+		}, expected: "reason=current_provider"},
+		{name: "retired provider target", mutate: func(schema *ProviderCatalogSchema) {
+			schema.ModelMigrations[0].TargetModel = schema.ModelMigrations[1].TargetModel
+		}, expected: "reason=retired_provider"},
+		{name: "target whitespace", mutate: func(schema *ProviderCatalogSchema) {
+			schema.ModelMigrations[1].TargetModel = " " + schema.ModelMigrations[1].TargetModel
+		}, expected: ".target_model"},
+		{name: "source target equality", mutate: func(schema *ProviderCatalogSchema) {
+			schema.ModelMigrations[1].TargetModel = schema.ModelMigrations[1].SourceModel
+		}, expected: ".target_model"},
+		{name: "target offering", mutate: func(schema *ProviderCatalogSchema) {
+			schema.ModelMigrations[1].TargetModel = "missing-model"
+		}, expected: "reason=dangling_reference"},
+		{name: "target operation", mutate: func(schema *ProviderCatalogSchema) {
+			schema.ModelMigrations[3].TargetModel = schema.ModelMigrations[2].TargetModel
+		}, expected: "reason=dangling_reference"},
+		{name: "duplicate", mutate: func(schema *ProviderCatalogSchema) {
+			schema.ModelMigrations = append(schema.ModelMigrations, schema.ModelMigrations[1])
+		}, expected: "duplicate_model_migration="},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -199,6 +253,24 @@ func TestProviderCatalogTransportValidationRejectsEveryInvalidShape(t *testing.T
 		{name: "lifecycle", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
 			(*transports)[0].Lifecycle = "future"
 		}, expected: ".lifecycle"},
+		{name: "resource visibility missing", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
+			(*transports)[0].ResourceVisibility = ProviderCatalogResourceVisibility{}
+		}, expected: ".resource_visibility"},
+		{name: "resource visibility interval", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
+			(*transports)[0].ResourceVisibility.RetryIntervalMilliseconds = providerCatalogResourceVisibilityMaxRetryIntervalMilliseconds + 1
+		}, expected: ".resource_visibility"},
+		{name: "resource visibility retry limit", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
+			(*transports)[0].ResourceVisibility.RetryLimit = providerCatalogResourceVisibilityMaxRetryLimit + 1
+		}, expected: ".resource_visibility"},
+		{name: "resource visibility status", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
+			(*transports)[0].ResourceVisibility.RetryStatusCodes = []int{http.StatusOK}
+		}, expected: ".retry_status_codes[0]"},
+		{name: "resource visibility duplicate status", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
+			(*transports)[0].ResourceVisibility.RetryStatusCodes = []int{http.StatusNotFound, http.StatusNotFound}
+		}, expected: "duplicate=404"},
+		{name: "resource visibility on synchronous transport", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
+			(*transports)[1].ResourceVisibility = (*transports)[0].ResourceVisibility
+		}, expected: "unexpected_resource_visibility"},
 		{name: "parameters", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
 			(*transports)[0].ProtocolParameters.OutputFields = nil
 		}, expected: ".protocol_parameters"},

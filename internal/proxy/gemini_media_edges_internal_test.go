@@ -333,7 +333,7 @@ func TestGeminiFileResourceAndInteractionInputEdges(t *testing.T) {
 		{ID: CatalogMediaLimitIDAudioCount, MediaType: "audio", Status: CatalogMediaLimitStatusBounded, Value: int64Pointer(1)},
 		{ID: CatalogMediaLimitIDAudioFileBytes, MediaType: "audio", Status: CatalogMediaLimitStatusBounded, Value: int64Pointer(1)},
 	}}
-	messages := chatMessages{{role: chatRoleSystem, content: "system"}, {role: chatRoleAssistant, content: "answer"}, {role: chatRoleUser, content: "listen", attachments: []messageMedia{*attachment, *attachment}}}
+	messages := chatMessages{{role: chatRoleSystem, content: "system"}, {role: chatRoleUser, content: "answer"}, {role: chatRoleUser, content: "listen", attachments: []messageMedia{*attachment, *attachment}}}
 	if countError := validateGeminiMediaCounts(model, messages); !errors.Is(countError, ErrProviderMediaLimit) {
 		t.Fatalf("count error=%v", countError)
 	}
@@ -352,7 +352,7 @@ func TestGeminiFileResourceAndInteractionInputEdges(t *testing.T) {
 	if _, _, inputError := messages.geminiInteractionInput([]string{"one", "two", "three"}); !errors.Is(inputError, ErrProviderAPI) {
 		t.Fatalf("extra URI error=%v", inputError)
 	}
-	if input, systemInstruction, inputError := messages.geminiInteractionInput([]string{"one", "two"}); inputError != nil || systemInstruction != "system" || len(input) != 2 || input[0].Type != geminiInteractionStepModelOutput {
+	if input, systemInstruction, inputError := messages.geminiInteractionInput([]string{"one", "two"}); inputError != nil || systemInstruction != "system" || len(input) != 2 || input[0].Type != geminiInteractionStepUserInput {
 		t.Fatalf("input=%+v system=%q error=%v", input, systemInstruction, inputError)
 	}
 
@@ -394,7 +394,7 @@ func TestGeminiPrepareInteractionPayloadFailureContracts(t *testing.T) {
 	client := newGeminiInteractionsClient(geminiEdgeDoer(func(*http.Request) (*http.Response, error) {
 		return nil, errAssetEdge
 	}))
-	if _, _, prepareError := client.prepareInteractionPayload(context.Background(), "key", "https://provider.test", textModelDefinition{}, messages, nil, "", false, nil); !errors.Is(prepareError, ErrProviderMediaLimit) {
+	if _, _, prepareError := client.prepareInteractionPayload(context.Background(), "key", "https://provider.test", textModelDefinition{}, messages, nil, "", nil); !errors.Is(prepareError, ErrProviderMediaLimit) {
 		t.Fatalf("missing inline limit error=%v", prepareError)
 	}
 
@@ -411,7 +411,7 @@ func TestGeminiPrepareInteractionPayloadFailureContracts(t *testing.T) {
 		{ID: CatalogMediaLimitIDImageCount, MediaType: "image", Status: CatalogMediaLimitStatusUnbounded},
 	}}
 	closedMessages := chatMessages{{role: chatRoleUser, content: "inspect", attachments: []messageMedia{closedAttachment}}}
-	if _, _, prepareError := client.prepareInteractionPayload(context.Background(), "key", "https://provider.test", unboundedModel, closedMessages, nil, "", false, nil); !errors.Is(prepareError, errAssetStore) {
+	if _, _, prepareError := client.prepareInteractionPayload(context.Background(), "key", "https://provider.test", unboundedModel, closedMessages, nil, "", nil); !errors.Is(prepareError, errAssetStore) {
 		t.Fatalf("inline payload error=%v", prepareError)
 	}
 
@@ -420,10 +420,10 @@ func TestGeminiPrepareInteractionPayloadFailureContracts(t *testing.T) {
 		{ID: CatalogMediaLimitIDImageCount, MediaType: "image", Status: CatalogMediaLimitStatusUnbounded},
 		{ID: CatalogMediaLimitIDImageFileBytes, MediaType: "image", Status: CatalogMediaLimitStatusUnbounded},
 	}}
-	if _, _, prepareError := client.prepareInteractionPayload(context.Background(), "key", "https://provider.test", boundedModel, messages, nil, "", false, nil); !errors.Is(prepareError, ErrProviderAPI) {
+	if _, _, prepareError := client.prepareInteractionPayload(context.Background(), "key", "https://provider.test", boundedModel, messages, nil, "", nil); !errors.Is(prepareError, ErrProviderAPI) {
 		t.Fatalf("upload error=%v", prepareError)
 	}
-	if _, requestError := newGeminiInteractionRequest(textModelDefinition{}, messages, []string{"one", "two"}, nil, "", false, nil); !errors.Is(requestError, ErrProviderAPI) {
+	if _, requestError := newGeminiInteractionRequest(textModelDefinition{}, messages, []string{"one", "two"}, nil, "", nil); !errors.Is(requestError, ErrProviderAPI) {
 		t.Fatalf("request input error=%v", requestError)
 	}
 }
@@ -464,7 +464,7 @@ func TestGeminiFinalizedFileIsCleanedAfterProcessingCancellation(t *testing.T) {
 			return geminiEdgeResponse(http.StatusNoContent, strings.NewReader(""), nil), nil
 		}
 	}))
-	_, uploadedFiles, prepareError := client.prepareInteractionPayload(requestContext, "key", "https://provider.test", model, messages, nil, "", false, nil)
+	_, uploadedFiles, prepareError := client.prepareInteractionPayload(requestContext, "key", "https://provider.test", model, messages, nil, "", nil)
 	if !errors.Is(prepareError, context.Canceled) || len(uploadedFiles) != 1 || uploadedFiles[0].name != "files/processing" {
 		t.Fatalf("calls=%d files=%+v error=%v", calls, uploadedFiles, prepareError)
 	}

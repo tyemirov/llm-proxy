@@ -271,7 +271,7 @@ func managedProviderModel(provider string) string {
 	case proxy.ProviderNameZAI:
 		return proxy.ModelNameZAIGLM
 	case proxy.ProviderNameGemini:
-		return proxy.ModelNameGemini25Flash
+		return proxy.ModelNameGemini35Flash
 	case proxy.ProviderNameAnthropic:
 		return proxy.ModelNameClaudeSonnet46
 	case proxy.ProviderNameMeta:
@@ -288,6 +288,18 @@ type managedProviderVerificationDoer struct {
 }
 
 func (doer managedProviderVerificationDoer) Do(request *http.Request) (*http.Response, error) {
+	if request.Header.Get("x-goog-api-key") != "" && strings.HasSuffix(request.URL.Path, "/interactions/managed-router-verification") {
+		responseBody := `{"id":"managed-router-verification","status":"completed"}`
+		if request.Method == http.MethodDelete {
+			responseBody = `{}`
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(strings.NewReader(responseBody)),
+			Request:    request,
+		}, nil
+	}
 	if request.Body == nil {
 		return doer.next.Do(request)
 	}
@@ -302,7 +314,7 @@ func (doer managedProviderVerificationDoer) Do(request *http.Request) (*http.Res
 	responseBody := `{"choices":[{}]}`
 	switch {
 	case request.Header.Get("x-goog-api-key") != "":
-		responseBody = `{"status":"completed"}`
+		responseBody = `{"id":"managed-router-verification","status":"completed"}`
 	case request.Header.Get("x-api-key") != "":
 		responseBody = `{"id":"verification","type":"message","role":"assistant"}`
 	case strings.HasSuffix(request.URL.Path, "/responses"):

@@ -95,21 +95,6 @@ var textRouteMessageMediaContracts = map[textRouteCapabilities]textRouteMessageM
 			},
 		},
 	},
-	geminiInteractionsSynchronousRouteCapabilities: {
-		attachmentLimitTransport: CatalogMediaTransportFile,
-		mimeTypes: map[messageMediaType]map[string]struct{}{
-			messageMediaTypeAudio: {
-				messageAudioMIMEM4A:  {},
-				messageAudioMIMEMPEG: {},
-				messageAudioMIMEWAV:  {},
-			},
-			messageMediaTypeImage: {
-				messageImageMIMEJPEG: {},
-				messageImageMIMEPNG:  {},
-				messageImageMIMEWebP: {},
-			},
-		},
-	},
 	anthropicMessagesSynchronousRouteCapabilities: {
 		attachmentLimitTransport: CatalogMediaTransportInline,
 		mimeTypes: map[messageMediaType]map[string]struct{}{

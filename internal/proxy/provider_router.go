@@ -38,7 +38,6 @@ var textRouteAdapters = map[textRouteCapabilities]textRouteAdapter{
 	openAIResponsesSynchronousRouteCapabilities:       openAIResponsesSynchronousTextRouteAdapter{},
 	openAIChatCompletionsSynchronousRouteCapabilities: openAIChatCompletionsTextRouteAdapter{},
 	geminiInteractionsPollableRouteCapabilities:       geminiInteractionsTextRouteAdapter{},
-	geminiInteractionsSynchronousRouteCapabilities:    geminiInteractionsTextRouteAdapter{},
 	anthropicMessagesSynchronousRouteCapabilities:     anthropicMessagesTextRouteAdapter{},
 }
 
@@ -75,6 +74,9 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 		if request.structuredOutput != nil {
 			return textGenerationResult{usage: accumulatedUsage}, fmt.Errorf("%w: structured output reached provider output limit", ErrProviderAPI)
 		}
+		if len(request.provider.activeTransport.protocolParameters.ContinuationRules) == 0 {
+			return textGenerationResult{usage: accumulatedUsage}, fmt.Errorf("%w: selected provider transport does not support output-limit continuation", ErrProviderAPI)
+		}
 
 		request.messages = completionContinuationMessages(originalMessages, accumulatedText.String())
 		request.maxTokens = continuationMaxTokens(request.maxTokens, request.model, generation.text)
@@ -94,7 +96,11 @@ func (router *providerRouter) generateTextAttempt(requestContext context.Context
 
 func (openAIResponsesTextRouteAdapter) generateText(requestContext context.Context, router *providerRouter, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	httpClient := newProviderTransportHTTPDoer(router.openAIClient.httpClient, request.provider, request.provider.credentialFor(endpointKindText))
-	client := NewOpenAIClient(httpClient, newEndpointsForResponsesURL(request.provider.textEndpointURL))
+	client := newPollableOpenAIClient(
+		httpClient,
+		newEndpointsForResponsesURL(request.provider.textEndpointURL),
+		request.provider.activeTransport.resourceVisibility,
+	)
 	return client.openAIRequest(
 		requestContext,
 		"",
@@ -142,7 +148,11 @@ func (openAIChatCompletionsTextRouteAdapter) generateText(requestContext context
 
 func (geminiInteractionsTextRouteAdapter) generateText(requestContext context.Context, router *providerRouter, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	httpClient := newProviderTransportHTTPDoer(router.geminiClient.httpClient, request.provider, request.provider.credentialFor(endpointKindText))
-	client := newGeminiInteractionsClient(httpClient)
+	client := newGeminiInteractionsClientWithHTTPPerformer(
+		httpClient,
+		performRetryingGeminiInteractionHTTP,
+		request.provider.activeTransport.resourceVisibility,
+	)
 	return client.generateText(
 		requestContext,
 		"",
@@ -151,7 +161,6 @@ func (geminiInteractionsTextRouteAdapter) generateText(requestContext context.Co
 		request.messages,
 		request.maxTokens,
 		request.reasoningEffort,
-		request.model.executionLifecycle,
 		request.structuredOutput,
 		structuredLogger,
 	)

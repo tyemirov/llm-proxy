@@ -963,7 +963,6 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 		{provider: proxy.ProviderNameOpenAI, apiKey: testManagementOpenAIKey, model: proxy.ModelNameGPT5},
 		{provider: proxy.ProviderNameDeepSeek, apiKey: testManagementDeepSeekKey, model: proxy.ModelNameDeepSeekV4Flash},
 		{provider: proxy.ProviderNameMoonshot, apiKey: "sk-moonshot", model: proxy.ModelNameMoonshotKimiK3},
-		{provider: proxy.ProviderNameGemini, apiKey: "sk-gemini", model: proxy.ModelNameGemini36Flash},
 	} {
 		request := authenticatedJSONRequest(http.MethodPut, tenantPath+"/provider-connections/"+providerKeyRequest.provider, managementProviderKeyRequestBody(t, providerKeyRequest.apiKey, providerKeyRequest.model, ""), sessionCookie)
 		response := httptest.NewRecorder()
@@ -1001,19 +1000,6 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 	if kimiK3Response.Code != http.StatusOK {
 		t.Fatalf("save Kimi K3 reasoning defaults status=%d body=%s", kimiK3Response.Code, kimiK3Response.Body.String())
 	}
-	gemini36Response := saveReasoningDefault(proxy.ProviderNameGemini, proxy.ModelNameGemini36Flash, "minimal")
-	if gemini36Response.Code != http.StatusOK {
-		t.Fatalf("save Gemini 3.6 reasoning defaults status=%d body=%s", gemini36Response.Code, gemini36Response.Body.String())
-	}
-	gemini37MinimalResponse := saveReasoningDefault(proxy.ProviderNameGemini, proxy.ModelNameGemini37Flash, "minimal")
-	if gemini37MinimalResponse.Code != http.StatusBadRequest || !strings.Contains(gemini37MinimalResponse.Body.String(), "managed_routing_defaults_invalid") {
-		t.Fatalf("Gemini 3.7 minimal reasoning status=%d body=%s", gemini37MinimalResponse.Code, gemini37MinimalResponse.Body.String())
-	}
-	gemini37Response := saveReasoningDefault(proxy.ProviderNameGemini, proxy.ModelNameGemini37Flash, "high")
-	if gemini37Response.Code != http.StatusOK {
-		t.Fatalf("save Gemini 3.7 reasoning defaults status=%d body=%s", gemini37Response.Code, gemini37Response.Body.String())
-	}
-
 	profileRequest := httptest.NewRequest(http.MethodGet, tenantPath, nil)
 	profileRequest.AddCookie(sessionCookie)
 	profileResponse := httptest.NewRecorder()
@@ -1051,7 +1037,7 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 	if decodeError := json.Unmarshal(profileResponse.Body.Bytes(), &profile); decodeError != nil {
 		t.Fatalf("decode capability profile: %v", decodeError)
 	}
-	if profile.Tenant.Defaults.Provider != proxy.ProviderNameGemini || profile.Tenant.Defaults.Model != proxy.ModelNameGemini37Flash || profile.Tenant.Defaults.ReasoningEffort != "high" {
+	if profile.Tenant.Defaults.Provider != proxy.ProviderNameMoonshot || profile.Tenant.Defaults.Model != proxy.ModelNameMoonshotKimiK3 || profile.Tenant.Defaults.ReasoningEffort != "high" {
 		t.Fatalf("profile defaults=%+v", profile.Tenant.Defaults)
 	}
 	expectedModelEfforts := map[string][]string{
@@ -1063,11 +1049,6 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 	}
 	matchedModelEfforts := map[string]bool{}
 	matchedKimiK3 := false
-	expectedGeminiModelEfforts := map[string][]string{
-		proxy.ModelNameGemini36Flash: {"minimal", "low", "medium", "high"},
-		proxy.ModelNameGemini37Flash: {"low", "medium", "high"},
-	}
-	matchedGeminiModelEfforts := map[string]bool{}
 	for _, provider := range profile.Providers {
 		if provider.ID == proxy.ProviderNameOpenAI {
 			if len(provider.ReasoningEffort) != 0 {
@@ -1090,20 +1071,9 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 				}
 			}
 		}
-		if provider.ID == proxy.ProviderNameGemini {
-			for _, model := range provider.TextModels {
-				expectedEfforts, required := expectedGeminiModelEfforts[model.ID]
-				if required {
-					if model.ReasoningEffort == nil || model.ReasoningEffort.Adapter != "gemini_interactions" || !reflect.DeepEqual(model.ReasoningEffort.Efforts, expectedEfforts) {
-						t.Fatalf("Gemini model=%s reasoning capability=%+v want=%v", model.ID, model.ReasoningEffort, expectedEfforts)
-					}
-					matchedGeminiModelEfforts[model.ID] = true
-				}
-			}
-		}
 	}
-	if len(matchedModelEfforts) != len(expectedModelEfforts) || !matchedKimiK3 || len(matchedGeminiModelEfforts) != len(expectedGeminiModelEfforts) {
-		t.Fatalf("profile model capabilities=%v Kimi K3=%t Gemini=%v", matchedModelEfforts, matchedKimiK3, matchedGeminiModelEfforts)
+	if len(matchedModelEfforts) != len(expectedModelEfforts) || !matchedKimiK3 {
+		t.Fatalf("profile model capabilities=%v Kimi K3=%t", matchedModelEfforts, matchedKimiK3)
 	}
 
 	incompatibleResponse := saveReasoningDefault(proxy.ProviderNameOpenAI, proxy.ModelNameGPT5, "max")
@@ -1119,8 +1089,8 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 		t.Fatalf("noncanonical reasoning effort status=%d body=%s", nonCanonicalResponse.Code, nonCanonicalResponse.Body.String())
 	}
 	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{
-		Provider:          proxy.ProviderNameGemini,
-		Model:             proxy.ModelNameGemini37Flash,
+		Provider:          proxy.ProviderNameMoonshot,
+		Model:             proxy.ModelNameMoonshotKimiK3,
 		DictationProvider: proxy.ProviderNameOpenAI,
 		DictationModel:    proxy.DefaultDictationModel,
 		ReasoningEffort:   "high",
@@ -1913,7 +1883,7 @@ func TestManagementValidationFailureUsageUsesSelectedProviderDefaultModel(t *tes
 		model    string
 	}{
 		{provider: proxy.ProviderNameOpenAI, apiKey: testManagementOpenAIKey, model: proxy.ModelNameGPT41},
-		{provider: proxy.ProviderNameGemini, apiKey: testGeminiKey, model: proxy.ModelNameGemini25Flash},
+		{provider: proxy.ProviderNameGemini, apiKey: testGeminiKey, model: proxy.ModelNameGemini35Flash},
 	} {
 		request := authenticatedJSONRequest(
 			http.MethodPut,
@@ -1982,7 +1952,7 @@ func TestManagementValidationFailureUsageUsesSelectedProviderDefaultModel(t *tes
 	if len(usage.Providers) != 1 || usage.Providers[0].Provider != proxy.ProviderNameGemini || usage.Providers[0].Data.Requests != len(requestCases) {
 		t.Fatalf("providers=%+v", usage.Providers)
 	}
-	if len(usage.Models) != 1 || usage.Models[0].Provider != proxy.ProviderNameGemini || usage.Models[0].Model != proxy.ModelNameGemini25Flash || usage.Models[0].Data.Requests != len(requestCases) {
+	if len(usage.Models) != 1 || usage.Models[0].Provider != proxy.ProviderNameGemini || usage.Models[0].Model != proxy.ModelNameGemini35Flash || usage.Models[0].Data.Requests != len(requestCases) {
 		t.Fatalf("models=%+v", usage.Models)
 	}
 }
@@ -2057,7 +2027,7 @@ func TestManagementUnconfiguredProviderUsageUsesCatalogDefaultModel(t *testing.T
 	if len(usage.Providers) != 1 || usage.Providers[0].Provider != proxy.ProviderNameGemini || usage.Providers[0].Data.Requests != len(requestCases) {
 		t.Fatalf("providers=%+v", usage.Providers)
 	}
-	if len(usage.Models) != 1 || usage.Models[0].Provider != proxy.ProviderNameGemini || usage.Models[0].Model != proxy.ModelNameGemini25Flash || usage.Models[0].Data.Requests != len(requestCases) {
+	if len(usage.Models) != 1 || usage.Models[0].Provider != proxy.ProviderNameGemini || usage.Models[0].Model != proxy.ModelNameGemini35Flash || usage.Models[0].Data.Requests != len(requestCases) {
 		t.Fatalf("models=%+v", usage.Models)
 	}
 }

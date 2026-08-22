@@ -2,14 +2,10 @@ package proxy
 
 import (
 	"context"
-	"net/http"
 	"time"
 )
 
-const (
-	pollableResourcePollInterval       = 500 * time.Millisecond
-	pollableResourceVisibilityInterval = 2 * time.Second
-)
+const pollableResourcePollInterval = 500 * time.Millisecond
 
 type pollableResourceRetryDecision uint8
 
@@ -22,6 +18,21 @@ type pollableResourceLifecycle[snapshot any] struct {
 	observe           func(context.Context) (snapshot, error)
 	isPending         func(snapshot) bool
 	recordObservation func(snapshot, error, pollableResourceRetryDecision)
+	visibilityPolicy  pollableResourceVisibilityPolicy
+}
+
+type pollableResourceVisibilityPolicy struct {
+	retryInterval time.Duration
+	retryLimit    int
+	statusCodes   []int
+}
+
+func pollableResourceVisibilityPolicyFromCatalog(configuration ProviderCatalogResourceVisibility) pollableResourceVisibilityPolicy {
+	return pollableResourceVisibilityPolicy{
+		retryInterval: time.Duration(configuration.RetryIntervalMilliseconds) * time.Millisecond,
+		retryLimit:    configuration.RetryLimit,
+		statusCodes:   append([]int(nil), configuration.RetryStatusCodes...),
+	}
 }
 
 func (lifecycle pollableResourceLifecycle[snapshot]) observeCreated(parentContext context.Context) (snapshot, error) {
@@ -29,21 +40,19 @@ func (lifecycle pollableResourceLifecycle[snapshot]) observeCreated(parentContex
 		var emptySnapshot snapshot
 		return emptySnapshot, contextError
 	}
-	observedSnapshot, observationError := lifecycle.observe(parentContext)
-	retryDecision := pollableResourceDoNotRetry
-	if pollableResourceVisibilityError(observationError) {
-		retryDecision = pollableResourceRetryVisibility
+	visibilityRetryCount := 0
+	for {
+		observedSnapshot, observationError := lifecycle.observe(parentContext)
+		retryDecision := lifecycle.visibilityPolicy.retryDecision(observationError, visibilityRetryCount)
+		lifecycle.recordObservation(observedSnapshot, observationError, retryDecision)
+		if retryDecision == pollableResourceDoNotRetry {
+			return observedSnapshot, observationError
+		}
+		if waitError := waitForRequestTelemetryPhase(parentContext, lifecycle.visibilityPolicy.retryInterval, requestTelemetryPhaseProviderPollWait); waitError != nil {
+			return observedSnapshot, waitError
+		}
+		visibilityRetryCount++
 	}
-	lifecycle.recordObservation(observedSnapshot, observationError, retryDecision)
-	if retryDecision == pollableResourceDoNotRetry {
-		return observedSnapshot, observationError
-	}
-	if waitError := waitForRequestTelemetryPhase(parentContext, pollableResourceVisibilityInterval, requestTelemetryPhaseProviderPollWait); waitError != nil {
-		return observedSnapshot, waitError
-	}
-	observedSnapshot, observationError = lifecycle.observe(parentContext)
-	lifecycle.recordObservation(observedSnapshot, observationError, pollableResourceDoNotRetry)
-	return observedSnapshot, observationError
 }
 
 func (lifecycle pollableResourceLifecycle[snapshot]) observeUntilTerminal(parentContext context.Context) (snapshot, error) {
@@ -58,7 +67,18 @@ func (lifecycle pollableResourceLifecycle[snapshot]) observeUntilTerminal(parent
 	return observedSnapshot, observationError
 }
 
-func pollableResourceVisibilityError(observationError error) bool {
+func (policy pollableResourceVisibilityPolicy) retryDecision(observationError error, retryCount int) pollableResourceRetryDecision {
+	if retryCount >= policy.retryLimit {
+		return pollableResourceDoNotRetry
+	}
 	statusCode, _, _, hasProviderStatus := providerHTTPMetadata(observationError)
-	return hasProviderStatus && (statusCode == http.StatusForbidden || statusCode == http.StatusNotFound)
+	if !hasProviderStatus {
+		return pollableResourceDoNotRetry
+	}
+	for _, retryStatusCode := range policy.statusCodes {
+		if statusCode == retryStatusCode {
+			return pollableResourceRetryVisibility
+		}
+	}
+	return pollableResourceDoNotRetry
 }

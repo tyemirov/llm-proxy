@@ -756,7 +756,7 @@ func TestMediaLimitAndMessageMediaEdgeContracts(t *testing.T) {
 	if validationError := validateCatalogMediaLimits([]CatalogMediaLimit{base, fileLimit, validCount}, []string{"image"}, openAIResponsesPollableRouteCapabilities, "limits"); validationError == nil {
 		t.Fatal("expected inline adapter file-only limit rejection")
 	}
-	if validationError := validateCatalogMediaLimits([]CatalogMediaLimit{base, inlineLimit, validCount}, []string{"image"}, geminiInteractionsSynchronousRouteCapabilities, "limits"); validationError == nil {
+	if validationError := validateCatalogMediaLimits([]CatalogMediaLimit{base, inlineLimit, validCount}, []string{"image"}, geminiInteractionsPollableRouteCapabilities, "limits"); validationError == nil {
 		t.Fatal("expected Gemini missing file limit rejection")
 	}
 
