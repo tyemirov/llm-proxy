@@ -361,7 +361,7 @@ func TestClientOmitsModelWhenRequestUsesProviderDefault(testingInstance *testing
 
 func TestClientReloadsAtomicallyReplacedModelProfile(testingInstance *testing.T) {
 	profilePath := filepath.Join(testingInstance.TempDir(), "current-model.json")
-	replaceModelProfile(testingInstance, profilePath, `{"provider":"gemini","model":"gemini-2.5-flash"}`)
+	replaceModelProfile(testingInstance, profilePath, `{"provider":"gemini","model":"gemini-3.5-flash"}`)
 
 	type capturedModelProfileRequest struct {
 		provider string
@@ -418,7 +418,7 @@ func TestClientReloadsAtomicallyReplacedModelProfile(testingInstance *testing.T)
 	}
 
 	wantRequests := []capturedModelProfileRequest{
-		{provider: "gemini", model: "gemini-2.5-flash"},
+		{provider: "gemini", model: "gemini-3.5-flash"},
 		{provider: "openai", model: "gpt-5-mini"},
 	}
 	if len(capturedRequests) != len(wantRequests) {
@@ -433,7 +433,7 @@ func TestClientReloadsAtomicallyReplacedModelProfile(testingInstance *testing.T)
 
 func TestConfigMessagesPostURLReloadsModelProfile(testingInstance *testing.T) {
 	profilePath := filepath.Join(testingInstance.TempDir(), "current-model.json")
-	replaceModelProfile(testingInstance, profilePath, `{"provider":"gemini","model":"gemini-2.5-flash"}`)
+	replaceModelProfile(testingInstance, profilePath, `{"provider":"gemini","model":"gemini-3.5-flash"}`)
 	config, configError := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{
 		BaseURL:            "https://proxy.example/review",
 		Secret:             "sekret",
@@ -479,7 +479,7 @@ func TestConfigMessagesPostURLReloadsModelProfile(testingInstance *testing.T) {
 
 func TestClientRejectsInvalidOrCompetingModelProfilesBeforeHTTP(testingInstance *testing.T) {
 	profilePath := filepath.Join(testingInstance.TempDir(), "current-model.json")
-	replaceModelProfile(testingInstance, profilePath, `{"provider":"gemini","model":"gemini-2.5-flash"}`)
+	replaceModelProfile(testingInstance, profilePath, `{"provider":"gemini","model":"gemini-3.5-flash"}`)
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 		requestCount++
@@ -528,7 +528,7 @@ func TestClientRejectsInvalidOrCompetingModelProfilesBeforeHTTP(testingInstance 
 		{
 			name: "invalid UTF-8 document",
 			prepare: func(subTest *testing.T, path string) {
-				invalidProfile := []byte(`{"provider":"gemini","model":"gemini-2.5-flash"}`)
+				invalidProfile := []byte(`{"provider":"gemini","model":"gemini-3.5-flash"}`)
 				invalidProfile[len(invalidProfile)-3] = 0xff
 				replaceModelProfileBytes(subTest, path, invalidProfile)
 			},
@@ -558,7 +558,7 @@ func TestClientRejectsInvalidOrCompetingModelProfilesBeforeHTTP(testingInstance 
 		{
 			name: "non-string value",
 			prepare: func(subTest *testing.T, path string) {
-				replaceModelProfile(subTest, path, `{"provider":7,"model":"gemini-2.5-flash"}`)
+				replaceModelProfile(subTest, path, `{"provider":7,"model":"gemini-3.5-flash"}`)
 			},
 			errorMessage: "decode model_profile",
 		},
@@ -572,7 +572,7 @@ func TestClientRejectsInvalidOrCompetingModelProfilesBeforeHTTP(testingInstance 
 		{
 			name: "missing provider",
 			prepare: func(subTest *testing.T, path string) {
-				replaceModelProfile(subTest, path, `{"model":"gemini-2.5-flash"}`)
+				replaceModelProfile(subTest, path, `{"model":"gemini-3.5-flash"}`)
 			},
 			errorMessage: "missing provider",
 		},
@@ -586,7 +586,7 @@ func TestClientRejectsInvalidOrCompetingModelProfilesBeforeHTTP(testingInstance 
 		{
 			name: "unexpected field",
 			prepare: func(subTest *testing.T, path string) {
-				replaceModelProfile(subTest, path, `{"provider":"gemini","model":"gemini-2.5-flash","secret":"forbidden"}`)
+				replaceModelProfile(subTest, path, `{"provider":"gemini","model":"gemini-3.5-flash","secret":"forbidden"}`)
 			},
 			errorMessage: "unsupported field",
 		},
@@ -600,14 +600,14 @@ func TestClientRejectsInvalidOrCompetingModelProfilesBeforeHTTP(testingInstance 
 		{
 			name: "trailing malformed JSON",
 			prepare: func(subTest *testing.T, path string) {
-				replaceModelProfile(subTest, path, `{"provider":"gemini","model":"gemini-2.5-flash"} trailing`)
+				replaceModelProfile(subTest, path, `{"provider":"gemini","model":"gemini-3.5-flash"} trailing`)
 			},
 			errorMessage: "decode model_profile",
 		},
 		{
 			name: "trailing JSON document",
 			prepare: func(subTest *testing.T, path string) {
-				replaceModelProfile(subTest, path, `{"provider":"gemini","model":"gemini-2.5-flash"}{}`)
+				replaceModelProfile(subTest, path, `{"provider":"gemini","model":"gemini-3.5-flash"}{}`)
 			},
 			errorMessage: "one JSON value",
 		},
@@ -634,7 +634,7 @@ func TestClientRejectsInvalidOrCompetingModelProfilesBeforeHTTP(testingInstance 
 			if requestCount != 1 {
 				subTest.Fatalf("invalid profile reused a prior model; request count=%d", requestCount)
 			}
-			replaceModelProfile(subTest, profilePath, `{"provider":"gemini","model":"gemini-2.5-flash"}`)
+			replaceModelProfile(subTest, profilePath, `{"provider":"gemini","model":"gemini-3.5-flash"}`)
 		})
 	}
 
