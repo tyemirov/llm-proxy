@@ -1606,6 +1606,61 @@ func TestOperationalLiveHarnessVerifiesEachKeyBeforeItsSmokeRequest(testingInsta
 	assertOperationalProxyChildStopped(testingInstance, fixture.proxyPIDPath)
 }
 
+func TestOperationalLiveGeminiHarnessRunsExactThinkingMatrix(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixture := newOperationalLiveHarnessFixture(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	environmentFile := filepath.Join(fixtureRoot, "live.env")
+	operationCapture := filepath.Join(fixtureRoot, "operations.log")
+	const (
+		providerKey = "test-live-gemini-key"
+		modelID     = "gemini-3.6-flash"
+	)
+	writeOperationalFile(testingInstance, environmentFile, "GEMINI_API_KEY="+providerKey+"\n", 0o600)
+	command := exec.Command(filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_gemini.sh"))
+	command.Dir = repositoryRoot
+	command.Env = []string{
+		"PATH=" + fixture.toolDirectory + string(os.PathListSeparator) + os.Getenv("PATH"),
+		"GO=" + filepath.Join(fixture.toolDirectory, "go"),
+		"LLM_PROXY_LIVE_PORT=" + strconv.Itoa(operationalLoopbackPort(testingInstance)),
+		"PROXY_PID_CAPTURE=" + fixture.proxyPIDPath,
+		"LIVE_ENV_FILE=" + environmentFile,
+		"LLM_PROXY_LIVE_GEMINI_MODEL=" + modelID,
+		"LIVE_OPERATION_CAPTURE=" + operationCapture,
+	}
+	output, commandError := command.CombinedOutput()
+	if commandError != nil {
+		testingInstance.Fatalf("live Gemini reasoning harness failed: %v\n%s", commandError, output)
+	}
+	outputText := string(output)
+	for _, reasoningEffort := range []string{"omitted", "minimal", "low", "medium", "high"} {
+		expected := "live provider smoke passed: provider=gemini model=" + modelID + " status=200 reasoning_effort=" + reasoningEffort
+		if !strings.Contains(outputText, expected) {
+			testingInstance.Fatalf("live Gemini output omitted %q: %s", expected, output)
+		}
+	}
+	if strings.Contains(outputText, providerKey) || strings.Contains(outputText, "live-generated-secret") {
+		testingInstance.Fatalf("live Gemini output exposed credential material: %s", output)
+	}
+	captureBytes, readError := os.ReadFile(operationCapture)
+	if readError != nil {
+		testingInstance.Fatalf("read live Gemini operation capture: %v", readError)
+	}
+	capture := string(captureBytes)
+	if strings.Count(capture, "verify PUT ") != 1 || strings.Count(capture, "smoke POST ") != 5 {
+		testingInstance.Fatalf("live Gemini operation count mismatch: %s", capture)
+	}
+	for _, reasoningEffort := range []string{"minimal", "low", "medium", "high"} {
+		if !strings.Contains(capture, `"reasoning_effort":"`+reasoningEffort+`"`) {
+			testingInstance.Fatalf("live Gemini capture omitted reasoning_effort=%s: %s", reasoningEffort, capture)
+		}
+	}
+	if strings.Count(capture, `"model":"`+modelID+`"`) != 5 {
+		testingInstance.Fatalf("live Gemini capture omitted exact model requests: %s", capture)
+	}
+	assertOperationalProxyChildStopped(testingInstance, fixture.proxyPIDPath)
+}
+
 func TestOperationalLiveHarnessDiscoversCatalogOnlyProviderFields(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	fixture := newOperationalLiveHarnessFixture(testingInstance)
@@ -2035,7 +2090,7 @@ write_response_headers() {
 
 case "${request_url}" in
   */api/public/capabilities)
-    builtin printf '%s' '{"offerings":[{"provider":"openai","model":"gpt-4.1","capabilities":["image_input","text"]},{"provider":"anthropic","model":"claude-sonnet-4-6","capabilities":["image_input","text"]},{"provider":"gemini","model":"gemini-2.5-flash","capabilities":["audio_input","image_input","text"]},{"provider":"moonshot","model":"kimi-k2.6","capabilities":["image_input","text"]},{"provider":"moonshot","model":"kimi-k2.7-code","capabilities":["image_input","text"]},{"provider":"moonshot","model":"kimi-k2.7-code-highspeed","capabilities":["image_input","text"]},{"provider":"moonshot","model":"kimi-k3","capabilities":["image_input","text"]},{"provider":"xai","model":"grok-4.5","capabilities":["image_input","text"]},{"provider":"dashscope","model":"qwen-plus","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.6-flash","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.7-max","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.7-plus","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.1","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.1-highspeed","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.5","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.5-highspeed","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.7","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.7-highspeed","capabilities":["text"]}]}' >"${output_path}"
+    builtin printf '%s' '{"offerings":[{"provider":"openai","model":"gpt-4.1","capabilities":["image_input","text"]},{"provider":"anthropic","model":"claude-sonnet-4-6","capabilities":["image_input","text"]},{"provider":"gemini","model":"gemini-2.5-flash","capabilities":["audio_input","image_input","text"]},{"provider":"gemini","model":"gemini-3.6-flash","capabilities":["text"],"reasoning_efforts":["minimal","low","medium","high"]},{"provider":"gemini","model":"gemini-3.7-flash","capabilities":["text"],"reasoning_efforts":["low","medium","high"]},{"provider":"moonshot","model":"kimi-k2.6","capabilities":["image_input","text"]},{"provider":"moonshot","model":"kimi-k2.7-code","capabilities":["image_input","text"]},{"provider":"moonshot","model":"kimi-k2.7-code-highspeed","capabilities":["image_input","text"]},{"provider":"moonshot","model":"kimi-k3","capabilities":["image_input","text"]},{"provider":"xai","model":"grok-4.5","capabilities":["image_input","text"]},{"provider":"dashscope","model":"qwen-plus","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.6-flash","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.7-max","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.7-plus","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.1","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.1-highspeed","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.5","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.5-highspeed","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.7","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.7-highspeed","capabilities":["text"]}]}' >"${output_path}"
     builtin printf '%s' 200
     ;;
   */api/management/account)
