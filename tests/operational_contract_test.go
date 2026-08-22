@@ -734,6 +734,8 @@ exec "${REAL_AWK_PATH:?}" "$@"
 				"LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY",
 				"condition: service_healthy",
 				"curl --fail --silent http://127.0.0.1:8080/api/public/capabilities",
+				"./configs/config.yml:/app/configs/config.yml:ro",
+				"./configs/providers.yml:/app/configs/providers.yml:ro",
 				"GHTTP_SERVE_DIRECTORY: \"/app/docs\"",
 				"./docs:/app/docs:ro",
 			},
