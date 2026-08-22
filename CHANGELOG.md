@@ -4,7 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-- Added Gemini 3.6 Flash and Gemini 3.7 Flash with exact Interactions thinking levels.
+- **Breaking:** Gemini Interactions now rejects assistant history and returns a provider error for incomplete output without replay.
+- **Breaking:** Removed all Gemini 2.5 routes and the synchronous Gemini Interactions transport. Gemini now exposes only 3.x pollable routes and defaults to Gemini 3.5 Flash. Managed schema version 10 migrates stored 2.5 selections once.
 - Added Meta Muse Spark 1.2 as a selectable Standard-tier text model. Muse Spark 1.1 remains the Meta default.
 - Removed schema versioning from the selected application manifest.
 - Added provider-enforced JSON Schema output and tenant-bound durable reconciliation for canonical `POST /v2` requests.
@@ -15,7 +16,7 @@ All notable changes to this project will be documented in this file.
 - Moved public-page rendering to the frontend-owned renderer and backend public-capability REST resource.
 - Restored one MPR UI and TAuth browser authentication flow across the public landing page and authenticated application.
 - Added the shared MPR header and compact footer to public pages, resource pages, legal pages, and the application.
-- Migrated Gemini text routing to the native Interactions API with explicit synchronous and background execution lifecycles.
+- Migrated Gemini text routing to the native Interactions API with stored background execution.
 - Added provider-neutral image and audio attachments to canonical `POST /v2` requests for compatible models.
 - Added tenant asset uploads, asset-backed message attachments, published provider media limits, and automatic Gemini inline or Files API media transport.
 - Added shared missing-suffix continuation for provider output-budget stops and sanitized provider failure responses.
