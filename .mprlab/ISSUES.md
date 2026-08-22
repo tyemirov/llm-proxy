@@ -25,6 +25,30 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B156] (P0) Mount the provider catalog in local orchestration.
+  Goal:
+  The local API starts with the canonical provider catalog.
+  Evidence:
+  - Expected: `providers.yml` exists beside the selected `config.yml` in the
+    API container.
+  - Actual: `make up` mounts only `config.yml`, and the API exits with
+    `provider_catalog_read_failed`.
+  Requirements:
+  - Mount `configs/providers.yml` beside the selected API configuration.
+  - Keep both runtime assets read-only.
+  - Require the exact local runtime asset pair in the operational test.
+  Validation:
+  - Prove the local API starts with the current provider catalog.
+  - Run `make ci` after the last repository change.
+  Resolution:
+  - The local API mounts `config.yml` and `providers.yml` as read-only runtime
+    assets in the same directory.
+  - The operational test requires both exact local runtime asset mounts.
+  - `make go-test` passed with 100.0 percent Go statement coverage.
+  - The final `make ci` passed all 11 gates in 134 seconds with 100.0 percent
+    Go statement coverage.
+  - `make up` passed all local readiness checks and stopped cleanly.
+
 - [x] [B155] (P1) {I231} Migrate retired Gemini selections before provider validation.
   Goal:
   Preserve each stored Gemini configuration during the schema-version-10
