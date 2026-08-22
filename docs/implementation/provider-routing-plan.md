@@ -104,7 +104,7 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 | `minimax` | none | `openai_chat_completions` | `synchronous_completion` | Not supported | Not supported |
 | `siliconflow` | none | `openai_chat_completions` | `synchronous_completion` | OpenAI-compatible audio transcription | Not supported |
 | `zai` | none | `openai_chat_completions` | `synchronous_completion` | Z.AI GLM-ASR transcription | Not supported |
-| `gemini` | none | `gemini_interactions` | Model-specific: Gemini 3.x `pollable_resource`; Gemini 2.5 `synchronous_completion` | Not supported | Not supported |
+| `gemini` | none | `gemini_interactions` | `pollable_resource` | Not supported | Not supported |
 | `anthropic` | `claude` | `anthropic_messages` | `synchronous_completion` | Not supported | Not supported |
 | `xai` | none | Model-specific: `grok-4.5` uses `openai_responses`, and other text models use `openai_chat_completions` | `synchronous_completion` | xAI STT | Not supported |
 
@@ -244,12 +244,12 @@ missing, unknown, contradictory, or provider-incompatible pairs and rejects
 these text-only fields on dictation entries. A future one-read deferred result
 must introduce a distinct lifecycle value.
 
-The shared `pollable_resource` lifecycle owns post-create observation. It reads
-the created resource immediately. A first `403` or `404` starts one two-second
-visibility interval outside the upstream worker and one reconciliation read.
-The caller context bounds this work. Other first read errors and all later read
-errors stop the lifecycle. Protocol adapters continue to own resource wire
-formats and provider status parsing.
+The shared `pollable_resource` lifecycle owns post-create observation. Each
+shared pollable text transport declares a bounded visibility retry policy in
+the provider catalog. The lifecycle reads the created resource immediately and
+applies the declared statuses, interval, and retry limit without
+provider-specific control flow. The caller context bounds every wait. Protocol
+adapters continue to own resource wire formats and provider status parsing.
 
 Every OpenAI Responses text request includes `background: true` and
 `store: true`. A nonblank response id is polled server-side only for the
@@ -271,10 +271,8 @@ Every Gemini text request uses `POST /interactions`, `x-goog-api-key`, and
 `Api-Revision: 2026-05-20`. The configured base URL is the `v1beta` API because
 that revision exposes the full configured model catalog. Gemini 3.x creates a
 stored background interaction; a nonblank interaction id is polled only while
-its status is `queued` or `in_progress`. Gemini 2.5 uses the same wire adapter
-synchronously with `background: false` and `store: false`; an immediate
-terminal response may omit `id`, while an active status fails closed. For both
-lifecycles, `completed` with visible text is success, `incomplete` is the
+its status is `queued` or `in_progress`. `completed` with visible text is
+success, `incomplete` is the
 provider-neutral output-limit signal, and `failed`, `cancelled`,
 `budget_exceeded`, `requires_action`, malformed, missing, or unknown states
 fail closed. The newest nonempty usage snapshot replaces earlier observations
@@ -284,16 +282,9 @@ provider-counted thought tokens remain represented. Active-resource cancel and
 delete operations use independent bounded contexts, so cancel exhaustion cannot
 prevent the delete request from starting.
 
-Gemini 3.6 Flash declares exact thinking levels `minimal`, `low`, `medium`, and
-`high`. Gemini 3.7 Flash declares `low`, `medium`, and `high`. The
-`gemini_interactions` reasoning adapter writes an explicit resolved value to
-`generation_config.thinking_level` on the first request and every continuation.
-It omits the field when no effort is selected. At the resolved edge, these two
-routes reject a final non-system assistant message before provider dispatch.
-Other Gemini routes do not use this reasoning adapter and retain their current
-message behavior.
-Google's [thinking guide](https://ai.google.dev/gemini-api/docs/thinking)
-defines these exact model-specific values.
+Each Gemini Interactions route rejects assistant history before provider
+dispatch. The public request cannot carry the provider state or thought
+signatures that a `model_output` step requires.
 
 Gemini offering media limits are part of the validated catalog and public
 capability resource. The inline request limit is 20,000,000 encoded request
@@ -325,24 +316,20 @@ therefore applies. Background Gemini interaction ids are likewise request-local
 and never returned or persisted. The proxy cancels every still-active Gemini
 interaction and then deletes it; terminal interactions are deleted directly. A
 cancel failure never skips deletion, and a deletion failure prevents a
-successful or output-limit result from escaping as success. Synchronous Gemini
-2.5 interactions are non-stored and create no reusable provider resource.
-Output-limit continuation creates a new inference request and is never resource
-observation.
+successful or output-limit result from escaping as success. Gemini
+Interactions declares no continuation actions. An `incomplete` interaction is
+deleted and returns a provider error without a second create request.
 
 One completion coordinator owns output-budget recovery for all transports.
 Adapters normalize only their exact recoverable signal: OpenAI
 `incomplete/max_output_tokens`, Chat Completions `length`, Gemini Interactions
-`incomplete`, and Anthropic `max_tokens`. The coordinator preserves the
-original messages, appends all accumulated assistant text plus one
-missing-suffix user instruction, repeats the selected provider call, and joins
-the returned suffixes until OpenAI or Gemini reports `completed`, Chat reports
-`stop`, or Anthropic reports `end_turn`/`stop_sequence`. The
-overall request deadline is the hard bound. Safety/filter, refusal,
-tool/intermediate, failed/cancelled, malformed, missing, and unknown signals
-return the canonical failure without exposing partial text. Provider-specific
-deferred, batch, and asynchronous APIs remain separate transports; an
-arbitrary response `id` never activates polling.
+`incomplete`, and Anthropic `max_tokens`. The coordinator starts replay only
+when the selected transport declares continuation actions. For these
+transports, it appends the accumulated assistant text and one missing-suffix
+instruction. It then joins the returned suffixes until the provider completes.
+The overall request deadline is the hard bound. Other terminal signals return
+the canonical failure without partial text. An arbitrary response `id` never
+activates polling.
 
 The caller's `max_tokens` value is the initial per-attempt budget and is reused
 for suffix attempts. When an output-budget response has no visible text and
@@ -414,9 +401,7 @@ provider transport for one fixed, non-user-content probe:
 - DeepSeek, DashScope, Moonshot, MiniMax, SiliconFlow, Z.AI, Meta, and xAI
   Chat Completions models use one authenticated `POST /chat/completions`.
   The request uses the provider's declared token-limit parameter.
-- A synchronous Gemini model uses one non-stored `POST /interactions` request.
-  It sends `background: false`, `store: false`, and a 16-token output limit.
-- A pollable Gemini model creates one stored background interaction. It then
+- A Gemini model creates one stored background interaction. It then
   observes the interaction through the shared `pollable_resource` lifecycle.
   It cancels active work and deletes the stored interaction before it accepts
   the credential.
@@ -424,13 +409,13 @@ provider transport for one fixed, non-user-content probe:
   `anthropic-version: 2023-06-01`, and `max_tokens: 16`.
 
 The verifier uses the management request context and the shared upstream
-worker, queue, and origin-rate-limit boundary. It can repeat only a first
-resource read that returns `403` or `404`. It does not retry a create, transport
-failure, later read, cancel, or delete. It does not use an alternative endpoint,
-start a continuation, or record managed usage. A pollable Gemini probe uses the
-production adapter's create, retrieve, cancel, and delete operations. A
-transport success counts only when its canonical response is valid. Provider
-`4xx` credential or model rejection maps to
+worker, queue, and origin-rate-limit boundary. It applies the selected
+transport's catalog-owned visibility retry policy after creation. It does not
+retry a create, an undeclared provider status, cancel, or delete. It does not
+use an alternative endpoint, start a continuation, or record managed usage. A
+pollable Gemini probe uses the production adapter's create, retrieve, cancel,
+and delete operations. A transport success counts only when its canonical
+response is valid. Provider `4xx` credential or model rejection maps to
 `422 provider_key_rejected`, except `408` and `429`. Upstream `504` also maps
 to timeout. Transport cancellation, deadline, outage, and malformed success
 map to the documented provider-neutral error. Candidate keys, probe content,
@@ -563,9 +548,9 @@ The `proxy provider progress` event records each OpenAI create/poll observation
 and each provider-neutral continuation attempt under the same request id. It
 uses an attempt or poll count, normalized provider state or completion signal,
 elapsed milliseconds, current output bytes, and accumulated output bytes.
-Only the first visibility `403` or `404` that starts reconciliation uses
-`pending`. A reconciliation or later-poll visibility error uses `failure`
-because it stops the lifecycle.
+Every visibility error that starts a catalog-declared retry uses `pending`.
+An undeclared visibility error or the error that exhausts the retry limit uses
+`failure` because it stops the lifecycle.
 Progress and terminal events never include provider resource ids, prompts,
 messages, generated text, provider bodies, credentials, cookies, or tenant
 secrets. The telemetry stays in structured logs; managed usage persistence,
@@ -761,16 +746,15 @@ that response or structured provider-failure logs.
 - Gemini uses a native Interactions adapter against its catalog-defined
   endpoint. `incomplete` continues through the shared
   coordinator as a new interaction. `completed` with visible model text
-  succeeds. Gemini 3.x uses stored background polling. Gemini 2.5 uses a
-  non-stored synchronous request. For exact models whose catalog declares the
+  succeeds. Gemini 3.x uses stored background polling. For exact models whose catalog declares the
   capability, ordered image and audio attachments become typed interaction
   content after the message text. The adapter selects inline `data` or Files
   API `uri` content from the exact provider offering limits.
 - xAI uses the shared Chat Completions adapter for text-only models. The `grok-4.5` image route uses synchronous Responses.
 - OpenAI-compatible chat providers receive validated and sorted `messages[]` as provider-supported `role` and `content` items.
 - OpenAI Responses payload shape comes from the selected configured model's stable `request_profile`; model-specific web-search support comes from the selected model catalog entry. OpenAI Responses text calls run in background mode with stored responses so long provider work can be polled by llm-proxy while the caller waits on one REST request.
-- Gemini receives user messages as `user_input` steps, assistant messages as
-  `model_output` steps, and system messages as `system_instruction`.
+- Gemini receives user messages as `user_input` steps and system messages as
+  `system_instruction`. The resolved route rejects each assistant message.
 - OpenAI-compatible Chat Completions adapters remain text-only and reject media declarations at startup.
 - OpenAI Responses receives text-only single prompts unchanged. Requests with images use role-preserving typed content blocks.
 - Dictation routing uses catalog-defined transports and the multipart transcription adapter. OpenAI, SiliconFlow, and Z.AI send a multipart `model` field. xAI STT omits it.
@@ -786,9 +770,10 @@ Black-box router tests cover:
   assembly, aggregated usage, and one successful managed event.
 - OpenAI polling only for documented pending states, with missing and unknown
   states rejected without another provider call.
-- Every configured provider through its public text route, proving the same
-  shared continuation transcript, completion order, suffix assembly, and usage
-  aggregation for Chat Completions, Gemini, Anthropic, and OpenAI.
+- Each transport with continuation actions through its public text route. These
+  tests prove transcript order, suffix assembly, and usage aggregation.
+- Gemini incomplete responses through the public text route. These tests prove
+  one create request, interaction deletion, and no partial-text response.
 - Ordered images through OpenAI Responses, Anthropic Messages, xAI Responses,
   and Gemini Interactions through canonical `POST /v2`.
 - Ordered Gemini audio through inline `data` or Files API `uri`, with no media echo in response metadata.

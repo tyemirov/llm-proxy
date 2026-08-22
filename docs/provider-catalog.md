@@ -3,8 +3,8 @@
 ## Ownership
 
 [`configs/providers.yml`](../configs/providers.yml) is the only provider catalog.
-It defines all supported providers, exact models, provider offerings, controls,
-limits, and prices.
+It defines all supported providers, exact models, provider offerings, managed
+model migrations, controls, limits, and prices.
 
 The loader reads `providers.yml` from the directory of the selected
 `config.yml`. It parses the provider catalog before it validates service
@@ -15,9 +15,10 @@ The current provider catalog has these records:
 - 11 provider definitions.
 - 11 model publishers.
 - 24 model families.
-- 69 exact models.
-- 70 provider offerings.
-- 70 price records.
+- 64 exact models.
+- 65 provider offerings.
+- 65 price records.
+- Seven managed model migrations.
 - Six protocol adapters.
 - Two lifecycle values.
 
@@ -32,6 +33,11 @@ value, a tenant setting value, a system prompt, or a routing default.
 | Provider datum | Schema location | Runtime use |
 |---|---|---|
 | Schema contract version | `schema_version` | Selects the only accepted parser contract. |
+| Managed schema version | `model_migrations[].managed_schema_version` | Selects the database migration that consumes the record. |
+| Migrated provider | `model_migrations[].provider` | Selects the persisted provider identity. |
+| Migrated operation | `model_migrations[].operation` | Selects the persisted route operation. |
+| Source model | `model_migrations[].source_model` | Identifies the exact persisted model value to replace or retire. |
+| Target model | `model_migrations[].target_model` | References the current provider offering that replaces the source. |
 | Operation identifier | `operations[].id` | Identifies `text`, `dictation`, or `video_generation`. |
 | Operation inputs | `operations[].input_artifacts` | Declares accepted artifact kinds. |
 | Operation outputs | `operations[].output_artifacts` | Declares result artifact kinds. |
@@ -47,6 +53,13 @@ value, a tenant setting value, a system prompt, or a routing default.
 | Exact model version | `models[].version` | Records the exact model version. |
 | Exact model operations | `models[].operations` | Declares the operations that the exact model supports. |
 | Exact model media | `models[].media_inputs` | Declares the combined media set of all offerings. |
+
+Each managed model migration belongs to one database schema version. A source
+model can be a retired public identifier or an old upstream identifier. A
+nonempty target must reference a current offering for the same provider and
+operation. The target can be empty only when the provider is absent from the
+current catalog. The migration changes selectable tenant state and preserves
+historical usage records.
 
 ## Provider record mapping
 
@@ -101,6 +114,9 @@ Each item in `providers[].transports` is one provider transport.
 | Response adapter | `transports[].response_protocol` | Selects the response protocol adapter. |
 | Usage adapter | `transports[].usage_mapping` | Selects the usage protocol adapter. |
 | Lifecycle | `transports[].lifecycle` | Selects synchronous completion or a pollable resource. |
+| Visibility retry interval | `transports[].resource_visibility.retry_interval_milliseconds` | Declares the wait between created-resource visibility reads. |
+| Visibility retry limit | `transports[].resource_visibility.retry_limit` | Bounds created-resource visibility retries. |
+| Visibility retry statuses | `transports[].resource_visibility.retry_status_codes` | Declares the provider HTTP statuses that mean the created resource is not visible yet. |
 | Upstream model field | `protocol_parameters.model_field` | Declares the upstream model field. |
 | Upstream token field | `protocol_parameters.token_field` | Declares the upstream output-token field. |
 | Output fields | `protocol_parameters.output_fields` | Declares the visible output locations. |
@@ -125,19 +141,31 @@ and lifecycle behavior. Provider identifiers do not select protocol code.
 | `openai_responses` | `synchronous_completion` or `pollable_resource` |
 | `openai_chat_completions` | `synchronous_completion` |
 | `anthropic_messages` | `synchronous_completion` |
-| `gemini_interactions` | `synchronous_completion` or `pollable_resource` |
+| `gemini_interactions` | `pollable_resource` |
 | `multipart_transcription` | `synchronous_completion` |
 | `xai_videos_generations` | `pollable_resource` |
 
 The shared `pollable_resource` lifecycle owns post-create observation for all
-protocol adapters. It reads a created resource immediately. A first `403` or
-`404` starts one two-second visibility interval outside the upstream worker and
-one reconciliation read. The caller context bounds the interval. Other first
-read errors and all later read errors stop the lifecycle.
+protocol adapters. Each shared text transport declares a bounded
+`resource_visibility` policy. The policy lists the provider statuses that mean
+a created resource is not visible yet, the retry interval, and the retry limit.
+The lifecycle reads the resource immediately and applies that policy without
+provider-specific control flow. The caller context bounds every wait. A status
+outside the declared list or an exhausted retry limit stops the lifecycle.
+
+The OpenAI transport allows one retry after two seconds for `403` or `404`.
+The Gemini transport allows six retries at five-second intervals for `400`,
+`403`, or `404`.
 
 The schema records each adapter contract in `protocol_parameters`. Startup
 compares those values with the selected protocol adapter. A mismatch stops
 startup.
+
+The completion coordinator starts a new request only when the transport
+declares continuation actions. An empty `continuation_rules` list makes an
+output-limit signal a provider error. The Gemini Interactions transport uses
+this empty list because the public request cannot carry provider interaction
+state or thought signatures.
 
 ## Provider offering mapping
 
