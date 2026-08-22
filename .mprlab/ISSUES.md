@@ -1229,7 +1229,7 @@ retain satisfied historical dependencies.
     connector geometry and containment at 1280-, 900-, and 390-pixel widths.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-- [ ] [I210] (P1) Add Meta Muse Spark 1.2 as a selectable Standard-tier model.
+- [!] [I210] (P1) Add Meta Muse Spark 1.2 as a selectable Standard-tier model.
   Goal:
   Add Meta's current Muse Spark 1.2 checkpoint to the existing `meta` text
   offering through the repository's exact model-owned routing contract.
@@ -1288,6 +1288,12 @@ retain satisfied historical dependencies.
     request with `LLM_PROXY_LIVE_META_MODEL=muse-spark-1.2`. Run the required
     baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair; deployment
     and production acceptance remain operator-owned.
+  Blocked: Repository work is complete. Both required `make ci` runs pass.
+  Live acceptance cannot start because `MODEL_API_KEY` is absent from the
+  process and each authorized repository environment file. The selected
+  harness stops before provider dispatch. The operator must supply
+  `MODEL_API_KEY` and authorize authenticated `GET /v1/models`, one key
+  verification, and one text request.
 - [ ] [I046] (P1) Make upstream admission fair across provider origins.
   Goal:
   Keep upstream work globally bounded while preventing one slow or throttled
@@ -1358,75 +1364,83 @@ retain satisfied historical dependencies.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
-- [ ] [I207] (P1) Add Gemini 3.6 Flash with route-bound Interactions thinking levels.
+- [!] [I207] (P1) Add Gemini 3.6 and 3.7 Flash with route-bound Interactions thinking levels.
   Goal:
-  Add Google's current stable Flash model to the Gemini Interactions catalog
-  and carry the existing provider-neutral `reasoning_effort` contract onto its
+  Add Google's current stable Flash models to the Gemini Interactions catalog
+  and carry the provider-neutral `reasoning_effort` contract onto their
   documented thinking controls.
   Evidence:
-  - Google identifies Gemini 3.6 Flash as GA and production-ready under the
-    exact stable model id `gemini-3.6-flash`, with a 65,536-token output limit
-    and `medium` as its default thinking level:
-    https://ai.google.dev/gemini-api/docs/latest-model
-  - The model page confirms that `gemini-3.6-flash` supports text, image, video,
-    audio, and PDF input, text output, and thinking:
+  - Google identifies `gemini-3.6-flash` and `gemini-3.7-flash` as stable model
+    IDs. Both models have a 65,536-token output limit:
     https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash
+    https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash
+  - Both model pages document text, image, video, audio, and PDF input, text
+    output, and thinking:
+    https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash
+    https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash
   - Google's Interactions thinking guide documents
-    `generation_config.thinking_level`; Gemini 3.6 Flash supports exactly
-    `minimal`, `low`, `medium`, and `high`, with `medium` as the default:
+    `generation_config.thinking_level`. Gemini 3.6 Flash supports `minimal`,
+    `low`, `medium`, and `high`. Gemini 3.7 Flash supports `low`, `medium`, and
+    `high`. Both models use `medium` when the field is absent:
     https://ai.google.dev/gemini-api/docs/thinking
-  - The Interactions schema defines the same four-value `thinking_level` enum:
+  - The Interactions schema defines the `thinking_level` field:
     https://ai.google.dev/api/interactions-api
-  - Google's Gemini 3.6 migration contract rejects a request whose final
-    nonempty turn is a model turn with HTTP 400 and directs multi-turn
+  - Google's current Gemini migration contract rejects a request whose final
+    nonempty turn is a model turn with HTTP 400. It directs multi-turn
     Interactions callers away from manually prefilled model turns:
     https://ai.google.dev/gemini-api/docs/latest-model
   Requirements:
-  - Add only the exact stable model id `gemini-3.6-flash`. Do not add or alias
-    the requested but unpublished `gemini-2.6-flash` name, use a moving
-    `gemini-flash-latest` alias, or change the Gemini provider default as an
-    incidental part of this issue.
+  - Add only the exact stable model IDs `gemini-3.6-flash` and
+    `gemini-3.7-flash`. Do not add a moving `gemini-flash-latest` alias or
+    change the Gemini provider default as part of this issue.
   - Before registering the route lifecycle, verify at the paid Google boundary
-    that this exact model supports stored background Interactions through
-    create, active status, retrieval, cancellation, and deletion. Register the
-    model as `gemini_interactions` plus `pollable_resource` only after that
+    that both exact models support stored background Interactions through
+    create, active status, retrieval, cancellation, and deletion. Register
+    each model as `gemini_interactions` plus `pollable_resource` only after that
     proof succeeds.
-  - At the resolved Gemini 3.6 route edge, reject with the canonical HTTP 400
-    invalid-messages response any request whose final non-system message is an
-    assistant turn. Do not send that turn as a terminal `model_output`, rewrite
-    it into another role, or change assistant-prefill behavior for other model
-    routes as an incidental part of this issue.
+  - At each resolved new route edge, reject with the canonical HTTP 400
+    invalid-messages response when the final non-system message is an assistant
+    turn. Do not send that turn as a terminal `model_output`, rewrite it into
+    another role, or change assistant-prefill behavior for other model routes.
   - Add the exact `gemini_interactions` reasoning-effort adapter, valid only for
-    the Gemini Interactions text route. Declare the model's ordered capability
-    as `minimal`, `low`, `medium`, and `high`; serialize an explicitly resolved
+    the Gemini Interactions text route. Declare Gemini 3.6 Flash with the
+    ordered values `minimal`, `low`, `medium`, and `high`. Declare Gemini 3.7
+    Flash with `low`, `medium`, and `high`. Serialize an explicitly resolved
     public effort unchanged as `generation_config.thinking_level` on the
     initial request and every output-limit continuation.
   - When neither the request nor tenant default selects an effort, omit
-    `thinking_level` so Google's documented `medium` default remains
-    authoritative. Reject blank, `none`, `xhigh`, `max`, and every other
-    unsupported value before an upstream call. Do not translate values, send a
-    2.5-era `thinking_budget`, or add a second Gemini request adapter.
+    `thinking_level` so Google's `medium` default remains authoritative. Reject
+    blank, `none`, `xhigh`, `max`, and every other value not declared for the
+    exact route before an upstream call. In particular, reject `minimal` for
+    Gemini 3.7 Flash. Do not translate values, send a 2.5-era
+    `thinking_budget`, or add a second Gemini request adapter.
   - Keep the current 65,536 proxy output limit. Declare only the image and audio
-    inputs already implemented by the public messages contract; do not imply
-    public video, PDF, tools, thought-summary, streaming, or computer-use
-    support from the broader upstream model capability list.
+    inputs that the public messages contract implements. Do not imply support
+    for video, PDF, tools, thought summaries, streaming, or computer use.
   - Expose the exact route capability through the management profile and
     Settings autosave contract, and update configuration, constants, README,
     OpenAPI, provider-routing documentation, generated resources, and the model
     capability table together. No persisted-routing migration or default-model
     change is part of this issue.
   Validation:
-  - Startup and public-boundary fixtures prove the Gemini-only adapter mapping,
-    all four explicit effort payloads, omitted-effort omission, continuation
-    preservation, early rejection of unsupported efforts, 65,536-token cap,
-    media declarations, management profile exposure, saved tenant-default
-    routing, and pre-upstream rejection of a terminal assistant turn only on
-    the Gemini 3.6 route.
+  - Startup and public-boundary fixtures prove the Gemini-only adapter mapping.
+    They prove each model's exact effort vocabulary and explicit payloads. They
+    prove omission, continuation, unsupported-effort rejection, and the token
+    limit. They also prove media, management, saved defaults, and terminal-turn
+    rejection for only the two new routes.
   - Authenticated branch acceptance runs one small request for each explicit
-    thinking level and one omitted-level request, then proves one background
-    create/poll/delete flow for `gemini-3.6-flash`. The final `make ci` passes
-    after the last implementation edit; deployment and production acceptance
-    remain operator-owned.
+    thinking level and one omitted-level request for each model. It proves one
+    background create/poll/delete flow and one cancellation flow for each exact
+    model. The final `make ci` passes after the last implementation edit.
+    Deployment and production acceptance remain operator-owned.
+  Blocked: Repository implementation is complete. The final `make ci` passes
+  all 11 gates with 100 percent Go statement coverage. Paid acceptance cannot
+  start its thinking matrix because the saved Gemini credential returns
+  `provider_key_rejected` during managed verification for
+  `gemini-3.6-flash`. The supported `gemini-3.5-flash` control returns the same
+  result, which isolates the blocker to the current credential or its model
+  access. The operator must supply a Gemini credential that can use the exact
+  models. Then run `make test-live-gemini` once with each exact model override.
 - [ ] [I027] (P1) Redesign the user dashboard around connected-provider widgets.
   Goal:
   Make the authenticated dashboard answer, at a glance, which upstream
