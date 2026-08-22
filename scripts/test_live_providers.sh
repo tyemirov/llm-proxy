@@ -84,6 +84,7 @@ import re
 import sys
 
 path = pathlib.Path(sys.argv[1])
+seen_names = set()
 for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
     line = raw_line.strip()
     if not line or line.startswith("#"):
@@ -96,6 +97,9 @@ for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlin
     name = name.strip()
     if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) is None:
         raise SystemExit(f"invalid dotenv name: {path}:{line_number}")
+    if name in seen_names:
+        raise SystemExit(f"duplicate dotenv name: {path}:{line_number}: {name}")
+    seen_names.add(name)
     value = raw_value.strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {chr(39), chr(34)}:
         parsed_value = ast.literal_eval(value)

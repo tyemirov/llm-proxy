@@ -561,7 +561,7 @@ done`,
       ["Startup guardrails", "A keyed provider must have a valid configured text default model.", "Invalid defaults fail before traffic starts."],
     ],
     examples: [
-      ["Provider trial", "A caller sets provider=gemini and omits model to use gemini-2.5-flash from config."],
+      ["Provider trial", "A caller sets provider=gemini and omits model to use gemini-3.5-flash from config."],
       ["Default route", "A client omits provider and model to use the tenant default OpenAI route."],
       ["Managed provider settings", "A user saves a provider-specific text model in Settings for generated-secret traffic."],
     ],
@@ -1403,41 +1403,68 @@ text = client.post_messages(
       "Provider endpoints must stay explicit in the provider catalog.",
     ],
   }),
-  page({
+  evidencedPage({
     slug: "gemini-interactions-proxy",
     category: "Provider routing",
     modifiedDate: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
     primaryKeyword: "Gemini Interactions proxy",
-    title: "Gemini Interactions proxy for shared LLM calls",
-    description: "Run model-specific Gemini Interactions lifecycles while callers keep one blocking proxy request.",
+    title: "Gemini Interactions proxy for stored 3.x model calls",
+    description: "Route four registered Gemini 3.x models through stored Interactions with provider-configured visibility retries, cleanup, and one blocking proxy request.",
     audience: "Developers adding Gemini as a provider without bringing Gemini-specific payloads into every app.",
-    problem: "Gemini models differ between stored background Interactions and non-stored synchronous Interactions, which shared proxy callers should not have to coordinate.",
-    solution: "LLM Proxy selects the configured model lifecycle, maps exact Gemini 3.6 and 3.7 thinking levels, polls and cleans up Gemini 3.x resources, and resolves Gemini 2.5 synchronously behind one blocking caller request.",
+    problem: "Stored Gemini Interactions require polling and cleanup, which shared proxy callers must not have to coordinate.",
+    solution: "LLM Proxy polls and cleans up registered Gemini 3.x resources while callers keep one blocking request.",
     steps: [
       "Keep the Gemini transport and offerings in providers.yml, then save the Gemini API key in tenant settings.",
       "Select provider=gemini or set Gemini as a tenant default.",
       "Send canonical messages through /v2 or compatibility text requests.",
-      "Select only a thinking level that the exact Gemini 3.6 or 3.7 route declares.",
       "Keep max_tokens within configured Gemini output limits.",
     ],
     features: [
-      ["Native adapter", "The backend maps user and assistant messages into Gemini interaction steps.", "System instructions use Gemini's system_instruction shape."],
-      ["Resource lifecycle", "The proxy polls queued and in-progress Gemini 3.x interactions server-side.", "Gemini 2.5 requests are synchronous and non-stored; active 3.x resources are cancelled and deleted on exit."],
-      ["Exact thinking levels", "Gemini 3.6 maps minimal, low, medium, and high; Gemini 3.7 maps low, medium, and high.", "Omission keeps Google's medium default, and continuations retain an explicit selection."],
+      ["Native adapter", "The backend maps user messages into Gemini interaction steps.", "System instructions use Gemini's system_instruction shape, and assistant history is invalid."],
+      ["Resource lifecycle", "The proxy polls queued and in-progress Gemini 3.x interactions server-side.", "Active resources are cancelled and every stored interaction is deleted on exit."],
       ["Tenant defaults", "Omitted model uses the tenant's saved Gemini text model.", "Client code can omit the model while tenant settings remain authoritative."],
-      ["Output limit validation", "Gemini max_tokens values above configured limits return 400 before upstream calls.", "Known constraints are enforced at the edge."],
+      ["Output limit contract", "Gemini max_tokens values above configured limits return 400 before upstream calls.", "An incomplete interaction returns a provider error without replay."],
     ],
     examples: [
       ["Gemini summary", "A service sends provider=gemini and omits model to use the configured default."],
-      ["Thinking control", "A Gemini 3.7 Flash request sends reasoning_effort=high and the adapter writes generation_config.thinking_level=high."],
-      ["Long transcript", "A /v2 messages request routes through Gemini without a Gemini SDK."],
+      ["Long user input", "A /v2 request routes user messages through Gemini without a Gemini SDK."],
       ["Limit check", "A caller sets max_tokens inside the configured Gemini limit."],
     ],
     limitations: [
       "Gemini dictation is not exposed through /dictate in this repo.",
       "Web search is not marked supported for Gemini in the current proxy catalog.",
-      "Gemini 3.6 Flash and Gemini 3.7 Flash reject a final non-system assistant message.",
+      "Each Gemini Interactions route rejects assistant history.",
       "The Gemini model list must be maintained in providers.yml.",
+    ],
+    repoExample: {
+      source: "configs/providers.yml",
+      verifiedOn: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
+      code: `resource_visibility:
+  retry_interval_milliseconds: 5000
+  retry_limit: 6
+  retry_status_codes:
+    - 400
+    - 403
+    - 404`,
+    },
+    quickVerdict: "Use this route for four registered Gemini 3.x models when the proxy must own stored-resource polling, visibility retries, and cleanup.",
+    faq: [
+      {
+        question: "Which Gemini models does this route register?",
+        answer: "The catalog registers Gemini 3.5 Flash, Gemini 3 Flash Preview, Gemini 3.1 Flash Lite, and Gemini 3.1 Pro Preview.",
+      },
+      {
+        question: "Can a Gemini request contain assistant history?",
+        answer: "No. Each Gemini Interactions route rejects an assistant message before it sends an upstream request.",
+      },
+      {
+        question: "What happens when Gemini returns an incomplete interaction?",
+        answer: "The proxy cleans up the stored interaction and returns a provider error. It does not replay the partial output.",
+      },
+      {
+        question: "How does the proxy handle delayed Gemini resource visibility?",
+        answer: "The Gemini transport declares six retries at five-second intervals for HTTP 400, 403, and 404 responses after creation.",
+      },
     ],
   }),
   page({
