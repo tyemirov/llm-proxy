@@ -42,6 +42,18 @@ type managementProviderKeyVerificationHTTPDoer struct {
 }
 
 func (httpDoer managementProviderKeyVerificationHTTPDoer) Do(request *http.Request) (*http.Response, error) {
+	if request.Header.Get("x-goog-api-key") != "" && strings.HasSuffix(request.URL.Path, "/interactions/verification") {
+		responseBody := `{}`
+		if request.Method == http.MethodGet {
+			responseBody = `{"id":"verification","status":"completed"}`
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(strings.NewReader(responseBody)),
+			Request:    request,
+		}, nil
+	}
 	if request.Body == nil {
 		return httpDoer.next.Do(request)
 	}
@@ -57,6 +69,9 @@ func (httpDoer managementProviderKeyVerificationHTTPDoer) Do(request *http.Reque
 	switch {
 	case request.Header.Get("x-goog-api-key") != "":
 		responseBody = `{"status":"completed"}`
+		if bytes.Contains(requestBody, []byte(`"background":true`)) {
+			responseBody = `{"id":"verification","status":"queued"}`
+		}
 	case request.Header.Get("x-api-key") != "":
 		responseBody = `{"id":"verification","type":"message","role":"assistant"}`
 	case strings.HasSuffix(request.URL.Path, "/responses"):
@@ -948,6 +963,7 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 		{provider: proxy.ProviderNameOpenAI, apiKey: testManagementOpenAIKey, model: proxy.ModelNameGPT5},
 		{provider: proxy.ProviderNameDeepSeek, apiKey: testManagementDeepSeekKey, model: proxy.ModelNameDeepSeekV4Flash},
 		{provider: proxy.ProviderNameMoonshot, apiKey: "sk-moonshot", model: proxy.ModelNameMoonshotKimiK3},
+		{provider: proxy.ProviderNameGemini, apiKey: "sk-gemini", model: proxy.ModelNameGemini36Flash},
 	} {
 		request := authenticatedJSONRequest(http.MethodPut, tenantPath+"/provider-connections/"+providerKeyRequest.provider, managementProviderKeyRequestBody(t, providerKeyRequest.apiKey, providerKeyRequest.model, ""), sessionCookie)
 		response := httptest.NewRecorder()
@@ -985,9 +1001,17 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 	if kimiK3Response.Code != http.StatusOK {
 		t.Fatalf("save Kimi K3 reasoning defaults status=%d body=%s", kimiK3Response.Code, kimiK3Response.Body.String())
 	}
-	gpt56Response = saveReasoningDefault(proxy.ProviderNameOpenAI, proxy.ModelNameGPT56, "max")
-	if gpt56Response.Code != http.StatusOK {
-		t.Fatalf("restore GPT-5.6 reasoning defaults status=%d body=%s", gpt56Response.Code, gpt56Response.Body.String())
+	gemini36Response := saveReasoningDefault(proxy.ProviderNameGemini, proxy.ModelNameGemini36Flash, "minimal")
+	if gemini36Response.Code != http.StatusOK {
+		t.Fatalf("save Gemini 3.6 reasoning defaults status=%d body=%s", gemini36Response.Code, gemini36Response.Body.String())
+	}
+	gemini37MinimalResponse := saveReasoningDefault(proxy.ProviderNameGemini, proxy.ModelNameGemini37Flash, "minimal")
+	if gemini37MinimalResponse.Code != http.StatusBadRequest || !strings.Contains(gemini37MinimalResponse.Body.String(), "managed_routing_defaults_invalid") {
+		t.Fatalf("Gemini 3.7 minimal reasoning status=%d body=%s", gemini37MinimalResponse.Code, gemini37MinimalResponse.Body.String())
+	}
+	gemini37Response := saveReasoningDefault(proxy.ProviderNameGemini, proxy.ModelNameGemini37Flash, "high")
+	if gemini37Response.Code != http.StatusOK {
+		t.Fatalf("save Gemini 3.7 reasoning defaults status=%d body=%s", gemini37Response.Code, gemini37Response.Body.String())
 	}
 
 	profileRequest := httptest.NewRequest(http.MethodGet, tenantPath, nil)
@@ -1027,7 +1051,7 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 	if decodeError := json.Unmarshal(profileResponse.Body.Bytes(), &profile); decodeError != nil {
 		t.Fatalf("decode capability profile: %v", decodeError)
 	}
-	if profile.Tenant.Defaults.Provider != proxy.ProviderNameOpenAI || profile.Tenant.Defaults.Model != proxy.ModelNameGPT56 || profile.Tenant.Defaults.ReasoningEffort != "max" {
+	if profile.Tenant.Defaults.Provider != proxy.ProviderNameGemini || profile.Tenant.Defaults.Model != proxy.ModelNameGemini37Flash || profile.Tenant.Defaults.ReasoningEffort != "high" {
 		t.Fatalf("profile defaults=%+v", profile.Tenant.Defaults)
 	}
 	expectedModelEfforts := map[string][]string{
@@ -1039,6 +1063,11 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 	}
 	matchedModelEfforts := map[string]bool{}
 	matchedKimiK3 := false
+	expectedGeminiModelEfforts := map[string][]string{
+		proxy.ModelNameGemini36Flash: {"minimal", "low", "medium", "high"},
+		proxy.ModelNameGemini37Flash: {"low", "medium", "high"},
+	}
+	matchedGeminiModelEfforts := map[string]bool{}
 	for _, provider := range profile.Providers {
 		if provider.ID == proxy.ProviderNameOpenAI {
 			if len(provider.ReasoningEffort) != 0 {
@@ -1061,9 +1090,20 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 				}
 			}
 		}
+		if provider.ID == proxy.ProviderNameGemini {
+			for _, model := range provider.TextModels {
+				expectedEfforts, required := expectedGeminiModelEfforts[model.ID]
+				if required {
+					if model.ReasoningEffort == nil || model.ReasoningEffort.Adapter != "gemini_interactions" || !reflect.DeepEqual(model.ReasoningEffort.Efforts, expectedEfforts) {
+						t.Fatalf("Gemini model=%s reasoning capability=%+v want=%v", model.ID, model.ReasoningEffort, expectedEfforts)
+					}
+					matchedGeminiModelEfforts[model.ID] = true
+				}
+			}
+		}
 	}
-	if len(matchedModelEfforts) != len(expectedModelEfforts) || !matchedKimiK3 {
-		t.Fatalf("profile model capabilities=%v Kimi K3=%t want=%v", matchedModelEfforts, matchedKimiK3, expectedModelEfforts)
+	if len(matchedModelEfforts) != len(expectedModelEfforts) || !matchedKimiK3 || len(matchedGeminiModelEfforts) != len(expectedGeminiModelEfforts) {
+		t.Fatalf("profile model capabilities=%v Kimi K3=%t Gemini=%v", matchedModelEfforts, matchedKimiK3, matchedGeminiModelEfforts)
 	}
 
 	incompatibleResponse := saveReasoningDefault(proxy.ProviderNameOpenAI, proxy.ModelNameGPT5, "max")
@@ -1079,11 +1119,11 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 		t.Fatalf("noncanonical reasoning effort status=%d body=%s", nonCanonicalResponse.Code, nonCanonicalResponse.Body.String())
 	}
 	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{
-		Provider:          proxy.ProviderNameOpenAI,
-		Model:             proxy.ModelNameGPT56,
+		Provider:          proxy.ProviderNameGemini,
+		Model:             proxy.ModelNameGemini37Flash,
 		DictationProvider: proxy.ProviderNameOpenAI,
 		DictationModel:    proxy.DefaultDictationModel,
-		ReasoningEffort:   "max",
+		ReasoningEffort:   "high",
 	})
 }
 
@@ -2143,8 +2183,8 @@ func TestManagementMetaProviderRoutesWithEncryptedTenantKey(t *testing.T) {
 		if unmarshalError := json.Unmarshal(bodyBytes, &upstreamPayload); unmarshalError != nil {
 			t.Fatalf("unmarshal upstream body: %v", unmarshalError)
 		}
-		if upstreamPayload["model"] != proxy.ModelNameMuseSpark11 {
-			t.Fatalf("model=%v want=%s", upstreamPayload["model"], proxy.ModelNameMuseSpark11)
+		if upstreamPayload["model"] != proxy.ModelNameMuseSpark12 {
+			t.Fatalf("model=%v want=%s", upstreamPayload["model"], proxy.ModelNameMuseSpark12)
 		}
 		messages, messagesOK := upstreamPayload["messages"].([]any)
 		if !messagesOK || len(messages) != 2 {
@@ -2166,7 +2206,7 @@ func TestManagementMetaProviderRoutesWithEncryptedTenantKey(t *testing.T) {
 	userTwoCookie := managementSessionCookie(t, "tauth-user-two")
 	userOneTenantPath := managementDefaultTenantTestPath(t, router, userOneCookie, "")
 
-	saveKeyRequest := authenticatedJSONRequest(http.MethodPut, userOneTenantPath+"/provider-connections/meta", managementProviderKeyRequestBody(t, testManagementMetaKey, proxy.ModelNameMuseSpark11, "meta managed system"), userOneCookie)
+	saveKeyRequest := authenticatedJSONRequest(http.MethodPut, userOneTenantPath+"/provider-connections/meta", managementProviderKeyRequestBody(t, testManagementMetaKey, proxy.ModelNameMuseSpark12, "meta managed system"), userOneCookie)
 	saveKeyResponse := httptest.NewRecorder()
 	router.ServeHTTP(saveKeyResponse, saveKeyRequest)
 	if saveKeyResponse.Code != http.StatusOK {
@@ -2175,7 +2215,14 @@ func TestManagementMetaProviderRoutesWithEncryptedTenantKey(t *testing.T) {
 	if strings.Contains(saveKeyResponse.Body.String(), testManagementMetaKey) || !strings.Contains(saveKeyResponse.Body.String(), "sk-...meta") {
 		t.Fatalf("provider key response leaked or failed to mask key: %s", saveKeyResponse.Body.String())
 	}
-	for _, expectedFragment := range []string{`"id":"meta"`, `"label":"Meta"`, `"text_model":"muse-spark-1.1"`, `"text_default_model":"muse-spark-1.1"`, `"supports_dictation":false`} {
+	for _, expectedFragment := range []string{
+		`"id":"meta"`,
+		`"label":"Meta"`,
+		`"text_model":"muse-spark-1.2"`,
+		`"text_default_model":"muse-spark-1.1"`,
+		`"text_models":[{"id":"muse-spark-1.1"},{"id":"muse-spark-1.2"}]`,
+		`"supports_dictation":false`,
+	} {
 		if !strings.Contains(saveKeyResponse.Body.String(), expectedFragment) {
 			t.Fatalf("provider key response missing %q: %s", expectedFragment, saveKeyResponse.Body.String())
 		}
@@ -2188,7 +2235,7 @@ func TestManagementMetaProviderRoutesWithEncryptedTenantKey(t *testing.T) {
 		t.Fatalf("save openai key status=%d body=%s", saveOpenAIKeyResponse.Code, saveOpenAIKeyResponse.Body.String())
 	}
 
-	defaultsBody := `{"provider":"meta","model":"` + proxy.ModelNameMuseSpark11 + `","dictation_provider":"openai","dictation_model":"` + proxy.DefaultDictationModel + `","system_prompt":"","reasoning_effort":""}`
+	defaultsBody := `{"provider":"meta","model":"` + proxy.ModelNameMuseSpark12 + `","dictation_provider":"openai","dictation_model":"` + proxy.DefaultDictationModel + `","system_prompt":"meta managed system","reasoning_effort":""}`
 	defaultsRequest := authenticatedJSONRequest(http.MethodPut, userOneTenantPath+"/defaults", defaultsBody, userOneCookie)
 	defaultsResponse := httptest.NewRecorder()
 	router.ServeHTTP(defaultsResponse, defaultsRequest)
@@ -2226,7 +2273,6 @@ func TestManagementMetaProviderRoutesWithEncryptedTenantKey(t *testing.T) {
 	proxyRequestValues := url.Values{}
 	proxyRequestValues.Set("key", secretResponse.Secret)
 	proxyRequestValues.Set("prompt", "hello")
-	proxyRequestValues.Set("provider", proxy.ProviderNameMeta)
 	proxyRequest := httptest.NewRequest(http.MethodGet, "/?"+proxyRequestValues.Encode(), nil)
 	proxyResponse := httptest.NewRecorder()
 	router.ServeHTTP(proxyResponse, proxyRequest)

@@ -437,6 +437,10 @@ func validateTextOffering(offering ProviderOffering, fieldPrefix string) error {
 			if capabilities != openAIChatCompletionsSynchronousRouteCapabilities || offering.RequestProfile != constants.EmptyString {
 				return fmt.Errorf("%w: field=%s.reasoning_effort adapter=%s", ErrInvalidModelCatalog, fieldPrefix, reasoningEffort.adapter)
 			}
+		case reasoningEffortAdapterGeminiInteractions:
+			if capabilities.wireContract != textWireContractGeminiInteractions || offering.RequestProfile != constants.EmptyString {
+				return fmt.Errorf("%w: field=%s.reasoning_effort adapter=%s", ErrInvalidModelCatalog, fieldPrefix, reasoningEffort.adapter)
+			}
 		}
 	}
 	return nil

@@ -91,7 +91,7 @@ func TestManagementProviderKeyVerificationUsesEveryCanonicalTransportBeforePersi
 		{provider: proxy.ProviderNameZAI, model: proxy.ModelNameZAIGLM, transport: verificationTransportChat, tokenLimitField: "max_tokens"},
 		{provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, transport: verificationTransportGemini},
 		{provider: proxy.ProviderNameAnthropic, model: proxy.ModelNameClaudeSonnet46, transport: verificationTransportAnthropic},
-		{provider: proxy.ProviderNameMeta, model: proxy.ModelNameMuseSpark11, transport: verificationTransportChat, tokenLimitField: "max_completion_tokens"},
+		{provider: proxy.ProviderNameMeta, model: proxy.ModelNameMuseSpark12, transport: verificationTransportChat, tokenLimitField: "max_completion_tokens"},
 		{provider: proxy.ProviderNameXAI, model: proxy.ModelNameGrok43, transport: verificationTransportChat, tokenLimitField: "max_tokens"},
 		{provider: proxy.ProviderNameXAI, model: proxy.ModelNameGrok45, transport: verificationTransportResponses},
 	}

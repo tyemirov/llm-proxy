@@ -50,6 +50,20 @@ type chatMessageCandidate struct {
 	order       *int
 }
 
+func validateMessagesForResolvedTextRoute(model textModelDefinition, messages chatMessages) error {
+	if model.reasoningEffort == nil || model.reasoningEffort.adapter != reasoningEffortAdapterGeminiInteractions {
+		return nil
+	}
+	terminalMessageIndex := len(messages) - 1
+	for messages[terminalMessageIndex].role == chatRoleSystem {
+		terminalMessageIndex--
+	}
+	if messages[terminalMessageIndex].role == chatRoleAssistant {
+		return fmt.Errorf("%w: terminal assistant message", ErrInvalidChatMessages)
+	}
+	return nil
+}
+
 func newPromptChatMessages(userPrompt string, systemPrompt string, systemPromptVisibleInResponse bool) (chatMessages, error) {
 	if userPrompt == constants.EmptyString {
 		return nil, fmt.Errorf("%w: missing prompt", ErrInvalidChatMessages)

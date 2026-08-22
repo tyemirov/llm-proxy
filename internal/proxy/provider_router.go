@@ -150,6 +150,7 @@ func (geminiInteractionsTextRouteAdapter) generateText(requestContext context.Co
 		request.model,
 		request.messages,
 		request.maxTokens,
+		request.reasoningEffort,
 		request.model.executionLifecycle,
 		request.structuredOutput,
 		structuredLogger,

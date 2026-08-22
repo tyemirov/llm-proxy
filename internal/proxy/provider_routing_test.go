@@ -774,26 +774,53 @@ func TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints(t *testin
 		target         string
 		body           string
 		expectedPrompt string
+		expectedModel  string
 	}{
 		{
-			name:           "get",
+			name:           "default get",
 			method:         http.MethodGet,
 			target:         "/?key=" + TestSecret + "&prompt=meta+get&provider=" + proxy.ProviderNameMeta + "&max_tokens=321&format=application/json",
 			expectedPrompt: "meta get",
+			expectedModel:  proxy.ModelNameMuseSpark11,
 		},
 		{
-			name:           "compatibility post",
+			name:           "default compatibility post",
 			method:         http.MethodPost,
 			target:         "/?key=" + TestSecret + "&provider=" + proxy.ProviderNameMeta + "&format=application/json",
 			body:           `{"prompt":"meta post","max_tokens":321}`,
 			expectedPrompt: "meta post",
+			expectedModel:  proxy.ModelNameMuseSpark11,
 		},
 		{
-			name:           "v2 post",
+			name:           "default v2 post",
 			method:         http.MethodPost,
 			target:         "/v2?key=" + TestSecret + "&provider=" + proxy.ProviderNameMeta + "&format=application/json",
 			body:           `{"messages":[{"role":"user","content":"meta v2"}],"max_tokens":321}`,
 			expectedPrompt: "meta v2",
+			expectedModel:  proxy.ModelNameMuseSpark11,
+		},
+		{
+			name:           "Muse Spark 1.2 get",
+			method:         http.MethodGet,
+			target:         "/?key=" + TestSecret + "&prompt=meta+1.2+get&provider=" + proxy.ProviderNameMeta + "&model=" + proxy.ModelNameMuseSpark12 + "&max_tokens=321&format=application/json",
+			expectedPrompt: "meta 1.2 get",
+			expectedModel:  proxy.ModelNameMuseSpark12,
+		},
+		{
+			name:           "Muse Spark 1.2 compatibility post",
+			method:         http.MethodPost,
+			target:         "/?key=" + TestSecret + "&provider=" + proxy.ProviderNameMeta + "&format=application/json",
+			body:           `{"prompt":"meta 1.2 post","model":"muse-spark-1.2","max_tokens":321}`,
+			expectedPrompt: "meta 1.2 post",
+			expectedModel:  proxy.ModelNameMuseSpark12,
+		},
+		{
+			name:           "Muse Spark 1.2 v2 post",
+			method:         http.MethodPost,
+			target:         "/v2?key=" + TestSecret + "&provider=" + proxy.ProviderNameMeta + "&format=application/json",
+			body:           `{"messages":[{"role":"user","content":"meta 1.2 v2"}],"model":"muse-spark-1.2","max_tokens":321}`,
+			expectedPrompt: "meta 1.2 v2",
+			expectedModel:  proxy.ModelNameMuseSpark12,
 		},
 	}
 	for _, testCase := range testCases {
@@ -830,7 +857,7 @@ func TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints(t *testin
 			if decodeError := json.Unmarshal(responseRecorder.Body.Bytes(), &response); decodeError != nil {
 				subTest.Fatalf("decode response: %v", decodeError)
 			}
-			if response.Model != proxy.ModelNameMuseSpark11 || response.Response != "meta partial meta ok" {
+			if response.Model != testCase.expectedModel || response.Response != "meta partial meta ok" {
 				subTest.Fatalf("response=%+v", response)
 			}
 			if response.Usage.RequestTokens != 11 || response.Usage.ResponseTokens != 7 || response.Usage.TotalTokens != 18 {
@@ -846,8 +873,8 @@ func TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints(t *testin
 		initialRequest := capturedRequests[testCaseIndex*2]
 		continuationRequest := capturedRequests[testCaseIndex*2+1]
 		for requestIndex, capturedRequest := range []capturedMetaRequest{initialRequest, continuationRequest} {
-			if capturedRequest.payload["model"] != proxy.ModelNameMuseSpark11 {
-				t.Fatalf("request %d.%d model=%v want=%s", testCaseIndex, requestIndex, capturedRequest.payload["model"], proxy.ModelNameMuseSpark11)
+			if capturedRequest.payload["model"] != testCase.expectedModel {
+				t.Fatalf("request %d.%d model=%v want=%s", testCaseIndex, requestIndex, capturedRequest.payload["model"], testCase.expectedModel)
 			}
 			if capturedRequest.payload["max_completion_tokens"] != float64(321) {
 				t.Fatalf("request %d.%d max_completion_tokens=%v", testCaseIndex, requestIndex, capturedRequest.payload["max_completion_tokens"])
@@ -1796,6 +1823,196 @@ func TestProviderRoutingSupportsMessagesJSONPostForGemini(t *testing.T) {
 	secondStep, ok := input[1].(map[string]any)
 	if !ok || secondStep["type"] != testGeminiInteractionModelStep || geminiInteractionStepText(t, secondStep) != "Hi." {
 		t.Fatalf("secondStep=%v", input[1])
+	}
+}
+
+func TestProviderRoutingMapsExactGeminiThinkingLevels(t *testing.T) {
+	capturedPayloads := make([]map[string]any, 0, 9)
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		assertGeminiInteractionHeaders(t, request, testGeminiKey)
+		if request.Method == http.MethodDelete {
+			writeGeminiInteractionDeleted(t, responseWriter)
+			return
+		}
+		if request.Method != http.MethodPost || request.URL.Path != testGeminiInteractionsPath {
+			t.Fatalf("unexpected Gemini Interactions request=%s %s", request.Method, request.URL.Path)
+		}
+		capturedPayloads = append(capturedPayloads, decodeGeminiInteractionRequest(t, request))
+		writeGeminiInteractionSnapshot(t, responseWriter, fmt.Sprintf("thinking-%d", len(capturedPayloads)), "completed", "OK", nil)
+	}))
+	defer upstreamServer.Close()
+
+	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	testCases := []struct {
+		model   string
+		efforts []string
+	}{
+		{model: proxy.ModelNameGemini36Flash, efforts: []string{"minimal", "low", "medium", "high", ""}},
+		{model: proxy.ModelNameGemini37Flash, efforts: []string{"low", "medium", "high", ""}},
+	}
+	for _, testCase := range testCases {
+		for _, effort := range testCase.efforts {
+			query := url.Values{
+				"key":        {TestSecret},
+				"prompt":     {"Reply with exactly OK."},
+				"provider":   {proxy.ProviderNameGemini},
+				"model":      {testCase.model},
+				"max_tokens": {"65536"},
+			}
+			if effort != "" {
+				query.Set("reasoning_effort", effort)
+			}
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/?"+query.Encode(), nil))
+			if response.Code != http.StatusOK || strings.TrimSpace(response.Body.String()) != "OK" {
+				t.Fatalf("model=%s effort=%q status=%d body=%q", testCase.model, effort, response.Code, response.Body.String())
+			}
+			generationConfig, ok := capturedPayloads[len(capturedPayloads)-1]["generation_config"].(map[string]any)
+			if !ok || generationConfig["max_output_tokens"] != float64(65536) {
+				t.Fatalf("model=%s effort=%q generation_config=%v", testCase.model, effort, generationConfig)
+			}
+			thinkingLevel, present := generationConfig["thinking_level"]
+			if effort == "" && present {
+				t.Fatalf("model=%s omitted thinking_level payload=%v", testCase.model, capturedPayloads[len(capturedPayloads)-1])
+			}
+			if effort != "" && thinkingLevel != effort {
+				t.Fatalf("model=%s thinking_level=%v want=%s", testCase.model, thinkingLevel, effort)
+			}
+		}
+	}
+
+	requestCount := len(capturedPayloads)
+	for _, invalid := range []struct {
+		model  string
+		effort string
+	}{
+		{model: proxy.ModelNameGemini36Flash, effort: "max"},
+		{model: proxy.ModelNameGemini37Flash, effort: "minimal"},
+	} {
+		request := httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=review&provider=gemini&model="+invalid.model+"&reasoning_effort="+invalid.effort, nil)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "invalid reasoning_effort parameter") {
+			t.Fatalf("model=%s effort=%s status=%d body=%q", invalid.model, invalid.effort, response.Code, response.Body.String())
+		}
+	}
+	if len(capturedPayloads) != requestCount {
+		t.Fatalf("unsupported efforts reached upstream: before=%d after=%d", requestCount, len(capturedPayloads))
+	}
+}
+
+func TestProviderRoutingPreservesGeminiThinkingLevelDuringOutputContinuation(t *testing.T) {
+	capturedPayloads := make([]map[string]any, 0, 2)
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		assertGeminiInteractionHeaders(t, request, testGeminiKey)
+		if request.Method == http.MethodDelete {
+			writeGeminiInteractionDeleted(t, responseWriter)
+			return
+		}
+		capturedPayloads = append(capturedPayloads, decodeGeminiInteractionRequest(t, request))
+		if len(capturedPayloads) == 1 {
+			writeGeminiInteractionSnapshot(t, responseWriter, "thinking-partial", "incomplete", "partial ", nil)
+			return
+		}
+		writeGeminiInteractionSnapshot(t, responseWriter, "thinking-complete", "completed", "answer", nil)
+	}))
+	defer upstreamServer.Close()
+
+	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=review&provider=gemini&model="+proxy.ModelNameGemini37Flash+"&reasoning_effort=high", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || strings.TrimSpace(response.Body.String()) != "partial answer" || len(capturedPayloads) != 2 {
+		t.Fatalf("status=%d body=%q payloads=%d", response.Code, response.Body.String(), len(capturedPayloads))
+	}
+	for payloadIndex, payload := range capturedPayloads {
+		generationConfig, ok := payload["generation_config"].(map[string]any)
+		if !ok || generationConfig["thinking_level"] != "high" {
+			t.Fatalf("payload[%d] generation_config=%v", payloadIndex, payload["generation_config"])
+		}
+	}
+}
+
+func TestProviderRoutingRejectsTerminalAssistantOnlyForNewGeminiFlashRoutes(t *testing.T) {
+	upstreamRequests := 0
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		upstreamRequests++
+		assertGeminiInteractionHeaders(t, request, testGeminiKey)
+		if request.Method == http.MethodDelete {
+			writeGeminiInteractionDeleted(t, responseWriter)
+			return
+		}
+		payload := decodeGeminiInteractionRequest(t, request)
+		if payload["model"] != proxy.ModelNameGemini35Flash && payload["model"] != proxy.ModelNameGemini36Flash {
+			t.Fatalf("terminal assistant reached model=%v", payload["model"])
+		}
+		writeGeminiInteractionSnapshot(t, responseWriter, "older-prefill", "completed", "continued", nil)
+	}))
+	defer upstreamServer.Close()
+
+	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+	requests := []struct {
+		path string
+		body string
+	}{
+		{path: "/?key=" + TestSecret + "&provider=gemini", body: `{"messages":[{"role":"user","content":"Review."},{"role":"assistant","content":"Draft."}],"model":"` + proxy.ModelNameGemini36Flash + `"}`},
+		{path: "/v2?key=" + TestSecret + "&provider=gemini", body: `{"messages":[{"role":"user","content":"Review."},{"role":"assistant","content":"Draft."}],"model":"` + proxy.ModelNameGemini37Flash + `"}`},
+		{path: "/?key=" + TestSecret + "&provider=gemini", body: `{"messages":[{"role":"user","content":"Review."},{"role":"assistant","content":"Draft."},{"role":"system","content":"Be concise."}],"model":"` + proxy.ModelNameGemini36Flash + `"}`},
+	}
+	for _, testCase := range requests {
+		request := httptest.NewRequest(http.MethodPost, testCase.path, strings.NewReader(testCase.body))
+		request.Header.Set("Content-Type", "application/json")
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "invalid messages parameter") {
+			t.Fatalf("path=%s status=%d body=%q", testCase.path, response.Code, response.Body.String())
+		}
+	}
+	if upstreamRequests != 0 {
+		t.Fatalf("new Gemini terminal assistant requests reached upstream=%d", upstreamRequests)
+	}
+	userRequest := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&provider=gemini", strings.NewReader(`{"messages":[{"role":"user","content":"Review."}],"model":"`+proxy.ModelNameGemini36Flash+`"}`))
+	userRequest.Header.Set("Content-Type", "application/json")
+	userResponse := httptest.NewRecorder()
+	router.ServeHTTP(userResponse, userRequest)
+	if userResponse.Code != http.StatusOK || strings.TrimSpace(userResponse.Body.String()) != "continued" || upstreamRequests != 2 {
+		t.Fatalf("new route status=%d body=%q upstream=%d", userResponse.Code, userResponse.Body.String(), upstreamRequests)
+	}
+
+	olderRequest := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret+"&provider=gemini", strings.NewReader(`{"messages":[{"role":"user","content":"Review."},{"role":"assistant","content":"Draft."}],"model":"`+proxy.ModelNameGemini35Flash+`"}`))
+	olderRequest.Header.Set("Content-Type", "application/json")
+	olderResponse := httptest.NewRecorder()
+	router.ServeHTTP(olderResponse, olderRequest)
+	if olderResponse.Code != http.StatusOK || strings.TrimSpace(olderResponse.Body.String()) != "continued" || upstreamRequests != 4 {
+		t.Fatalf("older route status=%d body=%q upstream=%d", olderResponse.Code, olderResponse.Body.String(), upstreamRequests)
 	}
 }
 

@@ -421,6 +421,10 @@ func chatRequestFromPayload(ginContext *gin.Context, payload chatRequestPayload,
 		ginContext.String(statusCodeForError(messageError), responseMessageForError(messageError))
 		return chatRequestParameters{}, false
 	}
+	if routeMessageError := validateMessagesForResolvedTextRoute(resolvedModel, messages); routeMessageError != nil {
+		ginContext.String(statusCodeForError(routeMessageError), responseMessageForError(routeMessageError))
+		return chatRequestParameters{}, false
+	}
 
 	return chatRequestParameters{
 		messages:         messages,
@@ -502,6 +506,11 @@ func chatRequestFromV2Payload(ginContext *gin.Context, payload chatV2RequestPayl
 		} else {
 			ginContext.String(statusCodeForError(messageError), responseMessageForError(messageError))
 		}
+		return chatRequestParameters{}, false
+	}
+	if routeMessageError := validateMessagesForResolvedTextRoute(resolvedModel, messages); routeMessageError != nil {
+		messages.closeMedia()
+		ginContext.String(statusCodeForError(routeMessageError), responseMessageForError(routeMessageError))
 		return chatRequestParameters{}, false
 	}
 	if mediaCapabilityError := validateMessageMediaForResolvedTextRoute(providerDefinition, resolvedModel, messages); mediaCapabilityError != nil {

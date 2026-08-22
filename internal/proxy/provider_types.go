@@ -80,6 +80,10 @@ const (
 	ModelNameSiliconFlowDeepSeek = ModelNameDeepSeekReasoner
 	// ModelNameZAIGLM identifies the GLM 5.1 model.
 	ModelNameZAIGLM = "glm-5.1"
+	// ModelNameGemini37Flash identifies Gemini 3.7 Flash.
+	ModelNameGemini37Flash = "gemini-3.7-flash"
+	// ModelNameGemini36Flash identifies Gemini 3.6 Flash.
+	ModelNameGemini36Flash = "gemini-3.6-flash"
 	// ModelNameGemini35Flash identifies Gemini 3.5 Flash.
 	ModelNameGemini35Flash = "gemini-3.5-flash"
 	// ModelNameGemini31FlashLite identifies Gemini 3.1 Flash-Lite.
@@ -108,6 +112,8 @@ const (
 	ModelNameClaudeOpus41Alias = "claude-opus-4-1"
 	// ModelNameMuseSpark11 identifies Meta Muse Spark 1.1.
 	ModelNameMuseSpark11 = "muse-spark-1.1"
+	// ModelNameMuseSpark12 identifies Meta Muse Spark 1.2.
+	ModelNameMuseSpark12 = "muse-spark-1.2"
 	// ModelNameGrok43 identifies the current Grok 4.3 model.
 	ModelNameGrok43 = "grok-4.3"
 	// ModelNameGrok43Latest identifies the Grok 4.3 latest alias.
@@ -224,6 +230,7 @@ const (
 	reasoningEffortAdapterNone                  reasoningEffortAdapter = ""
 	reasoningEffortAdapterOpenAIResponses       reasoningEffortAdapter = "openai_responses"
 	reasoningEffortAdapterOpenAIChatCompletions reasoningEffortAdapter = "openai_chat_completions"
+	reasoningEffortAdapterGeminiInteractions    reasoningEffortAdapter = "gemini_interactions"
 )
 
 type reasoningEffortCapability struct {
@@ -247,6 +254,12 @@ var reasoningEffortAdapterSupportedValues = map[reasoningEffortAdapter]map[strin
 		"low":  {},
 		"high": {},
 		"max":  {},
+	},
+	reasoningEffortAdapterGeminiInteractions: {
+		"minimal": {},
+		"low":     {},
+		"medium":  {},
+		"high":    {},
 	},
 }
 
