@@ -1032,6 +1032,9 @@ provider connection records and one provider profile record. It maps every
 predecessor value through the current provider definition. It re-encrypts the
 credential with the provider field identity as associated data. The transaction
 verifies every value and timestamp before it removes the predecessor table.
+Before current-catalog validation, startup atomically replaces each predecessor
+model that a schema-version-10 catalog record identifies. It also replaces the
+matching tenant default.
 Current-schema reads use only provider connection records and provider profile
 records.
 
