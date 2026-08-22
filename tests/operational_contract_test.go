@@ -19,6 +19,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -271,6 +273,41 @@ func TestOperationalEnvironmentExamplesStayDocumentationOnly(testingInstance *te
 		} {
 			if strings.Contains(environmentDocumentation, forbiddenFragment) {
 				testingInstance.Fatalf("environment documentation %s contains runnable value %q: %s", relativePath, forbiddenFragment, environmentDocumentation)
+			}
+		}
+	}
+}
+
+func TestOperationalManagedModelMigrationsStayCatalogOwned(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	catalogDocument, readCatalogError := os.ReadFile(filepath.Join(repositoryRoot, "configs", "providers.yml"))
+	if readCatalogError != nil {
+		testingInstance.Fatalf("read provider catalog: %v", readCatalogError)
+	}
+	var catalog struct {
+		ModelMigrations []struct {
+			SourceModel string `yaml:"source_model"`
+			TargetModel string `yaml:"target_model"`
+		} `yaml:"model_migrations"`
+	}
+	if decodeError := yaml.Unmarshal(catalogDocument, &catalog); decodeError != nil {
+		testingInstance.Fatalf("decode provider catalog model migrations: %v", decodeError)
+	}
+	if len(catalog.ModelMigrations) == 0 {
+		testingInstance.Fatal("provider catalog has no managed model migrations")
+	}
+	storeDocument, readStoreError := os.ReadFile(filepath.Join(repositoryRoot, "internal", "proxy", "management_store.go"))
+	if readStoreError != nil {
+		testingInstance.Fatalf("read managed store: %v", readStoreError)
+	}
+	storeSource := string(storeDocument)
+	if strings.Contains(storeSource, "ModelName") {
+		testingInstance.Fatal("managed store contains a compiled model identifier constant")
+	}
+	for migrationIndex, migration := range catalog.ModelMigrations {
+		for field, model := range map[string]string{"source_model": migration.SourceModel, "target_model": migration.TargetModel} {
+			if model != "" && strings.Contains(storeSource, model) {
+				testingInstance.Fatalf("managed store contains catalog model migration %d %s=%s", migrationIndex, field, model)
 			}
 		}
 	}
@@ -1497,6 +1534,45 @@ func TestOperationalLiveConfigRequiresManagementAndSafelyLoadsDotenv(testingInst
 	}
 }
 
+func TestOperationalLiveConfigRejectsDuplicateDotenvNames(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	environmentFile := filepath.Join(fixtureRoot, "live.env")
+	configurationOutput := filepath.Join(fixtureRoot, "live-config.yml")
+	const firstCredential = "first-provider-credential"
+	const secondCredential = "second-provider-credential"
+	writeOperationalFile(
+		testingInstance,
+		environmentFile,
+		"OPENAI_API_KEY="+firstCredential+"\nOPENAI_API_KEY="+secondCredential+"\n",
+		0o600,
+	)
+	command := exec.Command(
+		filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"),
+		"--write-config",
+		configurationOutput,
+	)
+	command.Dir = repositoryRoot
+	command.Env = []string{
+		"PATH=" + os.Getenv("PATH"),
+		"LIVE_ENV_FILE=" + environmentFile,
+		"LLM_PROXY_LIVE_PORT=18181",
+	}
+	output, commandError := command.CombinedOutput()
+	if commandError == nil {
+		testingInstance.Fatalf("live provider harness accepted a duplicate dotenv name: %s", output)
+	}
+	outputText := string(output)
+	if !strings.Contains(outputText, "duplicate dotenv name: "+environmentFile+":2: OPENAI_API_KEY") {
+		testingInstance.Fatalf("live provider harness did not identify the duplicate dotenv name: %s", outputText)
+	}
+	for _, credential := range []string{firstCredential, secondCredential} {
+		if strings.Contains(outputText, credential) {
+			testingInstance.Fatalf("live provider harness exposed a duplicate credential: %s", outputText)
+		}
+	}
+}
+
 func TestOperationalLiveConfigWritesWithoutProviderKeys(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	configurationOutput := filepath.Join(testingInstance.TempDir(), "live-config.yml")
@@ -1602,61 +1678,6 @@ func TestOperationalLiveHarnessVerifiesEachKeyBeforeItsSmokeRequest(testingInsta
 	expectedPayload := `payload {"fields":{"api_key":"` + providerKey + `"},"text_model":"gpt-4.1","system_prompt":""}`
 	if !strings.Contains(capture, expectedPayload) {
 		testingInstance.Fatalf("live verification payload mismatch: %s", capture)
-	}
-	assertOperationalProxyChildStopped(testingInstance, fixture.proxyPIDPath)
-}
-
-func TestOperationalLiveGeminiHarnessRunsExactThinkingMatrix(testingInstance *testing.T) {
-	repositoryRoot := operationalRepositoryRoot(testingInstance)
-	fixture := newOperationalLiveHarnessFixture(testingInstance)
-	fixtureRoot := testingInstance.TempDir()
-	environmentFile := filepath.Join(fixtureRoot, "live.env")
-	operationCapture := filepath.Join(fixtureRoot, "operations.log")
-	const (
-		providerKey = "test-live-gemini-key"
-		modelID     = "gemini-3.6-flash"
-	)
-	writeOperationalFile(testingInstance, environmentFile, "GEMINI_API_KEY="+providerKey+"\n", 0o600)
-	command := exec.Command(filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_gemini.sh"))
-	command.Dir = repositoryRoot
-	command.Env = []string{
-		"PATH=" + fixture.toolDirectory + string(os.PathListSeparator) + os.Getenv("PATH"),
-		"GO=" + filepath.Join(fixture.toolDirectory, "go"),
-		"LLM_PROXY_LIVE_PORT=" + strconv.Itoa(operationalLoopbackPort(testingInstance)),
-		"PROXY_PID_CAPTURE=" + fixture.proxyPIDPath,
-		"LIVE_ENV_FILE=" + environmentFile,
-		"LLM_PROXY_LIVE_GEMINI_MODEL=" + modelID,
-		"LIVE_OPERATION_CAPTURE=" + operationCapture,
-	}
-	output, commandError := command.CombinedOutput()
-	if commandError != nil {
-		testingInstance.Fatalf("live Gemini reasoning harness failed: %v\n%s", commandError, output)
-	}
-	outputText := string(output)
-	for _, reasoningEffort := range []string{"omitted", "minimal", "low", "medium", "high"} {
-		expected := "live provider smoke passed: provider=gemini model=" + modelID + " status=200 reasoning_effort=" + reasoningEffort
-		if !strings.Contains(outputText, expected) {
-			testingInstance.Fatalf("live Gemini output omitted %q: %s", expected, output)
-		}
-	}
-	if strings.Contains(outputText, providerKey) || strings.Contains(outputText, "live-generated-secret") {
-		testingInstance.Fatalf("live Gemini output exposed credential material: %s", output)
-	}
-	captureBytes, readError := os.ReadFile(operationCapture)
-	if readError != nil {
-		testingInstance.Fatalf("read live Gemini operation capture: %v", readError)
-	}
-	capture := string(captureBytes)
-	if strings.Count(capture, "verify PUT ") != 1 || strings.Count(capture, "smoke POST ") != 5 {
-		testingInstance.Fatalf("live Gemini operation count mismatch: %s", capture)
-	}
-	for _, reasoningEffort := range []string{"minimal", "low", "medium", "high"} {
-		if !strings.Contains(capture, `"reasoning_effort":"`+reasoningEffort+`"`) {
-			testingInstance.Fatalf("live Gemini capture omitted reasoning_effort=%s: %s", reasoningEffort, capture)
-		}
-	}
-	if strings.Count(capture, `"model":"`+modelID+`"`) != 5 {
-		testingInstance.Fatalf("live Gemini capture omitted exact model requests: %s", capture)
 	}
 	assertOperationalProxyChildStopped(testingInstance, fixture.proxyPIDPath)
 }
@@ -1827,7 +1848,7 @@ func TestOperationalLiveHarnessRunsCatalogSelectedImageMatrixAfterVerification(t
 		testingInstance.Fatalf("live provider image matrix failed: %v\n%s", commandError, output)
 	}
 	outputText := string(output)
-	expectedModels := []string{"gpt-4.1", "kimi-k2.6", "kimi-k2.7-code", "kimi-k2.7-code-highspeed", "kimi-k3", "gemini-2.5-flash", "claude-sonnet-4-6", "grok-4.5"}
+	expectedModels := []string{"gpt-4.1", "kimi-k2.6", "kimi-k2.7-code", "kimi-k2.7-code-highspeed", "kimi-k3", "gemini-3.5-flash", "claude-sonnet-4-6", "grok-4.5"}
 	expectedProviders := []string{"openai", "moonshot", "moonshot", "moonshot", "moonshot", "gemini", "anthropic", "xai"}
 	for index, provider := range expectedProviders {
 		expectedVerification := "live provider verification passed: provider=" + provider + " model=" + expectedModels[index] + " status=200"
@@ -2090,7 +2111,7 @@ write_response_headers() {
 
 case "${request_url}" in
   */api/public/capabilities)
-    builtin printf '%s' '{"offerings":[{"provider":"openai","model":"gpt-4.1","capabilities":["image_input","text"]},{"provider":"anthropic","model":"claude-sonnet-4-6","capabilities":["image_input","text"]},{"provider":"gemini","model":"gemini-2.5-flash","capabilities":["audio_input","image_input","text"]},{"provider":"gemini","model":"gemini-3.6-flash","capabilities":["text"],"reasoning_efforts":["minimal","low","medium","high"]},{"provider":"gemini","model":"gemini-3.7-flash","capabilities":["text"],"reasoning_efforts":["low","medium","high"]},{"provider":"moonshot","model":"kimi-k2.6","capabilities":["image_input","text"]},{"provider":"moonshot","model":"kimi-k2.7-code","capabilities":["image_input","text"]},{"provider":"moonshot","model":"kimi-k2.7-code-highspeed","capabilities":["image_input","text"]},{"provider":"moonshot","model":"kimi-k3","capabilities":["image_input","text"]},{"provider":"xai","model":"grok-4.5","capabilities":["image_input","text"]},{"provider":"dashscope","model":"qwen-plus","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.6-flash","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.7-max","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.7-plus","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.1","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.1-highspeed","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.5","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.5-highspeed","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.7","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.7-highspeed","capabilities":["text"]}]}' >"${output_path}"
+    builtin printf '%s' '{"offerings":[{"provider":"openai","model":"gpt-4.1","capabilities":["image_input","text"]},{"provider":"anthropic","model":"claude-sonnet-4-6","capabilities":["image_input","text"]},{"provider":"gemini","model":"gemini-3.5-flash","capabilities":["audio_input","image_input","text"]},{"provider":"moonshot","model":"kimi-k2.6","capabilities":["image_input","text"]},{"provider":"moonshot","model":"kimi-k2.7-code","capabilities":["image_input","text"]},{"provider":"moonshot","model":"kimi-k2.7-code-highspeed","capabilities":["image_input","text"]},{"provider":"moonshot","model":"kimi-k3","capabilities":["image_input","text"]},{"provider":"xai","model":"grok-4.5","capabilities":["image_input","text"]},{"provider":"dashscope","model":"qwen-plus","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.6-flash","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.7-max","capabilities":["text"]},{"provider":"dashscope","model":"qwen3.7-plus","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.1","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.1-highspeed","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.5","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.5-highspeed","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.7","capabilities":["text"]},{"provider":"minimax","model":"minimax-m2.7-highspeed","capabilities":["text"]}]}' >"${output_path}"
     builtin printf '%s' 200
     ;;
   */api/management/account)
@@ -2098,7 +2119,7 @@ case "${request_url}" in
     builtin printf '%s' 200
     ;;
   */api/management/tenants/tenant-live/secrets)
-    builtin printf '%s' '{"secret":"live-generated-secret","profile":{"providers":[{"id":"openai","text_default_model":"gpt-4.1"},{"id":"anthropic","text_default_model":"claude-sonnet-4-6"},{"id":"gemini","text_default_model":"gemini-2.5-flash"},{"id":"moonshot","text_default_model":"kimi-k2.6"},{"id":"minimax","text_default_model":"minimax-m2.7"},{"id":"xai","text_default_model":"grok-4.3"},{"id":"deepseek","text_default_model":"deepseek-v4-flash"}]}}' >"${output_path}"
+    builtin printf '%s' '{"secret":"live-generated-secret","profile":{"providers":[{"id":"openai","text_default_model":"gpt-4.1"},{"id":"anthropic","text_default_model":"claude-sonnet-4-6"},{"id":"gemini","text_default_model":"gemini-3.5-flash"},{"id":"moonshot","text_default_model":"kimi-k2.6"},{"id":"minimax","text_default_model":"minimax-m2.7"},{"id":"xai","text_default_model":"grok-4.3"},{"id":"deepseek","text_default_model":"deepseek-v4-flash"}]}}' >"${output_path}"
     builtin printf '%s' 200
     ;;
   */api/management/tenants/tenant-live/provider-connections/*)
