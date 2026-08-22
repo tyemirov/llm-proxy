@@ -25,6 +25,40 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B155] (P1) {I231} Migrate retired Gemini selections before provider validation.
+  Goal:
+  Preserve each stored Gemini configuration during the schema-version-10
+  migration.
+  Evidence:
+  - Expected: Startup replaces each stored Gemini 2.5 selection before
+    current-catalog validation.
+  - Actual: Startup validates a schema-version-8 selection during the
+    schema-version-9 migration and rejects the retired model.
+  Requirements:
+  - Use the schema-version-10 catalog records to replace each predecessor
+    model.
+  - Replace the selected model in each affected provider profile and
+    same-provider tenant default.
+  - Preserve provider credentials, system prompts, timestamps, and historical
+    usage records.
+  - Reject retired Gemini selections after the schema-version-10 migration.
+  Validation:
+  - Prove startup migration from schema version 8 for each retired Gemini
+    model.
+  - Prove preservation of credentials, prompts, timestamps, and historical
+    usage records.
+  - Run `make ci` after the last repository change.
+  Resolution:
+  - Predecessor migrations use the schema-version-10 catalog records before
+    current-catalog validation.
+  - Schema-version-8 startup preserves Gemini credentials, prompts,
+    timestamps, and historical usage records while it reaches the current
+    schema.
+  - Schema-version-8 startup tests cover each retired Gemini model and the
+    transaction failure paths.
+  - The final `make ci` passed all 11 gates with 100.0 percent Go statement
+    coverage.
+
 - [x] [B154] (P1) Move model migration policy into the provider catalog.
   Goal:
   Keep each persisted model identifier in the provider catalog.
