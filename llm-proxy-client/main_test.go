@@ -356,7 +356,7 @@ func TestCommandReadsPromptFileAndOptionalBodyFields(t *testing.T) {
 
 func TestCommandReadsCurrentModelProfile(t *testing.T) {
 	profilePath := filepath.Join(t.TempDir(), "current-model.json")
-	replaceCommandModelProfile(t, profilePath, `{"provider":"gemini","model":"gemini-2.5-flash"}`)
+	replaceCommandModelProfile(t, profilePath, `{"provider":"gemini","model":"gemini-3.5-flash"}`)
 	capturedRequests := []capturedProxyRequest{}
 	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 		bodyBytes, readError := io.ReadAll(httpRequest.Body)
@@ -381,7 +381,7 @@ func TestCommandReadsCurrentModelProfile(t *testing.T) {
 		provider string
 		model    string
 	}{
-		{provider: "gemini", model: "gemini-2.5-flash"},
+		{provider: "gemini", model: "gemini-3.5-flash"},
 		{provider: "openai", model: "gpt-5-mini"},
 	} {
 		var stdout bytes.Buffer
@@ -405,7 +405,7 @@ func TestCommandReadsCurrentModelProfile(t *testing.T) {
 		provider string
 		model    string
 	}{
-		{provider: "gemini", model: "gemini-2.5-flash"},
+		{provider: "gemini", model: "gemini-3.5-flash"},
 		{provider: "openai", model: "gpt-5-mini"},
 	} {
 		parsedURL, parseError := url.Parse(capturedRequests[requestIndex].path)
@@ -423,7 +423,7 @@ func TestCommandReadsCurrentModelProfile(t *testing.T) {
 
 func TestCommandRejectsCompetingModelProfileSourcesBeforeHTTP(t *testing.T) {
 	profilePath := filepath.Join(t.TempDir(), "current-model.json")
-	replaceCommandModelProfile(t, profilePath, `{"provider":"gemini","model":"gemini-2.5-flash"}`)
+	replaceCommandModelProfile(t, profilePath, `{"provider":"gemini","model":"gemini-3.5-flash"}`)
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 		requestCount++
