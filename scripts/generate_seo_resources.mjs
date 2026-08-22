@@ -16,7 +16,7 @@ const REPORT_PATH = "docs/marketing/seo-resource-cluster-report.md";
 const RESOURCE_PUBLISHED_DATE = "2026-07-06";
 const RESOURCE_DEFAULT_MODIFIED_DATE = "2026-07-11";
 const CURRENT_PUBLIC_CONTENT_MODIFIED_DATE = "2026-08-08";
-const PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE = "2026-08-20";
+const PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE = "2026-08-22";
 const LANDING_MODIFIED_DATE = CURRENT_PUBLIC_CONTENT_MODIFIED_DATE;
 const PRODUCT_NAME = "LLM Proxy";
 const API_DOCUMENTATION_PATH = "/docs/";
@@ -1392,7 +1392,7 @@ text = client.post_messages(
       ["Unconfigured-provider behavior", "A selected provider without a saved tenant key returns 503.", "Operators can add provider credentials without changing service config."],
     ],
     examples: [
-      ["Meta Muse route", "A caller sends provider=meta and model=muse-spark-1.1 through Chat Completions."],
+      ["Meta Muse route", "A caller sends provider=meta and model=muse-spark-1.2 through Chat Completions."],
       ["Qwen alias", "A caller uses provider=qwen for DashScope routing."],
       ["MiniMax route", "A caller can select any configured MiniMax M2 route, such as provider=minimax and model=minimax-m2.7-highspeed, through the shared Chat Completions adapter."],
       ["xAI route", "A Grok text request uses the OpenAI-compatible chat adapter behind provider=xai."],
@@ -1412,27 +1412,31 @@ text = client.post_messages(
     description: "Run model-specific Gemini Interactions lifecycles while callers keep one blocking proxy request.",
     audience: "Developers adding Gemini as a provider without bringing Gemini-specific payloads into every app.",
     problem: "Gemini models differ between stored background Interactions and non-stored synchronous Interactions, which shared proxy callers should not have to coordinate.",
-    solution: "LLM Proxy selects the configured model lifecycle, polls and cleans up Gemini 3.x resources, and resolves Gemini 2.5 synchronously behind one blocking caller request.",
+    solution: "LLM Proxy selects the configured model lifecycle, maps exact Gemini 3.6 and 3.7 thinking levels, polls and cleans up Gemini 3.x resources, and resolves Gemini 2.5 synchronously behind one blocking caller request.",
     steps: [
       "Keep the Gemini transport and offerings in providers.yml, then save the Gemini API key in tenant settings.",
       "Select provider=gemini or set Gemini as a tenant default.",
       "Send canonical messages through /v2 or compatibility text requests.",
+      "Select only a thinking level that the exact Gemini 3.6 or 3.7 route declares.",
       "Keep max_tokens within configured Gemini output limits.",
     ],
     features: [
       ["Native adapter", "The backend maps user and assistant messages into Gemini interaction steps.", "System instructions use Gemini's system_instruction shape."],
       ["Resource lifecycle", "The proxy polls queued and in-progress Gemini 3.x interactions server-side.", "Gemini 2.5 requests are synchronous and non-stored; active 3.x resources are cancelled and deleted on exit."],
+      ["Exact thinking levels", "Gemini 3.6 maps minimal, low, medium, and high; Gemini 3.7 maps low, medium, and high.", "Omission keeps Google's medium default, and continuations retain an explicit selection."],
       ["Tenant defaults", "Omitted model uses the tenant's saved Gemini text model.", "Client code can omit the model while tenant settings remain authoritative."],
       ["Output limit validation", "Gemini max_tokens values above configured limits return 400 before upstream calls.", "Known constraints are enforced at the edge."],
     ],
     examples: [
       ["Gemini summary", "A service sends provider=gemini and omits model to use the configured default."],
+      ["Thinking control", "A Gemini 3.7 Flash request sends reasoning_effort=high and the adapter writes generation_config.thinking_level=high."],
       ["Long transcript", "A /v2 messages request routes through Gemini without a Gemini SDK."],
       ["Limit check", "A caller sets max_tokens inside the configured Gemini limit."],
     ],
     limitations: [
       "Gemini dictation is not exposed through /dictate in this repo.",
       "Web search is not marked supported for Gemini in the current proxy catalog.",
+      "Gemini 3.6 Flash and Gemini 3.7 Flash reject a final non-system assistant message.",
       "The Gemini model list must be maintained in providers.yml.",
     ],
   }),
@@ -2577,7 +2581,7 @@ Generated: ${currentResourceModifiedDate}
 |---|---|---|---|
 | No zero-knowledge guarantee | Backend decrypts provider keys to call upstream providers. | README management UI | Say encrypted at rest for storage/backups/dumps, not user-only decryption. |
 | Not every upstream feature is exposed | Provider adapters define current capabilities. | README provider and dictation matrices | Do not claim universal provider feature parity. |
-| Meta support is text-only | Muse Spark 1.1 uses the shared Chat Completions adapter. | README provider-specific details | Do not imply Meta dictation, web search, tools, multimodal inputs, or Responses fallback. |
+| Meta support is text-only | Muse Spark 1.1 and 1.2 use the shared Chat Completions adapter. | README provider-specific details | Do not imply Meta dictation, web search, tools, multimodal inputs, or Responses fallback. |
 | Web search limited to configured OpenAI models | Other providers are marked unsupported. | README provider-specific details | Do not imply search across all providers. |
 | Third-party static-page telemetry | Public static pages load Google Analytics and LoopAware scripts. | site/index.html, resource generator | Do not claim collection, retention, consent, or opt-out behavior without approved legal or provider documentation. |
 | Live provider tests can spend money | Live smoke tests are not part of CI. | README local automation | Do not present live tests as routine CI. |
@@ -2588,7 +2592,7 @@ Generated: ${currentResourceModifiedDate}
 - LLM Proxy exposes GET /, POST /, POST /v2, and POST /dictate behind tenant-secret authentication.
 - Direct HTTP, the official Go package, the official Python package, and the installable CLI converge on canonical POST /v2 messages for text.
 - Provider and model selection can change the supported route without replacing the application's canonical messages integration.
-- It routes text to OpenAI, Meta Muse Spark 1.1 and other OpenAI-compatible providers, Anthropic, Gemini, and Grok/xAI as documented in the provider matrix.
+- It routes text to OpenAI, both Meta Muse Spark models, and other supported providers as documented in the provider matrix.
 - It routes dictation through /dictate for OpenAI, SiliconFlow, Z.AI, and Grok/xAI as documented.
 - It keeps upstream provider API keys server-side and rejects provider-key-like fields on public proxy requests.
 - It can run a TAuth-protected self-service management UI that automatically creates a missing client key, autosaves selected-provider settings, and requires one persisted provider key before Settings can close.
