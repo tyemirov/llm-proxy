@@ -1,4 +1,40 @@
 schema_version: 1
+model_migrations:
+    - managed_schema_version: 4
+      provider: qwencloud
+      operation: text
+      source_model: qwen3.8-max-preview
+      target_model: ""
+    - managed_schema_version: 5
+      provider: minimax
+      operation: text
+      source_model: MiniMax-M2.7
+      target_model: minimax-m2.7
+    - managed_schema_version: 5
+      provider: siliconflow
+      operation: text
+      source_model: deepseek-ai/DeepSeek-R1
+      target_model: deepseek-reasoner
+    - managed_schema_version: 5
+      provider: siliconflow
+      operation: dictation
+      source_model: FunAudioLLM/SenseVoiceSmall
+      target_model: sensevoice-small
+    - managed_schema_version: 10
+      provider: gemini
+      operation: text
+      source_model: gemini-2.5-flash
+      target_model: gemini-3.5-flash
+    - managed_schema_version: 10
+      provider: gemini
+      operation: text
+      source_model: gemini-2.5-flash-lite
+      target_model: gemini-3.5-flash
+    - managed_schema_version: 10
+      provider: gemini
+      operation: text
+      source_model: gemini-2.5-pro
+      target_model: gemini-3.5-flash
 operations:
     - id: text
       input_artifacts:
@@ -406,24 +442,6 @@ models:
       operations:
         - dictation
       media_inputs: []
-    - id: gemini-3.7-flash
-      publisher: google
-      family: gemini
-      version: gemini-3.7-flash
-      operations:
-        - text
-      media_inputs:
-        - image
-        - audio
-    - id: gemini-3.6-flash
-      publisher: google
-      family: gemini
-      version: gemini-3.6-flash
-      operations:
-        - text
-      media_inputs:
-        - image
-        - audio
     - id: gemini-3.5-flash
       publisher: google
       family: gemini
@@ -455,33 +473,6 @@ models:
       publisher: google
       family: gemini
       version: gemini-3.1-flash-lite
-      operations:
-        - text
-      media_inputs:
-        - image
-        - audio
-    - id: gemini-2.5-flash
-      publisher: google
-      family: gemini
-      version: gemini-2.5-flash
-      operations:
-        - text
-      media_inputs:
-        - image
-        - audio
-    - id: gemini-2.5-flash-lite
-      publisher: google
-      family: gemini
-      version: gemini-2.5-flash-lite
-      operations:
-        - text
-      media_inputs:
-        - image
-        - audio
-    - id: gemini-2.5-pro
-      publisher: google
-      family: gemini
-      version: gemini-2.5-pro
       operations:
         - text
       media_inputs:
@@ -695,6 +686,12 @@ providers:
           response_protocol: openai_responses
           usage_mapping: openai_responses
           lifecycle: pollable_resource
+          resource_visibility:
+            retry_interval_milliseconds: 2000
+            retry_limit: 1
+            retry_status_codes:
+                - 403
+                - 404
           protocol_parameters:
             model_field: model
             token_field: max_output_tokens
@@ -2417,6 +2414,13 @@ providers:
           response_protocol: gemini_interactions
           usage_mapping: gemini_interactions
           lifecycle: pollable_resource
+          resource_visibility:
+            retry_interval_milliseconds: 5000
+            retry_limit: 6
+            retry_status_codes:
+                - 400
+                - 403
+                - 404
           protocol_parameters:
             model_field: model
             token_field: generation_config.max_output_tokens
@@ -2427,48 +2431,7 @@ providers:
                     - completed
                 continue:
                     - incomplete
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - blocked
-                - cancelled
-                - failed
-                - unknown_status
-            usage_fields:
-                input: usage.input_tokens
-                output: usage.output_tokens
-                total: usage.total_tokens
-        - id: text_synchronous
-          endpoint:
-            method: POST
-            default_base_url: https://generativelanguage.googleapis.com/v1beta
-            path: /interactions
-          authentication:
-            kind: header
-            field: api_key
-            header: x-goog-api-key
-            prefix: ""
-          headers:
-            - name: Api-Revision
-              value: "2026-05-20"
-          request_protocol: gemini_interactions
-          response_protocol: gemini_interactions
-          usage_mapping: gemini_interactions
-          lifecycle: synchronous_completion
-          protocol_parameters:
-            model_field: model
-            token_field: generation_config.max_output_tokens
-            output_fields:
-                - outputs[].text
-            finish_rules:
-                complete:
-                    - completed
-                continue:
-                    - incomplete
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
+            continuation_rules: []
             error_rules:
                 - blocked
                 - cancelled
@@ -2479,143 +2442,12 @@ providers:
                 output: usage.output_tokens
                 total: usage.total_tokens
       offerings:
-        - model: gemini-3.7-flash
-          upstream_model: gemini-3.7-flash
-          transport: text_pollable
-          operations:
-            - text
-          output_token_limit: 65536
-          reasoning_effort:
-            adapter: gemini_interactions
-            efforts:
-                - low
-                - medium
-                - high
-          media_inputs:
-            - image
-            - audio
-          media_limits:
-            - id: inline_request_bytes
-              media_type: all
-              transport: inline
-              status: bounded
-              value: 20000000
-              unit: bytes
-              scope: request_encoded_bytes
-              source: https://ai.google.dev/gemini-api/docs/file-input-methods
-              last_verified: "2026-08-22"
-            - id: image_count
-              media_type: image
-              transport: any
-              status: bounded
-              value: 3600
-              unit: files
-              scope: request
-              source: https://ai.google.dev/gemini-api/docs/image-understanding
-              last_verified: "2026-08-22"
-            - id: audio_count
-              media_type: audio
-              transport: any
-              status: unknown
-              unit: files
-              scope: request
-              source: https://ai.google.dev/gemini-api/docs/audio
-              last_verified: "2026-08-22"
-            - id: image_file_bytes
-              media_type: image
-              transport: file
-              status: bounded
-              value: 2000000000
-              unit: bytes
-              scope: attachment
-              source: https://ai.google.dev/gemini-api/docs/files
-              last_verified: "2026-08-22"
-            - id: audio_file_bytes
-              media_type: audio
-              transport: file
-              status: bounded
-              value: 2000000000
-              unit: bytes
-              scope: attachment
-              source: https://ai.google.dev/gemini-api/docs/files
-              last_verified: "2026-08-22"
-          prices:
-            - operation: text
-              available: false
-              source: https://ai.google.dev/gemini-api/docs/pricing
-              last_verified: "2026-08-22"
-              unavailable_reason: Exact published pricing has not been imported for this provider offering.
-        - model: gemini-3.6-flash
-          upstream_model: gemini-3.6-flash
-          transport: text_pollable
-          operations:
-            - text
-          output_token_limit: 65536
-          reasoning_effort:
-            adapter: gemini_interactions
-            efforts:
-                - minimal
-                - low
-                - medium
-                - high
-          media_inputs:
-            - image
-            - audio
-          media_limits:
-            - id: inline_request_bytes
-              media_type: all
-              transport: inline
-              status: bounded
-              value: 20000000
-              unit: bytes
-              scope: request_encoded_bytes
-              source: https://ai.google.dev/gemini-api/docs/file-input-methods
-              last_verified: "2026-08-22"
-            - id: image_count
-              media_type: image
-              transport: any
-              status: bounded
-              value: 3600
-              unit: files
-              scope: request
-              source: https://ai.google.dev/gemini-api/docs/image-understanding
-              last_verified: "2026-08-22"
-            - id: audio_count
-              media_type: audio
-              transport: any
-              status: unknown
-              unit: files
-              scope: request
-              source: https://ai.google.dev/gemini-api/docs/audio
-              last_verified: "2026-08-22"
-            - id: image_file_bytes
-              media_type: image
-              transport: file
-              status: bounded
-              value: 2000000000
-              unit: bytes
-              scope: attachment
-              source: https://ai.google.dev/gemini-api/docs/files
-              last_verified: "2026-08-22"
-            - id: audio_file_bytes
-              media_type: audio
-              transport: file
-              status: bounded
-              value: 2000000000
-              unit: bytes
-              scope: attachment
-              source: https://ai.google.dev/gemini-api/docs/files
-              last_verified: "2026-08-22"
-          prices:
-            - operation: text
-              available: false
-              source: https://ai.google.dev/gemini-api/docs/pricing
-              last_verified: "2026-08-22"
-              unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: gemini-3.5-flash
           upstream_model: gemini-3.5-flash
           transport: text_pollable
           operations:
+            - text
+          default_operations:
             - text
           output_token_limit: 65536
           media_inputs:
@@ -2795,188 +2627,6 @@ providers:
         - model: gemini-3.1-flash-lite
           upstream_model: gemini-3.1-flash-lite
           transport: text_pollable
-          operations:
-            - text
-          output_token_limit: 65536
-          media_inputs:
-            - image
-            - audio
-          media_limits:
-            - id: inline_request_bytes
-              media_type: all
-              transport: inline
-              status: bounded
-              value: 20000000
-              unit: bytes
-              scope: request_encoded_bytes
-              source: https://ai.google.dev/gemini-api/docs/file-input-methods
-              last_verified: "2026-08-11"
-            - id: image_count
-              media_type: image
-              transport: any
-              status: bounded
-              value: 3600
-              unit: files
-              scope: request
-              source: https://ai.google.dev/gemini-api/docs/image-understanding
-              last_verified: "2026-08-11"
-            - id: audio_count
-              media_type: audio
-              transport: any
-              status: unknown
-              unit: files
-              scope: request
-              source: https://ai.google.dev/gemini-api/docs/audio
-              last_verified: "2026-08-11"
-            - id: image_file_bytes
-              media_type: image
-              transport: file
-              status: bounded
-              value: 2000000000
-              unit: bytes
-              scope: attachment
-              source: https://ai.google.dev/gemini-api/docs/files
-              last_verified: "2026-08-11"
-            - id: audio_file_bytes
-              media_type: audio
-              transport: file
-              status: bounded
-              value: 2000000000
-              unit: bytes
-              scope: attachment
-              source: https://ai.google.dev/gemini-api/docs/files
-              last_verified: "2026-08-11"
-          prices:
-            - operation: text
-              available: false
-              source: https://ai.google.dev/gemini-api/docs/pricing
-              last_verified: "2026-08-10"
-              unavailable_reason: Exact published pricing has not been imported for this provider offering.
-        - model: gemini-2.5-flash
-          upstream_model: gemini-2.5-flash
-          transport: text_synchronous
-          operations:
-            - text
-          default_operations:
-            - text
-          output_token_limit: 65536
-          media_inputs:
-            - image
-            - audio
-          media_limits:
-            - id: inline_request_bytes
-              media_type: all
-              transport: inline
-              status: bounded
-              value: 20000000
-              unit: bytes
-              scope: request_encoded_bytes
-              source: https://ai.google.dev/gemini-api/docs/file-input-methods
-              last_verified: "2026-08-11"
-            - id: image_count
-              media_type: image
-              transport: any
-              status: bounded
-              value: 3600
-              unit: files
-              scope: request
-              source: https://ai.google.dev/gemini-api/docs/image-understanding
-              last_verified: "2026-08-11"
-            - id: audio_count
-              media_type: audio
-              transport: any
-              status: unknown
-              unit: files
-              scope: request
-              source: https://ai.google.dev/gemini-api/docs/audio
-              last_verified: "2026-08-11"
-            - id: image_file_bytes
-              media_type: image
-              transport: file
-              status: bounded
-              value: 2000000000
-              unit: bytes
-              scope: attachment
-              source: https://ai.google.dev/gemini-api/docs/files
-              last_verified: "2026-08-11"
-            - id: audio_file_bytes
-              media_type: audio
-              transport: file
-              status: bounded
-              value: 2000000000
-              unit: bytes
-              scope: attachment
-              source: https://ai.google.dev/gemini-api/docs/files
-              last_verified: "2026-08-11"
-          prices:
-            - operation: text
-              available: false
-              source: https://ai.google.dev/gemini-api/docs/pricing
-              last_verified: "2026-08-10"
-              unavailable_reason: Exact published pricing has not been imported for this provider offering.
-        - model: gemini-2.5-flash-lite
-          upstream_model: gemini-2.5-flash-lite
-          transport: text_synchronous
-          operations:
-            - text
-          output_token_limit: 65536
-          media_inputs:
-            - image
-            - audio
-          media_limits:
-            - id: inline_request_bytes
-              media_type: all
-              transport: inline
-              status: bounded
-              value: 20000000
-              unit: bytes
-              scope: request_encoded_bytes
-              source: https://ai.google.dev/gemini-api/docs/file-input-methods
-              last_verified: "2026-08-11"
-            - id: image_count
-              media_type: image
-              transport: any
-              status: bounded
-              value: 3600
-              unit: files
-              scope: request
-              source: https://ai.google.dev/gemini-api/docs/image-understanding
-              last_verified: "2026-08-11"
-            - id: audio_count
-              media_type: audio
-              transport: any
-              status: unknown
-              unit: files
-              scope: request
-              source: https://ai.google.dev/gemini-api/docs/audio
-              last_verified: "2026-08-11"
-            - id: image_file_bytes
-              media_type: image
-              transport: file
-              status: bounded
-              value: 2000000000
-              unit: bytes
-              scope: attachment
-              source: https://ai.google.dev/gemini-api/docs/files
-              last_verified: "2026-08-11"
-            - id: audio_file_bytes
-              media_type: audio
-              transport: file
-              status: bounded
-              value: 2000000000
-              unit: bytes
-              scope: attachment
-              source: https://ai.google.dev/gemini-api/docs/files
-              last_verified: "2026-08-11"
-          prices:
-            - operation: text
-              available: false
-              source: https://ai.google.dev/gemini-api/docs/pricing
-              last_verified: "2026-08-10"
-              unavailable_reason: Exact published pricing has not been imported for this provider offering.
-        - model: gemini-2.5-pro
-          upstream_model: gemini-2.5-pro
-          transport: text_synchronous
           operations:
             - text
           output_token_limit: 65536
