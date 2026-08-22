@@ -21,6 +21,11 @@ Optional environment:
   LLM_PROXY_LIVE_ALL_MODELS  Exact true or false. When true, verify and smoke
                              every selected provider text model discovered from
                              the public catalog. Default: false.
+  LLM_PROXY_LIVE_REASONING_MATRIX
+                             Exact true or false. When true, send one omitted
+                             reasoning-effort request and one request for each
+                             effort published by the selected exact route.
+                             Default: false.
   LLM_PROXY_LIVE_PORT        Local port for the temporary proxy. Default: a
                              freshly allocated loopback port.
   LLM_PROXY_LIVE_TIMEOUT     Per-request curl timeout in seconds. Default: 45.
@@ -198,6 +203,31 @@ if not models:
     raise SystemExit(1)
 print("\n".join(models))
 ' "${PUBLIC_CAPABILITIES_RESPONSE_PATH}" "${provider}"
+}
+
+provider_catalog_reasoning_efforts() {
+  local provider="$1"
+  local model="$2"
+  python3 -c '
+import json
+import pathlib
+import sys
+
+catalog = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+matches = [
+    offering
+    for offering in catalog.get("offerings", [])
+    if offering.get("provider") == sys.argv[2]
+    and offering.get("model") == sys.argv[3]
+    and "text" in offering.get("capabilities", [])
+]
+if len(matches) != 1:
+    raise SystemExit(1)
+efforts = matches[0].get("reasoning_efforts", [])
+if not isinstance(efforts, list) or any(not isinstance(effort, str) or not effort for effort in efforts):
+    raise SystemExit(1)
+print("\n".join(efforts))
+' "${PUBLIC_CAPABILITIES_RESPONSE_PATH}" "${provider}" "${model}"
 }
 
 provider_catalog_image_models() {
@@ -673,12 +703,14 @@ pathlib.Path(sys.argv[3]).write_text(
 run_text_smoke() {
   local provider="$1"
   local requested_model="${2:-}"
+  local reasoning_effort="${3:-}"
   local model
   local response_path
   local request_body
   local http_status
   local response_text
   local request_model_label
+  local reasoning_effort_label="omitted"
   if [[ -n "${requested_model}" ]]; then
     model="${requested_model}"
   else
@@ -686,7 +718,12 @@ run_text_smoke() {
   fi
   response_path="${TMP_DIR}/${provider}-response.txt"
   if [[ -n "${model}" ]]; then
-    request_body="$(printf '{"prompt":"Reply with exactly OK and no punctuation.","model":"%s","web_search":false}' "${model}")"
+    if [[ -n "${reasoning_effort}" ]]; then
+      request_body="$(printf '{"prompt":"Reply with exactly OK and no punctuation.","model":"%s","reasoning_effort":"%s","web_search":false}' "${model}" "${reasoning_effort}")"
+      reasoning_effort_label="${reasoning_effort}"
+    else
+      request_body="$(printf '{"prompt":"Reply with exactly OK and no punctuation.","model":"%s","web_search":false}' "${model}")"
+    fi
     request_model_label="${model}"
   else
     request_body='{"prompt":"Reply with exactly OK and no punctuation.","web_search":false}'
@@ -709,7 +746,29 @@ run_text_smoke() {
     redact_log
     exit 1
   fi
-  echo "live provider smoke passed: provider=${provider} model=${request_model_label} status=${http_status}"
+  echo "live provider smoke passed: provider=${provider} model=${request_model_label} status=${http_status} reasoning_effort=${reasoning_effort_label}"
+}
+
+run_text_smoke_matrix() {
+  local provider="$1"
+  local requested_model="${2:-}"
+  local model
+  local reasoning_efforts
+  local reasoning_effort
+  if [[ -n "${requested_model}" ]]; then
+    model="${requested_model}"
+  else
+    model="$(provider_model "${provider}")"
+  fi
+  run_text_smoke "${provider}" "${model}"
+  if ! reasoning_efforts="$(provider_catalog_reasoning_efforts "${provider}" "${model}")"; then
+    echo "error: live provider reasoning capabilities are unavailable: provider=${provider} model=${model}" >&2
+    exit 1
+  fi
+  while IFS= read -r reasoning_effort; do
+    [[ -n "${reasoning_effort}" ]] || continue
+    run_text_smoke "${provider}" "${model}" "${reasoning_effort}"
+  done <<<"${reasoning_efforts}"
 }
 
 fetch_public_capabilities() {
@@ -920,6 +979,11 @@ if [[ "${LIVE_ALL_MODELS}" != "true" && "${LIVE_ALL_MODELS}" != "false" ]]; then
   echo "error: LLM_PROXY_LIVE_ALL_MODELS must be true or false" >&2
   exit 1
 fi
+LIVE_REASONING_MATRIX="$(env_or_default LLM_PROXY_LIVE_REASONING_MATRIX false)"
+if [[ "${LIVE_REASONING_MATRIX}" != "true" && "${LIVE_REASONING_MATRIX}" != "false" ]]; then
+  echo "error: LLM_PROXY_LIVE_REASONING_MATRIX must be true or false" >&2
+  exit 1
+fi
 
 if [[ -n "${LLM_PROXY_LIVE_PORT:-}" ]]; then
   PORT="${LLM_PROXY_LIVE_PORT}"
@@ -1031,6 +1095,9 @@ if [[ "${MEDIA_ONLY}" == "true" ]]; then
     run_image_smoke "${IMAGE_PROVIDERS[${live_provider_index}]}" "${IMAGE_MODELS[${live_provider_index}]}"
   done
 else
+  if [[ "${LIVE_REASONING_MATRIX}" == "true" && "${LIVE_ALL_MODELS}" != "true" ]]; then
+    fetch_public_capabilities
+  fi
   if [[ "${LIVE_ALL_MODELS}" == "true" ]]; then
     fetch_public_capabilities
     for live_provider in "${LIVE_PROVIDERS[@]}"; do
@@ -1041,13 +1108,21 @@ else
       while IFS= read -r live_model; do
         [[ -n "${live_model}" ]] || continue
         verify_provider_key "${live_provider}" "${live_model}"
-        run_text_smoke "${live_provider}" "${live_model}"
+        if [[ "${LIVE_REASONING_MATRIX}" == "true" ]]; then
+          run_text_smoke_matrix "${live_provider}" "${live_model}"
+        else
+          run_text_smoke "${live_provider}" "${live_model}"
+        fi
       done <<<"${live_models}"
     done
   else
     for live_provider in "${LIVE_PROVIDERS[@]}"; do
       verify_provider_key "${live_provider}"
-      run_text_smoke "${live_provider}"
+      if [[ "${LIVE_REASONING_MATRIX}" == "true" ]]; then
+        run_text_smoke_matrix "${live_provider}"
+      else
+        run_text_smoke "${live_provider}"
+      fi
     done
   fi
 fi

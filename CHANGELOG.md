@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Added Gemini 3.6 Flash and Gemini 3.7 Flash with exact Interactions thinking levels.
+- Added Meta Muse Spark 1.2 as a selectable Standard-tier text model. Muse Spark 1.1 remains the Meta default.
 - Removed schema versioning from the selected application manifest.
 - Added provider-enforced JSON Schema output and tenant-bound durable reconciliation for canonical `POST /v2` requests.
 - Added all seven documented MiniMax M2 text routes with current limits and standard PAYG prices.

@@ -50,7 +50,7 @@ func TestStructuredOutputSchemaAndProviderMappings(testingInstance *testing.T) {
 	}
 	geminiPayload, geminiError := newGeminiInteractionRequest(
 		textModelDefinition{providerIdentifier: newModelID("gemini-3-pro-preview")},
-		chatMessages{{role: chatRoleUser, content: "review"}}, nil, nil, false, schema,
+		chatMessages{{role: chatRoleUser, content: "review"}}, nil, nil, "", false, schema,
 	)
 	if geminiError != nil || len(geminiPayload.ResponseFormat) != 1 || geminiPayload.ResponseFormat[0].MIMEType != "application/json" {
 		testingInstance.Fatalf("Gemini payload=%+v error=%v", geminiPayload, geminiError)

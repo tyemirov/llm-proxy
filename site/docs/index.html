@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="efd0c27e50a54b4223f9a3bb66f75cc3161c5020e472c7d9075e956881190527">
+    <meta name="openapi-source-sha256" content="7aea14233bc4c7a5f21380f12ba5b7e99cb2045372fec394285df474b66ccd83">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="efd0c27e50a54b4223f9a3bb66f75cc3161c5020e472c7d9075e956881190527">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="7aea14233bc4c7a5f21380f12ba5b7e99cb2045372fec394285df474b66ccd83">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -45,11 +45,11 @@
       <section id="openapi-schema" class="resource-hero">
         <p class="eyebrow">Canonical API contract</p>
         <h1>LLM Proxy HTTP API</h1>
-        <p class="resource-deck">The sole canonical wire contract for llm-proxy-owned proxy, browser configuration, and management endpoints. Each configured text model owns one explicit upstream wire contract and execution lifecycle. OpenAI Responses and Gemini 3.x Interactions use stored pollable resources; Gemini 2.5 Interactions, OpenAI-compatible Chat Completions, and Anthropic Messages complete synchronously. Public proxy operations remain blocking and never expose an upstream resource id. OpenAI resource ids remain in memory only, but the current adapter does not cancel or delete stored Responses, so OpenAI account retention policy applies. Background Gemini interaction ids are also request-local; the adapter cancels active resources and deletes every stored interaction on exit. Synchronous Gemini interactions are non-stored. TAuth-owned endpoints are outside this contract. Contributors must update this document in the same change as any owned handler or bundled-client wire change.</p>
+        <p class="resource-deck">The sole canonical wire contract for llm-proxy-owned proxy, browser configuration, and management endpoints. Each configured text model owns one explicit upstream wire contract and execution lifecycle. OpenAI Responses and Gemini 3.x Interactions use stored pollable resources; Gemini 2.5 Interactions, OpenAI-compatible Chat Completions, and Anthropic Messages complete synchronously. Public proxy operations remain blocking and never expose an upstream resource id. OpenAI resource ids remain in memory only, but the current adapter does not cancel or delete stored Responses, so OpenAI account retention policy applies. Background Gemini interaction ids are also request-local; the adapter cancels active resources and deletes every stored interaction on exit. Synchronous Gemini interactions are non-stored. Gemini 3.6 Flash maps minimal, low, medium, and high reasoning efforts to thinking_level. Gemini 3.7 Flash maps low, medium, and high. Both routes reject a final non-system assistant message before provider dispatch. TAuth-owned endpoints are outside this contract. Contributors must update this document in the same change as any owned handler or bundled-client wire change.</p>
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>efd0c27e50a54b4223f9a3bb66f75cc3161c5020e472c7d9075e956881190527</code></span>
+          <span>Source SHA-256 <code>7aea14233bc4c7a5f21380f12ba5b7e99cb2045372fec394285df474b66ccd83</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -76,6 +76,9 @@ info:
     account retention policy applies. Background Gemini interaction ids are
     also request-local; the adapter cancels active resources and deletes every
     stored interaction on exit. Synchronous Gemini interactions are non-stored.
+    Gemini 3.6 Flash maps minimal, low, medium, and high reasoning efforts to
+    thinking_level. Gemini 3.7 Flash maps low, medium, and high. Both routes
+    reject a final non-system assistant message before provider dispatch.
     TAuth-owned endpoints are outside this contract.
     Contributors must update this document in the same change as any owned
     handler or bundled-client wire change.
@@ -184,7 +187,9 @@ paths:
         default. A supplied value must be non-blank and supported by the resolved
         route. The selected provider offering owns media admission and transport
         limits. Unsupported media or route capabilities return HTTP 400 before
-        an upstream call. The service rejects an encoded request body above 8
+        an upstream call. Gemini 3.6 Flash and Gemini 3.7 Flash also return HTTP
+        400 when the final non-system message has the assistant role. The service
+        rejects an encoded request body above 8
         MiB before JSON decoding. A smaller catalog-derived body limit applies
         when configured. Current Moonshot Kimi image routes preserve attachment
         order and exact bytes through Chat Completions Data URL blocks.
@@ -872,7 +877,10 @@ components:
       name: reasoning_effort
       in: query
       required: false
-      description: Non-blank effort supported by the resolved route. Omission selects the tenant or route default.
+      description: &gt;-
+        Non-blank effort supported by the resolved route. Omission selects the
+        tenant or route default. Gemini 3.6 Flash accepts minimal, low, medium,
+        or high. Gemini 3.7 Flash accepts low, medium, or high.
       schema:
         type: string
         minLength: 1
@@ -2334,6 +2342,10 @@ components:
         messages:
           type: array
           minItems: 1
+          description: &gt;-
+            Gemini 3.6 Flash and Gemini 3.7 Flash reject a final non-system
+            assistant message. Other routes retain their declared message
+            behavior.
           items:
             $ref: &#39;#/components/schemas/ChatMessage&#39;
         model:
@@ -2350,6 +2362,11 @@ components:
         reasoning_effort:
           type: string
           minLength: 1
+          description: &gt;-
+            Omission selects the tenant or route default. An explicit value
+            must be non-blank and supported by the resolved provider/model
+            route. Gemini 3.6 Flash accepts minimal, low, medium, or high.
+            Gemini 3.7 Flash accepts low, medium, or high.
     V2Request:
       type: object
       additionalProperties: false
@@ -2359,7 +2376,13 @@ components:
         messages:
           type: array
           minItems: 1
-          description: All messages must have an allowed role and non-blank content, include at least one user message, and either all omit order or all provide unique non-negative order values. Only user messages may carry attachments; message order and attachment order are preserved.
+          description: &gt;-
+            Each message must have an allowed role and non-blank content. The
+            request must include at least one user message. All messages must
+            omit order, or all must have unique non-negative order values. Only
+            user messages can have attachments. Message and attachment order
+            are preserved. Gemini 3.6 Flash and Gemini 3.7 Flash reject a final
+            non-system assistant message.
           items:
             $ref: &#39;#/components/schemas/V2ChatMessage&#39;
         model:
@@ -2376,7 +2399,12 @@ components:
         reasoning_effort:
           type: string
           minLength: 1
-          description: Omission selects the tenant or route default. An explicit value must be non-blank and supported by the resolved provider/model route. Kimi K3 accepts low, high, or max.
+          description: &gt;-
+            Omission selects the tenant or route default. An explicit value
+            must be non-blank and supported by the resolved provider/model
+            route. Kimi K3 accepts low, high, or max. Gemini 3.6 Flash accepts
+            minimal, low, medium, or high. Gemini 3.7 Flash accepts low,
+            medium, or high.
         structured_output:
           $ref: &#39;#/components/schemas/StructuredOutput&#39;
     StructuredOutput:
@@ -3428,7 +3456,7 @@ components:
 <tr><td><code>web_search</code></td><td>query</td><td>No</td><td>boolean</td><td>Exact boolean query parameter. Use true or false; omission disables web search. Any other supplied spelling is invalid and returns HTTP 400.</td></tr>
 <tr><td><code>system_prompt</code></td><td>query</td><td>No</td><td>string</td><td></td></tr>
 <tr><td><code>max_tokens</code></td><td>query</td><td>No</td><td>integer</td><td>Initial per-attempt output budget. The same budget is reused when the proxy requests a missing suffix; after a zero-text output-budget stop, a configured model output limit bounds any generic increase.</td></tr>
-<tr><td><code>reasoning_effort</code></td><td>query</td><td>No</td><td>string</td><td>Non-blank effort supported by the resolved route. Omission selects the tenant or route default.</td></tr>
+<tr><td><code>reasoning_effort</code></td><td>query</td><td>No</td><td>string</td><td>Non-blank effort supported by the resolved route. Omission selects the tenant or route default. Gemini 3.6 Flash accepts minimal, low, medium, or high. Gemini 3.7 Flash accepts low, medium, or high.</td></tr>
 <tr><td><code>format</code></td><td>query</td><td>No</td><td>string</td><td>Preferred response media type. Unknown values select text/plain.</td></tr>
 <tr><td><code>Accept</code></td><td>header</td><td>No</td><td>string</td><td>Response media preference used when format is omitted.</td></tr>
 <tr><td><code>X-LLM-Proxy-Request-Timeout-Seconds</code></td><td>header</td><td>No</td><td>integer</td><td>A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.</td></tr>
@@ -3487,12 +3515,12 @@ components:
               <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>prompt</code></td><td>No</td><td>string</td><td></td></tr>
-<tr><td><code>messages</code></td><td>No</td><td>array&lt;ChatMessage&gt;</td><td></td></tr>
+<tr><td><code>messages</code></td><td>No</td><td>array&lt;ChatMessage&gt;</td><td>Gemini 3.6 Flash and Gemini 3.7 Flash reject a final non-system assistant message. Other routes retain their declared message behavior.</td></tr>
 <tr><td><code>model</code></td><td>No</td><td>string</td><td></td></tr>
 <tr><td><code>web_search</code></td><td>No</td><td>boolean</td><td></td></tr>
 <tr><td><code>system_prompt</code></td><td>No</td><td>string</td><td></td></tr>
 <tr><td><code>max_tokens</code></td><td>No</td><td>integer</td><td>Initial per-attempt output budget. Reused for missing-suffix attempts, with any zero-progress increase bounded by the configured model output limit.</td></tr>
-<tr><td><code>reasoning_effort</code></td><td>No</td><td>string</td><td></td></tr>
+<tr><td><code>reasoning_effort</code></td><td>No</td><td>string</td><td>Omission selects the tenant or route default. An explicit value must be non-blank and supported by the resolved provider/model route. Gemini 3.6 Flash accepts minimal, low, medium, or high. Gemini 3.7 Flash accepts low, medium, or high.</td></tr>
               </tbody>
             </table>
           </div>
@@ -4347,7 +4375,7 @@ components:
           <span class="api-operation-id">postV2Messages</span>
         </header>
         <h2>Generate text from canonical messages</h2>
-        <p>The current messages-only operation. `messages` is required. User messages may include ordered inline or tenant-asset-backed image and audio attachments. `model`, `web_search`, `max_tokens`, `reasoning_effort`, and `structured_output` are optional. A structured request requires one Idempotency-Key and a supported provider protocol. The proxy compiles the schema and validates the selected provider subset before dispatch. It saves its provider result for reconciliation through `GET /v2/requests`. Omitting `reasoning_effort` selects the tenant or route default. A supplied value must be non-blank and supported by the resolved route. The selected provider offering owns media admission and transport limits. Unsupported media or route capabilities return HTTP 400 before an upstream call. The service rejects an encoded request body above 8 MiB before JSON decoding. A smaller catalog-derived body limit applies when configured. Current Moonshot Kimi image routes preserve attachment order and exact bytes through Chat Completions Data URL blocks.</p>
+        <p>The current messages-only operation. `messages` is required. User messages may include ordered inline or tenant-asset-backed image and audio attachments. `model`, `web_search`, `max_tokens`, `reasoning_effort`, and `structured_output` are optional. A structured request requires one Idempotency-Key and a supported provider protocol. The proxy compiles the schema and validates the selected provider subset before dispatch. It saves its provider result for reconciliation through `GET /v2/requests`. Omitting `reasoning_effort` selects the tenant or route default. A supplied value must be non-blank and supported by the resolved route. The selected provider offering owns media admission and transport limits. Unsupported media or route capabilities return HTTP 400 before an upstream call. Gemini 3.6 Flash and Gemini 3.7 Flash also return HTTP 400 when the final non-system message has the assistant role. The service rejects an encoded request body above 8 MiB before JSON decoding. A smaller catalog-derived body limit applies when configured. Current Moonshot Kimi image routes preserve attachment order and exact bytes through Chat Completions Data URL blocks.</p>
         <p class="api-security"><strong>Authentication:</strong> TenantClientKey (query key)</p>
         <div class="api-contract-block">
           <h3>Parameters</h3>
@@ -4371,11 +4399,11 @@ components:
             <table>
               <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>messages</code></td><td>Yes</td><td>array&lt;V2ChatMessage&gt;</td><td>All messages must have an allowed role and non-blank content, include at least one user message, and either all omit order or all provide unique non-negative order values. Only user messages may carry attachments; message order and attachment order are preserved.</td></tr>
+                <tr><td><code>messages</code></td><td>Yes</td><td>array&lt;V2ChatMessage&gt;</td><td>Each message must have an allowed role and non-blank content. The request must include at least one user message. All messages must omit order, or all must have unique non-negative order values. Only user messages can have attachments. Message and attachment order are preserved. Gemini 3.6 Flash and Gemini 3.7 Flash reject a final non-system assistant message.</td></tr>
 <tr><td><code>model</code></td><td>No</td><td>string</td><td>Omission selects the resolved provider default.</td></tr>
 <tr><td><code>web_search</code></td><td>No</td><td>boolean</td><td>The resolved route must declare web-search capability when true.</td></tr>
 <tr><td><code>max_tokens</code></td><td>No</td><td>integer</td><td>Initial per-attempt output budget. Reused for missing-suffix attempts, with any zero-progress increase bounded by the configured model output limit.</td></tr>
-<tr><td><code>reasoning_effort</code></td><td>No</td><td>string</td><td>Omission selects the tenant or route default. An explicit value must be non-blank and supported by the resolved provider/model route. Kimi K3 accepts low, high, or max.</td></tr>
+<tr><td><code>reasoning_effort</code></td><td>No</td><td>string</td><td>Omission selects the tenant or route default. An explicit value must be non-blank and supported by the resolved provider/model route. Kimi K3 accepts low, high, or max. Gemini 3.6 Flash accepts minimal, low, medium, or high. Gemini 3.7 Flash accepts low, medium, or high.</td></tr>
 <tr><td><code>structured_output</code></td><td>No</td><td>object</td><td></td></tr>
               </tbody>
             </table>

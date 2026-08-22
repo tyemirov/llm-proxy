@@ -406,6 +406,24 @@ models:
       operations:
         - dictation
       media_inputs: []
+    - id: gemini-3.7-flash
+      publisher: google
+      family: gemini
+      version: gemini-3.7-flash
+      operations:
+        - text
+      media_inputs:
+        - image
+        - audio
+    - id: gemini-3.6-flash
+      publisher: google
+      family: gemini
+      version: gemini-3.6-flash
+      operations:
+        - text
+      media_inputs:
+        - image
+        - audio
     - id: gemini-3.5-flash
       publisher: google
       family: gemini
@@ -553,6 +571,13 @@ models:
       publisher: meta
       family: muse-spark
       version: muse-spark-1.1
+      operations:
+        - text
+      media_inputs: []
+    - id: muse-spark-1.2
+      publisher: meta
+      family: muse-spark
+      version: muse-spark-1.2
       operations:
         - text
       media_inputs: []
@@ -2454,6 +2479,139 @@ providers:
                 output: usage.output_tokens
                 total: usage.total_tokens
       offerings:
+        - model: gemini-3.7-flash
+          upstream_model: gemini-3.7-flash
+          transport: text_pollable
+          operations:
+            - text
+          output_token_limit: 65536
+          reasoning_effort:
+            adapter: gemini_interactions
+            efforts:
+                - low
+                - medium
+                - high
+          media_inputs:
+            - image
+            - audio
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://ai.google.dev/gemini-api/docs/file-input-methods
+              last_verified: "2026-08-22"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 3600
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/image-understanding
+              last_verified: "2026-08-22"
+            - id: audio_count
+              media_type: audio
+              transport: any
+              status: unknown
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/audio
+              last_verified: "2026-08-22"
+            - id: image_file_bytes
+              media_type: image
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-08-22"
+            - id: audio_file_bytes
+              media_type: audio
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-08-22"
+          prices:
+            - operation: text
+              available: false
+              source: https://ai.google.dev/gemini-api/docs/pricing
+              last_verified: "2026-08-22"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: gemini-3.6-flash
+          upstream_model: gemini-3.6-flash
+          transport: text_pollable
+          operations:
+            - text
+          output_token_limit: 65536
+          reasoning_effort:
+            adapter: gemini_interactions
+            efforts:
+                - minimal
+                - low
+                - medium
+                - high
+          media_inputs:
+            - image
+            - audio
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://ai.google.dev/gemini-api/docs/file-input-methods
+              last_verified: "2026-08-22"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 3600
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/image-understanding
+              last_verified: "2026-08-22"
+            - id: audio_count
+              media_type: audio
+              transport: any
+              status: unknown
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/audio
+              last_verified: "2026-08-22"
+            - id: image_file_bytes
+              media_type: image
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-08-22"
+            - id: audio_file_bytes
+              media_type: audio
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-08-22"
+          prices:
+            - operation: text
+              available: false
+              source: https://ai.google.dev/gemini-api/docs/pricing
+              last_verified: "2026-08-22"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: gemini-3.5-flash
           upstream_model: gemini-3.5-flash
           transport: text_pollable
@@ -3417,6 +3575,17 @@ providers:
               available: false
               source: https://dev.meta.ai/docs/pricing-rate-limits
               last_verified: "2026-08-10"
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: muse-spark-1.2
+          upstream_model: muse-spark-1.2
+          transport: text
+          operations:
+            - text
+          prices:
+            - operation: text
+              available: false
+              source: https://dev.meta.ai/docs/pricing-rate-limits
+              last_verified: "2026-08-22"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: xai
       label: xAI

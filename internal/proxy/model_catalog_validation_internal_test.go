@@ -143,6 +143,9 @@ func TestTextOfferingValidationRejectsEveryAdapterBoundary(t *testing.T) {
 		{name: "chat reasoning adapter", mutate: func(offering *ProviderOffering) {
 			offering.ReasoningEffort = &ReasoningEffortCapability{Adapter: string(reasoningEffortAdapterOpenAIChatCompletions), Efforts: []string{"high"}}
 		}, expected: "adapter=openai_chat_completions"},
+		{name: "Gemini reasoning adapter", mutate: func(offering *ProviderOffering) {
+			offering.ReasoningEffort = &ReasoningEffortCapability{Adapter: string(reasoningEffortAdapterGeminiInteractions), Efforts: []string{"high"}}
+		}, expected: "adapter=gemini_interactions"},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {

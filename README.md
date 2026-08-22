@@ -357,7 +357,7 @@ when the provider offering has a code-owned transport.
 |-----------------|----------|-------------------------------|
 | All 11 OpenAI text models in the GPT-4 and GPT-5 families | OpenAI | `image` |
 | All 10 Claude text models in the Fable, Sonnet, Opus, and Haiku families | Anthropic | `image` |
-| All 7 Gemini text models | Gemini | `image`, `audio` |
+| All 9 Gemini text models | Gemini | `image`, `audio` |
 | `grok-4.5` | xAI | `image` |
 | Every other configured model | Its configured provider | None |
 
@@ -372,8 +372,8 @@ The loader rejects unknown fields and unsupported schema versions. It also
 rejects invalid identities, references, defaults, protocols, capabilities,
 limits, and prices.
 
-The current snapshot contains 11 providers, 66 exact models, 67 provider
-offerings, and 67 price records. The application compiles one immutable
+The current snapshot contains 11 providers, 69 exact models, 70 provider
+offerings, and 70 price records. The application compiles one immutable
 registry from this snapshot.
 
 Each provider offering references one exact model and one provider transport.
@@ -424,6 +424,18 @@ immediate terminal response without requiring or cleaning up an id.
 Output-limit continuation always starts a distinct inference request and never
 treats an arbitrary upstream identifier as pollable state.
 
+Gemini 3.6 Flash accepts `minimal`, `low`, `medium`, and `high` as exact public
+`reasoning_effort` values. Gemini 3.7 Flash accepts `low`, `medium`, and `high`.
+The adapter sends an explicit value unchanged as
+`generation_config.thinking_level` on the initial request and every
+output-limit continuation. It omits `thinking_level` when no request or tenant
+default selects an effort, which retains Google's `medium` default. The two
+routes reject a request when its final non-system message has the `assistant`
+role. Other Gemini routes retain their current message behavior.
+See Google's [thinking guide](https://ai.google.dev/gemini-api/docs/thinking),
+[Gemini 3.6 Flash reference](https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash),
+and [Gemini 3.7 Flash reference](https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash).
+
 Provider-specific details:
 
 * OpenAI is the only provider currently exposed with `web_search` support.
@@ -466,19 +478,19 @@ Provider-specific details:
   [Chat Completions reference](https://platform.minimax.io/docs/api-reference/text-chat-openai),
   and [PAYG prices](https://platform.minimax.io/docs/guides/pricing-paygo).
 * Meta Model API requests use that shared Chat Completions adapter with the
-  exact `meta` selector, `https://api.meta.ai/v1` base URL, a tenant-managed
-  credential, and `muse-spark-1.1` model. llm-proxy exposes
-  the public `max_tokens` input upstream as Meta's current
+  exact `meta` selector and `https://api.meta.ai/v1` base URL. The provider
+  offerings are `muse-spark-1.1` and `muse-spark-1.2`. Muse Spark 1.1 remains
+  the Meta default. llm-proxy exposes the public `max_tokens` input upstream as Meta's current
   `max_completion_tokens` field rather than Meta's deprecated `max_tokens` field.
-  The proxy exposes Muse Spark 1.1 only as text generation through `GET /`,
-  `POST /`, and `POST /v2`: there is no Meta dictation or `web_search`, no
-  proxy tool or multimodal input contract, and no fallback to Meta's Responses API. Meta
-  documents Muse Spark 1.1 as a public preview for U.S. developers with a
-  1,048,576-token context window. See Meta's
-  [Muse Spark guide](https://developer.meta.com/ai/resources/blog/build-with-muse-spark/),
-  [model reference](https://dev.meta.ai/docs/getting-started/models),
-  [Chat Completions reference](https://dev.meta.ai/docs/features/chat-completion),
-  and [pricing and rate-limit documentation](https://dev.meta.ai/docs/getting-started/pricing-rate-limits).
+  The proxy exposes both models only as text generation through `GET /`,
+  `POST /`, and `POST /v2`. Meta describes Muse Spark 1.2 as coding-focused.
+  This focus does not change the provider transport or add agent orchestration.
+  The proxy does not expose Meta dictation, `web_search`, tools, multimodal
+  input, or a Responses API fallback. See Meta's
+  [Muse Spark 1.2 announcement](https://research.meta.ai/blog/introducing-muse-code-and-muse-spark-1-2),
+  [model reference](https://dev.meta.ai/docs/models),
+  [Chat Completions reference](https://dev.meta.ai/docs/protocols/chat-completions),
+  and [pricing and rate-limit documentation](https://dev.meta.ai/docs/pricing-rate-limits).
 * Each dictation-capable provider has a `multipart_transcription` transport in
   `providers.yml`. That transport owns the exact endpoint and model-field rule.
 * Gemini text requests use native `POST /interactions` against the configured
@@ -1946,14 +1958,14 @@ curl --get \
   "http://localhost:8080/"
 ```
 
-Meta Muse Spark 1.1 text generation:
+Meta Muse Spark 1.2 text generation:
 
 ```shell
 curl --get \
   --data-urlencode "prompt=Summarize this with Muse Spark" \
   --data-urlencode "key=mysecret" \
   --data-urlencode "provider=meta" \
-  --data-urlencode "model=muse-spark-1.1" \
+  --data-urlencode "model=muse-spark-1.2" \
   --data-urlencode "max_tokens=512" \
   "http://localhost:8080/"
 ```
@@ -2228,6 +2240,10 @@ Kimi K3 accepts `low`, `high`, and `max`. Omission keeps Moonshot's provider
 default. Kimi K2.6 and the Kimi K2.7 Code routes do not expose a selectable
 effort through the proxy.
 
+Gemini 3.6 Flash accepts `minimal`, `low`, `medium`, and `high`. Gemini 3.7
+Flash accepts `low`, `medium`, and `high`. Omission keeps Google's `medium`
+default for both models.
+
 ### Model capabilities
 
 | Model | Provider | Provider default | Proxy `max_tokens` limit | Web search |
@@ -2244,6 +2260,7 @@ effort through the proxy.
 | `gpt-5.6-terra` | OpenAI | No | - | Yes |
 | `gpt-5.6-luna` | OpenAI | No | - | Yes |
 | `muse-spark-1.1` | Meta | Yes | - | No |
+| `muse-spark-1.2` | Meta | No | - | No |
 | `deepseek-v4-flash` | DeepSeek | Yes | - | No |
 | `deepseek-v4-pro` | DeepSeek | No | - | No |
 | `deepseek-chat` | DeepSeek | No | - | No |
@@ -2265,6 +2282,8 @@ effort through the proxy.
 | `minimax-m2` | MiniMax | No | `204800` | No |
 | `glm-5.1` | Z.AI | Yes | - | No |
 | `glm-5.2` | Z.AI | No | `131072` | No |
+| `gemini-3.7-flash` | Gemini | No | `65536` | No |
+| `gemini-3.6-flash` | Gemini | No | `65536` | No |
 | `gemini-3.5-flash` | Gemini | No | `65536` | No |
 | `gemini-3.1-pro-preview` | Gemini | No | `65536` | No |
 | `gemini-3-flash-preview` | Gemini | No | `65536` | No |

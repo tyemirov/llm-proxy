@@ -117,18 +117,19 @@ Structured requests use `openai_responses`, `gemini_interactions`, or
 `anthropic_messages`. Each other protocol rejects a structured request before
 provider dispatch.
 
-The canonical Meta contract uses selector `meta` with no aliases,
-`https://api.meta.ai/v1`, a tenant-managed API key, and model
-`muse-spark-1.1`. llm-proxy sends Meta requests only through the shared
-OpenAI-compatible Chat Completions adapter on the text endpoints and maps the
-public `max_tokens` input to Meta's current `max_completion_tokens` field. It
-does not expose Meta dictation, `web_search`, tools, multimodal inputs, or a Responses
-API fallback. Meta documents Muse Spark 1.1 as a public preview for U.S.
-developers with a 1,048,576-token context window. Current upstream details live
-in Meta's [Muse Spark guide](https://developer.meta.com/ai/resources/blog/build-with-muse-spark/),
-[model reference](https://dev.meta.ai/docs/getting-started/models),
-[Chat Completions reference](https://dev.meta.ai/docs/features/chat-completion),
-and [pricing and rate-limit documentation](https://dev.meta.ai/docs/getting-started/pricing-rate-limits).
+The canonical Meta contract uses selector `meta` with no aliases and
+`https://api.meta.ai/v1`. Each tenant supplies one Meta API key. Muse Spark 1.1
+remains the default. Muse Spark 1.2 is an additional Standard-tier text model.
+llm-proxy sends both models through the shared Chat Completions adapter. It
+maps public `max_tokens` to Meta's `max_completion_tokens` field. Meta describes
+Muse Spark 1.2 as coding-focused. This focus does not change the provider
+transport or add agent orchestration. The proxy does not expose Meta dictation,
+`web_search`, tools, multimodal input, or a Responses API fallback. Current
+upstream details live in Meta's
+[Muse Spark 1.2 announcement](https://research.meta.ai/blog/introducing-muse-code-and-muse-spark-1-2),
+[model reference](https://dev.meta.ai/docs/models),
+[Chat Completions reference](https://dev.meta.ai/docs/protocols/chat-completions),
+and [pricing and rate-limit documentation](https://dev.meta.ai/docs/pricing-rate-limits).
 
 DashScope is the only Alibaba provider. Each managed tenant saves its Singapore
 Model Studio workspace URL with the matching regional API key. Verification and
@@ -224,8 +225,8 @@ canonical proxy `reasoning_effort` request field is validated against the exact
 resolved provider/model capability and translated only through its configured
 adapter. A supplied value must be nonblank and exact. It takes precedence over
 the tenant routing default. An omitted value uses that default. The current
-mapping is the OpenAI Responses reasoning adapter. A blank or unsupported
-effort stops before a GLM or generic OpenAI-compatible request.
+mappings are OpenAI Responses, OpenAI-compatible Chat Completions, and Gemini
+Interactions. A blank or unsupported effort stops before an upstream request.
 
 OpenAI `request_profile` values select stable payload shapes:
 
@@ -282,6 +283,17 @@ for one interaction; input, output, and total counts are taken from
 provider-counted thought tokens remain represented. Active-resource cancel and
 delete operations use independent bounded contexts, so cancel exhaustion cannot
 prevent the delete request from starting.
+
+Gemini 3.6 Flash declares exact thinking levels `minimal`, `low`, `medium`, and
+`high`. Gemini 3.7 Flash declares `low`, `medium`, and `high`. The
+`gemini_interactions` reasoning adapter writes an explicit resolved value to
+`generation_config.thinking_level` on the first request and every continuation.
+It omits the field when no effort is selected. At the resolved edge, these two
+routes reject a final non-system assistant message before provider dispatch.
+Other Gemini routes do not use this reasoning adapter and retain their current
+message behavior.
+Google's [thinking guide](https://ai.google.dev/gemini-api/docs/thinking)
+defines these exact model-specific values.
 
 Gemini offering media limits are part of the validated catalog and public
 capability resource. The inline request limit is 20,000,000 encoded request
@@ -788,7 +800,7 @@ Black-box router tests cover:
 - Deadline exhaustion and nonrecoverable safety, refusal, tool, malformed,
   missing, and unknown signals, proving partial text is never exposed as a
   failure response.
-- Explicit Meta Muse Spark 1.1 routing through `GET /`, compatibility `POST /`, and canonical `POST /v2`.
+- Explicit Meta Muse Spark 1.1 and 1.2 routing through `GET /`, compatibility `POST /`, and canonical `POST /v2`.
 - Unsupported Meta `web_search` and dictation paths.
 - Explicit DeepSeek chat-completions routing.
 - Unsupported `web_search` for DeepSeek.
