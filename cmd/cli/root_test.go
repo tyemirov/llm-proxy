@@ -424,7 +424,8 @@ DASHSCOPE_BASE_URL=https://workspace.ap-southeast-1.maas.aliyuncs.com/compatible
 	}
 	metaOfferings := configuredProviderOfferings(capturedConfiguration.ModelCatalog, proxy.ProviderNameMeta)
 	metaDefault, metaDefaultFound := configuredDefaultOffering(capturedConfiguration.ModelCatalog, proxy.ProviderNameMeta, proxy.ModelOperationText)
-	if !metaDefaultFound || metaDefault.Model != proxy.ModelNameMuseSpark11 || len(metaOfferings) != 1 || metaOfferings[0].Model != proxy.ModelNameMuseSpark11 {
+	if !metaDefaultFound || metaDefault.Model != proxy.ModelNameMuseSpark11 || len(metaOfferings) != 2 ||
+		metaOfferings[0].Model != proxy.ModelNameMuseSpark11 || metaOfferings[1].Model != proxy.ModelNameMuseSpark12 {
 		t.Fatalf("meta offerings=%+v default=%+v", metaOfferings, metaDefault)
 	}
 }

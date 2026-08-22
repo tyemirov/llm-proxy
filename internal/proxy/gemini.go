@@ -53,6 +53,7 @@ const (
 type geminiInteractionsClient struct {
 	httpClient             HTTPDoer
 	performInteractionHTTP geminiInteractionHTTPPerformer
+	resourceVisibility     pollableResourceVisibilityPolicy
 }
 
 type geminiInteractionHTTPPerformer func(HTTPDoer, *http.Request, *zap.SugaredLogger) (int, []byte, http.Header, error)
@@ -75,7 +76,8 @@ type geminiInteractionRequest struct {
 }
 
 type geminiInteractionGeneration struct {
-	MaxOutputTokens int `json:"max_output_tokens,omitempty"`
+	MaxOutputTokens int    `json:"max_output_tokens,omitempty"`
+	ThinkingLevel   string `json:"thinking_level,omitempty"`
 }
 
 type geminiInteractionStep struct {
@@ -130,13 +132,17 @@ type geminiInteractionSnapshot struct {
 }
 
 func newGeminiInteractionsClient(httpClient HTTPDoer) *geminiInteractionsClient {
-	return newGeminiInteractionsClientWithHTTPPerformer(httpClient, performRetryingGeminiInteractionHTTP)
+	return &geminiInteractionsClient{
+		httpClient:             httpClient,
+		performInteractionHTTP: performRetryingGeminiInteractionHTTP,
+	}
 }
 
-func newGeminiInteractionsClientWithHTTPPerformer(httpClient HTTPDoer, performer geminiInteractionHTTPPerformer) *geminiInteractionsClient {
+func newGeminiInteractionsClientWithHTTPPerformer(httpClient HTTPDoer, performer geminiInteractionHTTPPerformer, resourceVisibility pollableResourceVisibilityPolicy) *geminiInteractionsClient {
 	return &geminiInteractionsClient{
 		httpClient:             httpClient,
 		performInteractionHTTP: performer,
+		resourceVisibility:     resourceVisibility,
 	}
 }
 
@@ -145,9 +151,8 @@ func performRetryingGeminiInteractionHTTP(httpClient HTTPDoer, httpRequest *http
 	return statusCode, responseBytes, responseHeader, requestError
 }
 
-func (client *geminiInteractionsClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, executionLifecycle textExecutionLifecycle, structuredOutput *structuredOutputSchema, structuredLogger *zap.SugaredLogger) (generation textGenerationResult, generationError error) {
-	background := executionLifecycle == textExecutionLifecyclePollableResource
-	payload, uploadedFiles, payloadError := client.prepareInteractionPayload(parentContext, apiKey, baseURL, modelIdentifier, messages, maxTokens, background, structuredOutput)
+func (client *geminiInteractionsClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, reasoningEffort string, structuredOutput *structuredOutputSchema, structuredLogger *zap.SugaredLogger) (generation textGenerationResult, generationError error) {
+	payload, uploadedFiles, payloadError := client.prepareInteractionPayload(parentContext, apiKey, baseURL, modelIdentifier, messages, maxTokens, reasoningEffort, structuredOutput)
 	if len(uploadedFiles) > 0 {
 		defer func() {
 			cleanupError := client.releaseGeminiFiles(parentContext, apiKey, baseURL, uploadedFiles)
@@ -169,19 +174,13 @@ func (client *geminiInteractionsClient) generateText(parentContext context.Conte
 
 	snapshot, createError := client.createInteraction(parentContext, apiKey, baseURL, payload, structuredLogger)
 	if createError != nil {
-		if background && !utils.IsBlank(snapshot.identifier) {
+		if !utils.IsBlank(snapshot.identifier) {
 			cleanupError := client.releaseInteraction(parentContext, apiKey, baseURL, snapshot.identifier, snapshot.cleanupMode(), structuredLogger)
 			if cleanupError != nil {
 				client.logInteractionCleanupError(cleanupError, structuredLogger)
 			}
 		}
 		return textGenerationResult{usage: snapshot.usage}, createError
-	}
-	if !background {
-		if snapshot.isPending() {
-			return textGenerationResult{usage: snapshot.usage}, fmt.Errorf("%w: synchronous Gemini Interaction returned active status=%s", ErrProviderAPI, snapshot.status)
-		}
-		return snapshot.resolve()
 	}
 	if utils.IsBlank(snapshot.identifier) {
 		return textGenerationResult{usage: snapshot.usage}, fmt.Errorf("%w: Gemini Interactions create response missing id", ErrProviderAPI)
@@ -207,7 +206,8 @@ func (client *geminiInteractionsClient) generateText(parentContext context.Conte
 			observe: func(observationContext context.Context) (geminiInteractionSnapshot, error) {
 				return client.getInteraction(observationContext, apiKey, baseURL, interactionIdentifier, structuredLogger)
 			},
-			isPending: geminiInteractionSnapshot.isPending,
+			isPending:        geminiInteractionSnapshot.isPending,
+			visibilityPolicy: client.resourceVisibility,
 			recordObservation: func(polledSnapshot geminiInteractionSnapshot, pollError error, _ pollableResourceRetryDecision) {
 				if polledSnapshot.usage != nil {
 					latestUsage = polledSnapshot.usage
@@ -349,11 +349,11 @@ func (client *geminiInteractionsClient) logFileCleanupError(cleanupError error, 
 	)
 }
 
-func (client *geminiInteractionsClient) prepareInteractionPayload(parentContext context.Context, apiKey string, baseURL string, model textModelDefinition, messages chatMessages, maxTokens *int, background bool, structuredOutput *structuredOutputSchema) (geminiInteractionRequest, []geminiUploadedFile, error) {
+func (client *geminiInteractionsClient) prepareInteractionPayload(parentContext context.Context, apiKey string, baseURL string, model textModelDefinition, messages chatMessages, maxTokens *int, reasoningEffort string, structuredOutput *structuredOutputSchema) (geminiInteractionRequest, []geminiUploadedFile, error) {
 	inlineLimit, hasInlineLimit := catalogMediaLimit(model.mediaLimits, CatalogMediaLimitIDInlineRequestBytes, messageMediaTypeImage)
 	mediaCount := messages.mediaCount()
 	if mediaCount == 0 {
-		payload, payloadError := newGeminiInteractionRequest(model, messages, nil, maxTokens, background, structuredOutput)
+		payload, payloadError := newGeminiInteractionRequest(model, messages, nil, maxTokens, reasoningEffort, structuredOutput)
 		return payload, nil, payloadError
 	}
 	if !hasInlineLimit {
@@ -364,7 +364,7 @@ func (client *geminiInteractionsClient) prepareInteractionPayload(parentContext 
 	}
 	inlinePossible := inlineLimit.Status != CatalogMediaLimitStatusBounded || messages.base64MediaBytes() < *inlineLimit.Value
 	if inlinePossible {
-		inlinePayload, payloadError := newGeminiInteractionRequest(model, messages, nil, maxTokens, background, structuredOutput)
+		inlinePayload, payloadError := newGeminiInteractionRequest(model, messages, nil, maxTokens, reasoningEffort, structuredOutput)
 		if payloadError != nil {
 			return geminiInteractionRequest{}, nil, payloadError
 		}
@@ -392,11 +392,11 @@ func (client *geminiInteractionsClient) prepareInteractionPayload(parentContext 
 			mediaURIs = append(mediaURIs, uploadedFile.uri)
 		}
 	}
-	payload, payloadError := newGeminiInteractionRequest(model, messages, mediaURIs, maxTokens, background, structuredOutput)
+	payload, payloadError := newGeminiInteractionRequest(model, messages, mediaURIs, maxTokens, reasoningEffort, structuredOutput)
 	return payload, uploadedFiles, payloadError
 }
 
-func newGeminiInteractionRequest(model textModelDefinition, messages chatMessages, mediaURIs []string, maxTokens *int, background bool, structuredOutput *structuredOutputSchema) (geminiInteractionRequest, error) {
+func newGeminiInteractionRequest(model textModelDefinition, messages chatMessages, mediaURIs []string, maxTokens *int, reasoningEffort string, structuredOutput *structuredOutputSchema) (geminiInteractionRequest, error) {
 	input, systemInstruction, inputError := messages.geminiInteractionInput(mediaURIs)
 	if inputError != nil {
 		return geminiInteractionRequest{}, inputError
@@ -405,12 +405,15 @@ func newGeminiInteractionRequest(model textModelDefinition, messages chatMessage
 		Model:             model.providerString(),
 		Input:             input,
 		SystemInstruction: systemInstruction,
-		Background:        background,
-		Store:             background,
+		Background:        true,
+		Store:             true,
 		ResponseFormat:    geminiStructuredResponseFormats(structuredOutput),
 	}
-	if maxTokens != nil {
-		payload.GenerationConfig = &geminiInteractionGeneration{MaxOutputTokens: *maxTokens}
+	if maxTokens != nil || reasoningEffort != constants.EmptyString {
+		payload.GenerationConfig = &geminiInteractionGeneration{ThinkingLevel: reasoningEffort}
+		if maxTokens != nil {
+			payload.GenerationConfig.MaxOutputTokens = *maxTokens
+		}
 	}
 	return payload, nil
 }
@@ -655,10 +658,6 @@ func (messages chatMessages) geminiInteractionInput(mediaURIs []string) ([]gemin
 			continue
 		}
 
-		stepType := geminiInteractionStepUserInput
-		if message.role == chatRoleAssistant {
-			stepType = geminiInteractionStepModelOutput
-		}
 		content := []geminiInteractionContent{{
 			Type: geminiInteractionContentText,
 			Text: message.content,
@@ -681,7 +680,7 @@ func (messages chatMessages) geminiInteractionInput(mediaURIs []string) ([]gemin
 			mediaIndex++
 			content = append(content, mediaContent)
 		}
-		input = append(input, geminiInteractionStep{Type: stepType, Content: content})
+		input = append(input, geminiInteractionStep{Type: geminiInteractionStepUserInput, Content: content})
 	}
 	if len(mediaURIs) > 0 && mediaIndex != len(mediaURIs) {
 		return nil, constants.EmptyString, ErrProviderAPI

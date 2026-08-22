@@ -84,12 +84,6 @@ const (
 	ModelNameGemini35Flash = "gemini-3.5-flash"
 	// ModelNameGemini31FlashLite identifies Gemini 3.1 Flash-Lite.
 	ModelNameGemini31FlashLite = "gemini-3.1-flash-lite"
-	// ModelNameGemini25Flash identifies Gemini 2.5 Flash.
-	ModelNameGemini25Flash = "gemini-2.5-flash"
-	// ModelNameGemini25FlashLite identifies Gemini 2.5 Flash-Lite.
-	ModelNameGemini25FlashLite = "gemini-2.5-flash-lite"
-	// ModelNameGemini25Pro identifies Gemini 2.5 Pro.
-	ModelNameGemini25Pro = "gemini-2.5-pro"
 	// ModelNameClaudeOpus48 identifies Claude Opus 4.8.
 	ModelNameClaudeOpus48 = "claude-opus-4-8"
 	// ModelNameClaudeSonnet46 identifies Claude Sonnet 4.6.
@@ -108,6 +102,8 @@ const (
 	ModelNameClaudeOpus41Alias = "claude-opus-4-1"
 	// ModelNameMuseSpark11 identifies Meta Muse Spark 1.1.
 	ModelNameMuseSpark11 = "muse-spark-1.1"
+	// ModelNameMuseSpark12 identifies Meta Muse Spark 1.2.
+	ModelNameMuseSpark12 = "muse-spark-1.2"
 	// ModelNameGrok43 identifies the current Grok 4.3 model.
 	ModelNameGrok43 = "grok-4.3"
 	// ModelNameGrok43Latest identifies the Grok 4.3 latest alias.
@@ -171,10 +167,6 @@ var (
 		wireContract:       textWireContractGeminiInteractions,
 		executionLifecycle: textExecutionLifecyclePollableResource,
 	}
-	geminiInteractionsSynchronousRouteCapabilities = textRouteCapabilities{
-		wireContract:       textWireContractGeminiInteractions,
-		executionLifecycle: textExecutionLifecycleSynchronousCompletion,
-	}
 	anthropicMessagesSynchronousRouteCapabilities = textRouteCapabilities{
 		wireContract:       textWireContractAnthropicMessages,
 		executionLifecycle: textExecutionLifecycleSynchronousCompletion,
@@ -224,6 +216,7 @@ const (
 	reasoningEffortAdapterNone                  reasoningEffortAdapter = ""
 	reasoningEffortAdapterOpenAIResponses       reasoningEffortAdapter = "openai_responses"
 	reasoningEffortAdapterOpenAIChatCompletions reasoningEffortAdapter = "openai_chat_completions"
+	reasoningEffortAdapterGeminiInteractions    reasoningEffortAdapter = "gemini_interactions"
 )
 
 type reasoningEffortCapability struct {
@@ -247,6 +240,12 @@ var reasoningEffortAdapterSupportedValues = map[reasoningEffortAdapter]map[strin
 		"low":  {},
 		"high": {},
 		"max":  {},
+	},
+	reasoningEffortAdapterGeminiInteractions: {
+		"minimal": {},
+		"low":     {},
+		"medium":  {},
+		"high":    {},
 	},
 }
 
@@ -339,6 +338,7 @@ type providerTransportDefinition struct {
 	responseProtocol    string
 	usageMapping        string
 	lifecycle           textExecutionLifecycle
+	resourceVisibility  pollableResourceVisibilityPolicy
 	protocolParameters  ProviderCatalogProtocolParameters
 	endpointURLOverride string
 }

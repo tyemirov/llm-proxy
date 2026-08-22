@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 )
@@ -23,7 +24,6 @@ const (
 	verificationTransportOpenAI    = "openai"
 	verificationTransportResponses = "responses"
 	verificationTransportChat      = "chat"
-	verificationTransportGemini    = "gemini"
 	verificationTransportAnthropic = "anthropic"
 	testDashScopeWorkspaceURL      = "https://test-workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
 )
@@ -89,9 +89,8 @@ func TestManagementProviderKeyVerificationUsesEveryCanonicalTransportBeforePersi
 		{provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM2, providerModel: "MiniMax-M2", transport: verificationTransportChat, tokenLimitField: "max_completion_tokens"},
 		{provider: proxy.ProviderNameSiliconFlow, model: proxy.ModelNameSiliconFlowDeepSeek, providerModel: "deepseek-ai/DeepSeek-R1", transport: verificationTransportChat, tokenLimitField: "max_tokens"},
 		{provider: proxy.ProviderNameZAI, model: proxy.ModelNameZAIGLM, transport: verificationTransportChat, tokenLimitField: "max_tokens"},
-		{provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, transport: verificationTransportGemini},
 		{provider: proxy.ProviderNameAnthropic, model: proxy.ModelNameClaudeSonnet46, transport: verificationTransportAnthropic},
-		{provider: proxy.ProviderNameMeta, model: proxy.ModelNameMuseSpark11, transport: verificationTransportChat, tokenLimitField: "max_completion_tokens"},
+		{provider: proxy.ProviderNameMeta, model: proxy.ModelNameMuseSpark12, transport: verificationTransportChat, tokenLimitField: "max_completion_tokens"},
 		{provider: proxy.ProviderNameXAI, model: proxy.ModelNameGrok43, transport: verificationTransportChat, tokenLimitField: "max_tokens"},
 		{provider: proxy.ProviderNameXAI, model: proxy.ModelNameGrok45, transport: verificationTransportResponses},
 	}
@@ -221,9 +220,11 @@ func TestManagementPollableGeminiProviderKeyVerificationCompletesStoredLifecycle
 	}))
 	t.Cleanup(upstreamServer.Close)
 
+	configuration := providerKeyVerificationConfiguration(upstreamServer.URL)
+	configuration.ProviderCatalog = testfixtures.ProviderCatalogWithResourceVisibilityInterval(t, proxy.ProviderNameGemini, testVisibilityRetryIntervalMS)
 	router := newOperationalProviderKeyVerificationRouter(
 		t,
-		providerKeyVerificationConfiguration(upstreamServer.URL),
+		configuration,
 		zap.NewNop().Sugar(),
 		databasePath,
 		TestTimeout,
@@ -279,6 +280,7 @@ func TestManagementPollableGeminiProviderKeyVerificationRejectsRetrievalAndPrese
 	const (
 		verifiedKey           = "verified-gemini-key"
 		candidateKey          = "retrieval-denied-gemini-key"
+		verifiedIdentifier    = "verified-gemini-interaction"
 		interactionIdentifier = "denied-retrieval-interaction"
 	)
 	requestSequence := make([]string, 0, 5)
@@ -287,11 +289,20 @@ func TestManagementPollableGeminiProviderKeyVerificationRejectsRetrievalAndPrese
 		assertGeminiInteractionHeaders(t, request, apiKey)
 		requestSequence = append(requestSequence, apiKey+" "+request.Method+" "+request.URL.Path)
 		if apiKey == verifiedKey {
-			payload := decodeGeminiInteractionRequest(t, request)
-			if request.Method != http.MethodPost || request.URL.Path != testGeminiInteractionsPath || payload["background"] != false || payload["store"] != false {
-				t.Errorf("initial Gemini verification request=%s %s payload=%v", request.Method, request.URL.Path, payload)
+			switch request.Method + " " + request.URL.Path {
+			case http.MethodPost + " " + testGeminiInteractionsPath:
+				payload := decodeGeminiInteractionRequest(t, request)
+				if payload["background"] != true || payload["store"] != true {
+					t.Errorf("initial Gemini verification payload=%v", payload)
+				}
+				writeGeminiInteractionSnapshot(t, responseWriter, verifiedIdentifier, "in_progress", "", nil)
+			case http.MethodGet + " " + testGeminiInteractionsPath + "/" + verifiedIdentifier:
+				writeGeminiInteractionSnapshot(t, responseWriter, verifiedIdentifier, "completed", "verified", nil)
+			case http.MethodDelete + " " + testGeminiInteractionsPath + "/" + verifiedIdentifier:
+				writeGeminiInteractionDeleted(t, responseWriter)
+			default:
+				http.Error(responseWriter, "unexpected initial Gemini verification request", http.StatusBadRequest)
 			}
-			writeProviderKeyVerificationSuccess(responseWriter, verificationTransportGemini)
 			return
 		}
 		if apiKey != candidateKey {
@@ -306,7 +317,7 @@ func TestManagementPollableGeminiProviderKeyVerificationRejectsRetrievalAndPrese
 			}
 			writeGeminiInteractionSnapshot(t, responseWriter, interactionIdentifier, "in_progress", "", nil)
 		case http.MethodGet + " " + testGeminiInteractionsPath + "/" + interactionIdentifier:
-			http.Error(responseWriter, `{"error":{"code":"permission_denied","private":"must not escape"}}`, http.StatusForbidden)
+			http.Error(responseWriter, `{"error":{"code":"permission_denied","private":"must not escape"}}`, http.StatusUnauthorized)
 		case http.MethodPost + " " + testGeminiInteractionsPath + "/" + interactionIdentifier + "/cancel":
 			writeGeminiInteractionDeleted(t, responseWriter)
 		case http.MethodDelete + " " + testGeminiInteractionsPath + "/" + interactionIdentifier:
@@ -334,7 +345,7 @@ func TestManagementPollableGeminiProviderKeyVerificationRejectsRetrievalAndPrese
 		tenantID,
 		proxy.ProviderNameGemini,
 		verifiedKey,
-		proxy.ModelNameGemini25Flash,
+		proxy.ModelNameGemini35Flash,
 		"retained Gemini prompt",
 		context.Background(),
 	)
@@ -371,14 +382,14 @@ func TestManagementPollableGeminiProviderKeyVerificationRejectsRetrievalAndPrese
 		t.Fatalf("load provider record after replacement: %v", queryError)
 	}
 	if beforeReplacement.EncryptedAPIKey != afterReplacement.EncryptedAPIKey ||
-		afterReplacement.TextModel != proxy.ModelNameGemini25Flash ||
+		afterReplacement.TextModel != proxy.ModelNameGemini35Flash ||
 		afterReplacement.SystemPrompt != "retained Gemini prompt" ||
 		!beforeReplacement.UpdatedAt.Equal(afterReplacement.UpdatedAt) {
 		t.Fatalf("provider record changed before=%+v after=%+v", beforeReplacement, afterReplacement)
 	}
 	profile := requestProviderKeyVerificationProfile(t, router, sessionCookie, tenantID)
 	retainedProvider := verificationProfileProvider(t, profile, proxy.ProviderNameGemini)
-	if !retainedProvider.HasKey || retainedProvider.TextModel != proxy.ModelNameGemini25Flash || retainedProvider.SystemPrompt != "retained Gemini prompt" {
+	if !retainedProvider.HasKey || retainedProvider.TextModel != proxy.ModelNameGemini35Flash || retainedProvider.SystemPrompt != "retained Gemini prompt" {
 		t.Fatalf("retained provider=%+v", retainedProvider)
 	}
 	revealRequest := authenticatedProviderKeyRevealRequest(
@@ -394,8 +405,9 @@ func TestManagementPollableGeminiProviderKeyVerificationRejectsRetrievalAndPrese
 	}
 	expectedSequence := []string{
 		verifiedKey + " " + http.MethodPost + " " + testGeminiInteractionsPath,
+		verifiedKey + " " + http.MethodGet + " " + testGeminiInteractionsPath + "/" + verifiedIdentifier,
+		verifiedKey + " " + http.MethodDelete + " " + testGeminiInteractionsPath + "/" + verifiedIdentifier,
 		candidateKey + " " + http.MethodPost + " " + testGeminiInteractionsPath,
-		candidateKey + " " + http.MethodGet + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
 		candidateKey + " " + http.MethodGet + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
 		candidateKey + " " + http.MethodPost + " " + testGeminiInteractionsPath + "/" + interactionIdentifier + "/cancel",
 		candidateKey + " " + http.MethodDelete + " " + testGeminiInteractionsPath + "/" + interactionIdentifier,
@@ -896,7 +908,7 @@ func TestManagementProviderKeyVerificationRejectsSafeFailuresWithoutPersistence(
 	transportCases := []providerKeyVerificationTransportCase{
 		{provider: proxy.ProviderNameOpenAI, model: proxy.ModelNameGPT41, transport: verificationTransportOpenAI},
 		{provider: proxy.ProviderNameDeepSeek, model: proxy.ModelNameDeepSeekV4Flash, transport: verificationTransportChat, tokenLimitField: "max_tokens"},
-		{provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, transport: verificationTransportGemini},
+		{provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini35Flash},
 		{provider: proxy.ProviderNameAnthropic, model: proxy.ModelNameClaudeSonnet46, transport: verificationTransportAnthropic},
 	}
 	failureCases := []struct {
@@ -1224,7 +1236,35 @@ func TestManagementProviderKeyVerificationPreservesVerifiedReplacementAndCoversT
 			tenantID,
 			proxy.ProviderNameGemini,
 			"invalid-url-candidate",
-			proxy.ModelNameGemini25Flash,
+			proxy.ModelNameGemini35Flash,
+			"",
+			context.Background(),
+		)
+		if response.Code != http.StatusServiceUnavailable || strings.TrimSpace(response.Body.String()) != "provider_key_verification_unavailable" {
+			subTest.Fatalf("status=%d body=%q", response.Code, response.Body.String())
+		}
+	})
+
+	t.Run("invalid synchronous verification URL", func(subTest *testing.T) {
+		configuration := providerKeyVerificationConfiguration("https://provider.invalid")
+		configuration.Endpoints.SetProviderBaseURL(proxy.ProviderNameAnthropic, "://")
+		router := newOperationalProviderKeyVerificationRouter(
+			subTest,
+			configuration,
+			zap.NewNop().Sugar(),
+			subTest.TempDir()+"/managed-tenants.db",
+			TestTimeout,
+		)
+		sessionCookie := managementSessionCookie(subTest, "verification-invalid-synchronous-url")
+		tenantID := managementDefaultTenantTestID(subTest, router, sessionCookie)
+		response := putManagementProviderKey(
+			subTest,
+			router,
+			sessionCookie,
+			tenantID,
+			proxy.ProviderNameAnthropic,
+			"invalid-url-candidate",
+			proxy.ModelNameClaudeSonnet46,
 			"",
 			context.Background(),
 		)
@@ -1406,19 +1446,6 @@ func assertProviderKeyVerificationRequest(t *testing.T, request *http.Request, t
 			payload[transportCase.tokenLimitField] != float64(16) {
 			t.Errorf("chat verification path=%q headers=%v payload=%v", request.URL.Path, request.Header, payload)
 		}
-	case verificationTransportGemini:
-		generationConfig, generationConfigOK := payload["generation_config"].(map[string]any)
-		input, inputOK := payload["input"].([]any)
-		if request.URL.Path != testGeminiInteractionsPath ||
-			request.Header.Get("x-goog-api-key") != candidateKey ||
-			request.Header.Get(testGeminiAPIRevisionHeader) != testGeminiAPIRevisionValue ||
-			payload["model"] != expectedProviderModel ||
-			payload["background"] != false ||
-			payload["store"] != false ||
-			!generationConfigOK || generationConfig["max_output_tokens"] != float64(16) ||
-			!inputOK || len(input) != 1 || geminiInteractionStepText(t, input[0]) != testProviderKeyVerificationPrompt {
-			t.Errorf("Gemini verification path=%q headers=%v payload=%v", request.URL.Path, request.Header, payload)
-		}
 	case verificationTransportAnthropic:
 		if request.URL.Path != "/v1/messages" ||
 			request.Header.Get("x-api-key") != candidateKey ||
@@ -1436,8 +1463,6 @@ func writeProviderKeyVerificationSuccess(responseWriter http.ResponseWriter, tra
 	switch transport {
 	case verificationTransportOpenAI, verificationTransportResponses:
 		responseBody = `{"id":"verification-response","status":"queued"}`
-	case verificationTransportGemini:
-		responseBody = `{"status":"incomplete"}`
 	case verificationTransportAnthropic:
 		responseBody = `{"id":"verification-message","type":"message","role":"assistant"}`
 	}

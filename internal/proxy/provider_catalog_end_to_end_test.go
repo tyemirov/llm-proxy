@@ -34,6 +34,59 @@ const (
 	testCatalogProviderFamilyID    = "catalog-test-family"
 )
 
+func TestProviderCatalogDeclaresProviderSpecificResourceVisibilityPolicies(testingInstance *testing.T) {
+	expectedPolicies := map[string]proxy.ProviderCatalogResourceVisibility{
+		proxy.ProviderNameOpenAI: {
+			RetryIntervalMilliseconds: 2000,
+			RetryLimit:                1,
+			RetryStatusCodes:          []int{http.StatusForbidden, http.StatusNotFound},
+		},
+		proxy.ProviderNameGemini: {
+			RetryIntervalMilliseconds: 5000,
+			RetryLimit:                6,
+			RetryStatusCodes:          []int{http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound},
+		},
+	}
+	observedPolicies := map[string]proxy.ProviderCatalogResourceVisibility{}
+	for _, provider := range testfixtures.ProviderCatalog(testingInstance).Schema().Providers {
+		if _, expected := expectedPolicies[provider.ID]; !expected {
+			continue
+		}
+		for _, transport := range provider.Transports {
+			if transport.ResourceVisibility.RetryLimit != 0 {
+				observedPolicies[provider.ID] = transport.ResourceVisibility
+			}
+		}
+	}
+	for providerIdentifier, expectedPolicy := range expectedPolicies {
+		observedPolicy, found := observedPolicies[providerIdentifier]
+		if !found ||
+			observedPolicy.RetryIntervalMilliseconds != expectedPolicy.RetryIntervalMilliseconds ||
+			observedPolicy.RetryLimit != expectedPolicy.RetryLimit ||
+			!slices.Equal(observedPolicy.RetryStatusCodes, expectedPolicy.RetryStatusCodes) {
+			testingInstance.Fatalf("provider=%s visibility=%+v want=%+v", providerIdentifier, observedPolicy, expectedPolicy)
+		}
+	}
+}
+
+func TestProviderCatalogDeclaresGeminiInteractionsWithoutReplayContinuation(testingInstance *testing.T) {
+	for _, provider := range testfixtures.ProviderCatalog(testingInstance).Schema().Providers {
+		if provider.ID != proxy.ProviderNameGemini {
+			continue
+		}
+		for _, transport := range provider.Transports {
+			if transport.RequestProtocol != proxy.CatalogProtocolGeminiInteractions {
+				continue
+			}
+			if len(transport.ProtocolParameters.ContinuationRules) != 0 {
+				testingInstance.Fatalf("Gemini Interactions continuation rules=%v want=[]", transport.ProtocolParameters.ContinuationRules)
+			}
+			return
+		}
+	}
+	testingInstance.Fatal("Gemini Interactions transport is missing")
+}
+
 func TestCatalogDefinedProviderFlowsThroughEveryGenericConsumer(testingInstance *testing.T) {
 	var requestMutex sync.Mutex
 	routedModels := []string{}

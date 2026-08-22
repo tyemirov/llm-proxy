@@ -13,6 +13,7 @@ const (
 	testGeminiAPIRevisionValue     = "2026-05-20"
 	testGeminiInteractionUserStep  = "user_input"
 	testGeminiInteractionModelStep = "model_output"
+	testVisibilityRetryIntervalMS  = 1
 )
 
 type testGeminiInteractionUsage struct {

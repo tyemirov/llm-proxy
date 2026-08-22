@@ -483,7 +483,7 @@ func TestManagedModelIdentityMigrationRejectsStageFailures(t *testing.T) {
 					if callbackDatabase.Statement.Table == managedUsageEventTable {
 						queryCount++
 						if queryCount == 2 {
-							callbackDatabase.Statement.AddClause(clause.Where{Exprs: []clause.Expression{clause.Expr{SQL: "1 = 0"}}})
+							callbackDatabase.Statement.Clauses["WHERE"] = clause.Clause{Name: "WHERE", Expression: clause.Where{Exprs: []clause.Expression{clause.Expr{SQL: "1 = 0"}}}}
 						}
 					}
 				}); callbackError != nil {
@@ -522,6 +522,36 @@ func TestManagedTenantInitializationPropagatesModelIdentityFailure(t *testing.T)
 	initializeError := initializeManagedTenantSchema(fixture.database, fixture.providerKeyCipher, fixture.providers)
 	if !errors.Is(initializeError, errManagedTenantSchemaMigration) || !strings.Contains(initializeError.Error(), "operation=preflight") {
 		t.Fatalf("initialize error=%v", initializeError)
+	}
+}
+
+func TestManagedModelMigrationPolicyIsRequiredByEachDatabaseMigration(t *testing.T) {
+	fixture := newManagedModelIdentityMigrationFixture(t)
+
+	missingSelectionPolicy := internalManagementProviderRegistry()
+	delete(missingSelectionPolicy.modelMigrations, managedGemini3OnlySchemaVersion)
+	selectionError := migrateManagedModelSelections(fixture.database, fixture.providerKeyCipher, missingSelectionPolicy, managedGemini3OnlySchemaVersion)
+	if !errors.Is(selectionError, errManagedTenantSchemaMigration) || !strings.Contains(selectionError.Error(), "operation=read_model_migrations") {
+		t.Fatalf("missing selection policy error=%v", selectionError)
+	}
+
+	retirementSelectionPolicy := internalManagementProviderRegistry()
+	retirementSelectionPolicy.modelMigrations[managedGemini3OnlySchemaVersion] = retirementSelectionPolicy.modelMigrations[managedQwenCloudRetirementVersion]
+	selectionError = migrateManagedModelSelections(fixture.database, fixture.providerKeyCipher, retirementSelectionPolicy, managedGemini3OnlySchemaVersion)
+	if !errors.Is(selectionError, errManagedTenantSchemaMigration) || !strings.Contains(selectionError.Error(), "operation=read_model_migrations") {
+		t.Fatalf("retirement selection policy error=%v", selectionError)
+	}
+
+	missingRetirementPolicy := internalManagementProviderRegistry()
+	delete(missingRetirementPolicy.modelMigrations, managedQwenCloudRetirementVersion)
+	if _, retirementError := preflightManagedQwenCloudRetirement(fixture.database, fixture.providerKeyCipher, missingRetirementPolicy); !errors.Is(retirementError, errManagedTenantSchemaMigration) || !strings.Contains(retirementError.Error(), "operation=read_model_migrations") {
+		t.Fatalf("missing retirement policy error=%v", retirementError)
+	}
+
+	missingIdentityPolicy := internalManagementProviderRegistry()
+	delete(missingIdentityPolicy.modelMigrations, managedModelIdentitySchemaVersion)
+	if _, usageError := managedModelIdentityHistoricalUsage(fixture.database, missingIdentityPolicy); !errors.Is(usageError, errManagedTenantSchemaMigration) || !strings.Contains(usageError.Error(), "operation=read_model_migrations") {
+		t.Fatalf("missing identity policy error=%v", usageError)
 	}
 }
 

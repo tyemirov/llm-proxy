@@ -383,7 +383,7 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 			QueueSize:             1,
 			RequestTimeoutSeconds: TestTimeout,
 		})
-		request := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret+"&provider="+proxy.ProviderNameGemini, strings.NewReader(`{"messages":[{"role":"user","content":"hello"}],"model":"`+proxy.ModelNameGemini25Flash+`","max_tokens":65537}`))
+		request := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret+"&provider="+proxy.ProviderNameGemini, strings.NewReader(`{"messages":[{"role":"user","content":"hello"}],"model":"`+proxy.ModelNameGemini35Flash+`","max_tokens":65537}`))
 		request.Header.Set("Content-Type", "application/json")
 		responseRecorder := httptest.NewRecorder()
 		geminiRouter.ServeHTTP(responseRecorder, request)

@@ -36,6 +36,9 @@ func TestV2LargeInlineMediaBypassesCompatibilityPromptLimit(t *testing.T) {
 	digest := sha256.Sum256(mediaBytes)
 	var receivedMedia []byte
 	upstream := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		if handleGeminiCompletedMediaInteraction(responseWriter, request) {
+			return
+		}
 		if request.URL.Path != "/interactions" {
 			http.NotFound(responseWriter, request)
 			return
@@ -111,6 +114,9 @@ func TestV2RejectsJSONAboveTheBufferedServiceLimit(t *testing.T) {
 func TestGeminiImageCountLimitAdmitsBoundaryAndRejectsOneAbove(t *testing.T) {
 	upstreamCalls := 0
 	upstream := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		if handleGeminiCompletedMediaInteraction(responseWriter, request) {
+			return
+		}
 		upstreamCalls++
 		_, _ = io.Copy(io.Discard, request.Body)
 		writeGeminiCompletedResponse(responseWriter)
@@ -122,12 +128,12 @@ func TestGeminiImageCountLimitAdmitsBoundaryAndRejectsOneAbove(t *testing.T) {
 	for attachmentIndex := range attachments {
 		attachments[attachmentIndex] = attachment
 	}
-	boundaryBody := mediaV2RequestBody(t, proxy.ModelNameGemini25Flash, "inspect", attachments)
+	boundaryBody := mediaV2RequestBody(t, proxy.ModelNameGemini35Flash, "inspect", attachments)
 	boundaryResponse := postV2MediaRequest(t, router, "secret-a", []byte(boundaryBody))
 	if boundaryResponse.Code != http.StatusOK || upstreamCalls != 1 {
 		t.Fatalf("boundary status=%d calls=%d body=%s", boundaryResponse.Code, upstreamCalls, boundaryResponse.Body.String())
 	}
-	aboveBody := mediaV2RequestBody(t, proxy.ModelNameGemini25Flash, "inspect", append(attachments, attachment))
+	aboveBody := mediaV2RequestBody(t, proxy.ModelNameGemini35Flash, "inspect", append(attachments, attachment))
 	aboveResponse := postV2MediaRequest(t, router, "secret-a", []byte(aboveBody))
 	if aboveResponse.Code != http.StatusRequestEntityTooLarge || upstreamCalls != 1 || !strings.Contains(aboveResponse.Body.String(), llmproxycontract.ErrorCodeProviderMediaLimitExceeded) {
 		t.Fatalf("above status=%d calls=%d body=%s", aboveResponse.Code, upstreamCalls, aboveResponse.Body.String())
@@ -142,6 +148,9 @@ func TestGeminiInlineRequestLimitSelectsInlineAtBoundaryAndFilesOneAbove(t *test
 	fileInteractions := 0
 	uploadCount := 0
 	upstream = httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		if handleGeminiCompletedMediaInteraction(responseWriter, request) {
+			return
+		}
 		switch {
 		case request.Method == http.MethodPost && request.URL.Path == "/upload/v1beta/files":
 			responseWriter.Header().Set("X-Goog-Upload-URL", upstream.URL+"/upload-session")
@@ -169,7 +178,7 @@ func TestGeminiInlineRequestLimitSelectsInlineAtBoundaryAndFilesOneAbove(t *test
 		}
 	}))
 	defer upstream.Close()
-	requestBody := []byte(mediaV2RequestBody(t, proxy.ModelNameGemini25Flash, "inspect", []map[string]any{
+	requestBody := []byte(mediaV2RequestBody(t, proxy.ModelNameGemini35Flash, "inspect", []map[string]any{
 		messageMediaPayload("image", "image/png", mediaBytes),
 	}))
 	executeCatalog := func(catalog proxy.ModelCatalog) *httptest.ResponseRecorder {
@@ -177,8 +186,8 @@ func TestGeminiInlineRequestLimitSelectsInlineAtBoundaryAndFilesOneAbove(t *test
 	}
 	executeBounded := func(inlineLimit int64) *httptest.ResponseRecorder {
 		catalog := testfixtures.ModelCatalog(t)
-		setGeminiMediaLimit(t, &catalog, proxy.ModelNameGemini25Flash, proxy.CatalogMediaLimitIDInlineRequestBytes, inlineLimit)
-		setGeminiMediaLimit(t, &catalog, proxy.ModelNameGemini25Flash, proxy.CatalogMediaLimitIDImageFileBytes, int64(len(mediaBytes)))
+		setGeminiMediaLimit(t, &catalog, proxy.ModelNameGemini35Flash, proxy.CatalogMediaLimitIDInlineRequestBytes, inlineLimit)
+		setGeminiMediaLimit(t, &catalog, proxy.ModelNameGemini35Flash, proxy.CatalogMediaLimitIDImageFileBytes, int64(len(mediaBytes)))
 		return executeCatalog(catalog)
 	}
 	initialResponse := executeBounded(20_000_000)
@@ -193,7 +202,7 @@ func TestGeminiInlineRequestLimitSelectsInlineAtBoundaryAndFilesOneAbove(t *test
 	}
 	for _, status := range []string{proxy.CatalogMediaLimitStatusUnbounded, proxy.CatalogMediaLimitStatusUnknown} {
 		catalog := testfixtures.ModelCatalog(t)
-		setGeminiMediaLimitStatus(t, &catalog, proxy.ModelNameGemini25Flash, proxy.CatalogMediaLimitIDInlineRequestBytes, status)
+		setGeminiMediaLimitStatus(t, &catalog, proxy.ModelNameGemini35Flash, proxy.CatalogMediaLimitIDInlineRequestBytes, status)
 		response := executeCatalog(catalog)
 		if response.Code != http.StatusOK {
 			t.Fatalf("status=%s response=%d body=%s", status, response.Code, response.Body.String())
@@ -208,6 +217,9 @@ func TestTenantAssetReferenceValidationAndExactRouting(t *testing.T) {
 	mediaBytes := []byte("tenant-owned-image-bytes")
 	var receivedMedia []byte
 	upstream := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		if handleGeminiCompletedMediaInteraction(responseWriter, request) {
+			return
+		}
 		var payload map[string]any
 		_ = json.NewDecoder(request.Body).Decode(&payload)
 		encoded := payload["input"].([]any)[0].(map[string]any)["content"].([]any)[1].(map[string]any)["data"].(string)
@@ -266,6 +278,9 @@ func TestGeminiFileTransportPreservesAssetBytesAndCleansUp(t *testing.T) {
 	interactionURI := ""
 	cleanupCount := 0
 	upstream = httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		if handleGeminiCompletedMediaInteraction(responseWriter, request) {
+			return
+		}
 		switch {
 		case request.Method == http.MethodPost && request.URL.Path == "/upload/v1beta/files":
 			responseWriter.Header().Set("X-Goog-Upload-URL", upstream.URL+"/upload-session")
@@ -291,8 +306,8 @@ func TestGeminiFileTransportPreservesAssetBytesAndCleansUp(t *testing.T) {
 	}))
 	defer upstream.Close()
 	catalog := testfixtures.ModelCatalog(t)
-	setGeminiMediaLimit(t, &catalog, proxy.ModelNameGemini25Flash, proxy.CatalogMediaLimitIDInlineRequestBytes, 256)
-	setGeminiMediaLimit(t, &catalog, proxy.ModelNameGemini25Flash, proxy.CatalogMediaLimitIDImageFileBytes, int64(len(mediaBytes)))
+	setGeminiMediaLimit(t, &catalog, proxy.ModelNameGemini35Flash, proxy.CatalogMediaLimitIDInlineRequestBytes, 256)
+	setGeminiMediaLimit(t, &catalog, proxy.ModelNameGemini35Flash, proxy.CatalogMediaLimitIDImageFileBytes, int64(len(mediaBytes)))
 	router := mediaAssetRouter(t, upstream.URL, t.TempDir(), catalog, 60)
 	asset := uploadTestAsset(t, router, "secret-a", "image/png", mediaBytes)
 	response := postV2MediaRequest(t, router, "secret-a", v2AssetReferencePayload(asset.AssetID, asset.MIMEType, asset.SHA256))
@@ -320,7 +335,14 @@ func TestGeminiFileCleanupFailureFailsTheRequest(t *testing.T) {
 				case request.Method == http.MethodPost && request.URL.Path == "/interactions":
 					interactionCalls++
 					responseWriter.Header().Set("Content-Type", "application/json")
-					_, _ = fmt.Fprintf(responseWriter, `{"status":%q,"steps":[{"type":"model_output","content":[{"type":"text","text":"accepted"}]}]}`, interactionStatus)
+					_, _ = fmt.Fprintf(responseWriter, `{"id":%q,"status":%q,"steps":[{"type":"model_output","content":[{"type":"text","text":"accepted"}]}]}`, mediaAssetGeminiInteractionID, interactionStatus)
+				case request.Method == http.MethodGet && request.URL.Path == "/interactions/"+mediaAssetGeminiInteractionID:
+					responseWriter.Header().Set("Content-Type", "application/json")
+					_, _ = fmt.Fprintf(responseWriter, `{"id":%q,"status":%q,"steps":[{"type":"model_output","content":[{"type":"text","text":"accepted"}]}]}`, mediaAssetGeminiInteractionID, interactionStatus)
+				case request.Method == http.MethodPost && request.URL.Path == "/interactions/"+mediaAssetGeminiInteractionID+"/cancel":
+					responseWriter.WriteHeader(http.StatusOK)
+				case request.Method == http.MethodDelete && request.URL.Path == "/interactions/"+mediaAssetGeminiInteractionID:
+					responseWriter.WriteHeader(http.StatusOK)
 				case request.Method == http.MethodDelete && request.URL.Path == "/files/cleanup-failure":
 					responseWriter.WriteHeader(http.StatusInternalServerError)
 				default:
@@ -329,10 +351,10 @@ func TestGeminiFileCleanupFailureFailsTheRequest(t *testing.T) {
 			}))
 			defer upstream.Close()
 			catalog := testfixtures.ModelCatalog(subTest)
-			setGeminiMediaLimit(subTest, &catalog, proxy.ModelNameGemini25Flash, proxy.CatalogMediaLimitIDInlineRequestBytes, 1)
-			setGeminiMediaLimit(subTest, &catalog, proxy.ModelNameGemini25Flash, proxy.CatalogMediaLimitIDImageFileBytes, int64(len(mediaBytes)))
+			setGeminiMediaLimit(subTest, &catalog, proxy.ModelNameGemini35Flash, proxy.CatalogMediaLimitIDInlineRequestBytes, 1)
+			setGeminiMediaLimit(subTest, &catalog, proxy.ModelNameGemini35Flash, proxy.CatalogMediaLimitIDImageFileBytes, int64(len(mediaBytes)))
 			router := mediaAssetRouter(subTest, upstream.URL, subTest.TempDir(), catalog, 60)
-			response := postV2MediaRequest(subTest, router, "secret-a", []byte(mediaV2RequestBody(subTest, proxy.ModelNameGemini25Flash, "inspect", []map[string]any{
+			response := postV2MediaRequest(subTest, router, "secret-a", []byte(mediaV2RequestBody(subTest, proxy.ModelNameGemini35Flash, "inspect", []map[string]any{
 				messageMediaPayload("image", "image/png", mediaBytes),
 			})))
 			if response.Code != http.StatusBadGateway || !strings.Contains(response.Body.String(), llmproxycontract.ErrorCodeProviderError) || interactionCalls != 1 {
@@ -350,6 +372,9 @@ func TestDeletingAssetAfterAdmissionKeepsTheOpenRequestStable(t *testing.T) {
 	var upstream *httptest.Server
 	var uploadedBytes []byte
 	upstream = httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		if handleGeminiCompletedMediaInteraction(responseWriter, request) {
+			return
+		}
 		switch {
 		case request.Method == http.MethodPost && request.URL.Path == "/upload/v1beta/files":
 			close(startReached)
@@ -369,7 +394,7 @@ func TestDeletingAssetAfterAdmissionKeepsTheOpenRequestStable(t *testing.T) {
 	}))
 	defer upstream.Close()
 	catalog := testfixtures.ModelCatalog(t)
-	setGeminiMediaLimit(t, &catalog, proxy.ModelNameGemini25Flash, proxy.CatalogMediaLimitIDInlineRequestBytes, 1)
+	setGeminiMediaLimit(t, &catalog, proxy.ModelNameGemini35Flash, proxy.CatalogMediaLimitIDInlineRequestBytes, 1)
 	router := mediaAssetRouter(t, upstream.URL, t.TempDir(), catalog, 60)
 	asset := uploadTestAsset(t, router, "secret-a", "image/png", mediaBytes)
 	requestComplete := make(chan *httptest.ResponseRecorder, 1)
@@ -425,8 +450,8 @@ func TestExpiredAssetAndProviderMediaLimitsFailWithStableCodes(t *testing.T) {
 		}))
 		defer upstream.Close()
 		catalog := testfixtures.ModelCatalog(subTest)
-		setGeminiMediaLimit(subTest, &catalog, proxy.ModelNameGemini25Flash, proxy.CatalogMediaLimitIDInlineRequestBytes, 1)
-		setGeminiMediaLimit(subTest, &catalog, proxy.ModelNameGemini25Flash, proxy.CatalogMediaLimitIDImageFileBytes, int64(len("above-limit")-1))
+		setGeminiMediaLimit(subTest, &catalog, proxy.ModelNameGemini35Flash, proxy.CatalogMediaLimitIDInlineRequestBytes, 1)
+		setGeminiMediaLimit(subTest, &catalog, proxy.ModelNameGemini35Flash, proxy.CatalogMediaLimitIDImageFileBytes, int64(len("above-limit")-1))
 		router := mediaAssetRouter(subTest, upstream.URL, subTest.TempDir(), catalog, 60)
 		asset := uploadTestAsset(subTest, router, "secret-a", "image/png", []byte("above-limit"))
 		response := postV2MediaRequest(subTest, router, "secret-a", v2AssetReferencePayload(asset.AssetID, asset.MIMEType, asset.SHA256))
@@ -474,7 +499,7 @@ func mediaAssetRouter(t *testing.T, geminiBaseURL string, assetRoot string, cata
 
 func mediaAssetRouterWithMaxPrompt(t *testing.T, geminiBaseURL string, assetRoot string, catalog proxy.ModelCatalog, retentionSeconds int, maxPromptBytes int64) http.Handler {
 	t.Helper()
-	defaults := proxy.TenantDefaults{Provider: proxy.ProviderNameGemini, Model: proxy.ModelNameGemini25Flash, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel}
+	defaults := proxy.TenantDefaults{Provider: proxy.ProviderNameGemini, Model: proxy.ModelNameGemini35Flash, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel}
 	firstTenant := proxy.StandardManagedTenantTestConfiguration("secret-a")
 	firstTenant.ID = "tenant-a"
 	firstTenant.Defaults = defaults
@@ -572,7 +597,25 @@ func setGeminiMediaLimitStatus(t *testing.T, catalog *proxy.ModelCatalog, model 
 	t.Fatalf("missing Gemini media limit=%s", limitID)
 }
 
+const mediaAssetGeminiInteractionID = "media-asset-interaction"
+
+func handleGeminiCompletedMediaInteraction(responseWriter http.ResponseWriter, request *http.Request) bool {
+	if request.URL.Path != "/interactions/"+mediaAssetGeminiInteractionID {
+		return false
+	}
+	switch request.Method {
+	case http.MethodGet:
+		writeGeminiCompletedResponse(responseWriter)
+	case http.MethodDelete:
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{}`))
+	default:
+		return false
+	}
+	return true
+}
+
 func writeGeminiCompletedResponse(responseWriter http.ResponseWriter) {
 	responseWriter.Header().Set("Content-Type", "application/json")
-	_, _ = responseWriter.Write([]byte(`{"status":"completed","steps":[{"type":"model_output","content":[{"type":"text","text":"accepted"}]}]}`))
+	_, _ = responseWriter.Write([]byte(`{"id":"` + mediaAssetGeminiInteractionID + `","status":"completed","steps":[{"type":"model_output","content":[{"type":"text","text":"accepted"}]}]}`))
 }

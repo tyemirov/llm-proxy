@@ -2,69 +2,17 @@ package proxy_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 	"go.uber.org/zap"
 )
-
-func TestGeminiInteractionsSynchronousModelsUseNonstoredImmediateResponses(testingInstance *testing.T) {
-	requestCount := 0
-	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		requestCount++
-		assertGeminiInteractionHeaders(testingInstance, request, testGeminiKey)
-		if request.Method != http.MethodPost || request.URL.Path != testGeminiInteractionsPath {
-			testingInstance.Fatalf("unexpected Gemini Interactions request=%s %s", request.Method, request.URL.Path)
-		}
-		payload := decodeGeminiInteractionRequest(testingInstance, request)
-		if payload["model"] != proxy.ModelNameGemini25Flash || payload["background"] != false || payload["store"] != false {
-			testingInstance.Fatalf("synchronous Gemini payload=%v", payload)
-		}
-		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"status":"completed","steps":[{"type":"model_output","content":[{"type":"text","text":"synchronous interaction ok"}]}]}`))
-	}))
-	testingInstance.Cleanup(upstreamServer.Close)
-
-	response := performGeminiInteractionsRequestForModel(
-		testingInstance,
-		geminiInteractionsTestRouter(testingInstance, upstreamServer.URL),
-		context.Background(),
-		proxy.ModelNameGemini25Flash,
-	)
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "synchronous interaction ok") || requestCount != 1 {
-		testingInstance.Fatalf("synchronous Gemini status=%d body=%q requests=%d", response.Code, response.Body.String(), requestCount)
-	}
-}
-
-func TestGeminiInteractionsSynchronousActiveStatusIsSafeProviderError(testingInstance *testing.T) {
-	requestCount := 0
-	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		requestCount++
-		assertGeminiInteractionHeaders(testingInstance, request, testGeminiKey)
-		writeGeminiInteractionSnapshot(testingInstance, responseWriter, "", "in_progress", "private active text", nil)
-	}))
-	testingInstance.Cleanup(upstreamServer.Close)
-
-	response := performGeminiInteractionsRequestForModel(
-		testingInstance,
-		geminiInteractionsTestRouter(testingInstance, upstreamServer.URL),
-		context.Background(),
-		proxy.ModelNameGemini25Flash,
-	)
-	assertProviderErrorResponse(testingInstance, response, providerErrorExpectation{
-		statusCode: http.StatusBadGateway,
-		errorCode:  llmproxycontract.ErrorCodeProviderError,
-		provider:   proxy.ProviderNameGemini,
-		rawBody:    "private active text",
-	})
-	if requestCount != 1 {
-		testingInstance.Fatalf("synchronous active requests=%d", requestCount)
-	}
-}
 
 func TestGeminiInteractionsTerminalFailuresAreSafeAndDeletedAtPublicBoundary(testingInstance *testing.T) {
 	for _, testCase := range []struct {
@@ -195,6 +143,58 @@ func TestGeminiInteractionsCancellationCancelsThenDeletesProviderResource(testin
 	}
 }
 
+func TestGeminiInteractionsReconcilesTransientVisibilitySequenceAtPublicBoundary(testingInstance *testing.T) {
+	const interactionIdentifier = "delayed-visible-interaction"
+	const completedText = "visible Gemini response"
+	pollCount := 0
+	deleteCount := 0
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		assertGeminiInteractionHeaders(testingInstance, request, testGeminiKey)
+		switch {
+		case request.Method == http.MethodPost && request.URL.Path == testGeminiInteractionsPath:
+			writeGeminiInteractionSnapshot(testingInstance, responseWriter, interactionIdentifier, "in_progress", "", nil)
+		case request.Method == http.MethodGet && request.URL.Path == testGeminiInteractionsPath+"/"+interactionIdentifier:
+			pollCount++
+			switch pollCount {
+			case 1:
+				http.Error(responseWriter, "private visibility permission error", http.StatusForbidden)
+			case 2:
+				http.Error(responseWriter, "private visibility argument error", http.StatusBadRequest)
+			case 3:
+				http.Error(responseWriter, "private visibility missing error", http.StatusNotFound)
+			default:
+				writeGeminiInteractionSnapshot(testingInstance, responseWriter, interactionIdentifier, "completed", completedText, nil)
+			}
+		case request.Method == http.MethodDelete && request.URL.Path == testGeminiInteractionsPath+"/"+interactionIdentifier:
+			deleteCount++
+			writeGeminiInteractionDeleted(testingInstance, responseWriter)
+		default:
+			testingInstance.Fatalf("unexpected Gemini Interactions request=%s %s", request.Method, request.URL.Path)
+		}
+	}))
+	testingInstance.Cleanup(upstreamServer.Close)
+
+	response := performGeminiInteractionsRequest(
+		testingInstance,
+		geminiInteractionsTestRouterWithVisibilityInterval(testingInstance, upstreamServer.URL),
+		context.Background(),
+	)
+	var responseBody struct {
+		Response string `json:"response"`
+	}
+	decodeError := json.Unmarshal(response.Body.Bytes(), &responseBody)
+	if response.Code != http.StatusOK || decodeError != nil || responseBody.Response != completedText || pollCount != 4 || deleteCount != 1 {
+		testingInstance.Fatalf(
+			"status=%d body=%q decode_error=%v polls=%d deletes=%d",
+			response.Code,
+			response.Body.String(),
+			decodeError,
+			pollCount,
+			deleteCount,
+		)
+	}
+}
+
 func TestGeminiInteractionsAlreadyCancelledContextSkipsPollingAndCleansUp(testingInstance *testing.T) {
 	const interactionIdentifier = "cancelled-before-poll"
 	requestContext, cancelRequest := context.WithCancel(context.Background())
@@ -310,8 +310,23 @@ func TestGeminiInteractionsPollFailureStillDeletesWhenCancellationFails(testingI
 
 func geminiInteractionsTestRouter(testingInstance testing.TB, baseURL string) http.Handler {
 	testingInstance.Helper()
+	return geminiInteractionsTestRouterWithCatalog(testingInstance, baseURL, testfixtures.ProviderCatalog(testingInstance))
+}
+
+func geminiInteractionsTestRouterWithVisibilityInterval(testingInstance testing.TB, baseURL string) http.Handler {
+	testingInstance.Helper()
+	return geminiInteractionsTestRouterWithCatalog(
+		testingInstance,
+		baseURL,
+		testfixtures.ProviderCatalogWithResourceVisibilityInterval(testingInstance, proxy.ProviderNameGemini, testVisibilityRetryIntervalMS),
+	)
+}
+
+func geminiInteractionsTestRouterWithCatalog(testingInstance testing.TB, baseURL string, providerCatalog *proxy.ProviderCatalog) http.Handler {
+	testingInstance.Helper()
 	router, buildError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
 		Endpoints:             providerEndpoints(baseURL, proxy.ProviderNameGemini),
+		ProviderCatalog:       providerCatalog,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,

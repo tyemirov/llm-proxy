@@ -50,6 +50,18 @@ type chatMessageCandidate struct {
 	order       *int
 }
 
+func validateMessagesForResolvedTextRoute(model textModelDefinition, messages chatMessages) error {
+	if model.wireContract != textWireContractGeminiInteractions {
+		return nil
+	}
+	for _, message := range messages {
+		if message.role == chatRoleAssistant {
+			return fmt.Errorf("%w: Gemini Interactions assistant history is unsupported", ErrInvalidChatMessages)
+		}
+	}
+	return nil
+}
+
 func newPromptChatMessages(userPrompt string, systemPrompt string, systemPromptVisibleInResponse bool) (chatMessages, error) {
 	if userPrompt == constants.EmptyString {
 		return nil, fmt.Errorf("%w: missing prompt", ErrInvalidChatMessages)

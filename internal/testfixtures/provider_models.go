@@ -30,6 +30,35 @@ func ProviderCatalog(testingInstance testing.TB) *proxy.ProviderCatalog {
 	return catalog
 }
 
+// ProviderCatalogWithResourceVisibilityInterval returns a catalog with one provider's pollable text interval changed for timing-independent lifecycle tests.
+func ProviderCatalogWithResourceVisibilityInterval(testingInstance testing.TB, providerIdentifier string, retryIntervalMilliseconds int) *proxy.ProviderCatalog {
+	testingInstance.Helper()
+	schema := ProviderCatalog(testingInstance).Schema()
+	matchCount := 0
+	for providerIndex := range schema.Providers {
+		provider := &schema.Providers[providerIndex]
+		if provider.ID != providerIdentifier {
+			continue
+		}
+		for transportIndex := range provider.Transports {
+			transport := &provider.Transports[transportIndex]
+			if transport.ResourceVisibility.RetryLimit == 0 {
+				continue
+			}
+			transport.ResourceVisibility.RetryIntervalMilliseconds = retryIntervalMilliseconds
+			matchCount++
+		}
+	}
+	if matchCount != 1 {
+		testingInstance.Fatalf("provider %s pollable text transports=%d want=1", providerIdentifier, matchCount)
+	}
+	catalog, catalogError := proxy.NewProviderCatalog(schema)
+	if catalogError != nil {
+		testingInstance.Fatalf("compile provider catalog with test visibility interval: %v", catalogError)
+	}
+	return catalog
+}
+
 // ModelCatalog returns the normalized projection used by catalog assertions.
 func ModelCatalog(testingInstance testing.TB) proxy.ModelCatalog {
 	testingInstance.Helper()
@@ -123,6 +152,22 @@ func testProviderTransport(identifier string, offering proxy.ProviderOffering) p
 		UsageMapping: offering.WireContract, Lifecycle: offering.ExecutionLifecycle,
 		ProtocolParameters: parameters,
 	}
+	if offering.ExecutionLifecycle == "pollable_resource" {
+		switch offering.Provider {
+		case proxy.ProviderNameOpenAI:
+			transport.ResourceVisibility = proxy.ProviderCatalogResourceVisibility{
+				RetryIntervalMilliseconds: 2000,
+				RetryLimit:                1,
+				RetryStatusCodes:          []int{403, 404},
+			}
+		case proxy.ProviderNameGemini:
+			transport.ResourceVisibility = proxy.ProviderCatalogResourceVisibility{
+				RetryIntervalMilliseconds: 5000,
+				RetryLimit:                6,
+				RetryStatusCodes:          []int{400, 403, 404},
+			}
+		}
+	}
 	if offering.WireContract == proxy.CatalogProtocolGeminiInteractions {
 		transport.Authentication = proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationHeader, Field: proxy.CatalogCredentialAPIKey, Header: "x-goog-api-key"}
 		transport.Headers = []proxy.ProviderCatalogHeader{{Name: "Api-Revision", Value: "2026-05-20"}}
@@ -164,7 +209,7 @@ func testProviderProtocolParameters(protocol string) proxy.ProviderCatalogProtoc
 		return proxy.ProviderCatalogProtocolParameters{
 			ModelField: "model", TokenField: "generation_config.max_output_tokens", OutputFields: []string{"outputs[].text"},
 			FinishRules:       proxy.ProviderCatalogFinishRules{Complete: []string{"completed"}, Continue: []string{"incomplete"}},
-			ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
+			ContinuationRules: []string{},
 			ErrorRules:        []string{"blocked", "cancelled", "failed", "unknown_status"},
 			UsageFields:       proxy.ProviderCatalogUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens"},
 		}

@@ -389,7 +389,7 @@ def test_client_reloads_atomically_replaced_model_profile(running_server: Runnin
     """One client reads the profile that exists at each outbound request."""
 
     profile_path = tmp_path / "current-model.json"
-    replace_model_profile(profile_path, '{"provider":"gemini","model":"gemini-2.5-flash"}')
+    replace_model_profile(profile_path, '{"provider":"gemini","model":"gemini-3.5-flash"}')
     client = Client(
         ClientConfig(
             base_url=running_server.url,
@@ -416,7 +416,7 @@ def test_client_reloads_atomically_replaced_model_profile(running_server: Runnin
             {
                 "messages": [{"role": "user", "content": "Use my selected model"}],
                 "web_search": False,
-                "model": "gemini-2.5-flash",
+                "model": "gemini-3.5-flash",
             },
         ),
         (
@@ -436,7 +436,7 @@ def test_client_rejects_invalid_or_competing_model_profiles_before_http(
     """Invalid profiles and a pinned request never reuse a prior profile or call the proxy."""
 
     profile_path = tmp_path / "current-model.json"
-    valid_profile = '{"provider":"gemini","model":"gemini-2.5-flash"}'
+    valid_profile = '{"provider":"gemini","model":"gemini-3.5-flash"}'
     replace_model_profile(profile_path, valid_profile)
     client = Client(
         ClientConfig(
@@ -454,7 +454,7 @@ def test_client_rejects_invalid_or_competing_model_profiles_before_http(
         ('{"provider":"gemini"', "decode model_profile"),
         ('{"provider":"gemini"}', "missing model"),
         ('{"provider":"qwencloud","model":"qwen3.8-max-preview"}', "provider is retired"),
-        ('{"provider":"gemini","model":"gemini-2.5-flash","secret":"forbidden"}', "unsupported field"),
+        ('{"provider":"gemini","model":"gemini-3.5-flash","secret":"forbidden"}', "unsupported field"),
         ('{"provider":"gemini","provider":"openai","model":"gpt-5-mini"}', "duplicate field"),
     ]
     for invalid_profile, expected_error in invalid_profiles:

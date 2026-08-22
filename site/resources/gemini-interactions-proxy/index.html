@@ -3,11 +3,11 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Gemini Interactions proxy for shared LLM calls</title>
-    <meta name="description" content="Run model-specific Gemini Interactions lifecycles while callers keep one blocking proxy request.">
+    <title>Gemini Interactions proxy for stored 3.x model calls</title>
+    <meta name="description" content="Route four registered Gemini 3.x models through stored Interactions with provider-configured visibility retries, cleanup, and one blocking proxy request.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/">
-    <meta property="og:title" content="Gemini Interactions proxy for shared LLM calls">
-    <meta property="og:description" content="Run model-specific Gemini Interactions lifecycles while callers keep one blocking proxy request.">
+    <meta property="og:title" content="Gemini Interactions proxy for stored 3.x model calls">
+    <meta property="og:description" content="Route four registered Gemini 3.x models through stored Interactions with provider-configured visibility retries, cleanup, and one blocking proxy request.">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/">
     <meta name="twitter:card" content="summary">
@@ -27,9 +27,9 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Gemini Interactions proxy for shared LLM calls","description":"Run model-specific Gemini Interactions lifecycles while callers keep one blocking proxy request.","url":"https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/","datePublished":"2026-07-06","dateModified":"2026-08-20","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/","about":["LLM Proxy","Provider routing","Gemini Interactions proxy"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Gemini Interactions proxy for shared LLM calls","item":"https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/"}]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of Gemini Interactions proxy?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy selects the configured model lifecycle, polls and cleans up Gemini 3.x resources, and resolves Gemini 2.5 synchronously behind one blocking caller request."}},{"@type":"Question","name":"Who should read this provider routing resource?","acceptedAnswer":{"@type":"Answer","text":"Developers adding Gemini as a provider without bringing Gemini-specific payloads into every app."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Integrate once through one multi-provider LLM proxy, which covers multi-provider LLM proxy."}}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Gemini Interactions proxy for stored 3.x model calls","description":"Route four registered Gemini 3.x models through stored Interactions with provider-configured visibility retries, cleanup, and one blocking proxy request.","url":"https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/","datePublished":"2026-07-06","dateModified":"2026-08-22","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/","about":["LLM Proxy","Provider routing","Gemini Interactions proxy"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Gemini Interactions proxy for stored 3.x model calls","item":"https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Which Gemini models does this route register?","acceptedAnswer":{"@type":"Answer","text":"The catalog registers Gemini 3.5 Flash, Gemini 3 Flash Preview, Gemini 3.1 Flash Lite, and Gemini 3.1 Pro Preview."}},{"@type":"Question","name":"Can a Gemini request contain assistant history?","acceptedAnswer":{"@type":"Answer","text":"No. Each Gemini Interactions route rejects an assistant message before it sends an upstream request."}},{"@type":"Question","name":"What happens when Gemini returns an incomplete interaction?","acceptedAnswer":{"@type":"Answer","text":"The proxy cleans up the stored interaction and returns a provider error. It does not replay the partial output."}},{"@type":"Question","name":"How does the proxy handle delayed Gemini resource visibility?","acceptedAnswer":{"@type":"Answer","text":"The Gemini transport declares six retries at five-second intervals for HTTP 400, 403, and 404 responses after creation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Integrate once through one multi-provider LLM proxy, which covers multi-provider LLM proxy."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body class="resource-page">
@@ -59,15 +59,19 @@
           <span>/</span>
           <a href="/resources/">Resources</a>
           <span>/</span>
-          <span>Gemini Interactions proxy for shared LLM calls</span>
+          <span>Gemini Interactions proxy for stored 3.x model calls</span>
         </nav>
         <article>
           <header class="resource-hero">
             <p class="eyebrow">Provider routing</p>
-            <h1>Gemini Interactions proxy for shared LLM calls</h1>
-            <p class="resource-deck">Run model-specific Gemini Interactions lifecycles while callers keep one blocking proxy request.</p>
+            <h1>Gemini Interactions proxy for stored 3.x model calls</h1>
+            <p class="resource-deck">Route four registered Gemini 3.x models through stored Interactions with provider-configured visibility retries, cleanup, and one blocking proxy request.</p>
             <p class="resource-audience">Developers adding Gemini as a provider without bringing Gemini-specific payloads into every app.</p>
-            <p class="resource-byline">Reviewed 2026-08-20 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <p class="resource-byline">Reviewed 2026-08-22 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <aside class="resource-verdict" aria-label="Quick verdict">
+              <strong>Quick verdict</strong>
+              <p>Use this route for four registered Gemini 3.x models when the proxy must own stored-resource polling, visibility retries, and cleanup.</p>
+            </aside>
             <div class="resource-actions">
               <a class="resource-button" href="/docs/">Open API reference</a>
               <a class="resource-link" href="/resources/">Browse all resources</a>
@@ -76,12 +80,12 @@
 
           <section>
             <h2>The problem</h2>
-            <p>Gemini models differ between stored background Interactions and non-stored synchronous Interactions, which shared proxy callers should not have to coordinate.</p>
+            <p>Stored Gemini Interactions require polling and cleanup, which shared proxy callers must not have to coordinate.</p>
           </section>
 
           <section>
             <h2>How LLM Proxy helps</h2>
-            <p>LLM Proxy selects the configured model lifecycle, polls and cleans up Gemini 3.x resources, and resolves Gemini 2.5 synchronously behind one blocking caller request.</p>
+            <p>LLM Proxy polls and cleans up registered Gemini 3.x resources while callers keep one blocking request.</p>
           </section>
 
           <section>
@@ -109,15 +113,15 @@
 
                         <tr>
                           <td>Native adapter</td>
-                          <td>The backend maps user and assistant messages into Gemini interaction steps.</td>
-                          <td>System instructions use Gemini's system_instruction shape.</td>
+                          <td>The backend maps user messages into Gemini interaction steps.</td>
+                          <td>System instructions use Gemini's system_instruction shape, and assistant history is invalid.</td>
                         </tr>
 
 
                         <tr>
                           <td>Resource lifecycle</td>
                           <td>The proxy polls queued and in-progress Gemini 3.x interactions server-side.</td>
-                          <td>Gemini 2.5 requests are synchronous and non-stored; active 3.x resources are cancelled and deleted on exit.</td>
+                          <td>Active resources are cancelled and every stored interaction is deleted on exit.</td>
                         </tr>
 
 
@@ -129,9 +133,9 @@
 
 
                         <tr>
-                          <td>Output limit validation</td>
+                          <td>Output limit contract</td>
                           <td>Gemini max_tokens values above configured limits return 400 before upstream calls.</td>
-                          <td>Known constraints are enforced at the edge.</td>
+                          <td>An incomplete interaction returns a provider error without replay.</td>
                         </tr>
 
                 </tbody>
@@ -150,8 +154,8 @@
 
 
                     <section class="resource-card">
-                      <h3>Long transcript</h3>
-                      <p>A /v2 messages request routes through Gemini without a Gemini SDK.</p>
+                      <h3>Long user input</h3>
+                      <p>A /v2 request routes user messages through Gemini without a Gemini SDK.</p>
                     </section>
 
 
@@ -168,8 +172,21 @@
             <ul class="resource-list">
               <li>Gemini dictation is not exposed through /dictate in this repo.</li>
 <li>Web search is not marked supported for Gemini in the current proxy catalog.</li>
+<li>Each Gemini Interactions route rejects assistant history.</li>
 <li>The Gemini model list must be maintained in providers.yml.</li>
             </ul>
+          </section>
+
+          <section>
+            <h2>Repository evidence</h2>
+            <pre class="usage-snippet"><code>resource_visibility:
+  retry_interval_milliseconds: 5000
+  retry_limit: 6
+  retry_status_codes:
+    - 400
+    - 403
+    - 404</code></pre>
+            <p>Verified 2026-08-22 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>configs/providers.yml</code>.</p>
           </section>
 
           <section>
@@ -177,26 +194,26 @@
             <div class="resource-faq">
 
                     <details>
-                      <summary>What is the main job of Gemini Interactions proxy?</summary>
-                      <p>LLM Proxy selects the configured model lifecycle, polls and cleans up Gemini 3.x resources, and resolves Gemini 2.5 synchronously behind one blocking caller request.</p>
+                      <summary>Which Gemini models does this route register?</summary>
+                      <p>The catalog registers Gemini 3.5 Flash, Gemini 3 Flash Preview, Gemini 3.1 Flash Lite, and Gemini 3.1 Pro Preview.</p>
                     </details>
 
 
                     <details>
-                      <summary>Who should read this provider routing resource?</summary>
-                      <p>Developers adding Gemini as a provider without bringing Gemini-specific payloads into every app.</p>
+                      <summary>Can a Gemini request contain assistant history?</summary>
+                      <p>No. Each Gemini Interactions route rejects an assistant message before it sends an upstream request.</p>
                     </details>
 
 
                     <details>
-                      <summary>Does this page claim provider performance or pricing advantages?</summary>
-                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                      <summary>What happens when Gemini returns an incomplete interaction?</summary>
+                      <p>The proxy cleans up the stored interaction and returns a provider error. It does not replay the partial output.</p>
                     </details>
 
 
                     <details>
-                      <summary>Where should setup details come from?</summary>
-                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                      <summary>How does the proxy handle delayed Gemini resource visibility?</summary>
+                      <p>The Gemini transport declares six retries at five-second intervals for HTTP 400, 403, and 404 responses after creation.</p>
                     </details>
 
 

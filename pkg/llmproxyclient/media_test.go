@@ -66,7 +66,7 @@ func TestClientPostMessagesSerializesImmutableOrderedMediaAttachments(testingIns
 			Attachments: attachments,
 			Order:       &order,
 		}},
-		Model:     "gemini-2.5-flash",
+		Model:     "gemini-3.5-flash",
 		MaxTokens: &maxTokens,
 	})
 	if requestError != nil {

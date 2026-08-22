@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"regexp"
 	"slices"
@@ -33,20 +34,34 @@ const (
 	CatalogProtocolAnthropicMessages      = "anthropic_messages"
 	CatalogProtocolGeminiInteractions     = "gemini_interactions"
 	CatalogProtocolMultipartTranscription = "multipart_transcription"
-	CatalogProtocolXAIVideosGenerations   = "xai_videos_generations"
-	providerCatalogRevisionPrefix         = "sha256-"
+
+	providerCatalogResourceVisibilityMaxRetryIntervalMilliseconds = 60000
+	providerCatalogResourceVisibilityMaxRetryLimit                = 100
+	providerCatalogResourceVisibilityStatusCodeUpperBound         = 600
+	CatalogProtocolXAIVideosGenerations                           = "xai_videos_generations"
+	providerCatalogRevisionPrefix                                 = "sha256-"
 )
 
 var catalogEnvironmentNamePattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
 
 // ProviderCatalogSchema is the strict persisted shape of configs/providers.yml.
 type ProviderCatalogSchema struct {
-	SchemaVersion int                       `yaml:"schema_version"`
-	Operations    []ModelOperationKind      `yaml:"operations"`
-	Publishers    []ModelPublisher          `yaml:"publishers"`
-	Families      []ModelFamily             `yaml:"families"`
-	Models        []ExactModel              `yaml:"models"`
-	Providers     []ProviderCatalogProvider `yaml:"providers"`
+	SchemaVersion   int                             `yaml:"schema_version"`
+	ModelMigrations []ProviderCatalogModelMigration `yaml:"model_migrations,omitempty"`
+	Operations      []ModelOperationKind            `yaml:"operations"`
+	Publishers      []ModelPublisher                `yaml:"publishers"`
+	Families        []ModelFamily                   `yaml:"families"`
+	Models          []ExactModel                    `yaml:"models"`
+	Providers       []ProviderCatalogProvider       `yaml:"providers"`
+}
+
+// ProviderCatalogModelMigration maps one persisted model identifier to the current catalog contract.
+type ProviderCatalogModelMigration struct {
+	ManagedSchemaVersion int    `yaml:"managed_schema_version"`
+	Provider             string `yaml:"provider"`
+	Operation            string `yaml:"operation"`
+	SourceModel          string `yaml:"source_model"`
+	TargetModel          string `yaml:"target_model"`
 }
 
 // ProviderCatalogProvider defines one provider and all provider-owned routes.
@@ -89,7 +104,15 @@ type ProviderCatalogTransport struct {
 	ResponseProtocol   string                            `yaml:"response_protocol"`
 	UsageMapping       string                            `yaml:"usage_mapping"`
 	Lifecycle          string                            `yaml:"lifecycle"`
+	ResourceVisibility ProviderCatalogResourceVisibility `yaml:"resource_visibility,omitempty"`
 	ProtocolParameters ProviderCatalogProtocolParameters `yaml:"protocol_parameters"`
+}
+
+// ProviderCatalogResourceVisibility defines bounded retries for a created resource that is not readable yet.
+type ProviderCatalogResourceVisibility struct {
+	RetryIntervalMilliseconds int   `yaml:"retry_interval_milliseconds"`
+	RetryLimit                int   `yaml:"retry_limit"`
+	RetryStatusCodes          []int `yaml:"retry_status_codes"`
 }
 
 // ProviderCatalogEndpoint defines a transport collection URL.
@@ -207,7 +230,62 @@ func newProviderCatalog(schema ProviderCatalogSchema, revision string) (*Provide
 	if compileError != nil {
 		return nil, compileError
 	}
+	if migrationError := validateProviderCatalogModelMigrations(schema.ModelMigrations, modelCatalog); migrationError != nil {
+		return nil, migrationError
+	}
 	return &ProviderCatalog{schema: cloneProviderCatalogSchema(schema), modelCatalog: modelCatalog}, nil
+}
+
+func validateProviderCatalogModelMigrations(migrations []ProviderCatalogModelMigration, catalog ModelCatalog) error {
+	providers := make(map[string]struct{}, len(catalog.Providers))
+	for _, provider := range catalog.Providers {
+		providers[provider.ID] = struct{}{}
+	}
+	offerings := make(map[string]struct{}, len(catalog.Offerings))
+	for _, offering := range catalog.Offerings {
+		for _, operation := range offering.Operations {
+			offerings[offering.Provider+"\x00"+operation+"\x00"+offering.Model] = struct{}{}
+		}
+	}
+	identities := make(map[string]struct{}, len(migrations))
+	for migrationIndex, migration := range migrations {
+		fieldPrefix := fmt.Sprintf("model_migrations[%d]", migrationIndex)
+		if migration.ManagedSchemaVersion <= 0 || migration.ManagedSchemaVersion > managedTenantSchemaVersion {
+			return fmt.Errorf("%w: field=%s.managed_schema_version value=%d", ErrInvalidModelCatalog, fieldPrefix, migration.ManagedSchemaVersion)
+		}
+		provider, providerError := canonicalCatalogIdentifier(migration.Provider, fieldPrefix+".provider")
+		if providerError != nil {
+			return providerError
+		}
+		if migration.Operation != ModelOperationText && migration.Operation != ModelOperationDictation {
+			return fmt.Errorf("%w: field=%s.operation operation=%s", ErrInvalidModelCatalog, fieldPrefix, migration.Operation)
+		}
+		if strings.TrimSpace(migration.SourceModel) == constants.EmptyString || migration.SourceModel != strings.TrimSpace(migration.SourceModel) {
+			return fmt.Errorf("%w: field=%s.source_model", ErrInvalidModelCatalog, fieldPrefix)
+		}
+		identity := fmt.Sprintf("%d\x00%s\x00%s\x00%s", migration.ManagedSchemaVersion, provider, migration.Operation, migration.SourceModel)
+		if _, duplicate := identities[identity]; duplicate {
+			return fmt.Errorf("%w: field=%s duplicate_model_migration=%s", ErrInvalidModelCatalog, fieldPrefix, migration.SourceModel)
+		}
+		identities[identity] = struct{}{}
+		_, currentProvider := providers[provider]
+		if migration.TargetModel == constants.EmptyString {
+			if currentProvider {
+				return fmt.Errorf("%w: field=%s.target_model provider=%s reason=current_provider", ErrInvalidModelCatalog, fieldPrefix, provider)
+			}
+			continue
+		}
+		if migration.TargetModel != strings.TrimSpace(migration.TargetModel) || migration.TargetModel == migration.SourceModel {
+			return fmt.Errorf("%w: field=%s.target_model", ErrInvalidModelCatalog, fieldPrefix)
+		}
+		if !currentProvider {
+			return fmt.Errorf("%w: field=%s.target_model provider=%s reason=retired_provider", ErrInvalidModelCatalog, fieldPrefix, provider)
+		}
+		if _, found := offerings[provider+"\x00"+migration.Operation+"\x00"+migration.TargetModel]; !found {
+			return fmt.Errorf("%w: field=%s.target_model provider=%s operation=%s model=%s reason=dangling_reference", ErrInvalidModelCatalog, fieldPrefix, provider, migration.Operation, migration.TargetModel)
+		}
+	}
+	return nil
 }
 
 // SchemaVersion returns the exact persisted schema version.
@@ -463,6 +541,9 @@ func validateProviderCatalogTransports(rawTransports []ProviderCatalogTransport,
 		if !knownTextExecutionLifecycle(textExecutionLifecycle(transport.Lifecycle)) {
 			return nil, fmt.Errorf("%w: field=%s.lifecycle lifecycle=%s", ErrInvalidModelCatalog, fieldPrefix, transport.Lifecycle)
 		}
+		if visibilityError := validateProviderCatalogResourceVisibility(transport, fieldPrefix+".resource_visibility"); visibilityError != nil {
+			return nil, visibilityError
+		}
 		if parametersError := validateProviderCatalogProtocolParameters(transport.ProtocolParameters, fieldPrefix+".protocol_parameters"); parametersError != nil {
 			return nil, parametersError
 		}
@@ -472,6 +553,33 @@ func validateProviderCatalogTransports(rawTransports []ProviderCatalogTransport,
 		transports[identifier] = transport
 	}
 	return transports, nil
+}
+
+func validateProviderCatalogResourceVisibility(transport ProviderCatalogTransport, field string) error {
+	sharedPollableLifecycle := transport.Lifecycle == string(textExecutionLifecyclePollableResource) &&
+		(transport.RequestProtocol == CatalogProtocolOpenAIResponses || transport.RequestProtocol == CatalogProtocolGeminiInteractions)
+	visibility := transport.ResourceVisibility
+	if !sharedPollableLifecycle {
+		if visibility.RetryIntervalMilliseconds != 0 || visibility.RetryLimit != 0 || len(visibility.RetryStatusCodes) != 0 {
+			return fmt.Errorf("%w: field=%s reason=unexpected_resource_visibility", ErrInvalidModelCatalog, field)
+		}
+		return nil
+	}
+	if visibility.RetryIntervalMilliseconds <= 0 || visibility.RetryIntervalMilliseconds > providerCatalogResourceVisibilityMaxRetryIntervalMilliseconds ||
+		visibility.RetryLimit <= 0 || visibility.RetryLimit > providerCatalogResourceVisibilityMaxRetryLimit || len(visibility.RetryStatusCodes) == 0 {
+		return fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
+	}
+	seenStatusCodes := map[int]struct{}{}
+	for statusIndex, statusCode := range visibility.RetryStatusCodes {
+		if statusCode < http.StatusBadRequest || statusCode >= providerCatalogResourceVisibilityStatusCodeUpperBound {
+			return fmt.Errorf("%w: field=%s.retry_status_codes[%d] status=%d", ErrInvalidModelCatalog, field, statusIndex, statusCode)
+		}
+		if _, duplicate := seenStatusCodes[statusCode]; duplicate {
+			return fmt.Errorf("%w: field=%s.retry_status_codes[%d] duplicate=%d", ErrInvalidModelCatalog, field, statusIndex, statusCode)
+		}
+		seenStatusCodes[statusCode] = struct{}{}
+	}
+	return nil
 }
 
 func validateProviderCatalogEndpoint(endpoint ProviderCatalogEndpoint, fields map[string]ProviderCatalogField, field string) error {
@@ -628,7 +736,7 @@ func validateProviderCatalogAdapterContract(transport ProviderCatalogTransport, 
 			FinishRules: ProviderCatalogFinishRules{
 				Complete: []string{"completed"}, Continue: []string{"incomplete"},
 			},
-			ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
+			ContinuationRules: []string{},
 			ErrorRules:        []string{"blocked", "cancelled", "failed", "unknown_status"},
 			UsageFields: ProviderCatalogUsageFields{
 				Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens",

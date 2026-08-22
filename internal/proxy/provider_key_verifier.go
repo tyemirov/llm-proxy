@@ -40,13 +40,11 @@ var (
 		openAIResponsesPollableRouteCapabilities:          buildOpenAIProviderKeyVerificationRequest,
 		openAIResponsesSynchronousRouteCapabilities:       buildSynchronousResponsesProviderKeyVerificationRequest,
 		openAIChatCompletionsSynchronousRouteCapabilities: buildChatProviderKeyVerificationRequest,
-		geminiInteractionsSynchronousRouteCapabilities:    buildGeminiProviderKeyVerificationRequest,
 		anthropicMessagesSynchronousRouteCapabilities:     buildAnthropicProviderKeyVerificationRequest,
 	}
 	providerKeyVerificationResponseValidators = map[textWireContract]providerKeyVerificationResponseValidator{
 		textWireContractOpenAIResponses:       validOpenAIProviderKeyVerificationResponse,
 		textWireContractOpenAIChatCompletions: validChatProviderKeyVerificationResponse,
-		textWireContractGeminiInteractions:    validGeminiProviderKeyVerificationResponse,
 		textWireContractAnthropicMessages:     validAnthropicProviderKeyVerificationResponse,
 	}
 )
@@ -72,10 +70,6 @@ type openAIProviderKeyVerificationResponse struct {
 
 type chatProviderKeyVerificationResponse struct {
 	Choices []json.RawMessage `json:"choices"`
-}
-
-type geminiProviderKeyVerificationResponse struct {
-	Status string `json:"status"`
 }
 
 type anthropicProviderKeyVerificationResponse struct {
@@ -134,8 +128,12 @@ func (verifier *operationalProviderKeyVerifier) verify(parentContext context.Con
 
 func (verifier *operationalProviderKeyVerifier) verifyPollableGeminiCredential(verificationContext context.Context, provider providerDefinition, model textModelDefinition, apiKey string) (verificationError error) {
 	httpClient := newProviderTransportHTTPDoer(verifier.httpClient, provider, apiKey)
-	geminiClient := newGeminiInteractionsClientWithHTTPPerformer(httpClient, performProviderKeyVerificationGeminiInteractionHTTP)
-	payload := geminiProviderKeyVerificationPayload(model, true)
+	geminiClient := newGeminiInteractionsClientWithHTTPPerformer(
+		httpClient,
+		performProviderKeyVerificationGeminiInteractionHTTP,
+		provider.activeTransport.resourceVisibility,
+	)
+	payload := geminiProviderKeyVerificationPayload(model)
 	createdSnapshot, createError := geminiClient.createInteraction(verificationContext, "", provider.textBaseURL, payload, verifier.logger)
 	if strings.TrimSpace(createdSnapshot.identifier) == "" {
 		if createError != nil {
@@ -160,6 +158,7 @@ func (verifier *operationalProviderKeyVerifier) verifyPollableGeminiCredential(v
 			return geminiClient.getInteraction(observationContext, "", provider.textBaseURL, createdSnapshot.identifier, verifier.logger)
 		},
 		isPending:         geminiInteractionSnapshot.isPending,
+		visibilityPolicy:  geminiClient.resourceVisibility,
 		recordObservation: func(geminiInteractionSnapshot, error, pollableResourceRetryDecision) {},
 	}
 	retrievedSnapshot, retrieveError := lifecycle.observeCreated(verificationContext)
@@ -246,22 +245,7 @@ func buildChatProviderKeyVerificationRequest(requestContext context.Context, _ *
 	return buildAuthorizedJSONRequest(requestContext, http.MethodPost, provider.textEndpointURL, apiKey, bytes.NewReader(payloadBytes))
 }
 
-func buildGeminiProviderKeyVerificationRequest(requestContext context.Context, _ *Endpoints, provider providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {
-	payload := geminiProviderKeyVerificationPayload(model, false)
-	payloadBytes, _ := json.Marshal(payload)
-	return buildProviderKeyVerificationRequestWithHeaders(
-		requestContext,
-		geminiInteractionsURL(provider.textBaseURL),
-		payloadBytes,
-		map[string]string{
-			headerContentType:       mimeApplicationJSON,
-			geminiAPIKeyHeader:      apiKey,
-			geminiAPIRevisionHeader: geminiAPIRevisionValue,
-		},
-	)
-}
-
-func geminiProviderKeyVerificationPayload(model textModelDefinition, background bool) geminiInteractionRequest {
+func geminiProviderKeyVerificationPayload(model textModelDefinition) geminiInteractionRequest {
 	return geminiInteractionRequest{
 		Model: model.providerString(),
 		Input: []geminiInteractionStep{{
@@ -272,8 +256,8 @@ func geminiProviderKeyVerificationPayload(model textModelDefinition, background 
 			}},
 		}},
 		GenerationConfig: &geminiInteractionGeneration{MaxOutputTokens: providerKeyVerificationMaxTokens},
-		Background:       background,
-		Store:            background,
+		Background:       true,
+		Store:            true,
 	}
 }
 
@@ -349,13 +333,6 @@ func validChatProviderKeyVerificationResponse(responseBytes []byte) bool {
 	var response chatProviderKeyVerificationResponse
 	decodeError := json.Unmarshal(responseBytes, &response)
 	return decodeError == nil && len(response.Choices) > 0
-}
-
-func validGeminiProviderKeyVerificationResponse(responseBytes []byte) bool {
-	var response geminiProviderKeyVerificationResponse
-	decodeError := json.Unmarshal(responseBytes, &response)
-	return decodeError == nil &&
-		(response.Status == statusCompleted || response.Status == statusIncomplete)
 }
 
 func validPollableGeminiProviderKeyVerificationStatus(status string) bool {

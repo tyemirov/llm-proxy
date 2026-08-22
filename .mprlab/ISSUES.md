@@ -25,6 +25,162 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B155] (P1) {I231} Migrate retired Gemini selections before provider validation.
+  Goal:
+  Preserve each stored Gemini configuration during the schema-version-10
+  migration.
+  Evidence:
+  - Expected: Startup replaces each stored Gemini 2.5 selection before
+    current-catalog validation.
+  - Actual: Startup validates a schema-version-8 selection during the
+    schema-version-9 migration and rejects the retired model.
+  Requirements:
+  - Use the schema-version-10 catalog records to replace each predecessor
+    model.
+  - Replace the selected model in each affected provider profile and
+    same-provider tenant default.
+  - Preserve provider credentials, system prompts, timestamps, and historical
+    usage records.
+  - Reject retired Gemini selections after the schema-version-10 migration.
+  Validation:
+  - Prove startup migration from schema version 8 for each retired Gemini
+    model.
+  - Prove preservation of credentials, prompts, timestamps, and historical
+    usage records.
+  - Run `make ci` after the last repository change.
+  Resolution:
+  - Predecessor migrations use the schema-version-10 catalog records before
+    current-catalog validation.
+  - Schema-version-8 startup preserves Gemini credentials, prompts,
+    timestamps, and historical usage records while it reaches the current
+    schema.
+  - Schema-version-8 startup tests cover each retired Gemini model and the
+    transaction failure paths.
+  - The final `make ci` passed all 11 gates with 100.0 percent Go statement
+    coverage.
+
+- [x] [B154] (P1) Move model migration policy into the provider catalog.
+  Goal:
+  Keep each persisted model identifier in the provider catalog.
+  Evidence:
+  - Expected: `configs/providers.yml` owns current, upstream, and retired model
+    identifiers.
+  - Actual: `management_store.go` defines retired and upstream model
+    identifiers for database migrations.
+  Requirements:
+  - Add a strict model migration record to the provider catalog schema.
+  - Declare the schema version, provider, operation, source model, and target
+    model in each record.
+  - Permit an empty target only when the record retires an absent provider.
+  - Make each managed database migration read the validated catalog records.
+  - Remove each model identifier literal and model constant from
+    `management_store.go`.
+  - Preserve atomic selection updates and unchanged historical usage records.
+  - Update the provider catalog documentation.
+  Validation:
+  - Prove that a changed catalog record changes the database migration result.
+  - Prove rejection of invalid and duplicate model migration records.
+  - Prove that managed store code contains no model identifier.
+  - Run `make ci` after the last repository change.
+  Resolution:
+  - The provider catalog owns seven strict database model migration records.
+  - Catalog validation rejects invalid versions, operations, sources, targets,
+    references, and duplicate records.
+  - Managed database migrations use the immutable registry projection and keep
+    historical usage unchanged.
+  - `management_store.go` contains no model identifier or model constant.
+  - Focused migration and operational tests passed. `make go-test` passed with
+    100.0 percent Go statement coverage.
+
+- [x] [B153] (P1) Reject unsupported Gemini assistant replay.
+  Goal:
+  Keep unsupported assistant history out of Gemini Interactions requests.
+  Evidence:
+  - Expected: Gemini requests contain only input that the public proxy contract
+    can represent completely.
+  - Actual: The proxy sends assistant messages as `model_output` steps without
+    provider state or thought signatures.
+  - An output-limit response also starts this unsupported replay automatically.
+  Requirements:
+  - Reject each assistant message for a Gemini Interactions route before an
+    upstream request.
+  - Declare no replay continuation for the Gemini Interactions transport.
+  - Return a provider error after an incomplete Gemini response.
+  - Delete the incomplete interaction without a second create request.
+  - Keep replay for each transport that declares continuation rules.
+  Validation:
+  - Prove assistant-history rejection through the public request route.
+  - Prove incomplete-response cleanup through the public request route.
+  - Run `make ci` after the last application change.
+  Resolution:
+  - Both public JSON message routes reject Gemini assistant history before an
+    upstream request.
+  - The Gemini transport declares no continuation actions. An incomplete
+    interaction returns a provider error after cleanup and does not start a
+    second create request.
+  - The generic completion coordinator continues only when the selected
+    transport declares continuation actions.
+  - The public routing tests and `make go-test` passed with 100.0 percent Go
+    statement and block coverage.
+
+- [x] [B152] (P1) Reconcile Gemini interaction visibility to a readable state.
+  Goal:
+  Keep a created Gemini interaction under the proxy lifecycle until Google
+  exposes its stored resource.
+  Evidence:
+  - Expected: A stored background create becomes readable before request
+    execution treats an observation error as terminal.
+  - Actual: Google returned `403 permission_denied`, transient
+    `400 invalid_request` responses, and then `200 completed` after 20 seconds
+    for its documented Gemini 3.6 Flash background example.
+  - The shared lifecycle stopped at the first transient `400` after two
+    seconds, so the proxy returned HTTP 502 and logged cleanup failure.
+  Requirements:
+  - Keep post-create visibility reconciliation in the shared pollable-resource
+    lifecycle.
+  - Read retry statuses, interval, and limit from each pollable provider
+    transport in `providers.yml`.
+  - Configure Gemini for the observed `400`, `403`, and `404` sequence.
+  - Configure OpenAI with its existing first-read visibility contract.
+  - Release upstream capacity during every wait.
+  - Preserve caller cancellation and request-budget authority.
+  Validation:
+  - Prove the complete transient sequence through public request routing.
+  - Prove exhaustion returns the last provider error.
+  - Run `make ci` after the last application change.
+  Resolution:
+  - The shared lifecycle reads a bounded visibility policy from the selected
+    provider transport without provider-specific retry control flow.
+  - OpenAI declares one retry after two seconds for `403` or `404`. Gemini
+    declares six retries at five-second intervals for `400`, `403`, or `404`.
+  - Public routing proves transient visibility recovery, exhaustion, caller
+    cancellation, cancel, and delete behavior.
+  - The intended key passed verification and smoke tests for all six Gemini
+    3.x candidates. Four models remain registered.
+  - `make ci` passed all 11 gates with 100.0 percent Go statement coverage.
+
+- [x] [B151] (P1) Reject duplicate live-test dotenv names.
+  Goal:
+  Make each live provider test use one explicit credential value.
+  Evidence:
+  - Expected: A dotenv name identifies one value for the live provider test.
+  - Actual: The loader silently kept the first of two `GEMINI_API_KEY`
+    entries, so it tested a retired credential instead of the replacement.
+  Requirements:
+  - Reject a duplicate name before provider discovery or an upstream request.
+  - Identify the duplicate name and line without exposing either value.
+  - Keep explicit process environment values authoritative over dotenv values.
+  Validation:
+  - Prove duplicate rejection through the live harness entry point.
+  - Run the applicable repository validation after the last change.
+  Resolution:
+  - The live harness rejects the second occurrence of a dotenv name before
+    provider discovery.
+  - The error identifies only the duplicate name and line number.
+  - The compiled operational test proves rejection without exposing either
+    credential value.
+  - `make go-test` passed with 100.0 percent Go statement coverage.
+
 - [x] [B150] (P2) Record terminal visibility errors as failures.
   Goal:
   OpenAI poll progress events agree with terminal provider failure summaries.
@@ -711,6 +867,35 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [x] [I231] (P1) Remove Gemini 2.5 model routes.
+  Goal:
+  Keep only Gemini 3.x exact models in the provider catalog.
+  Requirements:
+  - Remove all Gemini 2.5 exact models and provider offerings.
+  - Remove the unused synchronous Gemini provider transport.
+  - Make `gemini-3.5-flash` the Gemini default text model.
+  - Migrate each stored Gemini 2.5 provider profile and routing default to
+    `gemini-3.5-flash` once.
+  - Reject each retired model after the migration. Do not add an alias or a
+    fallback.
+  - Keep historical usage model identifiers unchanged.
+  - Update public capabilities, generated resources, examples, and tests.
+  Validation:
+  - Prove that startup and public capabilities contain only Gemini 3.x models.
+  - Prove that the migration is atomic and maps each retired model.
+  - Prove that each retired model fails before an upstream request.
+  - Run `make ci` after the last repository change.
+  Resolution:
+  - The catalog contains four Gemini 3.x models and one pollable Gemini
+    transport. Gemini 3.5 Flash is the provider default.
+  - Managed schema version 10 atomically replaces each stored Gemini 2.5 text
+    selection with Gemini 3.5 Flash.
+  - Public routing rejects each retired model before an upstream request.
+  - Public capabilities, generated resources, examples, and tests use the
+    four-model Gemini 3.x catalog.
+  - The focused `make go-test` passed with 100.0 percent Go statement and block
+    coverage.
+
 - [x] [I230] (P0) Use the permanent versionless selected application manifest.
   Goal:
   The selected application manifest uses one permanent contract without a
@@ -1229,7 +1414,7 @@ retain satisfied historical dependencies.
     connector geometry and containment at 1280-, 900-, and 390-pixel widths.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-- [ ] [I210] (P1) Add Meta Muse Spark 1.2 as a selectable Standard-tier model.
+- [!] [I210] (P1) Add Meta Muse Spark 1.2 as a selectable Standard-tier model.
   Goal:
   Add Meta's current Muse Spark 1.2 checkpoint to the existing `meta` text
   offering through the repository's exact model-owned routing contract.
@@ -1288,6 +1473,12 @@ retain satisfied historical dependencies.
     request with `LLM_PROXY_LIVE_META_MODEL=muse-spark-1.2`. Run the required
     baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair; deployment
     and production acceptance remain operator-owned.
+  Blocked: Repository work is complete. Both required `make ci` runs pass.
+  Live acceptance cannot start because `MODEL_API_KEY` is absent from the
+  process and each authorized repository environment file. The selected
+  harness stops before provider dispatch. The operator must supply
+  `MODEL_API_KEY` and authorize authenticated `GET /v1/models`, one key
+  verification, and one text request.
 - [ ] [I046] (P1) Make upstream admission fair across provider origins.
   Goal:
   Keep upstream work globally bounded while preventing one slow or throttled
@@ -1358,75 +1549,82 @@ retain satisfied historical dependencies.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
-- [ ] [I207] (P1) Add Gemini 3.6 Flash with route-bound Interactions thinking levels.
+- [!] [I207] (P1) Add Gemini 3.6 and 3.7 Flash with route-bound Interactions thinking levels.
   Goal:
-  Add Google's current stable Flash model to the Gemini Interactions catalog
-  and carry the existing provider-neutral `reasoning_effort` contract onto its
+  Add Google's current stable Flash models to the Gemini Interactions catalog
+  and carry the provider-neutral `reasoning_effort` contract onto their
   documented thinking controls.
   Evidence:
-  - Google identifies Gemini 3.6 Flash as GA and production-ready under the
-    exact stable model id `gemini-3.6-flash`, with a 65,536-token output limit
-    and `medium` as its default thinking level:
-    https://ai.google.dev/gemini-api/docs/latest-model
-  - The model page confirms that `gemini-3.6-flash` supports text, image, video,
-    audio, and PDF input, text output, and thinking:
+  - Google identifies `gemini-3.6-flash` and `gemini-3.7-flash` as stable model
+    IDs. Both models have a 65,536-token output limit:
     https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash
+    https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash
+  - Both model pages document text, image, video, audio, and PDF input, text
+    output, and thinking:
+    https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash
+    https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash
   - Google's Interactions thinking guide documents
-    `generation_config.thinking_level`; Gemini 3.6 Flash supports exactly
-    `minimal`, `low`, `medium`, and `high`, with `medium` as the default:
+    `generation_config.thinking_level`. Gemini 3.6 Flash supports `minimal`,
+    `low`, `medium`, and `high`. Gemini 3.7 Flash supports `low`, `medium`, and
+    `high`. Both models use `medium` when the field is absent:
     https://ai.google.dev/gemini-api/docs/thinking
-  - The Interactions schema defines the same four-value `thinking_level` enum:
+  - The Interactions schema defines the `thinking_level` field:
     https://ai.google.dev/api/interactions-api
-  - Google's Gemini 3.6 migration contract rejects a request whose final
-    nonempty turn is a model turn with HTTP 400 and directs multi-turn
+  - Google's current Gemini migration contract rejects a request whose final
+    nonempty turn is a model turn with HTTP 400. It directs multi-turn
     Interactions callers away from manually prefilled model turns:
     https://ai.google.dev/gemini-api/docs/latest-model
   Requirements:
-  - Add only the exact stable model id `gemini-3.6-flash`. Do not add or alias
-    the requested but unpublished `gemini-2.6-flash` name, use a moving
-    `gemini-flash-latest` alias, or change the Gemini provider default as an
-    incidental part of this issue.
+  - Add only the exact stable model IDs `gemini-3.6-flash` and
+    `gemini-3.7-flash`. Do not add a moving `gemini-flash-latest` alias or
+    change the Gemini provider default as part of this issue.
   - Before registering the route lifecycle, verify at the paid Google boundary
-    that this exact model supports stored background Interactions through
-    create, active status, retrieval, cancellation, and deletion. Register the
-    model as `gemini_interactions` plus `pollable_resource` only after that
+    that both exact models support stored background Interactions through
+    create, active status, retrieval, cancellation, and deletion. Register
+    each model as `gemini_interactions` plus `pollable_resource` only after that
     proof succeeds.
-  - At the resolved Gemini 3.6 route edge, reject with the canonical HTTP 400
-    invalid-messages response any request whose final non-system message is an
-    assistant turn. Do not send that turn as a terminal `model_output`, rewrite
-    it into another role, or change assistant-prefill behavior for other model
-    routes as an incidental part of this issue.
+  - At each resolved Gemini Interactions route edge, reject with the canonical
+    HTTP 400 invalid-messages response when the request contains an assistant
+    turn. Do not send it as `model_output`, rewrite it into another role, or
+    change assistant-prefill behavior for other model routes.
   - Add the exact `gemini_interactions` reasoning-effort adapter, valid only for
-    the Gemini Interactions text route. Declare the model's ordered capability
-    as `minimal`, `low`, `medium`, and `high`; serialize an explicitly resolved
+    the Gemini Interactions text route. Declare Gemini 3.6 Flash with the
+    ordered values `minimal`, `low`, `medium`, and `high`. Declare Gemini 3.7
+    Flash with `low`, `medium`, and `high`. Serialize an explicitly resolved
     public effort unchanged as `generation_config.thinking_level` on the
-    initial request and every output-limit continuation.
+    request.
   - When neither the request nor tenant default selects an effort, omit
-    `thinking_level` so Google's documented `medium` default remains
-    authoritative. Reject blank, `none`, `xhigh`, `max`, and every other
-    unsupported value before an upstream call. Do not translate values, send a
-    2.5-era `thinking_budget`, or add a second Gemini request adapter.
+    `thinking_level` so Google's `medium` default remains authoritative. Reject
+    blank, `none`, `xhigh`, `max`, and every other value not declared for the
+    exact route before an upstream call. In particular, reject `minimal` for
+    Gemini 3.7 Flash. Do not translate values, send a 2.5-era
+    `thinking_budget`, or add a second Gemini request adapter.
   - Keep the current 65,536 proxy output limit. Declare only the image and audio
-    inputs already implemented by the public messages contract; do not imply
-    public video, PDF, tools, thought-summary, streaming, or computer-use
-    support from the broader upstream model capability list.
+    inputs that the public messages contract implements. Do not imply support
+    for video, PDF, tools, thought summaries, streaming, or computer use.
   - Expose the exact route capability through the management profile and
     Settings autosave contract, and update configuration, constants, README,
     OpenAPI, provider-routing documentation, generated resources, and the model
     capability table together. No persisted-routing migration or default-model
     change is part of this issue.
   Validation:
-  - Startup and public-boundary fixtures prove the Gemini-only adapter mapping,
-    all four explicit effort payloads, omitted-effort omission, continuation
-    preservation, early rejection of unsupported efforts, 65,536-token cap,
-    media declarations, management profile exposure, saved tenant-default
-    routing, and pre-upstream rejection of a terminal assistant turn only on
-    the Gemini 3.6 route.
+  - Startup and public-boundary fixtures prove the Gemini-only adapter mapping.
+    They prove each model's exact effort vocabulary and explicit payloads. They
+    prove omission, continuation, unsupported-effort rejection, and the token
+    limit. They also prove media, management, saved defaults, and terminal-turn
+    rejection for only the two new routes.
   - Authenticated branch acceptance runs one small request for each explicit
-    thinking level and one omitted-level request, then proves one background
-    create/poll/delete flow for `gemini-3.6-flash`. The final `make ci` passes
-    after the last implementation edit; deployment and production acceptance
-    remain operator-owned.
+    thinking level and one omitted-level request for each model. It proves one
+    background create/poll/delete flow and one cancellation flow for each exact
+    model. The final `make ci` passes after the last implementation edit.
+    Deployment and production acceptance remain operator-owned.
+  Blocked: The new credential passed each declared reasoning request for both
+  exact models. Both paid lifecycle probes created an `in_progress` resource.
+  Google returned `403` and then `400` for every active retrieval attempt.
+  Gemini 3.6 became readable only after completion. Gemini 3.7 stayed
+  unreadable through the bounded probe. Both cleanup delete requests returned
+  HTTP 200. Neither model supplied the required active retrieve and cancel
+  proof. The provider catalog does not register these two routes.
 - [ ] [I027] (P1) Redesign the user dashboard around connected-provider widgets.
   Goal:
   Make the authenticated dashboard answer, at a glance, which upstream

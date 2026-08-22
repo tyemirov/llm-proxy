@@ -167,14 +167,13 @@ func internalTestProviderTransport(identifier string, offering ProviderOffering)
 	protocol := offering.WireContract
 	for _, provider := range internalCanonicalProviderCatalog().schema.Providers {
 		for _, template := range provider.Transports {
-			if template.RequestProtocol != protocol {
+			if template.RequestProtocol != protocol || template.Lifecycle != offering.ExecutionLifecycle {
 				continue
 			}
 			template.ID = identifier
 			template.Endpoint = ProviderCatalogEndpoint{
 				Method: CatalogEndpointMethodPost, DefaultBaseURL: "https://provider.example", Path: internalTestProviderProtocolPath(protocol),
 			}
-			template.Lifecycle = offering.ExecutionLifecycle
 			return template
 		}
 	}

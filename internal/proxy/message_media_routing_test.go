@@ -424,20 +424,20 @@ func TestV2RejectsInvalidOrUnsupportedMediaBeforeUpstreamWork(testingInstance *t
 		role        string
 		attachments any
 	}{
-		{name: "null attachments", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, role: "user", attachments: nil},
-		{name: "empty attachments", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, role: "user", attachments: []any{}},
-		{name: "non-array attachments", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, role: "user", attachments: "image"},
-		{name: "unknown attachment field", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, role: "user", attachments: []any{map[string]any{"type": "image", "mime_type": "image/png", "data": validImage["data"], "sha256": validImage["sha256"], "detail": "high"}}},
-		{name: "unsupported type", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, role: "user", attachments: []any{map[string]any{"type": "video", "mime_type": "video/mp4", "data": validImage["data"], "sha256": validImage["sha256"]}}},
-		{name: "unsupported image MIME", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, role: "user", attachments: []any{map[string]any{"type": "image", "mime_type": "audio/mpeg", "data": validImage["data"], "sha256": validImage["sha256"]}}},
-		{name: "unsupported audio MIME", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, role: "user", attachments: []any{map[string]any{"type": "audio", "mime_type": "image/png", "data": validAudio["data"], "sha256": validAudio["sha256"]}}},
-		{name: "empty data", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, role: "user", attachments: []any{map[string]any{"type": "image", "mime_type": "image/png", "data": "", "sha256": validImage["sha256"]}}},
-		{name: "empty decoded data", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, role: "user", attachments: []any{map[string]any{"type": "image", "mime_type": "image/png", "data": "\n", "sha256": validImage["sha256"]}}},
-		{name: "noncanonical base64", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, role: "user", attachments: []any{map[string]any{"type": "image", "mime_type": "image/png", "data": validImage["data"].(string) + "\n", "sha256": validImage["sha256"]}}},
-		{name: "malformed digest", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, role: "user", attachments: []any{map[string]any{"type": "image", "mime_type": "image/png", "data": validImage["data"], "sha256": "xyz"}}},
-		{name: "uppercase digest", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, role: "user", attachments: []any{map[string]any{"type": "image", "mime_type": "image/png", "data": validImage["data"], "sha256": strings.ToUpper(validImage["sha256"].(string))}}},
-		{name: "mismatched digest", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, role: "user", attachments: []any{map[string]any{"type": "image", "mime_type": "image/png", "data": validImage["data"], "sha256": messageMediaPayload("image", "image/png", []byte("other"))["sha256"]}}},
-		{name: "system attachment", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, role: "system", attachments: []any{validImage}},
+		{name: "null attachments", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini35Flash, role: "user", attachments: nil},
+		{name: "empty attachments", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini35Flash, role: "user", attachments: []any{}},
+		{name: "non-array attachments", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini35Flash, role: "user", attachments: "image"},
+		{name: "unknown attachment field", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini35Flash, role: "user", attachments: []any{map[string]any{"type": "image", "mime_type": "image/png", "data": validImage["data"], "sha256": validImage["sha256"], "detail": "high"}}},
+		{name: "unsupported type", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini35Flash, role: "user", attachments: []any{map[string]any{"type": "video", "mime_type": "video/mp4", "data": validImage["data"], "sha256": validImage["sha256"]}}},
+		{name: "unsupported image MIME", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini35Flash, role: "user", attachments: []any{map[string]any{"type": "image", "mime_type": "audio/mpeg", "data": validImage["data"], "sha256": validImage["sha256"]}}},
+		{name: "unsupported audio MIME", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini35Flash, role: "user", attachments: []any{map[string]any{"type": "audio", "mime_type": "image/png", "data": validAudio["data"], "sha256": validAudio["sha256"]}}},
+		{name: "empty data", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini35Flash, role: "user", attachments: []any{map[string]any{"type": "image", "mime_type": "image/png", "data": "", "sha256": validImage["sha256"]}}},
+		{name: "empty decoded data", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini35Flash, role: "user", attachments: []any{map[string]any{"type": "image", "mime_type": "image/png", "data": "\n", "sha256": validImage["sha256"]}}},
+		{name: "noncanonical base64", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini35Flash, role: "user", attachments: []any{map[string]any{"type": "image", "mime_type": "image/png", "data": validImage["data"].(string) + "\n", "sha256": validImage["sha256"]}}},
+		{name: "malformed digest", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini35Flash, role: "user", attachments: []any{map[string]any{"type": "image", "mime_type": "image/png", "data": validImage["data"], "sha256": "xyz"}}},
+		{name: "uppercase digest", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini35Flash, role: "user", attachments: []any{map[string]any{"type": "image", "mime_type": "image/png", "data": validImage["data"], "sha256": strings.ToUpper(validImage["sha256"].(string))}}},
+		{name: "mismatched digest", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini35Flash, role: "user", attachments: []any{map[string]any{"type": "image", "mime_type": "image/png", "data": validImage["data"], "sha256": messageMediaPayload("image", "image/png", []byte("other"))["sha256"]}}},
+		{name: "system attachment", provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini35Flash, role: "system", attachments: []any{validImage}},
 		{name: "text-only model", provider: proxy.ProviderNameXAI, model: proxy.ModelNameGrok43, role: "user", attachments: []any{validImage}},
 		{name: "provider MIME", provider: proxy.ProviderNameXAI, model: proxy.ModelNameGrok45, role: "user", attachments: []any{messageMediaPayload("image", "image/webp", []byte("webp"))}},
 		{name: "Moonshot unsupported audio", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK3, role: "user", attachments: []any{validAudio}},
@@ -506,7 +506,7 @@ func TestCompatibilityMessagesRejectMediaAndV2IgnoresCompatibilityBodyLimit(test
 		testingInstance.Fatalf("compatibility status=%d body=%s", compatibilityResponse.Code, compatibilityResponse.Body.String())
 	}
 
-	oversizedBody := mediaV2RequestBody(testingInstance, proxy.ModelNameGemini25Flash, strings.Repeat("x", 600), []map[string]any{validImage})
+	oversizedBody := mediaV2RequestBody(testingInstance, proxy.ModelNameGemini35Flash, strings.Repeat("x", 600), []map[string]any{validImage})
 	oversizedRequest := httptest.NewRequest(
 		http.MethodPost,
 		"/v2?key="+TestSecret+"&provider="+proxy.ProviderNameGemini,
@@ -531,19 +531,19 @@ func TestModelCatalogRejectsInvalidMediaInputDeclarations(testingInstance *testi
 		{
 			name: "unknown media input",
 			configure: func(catalogs proxy.ModelCatalog) {
-				setModelMediaInputs(catalogs, proxy.ProviderNameGemini, proxy.ModelNameGemini25Flash, []string{"video"})
+				setModelMediaInputs(catalogs, proxy.ProviderNameGemini, proxy.ModelNameGemini35Flash, []string{"video"})
 			},
 		},
 		{
 			name: "noncanonical media input",
 			configure: func(catalogs proxy.ModelCatalog) {
-				setModelMediaInputs(catalogs, proxy.ProviderNameGemini, proxy.ModelNameGemini25Flash, []string{" image"})
+				setModelMediaInputs(catalogs, proxy.ProviderNameGemini, proxy.ModelNameGemini35Flash, []string{" image"})
 			},
 		},
 		{
 			name: "duplicate media input",
 			configure: func(catalogs proxy.ModelCatalog) {
-				setModelMediaInputs(catalogs, proxy.ProviderNameGemini, proxy.ModelNameGemini25Flash, []string{"image", "image"})
+				setModelMediaInputs(catalogs, proxy.ProviderNameGemini, proxy.ModelNameGemini35Flash, []string{"image", "image"})
 			},
 		},
 		{
