@@ -89,24 +89,22 @@ OpenAI Responses and Gemini 3-series Interactions use pollable upstream
 lifecycles. The proxy sends stored background requests and holds the client
 connection. It polls a nonblank resource id through `status=queued` and
 `status=in_progress`. The shared `pollable_resource` lifecycle makes the first
-resource read immediately. If that read returns `403` or `404` after a
-successful create, the lifecycle releases the upstream worker, waits two
-seconds under the request context, and reads the resource one more time. Other
-first-read errors and all later read errors remain final. Gemini 2.5
-Interactions instead complete synchronously with `background: false` and
-`store: false`. A documented terminal status is resolved immediately, and a
-missing or unknown status is rejected rather than polled. Provider resource
-ids remain in the active request lifecycle. The proxy does not keep a durable
-provider job or expose a provider resource id.
+resource read immediately. The selected transport declares the retry statuses,
+interval, and limit for a resource that is not visible yet. OpenAI permits one
+retry after two seconds for `403` or `404`. Gemini permits six retries after
+five-second intervals for `400`, `403`, or `404`. The lifecycle releases the
+upstream worker during each wait. The request context bounds each wait.
+Provider resource ids remain in the active request lifecycle. The proxy does
+not keep a durable provider job or expose a provider resource id.
 
 Every current text route uses one provider-neutral completion coordinator.
-When an upstream attempt exhausts its output budget—OpenAI Responses
-`status=incomplete` with `reason=max_output_tokens`, Chat Completions
-`finish_reason=length`, Gemini Interactions `status=incomplete`, or Anthropic
-`stop_reason=max_tokens`—the coordinator retains the original messages,
-appends the accumulated assistant output and one missing-suffix instruction,
-and calls the same selected provider again. It repeats until the adapter
-reports its complete stop signal or the overall request deadline expires.
+The coordinator starts a new request only when the selected transport declares
+continuation actions. OpenAI Responses `status=incomplete` with
+`reason=max_output_tokens`, Chat Completions `finish_reason=length`, and
+Anthropic `stop_reason=max_tokens` use those actions. The coordinator retains
+the original messages and appends the visible output and one missing-suffix
+instruction. Gemini declares no continuation actions. A Gemini
+`status=incomplete` result causes a provider error after interaction cleanup.
 Safety filters, refusals, tool/intermediate states, malformed responses, and
 missing or unknown signals remain `502` failures and never trigger this loop.
 
@@ -344,7 +342,7 @@ adapters before they are available through `/dictate`.
 | `minimax` | none | `openai_chat_completions` | `synchronous_completion` | `minimax-m2.7` | Tenant-managed API key | `https://api.minimax.io/v1` | No | No |
 | `siliconflow` | none | `openai_chat_completions` | `synchronous_completion` | `deepseek-reasoner` | Tenant-managed API key | `https://api.siliconflow.com/v1` | Yes: `sensevoice-small` | No |
 | `zai` | none | `openai_chat_completions` | `synchronous_completion` | `glm-5.1` | Tenant-managed API key | `https://api.z.ai/api/paas/v4` | Yes: `glm-asr-2512` | No |
-| `gemini` | none | `gemini_interactions` | Model-specific: Gemini 3.x `pollable_resource`; Gemini 2.5 `synchronous_completion` | `gemini-2.5-flash` | Tenant-managed API key | `https://generativelanguage.googleapis.com/v1beta` | No | No |
+| `gemini` | none | `gemini_interactions` | `pollable_resource` | `gemini-3.5-flash` | Tenant-managed API key | `https://generativelanguage.googleapis.com/v1beta` | No | No |
 | `anthropic` | `claude` | `anthropic_messages` | `synchronous_completion` | `claude-sonnet-4-6` | Tenant-managed API key | `https://api.anthropic.com` | No | No |
 | `xai` | none | Model-specific: `grok-4.5` uses `openai_responses`, and other text models use `openai_chat_completions` | `synchronous_completion` | `grok-4.3` | Tenant-managed API key | `https://api.x.ai/v1` | Yes: `xai-stt` | No |
 
@@ -357,7 +355,7 @@ when the provider offering has a code-owned transport.
 |-----------------|----------|-------------------------------|
 | All 11 OpenAI text models in the GPT-4 and GPT-5 families | OpenAI | `image` |
 | All 10 Claude text models in the Fable, Sonnet, Opus, and Haiku families | Anthropic | `image` |
-| All 9 Gemini text models | Gemini | `image`, `audio` |
+| All 4 Gemini text models | Gemini | `image`, `audio` |
 | `grok-4.5` | xAI | `image` |
 | Every other configured model | Its configured provider | None |
 
@@ -372,8 +370,8 @@ The loader rejects unknown fields and unsupported schema versions. It also
 rejects invalid identities, references, defaults, protocols, capabilities,
 limits, and prices.
 
-The current snapshot contains 11 providers, 69 exact models, 70 provider
-offerings, and 70 price records. The application compiles one immutable
+The current snapshot contains 11 providers, 64 exact models, 65 provider
+offerings, and 65 price records. The application compiles one immutable
 registry from this snapshot.
 
 Each provider offering references one exact model and one provider transport.
@@ -418,23 +416,11 @@ interaction that is still active and then deletes the resource; a terminal
 interaction is deleted directly. Cancel and delete each receive an independent
 bounded cleanup context, so a stalled or failed cancel cannot consume the
 delete attempt. A failed deletion prevents a successful or output-limit result
-from escaping as success. Gemini 2.5 uses the same Interactions adapter
-synchronously with `background: false` and `store: false`, so it accepts an
-immediate terminal response without requiring or cleaning up an id.
-Output-limit continuation always starts a distinct inference request and never
-treats an arbitrary upstream identifier as pollable state.
-
-Gemini 3.6 Flash accepts `minimal`, `low`, `medium`, and `high` as exact public
-`reasoning_effort` values. Gemini 3.7 Flash accepts `low`, `medium`, and `high`.
-The adapter sends an explicit value unchanged as
-`generation_config.thinking_level` on the initial request and every
-output-limit continuation. It omits `thinking_level` when no request or tenant
-default selects an effort, which retains Google's `medium` default. The two
-routes reject a request when its final non-system message has the `assistant`
-role. Other Gemini routes retain their current message behavior.
-See Google's [thinking guide](https://ai.google.dev/gemini-api/docs/thinking),
-[Gemini 3.6 Flash reference](https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash),
-and [Gemini 3.7 Flash reference](https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash).
+from escaping as success.
+When a transport declares continuation actions, output-limit continuation
+starts a distinct inference request. It never treats an arbitrary upstream
+identifier as pollable state. Each Gemini Interactions route rejects a request
+that contains an `assistant` message.
 
 Provider-specific details:
 
@@ -495,13 +481,13 @@ Provider-specific details:
   `providers.yml`. That transport owns the exact endpoint and model-field rule.
 * Gemini text requests use native `POST /interactions` against the configured
   `v1beta` base URL with `x-goog-api-key` and
-  `Api-Revision: 2026-05-20`. Gemini 3.x sends `background: true` and
-  `store: true`; its `queued` and `in_progress` states are polled server-side.
-  Gemini 2.5 sends `background: false` and `store: false` and must return an
-  immediate terminal state. User and assistant history becomes `user_input`
-  and `model_output` steps, while system messages become the top-level
-  `system_instruction`. Only `completed` with visible model text succeeds.
-  `incomplete` enters the common missing-suffix loop through a new interaction.
+  `Api-Revision: 2026-05-20`. Every configured Gemini 3.x route sends
+  `background: true` and `store: true`; its `queued` and `in_progress` states
+  are polled server-side. User messages become `user_input` steps. System
+  messages become the top-level `system_instruction`. Assistant history is
+  invalid because the public request cannot carry provider interaction state or
+  thought signatures. Only `completed` with visible model text succeeds.
+  `incomplete` returns a provider error after interaction deletion.
   `failed`, `cancelled`, `budget_exceeded`, `requires_action`, malformed,
   missing, and unknown states are safe upstream failures. Usage
   totals map from `total_input_tokens`, `total_output_tokens`, and
@@ -713,10 +699,10 @@ pollable Gemini route creates one stored background interaction and observes it
 through the shared `pollable_resource` lifecycle. The verifier cancels an
 active interaction and deletes every stored interaction before it accepts the
 credential. Every request uses the shared upstream worker, queue,
-origin-rate-limit, and management request boundaries. The verifier can repeat
-only a first resource read that returns `403` or `404`. It does not retry a
-create, transport failure, later read, cancel, or delete. It does not start a
-continuation or record managed usage.
+origin-rate-limit, and management request boundaries. The verifier applies the
+selected transport's catalog-owned visibility policy after creation. It does
+not retry a create, an undeclared response, cancel, or delete. It does not start
+a continuation or record managed usage.
 Only an accepted provider connection and model enter the provider connection
 transaction. That transaction encrypts each secret field and saves each setting
 field. It also saves the provider profile, reconciles routing defaults, and
@@ -1048,6 +1034,12 @@ credential with the provider field identity as associated data. The transaction
 verifies every value and timestamp before it removes the predecessor table.
 Current-schema reads use only provider connection records and provider profile
 records.
+
+The bounded schema-version-10 migration replaces each stored Gemini 2.5 text
+model and same-provider tenant default with `gemini-3.5-flash`. It updates the
+provider profile and current default in one transaction. It preserves tenant
+and profile timestamps and all historical usage model identifiers. Current
+startup rejects retired Gemini routes instead of accepting an alias or fallback.
 
 Server settings and browser-facing MPR UI/TAuth bootstrap settings remain in
 `config.yml`. Provider definitions and static endpoints remain in
@@ -1434,9 +1426,8 @@ Its echo cases omit `model`, so they exercise each saved Default-tenant provider
 model. It runs echo markers for OpenAI, Anthropic, Meta, Gemini, and Moonshot.
 It sends the same deterministic request larger than 16 KiB through OpenAI,
 Anthropic, Meta, and Gemini. The long Gemini case explicitly selects
-`gemini-3.5-flash`. This selection proves the background Interactions path when
-the tenant's saved Gemini model is a synchronous 2.5 model. The
-long request requires normalized output for every portfolio record before its
+`gemini-3.5-flash`. This selection proves the default background Interactions
+path. The long request requires normalized output for every portfolio record before its
 final marker and uses a 900-second request budget. OpenAI and Gemini 3.5 keep
 the blocking caller request open while their resource adapters own background
 polling. Anthropic and Meta use their canonical
@@ -1622,7 +1613,7 @@ request, err := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequest
         Content:     "Inspect this exact frame.",
         Attachments: []llmproxyclient.MessageAttachment{frame},
     }},
-    Model: "gemini-2.5-flash",
+    Model: "gemini-3.5-flash",
 })
 if err != nil {
     return err
@@ -1712,7 +1703,7 @@ nonblank string fields and never contains credentials or TAuth material:
 ```json
 {
   "provider": "gemini",
-  "model": "gemini-2.5-flash"
+  "model": "gemini-3.5-flash"
 }
 ```
 
@@ -1816,7 +1807,7 @@ text = client.post_messages(
                 attachments=(frame,),
             ),
         ),
-        model="gemini-2.5-flash",
+        model="gemini-3.5-flash",
     )
 )
 ```
@@ -1929,7 +1920,7 @@ curl --get \
   --data-urlencode "prompt=Summarize this with Gemini" \
   --data-urlencode "key=mysecret" \
   --data-urlencode "provider=gemini" \
-  --data-urlencode "model=gemini-2.5-flash" \
+  --data-urlencode "model=gemini-3.5-flash" \
   --data-urlencode "max_tokens=512" \
   "http://localhost:8080/"
 ```
@@ -2072,7 +2063,7 @@ Use the returned asset record in the canonical message:
       ]
     }
   ],
-  "model": "gemini-2.5-flash"
+  "model": "gemini-3.5-flash"
 }
 ```
 
@@ -2240,10 +2231,6 @@ Kimi K3 accepts `low`, `high`, and `max`. Omission keeps Moonshot's provider
 default. Kimi K2.6 and the Kimi K2.7 Code routes do not expose a selectable
 effort through the proxy.
 
-Gemini 3.6 Flash accepts `minimal`, `low`, `medium`, and `high`. Gemini 3.7
-Flash accepts `low`, `medium`, and `high`. Omission keeps Google's `medium`
-default for both models.
-
 ### Model capabilities
 
 | Model | Provider | Provider default | Proxy `max_tokens` limit | Web search |
@@ -2282,15 +2269,10 @@ default for both models.
 | `minimax-m2` | MiniMax | No | `204800` | No |
 | `glm-5.1` | Z.AI | Yes | - | No |
 | `glm-5.2` | Z.AI | No | `131072` | No |
-| `gemini-3.7-flash` | Gemini | No | `65536` | No |
-| `gemini-3.6-flash` | Gemini | No | `65536` | No |
-| `gemini-3.5-flash` | Gemini | No | `65536` | No |
+| `gemini-3.5-flash` | Gemini | Yes | `65536` | No |
 | `gemini-3.1-pro-preview` | Gemini | No | `65536` | No |
 | `gemini-3-flash-preview` | Gemini | No | `65536` | No |
 | `gemini-3.1-flash-lite` | Gemini | No | `65536` | No |
-| `gemini-2.5-flash` | Gemini | Yes | `65536` | No |
-| `gemini-2.5-flash-lite` | Gemini | No | `65536` | No |
-| `gemini-2.5-pro` | Gemini | No | `65536` | No |
 | `claude-opus-4-8` | Anthropic/Claude | No | `128000` | No |
 | `claude-fable-5` | Anthropic/Claude | No | `128000` | No |
 | `claude-sonnet-5` | Anthropic/Claude | No | `128000` | No |
