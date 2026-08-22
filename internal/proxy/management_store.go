@@ -600,6 +600,11 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 	if queryError := database.Order(clause.OrderBy{Columns: []clause.OrderByColumn{{Column: clause.Column{Name: managedSchemaVersionColumn}, Desc: true}}}).First(&migration).Error; queryError != nil {
 		return fmt.Errorf("%w: operation=read_version table=%s: %v", errManagedTenantSchemaMigration, managedSchemaMigrationTable, queryError)
 	}
+	if migration.Version >= managedTenantOwnershipSchemaVersion && migration.Version < managedProviderConnectionsSchemaVersion {
+		if migrationError := migrateManagedPredecessorModelSelections(database, providers, managedGemini3OnlySchemaVersion); migrationError != nil {
+			return migrationError
+		}
+	}
 	requiresQwenCloudRetirement := false
 	requiresModelIdentityMigration := false
 	switch migration.Version {
@@ -723,26 +728,20 @@ func migrateManagedProviderConnections(database *gorm.DB, providerKeyCipher mana
 }
 
 func migrateManagedModelSelections(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry, schemaVersion int) error {
-	migrations := providers.modelMigrations[schemaVersion]
-	if len(migrations) == 0 {
-		return fmt.Errorf("%w: operation=read_model_migrations version=%d", errManagedTenantSchemaMigration, schemaVersion)
+	migrations, migrationsError := managedTextModelMigrations(providers, schemaVersion)
+	if migrationsError != nil {
+		return migrationsError
 	}
 	return database.Transaction(func(transaction *gorm.DB) error {
 		for _, migration := range migrations {
-			if migration.operation != ModelOperationText || migration.target == constants.EmptyString {
-				return fmt.Errorf("%w: operation=read_model_migrations version=%d provider=%s model=%s", errManagedTenantSchemaMigration, schemaVersion, migration.provider, migration.source)
-			}
 			profileResult := transaction.Model(&managedProviderProfileRecord{}).
 				Where(&managedProviderProfileRecord{ProviderID: migration.provider, TextModel: migration.source}).
 				UpdateColumn("text_model", migration.target)
 			if profileResult.Error != nil {
 				return fmt.Errorf("%w: operation=backfill table=%s provider=%s: %v", errManagedTenantSchemaMigration, managedProviderProfileTable, migration.provider, profileResult.Error)
 			}
-			tenantResult := transaction.Model(&managedTenantRecord{}).
-				Where(&managedTenantRecord{DefaultProvider: migration.provider, DefaultModel: migration.source}).
-				UpdateColumn("default_model", migration.target)
-			if tenantResult.Error != nil {
-				return fmt.Errorf("%w: operation=backfill table=%s provider=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, migration.provider, tenantResult.Error)
+			if migrationError := migrateManagedTenantModelSelection(transaction, migration); migrationError != nil {
+				return migrationError
 			}
 		}
 		if validationError := validateManagedConnectionRoutingDefaults(transaction, providerKeyCipher, providers); validationError != nil {
@@ -753,6 +752,50 @@ func migrateManagedModelSelections(database *gorm.DB, providerKeyCipher managedP
 		}
 		return nil
 	})
+}
+
+func migrateManagedPredecessorModelSelections(database *gorm.DB, providers *providerRegistry, schemaVersion int) error {
+	migrations, migrationsError := managedTextModelMigrations(providers, schemaVersion)
+	if migrationsError != nil {
+		return migrationsError
+	}
+	return database.Transaction(func(transaction *gorm.DB) error {
+		for _, migration := range migrations {
+			providerResult := transaction.Model(&managedProviderAPIKeyRecord{}).
+				Where(&managedProviderAPIKeyRecord{ProviderID: migration.provider, TextModel: migration.source}).
+				UpdateColumn("text_model", migration.target)
+			if providerResult.Error != nil {
+				return fmt.Errorf("%w: operation=backfill table=%s provider=%s: %v", errManagedTenantSchemaMigration, managedProviderKeyTable, migration.provider, providerResult.Error)
+			}
+			if migrationError := migrateManagedTenantModelSelection(transaction, migration); migrationError != nil {
+				return migrationError
+			}
+		}
+		return nil
+	})
+}
+
+func managedTextModelMigrations(providers *providerRegistry, schemaVersion int) ([]managedModelMigration, error) {
+	migrations := providers.modelMigrations[schemaVersion]
+	if len(migrations) == 0 {
+		return nil, fmt.Errorf("%w: operation=read_model_migrations version=%d", errManagedTenantSchemaMigration, schemaVersion)
+	}
+	for _, migration := range migrations {
+		if migration.operation != ModelOperationText || migration.target == constants.EmptyString {
+			return nil, fmt.Errorf("%w: operation=read_model_migrations version=%d provider=%s model=%s", errManagedTenantSchemaMigration, schemaVersion, migration.provider, migration.source)
+		}
+	}
+	return migrations, nil
+}
+
+func migrateManagedTenantModelSelection(database *gorm.DB, migration managedModelMigration) error {
+	tenantResult := database.Model(&managedTenantRecord{}).
+		Where(&managedTenantRecord{DefaultProvider: migration.provider, DefaultModel: migration.source}).
+		UpdateColumn("default_model", migration.target)
+	if tenantResult.Error != nil {
+		return fmt.Errorf("%w: operation=backfill table=%s provider=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, migration.provider, tenantResult.Error)
+	}
+	return nil
 }
 
 func migrateManagedProviderConnectionData(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry) error {
@@ -1300,6 +1343,10 @@ func canonicalManagedTextModel(providers *providerRegistry, provider string, mod
 	return providers.modelMigrationTarget(managedModelIdentitySchemaVersion, provider, ModelOperationText, model)
 }
 
+func canonicalManagedPendingTextModel(providers *providerRegistry, provider string, model string) (string, bool) {
+	return providers.modelMigrationTarget(managedGemini3OnlySchemaVersion, provider, ModelOperationText, model)
+}
+
 func canonicalManagedTenantDefaults(providers *providerRegistry, defaults TenantDefaults) (TenantDefaults, bool) {
 	changed := false
 	if canonicalModel, modelChanged := canonicalManagedTextModel(providers, defaults.Provider, defaults.Model); modelChanged {
@@ -1318,6 +1365,12 @@ func canonicalManagedPredecessorDefaults(providers *providerRegistry, defaults T
 	xaiDefaults, xaiProviderChanged := canonicalManagedXAIProviderDefaults(modelIdentityDefaults)
 	currentDefaults, zaiProviderChanged := canonicalManagedZAIProviderDefaults(xaiDefaults)
 	return currentDefaults, modelIdentityChanged || xaiProviderChanged || zaiProviderChanged
+}
+
+func canonicalManagedPendingModelDefaults(providers *providerRegistry, defaults TenantDefaults) (TenantDefaults, bool) {
+	currentModel, changed := canonicalManagedPendingTextModel(providers, defaults.Provider, defaults.Model)
+	defaults.Model = currentModel
+	return defaults, changed
 }
 
 func managedModelIdentityHistoricalUsage(database *gorm.DB, providers *providerRegistry) ([]managedUsageEventRecord, error) {
@@ -2152,6 +2205,7 @@ func preflightLegacyManagedTenantSchema(database *gorm.DB, providerKeyCipher man
 			return managedTenantMigrationDataset{}, fmt.Errorf("%w: operation=preflight table=%s user=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, legacyTenant.UserID, legacyTenant.TenantID, identifierError)
 		}
 		canonicalDefaults, _ := canonicalManagedPredecessorDefaults(providers, legacyTenant.defaults())
+		canonicalDefaults, _ = canonicalManagedPendingModelDefaults(providers, canonicalDefaults)
 		validatedDefaults, defaultsError := validateCanonicalManagedRoutingDefaults(providers, canonicalDefaults)
 		if defaultsError != nil {
 			return managedTenantMigrationDataset{}, fmt.Errorf("%w: operation=preflight table=%s user=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, legacyTenant.UserID, legacyTenant.TenantID, defaultsError)
@@ -2216,6 +2270,7 @@ func preflightLegacyManagedTenantSchema(database *gorm.DB, providerKeyCipher man
 		}
 		seenCanonicalProviderKeys[canonicalProviderKey] = struct{}{}
 		textModel, _ := canonicalManagedTextModel(providers, providerIdentifier, legacyProviderKey.TextModel)
+		textModel, _ = canonicalManagedPendingTextModel(providers, providerIdentifier, textModel)
 		providerDefinition, textModelDefinition, modelError := providers.resolveTextModel(
 			providerIdentifier,
 			textModel,

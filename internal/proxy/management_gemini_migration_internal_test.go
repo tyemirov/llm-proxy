@@ -171,6 +171,132 @@ func TestManagedGemini3OnlyMigrationMovesRoutingStateAndPreservesUsage(t *testin
 	}
 }
 
+func TestManagedGemini3OnlyMigrationStartsFromSchemaEight(t *testing.T) {
+	providers := internalManagementProviderRegistry()
+	migrations := providers.modelMigrationsFor(managedGemini3OnlySchemaVersion, ProviderNameGemini, ModelOperationText)
+	for _, migration := range migrations {
+		t.Run(migration.source, func(t *testing.T) {
+			fixture := newManagedProviderConnectionsMigrationFixture(t, ProviderNameGemini, migration.source, "")
+			var originalTenant managedTenantRecord
+			if queryError := fixture.database.Where(&managedTenantRecord{TenantID: fixture.predecessor.TenantID}).First(&originalTenant).Error; queryError != nil {
+				t.Fatalf("load schema-eight Gemini tenant: %v", queryError)
+			}
+			historicalUsage := managedUsageEventRecord{
+				ID: 1, TenantID: fixture.predecessor.TenantID, Endpoint: usageEndpointText,
+				ProviderID: ProviderNameGemini, ModelID: migration.source,
+				StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess,
+				RequestTokens: 1, ResponseTokens: 2, TotalTokens: 3, CreatedAt: fixture.predecessor.CreatedAt,
+			}
+			if createError := fixture.database.Create(&historicalUsage).Error; createError != nil {
+				t.Fatalf("seed schema-eight Gemini usage: %v", createError)
+			}
+			if createError := fixture.database.Create(&managedSchemaMigrationRecord{Version: managedZAIProviderSchemaVersion, AppliedAt: fixture.predecessor.CreatedAt}).Error; createError != nil {
+				t.Fatalf("seed schema-eight Gemini version: %v", createError)
+			}
+
+			if migrationError := initializeManagedTenantSchema(fixture.database, fixture.providerKeyCipher, fixture.providers); migrationError != nil {
+				t.Fatalf("migrate schema-eight Gemini model=%s: %v", migration.source, migrationError)
+			}
+			if fixture.database.Migrator().HasTable(managedProviderKeyTable) {
+				t.Fatal("schema-eight Gemini provider table was retained")
+			}
+
+			var connection managedProviderConnectionRecord
+			if queryError := fixture.database.Where(&managedProviderConnectionRecord{
+				TenantID: fixture.predecessor.TenantID, ProviderID: ProviderNameGemini, FieldID: CatalogCredentialAPIKey,
+			}).First(&connection).Error; queryError != nil {
+				t.Fatalf("load migrated Gemini connection: %v", queryError)
+			}
+			apiKey, decryptError := fixture.providerKeyCipher.decryptConnection(connection)
+			if decryptError != nil || apiKey != "sk-provider" || !connection.CreatedAt.Equal(fixture.predecessor.CreatedAt) || !connection.UpdatedAt.Equal(fixture.predecessor.UpdatedAt) {
+				t.Fatalf("migrated Gemini connection=%+v key=%q error=%v", connection, apiKey, decryptError)
+			}
+
+			var profile managedProviderProfileRecord
+			if queryError := fixture.database.Where(&managedProviderProfileRecord{TenantID: fixture.predecessor.TenantID, ProviderID: ProviderNameGemini}).First(&profile).Error; queryError != nil {
+				t.Fatalf("load migrated Gemini profile: %v", queryError)
+			}
+			if profile.TextModel != migration.target || profile.SystemPrompt != fixture.predecessor.SystemPrompt || !profile.CreatedAt.Equal(fixture.predecessor.CreatedAt) || !profile.UpdatedAt.Equal(fixture.predecessor.UpdatedAt) {
+				t.Fatalf("migrated Gemini profile=%+v", profile)
+			}
+
+			var tenant managedTenantRecord
+			if queryError := fixture.database.Where(&managedTenantRecord{TenantID: fixture.predecessor.TenantID}).First(&tenant).Error; queryError != nil {
+				t.Fatalf("load migrated Gemini tenant: %v", queryError)
+			}
+			if tenant.DefaultProvider != ProviderNameGemini || tenant.DefaultModel != migration.target || !tenant.UpdatedAt.Equal(originalTenant.UpdatedAt) {
+				t.Fatalf("migrated Gemini tenant=%+v", tenant)
+			}
+
+			var migratedUsage managedUsageEventRecord
+			if queryError := fixture.database.First(&migratedUsage, historicalUsage.ID).Error; queryError != nil || migratedUsage != historicalUsage {
+				t.Fatalf("migrated Gemini usage=%+v error=%v", migratedUsage, queryError)
+			}
+			var latest managedSchemaMigrationRecord
+			if queryError := fixture.database.Order("version DESC").First(&latest).Error; queryError != nil || latest.Version != managedGemini3OnlySchemaVersion {
+				t.Fatalf("latest Gemini schema version=%+v error=%v", latest, queryError)
+			}
+		})
+	}
+}
+
+func TestManagedGeminiPredecessorProjectionRollsBackStageFailures(t *testing.T) {
+	migrations := internalManagementProviderRegistry().modelMigrationsFor(managedGemini3OnlySchemaVersion, ProviderNameGemini, ModelOperationText)
+	if len(migrations) == 0 {
+		t.Fatal("Gemini model migrations are missing")
+	}
+	testCases := []struct {
+		name      string
+		want      string
+		configure func(*testing.T, managedProviderConnectionsMigrationFixture)
+	}{
+		{
+			name: "model migrations", want: "operation=read_model_migrations",
+			configure: func(_ *testing.T, fixture managedProviderConnectionsMigrationFixture) {
+				delete(fixture.providers.modelMigrations, managedGemini3OnlySchemaVersion)
+			},
+		},
+		{
+			name: "provider model", want: "operation=backfill table=" + managedProviderKeyTable,
+			configure: func(t *testing.T, fixture managedProviderConnectionsMigrationFixture) {
+				registerManagedGORMError(t, fixture.database, "gemini_predecessor_provider_backfill", "update", managedProviderKeyTable, errInternalTestDatabase)
+			},
+		},
+		{
+			name: "tenant model", want: "operation=backfill table=" + managedTenantTable,
+			configure: func(t *testing.T, fixture managedProviderConnectionsMigrationFixture) {
+				registerManagedGORMError(t, fixture.database, "gemini_predecessor_tenant_backfill", "update", managedTenantTable, errInternalTestDatabase)
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			fixture := newManagedProviderConnectionsMigrationFixture(t, ProviderNameGemini, migrations[0].source, "")
+			if createError := fixture.database.Create(&managedSchemaMigrationRecord{Version: managedZAIProviderSchemaVersion, AppliedAt: fixture.predecessor.CreatedAt}).Error; createError != nil {
+				t.Fatalf("seed schema-eight Gemini version: %v", createError)
+			}
+			testCase.configure(t, fixture)
+
+			migrationError := initializeManagedTenantSchema(fixture.database, fixture.providerKeyCipher, fixture.providers)
+			if !errors.Is(migrationError, errManagedTenantSchemaMigration) || !strings.Contains(migrationError.Error(), testCase.want) {
+				t.Fatalf("Gemini predecessor migration error=%v want=%q", migrationError, testCase.want)
+			}
+			var predecessor managedProviderAPIKeyRecord
+			if queryError := fixture.database.Where(&managedProviderAPIKeyRecord{TenantID: fixture.predecessor.TenantID, ProviderID: ProviderNameGemini}).First(&predecessor).Error; queryError != nil || predecessor.TextModel != migrations[0].source {
+				t.Fatalf("Gemini predecessor after rollback=%+v error=%v", predecessor, queryError)
+			}
+			var tenant managedTenantRecord
+			if queryError := fixture.database.Where(&managedTenantRecord{TenantID: fixture.predecessor.TenantID}).First(&tenant).Error; queryError != nil || tenant.DefaultModel != migrations[0].source {
+				t.Fatalf("Gemini tenant after rollback=%+v error=%v", tenant, queryError)
+			}
+			var latest managedSchemaMigrationRecord
+			if queryError := fixture.database.Order("version DESC").First(&latest).Error; queryError != nil || latest.Version != managedZAIProviderSchemaVersion {
+				t.Fatalf("Gemini schema version after rollback=%+v error=%v", latest, queryError)
+			}
+		})
+	}
+}
+
 func TestManagedModelSelectionMigrationUsesCatalogTarget(t *testing.T) {
 	fixture := newManagedGemini3OnlyMigrationFixture(t)
 	schema := internalCanonicalProviderCatalog().Schema()
