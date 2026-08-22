@@ -1,6 +1,6 @@
 # LLM Proxy SEO Resource Cluster Report
 
-Generated: 2026-08-20
+Generated: 2026-08-22
 
 ## Repo Analysis Report
 
@@ -46,7 +46,7 @@ Generated: 2026-08-20
 |---|---|---|---|
 | No zero-knowledge guarantee | Backend decrypts provider keys to call upstream providers. | README management UI | Say encrypted at rest for storage/backups/dumps, not user-only decryption. |
 | Not every upstream feature is exposed | Provider adapters define current capabilities. | README provider and dictation matrices | Do not claim universal provider feature parity. |
-| Meta support is text-only | Muse Spark 1.1 uses the shared Chat Completions adapter. | README provider-specific details | Do not imply Meta dictation, web search, tools, multimodal inputs, or Responses fallback. |
+| Meta support is text-only | Muse Spark 1.1 and 1.2 use the shared Chat Completions adapter. | README provider-specific details | Do not imply Meta dictation, web search, tools, multimodal inputs, or Responses fallback. |
 | Web search limited to configured OpenAI models | Other providers are marked unsupported. | README provider-specific details | Do not imply search across all providers. |
 | Third-party static-page telemetry | Public static pages load Google Analytics and LoopAware scripts. | site/index.html, resource generator | Do not claim collection, retention, consent, or opt-out behavior without approved legal or provider documentation. |
 | Live provider tests can spend money | Live smoke tests are not part of CI. | README local automation | Do not present live tests as routine CI. |
@@ -57,7 +57,7 @@ Generated: 2026-08-20
 - LLM Proxy exposes GET /, POST /, POST /v2, and POST /dictate behind tenant-secret authentication.
 - Direct HTTP, the official Go package, the official Python package, and the installable CLI converge on canonical POST /v2 messages for text.
 - Provider and model selection can change the supported route without replacing the application's canonical messages integration.
-- It routes text to OpenAI, Meta Muse Spark 1.1 and other OpenAI-compatible providers, Anthropic, Gemini, and Grok/xAI as documented in the provider matrix.
+- It routes text to OpenAI, both Meta Muse Spark models, and other supported providers as documented in the provider matrix.
 - It routes dictation through /dictate for OpenAI, SiliconFlow, Z.AI, and Grok/xAI as documented.
 - It keeps upstream provider API keys server-side and rejects provider-key-like fields on public proxy requests.
 - It can run a TAuth-protected self-service management UI that automatically creates a missing client key, autosaves selected-provider settings, and requires one persisted provider key before Settings can close.
@@ -150,8 +150,8 @@ Generated: 2026-08-20
 | Page | Allowed claims | Forbidden claims | Differentiation | Repository evidence | CTA | Canonical path | Significant update |
 |---|---|---|---|---|---|---|---|
 | Integrate once through one multi-provider LLM proxy | One canonical POST /v2 contract, direct HTTP, official Go, Python, and CLI clients, explicit supported-route selection, server-side provider credentials, and a generated current capability matrix. | Universal upstream feature parity, automatic fallback, benchmark leadership, savings, provider longevity, model-onboarding time, or hosted uptime guarantees. | This is the integrate-once cornerstone: it explains how the client contract stays stable while provider and model routing change. | README.md, verified 2026-08-08 | Compare integration options | /resources/multi-provider-llm-proxy/ | 2026-08-08 |
-| Switch OpenAI, Claude, and Gemini behind one endpoint | One canonical messages body, native OpenAI Responses, Anthropic Messages, and Gemini Interactions adapters, explicit route selection, blocking caller behavior, and current catalog validation. | Identical upstream behavior, identical capabilities, provider performance rankings, automatic fallback, availability guarantees, or universal model access. | This page is a concrete three-provider comparison for product teams. It explains which contract stays shared and which behavior remains route-specific. | README.md, verified 2026-08-20 | Explore supported models | /resources/openai-claude-gemini-one-endpoint/ | 2026-08-20 |
-| Transactional multi-tenant account ownership migration | Bounded preflight, atomic migration, preserved tenant ids and usage, and tenant-bound provider-key re-encryption. | Performance, pricing, compliance, benchmark, and zero-downtime claims. | Operator runbook for the one-tenant-per-user ownership upgrade, distinct from general GORM persistence guidance. | internal/proxy/management_store.go, verified 2026-08-20 | Read the migration runbook | /resources/multi-tenant-ownership-migration/ | 2026-08-20 |
+| Switch OpenAI, Claude, and Gemini behind one endpoint | One canonical messages body, native OpenAI Responses, Anthropic Messages, and Gemini Interactions adapters, explicit route selection, blocking caller behavior, and current catalog validation. | Identical upstream behavior, identical capabilities, provider performance rankings, automatic fallback, availability guarantees, or universal model access. | This page is a concrete three-provider comparison for product teams. It explains which contract stays shared and which behavior remains route-specific. | README.md, verified 2026-08-22 | Explore supported models | /resources/openai-claude-gemini-one-endpoint/ | 2026-08-22 |
+| Transactional multi-tenant account ownership migration | Bounded preflight, atomic migration, preserved tenant ids and usage, and tenant-bound provider-key re-encryption. | Performance, pricing, compliance, benchmark, and zero-downtime claims. | Operator runbook for the one-tenant-per-user ownership upgrade, distinct from general GORM persistence guidance. | internal/proxy/management_store.go, verified 2026-08-22 | Read the migration runbook | /resources/multi-tenant-ownership-migration/ | 2026-08-22 |
 | Internal AI gateway for durable product integrations | One tenant-client-key boundary, canonical messages integration, server-side provider keys, managed routing defaults, route validation, official clients, and content-free usage summaries. | Complete AI governance, compliance certification, data residency, procurement guarantees, hosted availability, or replacement of organizational security controls. | This page addresses institutional ownership and operating boundaries across many applications rather than provider comparison or individual developer setup. | README.md, verified 2026-08-08 | Read the authentication guide | /resources/internal-ai-gateway-for-product-tools/ | 2026-08-08 |
 
 ## Site Integration And Discoverability
@@ -164,7 +164,7 @@ Generated: 2026-08-20
 
 ## Evaluation Report
 
-Independent quality and risk evaluation: 2026-08-20
+Independent quality and risk evaluation: 2026-08-22
 
 | Category | Score | Notes |
 |---|---:|---|

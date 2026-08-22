@@ -15,9 +15,9 @@ The current provider catalog has these records:
 - 11 provider definitions.
 - 11 model publishers.
 - 24 model families.
-- 66 exact models.
-- 67 provider offerings.
-- 67 price records.
+- 69 exact models.
+- 70 provider offerings.
+- 70 price records.
 - Six protocol adapters.
 - Two lifecycle values.
 
@@ -165,6 +165,11 @@ The accepted request profiles are
 `openai_responses_temperature`,
 `openai_responses_temperature_tools`, and
 `openai_responses_reasoning_tools`.
+
+The accepted reasoning adapters are `openai_responses`,
+`openai_chat_completions`, and `gemini_interactions`. Startup requires each
+adapter to match its exact wire contract. Each offering declares only the
+ordered effort values that its exact provider/model route accepts.
 
 ## Capability and price mapping
 

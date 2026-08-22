@@ -14,6 +14,9 @@ info:
     account retention policy applies. Background Gemini interaction ids are
     also request-local; the adapter cancels active resources and deletes every
     stored interaction on exit. Synchronous Gemini interactions are non-stored.
+    Gemini 3.6 Flash maps minimal, low, medium, and high reasoning efforts to
+    thinking_level. Gemini 3.7 Flash maps low, medium, and high. Both routes
+    reject a final non-system assistant message before provider dispatch.
     TAuth-owned endpoints are outside this contract.
     Contributors must update this document in the same change as any owned
     handler or bundled-client wire change.
@@ -122,7 +125,9 @@ paths:
         default. A supplied value must be non-blank and supported by the resolved
         route. The selected provider offering owns media admission and transport
         limits. Unsupported media or route capabilities return HTTP 400 before
-        an upstream call. The service rejects an encoded request body above 8
+        an upstream call. Gemini 3.6 Flash and Gemini 3.7 Flash also return HTTP
+        400 when the final non-system message has the assistant role. The service
+        rejects an encoded request body above 8
         MiB before JSON decoding. A smaller catalog-derived body limit applies
         when configured. Current Moonshot Kimi image routes preserve attachment
         order and exact bytes through Chat Completions Data URL blocks.
@@ -810,7 +815,10 @@ components:
       name: reasoning_effort
       in: query
       required: false
-      description: Non-blank effort supported by the resolved route. Omission selects the tenant or route default.
+      description: >-
+        Non-blank effort supported by the resolved route. Omission selects the
+        tenant or route default. Gemini 3.6 Flash accepts minimal, low, medium,
+        or high. Gemini 3.7 Flash accepts low, medium, or high.
       schema:
         type: string
         minLength: 1
@@ -2272,6 +2280,10 @@ components:
         messages:
           type: array
           minItems: 1
+          description: >-
+            Gemini 3.6 Flash and Gemini 3.7 Flash reject a final non-system
+            assistant message. Other routes retain their declared message
+            behavior.
           items:
             $ref: '#/components/schemas/ChatMessage'
         model:
@@ -2288,6 +2300,11 @@ components:
         reasoning_effort:
           type: string
           minLength: 1
+          description: >-
+            Omission selects the tenant or route default. An explicit value
+            must be non-blank and supported by the resolved provider/model
+            route. Gemini 3.6 Flash accepts minimal, low, medium, or high.
+            Gemini 3.7 Flash accepts low, medium, or high.
     V2Request:
       type: object
       additionalProperties: false
@@ -2297,7 +2314,13 @@ components:
         messages:
           type: array
           minItems: 1
-          description: All messages must have an allowed role and non-blank content, include at least one user message, and either all omit order or all provide unique non-negative order values. Only user messages may carry attachments; message order and attachment order are preserved.
+          description: >-
+            Each message must have an allowed role and non-blank content. The
+            request must include at least one user message. All messages must
+            omit order, or all must have unique non-negative order values. Only
+            user messages can have attachments. Message and attachment order
+            are preserved. Gemini 3.6 Flash and Gemini 3.7 Flash reject a final
+            non-system assistant message.
           items:
             $ref: '#/components/schemas/V2ChatMessage'
         model:
@@ -2314,7 +2337,12 @@ components:
         reasoning_effort:
           type: string
           minLength: 1
-          description: Omission selects the tenant or route default. An explicit value must be non-blank and supported by the resolved provider/model route. Kimi K3 accepts low, high, or max.
+          description: >-
+            Omission selects the tenant or route default. An explicit value
+            must be non-blank and supported by the resolved provider/model
+            route. Kimi K3 accepts low, high, or max. Gemini 3.6 Flash accepts
+            minimal, low, medium, or high. Gemini 3.7 Flash accepts low,
+            medium, or high.
         structured_output:
           $ref: '#/components/schemas/StructuredOutput'
     StructuredOutput:
