@@ -528,16 +528,18 @@ func TestManagedTenantInitializationPropagatesModelIdentityFailure(t *testing.T)
 func TestManagedModelMigrationPolicyIsRequiredByEachDatabaseMigration(t *testing.T) {
 	fixture := newManagedModelIdentityMigrationFixture(t)
 
-	missingSelectionPolicy := internalManagementProviderRegistry()
-	delete(missingSelectionPolicy.modelMigrations, managedGemini3OnlySchemaVersion)
-	selectionError := migrateManagedModelSelections(fixture.database, fixture.providerKeyCipher, missingSelectionPolicy, managedGemini3OnlySchemaVersion)
-	if !errors.Is(selectionError, errManagedTenantSchemaMigration) || !strings.Contains(selectionError.Error(), "operation=read_model_migrations") {
-		t.Fatalf("missing selection policy error=%v", selectionError)
+	for _, schemaVersion := range managedModelSelectionSchemaVersions {
+		missingSelectionPolicy := internalManagementProviderRegistry()
+		delete(missingSelectionPolicy.modelMigrations, schemaVersion)
+		selectionError := migrateManagedModelSelections(fixture.database, fixture.providerKeyCipher, missingSelectionPolicy, schemaVersion)
+		if !errors.Is(selectionError, errManagedTenantSchemaMigration) || !strings.Contains(selectionError.Error(), "operation=read_model_migrations") {
+			t.Fatalf("missing selection policy version=%d error=%v", schemaVersion, selectionError)
+		}
 	}
 
 	retirementSelectionPolicy := internalManagementProviderRegistry()
 	retirementSelectionPolicy.modelMigrations[managedGemini3OnlySchemaVersion] = retirementSelectionPolicy.modelMigrations[managedQwenCloudRetirementVersion]
-	selectionError = migrateManagedModelSelections(fixture.database, fixture.providerKeyCipher, retirementSelectionPolicy, managedGemini3OnlySchemaVersion)
+	selectionError := migrateManagedModelSelections(fixture.database, fixture.providerKeyCipher, retirementSelectionPolicy, managedGemini3OnlySchemaVersion)
 	if !errors.Is(selectionError, errManagedTenantSchemaMigration) || !strings.Contains(selectionError.Error(), "operation=read_model_migrations") {
 		t.Fatalf("retirement selection policy error=%v", selectionError)
 	}

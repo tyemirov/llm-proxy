@@ -82,8 +82,6 @@ const (
 	ModelNameZAIGLM = "glm-5.1"
 	// ModelNameGemini35Flash identifies Gemini 3.5 Flash.
 	ModelNameGemini35Flash = "gemini-3.5-flash"
-	// ModelNameGemini31FlashLite identifies Gemini 3.1 Flash-Lite.
-	ModelNameGemini31FlashLite = "gemini-3.1-flash-lite"
 	// ModelNameClaudeOpus48 identifies Claude Opus 4.8.
 	ModelNameClaudeOpus48 = "claude-opus-4-8"
 	// ModelNameClaudeSonnet46 identifies Claude Sonnet 4.6.

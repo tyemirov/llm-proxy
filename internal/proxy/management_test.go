@@ -1581,7 +1581,7 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 			proxy.ModelNameMiniMaxM27HighSpeed,
 		},
 		proxy.ProviderNameZAI:       {"glm-5.2"},
-		proxy.ProviderNameGemini:    {"gemini-3.1-pro-preview", "gemini-3-flash-preview"},
+		proxy.ProviderNameGemini:    {"gemini-3-flash-preview", proxy.ModelNameGemini35Flash},
 		proxy.ProviderNameAnthropic: {"claude-fable-5", "claude-sonnet-5"},
 		proxy.ProviderNameXAI:       {"grok-4.5", "grok-4.20-0309-reasoning", "grok-4.20-0309-non-reasoning"},
 	}
@@ -1615,6 +1615,9 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 	}
 	if textDefaultsByProvider[proxy.ProviderNameDashScope] != proxy.ModelNameDashScopeQwenPlus {
 		t.Fatalf("profile provider=%s default=%s want=%s", proxy.ProviderNameDashScope, textDefaultsByProvider[proxy.ProviderNameDashScope], proxy.ModelNameDashScopeQwenPlus)
+	}
+	if configuredGeminiModels := modelsByProvider[proxy.ProviderNameGemini]; !reflect.DeepEqual(configuredGeminiModels, expectedModels[proxy.ProviderNameGemini]) {
+		t.Fatalf("profile provider=%s models=%v want=%v", proxy.ProviderNameGemini, configuredGeminiModels, expectedModels[proxy.ProviderNameGemini])
 	}
 	if configuredMiniMaxModels := modelsByProvider[proxy.ProviderNameMiniMax]; !reflect.DeepEqual(configuredMiniMaxModels, expectedModels[proxy.ProviderNameMiniMax]) {
 		t.Fatalf("profile provider=%s models=%v want=%v", proxy.ProviderNameMiniMax, configuredMiniMaxModels, expectedModels[proxy.ProviderNameMiniMax])
