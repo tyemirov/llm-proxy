@@ -1409,7 +1409,7 @@ text = client.post_messages(
     modifiedDate: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
     primaryKeyword: "Gemini Interactions proxy",
     title: "Gemini Interactions proxy for stored 3.x model calls",
-    description: "Route four registered Gemini 3.x models through stored Interactions with provider-configured visibility retries, cleanup, and one blocking proxy request.",
+    description: "Route two registered Gemini 3.x models through stored Interactions with provider-configured visibility retries, cleanup, and one blocking proxy request.",
     audience: "Developers adding Gemini as a provider without bringing Gemini-specific payloads into every app.",
     problem: "Stored Gemini Interactions require polling and cleanup, which shared proxy callers must not have to coordinate.",
     solution: "LLM Proxy polls and cleans up registered Gemini 3.x resources while callers keep one blocking request.",
@@ -1447,11 +1447,11 @@ text = client.post_messages(
     - 403
     - 404`,
     },
-    quickVerdict: "Use this route for four registered Gemini 3.x models when the proxy must own stored-resource polling, visibility retries, and cleanup.",
+    quickVerdict: "Use this route for two registered Gemini 3.x models when the proxy must own stored-resource polling, visibility retries, and cleanup.",
     faq: [
       {
         question: "Which Gemini models does this route register?",
-        answer: "The catalog registers Gemini 3.5 Flash, Gemini 3 Flash Preview, Gemini 3.1 Flash Lite, and Gemini 3.1 Pro Preview.",
+        answer: "The catalog registers Gemini 3.5 Flash and Gemini 3 Flash Preview.",
       },
       {
         question: "Can a Gemini request contain assistant history?",
@@ -1803,7 +1803,7 @@ text = client.post_messages(
     ],
     examples: [
       ["OpenAI smoke", "Run LLM_PROXY_LIVE_PROVIDERS=openai with a live env file."],
-      ["Gemini wrapper", "Use make test-live-gemini as the Gemini-specific compatibility target."],
+      ["Gemini wrapper", "Use make test-live-gemini to accept the exact Gemini 3.6 and 3.7 candidates before testing registered Gemini routes."],
       ["Post-deploy check", "After publishing, run selected live smokes for providers touched by config changes."],
     ],
     limitations: [

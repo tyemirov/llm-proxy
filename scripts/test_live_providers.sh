@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   builtin printf '%s\n' 'Usage:
-  scripts/test_live_providers.sh [--media | --preflight | --write-config <path>]
+  scripts/test_live_providers.sh [--gemini-candidates | --media | --preflight | --write-config <path>]
 
 Builds the current llm-proxy binary, verifies each available provider key
 through the authenticated management operation, and only then runs its live
@@ -25,13 +25,17 @@ Optional environment:
                              Exact true or false. When true, send one omitted
                              reasoning-effort request and one request for each
                              effort published by the selected exact route.
-                             Default: false.
+                             Default: false. Gemini candidate default: true.
   LLM_PROXY_LIVE_PORT        Local port for the temporary proxy. Default: a
                              freshly allocated loopback port.
   LLM_PROXY_LIVE_TIMEOUT     Per-request curl timeout in seconds. Default: 45.
   GO                         Go binary. Default: go.
 
 Options:
+  --gemini-candidates        Run paid direct acceptance for Gemini 3.6 Flash
+                             and Gemini 3.7 Flash. This mode does not register
+                             either candidate in the public provider catalog.
+
   --media                    Run paid image routes from the public catalog.
                              LLM_PROXY_LIVE_PROVIDERS can select a subset.
                              LLM_PROXY_LIVE_ALL_MODELS=true runs every selected
@@ -909,9 +913,14 @@ run_managed_config_preflight() {
 
 PREFLIGHT_ONLY=false
 MEDIA_ONLY=false
+GEMINI_CANDIDATES_ONLY=false
 WRITE_CONFIG_PATH=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --gemini-candidates)
+      GEMINI_CANDIDATES_ONLY=true
+      shift
+      ;;
     --media)
       MEDIA_ONLY=true
       shift
@@ -936,9 +945,10 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
-if [[ "${MEDIA_ONLY}" == "true" && ( "${PREFLIGHT_ONLY}" == "true" || -n "${WRITE_CONFIG_PATH}" ) ]] ||
-  [[ "${PREFLIGHT_ONLY}" == "true" && -n "${WRITE_CONFIG_PATH}" ]]; then
-  echo "error: --media, --preflight, and --write-config are mutually exclusive" >&2
+if [[ "${MEDIA_ONLY}" == "true" && ( "${PREFLIGHT_ONLY}" == "true" || "${GEMINI_CANDIDATES_ONLY}" == "true" || -n "${WRITE_CONFIG_PATH}" ) ]] ||
+  [[ "${PREFLIGHT_ONLY}" == "true" && ( "${GEMINI_CANDIDATES_ONLY}" == "true" || -n "${WRITE_CONFIG_PATH}" ) ]] ||
+  [[ "${GEMINI_CANDIDATES_ONLY}" == "true" && -n "${WRITE_CONFIG_PATH}" ]]; then
+  echo "error: --gemini-candidates, --media, --preflight, and --write-config are mutually exclusive" >&2
   exit 1
 fi
 
@@ -983,10 +993,21 @@ if [[ "${LIVE_ALL_MODELS}" != "true" && "${LIVE_ALL_MODELS}" != "false" ]]; then
   echo "error: LLM_PROXY_LIVE_ALL_MODELS must be true or false" >&2
   exit 1
 fi
-LIVE_REASONING_MATRIX="$(env_or_default LLM_PROXY_LIVE_REASONING_MATRIX false)"
+LIVE_REASONING_MATRIX_DEFAULT=false
+if [[ "${GEMINI_CANDIDATES_ONLY}" == "true" ]]; then
+  LIVE_REASONING_MATRIX_DEFAULT=true
+fi
+LIVE_REASONING_MATRIX="$(env_or_default LLM_PROXY_LIVE_REASONING_MATRIX "${LIVE_REASONING_MATRIX_DEFAULT}")"
 if [[ "${LIVE_REASONING_MATRIX}" != "true" && "${LIVE_REASONING_MATRIX}" != "false" ]]; then
   echo "error: LLM_PROXY_LIVE_REASONING_MATRIX must be true or false" >&2
   exit 1
+fi
+LIVE_TIMEOUT="$(env_or_default LLM_PROXY_LIVE_TIMEOUT 45)"
+if [[ "${GEMINI_CANDIDATES_ONLY}" == "true" ]]; then
+  LLM_PROXY_LIVE_REASONING_MATRIX="${LIVE_REASONING_MATRIX}" \
+    LLM_PROXY_LIVE_TIMEOUT="${LIVE_TIMEOUT}" \
+    "${ROOT_DIR}/scripts/test_live_gemini_candidates.sh"
+  exit 0
 fi
 
 if [[ -n "${LLM_PROXY_LIVE_PORT:-}" ]]; then
@@ -994,7 +1015,6 @@ if [[ -n "${LLM_PROXY_LIVE_PORT:-}" ]]; then
 else
   PORT="$(allocate_loopback_port)"
 fi
-LIVE_TIMEOUT="$(env_or_default LLM_PROXY_LIVE_TIMEOUT 45)"
 if [[ -n "${WRITE_CONFIG_PATH}" ]]; then
   mkdir -p "$(dirname "${WRITE_CONFIG_PATH}")"
   CONFIG_PATH="$(cd "$(dirname "${WRITE_CONFIG_PATH}")" && pwd)/$(basename "${WRITE_CONFIG_PATH}")"
