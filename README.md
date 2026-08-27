@@ -355,7 +355,7 @@ when the provider offering has a code-owned transport.
 |-----------------|----------|-------------------------------|
 | All 11 OpenAI text models in the GPT-4 and GPT-5 families | OpenAI | `image` |
 | All 10 Claude text models in the Fable, Sonnet, Opus, and Haiku families | Anthropic | `image` |
-| All 4 Gemini text models | Gemini | `image`, `audio` |
+| Both Gemini text models | Gemini | `image`, `audio` |
 | `grok-4.5` | xAI | `image` |
 | Every other configured model | Its configured provider | None |
 
@@ -370,8 +370,8 @@ The loader rejects unknown fields and unsupported schema versions. It also
 rejects invalid identities, references, defaults, protocols, capabilities,
 limits, and prices.
 
-The current snapshot contains 11 providers, 64 exact models, 65 provider
-offerings, and 65 price records. The application compiles one immutable
+The current snapshot contains 11 providers, 62 exact models, 63 provider
+offerings, and 63 price records. The application compiles one immutable
 registry from this snapshot.
 
 Each provider offering references one exact model and one provider transport.
@@ -1044,6 +1044,12 @@ provider profile and current default in one transaction. It preserves tenant
 and profile timestamps and all historical usage model identifiers. Current
 startup rejects retired Gemini routes instead of accepting an alias or fallback.
 
+The bounded schema-version-11 migration replaces stored
+`gemini-3.1-flash-lite` and `gemini-3.1-pro-preview` selections with
+`gemini-3.5-flash`. It updates the provider profile and same-provider tenant
+default in one transaction. It preserves provider connections, system prompts,
+timestamps, and historical usage model identifiers.
+
 Server settings and browser-facing MPR UI/TAuth bootstrap settings remain in
 `config.yml`. Provider definitions and static endpoints remain in
 `providers.yml`. Each managed DashScope workspace URL is tenant-owned and is
@@ -1287,7 +1293,7 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make test-live-provider-harness` | Save a temporary managed OpenAI connection and route one request through a loopback provider. |
 | `make test-live-providers` | Start a disposable managed tenant, verify every available provider key through the canonical management operation, and run that provider's live text smoke only after verification succeeds; use `LIVE_ENV_FILE=/path/to/env` to load key values. |
 | `make test-live-provider-media` | Verify OpenAI, Anthropic, Gemini, Moonshot, and xAI keys, then send one paid canonical image request through each provider. |
-| `make test-live-gemini` | Compatibility wrapper for `make test-live-providers` with `LLM_PROXY_LIVE_PROVIDERS=gemini`. |
+| `make test-live-gemini` | Run direct acceptance for the exact Gemini 3.6 Flash and Gemini 3.7 Flash candidates, then run registered Gemini routes through `make test-live-providers`. |
 | `make live-test` | Send paid production `POST /v2` requests through the Default tenant using only `LLM_PROXY_SECRET`: echo checks for OpenAI, Anthropic, Meta, Gemini, and Moonshot, plus large completion cases for OpenAI, Anthropic, Meta, and Gemini. |
 | `make release` | Delegate this clean checkout and its current resource declaration to the exact sibling `../mprlab-gateway` release transaction. |
 | `make publish` | Delegate publication of the exact sealed release to `../mprlab-gateway`; it does not rebuild or deploy. |
@@ -1303,6 +1309,21 @@ default is operational; an override is included in both verification and smoke.
 Set `LLM_PROXY_LIVE_ALL_MODELS=true` to discover every text model for each
 selected provider. The harness uses the validated public catalog and runs one
 verification and one explicit-model smoke request for each model.
+
+The Gemini wrapper first sends direct Interactions requests for the exact
+`gemini-3.6-flash` and `gemini-3.7-flash` candidates. It sends one request with
+the thinking level omitted and one request for every thinking level supported
+by the exact model. It then proves active retrieval, completion, cancellation,
+and deletion for stored background interactions. Google documents both exact
+models as stable Interactions models and documents the background resource
+lifecycle in its
+[Gemini 3.6 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash),
+[Gemini 3.7 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash),
+and [background execution](https://ai.google.dev/gemini-api/docs/background-execution)
+guides. These candidates remain outside the public provider catalog until the
+complete lifecycle succeeds. Set
+`LLM_PROXY_LIVE_GEMINI_CANDIDATES=false` only when a run must exercise the
+registered Gemini routes without candidate acceptance.
 
 `make ci` runs each declared gate sequentially through one top-level runner.
 Coverage is written to a fresh private artifact for that invocation and
@@ -2273,9 +2294,7 @@ effort through the proxy.
 | `glm-5.1` | Z.AI | Yes | - | No |
 | `glm-5.2` | Z.AI | No | `131072` | No |
 | `gemini-3.5-flash` | Gemini | Yes | `65536` | No |
-| `gemini-3.1-pro-preview` | Gemini | No | `65536` | No |
 | `gemini-3-flash-preview` | Gemini | No | `65536` | No |
-| `gemini-3.1-flash-lite` | Gemini | No | `65536` | No |
 | `claude-opus-4-8` | Anthropic/Claude | No | `128000` | No |
 | `claude-fable-5` | Anthropic/Claude | No | `128000` | No |
 | `claude-sonnet-5` | Anthropic/Claude | No | `128000` | No |
