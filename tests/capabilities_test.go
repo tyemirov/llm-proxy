@@ -134,7 +134,7 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 	if catalogError != nil {
 		testingInstance.Fatalf("NewPublicCapabilityCatalog error: %v", catalogError)
 	}
-	if catalog.Revision == "" || len(catalog.Operations) != 3 || len(catalog.Prices) != 65 || len(catalog.Prices) != len(catalog.Offerings) || catalog.Counts.Providers != 11 || catalog.Counts.ModelPublishers != 11 || catalog.Counts.ModelFamilies != 24 || catalog.Counts.ModelFamilies != len(catalog.Families) || catalog.Counts.ExactModels != 64 || catalog.Counts.ExactModels != len(catalog.Models) || catalog.Counts.ProviderOfferings != 65 || catalog.Counts.ProviderOfferings != len(catalog.Offerings) || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
+	if catalog.Revision == "" || len(catalog.Operations) != 3 || len(catalog.Prices) != 63 || len(catalog.Prices) != len(catalog.Offerings) || catalog.Counts.Providers != 11 || catalog.Counts.ModelPublishers != 11 || catalog.Counts.ModelFamilies != 24 || catalog.Counts.ModelFamilies != len(catalog.Families) || catalog.Counts.ExactModels != 62 || catalog.Counts.ExactModels != len(catalog.Models) || catalog.Counts.ProviderOfferings != 63 || catalog.Counts.ProviderOfferings != len(catalog.Offerings) || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
 		testingInstance.Fatalf("catalog summary=%+v", catalog)
 	}
 	weightAccessFound := map[string]bool{}
@@ -153,6 +153,15 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 			proxy.PublicModelCapabilityImageInput,
 			proxy.PublicModelCapabilityText,
 		},
+		"gemini-3-flash-preview": {
+			proxy.PublicModelCapabilityAudioInput,
+			proxy.PublicModelCapabilityImageInput,
+			proxy.PublicModelCapabilityText,
+		},
+	}
+	retiredGeminiModels := map[string]struct{}{
+		"gemini-3.1-flash-lite":  {},
+		"gemini-3.1-pro-preview": {},
 	}
 	openAIDictationCapabilityFound := false
 	expectedKimiModels := map[string]struct{}{
@@ -166,6 +175,9 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 		proxy.ModelNameMuseSpark12: {},
 	}
 	for _, model := range catalog.Models {
+		if _, retired := retiredGeminiModels[model.Identifier]; retired {
+			testingInstance.Fatalf("public capability catalog exposed retired Gemini model=%s", model.Identifier)
+		}
 		if model.Publisher == "google" && !strings.HasPrefix(model.Identifier, "gemini-3") {
 			testingInstance.Fatalf("public capability catalog exposed retired Gemini model=%s", model.Identifier)
 		}
@@ -206,6 +218,9 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 		}
 	}
 	for _, offering := range catalog.Offerings {
+		if _, retired := retiredGeminiModels[offering.Model]; retired {
+			testingInstance.Fatalf("public capability catalog exposed retired Gemini offering=%s", offering.Model)
+		}
 		if offering.Provider == proxy.ProviderNameOpenAI && offering.Model == proxy.DefaultDictationModel {
 			openAIDictationCapabilityFound = true
 		}
@@ -327,7 +342,7 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 	}
 	expectedOfferingCounts := map[string]int{
 		proxy.ProviderNameOpenAI:    11,
-		proxy.ProviderNameGemini:    4,
+		proxy.ProviderNameGemini:    2,
 		proxy.ProviderNameAnthropic: 10,
 		proxy.ProviderNameMoonshot:  4,
 		proxy.ProviderNameXAI:       1,

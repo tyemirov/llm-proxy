@@ -41,7 +41,8 @@ func TestOperationalHelpCommandsUseBuiltinOutput(testingInstance *testing.T) {
 		path             string
 		expectedFragment string
 	}{
-		{name: "live-providers", path: filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"), expectedFragment: "scripts/test_live_providers.sh [--media | --preflight | --write-config <path>]"},
+		{name: "live-providers", path: filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"), expectedFragment: "scripts/test_live_providers.sh [--gemini-candidates | --media | --preflight | --write-config <path>]"},
+		{name: "live-gemini-candidates", path: filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_gemini_candidates.sh"), expectedFragment: "Runs paid Google Interactions acceptance"},
 		{name: "production-live-test", path: filepath.Join(repositoryRoot, operationalScriptsDirectory, "live_test.sh"), expectedFragment: "Usage: make live-test"},
 	}
 	for _, helpCommand := range helpCommands {
@@ -1533,6 +1534,205 @@ func TestOperationalLiveConfigRequiresManagementAndSafelyLoadsDotenv(testingInst
 		if strings.Contains(configuration, forbiddenFragment) {
 			testingInstance.Fatalf("generated live config retained obsolete or secret-bearing %q: %s", forbiddenFragment, configuration)
 		}
+	}
+}
+
+func TestOperationalGeminiCandidateHarnessExercisesExactAcceptanceMatrix(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	toolDirectory := filepath.Join(fixtureRoot, "tools")
+	environmentFile := filepath.Join(fixtureRoot, "live.env")
+	capturePath := filepath.Join(fixtureRoot, "requests.log")
+	stateDirectory := filepath.Join(fixtureRoot, "state")
+	const providerCredential = "private-gemini-candidate-credential"
+	writeOperationalFile(testingInstance, environmentFile, "GEMINI_API_KEY="+providerCredential+"\n", 0o600)
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "sleep"), `#!/usr/bin/env bash
+exit 0
+`, 0o755)
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "curl"), `#!/usr/bin/env python3
+import json
+import os
+import pathlib
+import sys
+
+arguments = sys.argv[1:]
+method = arguments[arguments.index("-X") + 1]
+output_path = pathlib.Path(arguments[arguments.index("-o") + 1])
+url = arguments[-1]
+headers = [arguments[index + 1] for index, value in enumerate(arguments) if value == "-H"]
+if not any(value.startswith("x-goog-api-key: ") for value in headers):
+    raise SystemExit(41)
+if "Api-Revision: 2026-05-20" not in headers:
+    raise SystemExit(42)
+payload = {}
+if "--data-binary" in arguments:
+    request_reference = arguments[arguments.index("--data-binary") + 1]
+    payload = json.loads(pathlib.Path(request_reference.removeprefix("@")).read_text(encoding="utf-8"))
+
+state_directory = pathlib.Path(os.environ["GEMINI_FAKE_STATE"])
+state_directory.mkdir(parents=True, exist_ok=True)
+model = payload.get("model", "")
+thinking_level = payload.get("generation_config", {}).get("thinking_level", "omitted")
+background = payload.get("background", "")
+lifecycle = ""
+if background is True:
+    lifecycle = "completion" if payload["generation_config"]["max_output_tokens"] == 4096 else "cancellation"
+    interaction_id = model + "-" + lifecycle
+else:
+    interaction_id = "sync"
+
+with pathlib.Path(os.environ["GEMINI_FAKE_CAPTURE"]).open("a", encoding="utf-8") as capture:
+    capture.write(f"{method} {url} model={model} background={background} thinking_level={thinking_level} lifecycle={lifecycle}\n")
+
+status_code = "200"
+response = {}
+base_url = "https://generativelanguage.googleapis.com/v1beta/interactions"
+if method == "POST" and url == base_url and background is False:
+    response = {"id": interaction_id, "status": "completed", "steps": [{"type": "model_output", "content": [{"type": "text", "text": "OK"}]}]}
+elif method == "POST" and url == base_url and background is True:
+    response = {"id": interaction_id, "status": "in_progress"}
+elif method == "GET" and url.startswith(base_url + "/"):
+    interaction_id = url.rsplit("/", 1)[-1]
+    if interaction_id.endswith("-completion"):
+        count_path = state_directory / (interaction_id + ".count")
+        count = int(count_path.read_text(encoding="utf-8")) if count_path.exists() else 0
+        count_path.write_text(str(count + 1), encoding="utf-8")
+        if count == 0:
+            response = {"id": interaction_id, "status": "in_progress"}
+        else:
+            response = {"id": interaction_id, "status": "completed", "steps": [{"type": "model_output", "content": [{"type": "text", "text": "OK"}]}]}
+    else:
+        response = {"id": interaction_id, "status": "in_progress"}
+elif method == "POST" and url.endswith("/cancel"):
+    interaction_id = url.removesuffix("/cancel").rsplit("/", 1)[-1]
+    response = {"id": interaction_id, "status": "cancelled"}
+elif method == "DELETE" and url.startswith(base_url + "/"):
+    status_code = "204"
+else:
+    raise SystemExit(43)
+
+output_path.write_text(json.dumps(response), encoding="utf-8")
+sys.stdout.write(status_code)
+`, 0o755)
+
+	environment := append(
+		os.Environ(),
+		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"LIVE_ENV_FILE="+environmentFile,
+		"GEMINI_FAKE_CAPTURE="+capturePath,
+		"GEMINI_FAKE_STATE="+stateDirectory,
+	)
+	output := runOperationalCommand(
+		testingInstance,
+		repositoryRoot,
+		environment,
+		filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"),
+		"--gemini-candidates",
+	)
+	for _, expectedFragment := range []string{
+		"model=gemini-3.6-flash reasoning_effort=minimal status=200",
+		"model=gemini-3.7-flash reasoning_effort=high status=200",
+		"completion lifecycle passed: model=gemini-3.6-flash status=completed",
+		"cancellation lifecycle passed: model=gemini-3.7-flash status=cancelled",
+		"live Gemini candidate acceptance passed: models=gemini-3.6-flash,gemini-3.7-flash",
+	} {
+		if !strings.Contains(output, expectedFragment) {
+			testingInstance.Fatalf("candidate output omitted %q:\n%s", expectedFragment, output)
+		}
+	}
+	captureBytes, readError := os.ReadFile(capturePath)
+	if readError != nil {
+		testingInstance.Fatalf("read Gemini candidate request capture: %v", readError)
+	}
+	capture := string(captureBytes)
+	for _, exactCase := range []string{
+		"model=gemini-3.6-flash background=False thinking_level=omitted",
+		"model=gemini-3.6-flash background=False thinking_level=minimal",
+		"model=gemini-3.6-flash background=False thinking_level=low",
+		"model=gemini-3.6-flash background=False thinking_level=medium",
+		"model=gemini-3.6-flash background=False thinking_level=high",
+		"model=gemini-3.7-flash background=False thinking_level=omitted",
+		"model=gemini-3.7-flash background=False thinking_level=low",
+		"model=gemini-3.7-flash background=False thinking_level=medium",
+		"model=gemini-3.7-flash background=False thinking_level=high",
+	} {
+		if !strings.Contains(capture, exactCase) {
+			testingInstance.Fatalf("candidate request capture omitted %q:\n%s", exactCase, capture)
+		}
+	}
+	if strings.Contains(capture, "model=gemini-3.7-flash background=False thinking_level=minimal") {
+		testingInstance.Fatalf("candidate request capture sent unsupported Gemini 3.7 minimal thinking:\n%s", capture)
+	}
+	if strings.Count(capture, " POST ") != 0 || strings.Count(capture, "POST ") != 15 || strings.Count(capture, "GET ") != 6 || strings.Count(capture, "DELETE ") != 4 {
+		testingInstance.Fatalf("candidate request capture has an unexpected lifecycle matrix:\n%s", capture)
+	}
+	for _, privateValue := range []string{providerCredential, "x-goog-api-key"} {
+		if strings.Contains(output, privateValue) || strings.Contains(capture, privateValue) {
+			testingInstance.Fatalf("candidate harness exposed private value %q", privateValue)
+		}
+	}
+}
+
+func TestOperationalGeminiCandidateHarnessPreservesExplicitReasoningMatrixOverride(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	scriptDirectory := filepath.Join(fixtureRoot, operationalScriptsDirectory)
+	capturePath := filepath.Join(fixtureRoot, "reasoning-matrix.log")
+	copyOperationalFile(
+		testingInstance,
+		filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"),
+		filepath.Join(scriptDirectory, "test_live_providers.sh"),
+	)
+	writeOperationalFile(testingInstance, filepath.Join(scriptDirectory, "test_live_gemini_candidates.sh"), `#!/usr/bin/env bash
+set -euo pipefail
+builtin printf '%s\n' "${LLM_PROXY_LIVE_REASONING_MATRIX:?}" >"${GEMINI_MATRIX_CAPTURE:?}"
+`, 0o755)
+	runOperationalCommand(
+		testingInstance,
+		fixtureRoot,
+		append(
+			os.Environ(),
+			"GEMINI_MATRIX_CAPTURE="+capturePath,
+			"LLM_PROXY_LIVE_REASONING_MATRIX=false",
+		),
+		filepath.Join(scriptDirectory, "test_live_providers.sh"),
+		"--gemini-candidates",
+	)
+	captureBytes, readError := os.ReadFile(capturePath)
+	if readError != nil {
+		testingInstance.Fatalf("read Gemini reasoning-matrix override: %v", readError)
+	}
+	if string(captureBytes) != "false\n" {
+		testingInstance.Fatalf("Gemini reasoning-matrix override=%q, want false", captureBytes)
+	}
+}
+
+func TestOperationalGeminiWrapperRunsCandidatesBeforeRegisteredRoutes(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	scriptDirectory := filepath.Join(fixtureRoot, "scripts")
+	capturePath := filepath.Join(fixtureRoot, "wrapper.log")
+	copyOperationalFile(
+		testingInstance,
+		filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_gemini.sh"),
+		filepath.Join(scriptDirectory, "test_live_gemini.sh"),
+	)
+	writeOperationalFile(testingInstance, filepath.Join(scriptDirectory, "test_live_providers.sh"), `#!/usr/bin/env bash
+set -euo pipefail
+builtin printf '%s\n' "$*" >>"${GEMINI_WRAPPER_CAPTURE:?}"
+`, 0o755)
+	runOperationalCommand(
+		testingInstance,
+		fixtureRoot,
+		append(os.Environ(), "GEMINI_WRAPPER_CAPTURE="+capturePath),
+		filepath.Join(scriptDirectory, "test_live_gemini.sh"),
+	)
+	captureBytes, readError := os.ReadFile(capturePath)
+	if readError != nil {
+		testingInstance.Fatalf("read Gemini wrapper capture: %v", readError)
+	}
+	if string(captureBytes) != "--gemini-candidates\n\n" {
+		testingInstance.Fatalf("Gemini wrapper invocation order=%q, want candidate then registered routes", captureBytes)
 	}
 }
 
