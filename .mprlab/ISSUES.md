@@ -25,6 +25,64 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B158] (P2) Preserve the Gemini candidate reasoning matrix default.
+  Goal:
+  The Gemini candidate command tests all supported thinking levels by default.
+  Evidence:
+  - Expected: `test_live_providers.sh --gemini-candidates` uses the candidate
+    script default.
+  - Actual: The parent script supplies `false` and skips the supported thinking
+    levels.
+  Requirements:
+  - Use `true` as the candidate mode default.
+  - Preserve an explicit `false` value from the operator.
+  - Keep the registered provider mode default unchanged.
+  Validation:
+  - Prove that candidate mode sends all supported thinking levels without an
+    environment override.
+  - Prove that an explicit `false` value reaches the candidate script unchanged.
+  - Run `make ci` after the last repository change.
+  Resolution:
+  - Gemini candidate mode now uses `true` as its reasoning matrix default.
+  - An explicit `false` value remains authoritative.
+  - Registered provider mode keeps its `false` default.
+  - The operational test proves both candidate behaviors through the public
+    parent script.
+  - `make go-test` passed with 100.0 percent Go statement coverage.
+  - The final `make ci` passed all 11 gates in 138 seconds with 100.0 percent
+    Go statement coverage.
+
+- [x] [B157] (P1) Apply pending model replacements before route validation.
+  Goal:
+  A schema-version-9 database reaches the current schema with a retired Gemini
+  selection.
+  Evidence:
+  - Expected: Startup applies the schema-version-10 and schema-version-11 model
+    replacements before current route validation.
+  - Actual: The schema-version-10 migration validates the retired Gemini 3.1
+    selection and stops startup.
+  Requirements:
+  - Apply all pending model replacements in one database transaction.
+  - Validate the final routing state after all replacements.
+  - Record each pending schema version only after successful validation.
+  - Roll back all replacements and version records after a migration error.
+  - Preserve provider connections, profiles, tenant defaults, timestamps, and
+    historical usage records.
+  Validation:
+  - Prove the schema-version-9 to schema-version-11 migration for each retired
+    Gemini 3.1 selection.
+  - Prove transaction rollback after a pending migration error.
+  - Run `make ci` after the last repository change.
+  Resolution:
+  - Startup applies all pending model replacements in one transaction.
+  - Startup validates routing after the final replacement and then records each
+    schema version.
+  - The schema-version-9 test covers each retired Gemini 3.1 selection and a
+    missing schema-version-11 policy.
+  - `make go-test` passed with 100.0 percent Go statement coverage.
+  - The final `make ci` passed all 11 gates in 140 seconds with 100.0 percent
+    Go statement coverage.
+
 - [x] [B156] (P0) Mount the provider catalog in local orchestration.
   Goal:
   The local API starts with the canonical provider catalog.
@@ -890,6 +948,134 @@ retain satisfied historical dependencies.
 
 
 ## Improvements
+
+- [ ] [I235] (P1) Add explicit model activation to the provider catalog.
+  Goal:
+  Keep exact model data in the provider catalog without exposing an unaccepted
+  model route.
+  Requirements:
+  - Add a required `enabled` Boolean field to each exact model in
+    `configs/providers.yml`.
+  - Do not use an implicit default for the field.
+  - Include only enabled exact models and their provider offerings in the
+    immutable runtime registry.
+  - Exclude disabled exact models from route resolution, defaults, management
+    projections, public capabilities, and standard live-test discovery.
+  - Permit a disabled exact model to retain its provider offerings, limits,
+    controls, and prices in the provider catalog.
+  - Reject a provider default that references a disabled exact model.
+  - Require an explicit model migration for each stored selection that
+    references a disabled exact model.
+  - Update the provider catalog documentation and all current catalog records.
+  Validation:
+  - Prove that startup rejects a missing or invalid `enabled` value.
+  - Prove that startup rejects a disabled provider default.
+  - Prove that public discovery omits a disabled exact model and its offerings.
+  - Prove that route resolution rejects a disabled exact model before provider
+    dispatch.
+  - Prove that an explicit migration moves a disabled stored selection to an
+    enabled exact model.
+  - Run `make ci` after the last application change.
+
+- [!] [I234] (P1) Restore Gemini 3.1 Pro Preview after live acceptance.
+  Goal:
+  Restore the exact upstream route only after its current Google contract
+  passes.
+  Evidence:
+  - Google publishes `gemini-3.1-pro-preview` as the only Gemini 3.1 Pro API
+    model. Google does not publish a stable `gemini-3.1-pro` model ID.
+  - I232 removed the preview route after two provider verification requests
+    returned HTTP 429.
+  Requirements:
+  - Do a test of the omitted, `low`, `medium`, and `high` thinking levels.
+  - Prove background completion, active retrieval, cancellation, and deletion.
+  - Restore only the exact `gemini-3.1-pro-preview` model ID after all live
+    checks pass.
+  - Do not add a `gemini-3.1-pro` alias or change the Gemini default model.
+  - Keep the completed schema-version-11 migration unchanged.
+  - Restore the catalog, public capabilities, route constants, tests, and
+    current documentation together.
+  Validation:
+  - Run the exact paid candidate acceptance before source changes.
+  - Run `make ci` after the last application change.
+  Blocked: The omitted-thinking acceptance request returned HTTP 429. The test
+  stopped before the other thinking levels and background lifecycle. The
+  provider catalog remains unchanged.
+
+- [!] [I233] (P1) Add Gemini candidate models to the live test.
+  Goal:
+  Make the Gemini live test validate two stable candidates before public route
+  registration.
+  Evidence:
+  - I207 remains blocked because active retrieval and cancellation did not
+    pass for `gemini-3.6-flash` or `gemini-3.7-flash`.
+  - The current harness discovers only registered provider offerings. It
+    cannot validate an unregistered candidate route.
+  Requirements:
+  - Add both exact candidates to the default `make test-live-gemini` flow.
+  - Send omitted and supported thinking levels to the official Interactions
+    API.
+  - Prove one completed background lifecycle for each candidate.
+  - Prove active retrieval, cancellation, and deletion for each candidate.
+  - Keep both candidates outside the public provider catalog until I207
+    satisfies its registration gate.
+  - Load `GEMINI_API_KEY` through the current safe environment boundary.
+    Never print the key or private provider response bodies.
+  - Add black-box CLI coverage with a local fake provider boundary.
+  Validation:
+  - Run the candidate mode with the repository private environment file.
+  - Run `make ci` after the last implementation change.
+  Progress:
+  - Added the exact-model candidate mode to the default Gemini wrapper. The
+    mode validates the thinking matrix, completion, active retrieval,
+    cancellation, and deletion without registering either public route.
+  - Added local fake-provider coverage for the direct request matrix and the
+    wrapper order.
+  - Paid reasoning passed for the omitted, `minimal`, `low`, `medium`, and
+    `high` Gemini 3.6 Flash requests. Its stored completion reached
+    `completed` and deletion succeeded.
+  Blocked: The long Gemini 3.6 Flash cancellation resource was not readable
+  during any of seven bounded active retrieval attempts. Google returned HTTP
+  400 on the final attempt. The harness stopped before cancellation and before
+  the Gemini 3.7 Flash matrix. I207 remains blocked, and neither candidate is
+  registered in the public provider catalog.
+
+- [x] [I232] (P1) Remove two Gemini model routes.
+  Goal:
+  Keep only the selected Gemini exact models in the current provider catalog.
+  Evidence:
+  - `gemini-3.1-flash-lite` passed provider verification but failed its live
+    smoke request with proxy HTTP `502` and upstream HTTP `400`.
+  - `gemini-3.1-pro-preview` returned HTTP `429` during two provider
+    verification attempts. Its live smoke request did not start.
+  Requirements:
+  - Remove both exact models and their provider offerings.
+  - Migrate each stored selection to `gemini-3.5-flash` in one bounded
+    operation.
+  - Preserve provider connections, system prompts, timestamps, and historical
+    usage records.
+  - Reject both removed models after the migration.
+  - Remove both models from public documentation and generated capability
+    data.
+  Validation:
+  - Prove that public capabilities omit both removed models.
+  - Prove the stored profile and same-provider default migration for both
+    removed models.
+  - Run `make ci` after the last repository change.
+  Resolution:
+  - The canonical catalog now contains Gemini 3.5 Flash and Gemini 3 Flash
+    Preview. Public capabilities contain 62 models and 63 offerings.
+  - Managed schema version 11 atomically replaces both removed selections
+    with Gemini 3.5 Flash. It preserves provider connections, system prompts,
+    timestamps, and historical usage records.
+  - Public routing rejects both removed model IDs before provider dispatch.
+    The management profile and generated public resources omit both models.
+  - Changed files include the provider catalog, managed-store migration,
+    public and migration regressions, current documentation, the resource
+    generator, and its generated Gemini pages. No event contract changed.
+  - `make go-test` passed with 100.0 percent Go statement coverage.
+    `make frontend-test` passed all 95 browser scenarios. The final `make ci`
+    passed all 11 gates in 134 seconds with 100.0 percent Go coverage.
 
 - [x] [I231] (P1) Remove Gemini 2.5 model routes.
   Goal:

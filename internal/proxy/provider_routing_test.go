@@ -1393,7 +1393,7 @@ func TestProviderRoutingSurfacesChatCompletionTokenUsage(t *testing.T) {
 }
 
 func TestProviderRoutingSupportsGeminiInteractionsWithBackgroundPolling(t *testing.T) {
-	const currentGeminiModel = "gemini-3.1-pro-preview"
+	const currentGeminiModel = "gemini-3-flash-preview"
 	const interactionIdentifier = "gemini-background-poll"
 
 	var capturedPayload map[string]any
@@ -1900,9 +1900,7 @@ func TestProviderRoutingRejectsAssistantHistoryForAllGeminiRoutes(t *testing.T) 
 	}
 	models := []string{
 		proxy.ModelNameGemini35Flash,
-		"gemini-3.1-pro-preview",
 		"gemini-3-flash-preview",
-		proxy.ModelNameGemini31FlashLite,
 	}
 	for _, model := range models {
 		body := `{"messages":[{"role":"user","content":"Review."},{"role":"assistant","content":"Draft."},{"role":"user","content":"Continue."}],"model":"` + model + `"}`
@@ -2310,6 +2308,8 @@ func TestProviderRoutingRejectsGeminiUnsupportedAndInvalidRequests(t *testing.T)
 		{name: "retired Gemini 2.5 Flash", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=gemini&model=gemini-2.5-flash", expectedCode: http.StatusBadRequest},
 		{name: "retired Gemini 2.5 Flash-Lite", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=gemini&model=gemini-2.5-flash-lite", expectedCode: http.StatusBadRequest},
 		{name: "retired Gemini 2.5 Pro", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=gemini&model=gemini-2.5-pro", expectedCode: http.StatusBadRequest},
+		{name: "retired Gemini 3.1 Flash-Lite", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=gemini&model=gemini-3.1-flash-lite", expectedCode: http.StatusBadRequest},
+		{name: "retired Gemini 3.1 Pro Preview", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=gemini&model=gemini-3.1-pro-preview", expectedCode: http.StatusBadRequest},
 		{name: "unsupported web search", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=gemini&web_search=true", expectedCode: http.StatusBadRequest},
 		{name: "unsupported dictation", method: http.MethodPost, target: "/dictate?key=" + TestSecret + "&provider=gemini", expectedCode: http.StatusBadRequest},
 	}

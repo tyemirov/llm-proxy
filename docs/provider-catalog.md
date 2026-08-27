@@ -15,10 +15,10 @@ The current provider catalog has these records:
 - 11 provider definitions.
 - 11 model publishers.
 - 24 model families.
-- 64 exact models.
-- 65 provider offerings.
-- 65 price records.
-- Seven managed model migrations.
+- 62 exact models.
+- 63 provider offerings.
+- 63 price records.
+- Nine managed model migrations.
 - Six protocol adapters.
 - Two lifecycle values.
 
