@@ -558,7 +558,9 @@ public response/OpenAPI contracts, and bundled clients retain their existing
 shapes.
 
 The live-provider harness parses `LIVE_ENV_FILE` as dotenv data without shell
-execution and discovers selected provider keys. A paid run starts a disposable
+execution. It clears every catalog provider field before it loads the file.
+The file is the only provider-value source when it is set. The harness then
+discovers selected provider keys. A paid run starts a disposable
 management database with ephemeral encryption/session material, creates one
 local managed tenant and client secret, verifies each available key through the
 same provider-settings operation above, and runs that provider's smoke request
@@ -573,9 +575,10 @@ terminates only the proxy child started by the harness rather than a process
 discovered through a shared port.
 
 Local Compose live acceptance uses the current `docker-compose.local.yml`
-contract and the fixed `llm-proxy-live-test` project on allocated loopback
-ports. Each run builds the API image from the current checkout and creates new
-management and TAuth volumes.
+contract. Each project name starts with `llm-proxy-live-test-` and has a unique
+random suffix. The suffix prevents reuse of containers, networks, or volumes
+from an earlier run. Each run uses allocated loopback ports, builds the API
+image from the current checkout, and creates new management and TAuth volumes.
 The runner verifies the complete local readiness contract before provider
 configuration. It gives the harness only the existing
 allocated API origin and its scoped management environment. The
