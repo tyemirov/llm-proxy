@@ -572,6 +572,19 @@ port unless `LLM_PROXY_LIVE_PORT` explicitly provides one, and cleanup
 terminates only the proxy child started by the harness rather than a process
 discovered through a shared port.
 
+Local Compose live acceptance uses the current `docker-compose.local.yml`
+contract and the fixed `llm-proxy-live-test` project on allocated loopback
+ports. Each run builds the API image from the current checkout and creates new
+management and TAuth volumes.
+The runner verifies the complete local readiness contract before provider
+configuration. It gives the harness only the existing
+allocated API origin and its scoped management environment. The
+harness accepts only an HTTP `127.0.0.1` origin with an explicit port. It does
+not start a host proxy process in this mode. Each text smoke uses canonical
+`POST /v2`. Cleanup removes the complete test Compose project and its volumes
+after success or failure. Paid local Compose acceptance remains outside
+`make ci` and does not provide production acceptance.
+
 The explicit `--media` mode selects OpenAI, Anthropic, Gemini, Moonshot, and
 xAI by default. It verifies all selected provider keys before image requests.
 Each case selects its exact image model from the validated public provider
