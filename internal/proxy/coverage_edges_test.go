@@ -689,6 +689,38 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		}
 	})
 
+	t.Run("initial incomplete response without text doubles the caller budget without a model limit", func(subTest *testing.T) {
+		var capturedPayloads []map[string]any
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			if httpRequest.Method != http.MethodPost || httpRequest.URL.Path != "/" {
+				http.NotFound(responseWriter, httpRequest)
+				return
+			}
+			requestBytes, _ := io.ReadAll(httpRequest.Body)
+			var requestPayload map[string]any
+			_ = json.Unmarshal(requestBytes, &requestPayload)
+			capturedPayloads = append(capturedPayloads, requestPayload)
+			if len(capturedPayloads) == 1 {
+				_, _ = responseWriter.Write([]byte(`{"id":"partial","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[]}`))
+				return
+			}
+			_, _ = responseWriter.Write([]byte(`{"id":"complete","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"continued with a larger budget"}]}]}`))
+		})
+		queryParameters := url.Values{}
+		queryParameters.Set("max_tokens", "512")
+		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusOK || body != "continued with a larger budget" {
+			subTest.Fatalf("status=%d body=%q", statusCode, body)
+		}
+		if len(capturedPayloads) != 2 {
+			subTest.Fatalf("payloads=%d want=2", len(capturedPayloads))
+		}
+		if capturedPayloads[0]["max_output_tokens"] != float64(512) || capturedPayloads[1]["max_output_tokens"] != float64(1024) {
+			subTest.Fatalf("max_output_tokens sequence=%v,%v want=512,1024", capturedPayloads[0]["max_output_tokens"], capturedPayloads[1]["max_output_tokens"])
+		}
+	})
+
 	t.Run("caller cancellation ends shared continuation polling", func(subTest *testing.T) {
 		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")

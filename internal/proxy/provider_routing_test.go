@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -357,58 +358,73 @@ func TestProviderRoutingSupportsDeepSeekChatCompletions(t *testing.T) {
 }
 
 func TestProviderRoutingExpandsConfiguredContinuationTokenBudget(t *testing.T) {
-	requestCount := 0
-	var continuationPayload map[string]any
-	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		requestCount++
-		if request.Method != http.MethodPost || request.URL.Path != "/chat/completions" {
-			t.Fatalf("request=%s %s", request.Method, request.URL.Path)
-		}
-		requestBytes, readError := io.ReadAll(request.Body)
-		if readError != nil {
-			t.Fatalf("read body: %v", readError)
-		}
-		if requestCount == 1 {
-			responseWriter.Header().Set("Content-Type", "application/json")
-			_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":""},"finish_reason":"length"}]}`))
-			return
-		}
-		if unmarshalError := json.Unmarshal(requestBytes, &continuationPayload); unmarshalError != nil {
-			t.Fatalf("unmarshal continuation body: %v", unmarshalError)
-		}
-		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"continued"},"finish_reason":"stop"}]}`))
-	}))
-	defer upstreamServer.Close()
-
-	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDashScope),
-		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
-		RequestTimeoutSeconds: TestTimeout,
-	}, zap.NewNop().Sugar())
-	if buildError != nil {
-		t.Fatalf(messageBuildRouterError, buildError)
+	testCases := []struct {
+		name              string
+		initialMaxTokens  string
+		expectedMaxTokens float64
+	}{
+		{name: "caps caller budget at catalog limit", initialMaxTokens: "40000", expectedMaxTokens: 65536},
+		{name: "uses catalog limit when caller omits budget", expectedMaxTokens: 65536},
 	}
 
-	queryParameters := url.Values{}
-	queryParameters.Set("key", TestSecret)
-	queryParameters.Set("prompt", TestPrompt)
-	queryParameters.Set("provider", proxy.ProviderNameDashScope)
-	queryParameters.Set("model", proxy.ModelNameDashScopeQwen37Max)
-	queryParameters.Set("max_tokens", "1000")
-	responseRecorder := httptest.NewRecorder()
-	router.ServeHTTP(responseRecorder, httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil))
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			requestCount := 0
+			var continuationPayload map[string]any
+			upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+				requestCount++
+				if request.Method != http.MethodPost || request.URL.Path != "/chat/completions" {
+					subTest.Fatalf("request=%s %s", request.Method, request.URL.Path)
+				}
+				requestBytes, readError := io.ReadAll(request.Body)
+				if readError != nil {
+					subTest.Fatalf("read body: %v", readError)
+				}
+				if requestCount == 1 {
+					responseWriter.Header().Set("Content-Type", "application/json")
+					_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":""},"finish_reason":"length"}]}`))
+					return
+				}
+				if unmarshalError := json.Unmarshal(requestBytes, &continuationPayload); unmarshalError != nil {
+					subTest.Fatalf("unmarshal continuation body: %v", unmarshalError)
+				}
+				responseWriter.Header().Set("Content-Type", "application/json")
+				_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"continued"},"finish_reason":"stop"}]}`))
+			}))
+			defer upstreamServer.Close()
 
-	if responseRecorder.Code != http.StatusOK || strings.TrimSpace(responseRecorder.Body.String()) != "continued" {
-		t.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
-	}
-	if requestCount != 2 {
-		t.Fatalf("upstream requests=%d want=2", requestCount)
-	}
-	if continuationPayload["max_tokens"] != float64(2000) {
-		t.Fatalf("continuation max_tokens=%v want=2000", continuationPayload["max_tokens"])
+			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
+				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDashScope),
+				LogLevel:              proxy.LogLevelInfo,
+				WorkerCount:           1,
+				QueueSize:             1,
+				RequestTimeoutSeconds: TestTimeout,
+			}, zap.NewNop().Sugar())
+			if buildError != nil {
+				subTest.Fatalf(messageBuildRouterError, buildError)
+			}
+
+			queryParameters := url.Values{}
+			queryParameters.Set("key", TestSecret)
+			queryParameters.Set("prompt", TestPrompt)
+			queryParameters.Set("provider", proxy.ProviderNameDashScope)
+			queryParameters.Set("model", proxy.ModelNameDashScopeQwen37Max)
+			if testCase.initialMaxTokens != "" {
+				queryParameters.Set("max_tokens", testCase.initialMaxTokens)
+			}
+			responseRecorder := httptest.NewRecorder()
+			router.ServeHTTP(responseRecorder, httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil))
+
+			if responseRecorder.Code != http.StatusOK || strings.TrimSpace(responseRecorder.Body.String()) != "continued" {
+				subTest.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
+			}
+			if requestCount != 2 {
+				subTest.Fatalf("upstream requests=%d want=2", requestCount)
+			}
+			if continuationPayload["max_tokens"] != testCase.expectedMaxTokens {
+				subTest.Fatalf("continuation max_tokens=%v want=%v", continuationPayload["max_tokens"], testCase.expectedMaxTokens)
+			}
+		})
 	}
 }
 
@@ -954,6 +970,69 @@ func TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints(t *testin
 			!instructionMessageOK || instructionMessage["role"] != "user" || !instructionContentOK || !strings.Contains(instructionContent, "missing suffix") {
 			t.Fatalf("request %d continuation transcript=%v", testCaseIndex, continuationMessages)
 		}
+	}
+}
+
+func TestProviderRoutingIncreasesMetaContinuationBudgetAfterNoProgress(t *testing.T) {
+	testCases := []struct {
+		name            string
+		initialBudget   int
+		expectedBudgets []int
+	}{
+		{name: "doubles the caller budget", initialBudget: 512, expectedBudgets: []int{512, 1024}},
+		{name: "does not overflow the platform integer", initialBudget: math.MaxInt, expectedBudgets: []int{math.MaxInt, math.MaxInt}},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			var capturedBudgets []int
+			upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+				if request.Method != http.MethodPost || request.URL.Path != "/chat/completions" {
+					subTest.Fatalf("request=%s %s", request.Method, request.URL.Path)
+				}
+				var payload struct {
+					MaxCompletionTokens int `json:"max_completion_tokens"`
+				}
+				if decodeError := json.NewDecoder(request.Body).Decode(&payload); decodeError != nil {
+					subTest.Fatalf("decode request: %v", decodeError)
+				}
+				capturedBudgets = append(capturedBudgets, payload.MaxCompletionTokens)
+				responseWriter.Header().Set("Content-Type", "application/json")
+				if len(capturedBudgets) == 1 {
+					_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":""},"finish_reason":"length"}]}`))
+					return
+				}
+				_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"meta completed"},"finish_reason":"stop"}]}`))
+			}))
+			defer upstreamServer.Close()
+
+			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
+				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameMeta),
+				LogLevel:              proxy.LogLevelInfo,
+				WorkerCount:           1,
+				QueueSize:             1,
+				RequestTimeoutSeconds: TestTimeout,
+			}, zap.NewNop().Sugar())
+			if buildError != nil {
+				subTest.Fatalf(messageBuildRouterError, buildError)
+			}
+
+			request := httptest.NewRequest(
+				http.MethodPost,
+				"/v2?key="+TestSecret+"&provider="+proxy.ProviderNameMeta,
+				strings.NewReader(fmt.Sprintf(`{"messages":[{"role":"user","content":"complete every record"}],"model":"%s","max_tokens":%d}`, proxy.ModelNameMuseSpark11, testCase.initialBudget)),
+			)
+			request.Header.Set("Content-Type", "application/json")
+			responseRecorder := httptest.NewRecorder()
+			router.ServeHTTP(responseRecorder, request)
+
+			if responseRecorder.Code != http.StatusOK || strings.TrimSpace(responseRecorder.Body.String()) != "meta completed" {
+				subTest.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
+			}
+			if !reflect.DeepEqual(capturedBudgets, testCase.expectedBudgets) {
+				subTest.Fatalf("max_completion_tokens sequence=%v want=%v", capturedBudgets, testCase.expectedBudgets)
+			}
+		})
 	}
 }
 

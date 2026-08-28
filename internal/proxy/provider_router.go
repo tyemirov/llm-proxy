@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -190,11 +191,27 @@ func completionContinuationMessages(originalMessages chatMessages, accumulatedTe
 }
 
 func continuationMaxTokens(currentMaxTokens *int, model textModelDefinition, latestText string) *int {
-	if !utils.IsBlank(latestText) || !model.hasOutputTokenLimit {
+	if !utils.IsBlank(latestText) {
 		return currentMaxTokens
 	}
-	nextMaxTokens := model.outputTokenLimit
-	if currentMaxTokens != nil && *currentMaxTokens < model.outputTokenLimit && *currentMaxTokens <= model.outputTokenLimit/2 {
+	if currentMaxTokens == nil {
+		if !model.hasOutputTokenLimit {
+			return nil
+		}
+		nextMaxTokens := model.outputTokenLimit
+		return &nextMaxTokens
+	}
+
+	maximumMaxTokens := math.MaxInt
+	if model.hasOutputTokenLimit {
+		maximumMaxTokens = model.outputTokenLimit
+	}
+	if *currentMaxTokens >= maximumMaxTokens {
+		return currentMaxTokens
+	}
+
+	nextMaxTokens := maximumMaxTokens
+	if *currentMaxTokens <= maximumMaxTokens/2 {
 		nextMaxTokens = *currentMaxTokens * 2
 	}
 	return &nextMaxTokens
