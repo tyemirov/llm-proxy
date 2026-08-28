@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   builtin printf '%s\n' 'Usage:
-  scripts/test_live_providers.sh [--gemini-candidates | --media | --preflight | --write-config <path>]
+  scripts/test_live_providers.sh [--gemini-candidates | --media | --preflight | --write-config <path>] [--existing-local-origin <origin>]
 
 Builds the current llm-proxy binary, verifies each available provider key
 through the authenticated management operation, and only then runs its live
@@ -28,6 +28,9 @@ Optional environment:
                              Default: false. Gemini candidate default: true.
   LLM_PROXY_LIVE_PORT        Local port for the temporary proxy. Default: a
                              freshly allocated loopback port.
+  LLM_PROXY_LIVE_MANAGEMENT_ENV_FILE
+                             Scoped management environment for an existing
+                             local origin. Required with --existing-local-origin.
   LLM_PROXY_LIVE_TIMEOUT     Per-request curl timeout in seconds. Default: 45.
   GO                         Go binary. Default: go.
 
@@ -45,6 +48,10 @@ Options:
                              external provider call.
   --write-config <path>      Write the disposable managed config and exit
                              without building the proxy or calling providers.
+  --existing-local-origin <origin>
+                             Use an existing HTTP loopback API. Do not start a
+                             host proxy process. The local orchestration owner
+                             must remove its disposable management state.
 
 Provider fields use the environment bindings declared in configs/providers.yml.
 Per-provider model overrides use LLM_PROXY_LIVE_<PROVIDER_ID>_MODEL, with the
@@ -485,13 +492,12 @@ if request_count != len(expected_prompts):
 }
 
 configure_live_management_environment() {
-  local live_origin="http://127.0.0.1:${PORT}"
-  export LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN="${live_origin}"
-  export LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN="${live_origin}"
+  export LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN="${LIVE_ORIGIN}"
+  export LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN="${LIVE_ORIGIN}"
   export LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN="http://localhost:${PORT}"
   export LLM_PROXY_MANAGEMENT_UI_DESCRIPTION="LLM Proxy live provider verification"
   export LLM_PROXY_MANAGEMENT_ADMIN_EMAILS="[]"
-  export LLM_PROXY_MANAGEMENT_TAUTH_URL="${live_origin}"
+  export LLM_PROXY_MANAGEMENT_TAUTH_URL="${LIVE_ORIGIN}"
   export LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID="live-provider-verification"
   export LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID="live-provider-verification.apps.googleusercontent.com"
   export LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH="/auth/google"
@@ -505,14 +511,67 @@ configure_live_management_environment() {
   export LLM_PROXY_MANAGEMENT_DATABASE_PATH="${TMP_DIR}/management.sqlite"
   export LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY
   LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY="$(python3 -c 'import base64, secrets; print(base64.b64encode(secrets.token_bytes(32)).decode("ascii"))')"
-  export LLM_PROXY_MANAGEMENT_API_ORIGIN="${live_origin}"
-  export LLM_PROXY_MANAGEMENT_PROXY_ORIGIN="${live_origin}"
+  export LLM_PROXY_MANAGEMENT_API_ORIGIN="${LIVE_ORIGIN}"
+  export LLM_PROXY_MANAGEMENT_PROXY_ORIGIN="${LIVE_ORIGIN}"
+}
+
+existing_local_origin_port() {
+  python3 -c '
+import sys
+import urllib.parse
+
+origin = urllib.parse.urlsplit(sys.argv[1])
+try:
+    port = origin.port
+except ValueError:
+    raise SystemExit(1)
+if (
+    origin.scheme != "http"
+    or origin.hostname != "127.0.0.1"
+    or port is None
+    or origin.username is not None
+    or origin.password is not None
+    or origin.path not in {"", "/"}
+    or origin.query
+    or origin.fragment
+):
+    raise SystemExit(1)
+print(port)
+' "$1"
+}
+
+load_existing_management_environment() {
+  local management_environment_path="${LLM_PROXY_LIVE_MANAGEMENT_ENV_FILE:-}"
+  [[ -n "${management_environment_path}" ]] || {
+    echo "error: LLM_PROXY_LIVE_MANAGEMENT_ENV_FILE is required with --existing-local-origin" >&2
+    exit 1
+  }
+  [[ -f "${management_environment_path}" ]] || {
+    echo "error: local management environment not found: ${management_environment_path}" >&2
+    exit 1
+  }
+  unset \
+    LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY \
+    LLM_PROXY_MANAGEMENT_JWT_ISSUER \
+    LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME \
+    LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID
+  load_env_file "${management_environment_path}"
+  for required_name in \
+    LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY \
+    LLM_PROXY_MANAGEMENT_JWT_ISSUER \
+    LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME \
+    LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID; do
+    [[ -n "${!required_name:-}" ]] || {
+      echo "error: ${management_environment_path} must define ${required_name}" >&2
+      exit 1
+    }
+  done
 }
 
 wait_for_proxy() {
   local readiness_status
   for _ in {1..50}; do
-    readiness_status="$(curl -sS --max-time 1 -o /dev/null -w "%{http_code}" "http://127.0.0.1:${PORT}/?prompt=ready" 2>/dev/null || true)"
+    readiness_status="$(curl -sS --max-time 1 -o /dev/null -w "%{http_code}" "${LIVE_ORIGIN}/?prompt=ready" 2>/dev/null || true)"
     if [[ "${readiness_status}" == "403" ]]; then
       return 0
     fi
@@ -526,6 +585,15 @@ wait_for_proxy() {
   echo "error: live proxy did not become ready on port ${PORT}" >&2
   redact_log
   exit 1
+}
+
+wait_for_existing_local_origin() {
+  local readiness_status
+  readiness_status="$(curl -sS --max-time 5 -o /dev/null -w "%{http_code}" "${LIVE_ORIGIN}/?prompt=ready" 2>/dev/null || true)"
+  if [[ "${readiness_status}" != "403" ]]; then
+    echo "error: existing local API is not ready: origin=${LIVE_ORIGIN} expected_status=403 status=${readiness_status:-transport_error}" >&2
+    exit 1
+  fi
 }
 
 initialize_live_management() {
@@ -581,7 +649,7 @@ cookie_path.chmod(0o600)
       --cookie "${SESSION_COOKIE_PATH}" \
       -o "${account_response_path}" \
       -w "%{http_code}" \
-      "http://127.0.0.1:${PORT}/api/management/account"
+      "${LIVE_ORIGIN}/api/management/account"
   )"
   if [[ "${account_status}" != "200" ]]; then
     echo "error: live provider management account setup failed: status=${account_status}" >&2
@@ -611,7 +679,7 @@ print(tenants[0]["id"])
       --data '{}' \
       -o "${MANAGEMENT_SECRET_RESPONSE_PATH}" \
       -w "%{http_code}" \
-      "http://127.0.0.1:${PORT}/api/management/tenants/${TENANT_ID}/secrets"
+      "${LIVE_ORIGIN}/api/management/tenants/${TENANT_ID}/secrets"
   )"
   if [[ "${secret_status}" != "200" ]]; then
     echo "error: live provider tenant-key setup failed: status=${secret_status}" >&2
@@ -698,7 +766,7 @@ pathlib.Path(sys.argv[3]).write_text(
       --data-binary "@${request_path}" \
       -o "${response_path}" \
       -w "%{http_code}" \
-      "http://127.0.0.1:${PORT}/api/management/tenants/${TENANT_ID}/provider-connections/${provider}"
+      "${LIVE_ORIGIN}/api/management/tenants/${TENANT_ID}/provider-connections/${provider}"
   )"
   if [[ "${http_status}" != "200" ]]; then
     echo "error: live provider verification failed: provider=${provider} model=${model} status=${http_status} error=$(verification_failure_code "${response_path}")" >&2
@@ -727,14 +795,14 @@ run_text_smoke() {
   response_path="${TMP_DIR}/${provider}-response.txt"
   if [[ -n "${model}" ]]; then
     if [[ -n "${reasoning_effort}" ]]; then
-      request_body="$(printf '{"prompt":"Reply with exactly OK and no punctuation.","model":"%s","reasoning_effort":"%s","web_search":false}' "${model}" "${reasoning_effort}")"
+      request_body="$(printf '{"messages":[{"role":"user","content":"Reply with exactly OK and no punctuation."}],"model":"%s","reasoning_effort":"%s","web_search":false}' "${model}" "${reasoning_effort}")"
       reasoning_effort_label="${reasoning_effort}"
     else
-      request_body="$(printf '{"prompt":"Reply with exactly OK and no punctuation.","model":"%s","web_search":false}' "${model}")"
+      request_body="$(printf '{"messages":[{"role":"user","content":"Reply with exactly OK and no punctuation."}],"model":"%s","web_search":false}' "${model}")"
     fi
     request_model_label="${model}"
   else
-    request_body='{"prompt":"Reply with exactly OK and no punctuation.","web_search":false}'
+    request_body='{"messages":[{"role":"user","content":"Reply with exactly OK and no punctuation."}],"web_search":false}'
     request_model_label="omitted"
   fi
 
@@ -745,7 +813,7 @@ run_text_smoke() {
       --data "${request_body}" \
       -o "${response_path}" \
       -w "%{http_code}" \
-      "http://127.0.0.1:${PORT}/?provider=${provider}&format=text/plain&key=${LLM_PROXY_SECRET}"
+      "${LIVE_ORIGIN}/v2?provider=${provider}&format=text/plain&key=${LLM_PROXY_SECRET}"
   )"
 
   response_text="$(tr -d '\r\n' < "${response_path}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
@@ -785,7 +853,7 @@ fetch_public_capabilities() {
     curl -sS --max-time 5 \
       -o "${PUBLIC_CAPABILITIES_RESPONSE_PATH}" \
       -w "%{http_code}" \
-      "http://127.0.0.1:${PORT}/api/public/capabilities"
+      "${LIVE_ORIGIN}/api/public/capabilities"
   )"
   if [[ "${http_status}" != "200" ]] || ! python3 -c '
 import json
@@ -885,7 +953,7 @@ run_image_smoke() {
       --data-binary "@${request_path}" \
       -o "${response_path}" \
       -w "%{http_code}" \
-      "http://127.0.0.1:${PORT}/v2?provider=${provider}&format=text/plain&key=${LLM_PROXY_SECRET}"
+      "${LIVE_ORIGIN}/v2?provider=${provider}&format=text/plain&key=${LLM_PROXY_SECRET}"
   )"
 
   response_text="$(tr -d '\r\n' <"${response_path}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
@@ -915,6 +983,7 @@ PREFLIGHT_ONLY=false
 MEDIA_ONLY=false
 GEMINI_CANDIDATES_ONLY=false
 WRITE_CONFIG_PATH=""
+EXISTING_LOCAL_ORIGIN=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --gemini-candidates)
@@ -934,6 +1003,11 @@ while [[ $# -gt 0 ]]; do
       WRITE_CONFIG_PATH="$2"
       shift 2
       ;;
+    --existing-local-origin)
+      [[ $# -ge 2 ]] || { echo "error: --existing-local-origin requires an origin" >&2; exit 1; }
+      EXISTING_LOCAL_ORIGIN="$2"
+      shift 2
+      ;;
     --help|-h)
       usage
       exit 0
@@ -947,7 +1021,8 @@ while [[ $# -gt 0 ]]; do
 done
 if [[ "${MEDIA_ONLY}" == "true" && ( "${PREFLIGHT_ONLY}" == "true" || "${GEMINI_CANDIDATES_ONLY}" == "true" || -n "${WRITE_CONFIG_PATH}" ) ]] ||
   [[ "${PREFLIGHT_ONLY}" == "true" && ( "${GEMINI_CANDIDATES_ONLY}" == "true" || -n "${WRITE_CONFIG_PATH}" ) ]] ||
-  [[ "${GEMINI_CANDIDATES_ONLY}" == "true" && -n "${WRITE_CONFIG_PATH}" ]]; then
+  [[ "${GEMINI_CANDIDATES_ONLY}" == "true" && -n "${WRITE_CONFIG_PATH}" ]] ||
+  [[ -n "${EXISTING_LOCAL_ORIGIN}" && ( "${PREFLIGHT_ONLY}" == "true" || "${GEMINI_CANDIDATES_ONLY}" == "true" || -n "${WRITE_CONFIG_PATH}" ) ]]; then
   echo "error: --gemini-candidates, --media, --preflight, and --write-config are mutually exclusive" >&2
   exit 1
 fi
@@ -1010,10 +1085,19 @@ if [[ "${GEMINI_CANDIDATES_ONLY}" == "true" ]]; then
   exit 0
 fi
 
-if [[ -n "${LLM_PROXY_LIVE_PORT:-}" ]]; then
+if [[ -n "${EXISTING_LOCAL_ORIGIN}" ]]; then
+  if ! PORT="$(existing_local_origin_port "${EXISTING_LOCAL_ORIGIN}")"; then
+    echo "error: --existing-local-origin must be an HTTP 127.0.0.1 origin with an explicit port" >&2
+    exit 1
+  fi
+  LIVE_ORIGIN="${EXISTING_LOCAL_ORIGIN%/}"
+  load_existing_management_environment
+elif [[ -n "${LLM_PROXY_LIVE_PORT:-}" ]]; then
   PORT="${LLM_PROXY_LIVE_PORT}"
+  LIVE_ORIGIN="http://127.0.0.1:${PORT}"
 else
   PORT="$(allocate_loopback_port)"
+  LIVE_ORIGIN="http://127.0.0.1:${PORT}"
 fi
 if [[ -n "${WRITE_CONFIG_PATH}" ]]; then
   mkdir -p "$(dirname "${WRITE_CONFIG_PATH}")"
@@ -1026,7 +1110,7 @@ fi
 LOG_PATH="${TMP_DIR}/llm-proxy.log"
 PUBLIC_CAPABILITIES_RESPONSE_PATH="${TMP_DIR}/public-capabilities.json"
 export LLM_PROXY_LIVE_PORT="${PORT}"
-if [[ -z "${WRITE_CONFIG_PATH}" ]]; then
+if [[ -z "${WRITE_CONFIG_PATH}" && -z "${EXISTING_LOCAL_ORIGIN}" ]]; then
   configure_live_management_environment
 fi
 if [[ "${PREFLIGHT_ONLY}" == "true" ]]; then
@@ -1048,7 +1132,7 @@ fi
 GO_BIN="$(env_or_default GO go)"
 BINARY_PATH="${TMP_DIR}/llm-proxy-live"
 
-if command -v lsof >/dev/null 2>&1 && lsof -tiTCP:"${PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
+if [[ -z "${EXISTING_LOCAL_ORIGIN}" ]] && command -v lsof >/dev/null 2>&1 && lsof -tiTCP:"${PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
   echo "error: port ${PORT} is already in use; set LLM_PROXY_LIVE_PORT to a free port" >&2
   exit 1
 fi
@@ -1068,9 +1152,13 @@ if [[ "${PREFLIGHT_ONLY}" != "true" ]]; then
   fi
 fi
 
-GOEXPERIMENT= "${BINARY_PATH}" --config "${CONFIG_PATH}" >"${LOG_PATH}" 2>&1 &
-PROXY_PID="$!"
-wait_for_proxy
+if [[ -n "${EXISTING_LOCAL_ORIGIN}" ]]; then
+  wait_for_existing_local_origin
+else
+  GOEXPERIMENT= "${BINARY_PATH}" --config "${CONFIG_PATH}" >"${LOG_PATH}" 2>&1 &
+  PROXY_PID="$!"
+  wait_for_proxy
+fi
 
 initialize_live_management
 if [[ "${PREFLIGHT_ONLY}" == "true" ]]; then
