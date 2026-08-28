@@ -1294,6 +1294,8 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make test-live-providers` | Start a disposable managed tenant, verify every available provider key through the canonical management operation, and run that provider's live text smoke only after verification succeeds; use `LIVE_ENV_FILE=/path/to/env` to load key values. |
 | `make test-live-provider-media` | Verify OpenAI, Anthropic, Gemini, Moonshot, and xAI keys, then send one paid canonical image request through each provider. |
 | `make test-live-gemini` | Run direct acceptance for the exact Gemini 3.6 Flash and Gemini 3.7 Flash candidates, then run registered Gemini routes through `make test-live-providers`. |
+| `make test-live-local-providers` | Build an isolated local Compose project, verify selected provider keys, and send paid `POST /v2` requests through its Dockerized API. |
+| `make test-live-local-gemini` | Run every registered Gemini model and reasoning level through the isolated local Compose API. |
 | `make live-test` | Send paid production `POST /v2` requests through the Default tenant using only `LLM_PROXY_SECRET`: echo checks for OpenAI, Anthropic, Meta, Gemini, and Moonshot, plus large completion cases for OpenAI, Anthropic, Meta, and Gemini. |
 | `make release` | Delegate this clean checkout and its current resource declaration to the exact sibling `../mprlab-gateway` release transaction. |
 | `make publish` | Delegate publication of the exact sealed release to `../mprlab-gateway`; it does not rebuild or deploy. |
@@ -1301,7 +1303,9 @@ This repository exposes the standard local targets used by MPR app repos:
 
 Live provider smoke tests are intentionally not part of `make ci`; they call
 paid upstream APIs and depend on local or CI secret availability. The dynamic
-target discovers these provider keys after loading `LIVE_ENV_FILE`. It verifies
+target clears catalog provider fields before it loads `LIVE_ENV_FILE`. The
+file is the only provider-value source when it is set. The target discovers
+these provider keys after loading the file. It verifies
 each key against the provider's configured default model, or the exact model
 override below, before making that provider's smoke request. By default, the
 subsequent smoke omits `model` and proves that the newly saved managed provider
@@ -1309,6 +1313,31 @@ default is operational; an override is included in both verification and smoke.
 Set `LLM_PROXY_LIVE_ALL_MODELS=true` to discover every text model for each
 selected provider. The harness uses the validated public catalog and runs one
 verification and one explicit-model smoke request for each model.
+
+The local Compose live test uses the current `docker-compose.local.yml` file.
+It builds the API image from the current checkout. Each project name starts
+with `llm-proxy-live-test-` and has a unique random suffix. The suffix prevents
+reuse of resources from an earlier run. The test uses allocated loopback ports
+and temporary management and TAuth volumes. The command verifies all local
+readiness boundaries before it saves a provider
+connection. Each text smoke uses canonical `POST /v2` through
+the allocated API origin. The harness does not start a host proxy process for
+this mode. Cleanup removes the test containers, network, volumes, and temporary
+site files after success or failure. The command stops if `make up` is active.
+
+Run selected providers through the isolated local Compose API:
+
+```shell
+LLM_PROXY_LIVE_PROVIDERS=openai,gemini \
+  make test-live-local-providers LIVE_ENV_FILE=/path/to/provider.env
+```
+
+Run every registered Gemini text model and reasoning level through local
+Compose:
+
+```shell
+make test-live-local-gemini LIVE_ENV_FILE=/path/to/provider.env
+```
 
 The Gemini wrapper first sends direct Interactions requests for the exact
 `gemini-3.6-flash` and `gemini-3.7-flash` candidates. It sends one request with

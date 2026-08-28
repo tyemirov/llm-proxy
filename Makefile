@@ -15,7 +15,7 @@ export PLAYWRIGHT_BROWSERS_PATH
 
 GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 
-.PHONY: fmt check-format lint go-lint python-lint frontend-dependencies frontend-lint test go-test python-test python-package-install-test frontend-test test-frontend-dependency-contract test-openapi-pages-artifact test-management-auth-blackbox test-live-provider-harness test-live-providers test-live-provider-media test-live-gemini live-test build clean ci up down
+.PHONY: fmt check-format lint go-lint python-lint frontend-dependencies frontend-lint test go-test python-test python-package-install-test frontend-test test-frontend-dependency-contract test-openapi-pages-artifact test-management-auth-blackbox test-live-provider-harness test-live-providers test-live-provider-media test-live-gemini test-live-local-providers test-live-local-gemini live-test build clean ci up down
 
 fmt:
 	$(GOFMT) -w $(GO_SOURCES)
@@ -83,6 +83,15 @@ test-live-provider-media:
 
 test-live-gemini:
 	@GO="$(GO)" ./scripts/test_live_gemini.sh
+
+test-live-local-providers:
+	@GO="$(GO)" ./scripts/test_live_local.sh
+
+test-live-local-gemini:
+	@LLM_PROXY_LIVE_PROVIDERS=gemini \
+		LLM_PROXY_LIVE_ALL_MODELS=true \
+		LLM_PROXY_LIVE_REASONING_MATRIX=true \
+		GO="$(GO)" ./scripts/test_live_local.sh
 
 live-test:
 	@./scripts/live_test.sh

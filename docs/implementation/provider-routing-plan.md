@@ -558,7 +558,9 @@ public response/OpenAPI contracts, and bundled clients retain their existing
 shapes.
 
 The live-provider harness parses `LIVE_ENV_FILE` as dotenv data without shell
-execution and discovers selected provider keys. A paid run starts a disposable
+execution. It clears every catalog provider field before it loads the file.
+The file is the only provider-value source when it is set. The harness then
+discovers selected provider keys. A paid run starts a disposable
 management database with ephemeral encryption/session material, creates one
 local managed tenant and client secret, verifies each available key through the
 same provider-settings operation above, and runs that provider's smoke request
@@ -571,6 +573,20 @@ user, tenant, and client key, then proves authenticated routing. Each mode alloc
 port unless `LLM_PROXY_LIVE_PORT` explicitly provides one, and cleanup
 terminates only the proxy child started by the harness rather than a process
 discovered through a shared port.
+
+Local Compose live acceptance uses the current `docker-compose.local.yml`
+contract. Each project name starts with `llm-proxy-live-test-` and has a unique
+random suffix. The suffix prevents reuse of containers, networks, or volumes
+from an earlier run. Each run uses allocated loopback ports, builds the API
+image from the current checkout, and creates new management and TAuth volumes.
+The runner verifies the complete local readiness contract before provider
+configuration. It gives the harness only the existing
+allocated API origin and its scoped management environment. The
+harness accepts only an HTTP `127.0.0.1` origin with an explicit port. It does
+not start a host proxy process in this mode. Each text smoke uses canonical
+`POST /v2`. Cleanup removes the complete test Compose project and its volumes
+after success or failure. Paid local Compose acceptance remains outside
+`make ci` and does not provide production acceptance.
 
 The explicit `--media` mode selects OpenAI, Anthropic, Gemini, Moonshot, and
 xAI by default. It verifies all selected provider keys before image requests.

@@ -775,7 +775,7 @@ retain satisfied historical dependencies.
     zero proxy rate-limit wait.
   - The live harness validated the matching response request ID without printing
     the response body or a credential.
-- [ ] [B088] (P1) Restore Default-tenant long completion routing for OpenAI and Meta.
+- [!] [B088] (P1) Restore Default-tenant long completion routing for OpenAI and Meta.
   Goal:
   Make the Default tenant complete deterministic production live-test requests
   through OpenAI and Meta. Do not use local provider credentials, fallback
@@ -812,11 +812,51 @@ retain satisfied historical dependencies.
   - The same run proved both target routes accept the saved Default-tenant
     credential and model through their echo cases. Production `v3.1.1` now
     contains I045, and B127 records the correlated telemetry acceptance.
+  - The long-completion harness gives each provider a 512-token initial output
+    budget.
+  - B085 requires a larger next budget when an incomplete attempt has no
+    visible output.
+  - The current coordinator keeps the same budget when the model has no
+    configured output limit.
+  - The Terra and Muse Spark catalog records have no configured output limit.
+  - The existing zero-progress regression uses a model with a configured output
+    limit.
+  - The Meta regression always returns visible partial output. It does not test
+    the zero-progress case.
+  - The last B088 paid run occurred before I045 reached production. B127 proves
+    I045 with one Gemini request only.
+  Development evidence:
+  - On 2026-08-27, two new public route tests reproduced the defect. Both
+    continuations sent 512 tokens again instead of 1024.
+  - The repair keeps one shared coordinator. It doubles an explicit budget only
+    when the latest attempt returned no visible text.
+  - The repair caps known model limits. It uses the platform integer limit when
+    the catalog does not declare a model limit.
+  - Public tests cover OpenAI and Meta zero-progress continuations. They also
+    cover visible progress, configured limits, omitted budgets, and integer
+    overflow.
+  - The first unchanged baseline run stopped during Go integration tests with
+    no named failing test. An immediate focused run passed.
+  - The unchanged baseline rerun passed all 11 CI gates in 139 seconds with
+    100.0 percent Go statement coverage.
+  - After the repair, `make go-test` passed with 100.0 percent Go statement
+    coverage. The required final `make ci` passed all 11 gates in 134 seconds.
+  - No telemetry event contract changed. The existing I045 progress events and
+    terminal phase summary remain the production evidence source.
   Requirements:
   - Diagnose and restore the exact OpenAI and Meta production routes through
     the saved Default-tenant provider configuration. Retain OpenAI's
     server-owned Responses polling and Meta's canonical blocking request
     contract.
+  - Increase the next attempt budget after an output-limit result with no
+    visible text.
+  - Cap the next budget at the configured model output limit when that limit
+    exists.
+  - Use an overflow-safe increase when the model has no configured output
+    limit.
+  - Keep the initial budget after an output-limit result with visible text.
+  - Keep one shared continuation coordinator for all provider transports.
+  - Do not add provider-specific growth rules, retries, or timeout changes.
   - Keep the repaired Anthropic long-completion case in the production matrix
     and treat any regression from HTTP `200` as a new failure of this issue's
     acceptance gate.
@@ -834,8 +874,25 @@ retain satisfied historical dependencies.
   - Run one normalized Terra/max Creative Director source-world canary with
     the explicit 900-second request budget. Use I045 phase evidence to classify
     any failure before another paid run.
+  - Prove an OpenAI zero-progress continuation increases its next output budget
+    without a configured model limit.
+  - Prove a Meta zero-progress continuation increases its next output budget
+    without a configured model limit.
+  - Prove visible progress keeps the caller's initial per-attempt budget.
+  - Prove a configured model output limit caps the next output budget.
+  - Prove an unknown model output limit cannot cause integer overflow.
+  - Correlate each production case request ID with I045 progress events and one
+    terminal phase summary.
   - For any source change, run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Blocked: The verified repair exists only as working-tree changes above
+  application commit `142b1d25df28863b5ab8da1bc941da54f841f949`. The lifecycle
+  ignores working-tree bytes and uses committed application objects. Repository
+  policy assigns branch, commit, push, and pull request actions to the execution
+  chain. That chain must land the repair on `master`. Then the authorized
+  release, publication, deployment, and production acceptance can use the
+  correct source. The required private deployment input and production client
+  secret are present.
 - [!] [B128] (P1) Restore Gemini long-completion production acceptance after first-read visibility failure.
   Goal:
   Make the Default tenant's Gemini 3.5 Flash background case complete the
@@ -948,6 +1005,50 @@ retain satisfied historical dependencies.
 
 
 ## Improvements
+
+- [x] [I236] (P1) Add live-provider acceptance to local Compose.
+  Goal:
+  Route paid provider acceptance through the current local Compose API before
+  production deployment.
+  Requirements:
+  - Start the current local Compose services in one isolated test project.
+  - Use temporary management and TAuth volumes for each test run.
+  - Load provider credentials through the current live-test environment file.
+  - Save each selected provider connection through the local management API.
+  - Send each selected smoke request through the local `/v2` API.
+  - Do not start a host proxy process for this acceptance path.
+  - Remove all test containers, networks, volumes, and temporary files at exit.
+  - Keep `make up`, `make down`, and production `make live-test` unchanged.
+  - Keep paid local acceptance outside `make ci`.
+  Validation:
+  - Prove the command uses the current Docker image and local Compose contract.
+  - Prove provider verification occurs before each smoke request.
+  - Prove a failed run removes all test orchestration state.
+  - Prove the command rejects a non-loopback API origin.
+  - Run one registered Gemini matrix through the local Compose API.
+  - Run `make ci` after the last application change.
+  Resolution:
+  - Added isolated projects with the `llm-proxy-live-test-` prefix and a unique
+    random suffix. Each project uses allocated loopback ports, temporary
+    volumes, current-checkout image builds, and complete cleanup.
+  - Added a local-origin mode that saves and verifies provider connections
+    through the Dockerized management API before canonical `POST /v2` smoke
+    requests. This mode does not start a host proxy process.
+  - Proved HTTP 200 Gemini requests for `gemini-3-flash-preview` and
+    `gemini-3.5-flash`. The current catalog publishes no reasoning levels for
+    these routes, so the matrix used the omitted-effort case for each model.
+  - Proved that the test project retained no containers, networks, or volumes.
+  - Passed `make ci` with all 11 gates and 100.0% Go statement coverage.
+  Review resolution:
+  - Cleared every catalog provider field before the filtered file reload.
+  - Made `LIVE_ENV_FILE` the only provider-value source when it is set.
+  - Preserved the scoped local management session during the filtered reload.
+  - Added black-box coverage for inherited keys and old Compose project state.
+  - A real Docker run ignored an invalid inherited Gemini key.
+  - The run authenticated locally and passed the first Gemini smoke request.
+  - It also passed `gemini-3.5-flash` verification before Google returned 429.
+  - Cleanup left no test containers, networks, or volumes.
+  - Passed the final `make ci` with all 11 gates and 100.0% coverage.
 
 - [ ] [I235] (P1) Add explicit model activation to the provider catalog.
   Goal:

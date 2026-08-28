@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Added disposable local Compose acceptance for paid provider smoke requests,
+  with file-only provider credentials and a unique project for each run.
+- Increase shared continuation budgets after zero-text output-limit responses.
+  Cap each new budget at the catalog or platform integer limit.
 - **Breaking:** Gemini Interactions now rejects assistant history and returns a provider error for incomplete output without replay.
 - **Breaking:** Removed all Gemini 2.5 routes and the synchronous Gemini Interactions transport. Gemini now exposes only 3.x pollable routes and defaults to Gemini 3.5 Flash. Managed schema version 10 migrates stored 2.5 selections once.
 - Added Meta Muse Spark 1.2 as a selectable Standard-tier text model. Muse Spark 1.1 remains the Meta default.
