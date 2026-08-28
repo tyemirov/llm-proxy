@@ -25,6 +25,26 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B159] (P0) Restore LoopAware telemetry after the database reset.
+  Goal:
+  Public pages send telemetry to the current LLM Proxy site record.
+  Evidence:
+  - Expected: Each public page uses site `543d2796-d616-4080-99e7-0720ae438440`.
+  - Actual: Generated pages use a site record that the reset removed.
+  Requirements:
+  - Define the production pixel URL in the shared public shell module.
+  - Generate each legal page and resource page from that URL.
+  - Reject a public page that does not use the exact production URL.
+  Validation:
+  - Run the public-page browser test.
+  - Run `make ci` after the last repository change.
+  Resolution:
+  - The shared public shell exports the production LoopAware pixel URL.
+  - The landing page and each generator use the current site record.
+  - The all-pages browser test rejects a missing or incorrect pixel URL.
+  - The final `make ci` passed all 11 gates in 149 seconds.
+  - Go statement coverage remained at 100.0 percent.
+
 - [x] [B158] (P2) Preserve the Gemini candidate reasoning matrix default.
   Goal:
   The Gemini candidate command tests all supported thinking levels by default.
