@@ -41,7 +41,8 @@ func TestOperationalHelpCommandsUseBuiltinOutput(testingInstance *testing.T) {
 		path             string
 		expectedFragment string
 	}{
-		{name: "live-providers", path: filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"), expectedFragment: "scripts/test_live_providers.sh [--gemini-candidates | --media | --preflight | --write-config <path>]"},
+		{name: "live-providers", path: filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"), expectedFragment: "scripts/test_live_providers.sh [--gemini-candidates | --media | --preflight | --write-config <path>] [--existing-local-origin <origin>]"},
+		{name: "local-live-providers", path: filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_local.sh"), expectedFragment: "Usage: make test-live-local-providers"},
 		{name: "live-gemini-candidates", path: filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_gemini_candidates.sh"), expectedFragment: "Runs paid Google Interactions acceptance"},
 		{name: "production-live-test", path: filepath.Join(repositoryRoot, operationalScriptsDirectory, "live_test.sh"), expectedFragment: "Usage: make live-test"},
 	}
@@ -724,8 +725,8 @@ exec "${REAL_AWK_PATH:?}" "$@"
 				"GHTTP_SERVE_RESPONSE_HEADERS: \"/=Cache-Control:no-store\"",
 				"GHTTP_SERVE_DIRECTORY: \"/app/render/site\"",
 				"LLM_PROXY_MANAGEMENT_TAUTH_URL: \"http://localhost:4179\"",
-				"127.0.0.1:4179:4179",
-				"127.0.0.1:8080:8080",
+				"127.0.0.1:${LLM_PROXY_LOCAL_FRONTEND_HOST_PORT:-4179}:4179",
+				"127.0.0.1:${LLM_PROXY_LOCAL_API_HOST_PORT:-8080}:8080",
 				"site-builder:",
 				"image: node:22-bookworm-slim",
 				"/app/scripts/render_public_site.mjs",
@@ -787,6 +788,203 @@ exec "${REAL_AWK_PATH:?}" "$@"
 	}
 	if !strings.Contains(output.String(), "LLM Proxy local orchestration stopped.") {
 		testingInstance.Fatalf("make up did not report local stack shutdown: %s", output.String())
+	}
+}
+
+func TestOperationalLocalComposeLiveAcceptanceOwnsDisposableProject(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	for _, testCase := range []struct {
+		name          string
+		harnessStatus string
+		expectSuccess bool
+	}{
+		{name: "success", harnessStatus: "0", expectSuccess: true},
+		{name: "provider failure", harnessStatus: "37", expectSuccess: false},
+	} {
+		testingInstance.Run(testCase.name, func(testingInstance *testing.T) {
+			fixtureRoot := testingInstance.TempDir()
+			for _, relativePath := range []string{
+				"Makefile",
+				"docker-compose.local.yml",
+				filepath.Join(operationalScriptsDirectory, "local_orchestration.sh"),
+				filepath.Join(operationalScriptsDirectory, "test_live_local.sh"),
+				filepath.Join("configs", "config.yml"),
+				filepath.Join("configs", "tauth.local.yml"),
+			} {
+				copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, relativePath), filepath.Join(fixtureRoot, relativePath))
+			}
+			writeOperationalLocalEnvironment(testingInstance, fixtureRoot)
+			liveEnvironmentPath := filepath.Join(fixtureRoot, "provider.env")
+			writeOperationalFile(testingInstance, liveEnvironmentPath, "OPENAI_API_KEY=local-compose-provider-key\n", 0o600)
+
+			toolDirectory := filepath.Join(fixtureRoot, "tools")
+			composeArgumentsPath := filepath.Join(fixtureRoot, "compose-arguments")
+			composeStartedPath := filepath.Join(fixtureRoot, "compose-started")
+			composeDownPath := filepath.Join(fixtureRoot, "compose-down")
+			artifactPathCapture := filepath.Join(fixtureRoot, "artifact-path")
+			harnessCapture := filepath.Join(fixtureRoot, "harness-arguments")
+			writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "docker"), `#!/usr/bin/env bash
+set -euo pipefail
+
+builtin printf '%s\n' "$*" >>"${DOCKER_ARGUMENT_CAPTURE:?}"
+[[ "${1:?}" == "compose" ]]
+if [[ "${2:?}" == "version" ]]; then
+  exit 0
+fi
+shift
+compose_project=""
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --project-name)
+      compose_project="$2"
+      shift 2
+      ;;
+    --file)
+      shift 2
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+case "${1:?}" in
+  ps)
+    if [[ "${compose_project}" == "llm-proxy-live-test" && -f "${COMPOSE_STARTED_CAPTURE:?}" && " $* " == *" --status running "* ]]; then
+      builtin printf '%s\n' api frontend schema tauth
+    fi
+    ;;
+  up)
+    [[ "${compose_project}" == "llm-proxy-live-test" ]]
+    [[ -d "${LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY:?}" ]]
+    builtin printf '%s\n' "${LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY}" >"${ARTIFACT_PATH_CAPTURE:?}"
+    builtin printf '%s\n' started >"${COMPOSE_STARTED_CAPTURE:?}"
+    ;;
+  down)
+    [[ "${compose_project}" == "llm-proxy-live-test" ]]
+    [[ " $* " == *" --volumes "* ]]
+    builtin printf '%s\n' down >"${COMPOSE_DOWN_CAPTURE:?}"
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+`, 0o755)
+			writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "curl"), `#!/usr/bin/env bash
+set -euo pipefail
+
+arguments="$*"
+if [[ "${arguments}" != *"--write-out"* ]]; then
+  builtin printf '%s' '<routing-tree class="routing-tree"></routing-tree><table class="catalog-table"><tr><td>validated public route</td></tr></table>'
+  exit 0
+fi
+case "${arguments}" in
+  *"http://127.0.0.1:${LLM_PROXY_LOCAL_FRONTEND_HOST_PORT:?}/auth/session"*) status=204 ;;
+  *"http://127.0.0.1:${LLM_PROXY_LOCAL_FRONTEND_HOST_PORT}/auth/nonce"*) status=200 ;;
+  *"http://127.0.0.1:${LLM_PROXY_LOCAL_FRONTEND_HOST_PORT}/"*) status=200 ;;
+  *"http://127.0.0.1:${LLM_PROXY_LOCAL_API_HOST_PORT:?}/api/public/capabilities"*) status=200 ;;
+  *"http://127.0.0.1:${LLM_PROXY_LOCAL_API_HOST_PORT}/?prompt=ready"*) status=403 ;;
+  *"http://127.0.0.1:${LLM_PROXY_LOCAL_API_HOST_PORT}/api/management/account"*) status=401 ;;
+  *) exit 1 ;;
+esac
+builtin printf '%s' "${status}"
+`, 0o755)
+			writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "openssl"), `#!/usr/bin/env bash
+set -euo pipefail
+[[ "${1:?}" == "rand" ]]
+[[ "${2:?}" == "-base64" ]]
+builtin printf '%s' generated-local-live-value
+`, 0o755)
+			writeOperationalFile(testingInstance, filepath.Join(fixtureRoot, operationalScriptsDirectory, "test_live_providers.sh"), `#!/usr/bin/env bash
+set -euo pipefail
+builtin printf 'arguments=%s\norigin_env=%s\nproviders=%s\n' "$*" "${LLM_PROXY_LIVE_MANAGEMENT_ENV_FILE:?}" "${LLM_PROXY_LIVE_PROVIDERS:?}" >"${LIVE_HARNESS_CAPTURE:?}"
+exit "${LIVE_HARNESS_STATUS:?}"
+`, 0o755)
+
+			command := exec.Command("make", "test-live-local-providers")
+			command.Dir = fixtureRoot
+			command.Env = append(
+				os.Environ(),
+				"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
+				"LIVE_ENV_FILE="+liveEnvironmentPath,
+				"LLM_PROXY_LIVE_PROVIDERS=openai",
+				"DOCKER_ARGUMENT_CAPTURE="+composeArgumentsPath,
+				"COMPOSE_STARTED_CAPTURE="+composeStartedPath,
+				"COMPOSE_DOWN_CAPTURE="+composeDownPath,
+				"ARTIFACT_PATH_CAPTURE="+artifactPathCapture,
+				"LIVE_HARNESS_CAPTURE="+harnessCapture,
+				"LIVE_HARNESS_STATUS="+testCase.harnessStatus,
+			)
+			output, commandError := command.CombinedOutput()
+			if testCase.expectSuccess && commandError != nil {
+				testingInstance.Fatalf("local Compose live acceptance failed: %v\n%s", commandError, output)
+			}
+			if !testCase.expectSuccess && commandError == nil {
+				testingInstance.Fatalf("local Compose live acceptance ignored provider failure: %s", output)
+			}
+			if _, readError := os.ReadFile(composeDownPath); readError != nil {
+				testingInstance.Fatalf("local Compose live acceptance did not clean up: %v\n%s", readError, output)
+			}
+			for environmentPath, expectedOrigins := range map[string][]string{
+				filepath.Join(fixtureRoot, "configs", ".env.api.local"): {
+					"LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN=http://localhost:4179",
+					"LLM_PROXY_MANAGEMENT_API_ORIGIN=http://localhost:8080",
+				},
+				filepath.Join(fixtureRoot, "configs", ".env.tauth.local"): {
+					"LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN=http://localhost:4179",
+				},
+			} {
+				environmentBytes, environmentReadError := os.ReadFile(environmentPath)
+				if environmentReadError != nil {
+					testingInstance.Fatalf("read restored local environment %s: %v", environmentPath, environmentReadError)
+				}
+				for _, expectedOrigin := range expectedOrigins {
+					if !strings.Contains(string(environmentBytes), expectedOrigin) {
+						testingInstance.Fatalf("local Compose live acceptance did not restore %q in %s: %s", expectedOrigin, environmentPath, environmentBytes)
+					}
+				}
+			}
+			composeArguments, readError := os.ReadFile(composeArgumentsPath)
+			if readError != nil {
+				testingInstance.Fatalf("read local live Compose arguments: %v", readError)
+			}
+			for _, expectedFragment := range []string{
+				"--project-name llm-proxy-live-test",
+				"up --build --remove-orphans --wait",
+				"down --remove-orphans --volumes",
+			} {
+				if !strings.Contains(string(composeArguments), expectedFragment) {
+					testingInstance.Fatalf("local live Compose arguments omitted %q: %s", expectedFragment, composeArguments)
+				}
+			}
+			harnessArguments, readError := os.ReadFile(harnessCapture)
+			if readError != nil {
+				testingInstance.Fatalf("read local live harness arguments: %v", readError)
+			}
+			resolvedFixtureRoot, resolveError := filepath.EvalSymlinks(fixtureRoot)
+			if resolveError != nil {
+				testingInstance.Fatalf("resolve local live fixture root: %v", resolveError)
+			}
+			for _, expectedFragment := range []string{
+				"arguments=--existing-local-origin http://127.0.0.1:",
+				"origin_env=" + filepath.Join(resolvedFixtureRoot, "configs", ".env.api.local"),
+				"providers=openai",
+			} {
+				if !strings.Contains(string(harnessArguments), expectedFragment) {
+					testingInstance.Fatalf("local live harness omitted %q: %s", expectedFragment, harnessArguments)
+				}
+			}
+			artifactPathBytes, readError := os.ReadFile(artifactPathCapture)
+			if readError != nil {
+				testingInstance.Fatalf("read local live artifact path: %v", readError)
+			}
+			artifactPath := strings.TrimSpace(string(artifactPathBytes))
+			if _, statError := os.Stat(artifactPath); !os.IsNotExist(statError) {
+				testingInstance.Fatalf("local live acceptance retained temporary artifact %s: %v", artifactPath, statError)
+			}
+			if testCase.expectSuccess && !strings.Contains(string(output), "local Compose live-provider acceptance passed: providers=openai") {
+				testingInstance.Fatalf("local Compose live acceptance omitted success receipt: %s", output)
+			}
+		})
 	}
 }
 
@@ -1884,6 +2082,85 @@ func TestOperationalLiveHarnessVerifiesEachKeyBeforeItsSmokeRequest(testingInsta
 	assertOperationalProxyChildStopped(testingInstance, fixture.proxyPIDPath)
 }
 
+func TestOperationalLiveHarnessRoutesThroughExistingLocalOriginWithoutStartingProxy(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixture := newOperationalLiveHarnessFixture(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	environmentFile := filepath.Join(fixtureRoot, "live.env")
+	managementEnvironmentFile := filepath.Join(fixtureRoot, "management.env")
+	operationCapture := filepath.Join(fixtureRoot, "operations.log")
+	const providerKey = "test-existing-local-openai-key"
+	writeOperationalFile(testingInstance, environmentFile, "OPENAI_API_KEY="+providerKey+"\n", 0o600)
+	writeOperationalFile(testingInstance, managementEnvironmentFile, strings.Join([]string{
+		"LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY=existing-local-signing-key",
+		"LLM_PROXY_MANAGEMENT_JWT_ISSUER=tauth",
+		"LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME=existing_local_session",
+		"LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID=existing-local-tenant",
+	}, "\n")+"\n", 0o600)
+	localOrigin := "http://127.0.0.1:" + strconv.Itoa(operationalLoopbackPort(testingInstance))
+	command := exec.Command(
+		filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"),
+		"--existing-local-origin",
+		localOrigin,
+	)
+	command.Dir = repositoryRoot
+	command.Env = []string{
+		"PATH=" + fixture.toolDirectory + string(os.PathListSeparator) + os.Getenv("PATH"),
+		"GO=" + filepath.Join(fixture.toolDirectory, "go"),
+		"PROXY_PID_CAPTURE=" + fixture.proxyPIDPath,
+		"ALLOW_EXISTING_LOCAL_ORIGIN=true",
+		"LIVE_ENV_FILE=" + environmentFile,
+		"LLM_PROXY_LIVE_MANAGEMENT_ENV_FILE=" + managementEnvironmentFile,
+		"LLM_PROXY_LIVE_PROVIDERS=openai",
+		"LIVE_OPERATION_CAPTURE=" + operationCapture,
+	}
+	output, commandError := command.CombinedOutput()
+	if commandError != nil {
+		testingInstance.Fatalf("existing local-origin harness failed: %v\n%s", commandError, output)
+	}
+	if _, statError := os.Stat(fixture.proxyPIDPath); !os.IsNotExist(statError) {
+		testingInstance.Fatalf("existing local-origin harness started a host proxy: %v", statError)
+	}
+	outputText := string(output)
+	for _, expectedFragment := range []string{
+		"live provider verification passed: provider=openai model=gpt-4.1 status=200",
+		"live provider smoke passed: provider=openai model=omitted status=200",
+	} {
+		if !strings.Contains(outputText, expectedFragment) {
+			testingInstance.Fatalf("existing local-origin output omitted %q: %s", expectedFragment, outputText)
+		}
+	}
+	if strings.Contains(outputText, providerKey) || strings.Contains(outputText, "existing-local-signing-key") {
+		testingInstance.Fatalf("existing local-origin output exposed private values: %s", outputText)
+	}
+	captureBytes, readError := os.ReadFile(operationCapture)
+	if readError != nil {
+		testingInstance.Fatalf("read existing local-origin operation capture: %v", readError)
+	}
+	if !strings.Contains(string(captureBytes), localOrigin+"/api/management/tenants/tenant-live/provider-connections/openai") ||
+		!strings.Contains(string(captureBytes), localOrigin+"/v2?provider=openai") {
+		testingInstance.Fatalf("existing local-origin requests did not use %s: %s", localOrigin, captureBytes)
+	}
+}
+
+func TestOperationalLiveHarnessRejectsNonLoopbackExistingOrigin(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	command := exec.Command(
+		filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"),
+		"--existing-local-origin",
+		"https://llm-proxy-api.mprlab.com",
+	)
+	command.Dir = repositoryRoot
+	command.Env = []string{"PATH=" + os.Getenv("PATH")}
+	output, commandError := command.CombinedOutput()
+	if commandError == nil {
+		testingInstance.Fatalf("live harness accepted a non-loopback existing origin: %s", output)
+	}
+	if !strings.Contains(string(output), "--existing-local-origin must be an HTTP 127.0.0.1 origin with an explicit port") {
+		testingInstance.Fatalf("non-loopback origin failure was not specific: %s", output)
+	}
+}
+
 func TestOperationalLiveHarnessDiscoversCatalogOnlyProviderFields(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	fixture := newOperationalLiveHarnessFixture(testingInstance)
@@ -2263,7 +2540,7 @@ chmod +x "${output_path}"
 	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "curl"), `#!/usr/bin/env bash
 set -euo pipefail
 
-if [[ ! -f "${PROXY_PID_CAPTURE:?}" ]]; then
+if [[ ! -f "${PROXY_PID_CAPTURE:?}" && "${ALLOW_EXISTING_LOCAL_ORIGIN:-false}" != "true" ]]; then
   exit 1
 fi
 
@@ -2366,14 +2643,45 @@ with urllib.request.urlopen(request, timeout=5) as response:
     builtin printf '%s' 200
     ;;
   */v2?provider=*)
-    if [[ -n "${LIVE_OPERATION_CAPTURE:-}" ]]; then
-      builtin printf 'image %s %s\n' "${request_method}" "${request_url}" >>"${LIVE_OPERATION_CAPTURE}"
-      builtin printf 'image-payload ' >>"${LIVE_OPERATION_CAPTURE}"
-      command cat "${request_body_path}" >>"${LIVE_OPERATION_CAPTURE}"
-      builtin printf '\n' >>"${LIVE_OPERATION_CAPTURE}"
+    if [[ -n "${request_body_path}" ]]; then
+      if [[ -n "${LIVE_OPERATION_CAPTURE:-}" ]]; then
+        builtin printf 'image %s %s\n' "${request_method}" "${request_url}" >>"${LIVE_OPERATION_CAPTURE}"
+        builtin printf 'image-payload ' >>"${LIVE_OPERATION_CAPTURE}"
+        command cat "${request_body_path}" >>"${LIVE_OPERATION_CAPTURE}"
+        builtin printf '\n' >>"${LIVE_OPERATION_CAPTURE}"
+      fi
+      write_response_headers
+      builtin printf '%s' RED >"${output_path}"
+    else
+      if [[ -n "${PREFLIGHT_PROVIDER_URL:-}" ]]; then
+        python3 -c '
+import json
+import os
+import urllib.request
+
+payload = json.dumps({
+    "model": "gpt-4.1",
+    "input": "Reply with exactly OK and no punctuation.",
+}).encode("utf-8")
+request = urllib.request.Request(
+    os.environ["PREFLIGHT_PROVIDER_URL"] + "/responses",
+    data=payload,
+    headers={
+        "Authorization": "Bearer " + os.environ["PREFLIGHT_PROVIDER_API_KEY"],
+        "Content-Type": "application/json",
+    },
+    method="POST",
+)
+with urllib.request.urlopen(request, timeout=5) as response:
+    response.read()
+'
+      fi
+      if [[ -n "${LIVE_OPERATION_CAPTURE:-}" ]]; then
+        builtin printf 'smoke %s %s\n' "${request_method}" "${request_url}" >>"${LIVE_OPERATION_CAPTURE}"
+        builtin printf 'smoke-payload %s\n' "${request_body}" >>"${LIVE_OPERATION_CAPTURE}"
+      fi
+      builtin printf '%s' OK >"${output_path}"
     fi
-    write_response_headers
-    builtin printf '%s' RED >"${output_path}"
     builtin printf '%s' 200
     ;;
   *provider=*)
