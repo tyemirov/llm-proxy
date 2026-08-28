@@ -1028,9 +1028,9 @@ retain satisfied historical dependencies.
   - Run one registered Gemini matrix through the local Compose API.
   - Run `make ci` after the last application change.
   Resolution:
-  - Added an isolated `llm-proxy-live-test` project with allocated loopback
-    ports, temporary volumes, current-checkout image builds, and complete
-    cleanup after success or failure.
+  - Added isolated projects with the `llm-proxy-live-test-` prefix and a unique
+    random suffix. Each project uses allocated loopback ports, temporary
+    volumes, current-checkout image builds, and complete cleanup.
   - Added a local-origin mode that saves and verifies provider connections
     through the Dockerized management API before canonical `POST /v2` smoke
     requests. This mode does not start a host proxy process.
@@ -1039,6 +1039,16 @@ retain satisfied historical dependencies.
     these routes, so the matrix used the omitted-effort case for each model.
   - Proved that the test project retained no containers, networks, or volumes.
   - Passed `make ci` with all 11 gates and 100.0% Go statement coverage.
+  Review resolution:
+  - Cleared every catalog provider field before the filtered file reload.
+  - Made `LIVE_ENV_FILE` the only provider-value source when it is set.
+  - Preserved the scoped local management session during the filtered reload.
+  - Added black-box coverage for inherited keys and old Compose project state.
+  - A real Docker run ignored an invalid inherited Gemini key.
+  - The run authenticated locally and passed the first Gemini smoke request.
+  - It also passed `gemini-3.5-flash` verification before Google returned 429.
+  - Cleanup left no test containers, networks, or volumes.
+  - Passed the final `make ci` with all 11 gates and 100.0% coverage.
 
 - [ ] [I235] (P1) Add explicit model activation to the provider catalog.
   Goal:
