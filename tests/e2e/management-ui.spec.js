@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import {
   assertPublicDocumentShell,
+  LOOPAWARE_PIXEL_URL,
   PUBLIC_FOOTER_COMPACT_MAX_HEIGHT,
   renderLandingHeader,
   renderPublicHeader,
@@ -1314,6 +1315,7 @@ test("every public HTML page publishes its canonical MPR header and the identica
     expect(shell.header, publicPath).toBe(publicPath === "/" ? renderLandingHeader() : renderPublicHeader());
     expect(shell.footer, publicPath).toBe(canonicalFooter);
     expect(html, publicPath).toContain(`<link rel="stylesheet" href="${mprUICSSURL}">`);
+    expect(html, publicPath).toContain(`<script defer src="${LOOPAWARE_PIXEL_URL}"></script>`);
     expect(html, publicPath).toContain('<link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">');
     expect(html, publicPath).toContain(`<script src="${mprUIConfigURL}"></script>`);
     expect(html, publicPath).toContain(`data-mpr-ui-bundle-src="${mprUIBundleURL}"`);
