@@ -1303,7 +1303,9 @@ This repository exposes the standard local targets used by MPR app repos:
 
 Live provider smoke tests are intentionally not part of `make ci`; they call
 paid upstream APIs and depend on local or CI secret availability. The dynamic
-target discovers these provider keys after loading `LIVE_ENV_FILE`. It verifies
+target clears catalog provider fields before it loads `LIVE_ENV_FILE`. The
+file is the only provider-value source when it is set. The target discovers
+these provider keys after loading the file. It verifies
 each key against the provider's configured default model, or the exact model
 override below, before making that provider's smoke request. By default, the
 subsequent smoke omits `model` and proves that the newly saved managed provider
@@ -1313,10 +1315,11 @@ selected provider. The harness uses the validated public catalog and runs one
 verification and one explicit-model smoke request for each model.
 
 The local Compose live test uses the current `docker-compose.local.yml` file.
-It builds the API image from the current checkout. It uses the dedicated
-`llm-proxy-live-test` project, allocated loopback ports, and temporary
-management and TAuth volumes. The command verifies all local readiness
-boundaries before it saves a provider
+It builds the API image from the current checkout. Each project name starts
+with `llm-proxy-live-test-` and has a unique random suffix. The suffix prevents
+reuse of resources from an earlier run. The test uses allocated loopback ports
+and temporary management and TAuth volumes. The command verifies all local
+readiness boundaries before it saves a provider
 connection. Each text smoke uses canonical `POST /v2` through
 the allocated API origin. The harness does not start a host proxy process for
 this mode. Cleanup removes the test containers, network, volumes, and temporary
