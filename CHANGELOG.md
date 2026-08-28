@@ -4,7 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-- Added disposable local Compose acceptance for paid provider smoke requests.
+- Added disposable local Compose acceptance for paid provider smoke requests,
+  with file-only provider credentials and a unique project for each run.
 - Increase shared continuation budgets after zero-text output-limit responses.
   Cap each new budget at the catalog or platform integer limit.
 - **Breaking:** Gemini Interactions now rejects assistant history and returns a provider error for incomplete output without replay.
