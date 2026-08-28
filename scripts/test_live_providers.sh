@@ -86,6 +86,7 @@ listener.close()
 
 load_env_file() {
   local env_path="$1"
+  local allowed_names_path="${2:-}"
   local parsed_path="${TMP_DIR}/dotenv-values"
   command -v python3 >/dev/null 2>&1 || { echo "error: python3 is required to load LIVE_ENV_FILE" >&2; exit 1; }
   python3 -c '
@@ -95,6 +96,9 @@ import re
 import sys
 
 path = pathlib.Path(sys.argv[1])
+allowed_names = None
+if sys.argv[2]:
+    allowed_names = set(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8").splitlines())
 seen_names = set()
 for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
     line = raw_line.strip()
@@ -111,6 +115,8 @@ for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlin
     if name in seen_names:
         raise SystemExit(f"duplicate dotenv name: {path}:{line_number}: {name}")
     seen_names.add(name)
+    if allowed_names is not None and name not in allowed_names:
+        continue
     value = raw_value.strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {chr(39), chr(34)}:
         parsed_value = ast.literal_eval(value)
@@ -118,15 +124,12 @@ for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlin
             raise SystemExit(f"invalid dotenv value: {path}:{line_number}")
         value = parsed_value
     sys.stdout.buffer.write(name.encode("utf-8") + b"\0" + value.encode("utf-8") + b"\0")
-' "${env_path}" >"${parsed_path}"
+' "${env_path}" "${allowed_names_path}" >"${parsed_path}"
 
   local variable_name
   local variable_value
   while IFS= read -r -d '' variable_name; do
     IFS= read -r -d '' variable_value || { echo "error: invalid parsed dotenv output" >&2; exit 1; }
-    if declare -p "${variable_name}" >/dev/null 2>&1; then
-      continue
-    fi
     printf -v "${variable_name}" '%s' "${variable_value}"
     export "${variable_name}"
   done <"${parsed_path}"
@@ -331,6 +334,41 @@ for provider in providers:
         raise SystemExit(1)
     print(identifier)
 ' "${PROVIDER_DISCOVERY_PATH}"
+}
+
+catalog_provider_environment_names() {
+  python3 -c '
+import json
+import pathlib
+import sys
+
+discovery = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+providers = discovery.get("providers")
+if not isinstance(providers, list) or not providers:
+    raise SystemExit(1)
+environment_names = set()
+for provider in providers:
+    fields = provider.get("fields") if isinstance(provider, dict) else None
+    if not isinstance(fields, list) or not fields:
+        raise SystemExit(1)
+    for field in fields:
+        environment = field.get("environment") if isinstance(field, dict) else None
+        if not isinstance(environment, str) or not environment:
+            raise SystemExit(1)
+        environment_names.add(environment)
+print("\n".join(sorted(environment_names)))
+' "${PROVIDER_DISCOVERY_PATH}"
+}
+
+load_catalog_provider_environment() {
+  local environment_names_path="${TMP_DIR}/catalog-provider-environment-names"
+  local environment_name
+  catalog_provider_environment_names >"${environment_names_path}"
+  while IFS= read -r environment_name; do
+    [[ -n "${environment_name}" ]] || continue
+    unset "${environment_name}"
+  done <"${environment_names_path}"
+  load_env_file "${LIVE_ENV_FILE}" "${environment_names_path}"
 }
 
 discover_live_providers() {
@@ -1060,6 +1098,7 @@ trap 'exit 143' TERM
 
 if [[ -n "${LIVE_ENV_FILE:-}" ]]; then
   [[ -f "${LIVE_ENV_FILE}" ]] || { echo "error: LIVE_ENV_FILE not found: ${LIVE_ENV_FILE}" >&2; exit 1; }
+  LIVE_ENV_FILE="$(cd "$(dirname "${LIVE_ENV_FILE}")" && pwd)/$(basename "${LIVE_ENV_FILE}")"
   load_env_file "${LIVE_ENV_FILE}"
 fi
 
@@ -1079,6 +1118,12 @@ if [[ "${LIVE_REASONING_MATRIX}" != "true" && "${LIVE_REASONING_MATRIX}" != "fal
 fi
 LIVE_TIMEOUT="$(env_or_default LLM_PROXY_LIVE_TIMEOUT 45)"
 if [[ "${GEMINI_CANDIDATES_ONLY}" == "true" ]]; then
+  if [[ -n "${LIVE_ENV_FILE:-}" ]]; then
+    candidate_environment_names_path="${TMP_DIR}/candidate-provider-environment-names"
+    printf '%s\n' GEMINI_API_KEY >"${candidate_environment_names_path}"
+    unset GEMINI_API_KEY
+    load_env_file "${LIVE_ENV_FILE}" "${candidate_environment_names_path}"
+  fi
   LLM_PROXY_LIVE_REASONING_MATRIX="${LIVE_REASONING_MATRIX}" \
     LLM_PROXY_LIVE_TIMEOUT="${LIVE_TIMEOUT}" \
     "${ROOT_DIR}/scripts/test_live_gemini_candidates.sh"
@@ -1143,6 +1188,9 @@ GOEXPERIMENT= CGO_ENABLED=0 "${GO_BIN}" build -o "${BINARY_PATH}" ./cmd/cli
 if ! GOEXPERIMENT= "${BINARY_PATH}" --config "${CONFIG_PATH}" --provider-catalog-only >"${PROVIDER_DISCOVERY_PATH}"; then
   echo "error: live provider catalog discovery failed" >&2
   exit 1
+fi
+if [[ -n "${LIVE_ENV_FILE:-}" ]]; then
+  load_catalog_provider_environment
 fi
 if [[ "${PREFLIGHT_ONLY}" != "true" ]]; then
   discover_live_providers

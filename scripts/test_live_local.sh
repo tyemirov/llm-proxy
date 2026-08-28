@@ -22,13 +22,14 @@ fi
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_directory}/local_orchestration.sh"
 
-readonly live_compose_project="llm-proxy-live-test"
+readonly live_compose_project_prefix="llm-proxy-live-test"
 readonly local_environment_path="${LOCAL_ORCHESTRATION_REPOSITORY_ROOT}/configs/.env.local"
 readonly frontend_environment_path="${LOCAL_ORCHESTRATION_REPOSITORY_ROOT}/configs/.env.frontend.local"
 readonly api_environment_path="${LOCAL_ORCHESTRATION_REPOSITORY_ROOT}/configs/.env.api.local"
 readonly tauth_environment_path="${LOCAL_ORCHESTRATION_REPOSITORY_ROOT}/configs/.env.tauth.local"
 local_frontend_origin=""
 local_api_origin=""
+live_compose_project=""
 
 local_stack_started="0"
 local_environment_scoped="0"
@@ -112,11 +113,10 @@ command -v curl >/dev/null 2>&1 || fail "curl is required"
 command -v openssl >/dev/null 2>&1 || fail "openssl is required"
 command -v python3 >/dev/null 2>&1 || fail "python3 is required to allocate isolated host ports"
 
+live_compose_project="${live_compose_project_prefix}-$(openssl rand -hex 16)"
+
 if [[ -n "$(local_orchestration_compose_for_project "${LOCAL_ORCHESTRATION_COMPOSE_PROJECT}" ps --status running --services)" ]]; then
   fail "make up is already using the local HTTP ports"
-fi
-if [[ -n "$(local_orchestration_compose_for_project "${live_compose_project}" ps --all --quiet)" ]]; then
-  fail "the ${live_compose_project} Compose project already contains state"
 fi
 
 LLM_PROXY_LOCAL_FRONTEND_HOST_PORT="$(local_orchestration_allocate_loopback_port)"
