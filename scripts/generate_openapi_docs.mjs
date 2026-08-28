@@ -6,6 +6,7 @@ import { dirname } from "node:path";
 import { load } from "js-yaml";
 import {
   assertPublicDocumentShell,
+  LOOPAWARE_PIXEL_URL,
   renderPublicFooter,
   renderPublicHeader,
   renderPublicShellHeadAssets,
@@ -98,6 +99,7 @@ function renderDocument(document, sourceDigest, contractSource) {
     <meta name="openapi-source-sha256" content="${sourceDigest}">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
 ${renderPublicShellHeadAssets()}
+    <script defer src="${LOOPAWARE_PIXEL_URL}"></script>
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>

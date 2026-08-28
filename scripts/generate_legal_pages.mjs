@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import {
   assertPublicDocumentShell,
+  LOOPAWARE_PIXEL_URL,
   renderPublicFooter,
   renderPublicHeader,
   renderPublicShellHeadAssets,
@@ -206,7 +207,7 @@ function renderLegalPage(page) {
 ${renderPublicShellHeadAssets()}
     <link rel="stylesheet" href="/assets/llm-proxy/legal.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
+    <script defer src="${LOOPAWARE_PIXEL_URL}"></script>
   </head>
   <body class="legal-page">
     <a class="skip-link" href="#main-content">Skip to content</a>

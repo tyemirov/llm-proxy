@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { load } from "js-yaml";
 import {
   assertPublicDocumentShell,
+  LOOPAWARE_PIXEL_URL,
   renderPublicFooter,
   renderPublicHeader,
   renderPublicShellHeadAssets,
@@ -2399,7 +2400,7 @@ ${renderPublicShellHeadAssets()}
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
     ${input.jsonLd.map((schema) => `<script type="application/ld+json">${JSON.stringify(schema)}</script>`).join("\n    ")}
-    <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
+    <script defer src="${LOOPAWARE_PIXEL_URL}"></script>
   </head>
   <body class="${input.bodyClass}">
 ${input.body}
