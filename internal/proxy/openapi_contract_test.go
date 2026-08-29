@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/tyemirov/llm-proxy/internal/openapitest"
 	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 )
 
 func TestOpenAPIContractMatchesRegisteredOwnedRoutes(t *testing.T) {
@@ -99,7 +100,7 @@ func TestOpenAPIContractDocumentsActualAuthenticationBoundaries(t *testing.T) {
 	for _, operation := range operations {
 		expectedSecurity := [][]string{{"TAuthSession"}}
 		switch operation.Path {
-		case "/", "/v2", "/v2/requests", "/dictate", "/model/v1/assets", "/model/v1/assets/{asset_id}":
+		case "/", "/v2", llmproxycontract.TenantIdentityPath, "/v2/requests", "/dictate", "/model/v1/assets", "/model/v1/assets/{asset_id}":
 			expectedSecurity = [][]string{{"TenantClientKey"}}
 		case proxy.ManagementConfigUIPath, proxy.PublicCapabilitiesPath:
 			expectedSecurity = [][]string{}
@@ -329,6 +330,20 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 	var secret managementTenantSecretTestResponse
 	if decodeError := json.Unmarshal(secretResponse.Body.Bytes(), &secret); decodeError != nil {
 		t.Fatalf("decode tenant secret: %v", decodeError)
+	}
+
+	identityRequest := httptest.NewRequest(
+		http.MethodGet,
+		llmproxycontract.TenantIdentityPath+"?key="+url.QueryEscape(secret.Secret),
+		nil,
+	)
+	assertOpenAPIRequest(t, contract, llmproxycontract.TenantIdentityPath, identityRequest, nil)
+	identityResponse := httptest.NewRecorder()
+	router.ServeHTTP(identityResponse, identityRequest)
+	assertOpenAPIResponse(t, contract, llmproxycontract.TenantIdentityPath, http.MethodGet, identityResponse)
+	var identity tenantIdentityTestResponse
+	if decodeError := json.Unmarshal(identityResponse.Body.Bytes(), &identity); decodeError != nil || identity.TenantID != tenantID {
+		t.Fatalf("tenant identity=%+v want=%q error=%v", identity, tenantID, decodeError)
 	}
 
 	v2Body := []byte(`{"messages":[{"role":"user","content":"Validate this exchange."}],"model":"deepseek-v4-flash","web_search":false,"max_tokens":5}`)
