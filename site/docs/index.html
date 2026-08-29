@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="70257763b6ae80e71b86fa13cfaa91bbe32d19754ad368f972f88b7199c270e7">
+    <meta name="openapi-source-sha256" content="7694bd2d53e25ab16606e0741bbc2c9cfe50a56719967fd6d8693ae06fab6753">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="70257763b6ae80e71b86fa13cfaa91bbe32d19754ad368f972f88b7199c270e7">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="7694bd2d53e25ab16606e0741bbc2c9cfe50a56719967fd6d8693ae06fab6753">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>70257763b6ae80e71b86fa13cfaa91bbe32d19754ad368f972f88b7199c270e7</code></span>
+          <span>Source SHA-256 <code>7694bd2d53e25ab16606e0741bbc2c9cfe50a56719967fd6d8693ae06fab6753</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -2661,10 +2661,10 @@ components:
                   minimum: 100
                   maximum: 599
                 - type: &#39;null&#39;
-              description: Exact provider HTTP status when an upstream response was received; null for transport, request-construction, and response-protocol failures without a usable unsuccessful HTTP response.
+              description: Exact provider HTTP status when an upstream response was received. The value is null for transport, request-construction, and response-protocol failures without a usable unsuccessful HTTP response.
             retryable:
               type: boolean
-              description: True only for upstream HTTP 408, 425, 429, 500, 502, 503, or 504. This classifies the provider condition; clients remain responsible for duplicate-work and billing consequences before retrying.
+              description: True for upstream HTTP 408, 425, 429, 500, 502, 503, or 504. Failed Gemini Interactions use validated URI codes. The value is true only when each URI has a documented retryable final path segment. The retryable segments are aborted, api_error, deadline_exceeded, rate_limit_exceeded, service_unavailable, and too_many_requests. An empty list or unknown final path segment produces false. This value does not make a request idempotent or remove duplicate-work and billing risk.
             request_id:
               type: string
               minLength: 1
