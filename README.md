@@ -1492,12 +1492,20 @@ log correlation without printing the response body or tenant secret. A
 transport failure with no response prints no request ID. The command runs all
 nine cases before returning nonzero for any failed case.
 
-Set only the Default-tenant client secret before invoking it:
+Set the Default-tenant client secret and its exact tenant identifier before
+you invoke the target:
 
 ```shell
 export LLM_PROXY_SECRET='...'
+export LLM_PROXY_EXPECTED_TENANT_ID='managed-...'
 make live-test
 ```
+
+The target first calls authenticated `GET /v2/identity`. The server returns
+the tenant identifier that it resolved from the client secret. The target
+compares that value to `LLM_PROXY_EXPECTED_TENANT_ID`. It stops before any paid
+provider request if authentication fails or the tenant does not match. It does
+not store the client secret in a temporary file.
 
 This target is intentionally outside `make ci`: it has a real production cost
 and is expected to fail honestly for a disabled, rate-limited, or failing
