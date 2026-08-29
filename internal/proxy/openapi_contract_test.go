@@ -345,6 +345,37 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 	if decodeError := json.Unmarshal(identityResponse.Body.Bytes(), &identity); decodeError != nil || identity.TenantID != tenantID {
 		t.Fatalf("tenant identity=%+v want=%q error=%v", identity, tenantID, decodeError)
 	}
+	invalidIdentityRequests := []struct {
+		request *http.Request
+		body    []byte
+	}{
+		{
+			request: httptest.NewRequest(
+				http.MethodGet,
+				llmproxycontract.TenantIdentityPath+"?key="+url.QueryEscape(secret.Secret)+"&provider=openai",
+				nil,
+			),
+		},
+		{
+			request: httptest.NewRequest(
+				http.MethodGet,
+				llmproxycontract.TenantIdentityPath+"?key="+url.QueryEscape(secret.Secret),
+				strings.NewReader(`{}`),
+			),
+			body: []byte(`{}`),
+		},
+	}
+	for _, invalidIdentity := range invalidIdentityRequests {
+		if validationError := contract.ValidateRequest(llmproxycontract.TenantIdentityPath, invalidIdentity.request.Method, invalidIdentity.request, invalidIdentity.body); validationError == nil {
+			t.Fatal("invalid tenant identity request accepted by OpenAPI contract")
+		}
+		invalidIdentityResponse := httptest.NewRecorder()
+		router.ServeHTTP(invalidIdentityResponse, invalidIdentity.request)
+		assertOpenAPIResponse(t, contract, llmproxycontract.TenantIdentityPath, http.MethodGet, invalidIdentityResponse)
+		if invalidIdentityResponse.Code != http.StatusBadRequest {
+			t.Fatalf("invalid tenant identity status=%d body=%q", invalidIdentityResponse.Code, invalidIdentityResponse.Body.String())
+		}
+	}
 
 	v2Body := []byte(`{"messages":[{"role":"user","content":"Validate this exchange."}],"model":"deepseek-v4-flash","web_search":false,"max_tokens":5}`)
 	v2Request := httptest.NewRequest(

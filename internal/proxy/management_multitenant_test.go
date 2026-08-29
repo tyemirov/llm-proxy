@@ -224,6 +224,25 @@ func TestManagementTenantConfigurationSecretAndUsageIsolation(t *testing.T) {
 			t.Fatalf("tenant identity=%+v want=%q error=%v", identity, identityCase.tenantID, decodeError)
 		}
 	}
+	invalidIdentityRequests := []*http.Request{
+		httptest.NewRequest(
+			http.MethodGet,
+			llmproxycontract.TenantIdentityPath+"?key="+url.QueryEscape(firstSecret)+"&provider=openai",
+			nil,
+		),
+		httptest.NewRequest(
+			http.MethodGet,
+			llmproxycontract.TenantIdentityPath+"?key="+url.QueryEscape(firstSecret),
+			strings.NewReader(`{}`),
+		),
+	}
+	for _, invalidIdentityRequest := range invalidIdentityRequests {
+		identityResponse := httptest.NewRecorder()
+		router.ServeHTTP(identityResponse, invalidIdentityRequest)
+		if identityResponse.Code != http.StatusBadRequest || strings.TrimSpace(identityResponse.Body.String()) != "invalid tenant identity request" {
+			t.Fatalf("invalid tenant identity status=%d body=%q", identityResponse.Code, identityResponse.Body.String())
+		}
+	}
 	if len(upstreamCalls) != 0 {
 		t.Fatalf("identity requests reached upstream: %+v", upstreamCalls)
 	}
