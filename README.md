@@ -235,12 +235,15 @@ execution time or billing, and unclassified orchestration time must not be
 derived by subtracting phase totals from total latency.
 
 OpenAI create and poll observations and every provider-neutral continuation
-attempt emit `proxy provider progress` under the same request ID. The event
-contains canonical provider/model, `progress_kind`, an `attempt_count` or
-`poll_count`, normalized `provider_state` or `completion_signal`, `elapsed_ms`,
-`current_output_bytes`, and `accumulated_output_bytes`. It contains no provider
-resource ID, prompt, message, generated text, provider body, credential,
-cookie, or tenant secret. Phase fields remain structured-log-only and do not
+attempt emit `proxy provider progress` under the same request ID. These events
+contain canonical provider and model values, `progress_kind`, a count,
+`completion_signal`, and `elapsed_ms`. OpenAI progress also contains
+`provider_state`, `current_output_bytes`, and `accumulated_output_bytes`.
+Gemini create, poll, cancel, and delete operations use the same event. Gemini
+progress contains `provider_state` and validated `provider_error_codes` for a
+terminal fault. It does not contain a provider message or interaction ID. The
+event contains no prompt, message, generated text, provider body, credential,
+cookie, or tenant secret. Phase fields stay in structured logs. They do not
 extend responses, OpenAPI, bundled clients, or managed usage persistence.
 
 For managed tenants, the proxy writes and flushes the selected response before
@@ -482,14 +485,24 @@ Provider-specific details:
 * Gemini text requests use native `POST /interactions` against the configured
   `v1beta` base URL with `x-goog-api-key` and
   `Api-Revision: 2026-05-20`. Every configured Gemini 3.x route sends
-  `background: true` and `store: true`; its `queued` and `in_progress` states
-  are polled server-side. User messages become `user_input` steps. System
+  `background: true` and `store: true`. The proxy polls its `queued` and
+  `in_progress` states. User messages become `user_input` steps. System
   messages become the top-level `system_instruction`. Assistant history is
   invalid because the public request cannot carry provider interaction state or
   thought signatures. Only `completed` with visible model text succeeds.
-  `incomplete` returns a provider error after interaction deletion.
-  `failed`, `cancelled`, `budget_exceeded`, `requires_action`, malformed,
-  missing, and unknown states are safe upstream failures. Usage
+  `incomplete` returns a provider error after interaction deletion. A `failed`
+  response can include diagnostic errors. The adapter accepts each code only
+  when it is a canonical HTTPS URI of 2,048 characters or fewer. The URI must
+  contain a host and a clean path. It must not contain user information, a
+  query, a fragment, or an escaped path. The final path segment must be a
+  1-to-64-character `snake_case` value. The adapter discards each provider
+  message. A malformed URI is a response protocol failure. A failed
+  Interaction is retryable only when every URI has a retryable final path
+  segment. The retryable segments are `aborted`, `api_error`,
+  `deadline_exceeded`, `rate_limit_exceeded`, `service_unavailable`, and
+  `too_many_requests`. An empty list or an unknown segment fails closed.
+  `cancelled`, `requires_action`, malformed, missing, and unknown states are
+  safe upstream failures. Usage
   totals map from `total_input_tokens`, `total_output_tokens`, and
   `total_tokens`, preserving provider-counted thought tokens. For exact models
   whose catalog declares `media_inputs`, ordered image and audio attachments
@@ -2418,19 +2431,22 @@ Provider failures use one stable response shape:
 ```
 
 All six fields are present. `upstream_status` is the exact provider HTTP status,
-not the proxy status; it is `null` when no usable unsuccessful upstream HTTP
+not the proxy status. It is `null` when no usable unsuccessful upstream HTTP
 response exists. The proxy preserves upstream `429` as public `429` and maps
-other provider failures to public `502`. `retryable` is true only for upstream
-HTTP `408`, `425`, `429`, `500`, `502`, `503`, and `504`; it classifies the
-provider condition but does not make an LLM request idempotent or eliminate
-duplicate-work and billing risk. `retry_after` is `null` unless the provider
-supplied a valid delta-seconds or HTTP-date value, which the proxy normalizes
-and also returns in the standard `Retry-After` header.
+other provider failures to public `502`. `retryable` is true for upstream HTTP
+`408`, `425`, `429`, `500`, `502`, `503`, and `504`. It is also true for a
+failed Gemini Interaction when every URI code has a retryable final path
+segment. An unknown final segment sets `retryable` to false. The value
+classifies the provider condition. It does not make an LLM request idempotent
+or remove duplicate-work and billing risk. `retry_after` is `null` unless the
+provider supplied a valid delta-seconds or HTTP-date value. The proxy also
+returns that normalized value in the standard `Retry-After` header.
 
 `request_id` is generated by the proxy, returned in
 `X-LLM-Proxy-Request-ID`, and recorded in structured proxy logs. Provider
 failure responses and logs never include the provider's raw response body or
-error message.
+error message. For a failed Gemini Interaction, structured logs can include
+validated `provider_error_codes`. Public responses do not include these codes.
 
 ## Security
 
