@@ -270,15 +270,26 @@ client-side polling, durable provider-job queue, or later resume contract.
 Every Gemini text request uses `POST /interactions`, `x-goog-api-key`, and
 `Api-Revision: 2026-05-20`. The configured base URL is the `v1beta` API because
 that revision exposes the full configured model catalog. Gemini 3.x creates a
-stored background interaction; a nonblank interaction id is polled only while
+stored background interaction. A nonblank interaction ID is polled only while
 its status is `queued` or `in_progress`. `completed` with visible text is
-success, `incomplete` is the
-provider-neutral output-limit signal, and `failed`, `cancelled`,
-`budget_exceeded`, `requires_action`, malformed, missing, or unknown states
-fail closed. The newest nonempty usage snapshot replaces earlier observations
-for one interaction; input, output, and total counts are taken from
-`total_input_tokens`, `total_output_tokens`, and `total_tokens`, so
-provider-counted thought tokens remain represented. Active-resource cancel and
+success. `incomplete` is the provider-neutral output-limit signal. The adapter
+validates each `errors[].code` when it decodes an Interaction response. A code
+must be a canonical HTTPS URI of 2,048 characters or fewer. The URI must have a
+host and a clean path. User information, queries, fragments, and escaped paths
+are invalid. The final path segment must be a 1-to-64-character `snake_case`
+value. The adapter does not retain the provider message. A `failed` status
+produces one typed failure with its safe URI codes. The failure is retryable
+only when every URI has a retryable final path segment. The retryable segments
+are `aborted`, `api_error`, `deadline_exceeded`, `rate_limit_exceeded`,
+`service_unavailable`, and `too_many_requests`. An empty list or an unknown
+segment fails closed. The proxy does not derive an upstream HTTP status from
+these codes. A malformed URI is a response protocol failure. `cancelled`,
+`requires_action`, malformed, missing, or unknown states also fail closed. The
+newest nonempty usage snapshot replaces earlier observations for one
+interaction. Input, output, and total counts come from `total_input_tokens`,
+`total_output_tokens`, and `total_tokens`. Provider-counted thought tokens
+remain represented.
+Active-resource cancel and
 delete operations use independent bounded contexts, so cancel exhaustion cannot
 prevent the delete request from starting.
 
@@ -544,18 +555,23 @@ phase. These values describe only proxy-observed boundaries; they are neither
 provider execution/billing measurements nor a basis for inferring unclassified
 time by subtraction.
 
-The `proxy provider progress` event records each OpenAI create/poll observation
-and each provider-neutral continuation attempt under the same request id. It
-uses an attempt or poll count, normalized provider state or completion signal,
-elapsed milliseconds, current output bytes, and accumulated output bytes.
-Every visibility error that starts a catalog-declared retry uses `pending`.
+The `proxy provider progress` event records each OpenAI create/poll observation,
+each Gemini lifecycle operation, and each provider-neutral continuation attempt.
+All events use the same request ID. They use an attempt or poll count, a
+completion signal, and elapsed milliseconds. OpenAI events also include the
+provider state, current output bytes, and accumulated output bytes. Gemini
+events use `gemini_create`, `gemini_poll`, `gemini_cancel`, or `gemini_delete`.
+They include the provider state and safe `provider_error_codes` when present.
+This operation field distinguishes a terminal Interaction fault from a cleanup
+fault. Every visibility error that starts a catalog-declared retry uses `pending`.
 An undeclared visibility error or the error that exhausts the retry limit uses
 `failure` because it stops the lifecycle.
-Progress and terminal events never include provider resource ids, prompts,
-messages, generated text, provider bodies, credentials, cookies, or tenant
-secrets. The telemetry stays in structured logs; managed usage persistence,
-public response/OpenAPI contracts, and bundled clients retain their existing
-shapes.
+Gemini provider failure logs can include validated error code URIs. Public error
+responses retain their provider-neutral six-field shape. Progress and terminal
+events never include provider resource IDs, prompts, messages, generated text,
+provider bodies, credentials, cookies, or tenant secrets. The telemetry stays
+in structured logs. Managed usage persistence, public response contracts,
+OpenAPI contracts, and bundled clients retain their existing shapes.
 
 The live-provider harness parses `LIVE_ENV_FILE` as dotenv data without shell
 execution. It clears every catalog provider field before it loads the file.

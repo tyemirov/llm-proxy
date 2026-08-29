@@ -2598,10 +2598,10 @@ components:
                   minimum: 100
                   maximum: 599
                 - type: 'null'
-              description: Exact provider HTTP status when an upstream response was received; null for transport, request-construction, and response-protocol failures without a usable unsuccessful HTTP response.
+              description: Exact provider HTTP status when an upstream response was received. The value is null for transport, request-construction, and response-protocol failures without a usable unsuccessful HTTP response.
             retryable:
               type: boolean
-              description: True only for upstream HTTP 408, 425, 429, 500, 502, 503, or 504. This classifies the provider condition; clients remain responsible for duplicate-work and billing consequences before retrying.
+              description: True for upstream HTTP 408, 425, 429, 500, 502, 503, or 504. Failed Gemini Interactions use validated URI codes. The value is true only when each URI has a documented retryable final path segment. The retryable segments are aborted, api_error, deadline_exceeded, rate_limit_exceeded, service_unavailable, and too_many_requests. An empty list or unknown final path segment produces false. This value does not make a request idempotent or remove duplicate-work and billing risk.
             request_id:
               type: string
               minLength: 1
