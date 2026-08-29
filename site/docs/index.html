@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="8e9aa590981d960829c6f8d270ca434e8bc981046290b2b771c492181ce8908b">
+    <meta name="openapi-source-sha256" content="f80084c1516ab6701b39ceeebdfcd07130a6a4953e0b5187c6a3fe6d97f64533">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="8e9aa590981d960829c6f8d270ca434e8bc981046290b2b771c492181ce8908b">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="f80084c1516ab6701b39ceeebdfcd07130a6a4953e0b5187c6a3fe6d97f64533">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>8e9aa590981d960829c6f8d270ca434e8bc981046290b2b771c492181ce8908b</code></span>
+          <span>Source SHA-256 <code>f80084c1516ab6701b39ceeebdfcd07130a6a4953e0b5187c6a3fe6d97f64533</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -235,6 +235,27 @@ paths:
           $ref: &#39;#/components/responses/ProxyTimeout&#39;
         &#39;500&#39;:
           $ref: &#39;#/components/responses/V2InternalFailure&#39;
+  /v2/identity:
+    get:
+      operationId: getTenantIdentity
+      summary: Read the authenticated tenant identity
+      description: &gt;-
+        Returns the server-resolved tenant identifier for the supplied tenant
+        client key. This operation never dispatches provider work. A successful
+        response sets Cache-Control to no-store.
+      tags:
+        - Proxy
+      security:
+        - TenantClientKey: []
+      parameters:
+        - $ref: &#39;#/components/parameters/TenantClientKey&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/TenantIdentitySuccess&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ProxyForbidden&#39;
+        &#39;499&#39;:
+          $ref: &#39;#/components/responses/CallerClosed&#39;
   /v2/requests:
     get:
       operationId: getV2StructuredRequest
@@ -1162,6 +1183,15 @@ components:
           schema:
             type: string
             const: unknown client key
+    TenantIdentitySuccess:
+      description: Server-resolved identity for the authenticated tenant.
+      headers:
+        Cache-Control:
+          $ref: &#39;#/components/headers/NoStore&#39;
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/TenantIdentity&#39;
     ProxyPayloadTooLarge:
       description: The compatibility JSON request limit, dictation audio limit, tenant asset limit, or selected provider media limit was exceeded.
       headers:
@@ -2736,6 +2766,15 @@ components:
           type: string
         is_admin:
           type: boolean
+    TenantIdentity:
+      type: object
+      additionalProperties: false
+      required:
+        - tenant_id
+      properties:
+        tenant_id:
+          type: string
+          minLength: 1
     TenantSummary:
       type: object
       additionalProperties: false
@@ -3426,6 +3465,7 @@ components:
 <a href="#operation-uploadTenantAsset"><span class="api-method api-method-post">POST</span><code>/model/v1/assets</code><span>Upload exact tenant media bytes</span></a>
 <a href="#operation-deleteTenantAsset"><span class="api-method api-method-delete">DELETE</span><code>/model/v1/assets/{asset_id}</code><span>Delete one tenant asset</span></a>
 <a href="#operation-postV2Messages"><span class="api-method api-method-post">POST</span><code>/v2</code><span>Generate text from canonical messages</span></a>
+<a href="#operation-getTenantIdentity"><span class="api-method api-method-get">GET</span><code>/v2/identity</code><span>Read the authenticated tenant identity</span></a>
 <a href="#operation-getV2StructuredRequest"><span class="api-method api-method-get">GET</span><code>/v2/requests</code><span>Reconcile a durable structured-output request</span></a>
         </div>
       </section>
@@ -4423,6 +4463,41 @@ components:
 <tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. The response contains only sanitized provider metadata and never exposes partial generated text, token-count headers, a raw provider body, or a provider error message; provider-reported usage can still be retained in managed failure accounting.</td></tr>
 <tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected provider is not configured or the bounded request queue is full.</td></tr>
 <tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getTenantIdentity">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/v2/identity</code>
+          <span class="api-operation-id">getTenantIdentity</span>
+        </header>
+        <h2>Read the authenticated tenant identity</h2>
+        <p>Returns the server-resolved tenant identifier for the supplied tenant client key. This operation never dispatches provider work. A successful response sets Cache-Control to no-store.</p>
+        <p class="api-security"><strong>Authentication:</strong> TenantClientKey (query key)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>key</code></td><td>query</td><td>Yes</td><td>string</td><td>Tenant client secret.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Server-resolved identity for the authenticated tenant.</td></tr>
+<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
               </tbody>
             </table>
           </div>
