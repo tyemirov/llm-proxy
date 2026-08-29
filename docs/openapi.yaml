@@ -172,6 +172,29 @@ paths:
           $ref: '#/components/responses/ProxyTimeout'
         '500':
           $ref: '#/components/responses/V2InternalFailure'
+  /v2/identity:
+    get:
+      operationId: getTenantIdentity
+      summary: Read the authenticated tenant identity
+      description: >-
+        Returns the server-resolved tenant identifier for the supplied tenant
+        client key. This operation never dispatches provider work. A successful
+        response sets Cache-Control to no-store.
+      tags:
+        - Proxy
+      security:
+        - TenantClientKey: []
+      parameters:
+        - $ref: '#/components/parameters/TenantClientKey'
+      responses:
+        '200':
+          $ref: '#/components/responses/TenantIdentitySuccess'
+        '400':
+          $ref: '#/components/responses/ProxyBadRequest'
+        '403':
+          $ref: '#/components/responses/ProxyForbidden'
+        '499':
+          $ref: '#/components/responses/CallerClosed'
   /v2/requests:
     get:
       operationId: getV2StructuredRequest
@@ -1099,6 +1122,15 @@ components:
           schema:
             type: string
             const: unknown client key
+    TenantIdentitySuccess:
+      description: Server-resolved identity for the authenticated tenant.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/TenantIdentity'
     ProxyPayloadTooLarge:
       description: The compatibility JSON request limit, dictation audio limit, tenant asset limit, or selected provider media limit was exceeded.
       headers:
@@ -2673,6 +2705,15 @@ components:
           type: string
         is_admin:
           type: boolean
+    TenantIdentity:
+      type: object
+      additionalProperties: false
+      required:
+        - tenant_id
+      properties:
+        tenant_id:
+          type: string
+          minLength: 1
     TenantSummary:
       type: object
       additionalProperties: false

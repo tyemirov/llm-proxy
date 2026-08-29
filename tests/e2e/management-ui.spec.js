@@ -1543,7 +1543,7 @@ test("site publishes the exact canonical OpenAPI artifact and its derived refere
   expect(documentationHTML).not.toContain('id="operation-deleteManagementTenantSecret"');
   expect(documentationHTML).toContain("<code>reasoning_effort</code>");
   expect(documentationHTML).toContain(`href="${openAPIPath}"`);
-  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(24);
+  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(25);
 });
 
 test("OpenAPI reference views and downloads the exact canonical YAML", async ({ page }) => {

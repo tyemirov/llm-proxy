@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Added an authenticated tenant identity endpoint and require an exact tenant
+  match before the paid production provider matrix starts.
 - Added disposable local Compose acceptance for paid provider smoke requests,
   with file-only provider credentials and a unique project for each run.
 - Increase shared continuation budgets after zero-text output-limit responses.

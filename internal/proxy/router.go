@@ -138,6 +138,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	router.GET(rootPath, rootProxyHandler)
 	router.POST(rootPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, chatJSONHandler(upstreamProviders, providers, configuration.MaxPromptBytes, managedTenants, structuredLogger))))
 	router.POST(v2Path, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, chatV2JSONHandler(upstreamProviders, providers, maximumV2RequestBytes(configuration.MaxPromptBytes, configuration.ModelCatalog), assetStore, structuredRequests, managedTenants, structuredLogger))))
+	router.GET(llmproxycontract.TenantIdentityPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, tenantIdentityHandler()))
 	router.GET(llmproxycontract.StructuredRequestPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, structuredRequestStatusHandler(structuredRequests)))
 	router.POST(llmproxycontract.AssetPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, tenantAssetUploadHandler(assetStore))))
 	router.DELETE(llmproxycontract.AssetPath+"/:asset_id", tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, tenantAssetDeleteHandler(assetStore)))

@@ -47,6 +47,7 @@ const (
 
 	errorMissingPrompt          = "missing prompt parameter"
 	errorInvalidJSONRequest     = "invalid JSON request"
+	errorInvalidIdentityRequest = "invalid tenant identity request"
 	errorInvalidWebSearch       = "invalid web_search parameter"
 	errorInvalidMaxTokens       = "invalid max_tokens parameter"
 	errorInvalidReasoningEffort = "invalid reasoning_effort parameter"

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 )
 
 type managementAccountTestResponse struct {
@@ -37,6 +38,10 @@ type managementTenantUsageTestResponse struct {
 	Totals struct {
 		Requests int `json:"requests"`
 	} `json:"totals"`
+}
+
+type tenantIdentityTestResponse struct {
+	TenantID string `json:"tenant_id"`
 }
 
 func TestManagementTenantLifecycleAndIsolation(t *testing.T) {
@@ -197,6 +202,50 @@ func TestManagementTenantConfigurationSecretAndUsageIsolation(t *testing.T) {
 
 	firstSecret := generateManagementTenantSecret(t, router, ownerCookie, firstTenantID)
 	secondSecret := generateManagementTenantSecret(t, router, ownerCookie, secondTenantID)
+	for _, identityCase := range []struct {
+		secret   string
+		tenantID string
+	}{
+		{secret: firstSecret, tenantID: firstTenantID},
+		{secret: secondSecret, tenantID: secondTenantID},
+	} {
+		identityResponse := httptest.NewRecorder()
+		identityRequest := httptest.NewRequest(
+			http.MethodGet,
+			llmproxycontract.TenantIdentityPath+"?key="+url.QueryEscape(identityCase.secret),
+			nil,
+		)
+		router.ServeHTTP(identityResponse, identityRequest)
+		if identityResponse.Code != http.StatusOK || identityResponse.Header().Get("Cache-Control") != "no-store" {
+			t.Fatalf("tenant identity status=%d cache_control=%q body=%q", identityResponse.Code, identityResponse.Header().Get("Cache-Control"), identityResponse.Body.String())
+		}
+		var identity tenantIdentityTestResponse
+		if decodeError := json.Unmarshal(identityResponse.Body.Bytes(), &identity); decodeError != nil || identity.TenantID != identityCase.tenantID {
+			t.Fatalf("tenant identity=%+v want=%q error=%v", identity, identityCase.tenantID, decodeError)
+		}
+	}
+	invalidIdentityRequests := []*http.Request{
+		httptest.NewRequest(
+			http.MethodGet,
+			llmproxycontract.TenantIdentityPath+"?key="+url.QueryEscape(firstSecret)+"&provider=openai",
+			nil,
+		),
+		httptest.NewRequest(
+			http.MethodGet,
+			llmproxycontract.TenantIdentityPath+"?key="+url.QueryEscape(firstSecret),
+			strings.NewReader(`{}`),
+		),
+	}
+	for _, invalidIdentityRequest := range invalidIdentityRequests {
+		identityResponse := httptest.NewRecorder()
+		router.ServeHTTP(identityResponse, invalidIdentityRequest)
+		if identityResponse.Code != http.StatusBadRequest || strings.TrimSpace(identityResponse.Body.String()) != "invalid tenant identity request" {
+			t.Fatalf("invalid tenant identity status=%d body=%q", identityResponse.Code, identityResponse.Body.String())
+		}
+	}
+	if len(upstreamCalls) != 0 {
+		t.Fatalf("identity requests reached upstream: %+v", upstreamCalls)
+	}
 	for _, secret := range []string{firstSecret, secondSecret} {
 		values := url.Values{"key": {secret}, "prompt": {"hello"}}
 		response := httptest.NewRecorder()

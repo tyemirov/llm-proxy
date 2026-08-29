@@ -2,6 +2,8 @@
 set -euo pipefail
 
 readonly PRODUCTION_API_ORIGIN="https://llm-proxy-api.mprlab.com"
+readonly TENANT_IDENTITY_PATH="/v2/identity"
+readonly TEXT_PATH="/v2"
 readonly ECHO_REQUEST_TIMEOUT_SECONDS=90
 readonly ECHO_CURL_TIMEOUT_SECONDS=120
 readonly LONG_COMPLETION_REQUEST_TIMEOUT_SECONDS=900
@@ -22,7 +24,8 @@ usage() {
     'Usage: make live-test' \
     '' \
     'Runs paid production requests against the Default tenant at https://llm-proxy-api.mprlab.com.' \
-    'Requires only LLM_PROXY_SECRET, the Default-tenant client secret.' \
+    'Requires LLM_PROXY_SECRET, the Default-tenant client secret.' \
+    'Requires LLM_PROXY_EXPECTED_TENANT_ID, the exact Default-tenant identifier.' \
     'It never loads dotenv files or local upstream-provider credentials.' \
     '' \
     'The command first validates managed client-key retrieval without calling a provider.' \
@@ -103,63 +106,100 @@ print(json.dumps(payload, separators=(",", ":")))
 }
 
 write_curl_config() {
-  local provider_identifier="$1"
-  local model_identifier="$2"
-  local curl_config_path="$3"
+  local request_path="$1"
+  local provider_identifier="$2"
+  local model_identifier="$3"
+  local provider_query=""
   local model_query=""
+  if [[ -n "${provider_identifier}" ]]; then
+    provider_query="&provider=${provider_identifier}&format=text%2Fplain"
+  fi
   if [[ -n "${model_identifier}" ]]; then
     model_query="&model=${model_identifier}"
   fi
-  builtin printf 'url = "%s/v2?provider=%s&format=text%%2Fplain&key=%s%s"\n' \
+  builtin printf 'url = "%s%s?key=%s%s%s"\n' \
     "${PRODUCTION_API_ORIGIN}" \
-    "${provider_identifier}" \
+    "${request_path}" \
     "${ENCODED_TENANT_SECRET}" \
-    "${model_query}" >"${curl_config_path}"
+    "${provider_query}" \
+    "${model_query}"
 }
 
-run_client_authentication_preflight() {
-  local curl_config_path="${TEMPORARY_DIRECTORY}/client-authentication.curl"
-  local headers_path="${TEMPORARY_DIRECTORY}/client-authentication.headers"
-  local response_path="${TEMPORARY_DIRECTORY}/client-authentication.response"
+run_tenant_identity_preflight() {
+  local headers_path="${TEMPORARY_DIRECTORY}/tenant-identity.headers"
+  local response_path="${TEMPORARY_DIRECTORY}/tenant-identity.response"
   local http_status=""
   local response_bytes
   local response_request_id=""
+  local identity_status=0
 
-  builtin printf 'url = "%s/v2?key=%s"\n' \
-    "${PRODUCTION_API_ORIGIN}" \
-    "${ENCODED_TENANT_SECRET}" >"${curl_config_path}"
   if ! http_status="$(
-    printf '%s' '{}' | curl \
+    curl \
       --silent \
       --show-error \
-      --config "${curl_config_path}" \
-      --request POST \
-      --header 'Content-Type: application/json' \
+      --config <(write_curl_config "${TENANT_IDENTITY_PATH}" "" "") \
+      --request GET \
       --connect-timeout "${CURL_CONNECT_TIMEOUT_SECONDS}" \
       --max-time "${ECHO_CURL_TIMEOUT_SECONDS}" \
       --dump-header "${headers_path}" \
       --output "${response_path}" \
-      --write-out '%{http_code}' \
-      --data-binary @-
+      --write-out '%{http_code}' </dev/null
   )"; then
     response_bytes="$(response_size "${response_path}")"
-    builtin printf 'live test preflight failed: client_key=transport_error response_bytes=%s\n' "${response_bytes}" >&2
+    builtin printf 'live test identity preflight failed: client_key=transport_error response_bytes=%s\n' "${response_bytes}" >&2
     return 1
   fi
 
   response_bytes="$(response_size "${response_path}")"
   if ! response_request_id="$(validated_response_request_id "${headers_path}")"; then
-    builtin printf 'live test preflight failed: client_key=unconfirmed status=%s response_bytes=%s invalid_request_id_header\n' \
+    builtin printf 'live test identity preflight failed: client_key=unconfirmed status=%s response_bytes=%s invalid_request_id_header\n' \
       "${http_status}" "${response_bytes}" >&2
     return 1
   fi
-  if [[ "${http_status}" != '400' ]]; then
-    builtin printf 'live test preflight failed: client_key=rejected status=%s response_bytes=%s request_id=%s\n' \
+  if [[ "${http_status}" != '200' ]]; then
+    builtin printf 'live test identity preflight failed: client_key=rejected status=%s response_bytes=%s request_id=%s\n' \
       "${http_status}" "${response_bytes}" "${response_request_id}" >&2
     return 1
   fi
 
-  builtin printf 'live test preflight passed: client_key=authenticated status=%s response_bytes=%s request_id=%s\n' \
+  if python3 -c '
+import json
+import pathlib
+import sys
+
+try:
+    payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+except (OSError, UnicodeError, json.JSONDecodeError):
+    raise SystemExit(2)
+if not isinstance(payload, dict) or set(payload) != {"tenant_id"} or not isinstance(payload["tenant_id"], str):
+    raise SystemExit(2)
+if payload["tenant_id"] != sys.argv[2]:
+    raise SystemExit(3)
+' "${response_path}" "${LLM_PROXY_EXPECTED_TENANT_ID}"
+  then
+    identity_status=0
+  else
+    identity_status=$?
+  fi
+  case "${identity_status}" in
+    0)
+      ;;
+    2)
+      builtin printf 'live test identity preflight failed: client_key=unconfirmed status=%s response_bytes=%s request_id=%s invalid_identity_response\n' \
+        "${http_status}" "${response_bytes}" "${response_request_id}" >&2
+      return 1
+      ;;
+    3)
+      builtin printf 'live test identity preflight failed: client_key=unexpected_tenant status=%s response_bytes=%s request_id=%s\n' \
+        "${http_status}" "${response_bytes}" "${response_request_id}" >&2
+      return 1
+      ;;
+    *)
+      fail 'tenant identity validation failed'
+      ;;
+  esac
+
+  builtin printf 'live test identity preflight passed: tenant=expected status=%s response_bytes=%s request_id=%s\n' \
     "${http_status}" "${response_bytes}" "${response_request_id}"
 }
 
@@ -207,19 +247,17 @@ run_live_case() {
   local request_timeout_seconds="$5"
   local curl_timeout_seconds="$6"
   local model_identifier="$7"
-  local curl_config_path="${TEMPORARY_DIRECTORY}/${case_identifier}.curl"
   local headers_path="${TEMPORARY_DIRECTORY}/${case_identifier}.headers"
   local response_path="${TEMPORARY_DIRECTORY}/${case_identifier}.response"
   local http_status=""
   local response_bytes
   local response_request_id=""
 
-  write_curl_config "${provider_identifier}" "${model_identifier}" "${curl_config_path}"
   if ! http_status="$(
     printf '%s' "${request_body}" | curl \
       --silent \
       --show-error \
-      --config "${curl_config_path}" \
+      --config <(write_curl_config "${TEXT_PATH}" "${provider_identifier}" "${model_identifier}") \
       --request POST \
       --header 'Content-Type: application/json' \
       --header "X-LLM-Proxy-Request-Timeout-Seconds: ${request_timeout_seconds}" \
@@ -278,6 +316,9 @@ fi
 if [[ -z "${LLM_PROXY_SECRET:-}" ]]; then
   fail 'LLM_PROXY_SECRET must contain the Default-tenant client secret'
 fi
+if [[ -z "${LLM_PROXY_EXPECTED_TENANT_ID:-}" ]]; then
+  fail 'LLM_PROXY_EXPECTED_TENANT_ID must contain the Default-tenant identifier'
+fi
 command -v curl >/dev/null 2>&1 || fail 'curl is required for make live-test'
 command -v python3 >/dev/null 2>&1 || fail 'python3 is required for make live-test'
 
@@ -286,7 +327,7 @@ TEMPORARY_DIRECTORY="$(mktemp -d)"
 trap cleanup EXIT HUP INT TERM
 ENCODED_TENANT_SECRET="$(encode_tenant_secret)"
 
-run_client_authentication_preflight || exit 1
+run_tenant_identity_preflight || exit 1
 
 echo_request_body="$(build_echo_request)"
 long_completion_request_body="$(build_long_completion_request)"
