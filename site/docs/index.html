@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="f80084c1516ab6701b39ceeebdfcd07130a6a4953e0b5187c6a3fe6d97f64533">
+    <meta name="openapi-source-sha256" content="70257763b6ae80e71b86fa13cfaa91bbe32d19754ad368f972f88b7199c270e7">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="f80084c1516ab6701b39ceeebdfcd07130a6a4953e0b5187c6a3fe6d97f64533">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="70257763b6ae80e71b86fa13cfaa91bbe32d19754ad368f972f88b7199c270e7">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>f80084c1516ab6701b39ceeebdfcd07130a6a4953e0b5187c6a3fe6d97f64533</code></span>
+          <span>Source SHA-256 <code>70257763b6ae80e71b86fa13cfaa91bbe32d19754ad368f972f88b7199c270e7</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -252,6 +252,8 @@ paths:
       responses:
         &#39;200&#39;:
           $ref: &#39;#/components/responses/TenantIdentitySuccess&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/ProxyBadRequest&#39;
         &#39;403&#39;:
           $ref: &#39;#/components/responses/ProxyForbidden&#39;
         &#39;499&#39;:
@@ -4496,6 +4498,7 @@ components:
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Server-resolved identity for the authenticated tenant.</td></tr>
+<tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
 <tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
               </tbody>
