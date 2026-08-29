@@ -189,6 +189,8 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/TenantIdentitySuccess'
+        '400':
+          $ref: '#/components/responses/ProxyBadRequest'
         '403':
           $ref: '#/components/responses/ProxyForbidden'
         '499':
