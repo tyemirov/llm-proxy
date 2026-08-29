@@ -599,13 +599,15 @@ marker, and one valid proxy request identifier. The paid media mode remains
 outside `make ci`. `LLM_PROXY_LIVE_ALL_MODELS=true` expands media mode to
 every image route for each selected provider, including all four Kimi routes.
 
-`make live-test` is deliberately a different boundary: it calls only the
-production API origin with `LLM_PROXY_SECRET`, the Default tenant client
-secret. It never loads a dotenv file or local provider credential. The command
-first sends an intentionally incomplete `POST /v2` request. The client key must
-reach normal request validation and return `400` with a proxy request ID. A
-missing, rejected, or unreachable client key stops the command before any paid
-provider call. The command then uses canonical `POST /v2` calls with explicit
+`make live-test` is deliberately a different boundary. It calls only the
+production API origin. It requires `LLM_PROXY_SECRET`, the Default tenant
+client secret, and `LLM_PROXY_EXPECTED_TENANT_ID`, the exact Default tenant
+identifier. It never loads a dotenv file or local provider credential. The
+command first calls authenticated `GET /v2/identity`. It compares the returned
+server-resolved tenant identifier to the expected tenant identifier. A
+missing, rejected, unreachable, or unexpected tenant stops the command before
+any paid provider call. The command does not store the client secret in a
+temporary file. It then uses canonical `POST /v2` calls with explicit
 OpenAI, Anthropic, Meta, Gemini, and Moonshot providers. Requests have no
 explicit model, so managed production provider settings remain authoritative.
 Five echo-marker requests verify those routes. Matching deterministic requests
