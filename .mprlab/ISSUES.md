@@ -25,6 +25,74 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [ ] [B160] (P1) Reject a production live test for an unexpected tenant.
+  Goal:
+  `make live-test` must prove the expected production tenant identity before it
+  sends paid provider requests.
+  Evidence:
+  - The command states that `LLM_PROXY_SECRET` is the Default tenant client
+    secret.
+  - `run_client_authentication_preflight` accepts HTTP `400` from an invalid
+    request body as sufficient client authentication proof.
+  - The preflight does not verify the tenant identity that the client secret
+    selects.
+  - The 2026-08-29 production run used tenant
+    `managed-df47df8e2b434a62b0b1c5e1ca619f11`.
+  - The production database identifies that tenant as `Social Threader`.
+  - That tenant has OpenAI, Anthropic, and Meta provider connections. It does
+    not have Gemini or Moonshot provider connections.
+  - The Gemini and Moonshot requests returned HTTP `503` before provider
+    execution. Their usage records contain `service_unavailable`.
+  - The management interface loaded the Default tenant
+    `managed-60634d2470f31557462f52e319f07d07`.
+  - The Default tenant has saved Gemini and Moonshot provider connections.
+    Their provider profiles select `gemini-3.5-flash` and `kimi-k3`.
+  - The failed Moonshot request selected the catalog default `kimi-k2.6`. This
+    selection confirms that the request did not load the Default profile.
+  - `managedTenantStore.authenticate` finds one tenant by the presented secret
+    digest. The database query loads provider connections and profiles for each
+    request.
+  - `saveProviderConnectionsHandler` verifies a changed connection before
+    persistence. It saves the connection under the tenant identifier in the
+    management URL.
+  - The evidence disproves a missing-key, failed-persistence, decryption, or
+    stale-cache diagnosis for the Default tenant.
+  Requirements:
+  - Require one canonical expected tenant identifier for each production
+    live-test invocation.
+  - Compare the server-resolved tenant identifier with the expected identifier
+    before provider traffic.
+  - Stop the command before paid provider traffic when the identifiers differ.
+  - Do not use request validation as tenant identity proof.
+  - Do not put client secrets or provider credentials in output or stored
+    files.
+  - Preserve the unchanged provider matrix and request bodies after identity
+    verification.
+  - Do not rotate or save provider credentials as part of this repair.
+  - Keep B128 provider lifecycle work independent from this tenant identity
+    defect.
+  Deliverables:
+  - Add a server-owned authenticated identity contract for a tenant client
+    secret.
+  - Bind `scripts/live_test.sh` to the expected tenant identifier through that
+    contract.
+  - Add public black-box coverage for correct and incorrect tenant secrets.
+  - Update the live-test operator documentation for the new identity input.
+  Validation:
+  - Create two managed tenants with valid client secrets and different provider
+    connections.
+  - Prove that the expected tenant secret passes the identity preflight.
+  - Prove that the other valid tenant secret fails before a provider request.
+  - Prove that the failed preflight sends zero requests to each fake provider.
+  - Prove that the accepted request loads only the expected tenant provider
+    profile.
+  - Run the production identity preflight with the Default tenant identifier.
+  - Run the unchanged production matrix only after the identity preflight
+    passes.
+  - Correlate each production request with its tenant identifier and I045 phase
+    summary.
+  - Run `make ci` after the last repository change.
+
 - [x] [B159] (P0) Restore LoopAware telemetry after the database reset.
   Goal:
   Public pages send telemetry to the current LLM Proxy site record.
@@ -795,7 +863,7 @@ retain satisfied historical dependencies.
     zero proxy rate-limit wait.
   - The live harness validated the matching response request ID without printing
     the response body or a credential.
-- [!] [B088] (P1) Restore Default-tenant long completion routing for OpenAI and Meta.
+- [x] [B088] (P1) Restore Default-tenant long completion routing for OpenAI and Meta.
   Goal:
   Make the Default tenant complete deterministic production live-test requests
   through OpenAI and Meta. Do not use local provider credentials, fallback
@@ -863,6 +931,43 @@ retain satisfied historical dependencies.
     coverage. The required final `make ci` passed all 11 gates in 134 seconds.
   - No telemetry event contract changed. The existing I045 progress events and
     terminal phase summary remain the production evidence source.
+  Production evidence:
+  - Release `v6.0.0` uses application commit
+    `0d74ab6ca055ea614b52e93abd4b620018796b7d`.
+  - Publication produced container index
+    `sha256:6ff3dc29b4918019887fa587c5a132fec83fe6bcb1ed5958007e2f0837cbbd17`.
+  - Deployment generation 8 converged with zero failed or unreachable hosts.
+  - The public API returned its expected HTTP `403` authentication response.
+  - The public configuration and Pages routes returned HTTP `200`.
+  - The first paid run proved the repaired OpenAI long case returned HTTP
+    `200` with 6,572 bytes and its final marker.
+  - I045 classified the other HTTP `503` results as missing tenant provider
+    connections before provider execution.
+  - The authenticated management API verified and saved Anthropic
+    `claude-sonnet-4-6` and Meta `muse-spark-1.1`.
+  - The final paid run returned HTTP `200` for the OpenAI, Anthropic, and Meta
+    echo cases.
+  - Their echo request IDs were `A2UVHOC6IRNE74WWYP4V7LRD3J`,
+    `BB3R57HGZIA4W3FR5WTTAQQFIV`, and `OKKJCY6EYLGR4BGZT3MR7UELEM`.
+  - OpenAI long completion returned 8,292 bytes with request ID
+    `7YMWQOSNOW4JIL6KQWR67JWWKQ`.
+  - Anthropic long completion returned 18,630 bytes with request ID
+    `Y2BE7WXGQC4TBJUSLUZPXXE4DD`.
+  - Meta long completion returned 15,303 bytes with request ID
+    `ZRJOPH4DTE4DF5UTGAHJFXZTGM`.
+  - I045 recorded one terminal success summary and provider progress for each
+    of the six requests.
+  - The Meta long request returned no visible output for five attempts. Its
+    sixth attempt completed with all 15,303 bytes.
+  - The isolated Creative Director canary used `gpt-5.6-terra`, `max`, and a
+    900-second request budget.
+  - The canary passed on its first provider attempt with nine passing
+    assertions and zero blocking items.
+  - Canary request `JKP4WTL34KFKITJ522EZB4ZTK7` returned HTTP `200` after
+    613,657 milliseconds with 41,715 output bytes.
+  - The exact live-test command used a Social Threader client secret. Its
+    documentation identified the Default tenant as its target. B160 tracks that
+    identity defect.
   Requirements:
   - Diagnose and restore the exact OpenAI and Meta production routes through
     the saved Default-tenant provider configuration. Retain OpenAI's
@@ -905,14 +1010,15 @@ retain satisfied historical dependencies.
     terminal phase summary.
   - For any source change, run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-  Blocked: The verified repair exists only as working-tree changes above
-  application commit `142b1d25df28863b5ab8da1bc941da54f841f949`. The lifecycle
-  ignores working-tree bytes and uses committed application objects. Repository
-  policy assigns branch, commit, push, and pull request actions to the execution
-  chain. That chain must land the repair on `master`. Then the authorized
-  release, publication, deployment, and production acceptance can use the
-  correct source. The required private deployment input and production client
-  secret are present.
+  Resolution:
+  - The shared coordinator increases zero-output continuation budgets without
+    a provider-specific rule.
+  - Release `v6.0.0` is published, deployed, and active on the public routes.
+  - OpenAI, Anthropic, and Meta passed their echo and long-completion contracts.
+  - I045 correlated each accepted request with provider progress and one
+    terminal phase summary.
+  - The Creative Director Terra/max source-world canary passed within its
+    explicit 900-second request budget.
 - [!] [B128] (P1) Restore Gemini long-completion production acceptance after first-read visibility failure.
   Goal:
   Make the Default tenant's Gemini 3.5 Flash background case complete the
