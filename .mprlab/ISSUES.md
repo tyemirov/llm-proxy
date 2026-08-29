@@ -25,6 +25,35 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B161] (P2) Reject undeclared tenant identity input.
+  Goal:
+  The tenant identity handler must match its canonical OpenAPI request contract.
+  Evidence:
+  - Expected: `GET /v2/identity` accepts only the tenant client key and no body.
+  - Actual: The handler returns HTTP `200` with an undeclared query field or a
+    request body.
+  Requirements:
+  - Reject each undeclared query field with HTTP `400`.
+  - Reject a request body with HTTP `400`.
+  - Keep valid authenticated identity reads unchanged.
+  - Validate the request once at the HTTP boundary.
+  Validation:
+  - Send requests through the real router.
+  - Prove that valid input returns the authenticated tenant identifier.
+  - Prove that an extra query field returns HTTP `400`.
+  - Prove that a request body returns HTTP `400`.
+  - Prove that rejected requests send no provider request.
+  - Run `make ci` after the last application change.
+  Resolution:
+  - The authenticated handler accepts exactly one `key` query field and no
+    request body. It returns HTTP `400` for all other request shapes.
+  - The canonical OpenAPI contract and generated reference declare the HTTP
+    `400` response.
+  - Real-router tests cover valid identity reads, undeclared query input,
+    request bodies, and the zero-provider-request boundary.
+  - `make test` passed.
+  - `make ci` passed all 11 gates with 100.0% Go statement coverage.
+
 - [ ] [B160] (P1) Reject a production live test for an unexpected tenant.
   Goal:
   `make live-test` must prove the expected production tenant identity before it
