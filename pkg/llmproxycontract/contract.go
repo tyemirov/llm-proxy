@@ -14,6 +14,8 @@ const (
 	HeaderStructuredRequestState = "X-LLM-Proxy-Structured-Request-State"
 	// StructuredRequestPath is the authenticated reconciliation endpoint for structured v2 requests.
 	StructuredRequestPath = "/v2/requests"
+	// TenantIdentityPath is the authenticated tenant identity endpoint.
+	TenantIdentityPath = "/v2/identity"
 	// HeaderRequestTimeoutSeconds carries the accepted proxy work budget for one upstream request.
 	HeaderRequestTimeoutSeconds = "X-LLM-Proxy-Request-Timeout-Seconds"
 	// ErrorCodeInvalidRequestTimeout identifies a rejected request-timeout header.
