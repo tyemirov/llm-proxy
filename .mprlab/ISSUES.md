@@ -25,6 +25,110 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B162] (P1) Preserve Gemini terminal error codes during background polling.
+  Goal:
+  A failed Gemini background interaction must retain safe provider failure
+  evidence before resource cleanup removes the interaction.
+  Evidence:
+  - Expected: I045 identifies the Gemini lifecycle operation, terminal state,
+    and sanitized provider error code for each failed request.
+  - Actual: The proxy returns HTTP `502` with `provider_error`,
+    `retryable: false`, `upstream_status: null`, and no terminal error code.
+  - Production release `v6.1.0` uses application commit
+    `975053c675dcb1437e22c611433a8f0b46a42834`.
+  - The expected Default tenant passed `/v2/identity` before each production
+    run sent paid traffic.
+  - Eight production live cases passed, including `gemini-echo`.
+  - `gemini-background-polling` failed with request ID
+    `KEQJO2TXJLI4QJ3HYGPNWJO227` and a 157-byte response.
+  - The exact scoped retry failed with request ID
+    `OEPWJEUOLKNNK45VUDDFEYOQT2` and the same 157-byte response.
+  - The second failure occurred after the identity check returned HTTP `200`.
+  - The response proves that no unsuccessful provider HTTP status reached the
+    public provider error mapper.
+  - The response does not distinguish a terminal Interaction fault, a response
+    protocol fault, or a transport fault without a response.
+  - `geminiInteractionResponse` decodes `id`, `status`, `steps`, and `usage`.
+    It does not decode the provider `errors` array.
+  - The current Google Interaction resource defines each `errors[].code` as a
+    URI. It defines `message` as human-readable text.
+  - Google defines `failed` as a terminal status that can include a tool fault
+    or a rate limit.
+  - `geminiInteractionSnapshot.resolve` converts every `failed` status to bare
+    `ErrProviderAPI` and discards the provider error code.
+  - `providerHTTPMetadata` cannot classify bare `ErrProviderAPI` as an upstream
+    HTTP response or a retryable provider condition.
+  - The Gemini observation callback records usage and cleanup mode only. It
+    does not record the observed state or provider error code in I045.
+  - The terminal failure test supplies no `errors` array. It asserts only the
+    generic public provider error.
+  - The continuation event records only `failure`. It cannot identify the
+    failed Gemini lifecycle operation.
+  - The adapter deletes the provider resource on exit. The discarded provider
+    error code cannot be recovered after cleanup.
+  - The current provider contracts are documented at
+    `https://ai.google.dev/api/interactions-api-v1` and
+    `https://ai.google.dev/gemini-api/docs/background-execution`.
+  Requirements:
+  - Decode the Gemini Interaction `errors` array once at the provider response
+    boundary.
+  - Validate each provider error code as a canonical URI at the response edge.
+  - Represent the terminal status and safe error codes in one typed provider
+    failure.
+  - Keep `upstream_status` null when no unsuccessful provider HTTP response
+    exists.
+  - Do not invent an HTTP status from an Interaction error code.
+  - Define an explicit retry classification for supported terminal error codes.
+  - Fail closed for an unknown terminal error code.
+  - Record the safe terminal code in structured provider failure telemetry.
+  - Record Gemini create, observation, cancellation, and deletion outcomes in
+    I045.
+  - Distinguish an Interaction terminal fault from a cleanup fault.
+  - Keep provider messages, raw bodies, interaction identifiers, prompts,
+    responses, and credentials out of public responses and logs.
+  - Preserve cancellation and deletion for every stored interaction.
+  - Preserve the shared `pollable_resource` lifecycle and its visibility rule.
+  - Do not add another provider attempt, fallback, or timeout increase.
+  Deliverables:
+  - Add a typed Gemini terminal error model at the response boundary.
+  - Add safe Gemini lifecycle fields to the existing provider progress event.
+  - Update the provider error contract and OpenAPI artifacts when public fields
+    or retry classification change.
+  - Update B128 production evidence after the corrected request identifies the
+    terminal provider condition.
+  Validation:
+  - Return one controlled `failed` Interaction with a safe error code through
+    the real public router.
+  - Prove the public error and I045 events retain only the approved code.
+  - Prove provider messages and interaction identifiers do not escape.
+  - Prove retryable and non-retryable URI codes get different classifications.
+  - Prove an unknown URI path segment fails closed without a fallback.
+  - Prove terminal Interaction and cleanup faults produce different telemetry.
+  - Prove cancellation and deletion still occur in the required order.
+  - Rerun only `gemini-background-polling` with the expected Default tenant.
+  - Correlate its request ID with Gemini progress and one terminal I045 summary.
+  - Run `make ci` after the last application change.
+  Resolution:
+  - The Gemini response decoder validates each provider error code as a
+    canonical HTTPS URI. It does not retain provider messages.
+  - Each URI has a safe final `snake_case` path segment for classification.
+  - One typed terminal failure owns the status and validated codes.
+  - A failed Interaction is retryable only when every URI has a retryable final
+    path segment. An empty list or an unknown segment fails closed.
+  - `upstream_status` remains null without an unsuccessful provider HTTP
+    response. The public provider error keeps its six-field shape.
+  - I045 records Gemini create, poll, cancel, and delete operations. Terminal
+    progress and provider failure logs include only validated error codes.
+  - Real-router tests cover retryable, non-retryable, unknown, and malformed URI
+    codes. They also cover terminal faults, cleanup faults, redaction, and cleanup.
+  - The README, provider routing guide, OpenAPI contract, and generated API
+    reference describe the current retry and telemetry contracts.
+  - `make go-test` passed with 100.0% Go statement coverage after the URI fix.
+  - `make ci` passed all 11 gates with 100.0% Go statement coverage after the
+    URI fix.
+  - This implementation run did not send production traffic. B128 owns the
+    release, exact paid background case, and production I045 correlation.
+
 - [x] [B161] (P2) Reject undeclared tenant identity input.
   Goal:
   The tenant identity handler must match its canonical OpenAPI request contract.
@@ -1142,9 +1246,17 @@ retain satisfied historical dependencies.
   - The existing Authorization key passed local `gemini-3.5-flash` provider
     verification and text smoke checks through the corrected lifecycle.
   - The local checks did not release or deploy the change.
-  Blocked: Release and deploy B149. Rotate the exposed Authorization key and
-  save its replacement in the Default tenant. Run the exact Gemini echo and
-  background cases.
+  - On 2026-08-29, production release `v6.1.0` included B149 and accepted the
+    expected Default tenant before provider traffic.
+  - The current production matrix passed `gemini-echo` and seven other cases.
+  - `gemini-background-polling` returned HTTP `502` twice with no upstream
+    status or safe terminal code.
+  - B162 development now preserves validated terminal codes before resource
+    deletion and records each Gemini lifecycle operation in I045.
+  - The corrected source has not been released or deployed.
+  Blocked: Release and deploy the B162 correction. Confirm that the stored
+  Authorization key is not the exposed credential. Rerun the exact Gemini
+  background case.
 - [ ] [B141] (P1) Center the X icon inside the top-right square.
   Goal:
   Align the X icon so it is visually centered within the square control in the top-right corner, matching the intended UI layout shown in the attached screenshot.
