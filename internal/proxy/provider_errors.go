@@ -37,6 +37,12 @@ type providerHTTPError struct {
 	retryableHint bool
 }
 
+type providerTerminalFailure interface {
+	error
+	providerFailureCodes() []string
+	providerFailureRetryable() bool
+}
+
 func newProviderHTTPError(statusCode int, responseHeader http.Header) error {
 	cause := ErrProviderAPI
 	if statusCode == http.StatusTooManyRequests {
@@ -79,6 +85,15 @@ func providerHTTPMetadata(requestError error) (int, string, bool, bool) {
 		return 0, "", false, false
 	}
 	return providerError.statusCode, providerError.retryAfter, providerError.retryableHint, true
+}
+
+func providerFailureMetadata(requestError error) (int, string, bool, bool, []string) {
+	statusCode, retryAfter, retryable, hasUpstreamStatus := providerHTTPMetadata(requestError)
+	var terminalFailure providerTerminalFailure
+	if !errors.As(requestError, &terminalFailure) {
+		return statusCode, retryAfter, retryable, hasUpstreamStatus, nil
+	}
+	return statusCode, retryAfter, retryable || terminalFailure.providerFailureRetryable(), hasUpstreamStatus, terminalFailure.providerFailureCodes()
 }
 
 func sanitizedRetryAfter(rawValue string) string {

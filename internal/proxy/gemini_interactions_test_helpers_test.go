@@ -22,6 +22,11 @@ type testGeminiInteractionUsage struct {
 	Total  int
 }
 
+type testGeminiInteractionError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
 func decodeGeminiInteractionRequest(testingInstance testing.TB, request *http.Request) map[string]any {
 	testingInstance.Helper()
 	bodyBytes, readError := io.ReadAll(request.Body)
@@ -44,10 +49,17 @@ func assertGeminiInteractionHeaders(testingInstance testing.TB, request *http.Re
 }
 
 func writeGeminiInteractionSnapshot(testingInstance testing.TB, responseWriter http.ResponseWriter, identifier string, status string, text string, usage *testGeminiInteractionUsage) {
+	writeGeminiInteractionSnapshotWithErrors(testingInstance, responseWriter, identifier, status, text, usage, nil)
+}
+
+func writeGeminiInteractionSnapshotWithErrors(testingInstance testing.TB, responseWriter http.ResponseWriter, identifier string, status string, text string, usage *testGeminiInteractionUsage, interactionErrors []testGeminiInteractionError) {
 	testingInstance.Helper()
 	response := map[string]any{
 		"id":     identifier,
 		"status": status,
+	}
+	if len(interactionErrors) > 0 {
+		response["errors"] = interactionErrors
 	}
 	if text != "" {
 		response["steps"] = []map[string]any{{

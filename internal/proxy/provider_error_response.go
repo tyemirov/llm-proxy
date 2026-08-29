@@ -37,7 +37,7 @@ func writeProviderErrorResponse(ginContext *gin.Context, providerIdentifier stri
 		errorCode = llmproxycontract.ErrorCodeProviderMediaLimitExceeded
 	}
 
-	upstreamStatus, retryAfterValue, retryable, hasUpstreamStatus := providerHTTPMetadata(requestError)
+	upstreamStatus, retryAfterValue, retryable, hasUpstreamStatus, providerErrorCodes := providerFailureMetadata(requestError)
 	var upstreamStatusValue *int
 	if hasUpstreamStatus {
 		upstreamStatusValue = &upstreamStatus
@@ -60,6 +60,9 @@ func writeProviderErrorResponse(ginContext *gin.Context, providerIdentifier stri
 		}
 		if retryAfter != nil {
 			logFields = append(logFields, logFieldRetryAfter, *retryAfter)
+		}
+		if len(providerErrorCodes) > 0 {
+			logFields = append(logFields, logFieldProviderErrorCodes, providerErrorCodes)
 		}
 		structuredLogger.Warnw(logEventProviderFailure, logFields...)
 	}

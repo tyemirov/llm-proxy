@@ -47,6 +47,10 @@ type requestTelemetry struct {
 
 	openAICreateCount        int
 	openAIPollCount          int
+	geminiCreateCount        int
+	geminiPollCount          int
+	geminiCancelCount        int
+	geminiDeleteCount        int
 	continuationAttemptCount int
 	completedOutputBytes     int
 }
@@ -185,6 +189,97 @@ func recordOpenAIProgressWithRetryDecision(requestContext context.Context, struc
 		openAICompletionSignal(snapshot, progressError, retryDecision),
 		len([]byte(snapshot.text)),
 	)
+}
+
+func (telemetry *requestTelemetry) recordGeminiProgress(structuredLogger *zap.SugaredLogger, progressKind string, state string, completionSignal string, providerErrorCodes []string) {
+	telemetry.mutex.Lock()
+	progressCount := 0
+	switch progressKind {
+	case telemetryProgressKindGeminiCreate:
+		telemetry.geminiCreateCount++
+		progressCount = telemetry.geminiCreateCount
+	case telemetryProgressKindGeminiPoll:
+		telemetry.geminiPollCount++
+		progressCount = telemetry.geminiPollCount
+	case telemetryProgressKindGeminiCancel:
+		telemetry.geminiCancelCount++
+		progressCount = telemetry.geminiCancelCount
+	case telemetryProgressKindGeminiDelete:
+		telemetry.geminiDeleteCount++
+		progressCount = telemetry.geminiDeleteCount
+	}
+	requestID := telemetry.requestID
+	provider := telemetry.provider
+	model := telemetry.model
+	elapsedMilliseconds := time.Since(telemetry.startedAt).Milliseconds()
+	telemetry.mutex.Unlock()
+
+	fields := []any{
+		logFieldRequestID, requestID,
+		logFieldProvider, provider,
+		logFieldModel, model,
+		logFieldProgressKind, progressKind,
+		logFieldProviderState, state,
+		logFieldCompletionSignal, completionSignal,
+		logFieldElapsedMilliseconds, elapsedMilliseconds,
+	}
+	if progressKind == telemetryProgressKindGeminiPoll {
+		fields = append(fields, logFieldPollCount, progressCount)
+	} else {
+		fields = append(fields, logFieldAttemptCount, progressCount)
+	}
+	if len(providerErrorCodes) > 0 {
+		fields = append(fields, logFieldProviderErrorCodes, providerErrorCodes)
+	}
+	structuredLogger.Infow(logEventProviderProgress, fields...)
+}
+
+func recordGeminiProgress(requestContext context.Context, structuredLogger *zap.SugaredLogger, progressKind string, snapshot geminiInteractionSnapshot, progressError error, retryDecision pollableResourceRetryDecision) {
+	telemetry := requestTelemetryFromContext(requestContext)
+	if telemetry == nil || structuredLogger == nil {
+		return
+	}
+	providerErrorCodes := snapshot.providerFailureCodes()
+	telemetry.recordGeminiProgress(
+		structuredLogger,
+		progressKind,
+		normalizedGeminiState(snapshot.status),
+		geminiCompletionSignal(snapshot, progressError, retryDecision),
+		providerErrorCodes,
+	)
+}
+
+func normalizedGeminiState(state string) string {
+	switch state {
+	case statusQueued, statusInProgress, statusCompleted, statusCancelled, statusFailed, statusIncomplete, geminiInteractionStatusRequiresAction, telemetryProviderStateDeleted:
+		return state
+	default:
+		return telemetryProviderStateUnknown
+	}
+}
+
+func geminiCompletionSignal(snapshot geminiInteractionSnapshot, progressError error, retryDecision pollableResourceRetryDecision) string {
+	if errors.Is(progressError, context.Canceled) || errors.Is(progressError, context.DeadlineExceeded) {
+		return telemetryCompletionCanceled
+	}
+	if retryDecision == pollableResourceRetryVisibility {
+		return telemetryCompletionPending
+	}
+	if progressError != nil {
+		return telemetryCompletionFailure
+	}
+	switch snapshot.status {
+	case statusQueued, statusInProgress:
+		return telemetryCompletionPending
+	case statusCompleted, telemetryProviderStateDeleted:
+		return telemetryCompletionComplete
+	case statusIncomplete:
+		return telemetryCompletionOutputLimit
+	case statusCancelled:
+		return telemetryCompletionCanceled
+	default:
+		return telemetryCompletionFailure
+	}
 }
 
 func normalizedOpenAIState(state string) string {

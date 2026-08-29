@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -26,7 +27,6 @@ const (
 	geminiAPIRevisionHeader               = "Api-Revision"
 	geminiAPIRevisionValue                = "2026-05-20"
 	geminiInteractionStatusRequiresAction = "requires_action"
-	geminiInteractionStatusBudgetExceeded = "budget_exceeded"
 	geminiInteractionStepUserInput        = "user_input"
 	geminiInteractionStepModelOutput      = "model_output"
 	geminiInteractionContentText          = "text"
@@ -36,7 +36,15 @@ const (
 	geminiFilePollInterval                = 500 * time.Millisecond
 )
 
-var geminiFileNamePattern = regexp.MustCompile(`^files/[A-Za-z0-9_-]+$`)
+var (
+	geminiFileNamePattern           = regexp.MustCompile(`^files/[A-Za-z0-9_-]+$`)
+	geminiProviderErrorClassPattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$`)
+)
+
+const (
+	geminiProviderErrorCodeMaximumLength  = 2048
+	geminiProviderErrorClassMaximumLength = 64
+)
 
 const (
 	geminiUploadProtocolHeader     = "X-Goog-Upload-Protocol"
@@ -116,7 +124,33 @@ type geminiInteractionResponse struct {
 	Status string                       `json:"status"`
 	Steps  []geminiInteractionStep      `json:"steps"`
 	Usage  *geminiInteractionTokenUsage `json:"usage"`
+	Errors []geminiInteractionError     `json:"errors"`
 }
+
+type geminiInteractionError struct {
+	Code string `json:"code"`
+}
+
+type geminiProviderErrorCode struct {
+	uri        string
+	errorClass geminiProviderErrorClass
+}
+
+type geminiProviderErrorClass string
+
+type geminiInteractionTerminalFailure struct {
+	error
+	status geminiTerminalStatus
+	codes  []geminiProviderErrorCode
+}
+
+type geminiTerminalStatus string
+
+const (
+	geminiTerminalStatusFailed         geminiTerminalStatus = statusFailed
+	geminiTerminalStatusCancelled      geminiTerminalStatus = statusCancelled
+	geminiTerminalStatusRequiresAction geminiTerminalStatus = geminiInteractionStatusRequiresAction
+)
 
 type geminiInteractionTokenUsage struct {
 	TotalInputTokens  *int `json:"total_input_tokens"`
@@ -125,10 +159,11 @@ type geminiInteractionTokenUsage struct {
 }
 
 type geminiInteractionSnapshot struct {
-	identifier string
-	status     string
-	text       string
-	usage      *tokenUsage
+	identifier      string
+	status          string
+	text            string
+	usage           *tokenUsage
+	terminalFailure *geminiInteractionTerminalFailure
 }
 
 func newGeminiInteractionsClient(httpClient HTTPDoer) *geminiInteractionsClient {
@@ -173,6 +208,10 @@ func (client *geminiInteractionsClient) generateText(parentContext context.Conte
 	}
 
 	snapshot, createError := client.createInteraction(parentContext, apiKey, baseURL, payload, structuredLogger)
+	if createError == nil && utils.IsBlank(snapshot.identifier) {
+		createError = fmt.Errorf("%w: Gemini Interactions create response missing id", ErrProviderAPI)
+	}
+	recordGeminiProgress(parentContext, structuredLogger, telemetryProgressKindGeminiCreate, snapshot, createError, pollableResourceDoNotRetry)
 	if createError != nil {
 		if !utils.IsBlank(snapshot.identifier) {
 			cleanupError := client.releaseInteraction(parentContext, apiKey, baseURL, snapshot.identifier, snapshot.cleanupMode(), structuredLogger)
@@ -181,9 +220,6 @@ func (client *geminiInteractionsClient) generateText(parentContext context.Conte
 			}
 		}
 		return textGenerationResult{usage: snapshot.usage}, createError
-	}
-	if utils.IsBlank(snapshot.identifier) {
-		return textGenerationResult{usage: snapshot.usage}, fmt.Errorf("%w: Gemini Interactions create response missing id", ErrProviderAPI)
 	}
 
 	interactionIdentifier := snapshot.identifier
@@ -208,7 +244,8 @@ func (client *geminiInteractionsClient) generateText(parentContext context.Conte
 			},
 			isPending:        geminiInteractionSnapshot.isPending,
 			visibilityPolicy: client.resourceVisibility,
-			recordObservation: func(polledSnapshot geminiInteractionSnapshot, pollError error, _ pollableResourceRetryDecision) {
+			recordObservation: func(polledSnapshot geminiInteractionSnapshot, pollError error, retryDecision pollableResourceRetryDecision) {
+				recordGeminiProgress(parentContext, structuredLogger, telemetryProgressKindGeminiPoll, polledSnapshot, pollError, retryDecision)
 				if polledSnapshot.usage != nil {
 					latestUsage = polledSnapshot.usage
 				}
@@ -272,6 +309,11 @@ func (client *geminiInteractionsClient) releaseInteraction(parentContext context
 			apiKey,
 			structuredLogger,
 		)
+		cancelSnapshot := geminiInteractionSnapshot{status: statusCancelled}
+		if cancelError != nil {
+			cancelSnapshot.status = constants.EmptyString
+		}
+		recordGeminiProgress(detachedContext, structuredLogger, telemetryProgressKindGeminiCancel, cancelSnapshot, cancelError, pollableResourceDoNotRetry)
 	}
 	deleteError := client.performInteractionCleanupRequest(
 		detachedContext,
@@ -280,6 +322,11 @@ func (client *geminiInteractionsClient) releaseInteraction(parentContext context
 		apiKey,
 		structuredLogger,
 	)
+	deleteSnapshot := geminiInteractionSnapshot{status: telemetryProviderStateDeleted}
+	if deleteError != nil {
+		deleteSnapshot.status = constants.EmptyString
+	}
+	recordGeminiProgress(detachedContext, structuredLogger, telemetryProgressKindGeminiDelete, deleteSnapshot, deleteError, pollableResourceDoNotRetry)
 	if cancelError != nil {
 		return cancelError
 	}
@@ -711,7 +758,99 @@ func newGeminiInteractionSnapshot(responseBytes []byte) (geminiInteractionSnapsh
 	if usageError != nil {
 		return snapshot, usageError
 	}
+	errorCodes, errorCodeError := newGeminiProviderErrorCodes(response.Errors)
+	if errorCodeError != nil {
+		return snapshot, errorCodeError
+	}
+	switch snapshot.status {
+	case statusFailed:
+		snapshot.terminalFailure = newGeminiInteractionTerminalFailure(geminiTerminalStatusFailed, errorCodes)
+	case statusCancelled:
+		snapshot.terminalFailure = newGeminiInteractionTerminalFailure(geminiTerminalStatusCancelled, errorCodes)
+	case geminiInteractionStatusRequiresAction:
+		snapshot.terminalFailure = newGeminiInteractionTerminalFailure(geminiTerminalStatusRequiresAction, errorCodes)
+	}
 	return snapshot, nil
+}
+
+func newGeminiProviderErrorCodes(providerErrors []geminiInteractionError) ([]geminiProviderErrorCode, error) {
+	errorCodes := make([]geminiProviderErrorCode, 0, len(providerErrors))
+	for _, providerError := range providerErrors {
+		errorCode, codeError := newGeminiProviderErrorCode(providerError.Code)
+		if codeError != nil {
+			return nil, codeError
+		}
+		errorCodes = append(errorCodes, errorCode)
+	}
+	return errorCodes, nil
+}
+
+func newGeminiProviderErrorCode(rawCode string) (geminiProviderErrorCode, error) {
+	parsedCode, parseError := url.ParseRequestURI(rawCode)
+	errorClass := constants.EmptyString
+	if parseError == nil {
+		errorClass = path.Base(parsedCode.Path)
+	}
+	if parseError != nil ||
+		len(rawCode) > geminiProviderErrorCodeMaximumLength ||
+		parsedCode.Scheme != "https" ||
+		parsedCode.Host == "" ||
+		parsedCode.User != nil ||
+		parsedCode.RawQuery != "" ||
+		parsedCode.Fragment != "" ||
+		parsedCode.Opaque != "" ||
+		parsedCode.RawPath != "" ||
+		parsedCode.String() != rawCode ||
+		path.Clean(parsedCode.Path) != parsedCode.Path ||
+		len(errorClass) > geminiProviderErrorClassMaximumLength ||
+		!geminiProviderErrorClassPattern.MatchString(errorClass) {
+		return geminiProviderErrorCode{}, fmt.Errorf("%w: Gemini Interactions response has an invalid error code URI", ErrProviderAPI)
+	}
+	return geminiProviderErrorCode{uri: rawCode, errorClass: geminiProviderErrorClass(errorClass)}, nil
+}
+
+func newGeminiInteractionTerminalFailure(status geminiTerminalStatus, codes []geminiProviderErrorCode) *geminiInteractionTerminalFailure {
+	return &geminiInteractionTerminalFailure{error: ErrProviderAPI, status: status, codes: append([]geminiProviderErrorCode(nil), codes...)}
+}
+
+func (failure *geminiInteractionTerminalFailure) Unwrap() error {
+	return ErrProviderAPI
+}
+
+func (failure *geminiInteractionTerminalFailure) providerFailureCodes() []string {
+	errorCodes := make([]string, 0, len(failure.codes))
+	for _, errorCode := range failure.codes {
+		errorCodes = append(errorCodes, errorCode.uri)
+	}
+	return errorCodes
+}
+
+func (failure *geminiInteractionTerminalFailure) providerFailureRetryable() bool {
+	if failure.status != geminiTerminalStatusFailed || len(failure.codes) == 0 {
+		return false
+	}
+	for _, errorCode := range failure.codes {
+		if !retryableGeminiTerminalErrorCode(errorCode) {
+			return false
+		}
+	}
+	return true
+}
+
+func retryableGeminiTerminalErrorCode(errorCode geminiProviderErrorCode) bool {
+	switch errorCode.errorClass {
+	case "aborted", "api_error", "deadline_exceeded", "rate_limit_exceeded", "service_unavailable", "too_many_requests":
+		return true
+	default:
+		return false
+	}
+}
+
+func (snapshot geminiInteractionSnapshot) providerFailureCodes() []string {
+	if snapshot.terminalFailure == nil {
+		return nil
+	}
+	return snapshot.terminalFailure.providerFailureCodes()
 }
 
 func (snapshot geminiInteractionSnapshot) isPending() bool {
@@ -735,10 +874,8 @@ func (snapshot geminiInteractionSnapshot) resolve() (textGenerationResult, error
 		return generation, nil
 	case statusIncomplete:
 		return generation, errProviderOutputLimitReached
-	case geminiInteractionStatusRequiresAction:
-		return textGenerationResult{usage: snapshot.usage}, fmt.Errorf("%w: Gemini Interactions requires_action is unsupported", ErrProviderAPI)
-	case statusFailed, statusCancelled, geminiInteractionStatusBudgetExceeded:
-		return textGenerationResult{usage: snapshot.usage}, fmt.Errorf("%w: Gemini Interactions terminal status=%s", ErrProviderAPI, snapshot.status)
+	case geminiInteractionStatusRequiresAction, statusFailed, statusCancelled:
+		return textGenerationResult{usage: snapshot.usage}, snapshot.terminalFailure
 	default:
 		return textGenerationResult{usage: snapshot.usage}, fmt.Errorf("%w: Gemini Interactions unknown status=%s", ErrProviderAPI, snapshot.status)
 	}
