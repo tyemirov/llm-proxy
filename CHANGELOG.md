@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- **Breaking:** Removed caller-provided content hashes from inline media,
+  tenant asset uploads, asset references, responses, and the official Go and
+  Python client contracts. Media now uses semantic metadata and opaque owner
+  identifiers. Private checksums still protect stored bytes and provider file
+  uploads. This change made the prior and current media contracts incompatible
+  in both directions. It rejected version 1 tenant asset files. Added README
+  steps for client edits, asset store preparation, and the media traffic update.
+- Added typed public capability discovery to the official Go client. Model
+  applications can now use the supplied client for the complete request flow.
 - Added an authenticated tenant identity endpoint and require an exact tenant
   match before the paid production provider matrix starts.
 - Added disposable local Compose acceptance for paid provider smoke requests,
