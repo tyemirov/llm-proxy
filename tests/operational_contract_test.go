@@ -3,9 +3,7 @@ package tests_test
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"net"
 	"net/url"
@@ -2585,13 +2583,14 @@ func assertOperationalImageSmokePayload(testingInstance *testing.T, payloadText 
 				Type     string `json:"type"`
 				MIMEType string `json:"mime_type"`
 				Data     string `json:"data"`
-				SHA256   string `json:"sha256"`
 			} `json:"attachments"`
 		} `json:"messages"`
 		Model     string `json:"model"`
 		WebSearch bool   `json:"web_search"`
 	}
-	if decodeError := json.Unmarshal([]byte(payloadText), &payload); decodeError != nil {
+	decoder := json.NewDecoder(strings.NewReader(payloadText))
+	decoder.DisallowUnknownFields()
+	if decodeError := decoder.Decode(&payload); decodeError != nil {
 		testingInstance.Fatalf("decode live image payload: %v", decodeError)
 	}
 	if payload.Model != expectedModel || payload.WebSearch || len(payload.Messages) != 1 || payload.Messages[0].Role != "user" || len(payload.Messages[0].Attachments) != 1 {
@@ -2602,8 +2601,7 @@ func assertOperationalImageSmokePayload(testingInstance *testing.T, payloadText 
 	if decodeError != nil {
 		testingInstance.Fatalf("decode live image data: %v", decodeError)
 	}
-	imageDigest := sha256.Sum256(imageBytes)
-	if attachment.Type != "image" || attachment.MIMEType != "image/png" || !bytes.HasPrefix(imageBytes, []byte("\x89PNG\r\n\x1a\n")) || attachment.SHA256 != hex.EncodeToString(imageDigest[:]) {
+	if attachment.Type != "image" || attachment.MIMEType != "image/png" || !bytes.HasPrefix(imageBytes, []byte("\x89PNG\r\n\x1a\n")) {
 		testingInstance.Fatalf("live image attachment=%+v bytes=%d", attachment, len(imageBytes))
 	}
 }
