@@ -1445,7 +1445,7 @@ LLM_PROXY_LIVE_PROVIDERS=moonshot \
 ```
 
 Each image case creates the same deterministic 256 by 256 red PNG. The request
-sends canonical padded base64 data and its matching SHA-256 through `POST /v2`.
+sends canonical padded base64 data through `POST /v2`.
 The case requires HTTP `200`, an exact `RED` response, and a valid proxy request
 identifier. The harness does not print the image, response body, or credentials.
 
@@ -1649,6 +1649,10 @@ The reusable Go package under `pkg/llmproxyclient` is v2-only: construct a
 nonblank request override; the proxy validates it against the exact resolved
 provider/model capability before it calls upstream.
 
+Use `Client.GetPublicCapabilities` to read provider offerings and media limits.
+The client owns the public resource path, response boundary, and typed offering
+contract. Applications must not reproduce that HTTP operation.
+
 Set `MessagesRequestInput.RequestTimeoutSeconds` when one request needs a
 specific proxy work budget:
 
@@ -1697,16 +1701,15 @@ text, err := client.PostMessages(ctx, request)
 
 `NewImageAttachment` accepts `image/jpeg`, `image/png`, or `image/webp`.
 `NewAudioAttachment` accepts `audio/m4a`, `audio/mpeg`, or `audio/wav`.
-Both constructors copy the supplied nonempty bytes, compute their lowercase
-SHA-256 digest, and serialize canonical base64. Attachment values cannot be
-constructed directly. The proxy independently decodes and verifies both
-representations at the HTTP edge, preserves attachment order, rejects media on
-non-user messages or unsupported model routes before upstream work, and never
+Both constructors copy the supplied nonempty bytes and serialize canonical
+base64. Attachment values cannot be constructed directly. The proxy decodes
+the bytes at the HTTP edge and preserves attachment order. It rejects media on
+non-user messages or unsupported model routes before upstream work. It never
 echoes media bytes in response metadata.
 
 Use `UploadAsset` when the application needs a reusable tenant asset. The
-returned record contains the opaque asset id, MIME type, byte count, SHA-256,
-state, and expiry. Construct the attachment from that exact record:
+returned record contains the opaque asset id, MIME type, byte count, state,
+and expiry. Construct the attachment from that exact record:
 
 ```go
 asset, err := client.UploadAsset(ctx, llmproxyclient.AssetUploadInput{
@@ -1720,14 +1723,13 @@ frame, err := llmproxyclient.NewImageAssetAttachment(
     llmproxyclient.ImageAssetAttachmentInput{
         AssetID:  asset.AssetID,
         MIMEType: asset.MIMEType,
-        SHA256:   asset.SHA256,
     },
 )
 ```
 
 `NewAudioAssetAttachment` provides the corresponding audio constructor. Both
 asset constructors serialize `asset_id` instead of `data` and preserve the
-same hash-bound attachment union.
+same attachment union.
 
 The request value controls only the proxy budget header. `ctx` remains the Go
 caller's independent cancellation authority, and the injected `HTTPDoer` may
@@ -1741,6 +1743,50 @@ llmproxyclient.ErrClientHTTPFailure)` also remains true. Raw response bodies
 are never included in or exposed by the returned error. Transport and response
 read failures preserve `ErrClientHTTPFailure` without fabricating a completed
 HTTP status.
+
+#### Update from the prior media contract
+
+This media contract change requires one coordinated server and client update.
+The prior server rejects current media clients. The current server rejects prior
+media clients.
+
+For text-only applications, this media change does not require a source change.
+Inline media helpers keep their function signatures, but their serialized form
+changes. Complete these steps before you resume media traffic:
+
+1. Stop media requests to the prior server.
+2. Update each Go application to `llmproxyclient@latest`.
+3. Remove `SHA256` from `ImageAssetAttachmentInput` and
+   `AudioAssetAttachmentInput` values.
+4. Stop reading `Asset.SHA256` from asset upload results.
+5. Update each Python application to this repository release.
+6. Remove the third argument from `image_asset_attachment` and
+   `audio_asset_attachment` calls.
+7. Stop reading `ClientAsset.sha256` from asset upload results.
+8. For direct HTTP integrations, remove `sha256` from each attachment.
+9. Remove `X-LLM-Proxy-Asset-SHA256` from each direct asset upload.
+10. Remove `sha256` from each expected asset response.
+11. Update fake server fixtures to use the exact current request and response
+    shapes.
+12. Run each application's fake server tests against the updated official
+    client.
+13. Stop the prior server.
+14. Move root-level `ast_*.json` and `ast_*.data` files from
+    `server.asset_store_path` to a private backup directory.
+15. Keep the `structured-requests` directory unchanged.
+16. Start the current server and the updated applications.
+17. Upload retained source media again and replace each stored prior `asset_id`.
+18. Resume media traffic after the server and all applications pass acceptance
+    checks.
+
+Do not deploy a current media client against the prior server. Do not deploy
+the current server while a prior media client remains active. Do not add a
+dual-shape client or server bridge.
+
+Applications that use `GetPublicCapabilities` must update their fake responses.
+Each response must contain nonempty offerings with `wire_contract`,
+`execution_lifecycle`, and all required media limit records. The client returns
+`ErrClientHTTPFailure` for an incomplete successful response.
 
 To upgrade the Go package and CLI:
 
@@ -1871,7 +1917,7 @@ The Python client has the same asset contract:
 
 ```python
 asset = client.upload_asset(frame_bytes, "image/png")
-frame = image_asset_attachment(asset.asset_id, asset.mime_type, asset.sha256)
+frame = image_asset_attachment(asset.asset_id, asset.mime_type)
 text = client.post_messages(
     ClientMessagesRequest(
         messages=(
@@ -2096,10 +2142,11 @@ prepended when the submitted messages do not include a system message.
 Only `POST /v2` user messages may include `attachments`; compatibility
 `POST /`, `GET /`, and `/dictate` do not accept that field. Each attachment
 is one exact union variant. An inline attachment contains `type`, `mime_type`,
-canonical padded base64 `data`, and the matching lowercase hexadecimal
-`sha256`. An asset attachment contains `type`, `asset_id`, `mime_type`, and the
-matching lowercase hexadecimal `sha256`. The proxy validates tenant ownership,
-asset state, expiry, MIME type, byte count, and digest before provider dispatch.
+and canonical padded base64 `data`. An asset attachment contains `type`,
+`asset_id`, and `mime_type`. The proxy validates tenant ownership, asset state,
+expiry, MIME type, byte count, and stored-byte integrity before provider
+dispatch. The proxy calculates private checksums for integrity validation.
+These checksums are not public asset identity or response fields.
 `server.max_prompt_bytes` applies to compatibility `POST /`. Canonical
 `POST /v2` accepts an encoded JSON envelope of 8 MiB or less. A smaller
 catalog-derived limit applies when its configured text and inline media limits
@@ -2108,13 +2155,11 @@ published media limits and transport rules.
 Upload larger media through `POST /model/v1/assets` and send its asset
 reference through `/v2`.
 
-Upload an asset with the exact media content type and digest:
+Upload an asset with the exact media content type:
 
 ```shell
-asset_sha256="$(shasum -a 256 ./frame.png | awk '{print $1}')"
 curl -X POST \
   -H "Content-Type: image/png" \
-  -H "X-LLM-Proxy-Asset-SHA256: ${asset_sha256}" \
   --data-binary @./frame.png \
   "http://localhost:8080/model/v1/assets?key=mysecret"
 ```
@@ -2131,8 +2176,7 @@ Use the returned asset record in the canonical message:
         {
           "type": "image",
           "asset_id": "ast_0123456789abcdef0123456789abcdef",
-          "mime_type": "image/png",
-          "sha256": "RETURNED_SHA256"
+          "mime_type": "image/png"
         }
       ]
     }
