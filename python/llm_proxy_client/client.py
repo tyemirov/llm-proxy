@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
 import re
 import urllib.error
@@ -21,7 +20,6 @@ JSON_CONTENT_TYPE = "application/json; charset=utf-8"
 KEY_QUERY_KEY = "key"
 REQUEST_TIMEOUT_HEADER = "X-LLM-Proxy-Request-Timeout-Seconds"
 IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
-ASSET_SHA256_HEADER = "X-LLM-Proxy-Asset-SHA256"
 ASSET_ENDPOINT_PATH = "/model/v1/assets"
 PROVIDER_QUERY_KEY = "provider"
 MODEL_PROFILE_MODEL_KEY = "model"
@@ -46,7 +44,6 @@ IMAGE_MIME_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 AUDIO_MIME_TYPES = frozenset({"audio/m4a", "audio/mpeg", "audio/wav"})
 MEDIA_MIME_TYPES = IMAGE_MIME_TYPES | AUDIO_MIME_TYPES
 ASSET_ID_PATTERN = re.compile(r"^ast_[0-9a-f]{32}$")
-SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 IDEMPOTENCY_KEY_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 
 
@@ -321,11 +318,10 @@ def asset_endpoint_path(base_path: str) -> str:
 
 @dataclass(frozen=True)
 class ClientAttachment:
-    """One exact inline or hash-bound tenant media attachment."""
+    """One exact inline or tenant media attachment."""
 
     attachment_type: str
     mime_type: str
-    sha256: str
     data: bytes | None = None
     asset_id: str | None = None
 
@@ -337,20 +333,16 @@ class ClientAttachment:
             raise LLMProxyClientError("llm_proxy_client_invalid_request: unsupported attachment MIME type")
         if (self.data is None) == (self.asset_id is None):
             raise LLMProxyClientError("llm_proxy_client_invalid_request: attachment requires data or asset_id")
-        if not SHA256_PATTERN.fullmatch(self.sha256):
-            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid attachment sha256")
         if self.data is not None:
             if not isinstance(self.data, bytes) or not self.data:
                 raise LLMProxyClientError("llm_proxy_client_invalid_request: attachment data is empty")
-            if hashlib.sha256(self.data).hexdigest() != self.sha256:
-                raise LLMProxyClientError("llm_proxy_client_invalid_request: attachment sha256 mismatch")
         if self.asset_id is not None and not ASSET_ID_PATTERN.fullmatch(self.asset_id):
             raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid attachment asset_id")
 
     def body(self) -> dict[str, str]:
         """Return this attachment as one JSON-ready union variant."""
 
-        payload = {"type": self.attachment_type, "mime_type": self.mime_type, "sha256": self.sha256}
+        payload = {"type": self.attachment_type, "mime_type": self.mime_type}
         if self.data is not None:
             payload["data"] = base64.b64encode(self.data).decode("ascii")
         else:
@@ -370,16 +362,16 @@ def audio_attachment(data: bytes, mime_type: str) -> ClientAttachment:
     return _inline_attachment("audio", data, mime_type, AUDIO_MIME_TYPES)
 
 
-def image_asset_attachment(asset_id: str, mime_type: str, sha256: str) -> ClientAttachment:
-    """Construct one hash-bound tenant image asset attachment."""
+def image_asset_attachment(asset_id: str, mime_type: str) -> ClientAttachment:
+    """Construct one tenant image asset attachment."""
 
-    return _asset_attachment("image", asset_id, mime_type, sha256, IMAGE_MIME_TYPES)
+    return _asset_attachment("image", asset_id, mime_type, IMAGE_MIME_TYPES)
 
 
-def audio_asset_attachment(asset_id: str, mime_type: str, sha256: str) -> ClientAttachment:
-    """Construct one hash-bound tenant audio asset attachment."""
+def audio_asset_attachment(asset_id: str, mime_type: str) -> ClientAttachment:
+    """Construct one tenant audio asset attachment."""
 
-    return _asset_attachment("audio", asset_id, mime_type, sha256, AUDIO_MIME_TYPES)
+    return _asset_attachment("audio", asset_id, mime_type, AUDIO_MIME_TYPES)
 
 
 def _inline_attachment(
@@ -393,7 +385,6 @@ def _inline_attachment(
     return ClientAttachment(
         attachment_type=attachment_type,
         mime_type=normalized_mime_type,
-        sha256=hashlib.sha256(data).hexdigest(),
         data=data,
     )
 
@@ -402,7 +393,6 @@ def _asset_attachment(
     attachment_type: str,
     asset_id: str,
     mime_type: str,
-    sha256: str,
     supported_mime_types: frozenset[str],
 ) -> ClientAttachment:
     normalized_mime_type = mime_type.strip().lower()
@@ -411,7 +401,6 @@ def _asset_attachment(
     return ClientAttachment(
         attachment_type=attachment_type,
         mime_type=normalized_mime_type,
-        sha256=sha256,
         asset_id=asset_id,
     )
 
@@ -554,12 +543,11 @@ def ordered_messages(messages: Sequence[ClientMessage]) -> Sequence[ClientMessag
 
 @dataclass(frozen=True)
 class ClientAsset:
-    """One hash-bound tenant asset returned by llm-proxy."""
+    """One tenant asset returned by llm-proxy."""
 
     asset_id: str
     mime_type: str
     size_bytes: int
-    sha256: str
     state: str
     created_at: str
     expires_at: str
@@ -596,18 +584,17 @@ class Client:
         )
 
     def upload_asset(self, data: bytes, mime_type: str) -> ClientAsset:
-        """Upload exact tenant media bytes and return their hash-bound asset record."""
+        """Upload exact tenant media bytes and return their asset record."""
 
         normalized_mime_type = mime_type.strip().lower()
         if normalized_mime_type not in MEDIA_MIME_TYPES:
             raise LLMProxyClientError("llm_proxy_client_invalid_request: unsupported asset MIME type")
         if not isinstance(data, bytes) or not data:
             raise LLMProxyClientError("llm_proxy_client_invalid_request: asset data is empty")
-        digest = hashlib.sha256(data).hexdigest()
         prepared_request = urllib.request.Request(
             self.config.asset_upload_url(),
             data=data,
-            headers={CONTENT_TYPE_HEADER: normalized_mime_type, ASSET_SHA256_HEADER: digest},
+            headers={CONTENT_TYPE_HEADER: normalized_mime_type},
             method="POST",
         )
         opener = self.opener or default_response_opener
@@ -628,7 +615,6 @@ class Client:
             "asset_id",
             "mime_type",
             "size_bytes",
-            "sha256",
             "state",
             "created_at",
             "expires_at",
@@ -641,7 +627,6 @@ class Client:
             or response["mime_type"] != normalized_mime_type
             or isinstance(response["size_bytes"], bool)
             or response["size_bytes"] != len(data)
-            or response["sha256"] != digest
             or response["state"] != "available"
         ):
             raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid asset response")
@@ -653,7 +638,6 @@ class Client:
             asset_id=response["asset_id"],
             mime_type=response["mime_type"],
             size_bytes=response["size_bytes"],
-            sha256=response["sha256"],
             state=response["state"],
             created_at=response["created_at"],
             expires_at=response["expires_at"],

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import threading
@@ -42,24 +41,20 @@ def test_media_attachment_constructors_serialize_inline_and_asset_union_variants
 
     inline_data = b"inline-image"
     inline = image_attachment(inline_data, " IMAGE/PNG ")
-    asset_digest = hashlib.sha256(b"asset-audio").hexdigest()
     asset = audio_asset_attachment(
         "ast_0123456789abcdef0123456789abcdef",
         "audio/wav",
-        asset_digest,
     )
     message = ClientMessage(role="user", content="inspect", attachments=(inline, asset))
     body = message.body()
     assert body["attachments"][0] == {
         "type": "image",
         "mime_type": "image/png",
-        "sha256": hashlib.sha256(inline_data).hexdigest(),
         "data": "aW5saW5lLWltYWdl",
     }
     assert body["attachments"][1] == {
         "type": "audio",
         "mime_type": "audio/wav",
-        "sha256": asset_digest,
         "asset_id": "ast_0123456789abcdef0123456789abcdef",
     }
     with pytest.raises(LLMProxyClientError, match="attachments require user role"):
@@ -94,22 +89,20 @@ def test_client_serializes_kimi_k3_image_and_reasoning_selection(running_server:
 
 
 def test_client_upload_asset_validates_exact_response_without_exposing_bytes() -> None:
-    """The asset client sends exact bytes and validates the hash-bound record."""
+    """The asset client sends exact bytes and validates the semantic record."""
 
     data = b"asset-image"
-    digest = hashlib.sha256(data).hexdigest()
 
     def opener(request: urllib.request.Request) -> str:
         assert request.full_url.endswith("/model/v1/assets?key=sekret")
         assert request.data == data
         assert request.headers["Content-type"] == "image/png"
-        assert request.headers["X-llm-proxy-asset-sha256"] == digest
+        assert set(request.headers) == {"Content-type"}
         return json.dumps(
             {
                 "asset_id": "ast_0123456789abcdef0123456789abcdef",
                 "mime_type": "image/png",
                 "size_bytes": len(data),
-                "sha256": digest,
                 "state": "available",
                 "created_at": "2026-08-11T10:00:00Z",
                 "expires_at": "2026-08-13T10:00:00Z",
@@ -119,7 +112,7 @@ def test_client_upload_asset_validates_exact_response_without_exposing_bytes() -
     client = Client(ClientConfig(base_url="https://proxy.example/v2", secret="sekret"), opener=opener)
     asset = client.upload_asset(data, " IMAGE/PNG ")
     assert asset.asset_id == "ast_0123456789abcdef0123456789abcdef"
-    assert image_asset_attachment(asset.asset_id, asset.mime_type, asset.sha256).body()["asset_id"] == asset.asset_id
+    assert image_asset_attachment(asset.asset_id, asset.mime_type).body()["asset_id"] == asset.asset_id
 
 
 @dataclass
