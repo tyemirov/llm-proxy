@@ -53,7 +53,7 @@ func TestOperationalRepositoryOwnsVersionlessLifecycle(testingInstance *testing.
 		testingInstance.Fatalf("unexpected lifecycle owner: %#v", resourcesDocument["owner"])
 	}
 	release, releaseAvailable := resourcesDocument["release"].(map[string]any)
-	if !releaseAvailable || len(release) != 1 || release["scheme"] != "semver" {
+	if !releaseAvailable || len(release) != 2 || release["scheme"] != "semver" || release["fixed_major"] != 1 {
 		testingInstance.Fatalf("unexpected lifecycle release policy: %#v", resourcesDocument["release"])
 	}
 	if _, dependenciesAvailable := resourcesDocument["dependencies"]; dependenciesAvailable {
