@@ -25,6 +25,132 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B163] (P0) {F022} Remove content hashes from the canonical media contract.
+  Goal:
+  Identify public media through semantic fields and opaque owner identifiers.
+  Keep content hashes out of the public media contract. Keep private integrity
+  checks for stored bytes and provider file uploads.
+  Evidence:
+  - Expected: a caller can send current image or audio bytes with a MIME type,
+    or refer to a current tenant asset with its opaque `asset_id` and MIME type.
+  - Actual: every inline attachment requires a `sha256` field even though its
+    bytes are already present in the same request.
+  - Actual: every asset reference repeats the asset content hash even though
+    `asset_id` is the tenant-scoped identity and the server owns its metadata.
+  - Actual: asset upload requires `X-LLM-Proxy-Asset-SHA256`, returns `sha256`,
+    and persists that value beside the asset data.
+  - Actual: the Go and Python clients calculate SHA-256 for inline attachments
+    and uploads. Their asset-reference constructors require the returned hash.
+  - Required integrity control: asset resolution must compare stored bytes to
+    server-owned integrity metadata before each provider dispatch.
+  - Required integrity control: Gemini file validation must compare the
+    provider `sha256Hash` value to a server-owned checksum.
+  - Creative Director owns a hashless current-state workflow. Its official
+    LLM Proxy client dependency still calculates and serializes hashes when it
+    sends generated media for semantic QA.
+  - The generated-artifact hash is not a provider retrieval handle. It cannot
+    identify a current tenant asset or retrieve provider history.
+  - F033 made the hash a required identity field. This issue replaces that
+    requirement. It does not preserve the obsolete wire or persisted shape.
+  Requirements:
+  - Define inline media with exactly `type`, `mime_type`, and `data`.
+  - Define stored-asset media with exactly `type`, `mime_type`, and `asset_id`.
+  - Keep `asset_id` as the opaque tenant-scoped asset identity.
+  - Define asset upload with the authenticated request body and exact
+    `Content-Type`. Do not accept an artifact-hash header.
+  - Return only semantic asset metadata: asset id, MIME type, byte size,
+    lifecycle state, creation time, expiry, and deletion time when applicable.
+  - Persist the semantic metadata, tenant owner, and one private integrity
+    checksum. The checksum is not an asset identity or public field.
+  - Validate inline data as nonempty canonical base64. Calculate a private
+    checksum from the decoded bytes when a provider integrity check needs it.
+  - Resolve an asset by tenant, asset id, MIME type, lifecycle state, expiry,
+    and stored byte size. Compare its bytes to the private integrity checksum.
+  - Validate a provider file through its provider-owned name or URI, MIME type,
+    byte size, lifecycle state, and provider checksum.
+  - Remove media-hash fields, parameters, error codes, constructors, examples,
+    and prose from the canonical OpenAPI document, generated API reference,
+    official clients, root README, and provider routing guide.
+  - Reject the obsolete `sha256` attachment field as an unknown field.
+  - Reject the obsolete upload hash header as undeclared input.
+  - Reject obsolete persisted tenant asset metadata that contains the old
+    public `sha256` field. Do not add a dual read, migration bridge, alias,
+    optional legacy field, or fallback.
+  - Do not change credential-secret digests, structured-request intent
+    digests, catalog revision digests, package checksums, or other
+    non-artifact security and protocol mechanisms.
+  - Make Creative Director use the supplied Go client for capability discovery,
+    media construction, request construction, dispatch, and reconciliation.
+    Creative Director must not reproduce the client protocol.
+  Deliverables:
+  - Replace the media and asset wire schemas and regenerate every derived API
+    artifact.
+  - Replace server parsing and public error mapping with the hashless public
+    contract. Keep private asset and provider-file integrity validation.
+  - Replace the Go and Python client attachment and asset APIs with semantic
+    inputs and responses.
+  - Update F022 and F033 text so their current requirements do not require
+    artifact hashes.
+  - Update the README, provider routing guide, examples, and release notes.
+  - Add public capability discovery to the supplied Go client so downstream
+    applications need no direct proxy HTTP operation.
+  Implementation evidence on 2026-08-29:
+  - The server accepts inline media by type, MIME type, and canonical base64
+    data. It accepts stored media by type, MIME type, and tenant-scoped asset
+    id. Neither public path accepts or returns a content hash.
+  - Asset upload calculates and stores a private checksum with the semantic
+    metadata. Asset resolution rejects same-length byte replacement before
+    provider dispatch.
+  - The obsolete upload hash header and old hash-bearing metadata shape are
+    rejected.
+  - Gemini file acceptance uses provider name and URI, MIME type, byte size,
+    lifecycle state, and provider checksum. A checksum mismatch fails closed.
+  - The Go and Python client APIs, OpenAPI document, generated API reference,
+    README, routing guide, feature contracts, and release notes use the same
+    hashless media contract.
+  - Public-router regressions prove exact ordered bytes and MIME types reach
+    the selected fake provider. They also prove asset and provider checksum
+    failures stop before model dispatch.
+  - The live media harness emits the exact hashless inline attachment shape.
+  - The capability client validates each provider route and its required media
+    limit relationships. It rejects incomplete or malformed successful catalogs.
+  - The README defines the coordinated media client and server update. It
+    includes official client edits, direct HTTP edits, and fake server fixtures.
+  - The update procedure stops media traffic and preserves structured request
+    journals. It moves version 1 tenant asset files before server start. It
+    requires new uploads for retained source media.
+  - The breaking changelog entry identifies the incompatible media versions and
+    the README update procedure.
+  - The new migration prose passed the scoped STE check and `git diff --check`.
+    The Governor check reported only the existing M012 and M013 governance work.
+  - The post-review `make go-test` run passes with 100.0% Go statement coverage.
+  - The post-review final `make ci` run passes all 11 gates in 134 seconds. It
+    includes 45 Python tests, 95 browser tests, and 100.0% Go statement coverage.
+  Validation:
+  - Send inline image and audio attachments through the real `/v2` router and
+    prove the selected fake provider receives the exact ordered bytes and MIME
+    types without a hash field.
+  - Upload an image and audio asset through the real asset route without an
+    artifact-hash header. Prove the response contains no artifact hash and the
+    persisted metadata contains a private integrity checksum.
+  - Send tenant asset references through the real `/v2` router and prove
+    tenant ownership, asset id, MIME type, state, expiry, and byte-size checks
+    occur before provider dispatch.
+  - Prove foreign, missing, expired, deleted, wrong-MIME, malformed-size,
+    same-length-corrupted, and obsolete-metadata assets fail safely without
+    provider dispatch.
+  - Prove `sha256` on an inline or asset attachment and the obsolete upload
+    header are rejected at the public boundary.
+  - Prove Gemini file acceptance rejects a wrong checksum, provider name or
+    URI, MIME type, byte size, or state.
+  - Exercise every corrected official Go and Python client path against a fake
+    server. Prove no media request or client value contains an artifact hash.
+  - Scan production media, asset, provider, client, schema, and documentation
+    paths for artifact-hash fields and calculations. Keep documented security
+    and protocol exclusions explicit.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
 - [ ] [B160] (P1) Reject a production live test for an unexpected tenant.
   Goal:
   `make live-test` must prove the expected production tenant identity before it
@@ -368,7 +494,7 @@ retain satisfied historical dependencies.
   - Keep K2.6 binary thinking under its documented provider default.
   - Add image input to K3, K2.7 Code, K2.7 Code Highspeed, and K2.6.
   - Serialize ordered canonical images as documented Chat Completions content blocks.
-  - Preserve image bytes, MIME type, order, and SHA-256.
+  - Preserve image bytes, MIME type, and order.
   - Record each verified image limit with its source and verification date.
   - Use `unknown` for an official limit that the provider does not publish.
   - Return only visible answer text through the canonical response.
@@ -769,100 +895,133 @@ retain satisfied historical dependencies.
   unreadable through the bounded probe. Both cleanup delete requests returned
   HTTP 200. Neither model supplied the required active retrieve and cancel
   proof. The provider catalog does not register these two routes.
-- [ ] [I027] (P1) Redesign the user dashboard around connected-provider widgets.
+- [ ] [I027] (P1) Put provider usage and key settings on provider cards.
   Goal:
-  Make the authenticated dashboard answer, at a glance, which upstream
-  providers the selected Usage scope has connected. Preserve usage reporting as
-  a separate measure of activity so an unused connected provider remains
-  visible and historical traffic never implies that a provider is still
-  connected.
-  Current scope:
-  - Usage is account-wide by default and has an independent tenant filter. One
-    selected Usage tenant shows that tenant's connections. `All tenants` shows
-    tenant-labelled connections across all owned tenants. The Settings tenant
-    does not control the dashboard projection.
+  The authenticated dashboard has one catalog-owned card for each supported
+  provider. Each card combines provider activity with tenant-owned key and
+  provider profile settings. A provider always exists through the provider
+  catalog. Key presence and historical activity never define provider
+  membership.
   Requirements:
-  - Define a connected provider solely from canonical authenticated profile
-    data whose `has_key` value is `true`. Do not infer connection from catalog
-    membership, aliases, routing defaults, local environment credentials, or a
-    provider's presence in historical usage.
-  - Add a prominent `Connected providers` section to the user usage dashboard
-    and render exactly one widget for each tenant/provider connection in the
-    selected Usage scope. An explicit tenant uses that profile's deterministic
-    provider order. `All tenants` groups connections by account tenant order and
-    then provider order, labels every group with tenant name and opaque ID, and
-    does not merge the same provider across two tenants. Do not hard-code
-    provider names or duplicate provider-registration state in the browser.
-  - Give each widget a concise, consistent summary: the profile label,
-    `Connected` status, saved text model, declared text/dictation capabilities,
-    and current-period request and token totals matched by exact canonical
-    provider ID. A connected provider with no usage in the period must still
-    render with zero activity. A usage-load failure must render as unavailable,
-    not as a false zero or a disconnected provider.
-  - Add a provider-specific `Manage` action that opens Settings with that exact
-    tenant and provider selected without changing the Usage tenant filter. It
-    must not reveal a key, invoke the key-reveal endpoint, or alter
-    provider/default settings merely by opening the editor.
-  - Replace the ambiguous usage-derived `Providers` summary metric with a
-    `Connected providers` count derived from the same scope-correct `has_key`
-    projection. Under `All tenants`, count tenant/provider connections rather
-    than deduplicated provider IDs.
-    Keep provider/model usage breakdowns explicitly labeled as activity for the
-    selected reporting period, including historical rows for providers that are
-    no longer connected.
-  - Render a purposeful empty state when no providers are connected, with one
-    action that opens Settings. The state must coexist with mandatory onboarding
-    and must not create a path around its persisted-key requirements.
-  - Keep the widgets synchronized with canonical profile state: a successful
-    provider-key autosave adds its widget, a successful removal removes it,
-    failed mutations leave the current projection unchanged, and dashboard
-    refresh reloads both connection state and usage for the selected Usage
-    scope. Never let an out-of-order response restore stale connection state.
-  - Treat widgets as non-secret metadata. Never render provider API keys,
-    masked-key suffixes, client keys, system prompts, or credential-bearing
-    values in widget text, attributes, accessible names, or browser storage.
-  - Use semantic headings and per-provider articles, unique accessible action
-    names such as `Manage OpenAI`, full keyboard operation, and a responsive
-    grid that remains aligned without horizontal overflow on narrow screens.
-    Keep the provider widgets confined to the current user's owned tenants. The
-    admin dashboard must not project another tenant's provider credentials or
-    connection state.
-  - Add one canonical owner-wide safe connection projection because the account
-    summary does not contain provider `has_key` facts and the browser must not
-    fan out profile requests under `All tenants`. Preserve the existing tenant
-    profile as the canonical explicitly selected-tenant projection. Do not add
-    cached shadow state, compatibility aliases, fallback matching, or expose
-    masked/raw key material in the owner-wide response.
-  - Update dashboard and self-service documentation so `connected provider` and
-    `active provider` have explicit, non-overlapping meanings.
+  - Render one card for every provider definition in deterministic catalog
+    order. Do not hard-code a provider list in the browser.
+  - Do not use `Connected`, `Configured`, or `Verified` as user-facing provider
+    states. Do not add an `Add provider` or `Remove provider` action.
+  - Use `active` only for the tenant's selected default route. Use `used` only
+    for activity in the selected Usage interval.
+  - Show the provider label, catalog capabilities, request total, and token
+    total on the card front.
+  - For one Usage tenant, show that tenant's selected provider text model.
+  - For `All tenants`, do not synthesize one selected model from different
+    tenant profiles.
+  - Match activity by exact canonical provider ID. Keep historical activity
+    visible after key deletion.
+  - Show zero activity only after a successful usage load. Show unavailable
+    activity after a usage-load failure.
+  - Rename the current `Providers` metric to `Providers used`. Count exact
+    provider IDs with activity in the selected interval.
+  - For one tenant, label the card action `Set key` when no key is saved.
+    Label the action `Key settings` when a key is saved.
+  - For `All tenants`, label the action `Key settings`. Require an exact owned
+    tenant selection before key controls become available.
+  - Do not put a persistent key-status badge on the card front.
+  - Flip the card only through the explicit `Set key`, `Key settings`, or
+    `Done` control. Do not make the complete card a button.
+  - Permit only one open card back at a time. Keep its provider and tenant
+    identity fixed until the user closes or discards the editor.
+  - Show the exact tenant, catalog-defined provider fields, selected text model,
+    and provider system prompt on the card back.
+  - When no key is saved, show the key field and the provider's official
+    key-acquisition link.
+  - Load each official key-acquisition URL from the validated provider catalog.
+    Open it with `target="_blank"` and `rel="noopener noreferrer"`.
+  - Do not send a tenant ID, authentication value, provider key, or tracking
+    value to the key-acquisition URL.
+  - When a key is saved, show a generic mask and explicit `Replace key` and
+    `Delete key` actions. Do not reveal the key when the card flips.
+  - Delete only the saved provider key. Keep the provider definition, provider
+    profile, non-secret fields, and historical usage.
+  - Preserve valid tenant routing defaults when key deletion makes a route
+    unavailable.
+  - Verify each new or replacement key through the exact selected provider
+    route before persistence.
+  - Show `Checking key...` only while the verification request is active. Lock
+    conflicting card actions during that request.
+  - After successful verification, save the accepted key and show its generic
+    mask. Do not store or render a persistent verification state.
+  - Keep the card back open after successful verification until the user selects
+    `Done`.
+  - After failed verification, keep the candidate unsaved and show the exact
+    safe error. Preserve a previously saved key and settings.
+  - Reject each stale verification, save, deletion, or usage response after a
+    provider, tenant, interval, view, or authentication change.
+  - Keep the independent Usage tenant filter unchanged during card key actions.
+  - For `All tenants`, aggregate each card's activity across owned tenants.
+    Bind back-face key actions only to the explicitly selected tenant.
+  - Use the canonical tenant profile for key and provider profile state. Do not
+    add an owner-wide key-state projection or browser request fan-out.
+  - Remove the duplicate provider key, model, and provider prompt editor from
+    Settings after the card back owns these controls.
+  - Keep client access, routing defaults, the tenant prompt, and request examples
+    in Settings because these values are not provider keys.
+  - Supersede P001 only for provider-editor placement. Retain its catalog URL,
+    tenant isolation, atomic save, and client-key separation requirements.
+  - Keep raw key input transient on the active card back. Never put it in card
+    fronts, attributes, accessible names, browser storage, logs, or usage data.
+  - Keep a masked key value out of the card front and its accessible name.
+  - Use semantic provider articles and explicit controls with `aria-expanded`
+    and `aria-controls`.
+  - Make the inactive face `inert` and hidden from accessibility APIs. Move
+    focus between the action and the first applicable back-face control.
+  - Use a restrained 180-to-220-millisecond flip. Replace rotation with an
+    immediate face change when `prefers-reduced-motion` requests less motion.
+  - Use solid MPR charcoal surfaces, thin borders, compact controls, and
+    semantic status colors. Do not use a blurred-glass face.
+  - Keep the card grid aligned without horizontal overflow on narrow screens.
+  - Keep provider key controls unavailable on the administrator dashboard.
   Deliverables:
-  - Add the connected-provider widget grid, connected count, provider-specific
-    Settings navigation, empty/error states, and responsive styling to the user
-    dashboard.
-  - Add the owner-wide safe connection projection plus one derived presentation
-    model that joins tenant/provider connections to usage by exact canonical IDs
-    while keeping registration authoritative to `has_key`.
-  - Update first-party frontend types, copy, documentation, and rendered-browser
-    coverage for the final dashboard contract.
+  - Replace the prior provider-membership proposal with the catalog-owned
+    provider card grid and scope-correct activity presentation.
+  - Add the accessible front/back card interaction and the tenant-bound key
+    editor.
+  - Move provider key, model, and provider prompt controls from Settings to the
+    card back. Keep tenant-owned controls in Settings.
+  - Replace provider removal with key-only deletion that preserves provider
+    profile settings, non-secret fields, and historical usage.
+  - Add the validated key-acquisition URL to the safe management catalog
+    projection.
+  - Update frontend types, canonical API documentation, generated references,
+    self-service documentation, and user-facing copy.
   Validation:
-  - Add Playwright scenarios for `All tenants` and one explicit Usage tenant.
-  - Cover zero, one, and multiple connected providers.
-  - Cover duplicate provider IDs in two tenants and deterministic group order.
-  - Cover a connected provider with zero activity.
-  - Cover an unconnected provider with historical activity.
-  - Cover exact model, capability, usage, and connected-provider count values.
-  - Prove successful key autosave/removal and dashboard refresh update the
-    widgets, while rejected or out-of-order requests do not mutate the visible
-    projection and usage failure leaves connection state intact with activity
-    marked unavailable.
-  - Prove each `Manage` action selects the intended Settings tenant and provider
-    without changing the Usage tenant or making a reveal/mutation request, no
-    secret-bearing value reaches the rendered dashboard or browser storage, and
-    admin/user dashboard switching preserves isolation.
-  - Cover keyboard navigation, accessible names, and desktop/narrow viewport
-    layout without overlap or horizontal overflow.
-  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
-    pair for the implementation, with the final run after the last code edit.
+  - Add Playwright scenarios for every catalog provider and deterministic card
+    order.
+  - Cover one explicit Usage tenant and `All tenants` with one provider card per
+    provider definition.
+  - Cover exact provider activity, zero activity, unavailable activity, and
+    historical activity after key deletion.
+  - Cover explicit-tenant model presentation. Prove `All tenants` does not show
+    one synthetic selected model.
+  - Cover no-key, saved-key, replacement, deletion, active verification,
+    rejection, timeout, rate-limit, and unavailable verification states.
+  - Prove successful verification creates no persistent `Verified` state.
+  - Prove key deletion keeps the provider card, provider profile settings,
+    non-secret fields, and historical usage.
+  - Prove card opening does not reveal a key, mutate settings, or send a
+    provider request.
+  - Prove `All tenants` key actions require an exact tenant and do not change
+    the Usage tenant filter.
+  - Prove another tenant or user cannot receive key state, draft values,
+    provider settings, or activity.
+  - Prove only one card editor owns a raw draft. Reject stale responses after
+    each provider, tenant, interval, view, or authentication change.
+  - Prove raw and masked keys stay out of card fronts, attributes, accessible
+    names, browser storage, logs, and usage data.
+  - Cover keyboard operation, focus return, inactive-face isolation, reduced
+    motion, desktop layout, and narrow-screen layout.
+  - Prove the Settings modal has no duplicate provider editor after the card
+    cutover.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair for implementation.
 - [ ] [I038] (P2) Adopt DashScope's synchronous Responses API without background mode.
   Goal:
   Move eligible DashScope Qwen models from Chat Completions to Alibaba's newer
@@ -980,8 +1139,8 @@ retain satisfied historical dependencies.
   Usage scope's Provider usage and Model usage activity breakdowns, and make
   the Requests and Tokens time-series charts explain their scales without
   guesswork. Preserve the Usage tenant, interval, exact request and token
-  counts, and the distinction between historical activity and currently
-  connected providers.
+  counts, and the separation between provider activity and catalog-owned
+  provider cards.
   Evidence:
   - The current usage summary already returns deterministically ordered
     provider and model aggregates with request counts. The existing rows are
@@ -1002,8 +1161,8 @@ retain satisfied historical dependencies.
     management payload.
   - The current Usage contract provides account-wide and explicitly
     tenant-filtered scopes. I027 establishes the final dashboard layout and
-    reserves provider/model breakdowns for historical selected-period
-    activity, rather than current `has_key` connection state.
+    reserves provider/model breakdowns for selected-period activity. Provider
+    key presence does not define card membership.
   Requirements:
   - Implement after I027 against the canonical response for the selected Usage
     scope. Do not add a presentation-specific endpoint, response field, server
@@ -1066,12 +1225,12 @@ retain satisfied historical dependencies.
     value available to assistive technology without hover or a tooltip.
     Validate desktop and narrow layouts without clipping, tick-label overlap,
     or horizontal overflow.
-  - Keep the scope to the authenticated user's Usage Overview. I027's connected
-    provider widgets remain a separate `has_key` projection; an inactive
-    connected provider and historical activity for a disconnected provider must
-    retain their existing meanings. Do not add this control to the aggregate
-    admin dashboard or expose credentials, keys, prompts, responses, or other
-    sensitive usage data.
+  - Keep the scope to the authenticated user's Usage Overview. I027's provider
+    cards remain catalog-owned and show selected-scope activity.
+  - Apply this control only to the dedicated Provider usage and Model usage
+    panels. Do not change card faces or tenant key settings.
+  - Do not add this control to the aggregate administrator dashboard. Do not
+    expose credentials, keys, prompts, responses, or other sensitive usage data.
   - Document the resulting presentation contract in README, CHANGELOG.md, and
     `docs/implementation/provider-routing-plan.md`. Update the source in
     `scripts/generate_seo_resources.mjs` and regenerate the managed-tenant
@@ -1079,7 +1238,7 @@ retain satisfied historical dependencies.
     explicitly that this is a client-side view of existing aggregate request
     data, define both line charts' UTC time and per-bucket quantity axes, and
     state that the presentation is not a billing, provider-performance,
-    connected-provider, token-share, exact-event-time, or new management-API
+    provider-key, token-share, exact-event-time, or new management-API
     feature. This repository has no PRD.md or ARCHITECTURE.md; do not create
     partial placeholders for this UI change.
   Deliverables:
@@ -1630,7 +1789,7 @@ retain satisfied historical dependencies.
   - Add `POST /model/v1/assets` for bounded streaming upload and
     `GET /model/v1/artifacts/{artifact_id}` for authenticated download through
     opaque tenant-scoped identifiers.
-  - Record MIME type, byte size, SHA-256, ownership, creation time, retention
+  - Record MIME type, byte size, ownership, creation time, retention
     expiry, and provider-readable staging state for every asset.
   - Add a strict object-store configuration with a filesystem fixture backend
     and a GCS production backend for provider staging.
@@ -1639,8 +1798,8 @@ retain satisfied historical dependencies.
   - Materialize provider outputs into gateway-owned artifacts before reporting
     operation success unless the catalog declares a durable provider artifact
     that the gateway can retrieve on demand.
-  - Enforce tenant isolation, bounded uploads/downloads, MIME and digest
-    verification, expiry, and deterministic cleanup.
+  - Enforce tenant isolation, bounded uploads/downloads, MIME validation,
+    expiry, and deterministic cleanup.
   - Extend `pkg/llmproxyclient` with validated constructors and typed
     `PlanOperation`, `CreateOperation`, `GetOperation`, `UploadAsset`, and
     `DownloadArtifact` APIs.
@@ -1664,7 +1823,7 @@ retain satisfied historical dependencies.
     bodies, prompts, generated media, and provider-native handles.
   - Use a local fake server to prove every official-client path, authentication
     shape, idempotency header, typed error, and streaming cancellation path.
-  - Prove truncated uploads, digest mismatch, oversized media, cross-tenant
+  - Prove truncated uploads, oversized media, cross-tenant
     reads, expired assets, interrupted downloads, and cleanup races fail with
     durable and sanitized evidence.
   - Run the required baseline and final
@@ -2660,5 +2819,3 @@ retain satisfied historical dependencies.
     integrity before publication.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
-
-

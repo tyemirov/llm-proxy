@@ -6169,8 +6169,8 @@ issue titles discoverable without making the active tracker noisy.
   - Declare `media_inputs` only for a provider offering with a working
     code-owned transport.
   - Reject each media declaration that has no code-owned provider transport.
-  - Preserve attachment order, media bytes, MIME type, and SHA-256 through
-    provider serialization.
+  - Preserve attachment order, media bytes, and MIME type through provider
+    serialization. Validate provider-returned checksums for uploaded files.
   - Use a provider file API when inline transport cannot carry accepted media.
   - Apply each provider offering's declared media limits before dispatch.
   - Publish each media limit with its source and verification date.
@@ -6247,7 +6247,7 @@ issue titles discoverable without making the active tracker noisy.
   Goal:
   Let `/v2` accept provider-neutral media without a smaller LLM Proxy media
   limit. Translate each attachment into the selected provider's supported
-  transport. Preserve exact media bytes, order, MIME type, and SHA-256.
+  transport. Preserve exact media bytes, order, and MIME type.
   Observed failure:
   - Creative Director sends `master-character-sheet.png` through
     `NewImageAttachment` for Gemini semantic image QA.
@@ -6290,7 +6290,7 @@ issue titles discoverable without making the active tracker noisy.
   - Use the F022 tenant asset store for asset-backed attachments.
   - Add an asset-reference variant to the canonical user-message attachment
     union.
-  - Require `type`, `asset_id`, `mime_type`, and `sha256` in each asset
+  - Require `type`, `asset_id`, and `mime_type` in each asset
     reference.
   - Reject an attachment that contains both `data` and `asset_id`.
   - Remove `server.max_prompt_bytes` as a provider-independent `/v2` media
@@ -6314,8 +6314,8 @@ issue titles discoverable without making the active tracker noisy.
   - Represent an explicit provider no-limit value as `unbounded`.
   - Represent an unpublished provider limit as `unknown`.
   - Reverify provider limits during implementation.
-  - Validate tenant ownership, asset state, expiry, MIME type, size, and
-    SHA-256 before provider dispatch.
+  - Validate tenant ownership, asset state, expiry, MIME type, size, and stored
+    byte integrity before provider dispatch.
   - Preserve message order and attachment order after asset resolution.
   - Preserve caller bytes without resize, compression, or format conversion.
   - Keep caller filesystem paths outside the HTTP contract.
@@ -6335,14 +6335,13 @@ issue titles discoverable without making the active tracker noisy.
   - Send the 3,326,724-byte image inline through `/v2` to fake Gemini.
   - Require provider dispatch without a proxy 413 response.
   - Upload the same fixture through F022. Send one `/v2` asset reference.
-  - Require fake Gemini to receive the exact bytes, MIME type, SHA-256, and
-    order.
+  - Require fake Gemini to receive the exact bytes, MIME type, and order.
   - Do a test of each provider boundary at the limit and one unit above it.
   - Do a test of Gemini inline and Files API transport selection.
   - Do a test of each documented provider limit record.
   - Prove no provider-valid request fails because of a smaller proxy limit.
-  - Cover missing, foreign, expired, deleted, wrong-MIME, and wrong-digest
-    assets.
+  - Cover missing, foreign, expired, deleted, wrong-MIME, and
+    same-length-corrupted assets.
   - Cover one image, ordered images, audio, and mixed media.
   - Prove asset cleanup cannot change an admitted request or expose another
     tenant's asset.
