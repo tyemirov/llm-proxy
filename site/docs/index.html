@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="7694bd2d53e25ab16606e0741bbc2c9cfe50a56719967fd6d8693ae06fab6753">
+    <meta name="openapi-source-sha256" content="5521b1833acb6dad972545280e4d946e5aed06eab3948255c4a602e04ed6a0d6">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="7694bd2d53e25ab16606e0741bbc2c9cfe50a56719967fd6d8693ae06fab6753">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="5521b1833acb6dad972545280e4d946e5aed06eab3948255c4a602e04ed6a0d6">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>7694bd2d53e25ab16606e0741bbc2c9cfe50a56719967fd6d8693ae06fab6753</code></span>
+          <span>Source SHA-256 <code>5521b1833acb6dad972545280e4d946e5aed06eab3948255c4a602e04ed6a0d6</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -301,7 +301,7 @@ paths:
       operationId: uploadTenantAsset
       summary: Upload exact tenant media bytes
       description: &gt;-
-        Stores one hash-bound image or audio asset for the configured retention
+        Stores one image or audio asset for the configured retention
         period. The authenticated tenant owns the returned opaque asset id.
       tags:
         - Proxy
@@ -309,7 +309,6 @@ paths:
         - TenantClientKey: []
       parameters:
         - $ref: &#39;#/components/parameters/TenantClientKey&#39;
-        - $ref: &#39;#/components/parameters/AssetSHA256&#39;
         - $ref: &#39;#/components/parameters/RequestTimeout&#39;
       requestBody:
         $ref: &#39;#/components/requestBodies/AssetUpload&#39;
@@ -949,14 +948,6 @@ components:
       schema:
         type: string
         pattern: &#39;^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$&#39;
-    AssetSHA256:
-      name: X-LLM-Proxy-Asset-SHA256
-      in: header
-      required: true
-      description: Lowercase hexadecimal SHA-256 of the exact request body.
-      schema:
-        type: string
-        pattern: ^[0-9a-f]{64}$
     AssetID:
       name: asset_id
       in: path
@@ -2161,7 +2152,6 @@ components:
         - type
         - mime_type
         - data
-        - sha256
       properties:
         type:
           type: string
@@ -2176,10 +2166,6 @@ components:
           type: string
           minLength: 4
           description: Exact nonempty media bytes encoded as canonical padded RFC 4648 base64.
-        sha256:
-          type: string
-          pattern: ^[0-9a-f]{64}$
-          description: Lowercase hexadecimal SHA-256 of the decoded media bytes.
     AudioMessageAttachment:
       type: object
       additionalProperties: false
@@ -2187,7 +2173,6 @@ components:
         - type
         - mime_type
         - data
-        - sha256
       properties:
         type:
           type: string
@@ -2202,10 +2187,6 @@ components:
           type: string
           minLength: 4
           description: Exact nonempty media bytes encoded as canonical padded RFC 4648 base64.
-        sha256:
-          type: string
-          pattern: ^[0-9a-f]{64}$
-          description: Lowercase hexadecimal SHA-256 of the decoded media bytes.
     ImageAssetMessageAttachment:
       type: object
       additionalProperties: false
@@ -2213,7 +2194,6 @@ components:
         - type
         - mime_type
         - asset_id
-        - sha256
       properties:
         type:
           type: string
@@ -2227,9 +2207,6 @@ components:
         asset_id:
           type: string
           pattern: ^ast_[0-9a-f]{32}$
-        sha256:
-          type: string
-          pattern: ^[0-9a-f]{64}$
     AudioAssetMessageAttachment:
       type: object
       additionalProperties: false
@@ -2237,7 +2214,6 @@ components:
         - type
         - mime_type
         - asset_id
-        - sha256
       properties:
         type:
           type: string
@@ -2251,9 +2227,6 @@ components:
         asset_id:
           type: string
           pattern: ^ast_[0-9a-f]{32}$
-        sha256:
-          type: string
-          pattern: ^[0-9a-f]{64}$
     TenantAsset:
       type: object
       additionalProperties: false
@@ -2261,7 +2234,6 @@ components:
         - asset_id
         - mime_type
         - size_bytes
-        - sha256
         - state
         - created_at
         - expires_at
@@ -2282,9 +2254,6 @@ components:
           type: integer
           format: int64
           minimum: 1
-        sha256:
-          type: string
-          pattern: ^[0-9a-f]{64}$
         state:
           type: string
           const: available
@@ -2314,7 +2283,6 @@ components:
                 - asset_expired
                 - asset_deleted
                 - asset_mime_mismatch
-                - asset_digest_mismatch
                 - asset_too_large
                 - asset_store_error
     V2ChatMessage:
@@ -4333,7 +4301,7 @@ components:
           <span class="api-operation-id">uploadTenantAsset</span>
         </header>
         <h2>Upload exact tenant media bytes</h2>
-        <p>Stores one hash-bound image or audio asset for the configured retention period. The authenticated tenant owns the returned opaque asset id.</p>
+        <p>Stores one image or audio asset for the configured retention period. The authenticated tenant owns the returned opaque asset id.</p>
         <p class="api-security"><strong>Authentication:</strong> TenantClientKey (query key)</p>
         <div class="api-contract-block">
           <h3>Parameters</h3>
@@ -4342,7 +4310,6 @@ components:
               <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>key</code></td><td>query</td><td>Yes</td><td>string</td><td>Tenant client secret.</td></tr>
-<tr><td><code>X-LLM-Proxy-Asset-SHA256</code></td><td>header</td><td>Yes</td><td>string</td><td>Lowercase hexadecimal SHA-256 of the exact request body.</td></tr>
 <tr><td><code>X-LLM-Proxy-Request-Timeout-Seconds</code></td><td>header</td><td>No</td><td>integer</td><td>A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.</td></tr>
               </tbody>
             </table>
