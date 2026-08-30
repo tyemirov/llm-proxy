@@ -1,6 +1,6 @@
 [project]
 name = "llm-proxy-client"
-version = "0.2.0"
+version = "1.2.0"
 description = "Python client for llm-proxy JSON POST text requests."
 requires-python = ">=3.11"
 dependencies = []
