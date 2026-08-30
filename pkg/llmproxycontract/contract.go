@@ -4,8 +4,6 @@ package llmproxycontract
 const (
 	// AssetPath is the authenticated tenant asset upload endpoint.
 	AssetPath = "/model/v1/assets"
-	// HeaderAssetSHA256 carries the canonical lowercase hexadecimal digest for an asset upload.
-	HeaderAssetSHA256 = "X-LLM-Proxy-Asset-SHA256"
 	// HeaderRequestID carries the proxy-owned identifier used to correlate one public request with structured logs.
 	HeaderRequestID = "X-LLM-Proxy-Request-ID"
 	// HeaderIdempotencyKey binds one structured request intent to one durable provider submission.

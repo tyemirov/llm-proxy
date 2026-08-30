@@ -3,9 +3,7 @@ package llmproxyclient_test
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -161,20 +159,18 @@ func TestClientSerializesKimiK3ImageAndReasoningSelection(testingInstance *testi
 
 func TestClientUploadsAssetAndSerializesImageAndAudioAssetReferences(testingInstance *testing.T) {
 	imageBytes := []byte("uploaded-image")
-	imageDigest := sha256.Sum256(imageBytes)
-	digestText := hex.EncodeToString(imageDigest[:])
 	assetID := "ast_0123456789abcdef0123456789abcdef"
 	var capturedAttachment map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
 		case llmproxycontract.AssetPath:
 			body, _ := io.ReadAll(request.Body)
-			if !bytes.Equal(body, imageBytes) || request.Header.Get("Content-Type") != "image/png" || request.Header.Get(llmproxycontract.HeaderAssetSHA256) != digestText {
-				testingInstance.Errorf("asset upload body=%q content-type=%q digest=%q", body, request.Header.Get("Content-Type"), request.Header.Get(llmproxycontract.HeaderAssetSHA256))
+			if !bytes.Equal(body, imageBytes) || request.Header.Get("Content-Type") != "image/png" {
+				testingInstance.Errorf("asset upload body=%q content-type=%q", body, request.Header.Get("Content-Type"))
 			}
 			responseWriter.Header().Set("Content-Type", "application/json")
 			responseWriter.WriteHeader(http.StatusCreated)
-			_, _ = fmt.Fprintf(responseWriter, `{"asset_id":"%s","mime_type":"image/png","size_bytes":%d,"sha256":"%s","state":"available","created_at":"2026-08-11T10:00:00Z","expires_at":"2026-08-13T10:00:00Z"}`, assetID, len(imageBytes), digestText)
+			_, _ = fmt.Fprintf(responseWriter, `{"asset_id":"%s","mime_type":"image/png","size_bytes":%d,"state":"available","created_at":"2026-08-11T10:00:00Z","expires_at":"2026-08-13T10:00:00Z"}`, assetID, len(imageBytes))
 		case "/v2":
 			var payload map[string]any
 			_ = json.NewDecoder(request.Body).Decode(&payload)
@@ -200,11 +196,11 @@ func TestClientUploadsAssetAndSerializesImageAndAudioAssetReferences(testingInst
 	if uploadError != nil || asset.AssetID != assetID || asset.CreatedAt != time.Date(2026, 8, 11, 10, 0, 0, 0, time.UTC) {
 		testingInstance.Fatalf("asset=%+v error=%v", asset, uploadError)
 	}
-	imageAttachment, imageError := llmproxyclient.NewImageAssetAttachment(llmproxyclient.ImageAssetAttachmentInput{AssetID: asset.AssetID, MIMEType: asset.MIMEType, SHA256: asset.SHA256})
+	imageAttachment, imageError := llmproxyclient.NewImageAssetAttachment(llmproxyclient.ImageAssetAttachmentInput{AssetID: asset.AssetID, MIMEType: asset.MIMEType})
 	if imageError != nil {
 		testingInstance.Fatalf("image asset attachment: %v", imageError)
 	}
-	if _, audioError := llmproxyclient.NewAudioAssetAttachment(llmproxyclient.AudioAssetAttachmentInput{AssetID: asset.AssetID, MIMEType: "audio/wav", SHA256: asset.SHA256}); audioError != nil {
+	if _, audioError := llmproxyclient.NewAudioAssetAttachment(llmproxyclient.AudioAssetAttachmentInput{AssetID: asset.AssetID, MIMEType: "audio/wav"}); audioError != nil {
 		testingInstance.Fatalf("audio asset attachment: %v", audioError)
 	}
 	request, requestError := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequestInput{Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "inspect", Attachments: []llmproxyclient.MessageAttachment{imageAttachment}}}})
@@ -212,7 +208,7 @@ func TestClientUploadsAssetAndSerializesImageAndAudioAssetReferences(testingInst
 		testingInstance.Fatalf("request: %v", requestError)
 	}
 	response, postError := client.PostMessages(context.Background(), request)
-	if postError != nil || response != "asset ok" || capturedAttachment["asset_id"] != assetID || capturedAttachment["data"] != nil || capturedAttachment["sha256"] != digestText {
+	if postError != nil || response != "asset ok" || capturedAttachment["asset_id"] != assetID || capturedAttachment["data"] != nil || len(capturedAttachment) != 3 {
 		testingInstance.Fatalf("response=%q error=%v attachment=%v", response, postError, capturedAttachment)
 	}
 }
@@ -367,14 +363,7 @@ func TestMessageAttachmentConstructorsEnforceCanonicalMediaContract(testingInsta
 		{
 			name: "invalid asset identifier",
 			construct: func() (llmproxyclient.MessageAttachment, error) {
-				return llmproxyclient.NewImageAssetAttachment(llmproxyclient.ImageAssetAttachmentInput{AssetID: "bad", MIMEType: "image/png", SHA256: strings.Repeat("0", 64)})
-			},
-			wantError: true,
-		},
-		{
-			name: "invalid asset digest",
-			construct: func() (llmproxyclient.MessageAttachment, error) {
-				return llmproxyclient.NewAudioAssetAttachment(llmproxyclient.AudioAssetAttachmentInput{AssetID: "ast_0123456789abcdef0123456789abcdef", MIMEType: "audio/wav", SHA256: "bad"})
+				return llmproxyclient.NewImageAssetAttachment(llmproxyclient.ImageAssetAttachmentInput{AssetID: "bad", MIMEType: "image/png"})
 			},
 			wantError: true,
 		},
@@ -436,12 +425,10 @@ func assertClientAttachmentPayload(testingInstance *testing.T, rawAttachment any
 	if !attachmentOK {
 		testingInstance.Fatalf("attachment=%v", rawAttachment)
 	}
-	digest := sha256.Sum256(expectedData)
-	expectedDigest := hex.EncodeToString(digest[:])
 	if attachmentPayload["type"] != attachmentType ||
 		attachmentPayload["mime_type"] != mimeType ||
 		attachmentPayload["data"] != base64.StdEncoding.EncodeToString(expectedData) ||
-		attachmentPayload["sha256"] != expectedDigest {
+		len(attachmentPayload) != 3 {
 		testingInstance.Fatalf("attachment payload=%v", attachmentPayload)
 	}
 }

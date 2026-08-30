@@ -3,8 +3,6 @@ package llmproxyclient
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,12 +20,11 @@ type AssetUploadInput struct {
 	Data     []byte
 }
 
-// Asset is a hash-bound tenant asset returned by llm-proxy.
+// Asset is a tenant asset returned by llm-proxy.
 type Asset struct {
 	AssetID   string    `json:"asset_id"`
 	MIMEType  string    `json:"mime_type"`
 	SizeBytes int64     `json:"size_bytes"`
-	SHA256    string    `json:"sha256"`
 	State     string    `json:"state"`
 	CreatedAt time.Time `json:"created_at"`
 	ExpiresAt time.Time `json:"expires_at"`
@@ -62,7 +59,7 @@ func assetEndpointPath(basePath string) string {
 	return trimmedPath + llmproxycontract.AssetPath
 }
 
-// UploadAsset stores exact media bytes for later hash-bound attachment references.
+// UploadAsset stores exact media bytes for later attachment references.
 func (client Client) UploadAsset(contextValue context.Context, input AssetUploadInput) (Asset, error) {
 	mimeType := strings.ToLower(strings.TrimSpace(input.MIMEType))
 	if !supportedClientMediaMIME(mimeType) {
@@ -71,8 +68,6 @@ func (client Client) UploadAsset(contextValue context.Context, input AssetUpload
 	if len(input.Data) == 0 {
 		return Asset{}, fmt.Errorf("%w: asset data is empty", ErrInvalidClientRequest)
 	}
-	digest := sha256.Sum256(input.Data)
-	digestText := hex.EncodeToString(digest[:])
 	requestURL := client.config.assetUploadURL()
 	request := (&http.Request{
 		Method:        http.MethodPost,
@@ -82,7 +77,6 @@ func (client Client) UploadAsset(contextValue context.Context, input AssetUpload
 		ContentLength: int64(len(input.Data)),
 	}).WithContext(contextValue)
 	request.Header.Set(headerContentType, mimeType)
-	request.Header.Set(llmproxycontract.HeaderAssetSHA256, digestText)
 	response, requestError := client.httpClient.Do(request)
 	if requestError != nil {
 		return Asset{}, fmt.Errorf("%w: upload asset", ErrClientHTTPFailure)
@@ -104,7 +98,7 @@ func (client Client) UploadAsset(contextValue context.Context, input AssetUpload
 	if trailingError := decoder.Decode(&struct{}{}); trailingError != io.EOF {
 		return Asset{}, fmt.Errorf("%w: decode asset response", ErrClientHTTPFailure)
 	}
-	if !assetIdentifierPattern.MatchString(asset.AssetID) || asset.MIMEType != mimeType || asset.SizeBytes != int64(len(input.Data)) || asset.SHA256 != digestText || asset.State != "available" || asset.CreatedAt.IsZero() || !asset.ExpiresAt.After(asset.CreatedAt) {
+	if !assetIdentifierPattern.MatchString(asset.AssetID) || asset.MIMEType != mimeType || asset.SizeBytes != int64(len(input.Data)) || asset.State != "available" || asset.CreatedAt.IsZero() || !asset.ExpiresAt.After(asset.CreatedAt) {
 		return Asset{}, fmt.Errorf("%w: invalid asset response", ErrClientHTTPFailure)
 	}
 	return asset, nil
