@@ -914,7 +914,6 @@ write_image_smoke_request() {
   python3 -c '
 import base64
 import binascii
-import hashlib
 import json
 import pathlib
 import struct
@@ -943,7 +942,6 @@ payload = {
             "type": "image",
             "mime_type": "image/png",
             "data": base64.b64encode(image).decode("ascii"),
-            "sha256": hashlib.sha256(image).hexdigest(),
         }],
     }],
     "model": sys.argv[1],
