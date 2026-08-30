@@ -124,7 +124,7 @@ func TestGeminiFileUploadValidationAndPollingContracts(t *testing.T) {
 	digestBytes := sha256.Sum256(mediaBytes)
 	digest := hex.EncodeToString(digestBytes[:])
 	encodedDigest := base64.StdEncoding.EncodeToString(digestBytes[:])
-	attachment := &messageMedia{mediaType: messageMediaTypeImage, mimeType: "image/png", sha256: digest, sizeBytes: int64(len(mediaBytes)), data: mediaBytes}
+	attachment := &messageMedia{mediaType: messageMediaTypeImage, mimeType: "image/png", contentSHA256: digest, sizeBytes: int64(len(mediaBytes)), data: mediaBytes}
 	fileJSON := func(state string) string {
 		return `{"file":{"name":"files/media_1","mimeType":"image/png","sizeBytes":"11","sha256Hash":"` + encodedDigest + `","uri":"https://provider.test/v1beta/files/media_1","state":"` + state + `"}}`
 	}
@@ -273,7 +273,7 @@ func TestGeminiFileUploadValidationAndPollingContracts(t *testing.T) {
 		t.Fatalf("file=%+v error=%v", validFile, validationError)
 	}
 	invalidAttachment := *attachment
-	invalidAttachment.sha256 = "bad"
+	invalidAttachment.contentSHA256 = strings.Repeat("0", 64)
 	if _, validationError := validatedGeminiFileObject(validFile, &invalidAttachment, baseURL); !errors.Is(validationError, ErrProviderAPI) {
 		t.Fatalf("object validation error=%v", validationError)
 	}
@@ -301,7 +301,7 @@ func TestGeminiFileResourceAndInteractionInputEdges(t *testing.T) {
 	}))
 	attachmentData := []byte("a")
 	digest := sha256.Sum256(attachmentData)
-	attachment := &messageMedia{mediaType: messageMediaTypeAudio, mimeType: "audio/wav", sha256: hex.EncodeToString(digest[:]), sizeBytes: 1, data: attachmentData}
+	attachment := &messageMedia{mediaType: messageMediaTypeAudio, mimeType: "audio/wav", contentSHA256: hex.EncodeToString(digest[:]), sizeBytes: 1, data: attachmentData}
 	if _, getError := client.getGeminiFile(context.Background(), "key", "https://provider.test", "bad", attachment); !errors.Is(getError, ErrProviderAPI) {
 		t.Fatalf("invalid name error=%v", getError)
 	}
@@ -389,7 +389,7 @@ func TestGeminiFileResourceAndInteractionInputEdges(t *testing.T) {
 func TestGeminiPrepareInteractionPayloadFailureContracts(t *testing.T) {
 	data := []byte("media")
 	digest := sha256.Sum256(data)
-	inlineAttachment := messageMedia{mediaType: messageMediaTypeImage, mimeType: "image/png", sha256: hex.EncodeToString(digest[:]), sizeBytes: int64(len(data)), data: data}
+	inlineAttachment := messageMedia{mediaType: messageMediaTypeImage, mimeType: "image/png", contentSHA256: hex.EncodeToString(digest[:]), sizeBytes: int64(len(data)), data: data}
 	messages := chatMessages{{role: chatRoleUser, content: "inspect", attachments: []messageMedia{inlineAttachment}}}
 	client := newGeminiInteractionsClient(geminiEdgeDoer(func(*http.Request) (*http.Response, error) {
 		return nil, errAssetEdge
@@ -431,7 +431,7 @@ func TestGeminiPrepareInteractionPayloadFailureContracts(t *testing.T) {
 func TestGeminiFinalizedFileIsCleanedAfterProcessingCancellation(t *testing.T) {
 	data := []byte("processing-media")
 	digest := sha256.Sum256(data)
-	attachment := messageMedia{mediaType: messageMediaTypeImage, mimeType: "image/png", sha256: hex.EncodeToString(digest[:]), sizeBytes: int64(len(data)), data: data}
+	attachment := messageMedia{mediaType: messageMediaTypeImage, mimeType: "image/png", contentSHA256: hex.EncodeToString(digest[:]), sizeBytes: int64(len(data)), data: data}
 	messages := chatMessages{{role: chatRoleUser, content: "inspect", attachments: []messageMedia{attachment}}}
 	model := textModelDefinition{mediaLimits: []CatalogMediaLimit{
 		{ID: CatalogMediaLimitIDInlineRequestBytes, MediaType: CatalogMediaLimitTypeAll, Status: CatalogMediaLimitStatusBounded, Value: int64Pointer(1)},

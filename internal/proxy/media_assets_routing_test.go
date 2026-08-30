@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,13 +26,11 @@ type mediaAssetResponse struct {
 	AssetID   string `json:"asset_id"`
 	MIMEType  string `json:"mime_type"`
 	SizeBytes int64  `json:"size_bytes"`
-	SHA256    string `json:"sha256"`
 	State     string `json:"state"`
 }
 
 func TestV2LargeInlineMediaBypassesCompatibilityPromptLimit(t *testing.T) {
 	mediaBytes := bytes.Repeat([]byte{0x89, 0x50, 0x4e, 0x47}, 831681)
-	digest := sha256.Sum256(mediaBytes)
 	var receivedMedia []byte
 	upstream := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		if handleGeminiCompletedMediaInteraction(responseWriter, request) {
@@ -71,7 +68,7 @@ func TestV2LargeInlineMediaBypassesCompatibilityPromptLimit(t *testing.T) {
 			"role": "user", "content": "inspect exact image bytes",
 			"attachments": []any{map[string]any{
 				"type": "image", "mime_type": "image/png",
-				"data": base64.StdEncoding.EncodeToString(mediaBytes), "sha256": hex.EncodeToString(digest[:]),
+				"data": base64.StdEncoding.EncodeToString(mediaBytes),
 			}},
 		}},
 	}
@@ -142,7 +139,6 @@ func TestGeminiImageCountLimitAdmitsBoundaryAndRejectsOneAbove(t *testing.T) {
 
 func TestGeminiInlineRequestLimitSelectsInlineAtBoundaryAndFilesOneAbove(t *testing.T) {
 	mediaBytes := []byte("inline-boundary-image")
-	digest := sha256.Sum256(mediaBytes)
 	var upstream *httptest.Server
 	inlineRequestSizes := []int{}
 	fileInteractions := 0
@@ -161,7 +157,7 @@ func TestGeminiInlineRequestLimitSelectsInlineAtBoundaryAndFilesOneAbove(t *test
 				t.Errorf("uploaded bytes=%q", uploadedBytes)
 			}
 			uploadCount++
-			_, _ = fmt.Fprintf(responseWriter, `{"file":{"name":"files/inline-boundary","mimeType":"image/png","sizeBytes":"%d","sha256Hash":"%s","uri":"%s/files/inline-boundary","state":"ACTIVE"}}`, len(mediaBytes), base64.StdEncoding.EncodeToString(digest[:]), upstream.URL)
+			_, _ = fmt.Fprintf(responseWriter, `{"file":{"name":"files/inline-boundary","mimeType":"image/png","sizeBytes":"%d","sha256Hash":"%s","uri":"%s/files/inline-boundary","state":"ACTIVE"}}`, len(mediaBytes), mediaSHA256Base64(mediaBytes), upstream.URL)
 		case request.Method == http.MethodPost && request.URL.Path == "/interactions":
 			body, _ := io.ReadAll(request.Body)
 			if bytes.Contains(body, []byte(`"data"`)) {
@@ -231,7 +227,7 @@ func TestTenantAssetReferenceValidationAndExactRouting(t *testing.T) {
 	router := mediaAssetRouter(t, upstream.URL, assetRoot, testfixtures.ModelCatalog(t), 60)
 	asset := uploadTestAsset(t, router, "secret-a", "image/png", mediaBytes)
 
-	assetPayload := v2AssetReferencePayload(asset.AssetID, asset.MIMEType, asset.SHA256)
+	assetPayload := v2AssetReferencePayload(asset.AssetID, asset.MIMEType)
 	response := postV2MediaRequest(t, router, "secret-a", assetPayload)
 	if response.Code != http.StatusOK || !bytes.Equal(receivedMedia, mediaBytes) {
 		t.Fatalf("status=%d body=%s received=%q", response.Code, response.Body.String(), receivedMedia)
@@ -244,9 +240,9 @@ func TestTenantAssetReferenceValidationAndExactRouting(t *testing.T) {
 		wantStatus int
 	}{
 		{name: "foreign tenant", secret: "secret-b", payload: assetPayload, wantStatus: http.StatusNotFound},
-		{name: "missing asset", secret: "secret-a", payload: v2AssetReferencePayload("ast_00000000000000000000000000000000", asset.MIMEType, asset.SHA256), wantStatus: http.StatusNotFound},
-		{name: "wrong MIME", secret: "secret-a", payload: v2AssetReferencePayload(asset.AssetID, "image/jpeg", asset.SHA256), wantStatus: http.StatusBadRequest},
-		{name: "wrong digest", secret: "secret-a", payload: v2AssetReferencePayload(asset.AssetID, asset.MIMEType, strings.Repeat("0", 64)), wantStatus: http.StatusBadRequest},
+		{name: "missing asset", secret: "secret-a", payload: v2AssetReferencePayload("ast_00000000000000000000000000000000", asset.MIMEType), wantStatus: http.StatusNotFound},
+		{name: "wrong MIME", secret: "secret-a", payload: v2AssetReferencePayload(asset.AssetID, "image/jpeg"), wantStatus: http.StatusBadRequest},
+		{name: "obsolete hash field", secret: "secret-a", payload: v2ObsoleteAttachmentPayload(asset), wantStatus: http.StatusBadRequest},
 		{name: "both union variants", secret: "secret-a", payload: v2ConflictingAttachmentPayload(asset, mediaBytes), wantStatus: http.StatusBadRequest},
 	} {
 		t.Run(testCase.name, func(subTest *testing.T) {
@@ -271,7 +267,6 @@ func TestTenantAssetReferenceValidationAndExactRouting(t *testing.T) {
 
 func TestGeminiFileTransportPreservesAssetBytesAndCleansUp(t *testing.T) {
 	mediaBytes := bytes.Repeat([]byte("media"), 300)
-	digest := sha256.Sum256(mediaBytes)
 	var upstream *httptest.Server
 	var mutex sync.Mutex
 	uploadedBytes := []byte(nil)
@@ -291,7 +286,7 @@ func TestGeminiFileTransportPreservesAssetBytesAndCleansUp(t *testing.T) {
 			uploadedBytes = body
 			mutex.Unlock()
 			responseWriter.Header().Set("Content-Type", "application/json")
-			_, _ = fmt.Fprintf(responseWriter, `{"file":{"name":"files/media-1","mimeType":"image/png","sizeBytes":"%d","sha256Hash":"%s","uri":"%s/files/media-1","state":"ACTIVE"}}`, len(mediaBytes), base64.StdEncoding.EncodeToString(digest[:]), upstream.URL)
+			_, _ = fmt.Fprintf(responseWriter, `{"file":{"name":"files/media-1","mimeType":"image/png","sizeBytes":"%d","sha256Hash":"%s","uri":"%s/files/media-1","state":"ACTIVE"}}`, len(mediaBytes), mediaSHA256Base64(mediaBytes), upstream.URL)
 		case request.Method == http.MethodPost && request.URL.Path == "/interactions":
 			var payload map[string]any
 			_ = json.NewDecoder(request.Body).Decode(&payload)
@@ -310,7 +305,7 @@ func TestGeminiFileTransportPreservesAssetBytesAndCleansUp(t *testing.T) {
 	setGeminiMediaLimit(t, &catalog, proxy.ModelNameGemini35Flash, proxy.CatalogMediaLimitIDImageFileBytes, int64(len(mediaBytes)))
 	router := mediaAssetRouter(t, upstream.URL, t.TempDir(), catalog, 60)
 	asset := uploadTestAsset(t, router, "secret-a", "image/png", mediaBytes)
-	response := postV2MediaRequest(t, router, "secret-a", v2AssetReferencePayload(asset.AssetID, asset.MIMEType, asset.SHA256))
+	response := postV2MediaRequest(t, router, "secret-a", v2AssetReferencePayload(asset.AssetID, asset.MIMEType))
 	mutex.Lock()
 	defer mutex.Unlock()
 	if response.Code != http.StatusOK || !bytes.Equal(uploadedBytes, mediaBytes) || interactionURI != upstream.URL+"/files/media-1" || cleanupCount != 1 {
@@ -318,11 +313,41 @@ func TestGeminiFileTransportPreservesAssetBytesAndCleansUp(t *testing.T) {
 	}
 }
 
+func TestGeminiFileTransportRejectsWrongProviderChecksum(t *testing.T) {
+	mediaBytes := []byte("provider-checksum")
+	interactionCalls := 0
+	var upstream *httptest.Server
+	upstream = httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodPost && request.URL.Path == "/upload/v1beta/files":
+			responseWriter.Header().Set("X-Goog-Upload-URL", upstream.URL+"/upload-session")
+			responseWriter.WriteHeader(http.StatusOK)
+		case request.Method == http.MethodPost && request.URL.Path == "/upload-session":
+			_, _ = io.Copy(io.Discard, request.Body)
+			_, _ = fmt.Fprintf(responseWriter, `{"file":{"name":"files/wrong-checksum","mimeType":"image/png","sizeBytes":"%d","sha256Hash":"%s","uri":"%s/files/wrong-checksum","state":"ACTIVE"}}`, len(mediaBytes), mediaSHA256Base64(bytes.Repeat([]byte("x"), len(mediaBytes))), upstream.URL)
+		case request.Method == http.MethodPost && request.URL.Path == "/interactions":
+			interactionCalls++
+			writeGeminiCompletedResponse(responseWriter)
+		default:
+			http.NotFound(responseWriter, request)
+		}
+	}))
+	defer upstream.Close()
+	catalog := testfixtures.ModelCatalog(t)
+	setGeminiMediaLimit(t, &catalog, proxy.ModelNameGemini35Flash, proxy.CatalogMediaLimitIDInlineRequestBytes, 1)
+	setGeminiMediaLimit(t, &catalog, proxy.ModelNameGemini35Flash, proxy.CatalogMediaLimitIDImageFileBytes, int64(len(mediaBytes)))
+	response := postV2MediaRequest(t, mediaAssetRouter(t, upstream.URL, t.TempDir(), catalog, 60), "secret-a", []byte(mediaV2RequestBody(t, proxy.ModelNameGemini35Flash, "inspect", []map[string]any{
+		messageMediaPayload("image", "image/png", mediaBytes),
+	})))
+	if response.Code != http.StatusBadGateway || interactionCalls != 0 || !strings.Contains(response.Body.String(), llmproxycontract.ErrorCodeProviderError) {
+		t.Fatalf("status=%d interactions=%d body=%s", response.Code, interactionCalls, response.Body.String())
+	}
+}
+
 func TestGeminiFileCleanupFailureFailsTheRequest(t *testing.T) {
 	for _, interactionStatus := range []string{"completed", "incomplete"} {
 		t.Run(interactionStatus, func(subTest *testing.T) {
 			mediaBytes := []byte("cleanup-failure")
-			digest := sha256.Sum256(mediaBytes)
 			interactionCalls := 0
 			var upstream *httptest.Server
 			upstream = httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
@@ -331,7 +356,7 @@ func TestGeminiFileCleanupFailureFailsTheRequest(t *testing.T) {
 					responseWriter.Header().Set("X-Goog-Upload-URL", upstream.URL+"/upload-session")
 					responseWriter.WriteHeader(http.StatusOK)
 				case request.Method == http.MethodPost && request.URL.Path == "/upload-session":
-					_, _ = fmt.Fprintf(responseWriter, `{"file":{"name":"files/cleanup-failure","mimeType":"image/png","sizeBytes":"%d","sha256Hash":"%s","uri":"%s/files/cleanup-failure","state":"ACTIVE"}}`, len(mediaBytes), base64.StdEncoding.EncodeToString(digest[:]), upstream.URL)
+					_, _ = fmt.Fprintf(responseWriter, `{"file":{"name":"files/cleanup-failure","mimeType":"image/png","sizeBytes":"%d","sha256Hash":"%s","uri":"%s/files/cleanup-failure","state":"ACTIVE"}}`, len(mediaBytes), mediaSHA256Base64(mediaBytes), upstream.URL)
 				case request.Method == http.MethodPost && request.URL.Path == "/interactions":
 					interactionCalls++
 					responseWriter.Header().Set("Content-Type", "application/json")
@@ -366,7 +391,6 @@ func TestGeminiFileCleanupFailureFailsTheRequest(t *testing.T) {
 
 func TestDeletingAssetAfterAdmissionKeepsTheOpenRequestStable(t *testing.T) {
 	mediaBytes := bytes.Repeat([]byte("admitted-media"), 100)
-	digest := sha256.Sum256(mediaBytes)
 	startReached := make(chan struct{})
 	releaseStart := make(chan struct{})
 	var upstream *httptest.Server
@@ -383,7 +407,7 @@ func TestDeletingAssetAfterAdmissionKeepsTheOpenRequestStable(t *testing.T) {
 			responseWriter.WriteHeader(http.StatusOK)
 		case request.Method == http.MethodPost && request.URL.Path == "/upload-session":
 			uploadedBytes, _ = io.ReadAll(request.Body)
-			_, _ = fmt.Fprintf(responseWriter, `{"file":{"name":"files/admitted","mimeType":"image/png","sizeBytes":"%d","sha256Hash":"%s","uri":"%s/files/admitted","state":"ACTIVE"}}`, len(mediaBytes), base64.StdEncoding.EncodeToString(digest[:]), upstream.URL)
+			_, _ = fmt.Fprintf(responseWriter, `{"file":{"name":"files/admitted","mimeType":"image/png","sizeBytes":"%d","sha256Hash":"%s","uri":"%s/files/admitted","state":"ACTIVE"}}`, len(mediaBytes), mediaSHA256Base64(mediaBytes), upstream.URL)
 		case request.Method == http.MethodPost && request.URL.Path == "/interactions":
 			writeGeminiCompletedResponse(responseWriter)
 		case request.Method == http.MethodDelete && request.URL.Path == "/files/admitted":
@@ -399,7 +423,7 @@ func TestDeletingAssetAfterAdmissionKeepsTheOpenRequestStable(t *testing.T) {
 	asset := uploadTestAsset(t, router, "secret-a", "image/png", mediaBytes)
 	requestComplete := make(chan *httptest.ResponseRecorder, 1)
 	go func() {
-		requestComplete <- postV2MediaRequest(t, router, "secret-a", v2AssetReferencePayload(asset.AssetID, asset.MIMEType, asset.SHA256))
+		requestComplete <- postV2MediaRequest(t, router, "secret-a", v2AssetReferencePayload(asset.AssetID, asset.MIMEType))
 	}()
 	select {
 	case <-startReached:
@@ -437,7 +461,7 @@ func TestExpiredAssetAndProviderMediaLimitsFailWithStableCodes(t *testing.T) {
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
-		response := postV2MediaRequest(subTest, router, "secret-a", v2AssetReferencePayload(asset.AssetID, asset.MIMEType, asset.SHA256))
+		response := postV2MediaRequest(subTest, router, "secret-a", v2AssetReferencePayload(asset.AssetID, asset.MIMEType))
 		if response.Code != http.StatusGone || !strings.Contains(response.Body.String(), "asset_expired") {
 			subTest.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 		}
@@ -454,7 +478,7 @@ func TestExpiredAssetAndProviderMediaLimitsFailWithStableCodes(t *testing.T) {
 		setGeminiMediaLimit(subTest, &catalog, proxy.ModelNameGemini35Flash, proxy.CatalogMediaLimitIDImageFileBytes, int64(len("above-limit")-1))
 		router := mediaAssetRouter(subTest, upstream.URL, subTest.TempDir(), catalog, 60)
 		asset := uploadTestAsset(subTest, router, "secret-a", "image/png", []byte("above-limit"))
-		response := postV2MediaRequest(subTest, router, "secret-a", v2AssetReferencePayload(asset.AssetID, asset.MIMEType, asset.SHA256))
+		response := postV2MediaRequest(subTest, router, "secret-a", v2AssetReferencePayload(asset.AssetID, asset.MIMEType))
 		if response.Code != http.StatusRequestEntityTooLarge || !strings.Contains(response.Body.String(), llmproxycontract.ErrorCodeProviderMediaLimitExceeded) || upstreamCalls != 0 {
 			subTest.Fatalf("status=%d calls=%d body=%s", response.Code, upstreamCalls, response.Body.String())
 		}
@@ -467,10 +491,9 @@ func TestExpiredAssetAndProviderMediaLimitsFailWithStableCodes(t *testing.T) {
 		defer upstream.Close()
 		router := mediaAssetRouter(subTest, upstream.URL, subTest.TempDir(), testfixtures.ModelCatalog(subTest), 60)
 		mediaBytes := []byte("inline-media")
-		digest := sha256.Sum256(mediaBytes)
 		requestBody, _ := json.Marshal(map[string]any{"messages": []any{map[string]any{
 			"role": "user", "content": "inspect",
-			"attachments": []any{map[string]any{"type": "image", "mime_type": "image/png", "data": base64.StdEncoding.EncodeToString(mediaBytes), "sha256": hex.EncodeToString(digest[:])}},
+			"attachments": []any{map[string]any{"type": "image", "mime_type": "image/png", "data": base64.StdEncoding.EncodeToString(mediaBytes)}},
 		}}})
 		response := postV2MediaRequest(subTest, router, "secret-a", requestBody)
 		if response.Code != http.StatusRequestEntityTooLarge || !strings.Contains(response.Body.String(), llmproxycontract.ErrorCodeProviderMediaLimitExceeded) {
@@ -483,12 +506,19 @@ func TestTenantAssetUploadUsesTheAuthenticatedRequestBudget(t *testing.T) {
 	router := mediaAssetRouter(t, "https://provider.invalid", t.TempDir(), testfixtures.ModelCatalog(t), 60)
 	request := httptest.NewRequest(http.MethodPost, llmproxycontract.AssetPath+"?key=secret-a", strings.NewReader("asset"))
 	request.Header.Set("Content-Type", "image/png")
-	request.Header.Set(llmproxycontract.HeaderAssetSHA256, strings.Repeat("0", 64))
 	request.Header.Set(llmproxycontract.HeaderRequestTimeoutSeconds, "3601")
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
 	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), llmproxycontract.ErrorCodeInvalidRequestTimeout) {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	obsoleteRequest := httptest.NewRequest(http.MethodPost, llmproxycontract.AssetPath+"?key=secret-a", strings.NewReader("asset"))
+	obsoleteRequest.Header.Set("Content-Type", "image/png")
+	obsoleteRequest.Header.Set("X-LLM-Proxy-Asset-SHA256", strings.Repeat("0", 64))
+	obsoleteResponse := httptest.NewRecorder()
+	router.ServeHTTP(obsoleteResponse, obsoleteRequest)
+	if obsoleteResponse.Code != http.StatusBadRequest || !strings.Contains(obsoleteResponse.Body.String(), "asset_invalid") {
+		t.Fatalf("obsolete status=%d body=%s", obsoleteResponse.Code, obsoleteResponse.Body.String())
 	}
 }
 
@@ -521,10 +551,8 @@ func mediaAssetRouterWithMaxPrompt(t *testing.T, geminiBaseURL string, assetRoot
 
 func uploadTestAsset(t *testing.T, router http.Handler, secret string, mimeType string, data []byte) mediaAssetResponse {
 	t.Helper()
-	digest := sha256.Sum256(data)
 	request := httptest.NewRequest(http.MethodPost, llmproxycontract.AssetPath+"?key="+secret, bytes.NewReader(data))
 	request.Header.Set("Content-Type", mimeType)
-	request.Header.Set(llmproxycontract.HeaderAssetSHA256, hex.EncodeToString(digest[:]))
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
 	if response.Code != http.StatusCreated {
@@ -546,10 +574,10 @@ func postV2MediaRequest(t *testing.T, router http.Handler, secret string, payloa
 	return response
 }
 
-func v2AssetReferencePayload(assetID string, mimeType string, digest string) []byte {
+func v2AssetReferencePayload(assetID string, mimeType string) []byte {
 	payload, _ := json.Marshal(map[string]any{"messages": []any{map[string]any{
 		"role": "user", "content": "inspect asset",
-		"attachments": []any{map[string]any{"type": "image", "asset_id": assetID, "mime_type": mimeType, "sha256": digest}},
+		"attachments": []any{map[string]any{"type": "image", "asset_id": assetID, "mime_type": mimeType}},
 	}}})
 	return payload
 }
@@ -557,9 +585,22 @@ func v2AssetReferencePayload(assetID string, mimeType string, digest string) []b
 func v2ConflictingAttachmentPayload(asset mediaAssetResponse, data []byte) []byte {
 	payload, _ := json.Marshal(map[string]any{"messages": []any{map[string]any{
 		"role": "user", "content": "inspect asset",
-		"attachments": []any{map[string]any{"type": "image", "asset_id": asset.AssetID, "data": base64.StdEncoding.EncodeToString(data), "mime_type": asset.MIMEType, "sha256": asset.SHA256}},
+		"attachments": []any{map[string]any{"type": "image", "asset_id": asset.AssetID, "data": base64.StdEncoding.EncodeToString(data), "mime_type": asset.MIMEType}},
 	}}})
 	return payload
+}
+
+func v2ObsoleteAttachmentPayload(asset mediaAssetResponse) []byte {
+	payload, _ := json.Marshal(map[string]any{"messages": []any{map[string]any{
+		"role": "user", "content": "inspect asset",
+		"attachments": []any{map[string]any{"type": "image", "asset_id": asset.AssetID, "mime_type": asset.MIMEType, "sha256": strings.Repeat("0", 64)}},
+	}}})
+	return payload
+}
+
+func mediaSHA256Base64(data []byte) string {
+	digest := sha256.Sum256(data)
+	return base64.StdEncoding.EncodeToString(digest[:])
 }
 
 func setGeminiMediaLimit(t *testing.T, catalog *proxy.ModelCatalog, model string, limitID string, value int64) {

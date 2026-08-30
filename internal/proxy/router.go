@@ -848,7 +848,7 @@ func validateTextMaxTokens(providerDefinition providerDefinition, modelIdentifie
 
 func statusCodeForError(requestError error) int {
 	switch {
-	case errors.Is(requestError, ErrUnknownProvider), errors.Is(requestError, ErrUnknownModel), errors.Is(requestError, ErrUnsupportedCapability), errors.Is(requestError, ErrUnsupportedEndpoint), errors.Is(requestError, ErrConflictingModelParameters), errors.Is(requestError, ErrInvalidChatMessages), errors.Is(requestError, errAssetInvalid), errors.Is(requestError, errAssetMIMEMismatch), errors.Is(requestError, errAssetDigestMismatch):
+	case errors.Is(requestError, ErrUnknownProvider), errors.Is(requestError, ErrUnknownModel), errors.Is(requestError, ErrUnsupportedCapability), errors.Is(requestError, ErrUnsupportedEndpoint), errors.Is(requestError, ErrConflictingModelParameters), errors.Is(requestError, ErrInvalidChatMessages), errors.Is(requestError, errAssetInvalid), errors.Is(requestError, errAssetMIMEMismatch):
 		return http.StatusBadRequest
 	case errors.Is(requestError, errAssetNotFound):
 		return http.StatusNotFound

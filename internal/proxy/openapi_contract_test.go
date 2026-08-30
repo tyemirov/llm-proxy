@@ -2,8 +2,6 @@ package proxy_test
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -157,22 +155,22 @@ func TestOpenAPIContractEnforcesV2MediaRelationships(t *testing.T) {
 	}{
 		{
 			name:      "user image attachment",
-			body:      `{"messages":[{"role":"user","content":"Describe the image.","attachments":[{"type":"image","mime_type":"image/png","data":"YQ==","sha256":"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"}]}]}`,
+			body:      `{"messages":[{"role":"user","content":"Describe the image.","attachments":[{"type":"image","mime_type":"image/png","data":"YQ=="}]}]}`,
 			wantValid: true,
 		},
 		{
 			name:      "user audio attachment",
-			body:      `{"messages":[{"role":"user","content":"Transcribe the audio.","attachments":[{"type":"audio","mime_type":"audio/wav","data":"YQ==","sha256":"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"}]}]}`,
+			body:      `{"messages":[{"role":"user","content":"Transcribe the audio.","attachments":[{"type":"audio","mime_type":"audio/wav","data":"YQ=="}]}]}`,
 			wantValid: true,
 		},
 		{
 			name:      "user image asset attachment",
-			body:      `{"messages":[{"role":"user","content":"Describe the image.","attachments":[{"type":"image","mime_type":"image/png","asset_id":"ast_0123456789abcdef0123456789abcdef","sha256":"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"}]}]}`,
+			body:      `{"messages":[{"role":"user","content":"Describe the image.","attachments":[{"type":"image","mime_type":"image/png","asset_id":"ast_0123456789abcdef0123456789abcdef"}]}]}`,
 			wantValid: true,
 		},
 		{
 			name:      "user audio asset attachment",
-			body:      `{"messages":[{"role":"user","content":"Transcribe the audio.","attachments":[{"type":"audio","mime_type":"audio/wav","asset_id":"ast_0123456789abcdef0123456789abcdef","sha256":"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"}]}]}`,
+			body:      `{"messages":[{"role":"user","content":"Transcribe the audio.","attachments":[{"type":"audio","mime_type":"audio/wav","asset_id":"ast_0123456789abcdef0123456789abcdef"}]}]}`,
 			wantValid: true,
 		},
 		{
@@ -182,15 +180,19 @@ func TestOpenAPIContractEnforcesV2MediaRelationships(t *testing.T) {
 		},
 		{
 			name: "image type with audio MIME",
-			body: `{"messages":[{"role":"user","content":"Reject mismatched media.","attachments":[{"type":"image","mime_type":"audio/wav","data":"YQ==","sha256":"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"}]}]}`,
+			body: `{"messages":[{"role":"user","content":"Reject mismatched media.","attachments":[{"type":"image","mime_type":"audio/wav","data":"YQ=="}]}]}`,
+		},
+		{
+			name: "obsolete hash field",
+			body: `{"messages":[{"role":"user","content":"Reject obsolete media.","attachments":[{"type":"image","mime_type":"image/png","data":"YQ==","sha256":"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"}]}]}`,
 		},
 		{
 			name: "system attachment",
-			body: `{"messages":[{"role":"system","content":"Reject attached system media.","attachments":[{"type":"image","mime_type":"image/png","data":"YQ==","sha256":"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"}]}]}`,
+			body: `{"messages":[{"role":"system","content":"Reject attached system media.","attachments":[{"type":"image","mime_type":"image/png","data":"YQ=="}]}]}`,
 		},
 		{
 			name: "attachment with data and asset id",
-			body: `{"messages":[{"role":"user","content":"Reject conflicting media.","attachments":[{"type":"image","mime_type":"image/png","data":"YQ==","asset_id":"ast_0123456789abcdef0123456789abcdef","sha256":"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"}]}]}`,
+			body: `{"messages":[{"role":"user","content":"Reject conflicting media.","attachments":[{"type":"image","mime_type":"image/png","data":"YQ==","asset_id":"ast_0123456789abcdef0123456789abcdef"}]}]}`,
 		},
 	}
 
@@ -222,10 +224,8 @@ func TestOpenAPIContractValidatesTenantAssetUploadAndDeleteExchanges(t *testing.
 		t.Fatalf("BuildRouter error: %v", buildError)
 	}
 	assetBytes := []byte("openapi-asset")
-	digest := sha256.Sum256(assetBytes)
 	uploadRequest := httptest.NewRequest(http.MethodPost, "/model/v1/assets?key="+TestSecret, bytes.NewReader(assetBytes))
 	uploadRequest.Header.Set("Content-Type", "image/png")
-	uploadRequest.Header.Set("X-LLM-Proxy-Asset-SHA256", hex.EncodeToString(digest[:]))
 	assertOpenAPIRequest(t, contract, "/model/v1/assets", uploadRequest, assetBytes)
 	uploadResponse := httptest.NewRecorder()
 	router.ServeHTTP(uploadResponse, uploadRequest)

@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -23,7 +22,7 @@ import (
 )
 
 const (
-	assetMetadataVersion = 1
+	assetMetadataVersion = 2
 	assetStateAvailable  = "available"
 	assetStateDeleted    = "deleted"
 	assetFileMode        = 0o600
@@ -31,36 +30,34 @@ const (
 )
 
 var (
-	errAssetInvalid        = errors.New("asset_invalid")
-	errAssetNotFound       = errors.New("asset_not_found")
-	errAssetExpired        = errors.New("asset_expired")
-	errAssetDeleted        = errors.New("asset_deleted")
-	errAssetMIMEMismatch   = errors.New("asset_mime_mismatch")
-	errAssetDigestMismatch = errors.New("asset_digest_mismatch")
-	errAssetTooLarge       = errors.New("asset_too_large")
-	errAssetStore          = errors.New("asset_store_error")
+	errAssetInvalid      = errors.New("asset_invalid")
+	errAssetNotFound     = errors.New("asset_not_found")
+	errAssetExpired      = errors.New("asset_expired")
+	errAssetDeleted      = errors.New("asset_deleted")
+	errAssetMIMEMismatch = errors.New("asset_mime_mismatch")
+	errAssetTooLarge     = errors.New("asset_too_large")
+	errAssetStore        = errors.New("asset_store_error")
 
 	assetIdentifierPattern = regexp.MustCompile(`^ast_[0-9a-f]{32}$`)
 )
 
 type tenantAssetMetadata struct {
-	Version   int        `json:"version"`
-	AssetID   string     `json:"asset_id"`
-	TenantID  string     `json:"tenant_id"`
-	MIMEType  string     `json:"mime_type"`
-	SizeBytes int64      `json:"size_bytes"`
-	SHA256    string     `json:"sha256"`
-	State     string     `json:"state"`
-	CreatedAt time.Time  `json:"created_at"`
-	ExpiresAt time.Time  `json:"expires_at"`
-	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+	Version       int        `json:"version"`
+	AssetID       string     `json:"asset_id"`
+	TenantID      string     `json:"tenant_id"`
+	MIMEType      string     `json:"mime_type"`
+	SizeBytes     int64      `json:"size_bytes"`
+	ContentSHA256 string     `json:"content_sha256"`
+	State         string     `json:"state"`
+	CreatedAt     time.Time  `json:"created_at"`
+	ExpiresAt     time.Time  `json:"expires_at"`
+	DeletedAt     *time.Time `json:"deleted_at,omitempty"`
 }
 
 type tenantAssetResponse struct {
 	AssetID   string    `json:"asset_id"`
 	MIMEType  string    `json:"mime_type"`
 	SizeBytes int64     `json:"size_bytes"`
-	SHA256    string    `json:"sha256"`
 	State     string    `json:"state"`
 	CreatedAt time.Time `json:"created_at"`
 	ExpiresAt time.Time `json:"expires_at"`
@@ -118,8 +115,8 @@ func newTenantAssetStore(root string, maxAssetBytes int64, retentionSeconds int)
 	}
 }
 
-func (store *tenantAssetStore) upload(requestTenant tenant, mimeType string, expectedDigest string, source io.Reader) (tenantAssetMetadata, error) {
-	if !supportedMessageMediaMIME(mimeType) || !canonicalSHA256(expectedDigest) {
+func (store *tenantAssetStore) upload(requestTenant tenant, mimeType string, source io.Reader) (tenantAssetMetadata, error) {
+	if !supportedMessageMediaMIME(mimeType) {
 		return tenantAssetMetadata{}, errAssetInvalid
 	}
 	store.mutex.Lock()
@@ -150,10 +147,6 @@ func (store *tenantAssetStore) upload(requestTenant tenant, mimeType string, exp
 	if written > store.maxAssetBytes {
 		return tenantAssetMetadata{}, errAssetTooLarge
 	}
-	actualDigest := hex.EncodeToString(hasher.Sum(nil))
-	if !bytes.Equal([]byte(actualDigest), []byte(expectedDigest)) {
-		return tenantAssetMetadata{}, errAssetDigestMismatch
-	}
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
 	if store.cleanupError != nil {
@@ -162,15 +155,15 @@ func (store *tenantAssetStore) upload(requestTenant tenant, mimeType string, exp
 	assetID := newAssetIdentifier()
 	createdAt := store.now().UTC()
 	metadata := tenantAssetMetadata{
-		Version:   assetMetadataVersion,
-		AssetID:   assetID,
-		TenantID:  requestTenant.identifier.string(),
-		MIMEType:  mimeType,
-		SizeBytes: written,
-		SHA256:    actualDigest,
-		State:     assetStateAvailable,
-		CreatedAt: createdAt,
-		ExpiresAt: createdAt.Add(store.retention),
+		Version:       assetMetadataVersion,
+		AssetID:       assetID,
+		TenantID:      requestTenant.identifier.string(),
+		MIMEType:      mimeType,
+		SizeBytes:     written,
+		ContentSHA256: hex.EncodeToString(hasher.Sum(nil)),
+		State:         assetStateAvailable,
+		CreatedAt:     createdAt,
+		ExpiresAt:     createdAt.Add(store.retention),
 	}
 	dataPath := store.dataPath(assetID)
 	if renameError := assetRename(temporaryPath, dataPath); renameError != nil {
@@ -184,8 +177,8 @@ func (store *tenantAssetStore) upload(requestTenant tenant, mimeType string, exp
 	return metadata, nil
 }
 
-func (store *tenantAssetStore) resolve(requestTenant tenant, assetID string, expectedMIMEType string, expectedDigest string) (*tenantAssetReader, error) {
-	if !assetIdentifierPattern.MatchString(assetID) || !supportedMessageMediaMIME(expectedMIMEType) || !canonicalSHA256(expectedDigest) {
+func (store *tenantAssetStore) resolve(requestTenant tenant, assetID string, expectedMIMEType string) (*tenantAssetReader, error) {
+	if !assetIdentifierPattern.MatchString(assetID) || !supportedMessageMediaMIME(expectedMIMEType) {
 		return nil, errAssetInvalid
 	}
 	store.mutex.Lock()
@@ -218,10 +211,6 @@ func (store *tenantAssetStore) resolve(requestTenant tenant, assetID string, exp
 		store.mutex.Unlock()
 		return nil, errAssetMIMEMismatch
 	}
-	if metadata.SHA256 != expectedDigest {
-		store.mutex.Unlock()
-		return nil, errAssetDigestMismatch
-	}
 	dataFile, openError := assetOpen(store.dataPath(assetID))
 	if openError != nil {
 		store.mutex.Unlock()
@@ -242,7 +231,7 @@ func (store *tenantAssetStore) resolve(requestTenant tenant, assetID string, exp
 	if _, hashError := assetCopy(hasher, dataFile); hashError != nil {
 		return nil, errAssetStore
 	}
-	if hex.EncodeToString(hasher.Sum(nil)) != metadata.SHA256 {
+	if hex.EncodeToString(hasher.Sum(nil)) != metadata.ContentSHA256 {
 		return nil, errAssetStore
 	}
 	if _, seekError := assetSeek(dataFile, 0, io.SeekStart); seekError != nil {
@@ -390,7 +379,7 @@ func (store *tenantAssetStore) readMetadata(assetID string) (tenantAssetMetadata
 	}
 	validState := metadata.State == assetStateAvailable && metadata.DeletedAt == nil
 	validState = validState || (metadata.State == assetStateDeleted && metadata.DeletedAt != nil && !metadata.DeletedAt.Before(metadata.CreatedAt))
-	if metadata.Version != assetMetadataVersion || metadata.AssetID != assetID || metadata.TenantID == constants.EmptyString || !supportedMessageMediaMIME(metadata.MIMEType) || metadata.SizeBytes <= 0 || !canonicalSHA256(metadata.SHA256) || metadata.CreatedAt.IsZero() || !metadata.ExpiresAt.After(metadata.CreatedAt) || !validState {
+	if metadata.Version != assetMetadataVersion || metadata.AssetID != assetID || metadata.TenantID == constants.EmptyString || !supportedMessageMediaMIME(metadata.MIMEType) || metadata.SizeBytes <= 0 || !canonicalSHA256(metadata.ContentSHA256) || metadata.CreatedAt.IsZero() || !metadata.ExpiresAt.After(metadata.CreatedAt) || !validState {
 		return tenantAssetMetadata{}, errAssetStore
 	}
 	return metadata, nil
@@ -446,10 +435,13 @@ func tenantAssetUploadHandler(store *tenantAssetStore) gin.HandlerFunc {
 			writeTenantAssetError(ginContext, errAssetTooLarge)
 			return
 		}
+		if !validTenantAssetUploadHeaders(ginContext.Request) {
+			writeTenantAssetError(ginContext, errAssetInvalid)
+			return
+		}
 		metadata, uploadError := store.upload(
 			authenticatedTenantFromContext(ginContext),
 			strings.TrimSpace(ginContext.GetHeader(headerContentType)),
-			strings.TrimSpace(ginContext.GetHeader(llmproxycontract.HeaderAssetSHA256)),
 			ginContext.Request.Body,
 		)
 		if uploadError != nil {
@@ -462,9 +454,20 @@ func tenantAssetUploadHandler(store *tenantAssetStore) gin.HandlerFunc {
 		markRequestOutcome(ginContext, requestOutcomeSuccess, managedUsageOutcomeSuccess)
 		ginContext.JSON(http.StatusCreated, tenantAssetResponse{
 			AssetID: metadata.AssetID, MIMEType: metadata.MIMEType, SizeBytes: metadata.SizeBytes,
-			SHA256: metadata.SHA256, State: metadata.State, CreatedAt: metadata.CreatedAt, ExpiresAt: metadata.ExpiresAt,
+			State: metadata.State, CreatedAt: metadata.CreatedAt, ExpiresAt: metadata.ExpiresAt,
 		})
 	}
+}
+
+func validTenantAssetUploadHeaders(request *http.Request) bool {
+	allowedProxyHeader := http.CanonicalHeaderKey(llmproxycontract.HeaderRequestTimeoutSeconds)
+	for headerName := range request.Header {
+		canonicalName := http.CanonicalHeaderKey(headerName)
+		if strings.HasPrefix(canonicalName, "X-Llm-Proxy-") && canonicalName != allowedProxyHeader {
+			return false
+		}
+	}
+	return true
 }
 
 func tenantAssetDeleteHandler(store *tenantAssetStore) gin.HandlerFunc {
@@ -489,8 +492,6 @@ func writeTenantAssetError(ginContext *gin.Context, assetError error) {
 		statusCode, code = http.StatusGone, errAssetDeleted.Error()
 	case errors.Is(assetError, errAssetMIMEMismatch):
 		code = errAssetMIMEMismatch.Error()
-	case errors.Is(assetError, errAssetDigestMismatch):
-		code = errAssetDigestMismatch.Error()
 	case errors.Is(assetError, errAssetTooLarge):
 		statusCode, code = http.StatusRequestEntityTooLarge, errAssetTooLarge.Error()
 	case errors.Is(assetError, errAssetStore):
@@ -500,5 +501,5 @@ func writeTenantAssetError(ginContext *gin.Context, assetError error) {
 }
 
 func isTenantAssetError(assetError error) bool {
-	return errors.Is(assetError, errAssetInvalid) || errors.Is(assetError, errAssetNotFound) || errors.Is(assetError, errAssetExpired) || errors.Is(assetError, errAssetDeleted) || errors.Is(assetError, errAssetMIMEMismatch) || errors.Is(assetError, errAssetDigestMismatch) || errors.Is(assetError, errAssetTooLarge) || errors.Is(assetError, errAssetStore)
+	return errors.Is(assetError, errAssetInvalid) || errors.Is(assetError, errAssetNotFound) || errors.Is(assetError, errAssetExpired) || errors.Is(assetError, errAssetDeleted) || errors.Is(assetError, errAssetMIMEMismatch) || errors.Is(assetError, errAssetTooLarge) || errors.Is(assetError, errAssetStore)
 }

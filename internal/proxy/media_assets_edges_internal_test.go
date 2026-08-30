@@ -40,27 +40,23 @@ func TestTenantAssetUploadDoesNotBlockExistingAssetResolution(t *testing.T) {
 	requestTenant := managedTenantForInternalTest("asset-concurrency", "secret")
 	store := newTenantAssetStore(t.TempDir(), 1024, 60)
 	existingData := []byte("existing")
-	existingDigestBytes := sha256.Sum256(existingData)
-	existingDigest := hex.EncodeToString(existingDigestBytes[:])
-	existing, uploadError := store.upload(requestTenant, "image/png", existingDigest, bytes.NewReader(existingData))
+	existing, uploadError := store.upload(requestTenant, "image/png", bytes.NewReader(existingData))
 	if uploadError != nil {
 		t.Fatalf("existing upload: %v", uploadError)
 	}
 
 	slowData := []byte("slow upload")
-	slowDigestBytes := sha256.Sum256(slowData)
-	slowDigest := hex.EncodeToString(slowDigestBytes[:])
 	started := make(chan struct{})
 	release := make(chan struct{})
 	uploadComplete := make(chan error, 1)
 	go func() {
-		_, slowUploadError := store.upload(requestTenant, "image/png", slowDigest, &gatedAssetReader{reader: bytes.NewReader(slowData), started: started, release: release})
+		_, slowUploadError := store.upload(requestTenant, "image/png", &gatedAssetReader{reader: bytes.NewReader(slowData), started: started, release: release})
 		uploadComplete <- slowUploadError
 	}()
 	<-started
 	resolveComplete := make(chan error, 1)
 	go func() {
-		reader, resolveError := store.resolve(requestTenant, existing.AssetID, existing.MIMEType, existing.SHA256)
+		reader, resolveError := store.resolve(requestTenant, existing.AssetID, existing.MIMEType)
 		if resolveError == nil {
 			resolveError = reader.Close()
 		}
@@ -89,11 +85,9 @@ func TestTenantAssetStoreRecoversPersistedExpiryState(t *testing.T) {
 	store := newTenantAssetStore(root, 1024, 60)
 	store.now = func() time.Time { return now }
 	data := []byte("recovered")
-	digestBytes := sha256.Sum256(data)
-	digest := hex.EncodeToString(digestBytes[:])
 	upload := func() tenantAssetMetadata {
 		t.Helper()
-		metadata, uploadError := store.upload(requestTenant, "image/png", digest, bytes.NewReader(data))
+		metadata, uploadError := store.upload(requestTenant, "image/png", bytes.NewReader(data))
 		if uploadError != nil {
 			t.Fatalf("upload: %v", uploadError)
 		}
@@ -125,7 +119,7 @@ func TestTenantAssetStoreRecoversPersistedExpiryState(t *testing.T) {
 
 	recoveredStore := newTenantAssetStore(root, 1024, 60)
 	recoveredStore.now = func() time.Time { return now.Add(2 * time.Minute) }
-	reader, resolveError := recoveredStore.resolve(requestTenant, available.AssetID, available.MIMEType, available.SHA256)
+	reader, resolveError := recoveredStore.resolve(requestTenant, available.AssetID, available.MIMEType)
 	if resolveError != nil {
 		t.Fatalf("resolve available: %v", resolveError)
 	}
@@ -133,22 +127,24 @@ func TestTenantAssetStoreRecoversPersistedExpiryState(t *testing.T) {
 	if _, statError := os.Stat(recoveredStore.dataPath(expired.AssetID)); !errors.Is(statError, os.ErrNotExist) {
 		t.Fatalf("expired data error=%v", statError)
 	}
-	if _, resolveError := recoveredStore.resolve(requestTenant, expired.AssetID, expired.MIMEType, expired.SHA256); !errors.Is(resolveError, errAssetExpired) {
+	if _, resolveError := recoveredStore.resolve(requestTenant, expired.AssetID, expired.MIMEType); !errors.Is(resolveError, errAssetExpired) {
 		t.Fatalf("expired resolve error=%v", resolveError)
 	}
-	if _, resolveError := recoveredStore.resolve(requestTenant, deleted.AssetID, deleted.MIMEType, deleted.SHA256); !errors.Is(resolveError, errAssetDeleted) {
+	if _, resolveError := recoveredStore.resolve(requestTenant, deleted.AssetID, deleted.MIMEType); !errors.Is(resolveError, errAssetDeleted) {
 		t.Fatalf("deleted resolve error=%v", resolveError)
 	}
 }
 
 func TestTenantAssetExpirationMaintenanceFailureContracts(t *testing.T) {
 	originalCreateTemp := assetCreateTemp
+	originalCopy := assetCopy
 	originalOpen := assetOpen
 	originalRemove := assetRemove
 	originalAfterFunc := assetAfterFunc
 	timers := make([]*time.Timer, 0)
 	reset := func() {
 		assetCreateTemp = originalCreateTemp
+		assetCopy = originalCopy
 		assetOpen = originalOpen
 		assetRemove = originalRemove
 		assetAfterFunc = originalAfterFunc
@@ -163,8 +159,6 @@ func TestTenantAssetExpirationMaintenanceFailureContracts(t *testing.T) {
 	requestTenant := managedTenantForInternalTest("asset-maintenance", "secret")
 	now := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
 	assetBytes := []byte("asset-maintenance")
-	digestBytes := sha256.Sum256(assetBytes)
-	digest := hex.EncodeToString(digestBytes[:])
 	newStore := func(root string) *tenantAssetStore {
 		store := newTenantAssetStore(root, 1024, 3600)
 		store.now = func() time.Time { return now }
@@ -172,7 +166,7 @@ func TestTenantAssetExpirationMaintenanceFailureContracts(t *testing.T) {
 	}
 
 	store := newStore(t.TempDir())
-	metadata, uploadError := store.upload(requestTenant, "image/png", digest, bytes.NewReader(assetBytes))
+	metadata, uploadError := store.upload(requestTenant, "image/png", bytes.NewReader(assetBytes))
 	if uploadError != nil {
 		t.Fatalf("upload: %v", uploadError)
 	}
@@ -192,7 +186,7 @@ func TestTenantAssetExpirationMaintenanceFailureContracts(t *testing.T) {
 	failedStore := newStore(t.TempDir())
 	failedStore.cleanupError = errAssetEdge
 	failedStore.expireAsset(metadata.AssetID, metadata.ExpiresAt)
-	if _, resolveError := failedStore.resolve(requestTenant, metadata.AssetID, "image/png", digest); !errors.Is(resolveError, errAssetEdge) {
+	if _, resolveError := failedStore.resolve(requestTenant, metadata.AssetID, "image/png"); !errors.Is(resolveError, errAssetEdge) {
 		t.Fatalf("cleanup resolve error=%v", resolveError)
 	}
 	if deleteError := failedStore.delete(requestTenant, metadata.AssetID); !errors.Is(deleteError, errAssetEdge) {
@@ -224,7 +218,7 @@ func TestTenantAssetExpirationMaintenanceFailureContracts(t *testing.T) {
 		uploadStore.cleanupError = errAssetEdge
 		return originalCreateTemp(directory, pattern)
 	}
-	if _, uploadError := uploadStore.upload(requestTenant, "image/png", digest, bytes.NewReader(assetBytes)); !errors.Is(uploadError, errAssetEdge) {
+	if _, uploadError := uploadStore.upload(requestTenant, "image/png", bytes.NewReader(assetBytes)); !errors.Is(uploadError, errAssetEdge) {
 		t.Fatalf("concurrent cleanup upload error=%v", uploadError)
 	}
 	reset()
@@ -241,7 +235,7 @@ func TestTenantAssetExpirationMaintenanceFailureContracts(t *testing.T) {
 
 	reclaimRoot := t.TempDir()
 	reclaimStore := newStore(reclaimRoot)
-	reclaimMetadata, reclaimUploadError := reclaimStore.upload(requestTenant, "image/png", digest, bytes.NewReader(assetBytes))
+	reclaimMetadata, reclaimUploadError := reclaimStore.upload(requestTenant, "image/png", bytes.NewReader(assetBytes))
 	if reclaimUploadError != nil {
 		t.Fatalf("reclaim upload: %v", reclaimUploadError)
 	}
@@ -264,6 +258,7 @@ func TestTenantAssetExpirationMaintenanceFailureContracts(t *testing.T) {
 	ginContext.Request = request
 	ginContext.Set(contextKeyTenant, requestTenant)
 	ginContext.Set(contextKeyRequestTimeoutState, &requestTimeoutState{})
+	assetCopy = func(io.Writer, io.Reader) (int64, error) { return 0, errAssetEdge }
 	tenantAssetUploadHandler(handlerStore)(ginContext)
 	if ginContext.Writer.Status() != statusClientClosedRequest {
 		t.Fatalf("cancelled upload status=%d", ginContext.Writer.Status())
@@ -281,7 +276,6 @@ func TestTenantAssetStoreFailureContracts(t *testing.T) {
 	originalOpen := assetOpen
 	originalReadDir := assetReadDir
 	originalStat := assetStat
-	originalSeek := assetSeek
 	originalWrite := assetWrite
 	reset := func() {
 		assetMkdirAll = originalMkdirAll
@@ -294,48 +288,45 @@ func TestTenantAssetStoreFailureContracts(t *testing.T) {
 		assetOpen = originalOpen
 		assetReadDir = originalReadDir
 		assetStat = originalStat
-		assetSeek = originalSeek
 		assetWrite = originalWrite
 	}
 	t.Cleanup(reset)
 
 	requestTenant := managedTenantForInternalTest("asset-edge", "secret")
 	assetBytes := []byte("asset-edge-bytes")
-	digestBytes := sha256.Sum256(assetBytes)
-	digest := hex.EncodeToString(digestBytes[:])
 	newStore := func() *tenantAssetStore {
 		store := newTenantAssetStore(t.TempDir(), int64(len(assetBytes)), 60)
 		store.now = func() time.Time { return time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC) }
 		return store
 	}
-	requireUploadError := func(store *tenantAssetStore, source io.Reader, mimeType string, expectedDigest string, expected error) {
+	requireUploadError := func(store *tenantAssetStore, source io.Reader, mimeType string, expected error) {
 		t.Helper()
-		_, uploadError := store.upload(requestTenant, mimeType, expectedDigest, source)
+		_, uploadError := store.upload(requestTenant, mimeType, source)
 		if !errors.Is(uploadError, expected) {
 			t.Fatalf("upload error=%v want=%v", uploadError, expected)
 		}
 	}
 
-	requireUploadError(newStore(), bytes.NewReader(assetBytes), "text/plain", digest, errAssetInvalid)
+	requireUploadError(newStore(), bytes.NewReader(assetBytes), "text/plain", errAssetInvalid)
 
 	store := newStore()
 	assetMkdirAll = func(string, os.FileMode) error { return errAssetEdge }
-	requireUploadError(store, bytes.NewReader(assetBytes), "image/png", digest, errAssetStore)
+	requireUploadError(store, bytes.NewReader(assetBytes), "image/png", errAssetStore)
 	reset()
 
 	store = newStore()
 	assetChmod = func(string, os.FileMode) error { return errAssetEdge }
-	requireUploadError(store, bytes.NewReader(assetBytes), "image/png", digest, errAssetStore)
+	requireUploadError(store, bytes.NewReader(assetBytes), "image/png", errAssetStore)
 	reset()
 
 	store = newStore()
 	assetReadDir = func(string) ([]os.DirEntry, error) { return nil, errAssetEdge }
-	requireUploadError(store, bytes.NewReader(assetBytes), "image/png", digest, errAssetStore)
+	requireUploadError(store, bytes.NewReader(assetBytes), "image/png", errAssetStore)
 	reset()
 
 	store = newStore()
 	assetCreateTemp = func(string, string) (*os.File, error) { return nil, errAssetEdge }
-	requireUploadError(store, bytes.NewReader(assetBytes), "image/png", digest, errAssetStore)
+	requireUploadError(store, bytes.NewReader(assetBytes), "image/png", errAssetStore)
 	reset()
 
 	store = newStore()
@@ -347,12 +338,12 @@ func TestTenantAssetStoreFailureContracts(t *testing.T) {
 		}
 		return originalChmod(path, mode)
 	}
-	requireUploadError(store, bytes.NewReader(assetBytes), "image/png", digest, errAssetStore)
+	requireUploadError(store, bytes.NewReader(assetBytes), "image/png", errAssetStore)
 	reset()
 
 	store = newStore()
 	assetCopy = func(io.Writer, io.Reader) (int64, error) { return 0, errAssetEdge }
-	requireUploadError(store, bytes.NewReader(assetBytes), "image/png", digest, errAssetStore)
+	requireUploadError(store, bytes.NewReader(assetBytes), "image/png", errAssetStore)
 	reset()
 
 	store = newStore()
@@ -365,18 +356,17 @@ func TestTenantAssetStoreFailureContracts(t *testing.T) {
 		}
 		return closeError
 	}
-	requireUploadError(store, bytes.NewReader(assetBytes), "image/png", digest, errAssetStore)
+	requireUploadError(store, bytes.NewReader(assetBytes), "image/png", errAssetStore)
 	reset()
 
-	requireUploadError(newStore(), bytes.NewReader(nil), "image/png", hex.EncodeToString(sha256.New().Sum(nil)), errAssetInvalid)
+	requireUploadError(newStore(), bytes.NewReader(nil), "image/png", errAssetInvalid)
 	tooLargeStore := newStore()
 	tooLargeStore.maxAssetBytes--
-	requireUploadError(tooLargeStore, bytes.NewReader(assetBytes), "image/png", digest, errAssetTooLarge)
-	requireUploadError(newStore(), bytes.NewReader(assetBytes), "image/png", strings.Repeat("0", 64), errAssetDigestMismatch)
+	requireUploadError(tooLargeStore, bytes.NewReader(assetBytes), "image/png", errAssetTooLarge)
 
 	store = newStore()
 	assetRename = func(string, string) error { return errAssetEdge }
-	requireUploadError(store, bytes.NewReader(assetBytes), "image/png", digest, errAssetStore)
+	requireUploadError(store, bytes.NewReader(assetBytes), "image/png", errAssetStore)
 	reset()
 
 	store = newStore()
@@ -388,7 +378,7 @@ func TestTenantAssetStoreFailureContracts(t *testing.T) {
 		}
 		return originalRename(oldPath, newPath)
 	}
-	requireUploadError(store, bytes.NewReader(assetBytes), "image/png", digest, errAssetStore)
+	requireUploadError(store, bytes.NewReader(assetBytes), "image/png", errAssetStore)
 	reset()
 }
 
@@ -423,20 +413,22 @@ func TestTenantAssetMetadataAndResolutionFailureContracts(t *testing.T) {
 	store := newTenantAssetStore(t.TempDir(), 1024, 60)
 	store.now = func() time.Time { return now }
 	assetBytes := []byte("resolved-asset")
-	digestBytes := sha256.Sum256(assetBytes)
-	digest := hex.EncodeToString(digestBytes[:])
-	metadata, uploadError := store.upload(requestTenant, "image/png", digest, bytes.NewReader(assetBytes))
+	metadata, uploadError := store.upload(requestTenant, "image/png", bytes.NewReader(assetBytes))
 	if uploadError != nil {
 		t.Fatalf("upload: %v", uploadError)
 	}
+	digest := sha256.Sum256(assetBytes)
+	if metadata.ContentSHA256 != hex.EncodeToString(digest[:]) {
+		t.Fatalf("content checksum=%q", metadata.ContentSHA256)
+	}
 
-	if _, resolveError := store.resolve(requestTenant, "bad", "image/png", digest); !errors.Is(resolveError, errAssetInvalid) {
+	if _, resolveError := store.resolve(requestTenant, "bad", "image/png"); !errors.Is(resolveError, errAssetInvalid) {
 		t.Fatalf("invalid resolve error=%v", resolveError)
 	}
-	if _, resolveError := store.resolve(requestTenant, "ast_00000000000000000000000000000000", "image/png", digest); !errors.Is(resolveError, errAssetNotFound) {
+	if _, resolveError := store.resolve(requestTenant, "ast_00000000000000000000000000000000", "image/png"); !errors.Is(resolveError, errAssetNotFound) {
 		t.Fatalf("missing resolve error=%v", resolveError)
 	}
-	if _, resolveError := store.resolve(foreignTenant, metadata.AssetID, "image/png", digest); !errors.Is(resolveError, errAssetNotFound) {
+	if _, resolveError := store.resolve(foreignTenant, metadata.AssetID, "image/png"); !errors.Is(resolveError, errAssetNotFound) {
 		t.Fatalf("foreign resolve error=%v", resolveError)
 	}
 
@@ -448,21 +440,28 @@ func TestTenantAssetMetadataAndResolutionFailureContracts(t *testing.T) {
 	if writeError := os.WriteFile(metadataPath, []byte("{"), assetFileMode); writeError != nil {
 		t.Fatalf("write malformed metadata: %v", writeError)
 	}
-	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png", digest); !errors.Is(resolveError, errAssetStore) {
+	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png"); !errors.Is(resolveError, errAssetStore) {
 		t.Fatalf("malformed metadata error=%v", resolveError)
 	}
 	if writeError := os.WriteFile(metadataPath, append(validMetadataBytes, []byte("{}")...), assetFileMode); writeError != nil {
 		t.Fatalf("write trailing metadata: %v", writeError)
 	}
-	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png", digest); !errors.Is(resolveError, errAssetStore) {
+	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png"); !errors.Is(resolveError, errAssetStore) {
 		t.Fatalf("trailing metadata error=%v", resolveError)
 	}
-	invalidMetadata := bytes.Replace(validMetadataBytes, []byte(`"version":1`), []byte(`"version":2`), 1)
+	invalidMetadata := bytes.Replace(validMetadataBytes, []byte(`"version":2`), []byte(`"version":1`), 1)
 	if writeError := os.WriteFile(metadataPath, invalidMetadata, assetFileMode); writeError != nil {
 		t.Fatalf("write invalid metadata: %v", writeError)
 	}
-	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png", digest); !errors.Is(resolveError, errAssetStore) {
+	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png"); !errors.Is(resolveError, errAssetStore) {
 		t.Fatalf("invalid metadata error=%v", resolveError)
+	}
+	obsoleteMetadata := bytes.Replace(validMetadataBytes, []byte(`"state":`), []byte(`"sha256":"`+strings.Repeat("0", 64)+`","state":`), 1)
+	if writeError := os.WriteFile(metadataPath, obsoleteMetadata, assetFileMode); writeError != nil {
+		t.Fatalf("write obsolete metadata: %v", writeError)
+	}
+	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png"); !errors.Is(resolveError, errAssetStore) {
+		t.Fatalf("obsolete metadata error=%v", resolveError)
 	}
 	if writeError := os.WriteFile(metadataPath, validMetadataBytes, assetFileMode); writeError != nil {
 		t.Fatalf("restore metadata: %v", writeError)
@@ -474,7 +473,7 @@ func TestTenantAssetMetadataAndResolutionFailureContracts(t *testing.T) {
 		}
 		return originalOpen(path)
 	}
-	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png", digest); !errors.Is(resolveError, errAssetStore) {
+	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png"); !errors.Is(resolveError, errAssetStore) {
 		t.Fatalf("metadata open error=%v", resolveError)
 	}
 	reset()
@@ -484,18 +483,15 @@ func TestTenantAssetMetadataAndResolutionFailureContracts(t *testing.T) {
 	if metadataError := store.writeMetadata(changed); metadataError != nil {
 		t.Fatalf("write state metadata: %v", metadataError)
 	}
-	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png", digest); !errors.Is(resolveError, errAssetStore) {
+	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png"); !errors.Is(resolveError, errAssetStore) {
 		t.Fatalf("state error=%v", resolveError)
 	}
 	if writeError := os.WriteFile(metadataPath, validMetadataBytes, assetFileMode); writeError != nil {
 		t.Fatalf("restore metadata: %v", writeError)
 	}
 
-	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/jpeg", digest); !errors.Is(resolveError, errAssetMIMEMismatch) {
+	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/jpeg"); !errors.Is(resolveError, errAssetMIMEMismatch) {
 		t.Fatalf("MIME error=%v", resolveError)
-	}
-	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png", strings.Repeat("0", 64)); !errors.Is(resolveError, errAssetDigestMismatch) {
-		t.Fatalf("digest error=%v", resolveError)
 	}
 
 	dataPath := store.dataPath(metadata.AssetID)
@@ -505,53 +501,60 @@ func TestTenantAssetMetadataAndResolutionFailureContracts(t *testing.T) {
 		}
 		return originalOpen(path)
 	}
-	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png", digest); !errors.Is(resolveError, errAssetStore) {
+	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png"); !errors.Is(resolveError, errAssetStore) {
 		t.Fatalf("data open error=%v", resolveError)
 	}
 	reset()
 
 	assetStat = func(*os.File) (os.FileInfo, error) { return nil, errAssetEdge }
-	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png", digest); !errors.Is(resolveError, errAssetStore) {
+	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png"); !errors.Is(resolveError, errAssetStore) {
 		t.Fatalf("stat error=%v", resolveError)
 	}
 	reset()
 
 	assetCopy = func(io.Writer, io.Reader) (int64, error) { return 0, errAssetEdge }
-	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png", digest); !errors.Is(resolveError, errAssetStore) {
-		t.Fatalf("hash error=%v", resolveError)
+	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png"); !errors.Is(resolveError, errAssetStore) {
+		t.Fatalf("checksum error=%v", resolveError)
 	}
 	reset()
 
-	if writeError := os.WriteFile(dataPath, bytes.Repeat([]byte("x"), len(assetBytes)), assetFileMode); writeError != nil {
+	if writeError := os.WriteFile(dataPath, []byte("short"), assetFileMode); writeError != nil {
+		t.Fatalf("write short data: %v", writeError)
+	}
+	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png"); !errors.Is(resolveError, errAssetStore) {
+		t.Fatalf("size mismatch error=%v", resolveError)
+	}
+	alteredBytes := bytes.Repeat([]byte("x"), len(assetBytes))
+	if writeError := os.WriteFile(dataPath, alteredBytes, assetFileMode); writeError != nil {
 		t.Fatalf("write altered data: %v", writeError)
 	}
-	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png", digest); !errors.Is(resolveError, errAssetStore) {
-		t.Fatalf("hash mismatch error=%v", resolveError)
+	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png"); !errors.Is(resolveError, errAssetStore) {
+		t.Fatalf("checksum mismatch error=%v", resolveError)
 	}
 	if writeError := os.WriteFile(dataPath, assetBytes, assetFileMode); writeError != nil {
 		t.Fatalf("restore data: %v", writeError)
 	}
 
 	assetSeek = func(*os.File, int64, int) (int64, error) { return 0, errAssetEdge }
-	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png", digest); !errors.Is(resolveError, errAssetStore) {
+	if _, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png"); !errors.Is(resolveError, errAssetStore) {
 		t.Fatalf("seek error=%v", resolveError)
 	}
 	reset()
 
-	reader, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png", digest)
+	reader, resolveError := store.resolve(requestTenant, metadata.AssetID, "image/png")
 	if resolveError != nil {
 		t.Fatalf("valid resolve: %v", resolveError)
 	}
 	if closeError := reader.Close(); closeError != nil {
 		t.Fatalf("close resolved asset: %v", closeError)
 	}
-	expiringMetadata, uploadError := store.upload(requestTenant, "image/png", digest, bytes.NewReader(assetBytes))
+	expiringMetadata, uploadError := store.upload(requestTenant, "image/png", bytes.NewReader(assetBytes))
 	if uploadError != nil {
 		t.Fatalf("upload expiring asset: %v", uploadError)
 	}
 	store.now = func() time.Time { return now.Add(2 * time.Minute) }
 	assetRemove = func(string) error { return errAssetEdge }
-	if _, resolveError := store.resolve(requestTenant, expiringMetadata.AssetID, "image/png", digest); !errors.Is(resolveError, errAssetStore) {
+	if _, resolveError := store.resolve(requestTenant, expiringMetadata.AssetID, "image/png"); !errors.Is(resolveError, errAssetStore) {
 		t.Fatalf("expired resolve remove error=%v", resolveError)
 	}
 	reset()
@@ -584,10 +587,8 @@ func TestTenantAssetDeletionAndHTTPErrorContracts(t *testing.T) {
 	now := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
 	store.now = func() time.Time { return now }
 	data := []byte("delete-asset")
-	digestBytes := sha256.Sum256(data)
-	digest := hex.EncodeToString(digestBytes[:])
 	upload := func() tenantAssetMetadata {
-		metadata, uploadError := store.upload(requestTenant, "image/png", digest, bytes.NewReader(data))
+		metadata, uploadError := store.upload(requestTenant, "image/png", bytes.NewReader(data))
 		if uploadError != nil {
 			t.Fatalf("upload: %v", uploadError)
 		}
@@ -652,7 +653,7 @@ func TestTenantAssetDeletionAndHTTPErrorContracts(t *testing.T) {
 		t.Fatalf("expired delete error=%v", deleteError)
 	}
 
-	for _, assetError := range []error{errAssetInvalid, errAssetNotFound, errAssetExpired, errAssetDeleted, errAssetMIMEMismatch, errAssetDigestMismatch, errAssetTooLarge, errAssetStore} {
+	for _, assetError := range []error{errAssetInvalid, errAssetNotFound, errAssetExpired, errAssetDeleted, errAssetMIMEMismatch, errAssetTooLarge, errAssetStore} {
 		response := httptest.NewRecorder()
 		ginContext, _ := gin.CreateTestContext(response)
 		writeTenantAssetError(ginContext, assetError)
@@ -681,7 +682,6 @@ func TestTenantAssetDeletionAndHTTPErrorContracts(t *testing.T) {
 	router.DELETE("/assets/:asset_id", tenantAssetDeleteHandler(handlerStore))
 	tooLargeRequest := httptest.NewRequest(http.MethodPost, "/assets", strings.NewReader("12345"))
 	tooLargeRequest.Header.Set("Content-Type", "image/png")
-	tooLargeRequest.Header.Set("X-Asset-SHA256", strings.Repeat("0", 64))
 	tooLargeResponse := httptest.NewRecorder()
 	router.ServeHTTP(tooLargeResponse, tooLargeRequest)
 	if tooLargeResponse.Code != http.StatusRequestEntityTooLarge {
@@ -761,7 +761,7 @@ func TestMediaLimitAndMessageMediaEdgeContracts(t *testing.T) {
 	}
 
 	assetID := " ast_0123456789abcdef0123456789abcdef"
-	if _, mediaError := newMessageMedia(chatMessageAttachmentPayload{Type: "image", MIMEType: "image/png", AssetID: &assetID, SHA256: strings.Repeat("0", 64)}, tenant{}, newTenantAssetStore(t.TempDir(), 10, 60)); mediaError == nil {
+	if _, mediaError := newMessageMedia(chatMessageAttachmentPayload{Type: "image", MIMEType: "image/png", AssetID: &assetID}, tenant{}, newTenantAssetStore(t.TempDir(), 10, 60)); mediaError == nil {
 		t.Fatal("expected noncanonical asset id rejection")
 	}
 	dataFile, fileError := os.CreateTemp(t.TempDir(), "closed-asset")
@@ -796,8 +796,7 @@ func TestV2RouteMIMERejectionClosesTheResolvedAsset(t *testing.T) {
 	}
 	assetStore := newTenantAssetStore(t.TempDir(), 1024, 60)
 	mediaBytes := []byte("webp-asset")
-	digest := sha256.Sum256(mediaBytes)
-	assetMetadata, uploadError := assetStore.upload(requestTenant, messageImageMIMEWebP, hex.EncodeToString(digest[:]), bytes.NewReader(mediaBytes))
+	assetMetadata, uploadError := assetStore.upload(requestTenant, messageImageMIMEWebP, bytes.NewReader(mediaBytes))
 	if uploadError != nil {
 		t.Fatalf("upload asset: %v", uploadError)
 	}
@@ -815,7 +814,7 @@ func TestV2RouteMIMERejectionClosesTheResolvedAsset(t *testing.T) {
 	validator := newModelValidator(providers.forTenant(requestTenant))
 	attachmentBytes, _ := json.Marshal([]chatMessageAttachmentPayload{{
 		Type: string(messageMediaTypeImage), MIMEType: messageImageMIMEWebP,
-		AssetID: &assetMetadata.AssetID, SHA256: assetMetadata.SHA256,
+		AssetID: &assetMetadata.AssetID,
 	}})
 	messages := []chatV2MessagePayload{{Role: string(chatRoleUser), Content: "inspect", Attachments: attachmentBytes}}
 	payload := chatV2RequestPayload{Messages: &messages, Model: ModelNameGrok45}

@@ -33,16 +33,15 @@ type chatMessageAttachmentPayload struct {
 	MIMEType string  `json:"mime_type"`
 	Data     *string `json:"data,omitempty"`
 	AssetID  *string `json:"asset_id,omitempty"`
-	SHA256   string  `json:"sha256"`
 }
 
 type messageMedia struct {
-	mediaType messageMediaType
-	mimeType  string
-	sha256    string
-	sizeBytes int64
-	data      []byte
-	asset     *tenantAssetReader
+	mediaType     messageMediaType
+	mimeType      string
+	contentSHA256 string
+	sizeBytes     int64
+	data          []byte
+	asset         *tenantAssetReader
 }
 
 type textRouteMessageMediaContract struct {
@@ -119,21 +118,22 @@ func newMessageMedia(payload chatMessageAttachmentPayload, requestTenant tenant,
 		return messageMedia{}, fmt.Errorf("%w: attachment requires exactly one of data or asset_id", ErrInvalidChatMessages)
 	}
 	if payload.Data != nil {
-		data, dataError := decodeHashBoundMessageMedia(*payload.Data, payload.SHA256)
+		data, dataError := decodeMessageMedia(*payload.Data)
 		if dataError != nil {
 			return messageMedia{}, dataError
 		}
-		return messageMedia{mediaType: mediaType, mimeType: payload.MIMEType, sha256: payload.SHA256, sizeBytes: int64(len(data)), data: data}, nil
+		digest := sha256.Sum256(data)
+		return messageMedia{mediaType: mediaType, mimeType: payload.MIMEType, contentSHA256: hex.EncodeToString(digest[:]), sizeBytes: int64(len(data)), data: data}, nil
 	}
 	assetID := strings.TrimSpace(*payload.AssetID)
 	if assetID != *payload.AssetID {
 		return messageMedia{}, fmt.Errorf("%w: asset_id is not canonical", ErrInvalidChatMessages)
 	}
-	asset, assetError := assetStore.resolve(requestTenant, assetID, payload.MIMEType, payload.SHA256)
+	asset, assetError := assetStore.resolve(requestTenant, assetID, payload.MIMEType)
 	if assetError != nil {
 		return messageMedia{}, assetError
 	}
-	return messageMedia{mediaType: mediaType, mimeType: payload.MIMEType, sha256: payload.SHA256, sizeBytes: asset.metadata.SizeBytes, asset: asset}, nil
+	return messageMedia{mediaType: mediaType, mimeType: payload.MIMEType, contentSHA256: asset.metadata.ContentSHA256, sizeBytes: asset.metadata.SizeBytes, asset: asset}, nil
 }
 
 func supportedMessageMediaTypeMIME(mediaType messageMediaType, mimeType string) bool {
@@ -191,21 +191,13 @@ func (media *messageMedia) bytes() ([]byte, error) {
 	return data, nil
 }
 
-func decodeHashBoundMessageMedia(rawData string, rawDigest string) ([]byte, error) {
+func decodeMessageMedia(rawData string) ([]byte, error) {
 	if rawData == constants.EmptyString {
 		return nil, fmt.Errorf("%w: attachment data is empty", ErrInvalidChatMessages)
 	}
 	decodedData, decodeError := base64.StdEncoding.DecodeString(rawData)
 	if decodeError != nil || len(decodedData) == 0 || base64.StdEncoding.EncodeToString(decodedData) != rawData {
 		return nil, fmt.Errorf("%w: attachment data is not canonical base64", ErrInvalidChatMessages)
-	}
-	digestBytes, digestError := hex.DecodeString(rawDigest)
-	if digestError != nil || len(digestBytes) != sha256.Size || strings.ToLower(rawDigest) != rawDigest {
-		return nil, fmt.Errorf("%w: attachment sha256 is not canonical lowercase hex", ErrInvalidChatMessages)
-	}
-	actualDigest := sha256.Sum256(decodedData)
-	if !bytes.Equal(actualDigest[:], digestBytes) {
-		return nil, fmt.Errorf("%w: attachment sha256 does not match data", ErrInvalidChatMessages)
 	}
 	return decodedData, nil
 }

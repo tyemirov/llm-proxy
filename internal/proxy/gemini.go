@@ -608,7 +608,7 @@ func validatedGeminiFile(responseBytes []byte, attachment *messageMedia, baseURL
 func validatedGeminiFileObject(file geminiFile, attachment *messageMedia, baseURL string) (geminiFile, error) {
 	sizeBytes, sizeError := strconv.ParseInt(file.SizeBytes, 10, 64)
 	digestBytes, digestError := base64.StdEncoding.DecodeString(file.SHA256Hash)
-	expectedDigest, expectedDigestError := hex.DecodeString(attachment.sha256)
+	expectedDigest, expectedDigestError := hex.DecodeString(attachment.contentSHA256)
 	if sizeError != nil || sizeBytes != attachment.sizeBytes || digestError != nil || expectedDigestError != nil || !bytes.Equal(digestBytes, expectedDigest) || file.MIMEType != attachment.mimeType || !geminiFileNamePattern.MatchString(file.Name) || !providerOwnedFileURI(file.URI, baseURL, file.Name) {
 		return geminiFile{}, ErrProviderAPI
 	}
