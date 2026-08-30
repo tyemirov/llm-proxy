@@ -238,7 +238,7 @@ paths:
       operationId: uploadTenantAsset
       summary: Upload exact tenant media bytes
       description: >-
-        Stores one hash-bound image or audio asset for the configured retention
+        Stores one image or audio asset for the configured retention
         period. The authenticated tenant owns the returned opaque asset id.
       tags:
         - Proxy
@@ -246,7 +246,6 @@ paths:
         - TenantClientKey: []
       parameters:
         - $ref: '#/components/parameters/TenantClientKey'
-        - $ref: '#/components/parameters/AssetSHA256'
         - $ref: '#/components/parameters/RequestTimeout'
       requestBody:
         $ref: '#/components/requestBodies/AssetUpload'
@@ -886,14 +885,6 @@ components:
       schema:
         type: string
         pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
-    AssetSHA256:
-      name: X-LLM-Proxy-Asset-SHA256
-      in: header
-      required: true
-      description: Lowercase hexadecimal SHA-256 of the exact request body.
-      schema:
-        type: string
-        pattern: ^[0-9a-f]{64}$
     AssetID:
       name: asset_id
       in: path
@@ -2098,7 +2089,6 @@ components:
         - type
         - mime_type
         - data
-        - sha256
       properties:
         type:
           type: string
@@ -2113,10 +2103,6 @@ components:
           type: string
           minLength: 4
           description: Exact nonempty media bytes encoded as canonical padded RFC 4648 base64.
-        sha256:
-          type: string
-          pattern: ^[0-9a-f]{64}$
-          description: Lowercase hexadecimal SHA-256 of the decoded media bytes.
     AudioMessageAttachment:
       type: object
       additionalProperties: false
@@ -2124,7 +2110,6 @@ components:
         - type
         - mime_type
         - data
-        - sha256
       properties:
         type:
           type: string
@@ -2139,10 +2124,6 @@ components:
           type: string
           minLength: 4
           description: Exact nonempty media bytes encoded as canonical padded RFC 4648 base64.
-        sha256:
-          type: string
-          pattern: ^[0-9a-f]{64}$
-          description: Lowercase hexadecimal SHA-256 of the decoded media bytes.
     ImageAssetMessageAttachment:
       type: object
       additionalProperties: false
@@ -2150,7 +2131,6 @@ components:
         - type
         - mime_type
         - asset_id
-        - sha256
       properties:
         type:
           type: string
@@ -2164,9 +2144,6 @@ components:
         asset_id:
           type: string
           pattern: ^ast_[0-9a-f]{32}$
-        sha256:
-          type: string
-          pattern: ^[0-9a-f]{64}$
     AudioAssetMessageAttachment:
       type: object
       additionalProperties: false
@@ -2174,7 +2151,6 @@ components:
         - type
         - mime_type
         - asset_id
-        - sha256
       properties:
         type:
           type: string
@@ -2188,9 +2164,6 @@ components:
         asset_id:
           type: string
           pattern: ^ast_[0-9a-f]{32}$
-        sha256:
-          type: string
-          pattern: ^[0-9a-f]{64}$
     TenantAsset:
       type: object
       additionalProperties: false
@@ -2198,7 +2171,6 @@ components:
         - asset_id
         - mime_type
         - size_bytes
-        - sha256
         - state
         - created_at
         - expires_at
@@ -2219,9 +2191,6 @@ components:
           type: integer
           format: int64
           minimum: 1
-        sha256:
-          type: string
-          pattern: ^[0-9a-f]{64}$
         state:
           type: string
           const: available
@@ -2251,7 +2220,6 @@ components:
                 - asset_expired
                 - asset_deleted
                 - asset_mime_mismatch
-                - asset_digest_mismatch
                 - asset_too_large
                 - asset_store_error
     V2ChatMessage:

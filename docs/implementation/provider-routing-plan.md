@@ -24,26 +24,26 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
   ordered `attachments[]` array. Compatibility `GET /`, JSON `POST /`, and
   `/dictate` never accept message attachments.
 - `messages[]` items contain `role` and nonblank string `content`. Supported
-  roles are `system`, `user`, and `assistant`; at least one `user` message is
+  roles are `system`, `user`, and `assistant`. At least one `user` message is
   required. `attachments[]` is allowed only on a user message and each item
   uses one exact union variant. Inline media contains `type`, `mime_type`,
-  canonical padded base64 `data`, and the matching lowercase hexadecimal
-  `sha256`. Asset media contains `type`, `asset_id`, `mime_type`, and the
-  matching lowercase hexadecimal `sha256`. Image accepts `image/jpeg`,
+  and canonical padded base64 `data`. Asset media contains `type`, `asset_id`,
+  and `mime_type`. Image accepts `image/jpeg`,
   `image/png`, and `image/webp`. Audio accepts `audio/m4a`, `audio/mpeg`, and
   `audio/wav`.
 - `POST /model/v1/assets` stores exact image or audio bytes for the
-  authenticated tenant. The request supplies the exact media content type and
-  `X-LLM-Proxy-Asset-SHA256`. The response supplies one opaque asset id and its
-  hash-bound metadata. `DELETE /model/v1/assets/{asset_id}` marks the asset as
-  deleted and removes its stored bytes.
+  authenticated tenant. The request supplies the exact media content type.
+  The response supplies one opaque asset id and its semantic metadata.
+  The server stores a private checksum for integrity validation.
+  `DELETE /model/v1/assets/{asset_id}` marks the asset as deleted and removes
+  its stored bytes.
 - `server.max_prompt_bytes` limits compatibility `POST /`. Canonical
   `POST /v2` accepts an encoded JSON envelope of 8 MiB or less. A smaller
   catalog-derived limit applies when its text and inline media limits have a
   smaller sum. Larger media uses the asset endpoint and an asset reference.
   The proxy uses the resolved provider offering's media limits. It validates
-  asset ownership, state, expiry, MIME type, size, and SHA-256 before provider
-  dispatch.
+  asset ownership, state, expiry, MIME type, size, and stored-byte integrity
+  before provider dispatch.
 - `messages[].order` is optional. When any submitted message includes `order`, every submitted message must include a unique non-negative integer `order`; the proxy sorts submitted messages by ascending `order` before adding a request or tenant system prompt and before routing upstream.
 - With `messages[]` on `POST /`, body `system_prompt` is prepended as a system message only when the transcript does not already contain a `system` message. A body containing both `system_prompt` and a system message is invalid. With `POST /v2`, callers send system instructions as `system` role messages.
 - `max_tokens` is an optional positive integer on `GET /` query strings and JSON `POST /` bodies. It is the initial per-attempt output budget and is reused for missing-suffix attempts.
@@ -86,8 +86,8 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 - JSON `POST /v2` bodies that provide `prompt`, body `system_prompt`, missing
   or empty messages, unsupported roles, empty content, a missing user message,
   partially specified `order`, duplicate `order`, negative `order`, media on a
-  non-user message, `null` or empty attachments, malformed base64, mismatched
-  digests, unsupported media types, or unknown JSON fields return
+  non-user message, `null` or empty attachments, malformed or noncanonical
+  base64, unsupported media types, or unknown JSON fields return
   `400 Bad Request`. Media unsupported by the exact resolved model also returns
   `400` before any provider call.
 - Upstream provider API keys are never accepted from client requests.
@@ -305,8 +305,8 @@ to 2,000,000,000 bytes. The adapter builds the complete inline interaction and
 uses inline `data` when its encoded size is within the limit. A larger request
 streams each exact attachment to the Gemini Files API and uses the returned
 `uri` in the same attachment order. The adapter verifies the provider file's
-MIME type, byte count, SHA-256, URI, and active state. It deletes every uploaded
-provider file when the interaction ends. The catalog records Google's
+MIME type, byte count, checksum, URI, and active state. It deletes every
+uploaded provider file when the interaction ends. The catalog records Google's
 [file input methods](https://ai.google.dev/gemini-api/docs/file-input-methods),
 [image input](https://ai.google.dev/gemini-api/docs/image-understanding),
 [audio input](https://ai.google.dev/gemini-api/docs/audio), and
@@ -355,9 +355,9 @@ deadline records one `504` with all usage observed before the deadline.
 Bundled clients intentionally expose only the canonical `POST /v2` message
 contract. The installable Go CLI maps prompt flags or stdin into v2 `system`
 and `user` messages. The reusable Go package additionally exposes closed
-image/audio attachment constructors that copy bytes, derive the canonical
-base64 and digest representations, and attach only to user messages. The
-Python package and CLI remain text-only callers of the same endpoint.
+image/audio attachment constructors that copy bytes, derive canonical base64,
+and attach only to user messages. The Python package exposes the same media
+contract. The CLI remains a text-only caller of the same endpoint.
 Their optional `reasoning_effort` input serializes the same canonical field;
 the clients reject only blank local input and leave exact model-capability
 validation to the proxy edge.
@@ -814,8 +814,9 @@ Black-box router tests cover:
 - Inline and asset-backed media admission, exact-limit and one-unit-above
   provider boundaries, tenant isolation, asset expiry and deletion, and
   provider file cleanup.
-- Malformed, digest-mismatched, misplaced, unsupported-model, and
-  compatibility-route media rejection before any upstream request.
+- Malformed, misplaced, same-length-corrupted, provider-checksum-mismatched,
+  unsupported-model, and compatibility-route media rejection before any
+  upstream request.
 - Deadline exhaustion and nonrecoverable safety, refusal, tool, malformed,
   missing, and unknown signals, proving partial text is never exposed as a
   failure response.
