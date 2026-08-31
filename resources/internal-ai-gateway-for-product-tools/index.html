@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Internal AI gateway for durable product integrations</title>
+    <meta name="description" content="Give institutional teams one AI integration while platform engineering centralizes provider credentials, routing, validation, and usage signals.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/internal-ai-gateway-for-product-tools/">
+    <meta property="og:title" content="Internal AI gateway for durable product integrations">
+    <meta property="og:description" content="Give institutional teams one AI integration while platform engineering centralizes provider credentials, routing, validation, and usage signals.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/internal-ai-gateway-for-product-tools/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.3.0/dist/js-yaml.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"></script>
+    <script
+      id="mpr-ui-bundle"
+      type="application/json"
+      data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
+    ></script>
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Internal AI gateway for durable product integrations","description":"Give institutional teams one AI integration while platform engineering centralizes provider credentials, routing, validation, and usage signals.","url":"https://llm-proxy.mprlab.com/resources/internal-ai-gateway-for-product-tools/","datePublished":"2026-07-06","dateModified":"2026-08-08","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/internal-ai-gateway-for-product-tools/","about":["LLM Proxy","Use cases","internal AI gateway"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Internal AI gateway for durable product integrations","item":"https://llm-proxy.mprlab.com/resources/internal-ai-gateway-for-product-tools/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What credential does an internal application receive?","acceptedAnswer":{"@type":"Answer","text":"The application receives an LLM Proxy tenant client key. Upstream provider API keys remain in authenticated tenant management storage."}},{"@type":"Question","name":"Can platform teams change a tenant's default model centrally?","acceptedAnswer":{"@type":"Answer","text":"Yes. When an official client omits provider and model, the next request follows that tenant's saved routing default without an application code or deployment change."}},{"@type":"Question","name":"What usage data does the management app expose?","acceptedAnswer":{"@type":"Answer","text":"It summarizes request counts, token usage, provider, model, status, and time buckets. The documented managed-usage contract excludes prompt, audio, transcript, and response bodies."}},{"@type":"Question","name":"Does the gateway replace every governance control?","acceptedAnswer":{"@type":"Answer","text":"No. It provides the documented integration, credential, routing, validation, failure, and usage boundary. Organizations still own their wider network, identity, procurement, data, and policy controls."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Integrate once through one multi-provider LLM proxy, which covers multi-provider LLM proxy."}}]}</script>
+    <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440"></script>
+  </head>
+  <body class="resource-page">
+
+    <mpr-header
+      class="public-site-header"
+      data-config-url="https://llm-proxy-api.mprlab.com/config-ui.yaml"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      logout-url="/"
+      settings="false"
+      sign-in-label="Log In"
+      sign-in-redirect-url="/app/"
+      size="small"
+      sticky="true"
+      auth-transition='{"title":"Opening LLM Proxy","message":"Loading your app."}'
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"}]}'
+    >
+      <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
+        <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
+        <span>LLM Proxy</span>
+      </a>
+    </mpr-header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>Internal AI gateway for durable product integrations</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Use cases</p>
+            <h1>Internal AI gateway for durable product integrations</h1>
+            <p class="resource-deck">Give institutional teams one AI integration while platform engineering centralizes provider credentials, routing, validation, and usage signals.</p>
+            <p class="resource-audience">Institutional engineering and platform teams standardizing AI access across multiple applications and product groups.</p>
+            <p class="resource-byline">Reviewed 2026-08-08 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <aside class="resource-verdict" aria-label="Quick verdict">
+              <strong>Quick verdict</strong>
+              <p>Use LLM Proxy as an internal AI gateway when platform engineering should own provider complexity and product teams should own only one supported application contract.</p>
+            </aside>
+            <div class="resource-actions">
+              <a class="resource-button" href="/docs/">Open API reference</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>Applications that adopt provider SDKs independently create duplicated credential handling, inconsistent route validation, provider-specific failures, and fragmented usage visibility.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy becomes one tenant-client-key boundary for applications while platform engineering owns upstream credentials, supported routes, managed defaults, request validation, and usage metadata centrally.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Run LLM Proxy as the shared API boundary and configure the supported provider registry centrally.</li>
+<li>Give each application its own tenant client key instead of upstream provider credentials.</li>
+<li>Standardize new product integrations on POST /v2 or an official client and use managed route defaults where appropriate.</li>
+<li>Review requests, tokens, provider, model, and status metadata without persisting prompt or response bodies.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+
+                        <tr>
+                          <td>Shared integration contract</td>
+                          <td>Applications use canonical messages instead of provider SDKs.</td>
+                          <td>A product team can change an approved route without rebuilding its AI boundary.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Credential separation</td>
+                          <td>Client applications receive tenant keys while upstream provider credentials stay server-side.</td>
+                          <td>Provider-key rotation does not require distributing a replacement key to every application.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Central route policy</td>
+                          <td>Validated provider catalogs and managed defaults define the available routes.</td>
+                          <td>Unsupported model and capability combinations fail before upstream dispatch.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Usage visibility</td>
+                          <td>Managed dashboards summarize requests, tokens, provider, model, and status without storing content.</td>
+                          <td>Platform teams can inspect operational patterns across account or tenant scopes.</td>
+                        </tr>
+
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+
+                    <section class="resource-card">
+                      <h3>Product portfolio</h3>
+                      <p>Several product backends use separate client keys and one canonical messages contract while platform engineering maintains supported provider routes.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Engineering automation</h3>
+                      <p>Internal scripts use the official CLI instead of distributing provider keys to developer machines.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Managed model change</h3>
+                      <p>A tenant owner changes the default route in the app and model-omitting client requests follow that route without an application deployment.</p>
+                    </section>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>The proxy is not a full policy engine for every AI governance need.</li>
+<li>Provider spend and availability still depend on upstream accounts.</li>
+<li>Network controls are recommended before public exposure.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>Repository evidence</h2>
+            <pre class="usage-snippet"><code>curl -X POST   &quot;https://llm-proxy-api.mprlab.com/v2?key=$PRODUCT_TOOL_CLIENT_KEY&quot;   -H &quot;Content-Type: application/json&quot;   -d '{&quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;Summarize this&quot;}]}'</code></pre>
+            <p>Verified 2026-08-08 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+
+                    <details>
+                      <summary>What credential does an internal application receive?</summary>
+                      <p>The application receives an LLM Proxy tenant client key. Upstream provider API keys remain in authenticated tenant management storage.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Can platform teams change a tenant's default model centrally?</summary>
+                      <p>Yes. When an official client omits provider and model, the next request follows that tenant's saved routing default without an application code or deployment change.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>What usage data does the management app expose?</summary>
+                      <p>It summarizes request counts, token usage, provider, model, status, and time buckets. The documented managed-usage contract excludes prompt, audio, transcript, and response bodies.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Does the gateway replace every governance control?</summary>
+                      <p>No. It provides the documented integration, credential, routing, validation, failure, and usage boundary. Organizations still own their wider network, identity, procurement, data, and policy controls.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is Integrate once through one multi-provider LLM proxy, which covers multi-provider LLM proxy.</p>
+                    </details>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+
+                    <a class="resource-related" href="/resources/multi-provider-llm-proxy/">
+                      <span>Provider routing</span>
+                      <strong>Integrate once through one multi-provider LLM proxy</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/server-side-provider-api-keys/">
+                      <span>Security</span>
+                      <strong>Keep provider API keys server-side for LLM apps</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/managed-tenant-usage-dashboard/">
+                      <span>Usage</span>
+                      <strong>Account-wide managed tenant usage dashboard for LLMs</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/llm-proxy-client-authentication/">
+                      <span>Clients</span>
+                      <strong>Authenticate an LLM Proxy client with a tenant secret</strong>
+                    </a>
+
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Standardize the first application request</h2>
+            <p>Use the authentication guide to separate the application client key, management session, and upstream provider credentials.</p>
+            <a class="resource-button" href="/resources/llm-proxy-client-authentication/">Read the authentication guide</a>
+          </section>
+        </article>
+      </main>
+    <mpr-footer
+      class="public-site-footer"
+      size="small"
+      sticky="true"
+      wrapper-class="public-site-footer-layout"
+      privacy-link-label="Privacy"
+      privacy-link-href="/privacy/"
+      theme-switcher="square"
+      horizontal-links='{"alignment":"left","links":[{"label":"Terms","href":"/terms/"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+      links-collection='{"style":"drop-up","text":"Built by Marco Polo Research Lab","links":[{"label":"Marco Polo Research Lab","url":"https://mprlab.com"},{"label":"Gravity Notes","url":"https://gravity.mprlab.com"},{"label":"LoopAware","url":"https://loopaware.mprlab.com"},{"label":"Allergy Wheel","url":"https://allergy.mprlab.com"},{"label":"Social Threader","url":"https://threader.mprlab.com"},{"label":"RSVP","url":"https://rsvp.mprlab.com"},{"label":"Countdown Calendar","url":"https://countdown.mprlab.com"},{"label":"LLM Crossword","url":"https://llm-crossword.mprlab.com"},{"label":"Prompt Bubbles","url":"https://prompts.mprlab.com"},{"label":"Wallpapers","url":"https://wallpapers.mprlab.com"}]}'
+    >
+      <footer class="public-site-footer-fallback" role="contentinfo">
+        <nav class="public-site-footer-fallback__nav" aria-label="Footer">
+          <a href="/privacy/">Privacy</a>
+          <a href="/terms/">Terms</a>
+          <a href="/resources/">Resources</a>
+          <a href="https://github.com/tyemirov/llm-proxy">GitHub</a>
+        </nav>
+        <details class="public-site-footer-fallback__projects">
+          <summary>Built by Marco Polo Research Lab</summary>
+          <ul>
+            <li><a href="https://mprlab.com">Marco Polo Research Lab</a></li>
+            <li><a href="https://gravity.mprlab.com">Gravity Notes</a></li>
+            <li><a href="https://loopaware.mprlab.com">LoopAware</a></li>
+            <li><a href="https://allergy.mprlab.com">Allergy Wheel</a></li>
+            <li><a href="https://threader.mprlab.com">Social Threader</a></li>
+            <li><a href="https://rsvp.mprlab.com">RSVP</a></li>
+            <li><a href="https://countdown.mprlab.com">Countdown Calendar</a></li>
+            <li><a href="https://llm-crossword.mprlab.com">LLM Crossword</a></li>
+            <li><a href="https://prompts.mprlab.com">Prompt Bubbles</a></li>
+            <li><a href="https://wallpapers.mprlab.com">Wallpapers</a></li>
+          </ul>
+        </details>
+      </footer>
+    </mpr-footer>
+
+  </body>
+</html>
