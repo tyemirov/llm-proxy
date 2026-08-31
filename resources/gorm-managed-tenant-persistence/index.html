@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>GORM-managed tenant persistence for LLM Proxy</title>
+    <meta name="description" content="Persist TAuth accounts, isolated tenants, provider settings, generated secret digests, defaults, and usage through GORM.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/gorm-managed-tenant-persistence/">
+    <meta property="og:title" content="GORM-managed tenant persistence for LLM Proxy">
+    <meta property="og:description" content="Persist TAuth accounts, isolated tenants, provider settings, generated secret digests, defaults, and usage through GORM.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/gorm-managed-tenant-persistence/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.3.0/dist/js-yaml.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"></script>
+    <script
+      id="mpr-ui-bundle"
+      type="application/json"
+      data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
+    ></script>
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"GORM-managed tenant persistence for LLM Proxy","description":"Persist TAuth accounts, isolated tenants, provider settings, generated secret digests, defaults, and usage through GORM.","url":"https://llm-proxy.mprlab.com/resources/gorm-managed-tenant-persistence/","datePublished":"2026-07-06","dateModified":"2026-08-22","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/gorm-managed-tenant-persistence/","about":["LLM Proxy","Configuration","GORM managed tenant persistence"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"GORM-managed tenant persistence for LLM Proxy","item":"https://llm-proxy.mprlab.com/resources/gorm-managed-tenant-persistence/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of GORM managed tenant persistence?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy stores TAuth users, their personal tenants, provider keys, defaults, generated secret digests, and usage events in a GORM-managed database."}},{"@type":"Question","name":"Who should read this configuration resource?","acceptedAnswer":{"@type":"Answer","text":"Backend operators deciding how tenant management state is stored."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is LLM provider catalog configuration in providers.yml, which covers LLM model catalog configuration."}}]}</script>
+    <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440"></script>
+  </head>
+  <body class="resource-page">
+
+    <mpr-header
+      class="public-site-header"
+      data-config-url="https://llm-proxy-api.mprlab.com/config-ui.yaml"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      logout-url="/"
+      settings="false"
+      sign-in-label="Log In"
+      sign-in-redirect-url="/app/"
+      size="small"
+      sticky="true"
+      auth-transition='{"title":"Opening LLM Proxy","message":"Loading your app."}'
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"}]}'
+    >
+      <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
+        <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
+        <span>LLM Proxy</span>
+      </a>
+    </mpr-header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>GORM-managed tenant persistence for LLM Proxy</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Configuration</p>
+            <h1>GORM-managed tenant persistence for LLM Proxy</h1>
+            <p class="resource-deck">Persist TAuth accounts, isolated tenants, provider settings, generated secret digests, defaults, and usage through GORM.</p>
+            <p class="resource-audience">Backend operators deciding how tenant management state is stored.</p>
+            <p class="resource-byline">Reviewed 2026-08-22 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <div class="resource-actions">
+              <a class="resource-button" href="/docs/">Open API reference</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>Self-service management needs persistent tenant state without mutating runtime config files or adding raw SQL paths.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy stores TAuth users, their personal tenants, provider keys, defaults, generated secret digests, and usage events in a GORM-managed database.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Configure management.database_path with the SQLite database location.</li>
+<li>Run the service with the required provider-key encryption key.</li>
+<li>Let GORM model APIs own signup, provider, defaults, secret, and usage state.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+
+                        <tr>
+                          <td>SQLite through GORM</td>
+                          <td>Hosted and local management profiles choose the database location with one path.</td>
+                          <td>The pure-Go SQLite driver keeps CGO_DISABLED builds valid.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>No runtime config mutation</td>
+                          <td>User signup and provider enablement update database state, not config.yml.</td>
+                          <td>Configuration stays operator-owned.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Usage event persistence</td>
+                          <td>Managed request metadata is stored with tenant isolation.</td>
+                          <td>Dashboards survive restarts.</td>
+                        </tr>
+
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+
+                    <section class="resource-card">
+                      <h3>Local development</h3>
+                      <p>A developer supplies the path to a local ignored SQLite database file.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Hosted deployment</h3>
+                      <p>The service receives its persistent SQLite database path through deployment configuration.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Usage dashboard</h3>
+                      <p>The dashboard reads aggregate usage from persisted events.</p>
+                    </section>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>The current persistence engine is SQLite; other database engines are outside the contract.</li>
+<li>Storage access failures can affect management state and dashboard access.</li>
+<li>Provider transports and model definitions live in providers.yml.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+
+                    <details>
+                      <summary>What is the main job of GORM managed tenant persistence?</summary>
+                      <p>LLM Proxy stores TAuth users, their personal tenants, provider keys, defaults, generated secret digests, and usage events in a GORM-managed database.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Who should read this configuration resource?</summary>
+                      <p>Backend operators deciding how tenant management state is stored.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Does this page claim provider performance or pricing advantages?</summary>
+                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Where should setup details come from?</summary>
+                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is LLM provider catalog configuration in providers.yml, which covers LLM model catalog configuration.</p>
+                    </details>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+
+                    <a class="resource-related" href="/resources/model-catalog-configuration/">
+                      <span>Configuration</span>
+                      <strong>LLM provider catalog configuration in providers.yml</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/provider-default-model-selection/">
+                      <span>Configuration</span>
+                      <strong>Provider default model selection for omitted models</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/llm-proxy-client-authentication/">
+                      <span>Clients</span>
+                      <strong>Authenticate an LLM Proxy client with a tenant secret</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/multi-tenant-ownership-migration/">
+                      <span>Configuration</span>
+                      <strong>Transactional multi-tenant account ownership migration</strong>
+                    </a>
+
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Use this pattern in LLM Proxy</h2>
+            <p>Start from the canonical API reference, then use the management surface when the workflow needs tenant or provider configuration.</p>
+            <a class="resource-button" href="/docs/">Open API reference</a>
+          </section>
+        </article>
+      </main>
+    <mpr-footer
+      class="public-site-footer"
+      size="small"
+      sticky="true"
+      wrapper-class="public-site-footer-layout"
+      privacy-link-label="Privacy"
+      privacy-link-href="/privacy/"
+      theme-switcher="square"
+      horizontal-links='{"alignment":"left","links":[{"label":"Terms","href":"/terms/"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+      links-collection='{"style":"drop-up","text":"Built by Marco Polo Research Lab","links":[{"label":"Marco Polo Research Lab","url":"https://mprlab.com"},{"label":"Gravity Notes","url":"https://gravity.mprlab.com"},{"label":"LoopAware","url":"https://loopaware.mprlab.com"},{"label":"Allergy Wheel","url":"https://allergy.mprlab.com"},{"label":"Social Threader","url":"https://threader.mprlab.com"},{"label":"RSVP","url":"https://rsvp.mprlab.com"},{"label":"Countdown Calendar","url":"https://countdown.mprlab.com"},{"label":"LLM Crossword","url":"https://llm-crossword.mprlab.com"},{"label":"Prompt Bubbles","url":"https://prompts.mprlab.com"},{"label":"Wallpapers","url":"https://wallpapers.mprlab.com"}]}'
+    >
+      <footer class="public-site-footer-fallback" role="contentinfo">
+        <nav class="public-site-footer-fallback__nav" aria-label="Footer">
+          <a href="/privacy/">Privacy</a>
+          <a href="/terms/">Terms</a>
+          <a href="/resources/">Resources</a>
+          <a href="https://github.com/tyemirov/llm-proxy">GitHub</a>
+        </nav>
+        <details class="public-site-footer-fallback__projects">
+          <summary>Built by Marco Polo Research Lab</summary>
+          <ul>
+            <li><a href="https://mprlab.com">Marco Polo Research Lab</a></li>
+            <li><a href="https://gravity.mprlab.com">Gravity Notes</a></li>
+            <li><a href="https://loopaware.mprlab.com">LoopAware</a></li>
+            <li><a href="https://allergy.mprlab.com">Allergy Wheel</a></li>
+            <li><a href="https://threader.mprlab.com">Social Threader</a></li>
+            <li><a href="https://rsvp.mprlab.com">RSVP</a></li>
+            <li><a href="https://countdown.mprlab.com">Countdown Calendar</a></li>
+            <li><a href="https://llm-crossword.mprlab.com">LLM Crossword</a></li>
+            <li><a href="https://prompts.mprlab.com">Prompt Bubbles</a></li>
+            <li><a href="https://wallpapers.mprlab.com">Wallpapers</a></li>
+          </ul>
+        </details>
+      </footer>
+    </mpr-footer>
+
+  </body>
+</html>
