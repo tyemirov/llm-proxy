@@ -4,8 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-- Set the application, Go client, and Python client release to `v1.2.0`.
-  Fixed the release major version at `1` for each future SemVer release.
+- Set the application, Go client, and Python client release to `v1.2.2`.
+  Added an application-owned validator for the exact gateway release decision.
+  Required that decision to match the official client version.
 - **Breaking:** Removed caller-provided content hashes from inline media,
   tenant asset uploads, asset references, responses, and the official Go and
   Python client contracts. Media now uses semantic metadata and opaque owner
