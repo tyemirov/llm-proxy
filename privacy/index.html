@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Privacy Policy - LLM Proxy</title>
+    <meta name="description" content="How Marco Polo Research Lab handles account, configuration, request, credential, and usage data for LLM Proxy.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/privacy/">
+    <meta property="og:title" content="Privacy Policy - LLM Proxy">
+    <meta property="og:description" content="How Marco Polo Research Lab handles account, configuration, request, credential, and usage data for LLM Proxy.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/privacy/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0f1114">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.3.0/dist/js-yaml.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"></script>
+    <script
+      id="mpr-ui-bundle"
+      type="application/json"
+      data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
+    ></script>
+    <link rel="stylesheet" href="/assets/llm-proxy/legal.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
+    <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440"></script>
+  </head>
+  <body class="legal-page">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <mpr-header
+      class="public-site-header"
+      data-config-url="https://llm-proxy-api.mprlab.com/config-ui.yaml"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      logout-url="/"
+      settings="false"
+      sign-in-label="Log In"
+      sign-in-redirect-url="/app/"
+      size="small"
+      sticky="true"
+      auth-transition='{"title":"Opening LLM Proxy","message":"Loading your app."}'
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"}]}'
+    >
+      <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
+        <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
+        <span>LLM Proxy</span>
+      </a>
+    </mpr-header>
+    <main id="main-content" class="legal-main">
+      <mpr-legal-document
+        type="privacy"
+        title="Privacy Policy - LLM Proxy"
+        product-name="LLM Proxy"
+        service-description="LLM Proxy provides authenticated model routing, provider credential management, tenant configuration, and usage visibility."
+        service-data-description="account identity, tenant configuration, encrypted provider credentials, client-secret digests, routing settings, request content processed in transit, and content-free usage records"
+        effective-date="2026-08-08"
+        effective-date-text="August 8, 2026"
+        last-updated-date="2026-08-08"
+        privacy-path="/privacy/"
+        terms-path="/terms/"
+        sections='[{&quot;id&quot;:&quot;scope&quot;,&quot;heading&quot;:&quot;1. Scope&quot;,&quot;paragraphs&quot;:[&quot;This policy applies to the public LLM Proxy website, the authenticated management app, the LLM Proxy API, and related support communications.&quot;],&quot;list&quot;:[]},{&quot;id&quot;:&quot;information&quot;,&quot;heading&quot;:&quot;2. Information We Handle&quot;,&quot;paragraphs&quot;:[],&quot;list&quot;:[&quot;Account and authentication data supplied through MPR UI, TAuth, and Google Identity Services, including the name, email address, and profile image associated with the account.&quot;,&quot;Tenant names, provider and model routing defaults, encrypted upstream provider credentials, and one-way digests of generated LLM Proxy client secrets.&quot;,&quot;Prompts, message attachments, audio, and other request content while routing a request to the selected model provider and returning its response.&quot;,&quot;Content-free usage metadata such as tenant, provider, model, operation, status, token counts, timing, and request outcome.&quot;,&quot;Support communications and the technical records required to secure, operate, and troubleshoot the service.&quot;]},{&quot;id&quot;:&quot;usage-content-boundary&quot;,&quot;heading&quot;:&quot;3. Usage Record Content Boundary&quot;,&quot;paragraphs&quot;:[&quot;LLM Proxy usage records do not store prompts, message attachments, input audio, transcripts, generated responses, raw provider credentials, or raw client secrets.&quot;],&quot;list&quot;:[]},{&quot;id&quot;:&quot;use&quot;,&quot;heading&quot;:&quot;4. How We Use Information&quot;,&quot;paragraphs&quot;:[],&quot;list&quot;:[&quot;Authenticate users and protect account access.&quot;,&quot;Route requests, apply tenant configuration, and return provider responses.&quot;,&quot;Manage provider credentials and generated client access.&quot;,&quot;Present usage, failure, and reliability information to authorized users.&quot;,&quot;Secure, troubleshoot, maintain, and improve LLM Proxy.&quot;,&quot;Respond to support, privacy, and legal requests.&quot;]},{&quot;id&quot;:&quot;providers&quot;,&quot;heading&quot;:&quot;5. Service Providers and Model Providers&quot;,&quot;paragraphs&quot;:[&quot;Authentication is provided through MPR UI and TAuth, with Google Identity Services available for sign-in. Model request content is sent to the provider selected by the authenticated tenant and is subject to that provider&#39;s terms and privacy practices.&quot;,&quot;The public site uses GitHub Pages. Google Analytics and LoopAware receive website interaction and technical telemetry used to understand aggregate traffic and service quality.&quot;],&quot;list&quot;:[]},{&quot;id&quot;:&quot;browser-storage&quot;,&quot;heading&quot;:&quot;6. Cookies and Browser Storage&quot;,&quot;paragraphs&quot;:[&quot;TAuth uses secure HttpOnly session and refresh cookies for authentication. Browser JavaScript cannot read those cookies. The LLM Proxy backend receives and validates the configured session cookie through TAuth&#39;s published validator only to authorize protected LLM Proxy resources. Browser storage may retain interface preferences such as the selected theme; raw provider credentials and generated client secrets are not persisted in browser storage by the app.&quot;],&quot;list&quot;:[]},{&quot;id&quot;:&quot;sharing&quot;,&quot;heading&quot;:&quot;7. Sharing&quot;,&quot;paragraphs&quot;:[&quot;We do not sell personal information. We disclose information to authentication, hosting, analytics, support, and selected model providers only as needed to provide and secure LLM Proxy, or when required by law or needed to protect rights and safety.&quot;],&quot;list&quot;:[]},{&quot;id&quot;:&quot;retention&quot;,&quot;heading&quot;:&quot;8. Retention&quot;,&quot;paragraphs&quot;:[&quot;Account, tenant configuration, credential, and usage records are retained while needed to operate the service, secure accounts, meet legal obligations, and resolve disputes. Request content is processed in transit and is excluded from the LLM Proxy usage record.&quot;],&quot;list&quot;:[]},{&quot;id&quot;:&quot;security&quot;,&quot;heading&quot;:&quot;9. Security&quot;,&quot;paragraphs&quot;:[&quot;We use access controls, transport security, encrypted storage for provider credentials, one-way secret digests, and content-free usage records to protect information. No system can guarantee absolute security.&quot;],&quot;list&quot;:[]},{&quot;id&quot;:&quot;choices&quot;,&quot;heading&quot;:&quot;10. Your Choices&quot;,&quot;paragraphs&quot;:[&quot;You may request access, correction, export, or deletion of personal information, subject to applicable law and records we must retain. Contact support@mprlab.com to make a request or to disconnect an account.&quot;],&quot;list&quot;:[]},{&quot;id&quot;:&quot;changes&quot;,&quot;heading&quot;:&quot;11. Changes to This Policy&quot;,&quot;paragraphs&quot;:[&quot;We may update this policy as LLM Proxy or applicable requirements change. The effective and last-updated dates on this page identify the current version.&quot;],&quot;list&quot;:[]},{&quot;id&quot;:&quot;contact&quot;,&quot;heading&quot;:&quot;12. Contact&quot;,&quot;paragraphs&quot;:[&quot;For privacy questions or data requests, email support@mprlab.com. For legal notices, email legal@mprlab.com. Marco Polo Research Lab LLC can also be reached through https://mprlab.com.&quot;],&quot;list&quot;:[]}]'
+      >
+        <article class="mpr-legal-document__card">
+          <h1 class="mpr-legal-document__title">Privacy Policy - LLM Proxy</h1>
+          <p class="mpr-legal-document__meta"><strong>Effective Date:</strong> <time datetime="2026-08-08">August 8, 2026</time> · <strong>Last Updated:</strong> <time datetime="2026-08-08">August 8, 2026</time></p>
+        <p class="mpr-legal-document__intro">This Privacy Policy explains how Marco Polo Research Lab LLC handles information when you use LLM Proxy.</p>
+        <p class="mpr-legal-document__intro">LLM Proxy separates browser authentication, tenant configuration, model requests, and content-free usage records so each category is processed only for its stated purpose.</p>
+          <section id="scope" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">1. Scope</h2>
+            <p class="mpr-legal-document__paragraph">This policy applies to the public LLM Proxy website, the authenticated management app, the LLM Proxy API, and related support communications.</p>
+          </section>
+          <section id="information" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">2. Information We Handle</h2>
+
+            <ul class="mpr-legal-document__list">
+              <li class="mpr-legal-document__list-item">Account and authentication data supplied through MPR UI, TAuth, and Google Identity Services, including the name, email address, and profile image associated with the account.</li>
+              <li class="mpr-legal-document__list-item">Tenant names, provider and model routing defaults, encrypted upstream provider credentials, and one-way digests of generated LLM Proxy client secrets.</li>
+              <li class="mpr-legal-document__list-item">Prompts, message attachments, audio, and other request content while routing a request to the selected model provider and returning its response.</li>
+              <li class="mpr-legal-document__list-item">Content-free usage metadata such as tenant, provider, model, operation, status, token counts, timing, and request outcome.</li>
+              <li class="mpr-legal-document__list-item">Support communications and the technical records required to secure, operate, and troubleshoot the service.</li>
+            </ul>
+          </section>
+          <section id="usage-content-boundary" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">3. Usage Record Content Boundary</h2>
+            <p class="mpr-legal-document__paragraph">LLM Proxy usage records do not store prompts, message attachments, input audio, transcripts, generated responses, raw provider credentials, or raw client secrets.</p>
+          </section>
+          <section id="use" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">4. How We Use Information</h2>
+
+            <ul class="mpr-legal-document__list">
+              <li class="mpr-legal-document__list-item">Authenticate users and protect account access.</li>
+              <li class="mpr-legal-document__list-item">Route requests, apply tenant configuration, and return provider responses.</li>
+              <li class="mpr-legal-document__list-item">Manage provider credentials and generated client access.</li>
+              <li class="mpr-legal-document__list-item">Present usage, failure, and reliability information to authorized users.</li>
+              <li class="mpr-legal-document__list-item">Secure, troubleshoot, maintain, and improve LLM Proxy.</li>
+              <li class="mpr-legal-document__list-item">Respond to support, privacy, and legal requests.</li>
+            </ul>
+          </section>
+          <section id="providers" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">5. Service Providers and Model Providers</h2>
+            <p class="mpr-legal-document__paragraph">Authentication is provided through MPR UI and TAuth, with Google Identity Services available for sign-in. Model request content is sent to the provider selected by the authenticated tenant and is subject to that provider&#39;s terms and privacy practices.</p>
+            <p class="mpr-legal-document__paragraph">The public site uses GitHub Pages. Google Analytics and LoopAware receive website interaction and technical telemetry used to understand aggregate traffic and service quality.</p>
+          </section>
+          <section id="browser-storage" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">6. Cookies and Browser Storage</h2>
+            <p class="mpr-legal-document__paragraph">TAuth uses secure HttpOnly session and refresh cookies for authentication. Browser JavaScript cannot read those cookies. The LLM Proxy backend receives and validates the configured session cookie through TAuth&#39;s published validator only to authorize protected LLM Proxy resources. Browser storage may retain interface preferences such as the selected theme; raw provider credentials and generated client secrets are not persisted in browser storage by the app.</p>
+          </section>
+          <section id="sharing" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">7. Sharing</h2>
+            <p class="mpr-legal-document__paragraph">We do not sell personal information. We disclose information to authentication, hosting, analytics, support, and selected model providers only as needed to provide and secure LLM Proxy, or when required by law or needed to protect rights and safety.</p>
+          </section>
+          <section id="retention" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">8. Retention</h2>
+            <p class="mpr-legal-document__paragraph">Account, tenant configuration, credential, and usage records are retained while needed to operate the service, secure accounts, meet legal obligations, and resolve disputes. Request content is processed in transit and is excluded from the LLM Proxy usage record.</p>
+          </section>
+          <section id="security" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">9. Security</h2>
+            <p class="mpr-legal-document__paragraph">We use access controls, transport security, encrypted storage for provider credentials, one-way secret digests, and content-free usage records to protect information. No system can guarantee absolute security.</p>
+          </section>
+          <section id="choices" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">10. Your Choices</h2>
+            <p class="mpr-legal-document__paragraph">You may request access, correction, export, or deletion of personal information, subject to applicable law and records we must retain. Contact support@mprlab.com to make a request or to disconnect an account.</p>
+          </section>
+          <section id="changes" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">11. Changes to This Policy</h2>
+            <p class="mpr-legal-document__paragraph">We may update this policy as LLM Proxy or applicable requirements change. The effective and last-updated dates on this page identify the current version.</p>
+          </section>
+          <section id="contact" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">12. Contact</h2>
+            <p class="mpr-legal-document__paragraph">For privacy questions or data requests, email support@mprlab.com. For legal notices, email legal@mprlab.com. Marco Polo Research Lab LLC can also be reached through https://mprlab.com.</p>
+          </section>
+        </article>
+      </mpr-legal-document>
+    </main>
+    <mpr-footer
+      class="public-site-footer"
+      size="small"
+      sticky="true"
+      wrapper-class="public-site-footer-layout"
+      privacy-link-label="Privacy"
+      privacy-link-href="/privacy/"
+      theme-switcher="square"
+      horizontal-links='{"alignment":"left","links":[{"label":"Terms","href":"/terms/"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+      links-collection='{"style":"drop-up","text":"Built by Marco Polo Research Lab","links":[{"label":"Marco Polo Research Lab","url":"https://mprlab.com"},{"label":"Gravity Notes","url":"https://gravity.mprlab.com"},{"label":"LoopAware","url":"https://loopaware.mprlab.com"},{"label":"Allergy Wheel","url":"https://allergy.mprlab.com"},{"label":"Social Threader","url":"https://threader.mprlab.com"},{"label":"RSVP","url":"https://rsvp.mprlab.com"},{"label":"Countdown Calendar","url":"https://countdown.mprlab.com"},{"label":"LLM Crossword","url":"https://llm-crossword.mprlab.com"},{"label":"Prompt Bubbles","url":"https://prompts.mprlab.com"},{"label":"Wallpapers","url":"https://wallpapers.mprlab.com"}]}'
+    >
+      <footer class="public-site-footer-fallback" role="contentinfo">
+        <nav class="public-site-footer-fallback__nav" aria-label="Footer">
+          <a href="/privacy/">Privacy</a>
+          <a href="/terms/">Terms</a>
+          <a href="/resources/">Resources</a>
+          <a href="https://github.com/tyemirov/llm-proxy">GitHub</a>
+        </nav>
+        <details class="public-site-footer-fallback__projects">
+          <summary>Built by Marco Polo Research Lab</summary>
+          <ul>
+            <li><a href="https://mprlab.com">Marco Polo Research Lab</a></li>
+            <li><a href="https://gravity.mprlab.com">Gravity Notes</a></li>
+            <li><a href="https://loopaware.mprlab.com">LoopAware</a></li>
+            <li><a href="https://allergy.mprlab.com">Allergy Wheel</a></li>
+            <li><a href="https://threader.mprlab.com">Social Threader</a></li>
+            <li><a href="https://rsvp.mprlab.com">RSVP</a></li>
+            <li><a href="https://countdown.mprlab.com">Countdown Calendar</a></li>
+            <li><a href="https://llm-crossword.mprlab.com">LLM Crossword</a></li>
+            <li><a href="https://prompts.mprlab.com">Prompt Bubbles</a></li>
+            <li><a href="https://wallpapers.mprlab.com">Wallpapers</a></li>
+          </ul>
+        </details>
+      </footer>
+    </mpr-footer>
+  </body>
+</html>
