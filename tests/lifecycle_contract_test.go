@@ -53,7 +53,7 @@ func TestOperationalRepositoryOwnsVersionlessLifecycle(testingInstance *testing.
 		testingInstance.Fatalf("unexpected lifecycle owner: %#v", resourcesDocument["owner"])
 	}
 	release, releaseAvailable := resourcesDocument["release"].(map[string]any)
-	if !releaseAvailable || len(release) != 2 || release["scheme"] != "semver" || release["fixed_major"] != 1 {
+	if !releaseAvailable || len(release) != 1 || release["scheme"] != "semver" {
 		testingInstance.Fatalf("unexpected lifecycle release policy: %#v", resourcesDocument["release"])
 	}
 	if _, dependenciesAvailable := resourcesDocument["dependencies"]; dependenciesAvailable {
@@ -271,7 +271,7 @@ func TestOperationalRepositoryOwnsVersionlessLifecycle(testingInstance *testing.
 	}
 }
 
-func TestOperationalProductionLifecycleDelegatesOnlyToSiblingGateway(testingInstance *testing.T) {
+func TestOperationalProductionLifecycleKeepsPolicyInAppAndDelegatesToSiblingGateway(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	makefileBytes, readError := os.ReadFile(filepath.Join(repositoryRoot, "Makefile"))
 	if readError != nil {
@@ -328,6 +328,61 @@ func TestOperationalProductionLifecycleDelegatesOnlyToSiblingGateway(testingInst
 	}
 	if !slices.Equal(trackedDeployFiles, []string{lifecycleManifestRelativePath}) {
 		testingInstance.Fatalf("unexpected tracked deployment files: %#v", trackedDeployFiles)
+	}
+	validatorPath := filepath.Join(repositoryRoot, "scripts", "validate-release-decision")
+	validatorMetadata, statError := os.Stat(validatorPath)
+	if statError != nil || !validatorMetadata.Mode().IsRegular() || validatorMetadata.Mode().Perm() != 0o755 {
+		testingInstance.Fatalf("release decision validator is not a mode-0755 regular file: %v", statError)
+	}
+}
+
+func TestOperationalReleaseDecisionMustMatchOfficialClientVersion(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+
+	testCases := []struct {
+		name       string
+		output     string
+		wantStatus bool
+		wantText   string
+	}{
+		{
+			name:       "exact official version",
+			output:     `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver"},"next_version":"v1.2.2"}`,
+			wantStatus: true,
+			wantText:   "LLM_PROXY_RELEASE_POLICY_OK version=v1.2.2",
+		},
+		{
+			name:     "different major one version",
+			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver"},"next_version":"v1.3.0"}`,
+			wantText: "llm_proxy.release_version_invalid: release version must match official client version v1.2.2",
+		},
+		{
+			name:     "higher major",
+			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver"},"next_version":"v2.0.0"}`,
+			wantText: "llm_proxy.release_version_invalid: release version must match official client version v1.2.2",
+		},
+		{
+			name:     "gateway version override",
+			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"v1.2.2"}`,
+			wantText: "llm_proxy.release_policy_invalid: expected standard SemVer decision",
+		},
+		{
+			name:     "missing decision",
+			output:   `not a version decision`,
+			wantText: "llm_proxy.release_policy_invalid: expected one release decision document",
+		},
+	}
+
+	for _, testCase := range testCases {
+		testingInstance.Run(testCase.name, func(testingInstance *testing.T) {
+			command := exec.Command(filepath.Join(repositoryRoot, "scripts", "validate-release-decision"))
+			command.Dir = repositoryRoot
+			command.Stdin = strings.NewReader(testCase.output)
+			output, runError := command.CombinedOutput()
+			if (runError == nil) != testCase.wantStatus || !strings.Contains(string(output), testCase.wantText) {
+				testingInstance.Fatalf("release policy status=%v error=%v output=%s", testCase.wantStatus, runError, output)
+			}
+		})
 	}
 }
 
