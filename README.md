@@ -1310,7 +1310,7 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make test-live-local-providers` | Build an isolated local Compose project, verify selected provider keys, and send paid `POST /v2` requests through its Dockerized API. |
 | `make test-live-local-gemini` | Run every registered Gemini model and reasoning level through the isolated local Compose API. |
 | `make live-test` | Send paid production `POST /v2` requests through the Default tenant using only `LLM_PROXY_SECRET`: echo checks for OpenAI, Anthropic, Meta, Gemini, and Moonshot, plus large completion cases for OpenAI, Anthropic, Meta, and Gemini. |
-| `make release` | Delegate this clean checkout and its current resource declaration to the exact sibling `../mprlab-gateway` release transaction. |
+| `make release` | Delegate the clean checkout to the exact sibling `../mprlab-gateway`. The transaction validates its exact prepared or reused decision before CI. |
 | `make publish` | Delegate publication of the exact sealed release to `../mprlab-gateway`; it does not rebuild or deploy. |
 | `make deploy` | Delegate convergence of only this app's declared runtime, route, health, Pages, and TAuth resources to `../mprlab-gateway`. |
 
@@ -2517,16 +2517,23 @@ the selected integration profile or deployment docs, not in this README.
 
 Use `make release`, `make publish`, and `make deploy` from the selected clean
 checkout. These are deliberately thin entrypoints into the exact sibling
-`../mprlab-gateway`; this repository contains declarations, not production
-lifecycle machinery.
+`../mprlab-gateway`. This repository owns its permanent major version `1`
+release policy. The gateway runs the committed
+`scripts/validate-release-decision` program against the exact decision that
+the transaction prepares or reuses. The validator requires that decision to
+match the Python client version.
 
-The gateway release transaction validates this app, builds the declared
+The generic gateway transaction validates this app, builds the declared
 multi-platform container and frontend-rendered Pages artifact from committed source,
 and seals the canonical SemVer release. Publication creates only missing remote
 state from that exact release and rejects conflicts. Deployment uses the
 gateway-owned Ansible inventory and transaction to reconcile only this app's
 declared resources, then verifies its backend and Pages boundaries. Publish and
 deploy do not rerun CI or rebuild artifacts, and all three stages are retry-safe.
+
+The gateway does not own this application's version policy, version history,
+artifact names, migration, cutover, or cleanup sequence. Keep each such rule in
+this repository.
 
 ## License
 
