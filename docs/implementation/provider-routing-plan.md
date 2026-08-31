@@ -650,12 +650,15 @@ credentials, and routing defaults in the database.
 The repository owns the permanent versionless production declaration in
 `.mprlab/deploy/resources.yml`. The repository also owns the standard
 `make release`, `make publish`, and `make deploy` entrypoints. These targets use
-the exact `../mprlab-gateway` sibling. The gateway owns SemVer selection, schema
-validation, artifact sealing, publication, Ansible inventory, reconciliation,
-and production verification. The selected transaction reads only this
-application checkout and the references in its typed resources. It does not
-inspect unrelated repositories. Publication and deployment use the exact
-sealed release. They do not run CI or build artifacts again.
+the exact `../mprlab-gateway` sibling. The gateway runs the committed release
+decision validator against the exact decision that the transaction prepares or
+reuses. The validator requires the decision to match the Python client version.
+The gateway owns generic schema validation, artifact sealing, publication,
+Ansible inventory, reconciliation, and production verification. The selected
+transaction reads only this application checkout and the references in its
+typed resources. It does not inspect unrelated repositories. Publication and
+deployment use the exact sealed release. They do not run CI or build artifacts
+again.
 
 The ignored `.mprlab/deploy/.env` file is the selected application's private
 deployment input. The manifest binds exact dotenv keys to closed private
