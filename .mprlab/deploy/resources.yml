@@ -3,7 +3,6 @@ mprlab_resources:
   owner: llm-proxy
   release:
     scheme: semver
-    fixed_major: 1
   resources:
     - kind: private_values
       id: private

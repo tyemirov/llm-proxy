@@ -29,33 +29,38 @@ retain satisfied historical dependencies.
   Goal:
   The application and each official client use one current `v1` release.
   Evidence:
-  - Go Proxy selects `v1.1.0` for the official Go module.
-  - The deployed application used the invalid `v7.0.0` release identity.
-  - The Python client declares version `0.2.0`.
-  - The version authority selects `v1.2.0` with fixed major `1`.
-  - Expected result: each current release surface uses `v1.2.0`.
+  - Go Proxy selects `v1.2.1` for the official Go module.
+  - The deployed application uses the valid `v1.2.1` release identity.
+  - The Python client declares version `1.2.0`.
+  - The next forward-only patch release is `v1.2.2`.
+  - Expected result: each current release surface uses `v1.2.2`.
   - Actual result: current release surfaces use different versions.
   Requirements:
-  - Set fixed major `1` in the selected manifest.
-  - Set the Python client version to `1.2.0`.
+  - Keep the selected manifest free of application release policy.
+  - Validate the exact decision that the gateway transaction prepares or reuses.
+  - Require the release decision to match the official client version.
+  - Set the Python client version to `1.2.2`.
   - Keep the Go module path unchanged.
-  - Publish the current source only as `v1.2.0`.
+  - Publish the current source only as `v1.2.2`.
   - Remove each release identity above major version `1`.
-  - Deploy the exact `v1.2.0` publication.
+  - Deploy the exact `v1.2.2` publication.
   Validation:
-  - Verify that Go Proxy selects `v1.2.0`.
-  - Verify that the Python package reports `1.2.0`.
-  - Verify that GitHub, GHCR, Pages, and production report `v1.2.0`.
+  - Verify that Go Proxy selects `v1.2.2`.
+  - Verify that the Python package reports `1.2.2`.
+  - Verify that GitHub, GHCR, Pages, and production report `v1.2.2`.
   - Verify that no release tag has a major version above `1`.
   - Run `make ci`.
   Blocked:
-  - The validated llm-proxy and gateway changes are not committed. The
-    execution chain must commit and push both worktrees before the canonical
-    lifecycle can publish and deploy `v1.2.0`.
-  - GitHub releases and Git tags above major version `1` are removed. Keep the
-    selected GHCR and Pages artifacts until the exact `v1.2.0` replacement is
-    published and deployed.
-
+  - Source and lock metadata now set the Python client version to `1.2.2`.
+  - The application-owned validator requires the exact `v1.2.2` decision.
+  - The gateway runs the validator for each prepared or reused decision.
+  - The selected manifest contains only the generic SemVer scheme.
+  - The gateway contains no LLM Proxy version policy or cutover exception.
+  - `make python-package-install-test` passed for version `1.2.2`.
+  - `make ci` passed all 11 gates with 100 percent Go coverage.
+  - The gateway formatting, lint, and test suites passed.
+  - The execution chain must commit and push the current source changes.
+  - Keep the v7 GHCR and Pages artifacts until deployment and live tests pass.
 - [x] [B163] (P0) {F022} Remove content hashes from the canonical media contract.
   Goal:
   Identify public media through semantic fields and opaque owner identifiers.

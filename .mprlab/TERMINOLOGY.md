@@ -27,6 +27,7 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `provider profile`: Tenant settings for one provider, such as the selected text model and system prompt.
 - `provider transport`: One provider route that defines an endpoint, authentication, protocol adapter, and lifecycle.
 - `request intent`: The tenant-bound semantic inputs that one idempotency key identifies.
+- `release decision validator`: A committed application program that validates the exact release decision that the gateway transaction uses.
 - `structured request`: A canonical text request that requires one caller JSON Schema for its output.
 - `production acceptance`: Evidence that the production runtime satisfies the checks that an issue specifies.
 - `route explorer`: The public interface that selects an exact model and a provider offering.
