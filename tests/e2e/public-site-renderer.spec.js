@@ -50,6 +50,39 @@ test("public site rendering rejects an invalid model family weight access", asyn
   });
 });
 
+test("public site rendering requires a lifecycle for each media offering", async () => {
+  const capabilities = normalizedCapabilityFixture();
+  capabilities.models[0].media_inputs = ["image"];
+  capabilities.models[0].capabilities = ["image_input", "text"];
+  capabilities.offerings[0].capabilities = ["image_input", "text"];
+  await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+    const fixture = await siteFixture();
+    try {
+      await expect(renderFixture(fixture, capabilitiesURL)).rejects.toThrow(/catalog\.offerings\[0\] keys=/u);
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+});
+
+test("public site rendering accepts an explicit media lifecycle", async () => {
+  const capabilities = normalizedCapabilityFixture();
+  capabilities.models[0].media_inputs = ["image"];
+  capabilities.models[0].capabilities = ["image_input", "text"];
+  capabilities.offerings[0].capabilities = ["image_input", "text"];
+  capabilities.offerings[0].media_execution_lifecycle = "synchronous_completion";
+  await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+    const fixture = await siteFixture();
+    try {
+      await renderFixture(fixture, capabilitiesURL);
+      const renderedLanding = await readFile(path.join(fixture.output, "index.html"), "utf8");
+      expect(renderedLanding).toContain('data-route-provider-capabilities="image_input text"');
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+});
+
 test("public site rendering writes the normalized exact model catalog", async () => {
   await withCapabilityServer(200, normalizedCapabilityFixture(), async (capabilitiesURL) => {
     const fixture = await siteFixture();

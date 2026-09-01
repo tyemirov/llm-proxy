@@ -1576,7 +1576,11 @@ builtin printf '%s' '200'
 			}
 			continue
 		}
-		if len(requestBody) < 16384 || len(payload.Messages) != 2 || payload.MaxTokens == nil || *payload.MaxTokens != 512 || !strings.Contains(payload.Messages[1].Content, "LLM_PROXY_LIVE_COMPLEX_OK") || !strings.Contains(payload.Messages[1].Content, "all 120 normalized lines") {
+		expectedMaxTokens := 512
+		if expectedProvider == "gemini" {
+			expectedMaxTokens = 32768
+		}
+		if len(requestBody) < 16384 || len(payload.Messages) != 2 || payload.MaxTokens == nil || *payload.MaxTokens != expectedMaxTokens || !strings.Contains(payload.Messages[1].Content, "LLM_PROXY_LIVE_COMPLEX_OK") || !strings.Contains(payload.Messages[1].Content, "all 120 normalized lines") {
 			testingInstance.Fatalf("long completion call %d did not preserve the large complex request contract: bytes=%d payload=%s", captureIndex, len(requestBody), requestBody)
 		}
 		if string(timeoutBytes) != "900" {

@@ -230,7 +230,8 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 			}
 		}
 		if offering.Provider == proxy.ProviderNameGemini {
-			if !strings.HasPrefix(offering.Model, "gemini-3") || offering.WireContract != "gemini_interactions" || offering.ExecutionLifecycle != "pollable_resource" {
+			if !strings.HasPrefix(offering.Model, "gemini-3") || offering.WireContract != "gemini_interactions" ||
+				offering.ExecutionLifecycle != "pollable_resource" || offering.MediaExecutionLifecycle != "synchronous_completion" {
 				testingInstance.Fatalf("Gemini offering is not canonical 3.x pollable route=%+v", offering)
 			}
 			if len(offering.ReasoningEfforts) != 0 || offering.OutputTokenLimit != 65536 {
