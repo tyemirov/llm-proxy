@@ -12,6 +12,7 @@ readonly CURL_CONNECT_TIMEOUT_SECONDS=15
 readonly ECHO_RESPONSE_MARKER="LLM_PROXY_LIVE_ECHO_OK"
 readonly LONG_COMPLETION_RESPONSE_MARKER="LLM_PROXY_LIVE_COMPLEX_OK"
 readonly LONG_COMPLETION_MAX_TOKENS=512
+readonly GEMINI_LONG_COMPLETION_MAX_TOKENS=32768
 readonly LONG_COMPLETION_MINIMUM_REQUEST_BYTES=16384
 
 LIVE_TEST_PROVIDERS=(openai anthropic meta gemini moonshot)
@@ -57,6 +58,7 @@ build_echo_request() {
 }
 
 build_long_completion_request() {
+  local max_tokens="$1"
   python3 -c '
 import json
 import sys
@@ -102,7 +104,7 @@ payload = {
     "max_tokens": int(sys.argv[1]),
 }
 print(json.dumps(payload, separators=(",", ":")))
-' "${LONG_COMPLETION_MAX_TOKENS}"
+' "${max_tokens}"
 }
 
 write_curl_config() {
@@ -330,9 +332,13 @@ ENCODED_TENANT_SECRET="$(encode_tenant_secret)"
 run_tenant_identity_preflight || exit 1
 
 echo_request_body="$(build_echo_request)"
-long_completion_request_body="$(build_long_completion_request)"
+long_completion_request_body="$(build_long_completion_request "${LONG_COMPLETION_MAX_TOKENS}")"
+gemini_long_completion_request_body="$(build_long_completion_request "${GEMINI_LONG_COMPLETION_MAX_TOKENS}")"
 if [[ "$(printf '%s' "${long_completion_request_body}" | wc -c | tr -d '[:space:]')" -lt "${LONG_COMPLETION_MINIMUM_REQUEST_BYTES}" ]]; then
   fail 'large completion request did not meet the minimum request size'
+fi
+if [[ "$(printf '%s' "${gemini_long_completion_request_body}" | wc -c | tr -d '[:space:]')" -lt "${LONG_COMPLETION_MINIMUM_REQUEST_BYTES}" ]]; then
+  fail 'Gemini large completion request did not meet the minimum request size'
 fi
 
 failed_case_count=0
@@ -356,13 +362,15 @@ for provider_identifier in "${LONG_COMPLETION_PROVIDERS[@]}"; do
   if [[ "${provider_identifier}" == 'gemini' ]]; then
     case_identifier='gemini-background-polling'
     model_identifier='gemini-3.5-flash'
+    provider_request_body="${gemini_long_completion_request_body}"
   else
     model_identifier=''
+    provider_request_body="${long_completion_request_body}"
   fi
   if ! run_live_case \
     "${case_identifier}" \
     "${provider_identifier}" \
-    "${long_completion_request_body}" \
+    "${provider_request_body}" \
     "${LONG_COMPLETION_RESPONSE_MARKER}" \
     "${LONG_COMPLETION_REQUEST_TIMEOUT_SECONDS}" \
     "${LONG_COMPLETION_CURL_TIMEOUT_SECONDS}" \

@@ -67,6 +67,7 @@ await renderPublicSite(options);
  *   capabilities: string[],
  *   wire_contract: string,
  *   execution_lifecycle: string,
+ *   media_execution_lifecycle: string,
  *   output_token_limit: number,
  *   reasoning_efforts: string[],
  *   controls: PublicCatalogControl[],
@@ -299,17 +300,24 @@ function parseCapabilityCatalog(rawCatalog) {
   const offerings = requiredNonemptyArray(catalog.offerings, "catalog.offerings").map((rawOffering, offeringIndex) => {
     const field = `catalog.offerings[${offeringIndex}]`;
     const offering = requiredRecord(rawOffering, field);
-    requireExactKeys(offering, [
+    const capabilities = parseCapabilities(offering.capabilities, `${field}.capabilities`);
+    const hasMedia = capabilities.includes("image_input") || capabilities.includes("audio_input");
+    const offeringKeys = [
       "identifier", "provider", "model", "capabilities", "wire_contract", "execution_lifecycle",
       "output_token_limit", "reasoning_efforts", "controls", "limits", "media_limits",
-    ], field);
+    ];
+    if (hasMedia) {
+      offeringKeys.push("media_execution_lifecycle");
+    }
+    requireExactKeys(offering, offeringKeys, field);
     return {
       identifier: requiredString(offering.identifier, `${field}.identifier`),
       provider: requiredString(offering.provider, `${field}.provider`),
       model: requiredString(offering.model, `${field}.model`),
-      capabilities: parseCapabilities(offering.capabilities, `${field}.capabilities`),
+      capabilities,
       wire_contract: requiredString(offering.wire_contract, `${field}.wire_contract`, true),
       execution_lifecycle: requiredExecutionLifecycle(offering.execution_lifecycle, `${field}.execution_lifecycle`),
+      media_execution_lifecycle: hasMedia ? requiredExecutionLifecycle(offering.media_execution_lifecycle, `${field}.media_execution_lifecycle`) : "",
       output_token_limit: requiredNonnegativeInteger(offering.output_token_limit, `${field}.output_token_limit`),
       reasoning_efforts: requiredStringArray(offering.reasoning_efforts, `${field}.reasoning_efforts`),
       controls: requiredArray(offering.controls, `${field}.controls`).map((control, controlIndex) => parseCatalogControl(control, `${field}.controls[${controlIndex}]`)),
