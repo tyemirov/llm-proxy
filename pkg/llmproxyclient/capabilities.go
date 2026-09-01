@@ -25,13 +25,14 @@ type PublicCapabilityCatalog struct {
 
 // PublicProviderOffering describes one selectable provider and model route.
 type PublicProviderOffering struct {
-	Identifier         string             `json:"identifier"`
-	Provider           string             `json:"provider"`
-	Model              string             `json:"model"`
-	Capabilities       []string           `json:"capabilities"`
-	WireContract       string             `json:"wire_contract"`
-	ExecutionLifecycle string             `json:"execution_lifecycle"`
-	MediaLimits        []PublicMediaLimit `json:"media_limits"`
+	Identifier              string             `json:"identifier"`
+	Provider                string             `json:"provider"`
+	Model                   string             `json:"model"`
+	Capabilities            []string           `json:"capabilities"`
+	WireContract            string             `json:"wire_contract"`
+	ExecutionLifecycle      string             `json:"execution_lifecycle"`
+	MediaExecutionLifecycle string             `json:"media_execution_lifecycle"`
+	MediaLimits             []PublicMediaLimit `json:"media_limits"`
 }
 
 // PublicMediaLimit describes one current media boundary for an offering.
@@ -190,6 +191,15 @@ func validPublicProviderOffering(offering PublicProviderOffering) bool {
 			return false
 		}
 		seenCapabilities[capability] = struct{}{}
+	}
+	_, hasImage := seenCapabilities[publicCapabilityImageInput]
+	_, hasAudio := seenCapabilities[publicCapabilityAudioInput]
+	if hasImage || hasAudio {
+		if offering.MediaExecutionLifecycle != publicExecutionLifecyclePollable && offering.MediaExecutionLifecycle != publicExecutionLifecycleSynchronous {
+			return false
+		}
+	} else if offering.MediaExecutionLifecycle != "" {
+		return false
 	}
 	seenLimits := make(map[string]PublicMediaLimit, len(offering.MediaLimits))
 	for _, limit := range offering.MediaLimits {

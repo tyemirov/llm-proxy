@@ -23,7 +23,8 @@ func TestClientReadsPublicCapabilitiesWithoutAuthentication(testingInstance *tes
 			"offerings": []map[string]any{{
 				"identifier": "openai:gpt-5.5", "provider": "openai", "model": "gpt-5.5",
 				"capabilities": []string{"image_input", "text"}, "wire_contract": "openai_responses",
-				"execution_lifecycle": "pollable_resource",
+				"execution_lifecycle":       "pollable_resource",
+				"media_execution_lifecycle": "pollable_resource",
 				"media_limits": []map[string]any{
 					{
 						"id": "inline_request_bytes", "media_type": "all", "transport": "inline",
@@ -63,6 +64,7 @@ func TestClientReadsPublicCapabilitiesWithoutAuthentication(testingInstance *tes
 	}
 	if len(catalog.Offerings) != 1 || catalog.Offerings[0].Identifier != "openai:gpt-5.5" ||
 		catalog.Offerings[0].WireContract != "openai_responses" ||
+		catalog.Offerings[0].MediaExecutionLifecycle != "pollable_resource" ||
 		len(catalog.Offerings[0].MediaLimits) != 3 || *catalog.Offerings[0].MediaLimits[1].Value != 4 {
 		testingInstance.Fatalf("catalog=%+v", catalog)
 	}
