@@ -4202,7 +4202,7 @@ test("blocked Alpine startup becomes an actionable application error", async ({ 
     }
   });
   page.on("requestfailed", (request) => {
-    if (request.url().includes("/alpinejs@3.13.5/dist/module.esm.js")) {
+    if (request.url().includes("/alpinejs@3.17.1/dist/module.esm.js")) {
       blockedAlpineRequests.push(request);
     }
   });
@@ -5271,7 +5271,7 @@ async function installAssetRoutes(page, options = {}) {
     route.fulfill({ body: "", contentType: "application/javascript" }),
   );
   await page.route("https://accounts.google.com/**", async (route) => route.abort());
-  await page.route("**/alpinejs@3.13.5/dist/module.esm.js", async (route) => {
+  await page.route("**/alpinejs@3.17.1/dist/module.esm.js", async (route) => {
     if (options.alpineModuleFailure) {
       await route.abort("blockedbyclient");
       return;
@@ -5283,8 +5283,8 @@ async function installAssetRoutes(page, options = {}) {
       route.fulfill({ body: "export {};", contentType: "application/javascript" }),
     );
   }
-  await page.route("**/js-yaml@4.3.0/dist/js-yaml.min.js", async (route) =>
-    fulfillFile(route, "node_modules/js-yaml/dist/js-yaml.min.js", "application/javascript"),
+  await page.route("**/js-yaml@5.4.1/dist/browser/js-yaml.umd.min.js", async (route) =>
+    fulfillFile(route, "node_modules/js-yaml/dist/browser/js-yaml.umd.min.js", "application/javascript"),
   );
   await page.route("**/mpr-ui.css", async (route) =>
     route.fulfill({ body: mprShellLayerCSS(), contentType: "text/css" }),

@@ -598,11 +598,11 @@ async function installLocalAssetRoutes(page) {
       contentType: "application/javascript",
     }),
   );
-  await page.route("**/alpinejs@3.13.5/dist/module.esm.js", async (route) =>
+  await page.route("**/alpinejs@3.17.1/dist/module.esm.js", async (route) =>
     fulfillLocalFile(route, "node_modules/alpinejs/dist/module.esm.js", "application/javascript"),
   );
-  await page.route("**/js-yaml@4.3.0/dist/js-yaml.min.js", async (route) =>
-    fulfillLocalFile(route, "node_modules/js-yaml/dist/js-yaml.min.js", "application/javascript"),
+  await page.route("**/js-yaml@5.4.1/dist/browser/js-yaml.umd.min.js", async (route) =>
+    fulfillLocalFile(route, "node_modules/js-yaml/dist/browser/js-yaml.umd.min.js", "application/javascript"),
   );
 }
 

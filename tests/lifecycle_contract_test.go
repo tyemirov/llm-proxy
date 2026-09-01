@@ -347,23 +347,23 @@ func TestOperationalReleaseDecisionMustMatchOfficialClientVersion(testingInstanc
 	}{
 		{
 			name:       "exact official version",
-			output:     `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver"},"next_version":"v1.2.2"}`,
+			output:     `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver"},"next_version":"v1.3.0"}`,
 			wantStatus: true,
-			wantText:   "LLM_PROXY_RELEASE_POLICY_OK version=v1.2.2",
+			wantText:   "LLM_PROXY_RELEASE_POLICY_OK version=v1.3.0",
 		},
 		{
 			name:     "different major one version",
-			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver"},"next_version":"v1.3.0"}`,
-			wantText: "llm_proxy.release_version_invalid: release version must match official client version v1.2.2",
+			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver"},"next_version":"v1.2.2"}`,
+			wantText: "llm_proxy.release_version_invalid: release version must match official client version v1.3.0",
 		},
 		{
 			name:     "higher major",
 			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver"},"next_version":"v2.0.0"}`,
-			wantText: "llm_proxy.release_version_invalid: release version must match official client version v1.2.2",
+			wantText: "llm_proxy.release_version_invalid: release version must match official client version v1.3.0",
 		},
 		{
 			name:     "gateway version override",
-			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"v1.2.2"}`,
+			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"v1.3.0"}`,
 			wantText: "llm_proxy.release_policy_invalid: expected standard SemVer decision",
 		},
 		{
