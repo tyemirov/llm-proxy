@@ -685,6 +685,7 @@ providers:
                 - 403
                 - 404
           protocol_parameters:
+            media_execution_lifecycle: pollable_resource
             model_field: model
             token_field: max_output_tokens
             output_fields:
@@ -1317,6 +1318,7 @@ providers:
           usage_mapping: openai_chat_completions
           lifecycle: synchronous_completion
           protocol_parameters:
+            media_execution_lifecycle: synchronous_completion
             model_field: model
             token_field: max_tokens
             output_fields:
@@ -1427,6 +1429,7 @@ providers:
           usage_mapping: openai_chat_completions
           lifecycle: synchronous_completion
           protocol_parameters:
+            media_execution_lifecycle: synchronous_completion
             model_field: model
             token_field: max_tokens
             output_fields:
@@ -1597,6 +1600,7 @@ providers:
           usage_mapping: openai_chat_completions
           lifecycle: synchronous_completion
           protocol_parameters:
+            media_execution_lifecycle: synchronous_completion
             model_field: model
             token_field: max_completion_tokens
             output_fields:
@@ -1811,6 +1815,7 @@ providers:
           usage_mapping: openai_chat_completions
           lifecycle: synchronous_completion
           protocol_parameters:
+            media_execution_lifecycle: synchronous_completion
             model_field: model
             token_field: max_completion_tokens
             output_fields:
@@ -2178,6 +2183,7 @@ providers:
           usage_mapping: openai_chat_completions
           lifecycle: synchronous_completion
           protocol_parameters:
+            media_execution_lifecycle: synchronous_completion
             model_field: model
             token_field: max_tokens
             output_fields:
@@ -2285,6 +2291,7 @@ providers:
           usage_mapping: openai_chat_completions
           lifecycle: synchronous_completion
           protocol_parameters:
+            media_execution_lifecycle: synchronous_completion
             model_field: model
             token_field: max_tokens
             output_fields:
@@ -2414,6 +2421,7 @@ providers:
                 - 403
                 - 404
           protocol_parameters:
+            media_execution_lifecycle: synchronous_completion
             model_field: model
             token_field: generation_config.max_output_tokens
             output_fields:
@@ -2590,6 +2598,7 @@ providers:
           usage_mapping: anthropic_messages
           lifecycle: synchronous_completion
           protocol_parameters:
+            media_execution_lifecycle: synchronous_completion
             model_field: model
             token_field: max_tokens
             output_fields:
@@ -3064,6 +3073,7 @@ providers:
           usage_mapping: openai_chat_completions
           lifecycle: synchronous_completion
           protocol_parameters:
+            media_execution_lifecycle: synchronous_completion
             model_field: model
             token_field: max_completion_tokens
             output_fields:
@@ -3138,6 +3148,7 @@ providers:
           usage_mapping: openai_chat_completions
           lifecycle: synchronous_completion
           protocol_parameters:
+            media_execution_lifecycle: synchronous_completion
             model_field: model
             token_field: max_tokens
             output_fields:
@@ -3173,6 +3184,7 @@ providers:
           usage_mapping: openai_responses
           lifecycle: synchronous_completion
           protocol_parameters:
+            media_execution_lifecycle: synchronous_completion
             model_field: model
             token_field: max_output_tokens
             output_fields:
