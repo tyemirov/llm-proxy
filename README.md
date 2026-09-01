@@ -1882,11 +1882,11 @@ remains the separate normal contract.
 The same transport contract is available as an importable Python package:
 
 ```shell
-uv pip install --upgrade "llm-proxy-client @ git+https://github.com/tyemirov/llm-proxy.git@master#subdirectory=python"
+uv pip install --upgrade "llm-proxy-client @ git+https://github.com/tyemirov/llm-proxy.git@v1.2.2#subdirectory=python"
 ```
 
-For reproducible application builds, replace `master` with the desired released
-repository tag.
+Use an exact released repository tag for each application build. The default
+branch contains development source for the next release.
 
 ```python
 from llm_proxy_client import (
