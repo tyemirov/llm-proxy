@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>System prompt handling without ambiguous inputs</title>
+    <meta name="description" content="Keep system instructions explicit across prompt bodies, v2 messages, tenant defaults, and provider settings.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/system-prompt-handling/">
+    <meta property="og:title" content="System prompt handling without ambiguous inputs">
+    <meta property="og:description" content="Keep system instructions explicit across prompt bodies, v2 messages, tenant defaults, and provider settings.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/system-prompt-handling/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@5.4.1/dist/browser/js-yaml.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"></script>
+    <script
+      id="mpr-ui-bundle"
+      type="application/json"
+      data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
+    ></script>
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"System prompt handling without ambiguous inputs","description":"Keep system instructions explicit across prompt bodies, v2 messages, tenant defaults, and provider settings.","url":"https://llm-proxy.mprlab.com/resources/system-prompt-handling/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/system-prompt-handling/","about":["LLM Proxy","API contract","LLM system prompt handling"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"System prompt handling without ambiguous inputs","item":"https://llm-proxy.mprlab.com/resources/system-prompt-handling/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of LLM system prompt handling?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy validates ambiguous system prompt inputs and applies tenant or provider system prompts only when request-level instructions are absent."}},{"@type":"Question","name":"Who should read this api contract resource?","acceptedAnswer":{"@type":"Answer","text":"Developers who need predictable system-instruction behavior across providers."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Canonical /v2 chat messages API for LLM calls, which covers v2 chat messages API."}}]}</script>
+    <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440"></script>
+  </head>
+  <body class="resource-page">
+
+    <mpr-header
+      class="public-site-header"
+      data-config-url="https://llm-proxy-api.mprlab.com/config-ui.yaml"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      logout-url="/"
+      settings="false"
+      sign-in-label="Log In"
+      sign-in-redirect-url="/app/"
+      size="small"
+      sticky="true"
+      auth-transition='{"title":"Opening LLM Proxy","message":"Loading your app."}'
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"}]}'
+    >
+      <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
+        <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
+        <span>LLM Proxy</span>
+      </a>
+    </mpr-header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>System prompt handling without ambiguous inputs</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">API contract</p>
+            <h1>System prompt handling without ambiguous inputs</h1>
+            <p class="resource-deck">Keep system instructions explicit across prompt bodies, v2 messages, tenant defaults, and provider settings.</p>
+            <p class="resource-audience">Developers who need predictable system-instruction behavior across providers.</p>
+            <p class="resource-byline">Reviewed 2026-07-11 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <div class="resource-actions">
+              <a class="resource-button" href="/docs/">Open API reference</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>System instructions can collide when a request sends both a body system_prompt and a system role message, or when tenant defaults also exist.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy validates ambiguous system prompt inputs and applies tenant or provider system prompts only when request-level instructions are absent.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Use body system_prompt only on compatibility POST / prompt-style requests.</li>
+<li>Use system role messages on POST /v2.</li>
+<li>Avoid sending both body system_prompt and a system message.</li>
+<li>Configure tenant defaults or provider-specific system prompts for omitted request instructions.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+
+                        <tr>
+                          <td>Ambiguity rejection</td>
+                          <td>Bodies that combine system_prompt with system messages return 400.</td>
+                          <td>The proxy avoids guessing instruction precedence.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Tenant default prompt</td>
+                          <td>A tenant default system prompt can be prepended when submitted messages lack a system message.</td>
+                          <td>Default behavior is server-owned.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Provider-specific prompt</td>
+                          <td>Managed provider settings can store a system prompt for provider-selected requests.</td>
+                          <td>Provider context travels with the saved provider.</td>
+                        </tr>
+
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+
+                    <section class="resource-card">
+                      <h3>Canonical /v2</h3>
+                      <p>A chat app sends a system role message and no body system_prompt.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Managed provider route</h3>
+                      <p>A request selects provider=deepseek and omits system instructions, so the saved provider prompt can apply.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Conflict cleanup</h3>
+                      <p>A migration removes duplicate system_prompt from bodies that already contain system messages.</p>
+                    </section>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>Server-injected system prompts are not echoed in response metadata.</li>
+<li>POST /v2 rejects body system_prompt by design.</li>
+<li>Provider-specific prompt behavior applies to managed provider-selected requests when request-level instructions are omitted.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+
+                    <details>
+                      <summary>What is the main job of LLM system prompt handling?</summary>
+                      <p>LLM Proxy validates ambiguous system prompt inputs and applies tenant or provider system prompts only when request-level instructions are absent.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Who should read this api contract resource?</summary>
+                      <p>Developers who need predictable system-instruction behavior across providers.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Does this page claim provider performance or pricing advantages?</summary>
+                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Where should setup details come from?</summary>
+                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is Canonical /v2 chat messages API for LLM calls, which covers v2 chat messages API.</p>
+                    </details>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+
+                    <a class="resource-related" href="/resources/canonical-v2-chat-messages-api/">
+                      <span>API contract</span>
+                      <strong>Canonical /v2 chat messages API for LLM calls</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/large-prompt-json-post/">
+                      <span>API contract</span>
+                      <strong>Large prompt JSON POST for LLM requests</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/max-tokens-provider-limit-validation/">
+                      <span>API contract</span>
+                      <strong>max_tokens validation across LLM providers</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/per-request-provider-model-selection/">
+                      <span>API contract</span>
+                      <strong>Per-request provider and model selection</strong>
+                    </a>
+
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Use this pattern in LLM Proxy</h2>
+            <p>Start from the canonical API reference, then use the management surface when the workflow needs tenant or provider configuration.</p>
+            <a class="resource-button" href="/docs/">Open API reference</a>
+          </section>
+        </article>
+      </main>
+    <mpr-footer
+      class="public-site-footer"
+      size="small"
+      sticky="true"
+      wrapper-class="public-site-footer-layout"
+      privacy-link-label="Privacy"
+      privacy-link-href="/privacy/"
+      theme-switcher="square"
+      horizontal-links='{"alignment":"left","links":[{"label":"Terms","href":"/terms/"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+      links-collection='{"style":"drop-up","text":"Built by Marco Polo Research Lab","links":[{"label":"Marco Polo Research Lab","url":"https://mprlab.com"},{"label":"Gravity Notes","url":"https://gravity.mprlab.com"},{"label":"LoopAware","url":"https://loopaware.mprlab.com"},{"label":"Allergy Wheel","url":"https://allergy.mprlab.com"},{"label":"Social Threader","url":"https://threader.mprlab.com"},{"label":"RSVP","url":"https://rsvp.mprlab.com"},{"label":"Countdown Calendar","url":"https://countdown.mprlab.com"},{"label":"LLM Crossword","url":"https://llm-crossword.mprlab.com"},{"label":"Prompt Bubbles","url":"https://prompts.mprlab.com"},{"label":"Wallpapers","url":"https://wallpapers.mprlab.com"}]}'
+    >
+      <footer class="public-site-footer-fallback" role="contentinfo">
+        <nav class="public-site-footer-fallback__nav" aria-label="Footer">
+          <a href="/privacy/">Privacy</a>
+          <a href="/terms/">Terms</a>
+          <a href="/resources/">Resources</a>
+          <a href="https://github.com/tyemirov/llm-proxy">GitHub</a>
+        </nav>
+        <details class="public-site-footer-fallback__projects">
+          <summary>Built by Marco Polo Research Lab</summary>
+          <ul>
+            <li><a href="https://mprlab.com">Marco Polo Research Lab</a></li>
+            <li><a href="https://gravity.mprlab.com">Gravity Notes</a></li>
+            <li><a href="https://loopaware.mprlab.com">LoopAware</a></li>
+            <li><a href="https://allergy.mprlab.com">Allergy Wheel</a></li>
+            <li><a href="https://threader.mprlab.com">Social Threader</a></li>
+            <li><a href="https://rsvp.mprlab.com">RSVP</a></li>
+            <li><a href="https://countdown.mprlab.com">Countdown Calendar</a></li>
+            <li><a href="https://llm-crossword.mprlab.com">LLM Crossword</a></li>
+            <li><a href="https://prompts.mprlab.com">Prompt Bubbles</a></li>
+            <li><a href="https://wallpapers.mprlab.com">Wallpapers</a></li>
+          </ul>
+        </details>
+      </footer>
+    </mpr-footer>
+
+  </body>
+</html>
