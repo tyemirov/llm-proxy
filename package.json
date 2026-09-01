@@ -8,11 +8,10 @@
     "frontend:test:blackbox": "playwright test --config=playwright.blackbox.config.js"
   },
   "devDependencies": {
-    "@playwright/test": "1.61.1",
-    "@types/js-yaml": "4.0.9",
-    "@types/node": "26.1.2",
-    "alpinejs": "3.13.5",
-    "js-yaml": "4.3.0",
+    "@playwright/test": "1.62.1",
+    "@types/node": "26.4.1",
+    "alpinejs": "3.17.1",
+    "js-yaml": "5.4.1",
     "typescript": "7.0.2"
   }
 }
