@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="5521b1833acb6dad972545280e4d946e5aed06eab3948255c4a602e04ed6a0d6">
+    <meta name="openapi-source-sha256" content="32a117b3dc91a01c7076161f4733467bb3833b11afb68da7f92ef7e59f9c07af">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="5521b1833acb6dad972545280e4d946e5aed06eab3948255c4a602e04ed6a0d6">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="32a117b3dc91a01c7076161f4733467bb3833b11afb68da7f92ef7e59f9c07af">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>5521b1833acb6dad972545280e4d946e5aed06eab3948255c4a602e04ed6a0d6</code></span>
+          <span>Source SHA-256 <code>32a117b3dc91a01c7076161f4733467bb3833b11afb68da7f92ef7e59f9c07af</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -1100,7 +1100,25 @@ components:
             $ref: &#39;#/components/schemas/EmptyObject&#39;
   responses:
     TextSuccess:
-      description: &#39;Complete generated text in the selected representation. The selected model has one validated wire contract and one execution lifecycle; no lifecycle is inferred from an endpoint or upstream id. The proxy internally observes queued and in_progress states for OpenAI Responses and Gemini Interactions while keeping every public operation blocking. Transports with continuation actions continue exact output-budget stops through new provider calls: OpenAI Responses incomplete/max_output_tokens, OpenAI-compatible Chat Completions length, and Anthropic max_tokens. Gemini Interactions has no continuation actions; an incomplete result returns a provider error after cleanup. HTTP 200 is returned only after the adapter reports its complete signal: OpenAI or Gemini completed, Chat stop, or Anthropic end_turn|stop_sequence. Intermediate, safety, refusal, tool, malformed, missing, and unknown states never return text as success.&#39;
+      description: &gt;-
+        Complete generated text in the selected representation. Each provider
+        offering publishes one validated wire contract and an execution
+        lifecycle for text-only requests. A media-capable offering also
+        publishes media_execution_lifecycle for requests that contain image or
+        audio input. The proxy does not infer a lifecycle from an endpoint or
+        an upstream identifier. The proxy observes queued and in_progress
+        states only for a pollable lifecycle. Each public operation remains
+        blocking. Gemini media requests use synchronous completion and do not
+        poll an Interaction resource. Transports with continuation actions
+        continue exact output-budget stops through new provider calls. These
+        transports are OpenAI Responses incomplete/max_output_tokens,
+        OpenAI-compatible Chat Completions length, and Anthropic max_tokens.
+        Gemini Interactions has no continuation actions. An incomplete result
+        returns a provider error after cleanup. The adapter returns HTTP 200
+        only after the provider reports its complete signal. These signals are
+        OpenAI or Gemini completed, Chat stop, or Anthropic end_turn or
+        stop_sequence. Intermediate, safety, refusal, tool, malformed, missing,
+        and unknown states do not return text as success.
       headers:
         X-LLM-Proxy-Request-Timeout-Seconds:
           $ref: &#39;#/components/headers/ResolvedRequestTimeout&#39;
@@ -1795,6 +1813,21 @@ components:
     PublicProviderOffering:
       type: object
       additionalProperties: false
+      allOf:
+        - if:
+            properties:
+              capabilities:
+                contains:
+                  enum:
+                    - image_input
+                    - audio_input
+          then:
+            required:
+              - media_execution_lifecycle
+          else:
+            not:
+              required:
+                - media_execution_lifecycle
       required:
         - identifier
         - provider
@@ -1835,6 +1868,11 @@ components:
           type: string
           minLength: 1
         execution_lifecycle:
+          type: string
+          enum:
+            - synchronous_completion
+            - pollable_resource
+        media_execution_lifecycle:
           type: string
           enum:
             - synchronous_completion
@@ -3475,7 +3513,7 @@ components:
             <table>
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Complete generated text in the selected representation. The selected model has one validated wire contract and one execution lifecycle; no lifecycle is inferred from an endpoint or upstream id. The proxy internally observes queued and in_progress states for OpenAI Responses and Gemini Interactions while keeping every public operation blocking. Transports with continuation actions continue exact output-budget stops through new provider calls: OpenAI Responses incomplete/max_output_tokens, OpenAI-compatible Chat Completions length, and Anthropic max_tokens. Gemini Interactions has no continuation actions; an incomplete result returns a provider error after cleanup. HTTP 200 is returned only after the adapter reports its complete signal: OpenAI or Gemini completed, Chat stop, or Anthropic end_turn|stop_sequence. Intermediate, safety, refusal, tool, malformed, missing, and unknown states never return text as success.</td></tr>
+                <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Complete generated text in the selected representation. Each provider offering publishes one validated wire contract and an execution lifecycle for text-only requests. A media-capable offering also publishes media_execution_lifecycle for requests that contain image or audio input. The proxy does not infer a lifecycle from an endpoint or an upstream identifier. The proxy observes queued and in_progress states only for a pollable lifecycle. Each public operation remains blocking. Gemini media requests use synchronous completion and do not poll an Interaction resource. Transports with continuation actions continue exact output-budget stops through new provider calls. These transports are OpenAI Responses incomplete/max_output_tokens, OpenAI-compatible Chat Completions length, and Anthropic max_tokens. Gemini Interactions has no continuation actions. An incomplete result returns a provider error after cleanup. The adapter returns HTTP 200 only after the provider reports its complete signal. These signals are OpenAI or Gemini completed, Chat stop, or Anthropic end_turn or stop_sequence. Intermediate, safety, refusal, tool, malformed, missing, and unknown states do not return text as success.</td></tr>
 <tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
 <tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
 <tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.</td></tr>
@@ -3535,7 +3573,7 @@ components:
             <table>
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Complete generated text in the selected representation. The selected model has one validated wire contract and one execution lifecycle; no lifecycle is inferred from an endpoint or upstream id. The proxy internally observes queued and in_progress states for OpenAI Responses and Gemini Interactions while keeping every public operation blocking. Transports with continuation actions continue exact output-budget stops through new provider calls: OpenAI Responses incomplete/max_output_tokens, OpenAI-compatible Chat Completions length, and Anthropic max_tokens. Gemini Interactions has no continuation actions; an incomplete result returns a provider error after cleanup. HTTP 200 is returned only after the adapter reports its complete signal: OpenAI or Gemini completed, Chat stop, or Anthropic end_turn|stop_sequence. Intermediate, safety, refusal, tool, malformed, missing, and unknown states never return text as success.</td></tr>
+                <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Complete generated text in the selected representation. Each provider offering publishes one validated wire contract and an execution lifecycle for text-only requests. A media-capable offering also publishes media_execution_lifecycle for requests that contain image or audio input. The proxy does not infer a lifecycle from an endpoint or an upstream identifier. The proxy observes queued and in_progress states only for a pollable lifecycle. Each public operation remains blocking. Gemini media requests use synchronous completion and do not poll an Interaction resource. Transports with continuation actions continue exact output-budget stops through new provider calls. These transports are OpenAI Responses incomplete/max_output_tokens, OpenAI-compatible Chat Completions length, and Anthropic max_tokens. Gemini Interactions has no continuation actions. An incomplete result returns a provider error after cleanup. The adapter returns HTTP 200 only after the provider reports its complete signal. These signals are OpenAI or Gemini completed, Chat stop, or Anthropic end_turn or stop_sequence. Intermediate, safety, refusal, tool, malformed, missing, and unknown states do not return text as success.</td></tr>
 <tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
 <tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
 <tr><td><code>413</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The compatibility JSON request limit, dictation audio limit, tenant asset limit, or selected provider media limit was exceeded.</td></tr>
