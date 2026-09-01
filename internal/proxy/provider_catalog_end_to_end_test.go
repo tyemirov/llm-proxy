@@ -499,7 +499,7 @@ func catalogWithTestProvider(testingInstance *testing.T) *proxy.ProviderCatalog 
 			UsageMapping:     proxy.CatalogProtocolOpenAIChatCompletions,
 			Lifecycle:        "synchronous_completion",
 			ProtocolParameters: proxy.ProviderCatalogProtocolParameters{
-				ModelField: "model", TokenField: "max_tokens",
+				ModelField: "model", TokenField: "max_tokens", MediaExecutionLifecycle: "synchronous_completion",
 				OutputFields: []string{"choices[].message.content"},
 				FinishRules: proxy.ProviderCatalogFinishRules{
 					Complete: []string{"stop"}, Continue: []string{"length"},

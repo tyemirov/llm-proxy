@@ -273,9 +273,6 @@ func TestGeminiFileTransportPreservesAssetBytesAndCleansUp(t *testing.T) {
 	interactionURI := ""
 	cleanupCount := 0
 	upstream = httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		if handleGeminiCompletedMediaInteraction(responseWriter, request) {
-			return
-		}
 		switch {
 		case request.Method == http.MethodPost && request.URL.Path == "/upload/v1beta/files":
 			responseWriter.Header().Set("X-Goog-Upload-URL", upstream.URL+"/upload-session")
@@ -290,6 +287,9 @@ func TestGeminiFileTransportPreservesAssetBytesAndCleansUp(t *testing.T) {
 		case request.Method == http.MethodPost && request.URL.Path == "/interactions":
 			var payload map[string]any
 			_ = json.NewDecoder(request.Body).Decode(&payload)
+			if payload["background"] != false || payload["store"] != false {
+				t.Errorf("Gemini file interaction lifecycle background=%v store=%v", payload["background"], payload["store"])
+			}
 			interactionURI = payload["input"].([]any)[0].(map[string]any)["content"].([]any)[1].(map[string]any)["uri"].(string)
 			writeGeminiCompletedResponse(responseWriter)
 		case request.Method == http.MethodDelete && request.URL.Path == "/files/media-1":

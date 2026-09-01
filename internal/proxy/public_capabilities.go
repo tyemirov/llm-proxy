@@ -74,17 +74,18 @@ type PublicExactModelCapability struct {
 
 // PublicProviderOffering describes one selectable provider and exact-model route.
 type PublicProviderOffering struct {
-	Identifier         string              `json:"identifier"`
-	Provider           string              `json:"provider"`
-	Model              string              `json:"model"`
-	Capabilities       []string            `json:"capabilities"`
-	WireContract       string              `json:"wire_contract"`
-	ExecutionLifecycle string              `json:"execution_lifecycle"`
-	OutputTokenLimit   int                 `json:"output_token_limit"`
-	ReasoningEfforts   []string            `json:"reasoning_efforts"`
-	Controls           []CatalogControl    `json:"controls"`
-	Limits             []CatalogLimit      `json:"limits"`
-	MediaLimits        []CatalogMediaLimit `json:"media_limits"`
+	Identifier              string              `json:"identifier"`
+	Provider                string              `json:"provider"`
+	Model                   string              `json:"model"`
+	Capabilities            []string            `json:"capabilities"`
+	WireContract            string              `json:"wire_contract"`
+	ExecutionLifecycle      string              `json:"execution_lifecycle"`
+	MediaExecutionLifecycle string              `json:"media_execution_lifecycle,omitempty"`
+	OutputTokenLimit        int                 `json:"output_token_limit"`
+	ReasoningEfforts        []string            `json:"reasoning_efforts"`
+	Controls                []CatalogControl    `json:"controls"`
+	Limits                  []CatalogLimit      `json:"limits"`
+	MediaLimits             []CatalogMediaLimit `json:"media_limits"`
 }
 
 // Public model capability identifiers are the stable filter vocabulary for the
@@ -223,18 +224,23 @@ func publicProviderOffering(offering ProviderOffering) PublicProviderOffering {
 		capabilities = append(capabilities, PublicModelCapabilityReasoning)
 	}
 	sort.Strings(capabilities)
+	mediaExecutionLifecycle := ""
+	if len(offering.MediaInputs) > 0 {
+		mediaExecutionLifecycle = offering.MediaExecutionLifecycle
+	}
 	return PublicProviderOffering{
-		Identifier:         providerOfferingIdentifier(offering.Provider, offering.Model),
-		Provider:           offering.Provider,
-		Model:              offering.Model,
-		Capabilities:       capabilities,
-		WireContract:       offering.WireContract,
-		ExecutionLifecycle: offering.ExecutionLifecycle,
-		OutputTokenLimit:   offering.OutputTokenLimit,
-		ReasoningEfforts:   reasoningEfforts,
-		Controls:           publicCatalogControls(offering.Controls),
-		Limits:             publicCatalogLimits(offering.Limits),
-		MediaLimits:        cloneCatalogMediaLimits(offering.MediaLimits),
+		Identifier:              providerOfferingIdentifier(offering.Provider, offering.Model),
+		Provider:                offering.Provider,
+		Model:                   offering.Model,
+		Capabilities:            capabilities,
+		WireContract:            offering.WireContract,
+		ExecutionLifecycle:      offering.ExecutionLifecycle,
+		MediaExecutionLifecycle: mediaExecutionLifecycle,
+		OutputTokenLimit:        offering.OutputTokenLimit,
+		ReasoningEfforts:        reasoningEfforts,
+		Controls:                publicCatalogControls(offering.Controls),
+		Limits:                  publicCatalogLimits(offering.Limits),
+		MediaLimits:             cloneCatalogMediaLimits(offering.MediaLimits),
 	}
 }
 

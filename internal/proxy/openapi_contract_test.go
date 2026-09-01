@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -13,9 +14,11 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/tyemirov/llm-proxy/internal/openapitest"
 	"github.com/tyemirov/llm-proxy/internal/proxy"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
+	"gopkg.in/yaml.v3"
 )
 
 func TestOpenAPIContractMatchesRegisteredOwnedRoutes(t *testing.T) {
@@ -210,6 +213,84 @@ func TestOpenAPIContractEnforcesV2MediaRelationships(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestOpenAPIContractEnforcesProviderOfferingMediaLifecycleRelationship(t *testing.T) {
+	contractPath := filepath.Join("..", "..", openapitest.CanonicalDocumentPath)
+	contractBytes, readError := os.ReadFile(contractPath)
+	if readError != nil {
+		t.Fatalf("read canonical OpenAPI contract: %v", readError)
+	}
+	var document map[string]any
+	if decodeError := yaml.Unmarshal(contractBytes, &document); decodeError != nil {
+		t.Fatalf("decode canonical OpenAPI contract: %v", decodeError)
+	}
+	document["$schema"] = "https://json-schema.org/draft/2020-12/schema"
+	document["$ref"] = "#/components/schemas/PublicProviderOffering"
+	compiler := jsonschema.NewCompiler()
+	if resourceError := compiler.AddResource("urn:llm-proxy:public-provider-offering", document); resourceError != nil {
+		t.Fatalf("load public provider offering schema: %v", resourceError)
+	}
+	schema, compileError := compiler.Compile("urn:llm-proxy:public-provider-offering")
+	if compileError != nil {
+		t.Fatalf("compile public provider offering schema: %v", compileError)
+	}
+
+	testCases := []struct {
+		name      string
+		offering  map[string]any
+		wantValid bool
+	}{
+		{
+			name:      "text offering without media lifecycle",
+			offering:  openAPIProviderOffering([]any{"text"}, ""),
+			wantValid: true,
+		},
+		{
+			name:      "media offering with media lifecycle",
+			offering:  openAPIProviderOffering([]any{"image_input", "text"}, "synchronous_completion"),
+			wantValid: true,
+		},
+		{
+			name:     "text offering with media lifecycle",
+			offering: openAPIProviderOffering([]any{"text"}, "pollable_resource"),
+		},
+		{
+			name:     "media offering without media lifecycle",
+			offering: openAPIProviderOffering([]any{"audio_input", "text"}, ""),
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			validationError := schema.Validate(testCase.offering)
+			if testCase.wantValid && validationError != nil {
+				t.Fatalf("valid offering rejected: %v", validationError)
+			}
+			if !testCase.wantValid && validationError == nil {
+				t.Fatal("invalid offering accepted")
+			}
+		})
+	}
+}
+
+func openAPIProviderOffering(capabilities []any, mediaExecutionLifecycle string) map[string]any {
+	offering := map[string]any{
+		"identifier":          "provider:model",
+		"provider":            "provider",
+		"model":               "model",
+		"capabilities":        capabilities,
+		"wire_contract":       "provider_contract",
+		"execution_lifecycle": "pollable_resource",
+		"output_token_limit":  1,
+		"reasoning_efforts":   []any{},
+		"controls":            []any{},
+		"limits":              []any{},
+		"media_limits":        []any{},
+	}
+	if mediaExecutionLifecycle != "" {
+		offering["media_execution_lifecycle"] = mediaExecutionLifecycle
+	}
+	return offering
 }
 
 func TestOpenAPIContractValidatesTenantAssetUploadAndDeleteExchanges(t *testing.T) {

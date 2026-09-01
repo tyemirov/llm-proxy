@@ -214,25 +214,30 @@ func internalTestOffering(provider string, model string, operations []string, de
 }
 
 func internalConfigureTextOffering(offering *ProviderOffering) {
-	if offering.WireContract != "" {
-		return
-	}
-	switch offering.Provider {
-	case ProviderNameOpenAI:
-		offering.WireContract = string(textWireContractOpenAIResponses)
-		offering.ExecutionLifecycle = string(textExecutionLifecyclePollableResource)
-		offering.RequestProfile = string(requestProfileOpenAIResponsesTemperatureTools)
-	case ProviderNameGemini:
-		offering.WireContract = string(textWireContractGeminiInteractions)
-		offering.ExecutionLifecycle = string(textExecutionLifecycleSynchronousCompletion)
-	case ProviderNameAnthropic:
-		offering.WireContract = string(textWireContractAnthropicMessages)
-		offering.ExecutionLifecycle = string(textExecutionLifecycleSynchronousCompletion)
-		if offering.OutputTokenLimit == 0 {
-			offering.OutputTokenLimit = 1024
+	if offering.WireContract == "" {
+		switch offering.Provider {
+		case ProviderNameOpenAI:
+			offering.WireContract = string(textWireContractOpenAIResponses)
+			offering.ExecutionLifecycle = string(textExecutionLifecyclePollableResource)
+			offering.RequestProfile = string(requestProfileOpenAIResponsesTemperatureTools)
+		case ProviderNameGemini:
+			offering.WireContract = string(textWireContractGeminiInteractions)
+			offering.ExecutionLifecycle = string(textExecutionLifecycleSynchronousCompletion)
+		case ProviderNameAnthropic:
+			offering.WireContract = string(textWireContractAnthropicMessages)
+			offering.ExecutionLifecycle = string(textExecutionLifecycleSynchronousCompletion)
+			if offering.OutputTokenLimit == 0 {
+				offering.OutputTokenLimit = 1024
+			}
+		default:
+			offering.WireContract = string(textWireContractOpenAIChatCompletions)
+			offering.ExecutionLifecycle = string(textExecutionLifecycleSynchronousCompletion)
 		}
-	default:
-		offering.WireContract = string(textWireContractOpenAIChatCompletions)
-		offering.ExecutionLifecycle = string(textExecutionLifecycleSynchronousCompletion)
+	}
+	if offering.MediaExecutionLifecycle == "" && len(offering.MediaInputs) > 0 {
+		offering.MediaExecutionLifecycle = offering.ExecutionLifecycle
+		if offering.WireContract == string(textWireContractGeminiInteractions) {
+			offering.MediaExecutionLifecycle = string(textExecutionLifecycleSynchronousCompletion)
+		}
 	}
 }

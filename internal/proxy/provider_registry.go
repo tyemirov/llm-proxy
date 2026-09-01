@@ -83,19 +83,20 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 					executionLifecycle: transport.lifecycle,
 				}
 				definition.textModels[strings.ToLower(offering.Model)] = textModelDefinition{
-					identifier:          modelID(offering.Model),
-					providerIdentifier:  modelID(offering.UpstreamModel),
-					transportIdentifier: offering.Transport,
-					wireContract:        routeCapabilities.wireContract,
-					executionLifecycle:  routeCapabilities.executionLifecycle,
-					routeAdapter:        textRouteAdapters[routeCapabilities],
-					requestProfile:      modelRequestProfile(offering.RequestProfile),
-					supportsWebSearch:   offering.WebSearch,
-					outputTokenLimit:    offering.OutputTokenLimit,
-					hasOutputTokenLimit: offering.OutputTokenLimit > 0,
-					reasoningEffort:     configuredReasoningEffortCapability(offering.ReasoningEffort),
-					mediaInputs:         configuredMediaInputSet(offering.MediaInputs),
-					mediaLimits:         cloneCatalogMediaLimits(offering.MediaLimits),
+					identifier:              modelID(offering.Model),
+					providerIdentifier:      modelID(offering.UpstreamModel),
+					transportIdentifier:     offering.Transport,
+					wireContract:            routeCapabilities.wireContract,
+					executionLifecycle:      routeCapabilities.executionLifecycle,
+					mediaExecutionLifecycle: textExecutionLifecycle(transport.protocolParameters.MediaExecutionLifecycle),
+					routeAdapter:            textRouteAdapters[routeCapabilities],
+					requestProfile:          modelRequestProfile(offering.RequestProfile),
+					supportsWebSearch:       offering.WebSearch,
+					outputTokenLimit:        offering.OutputTokenLimit,
+					hasOutputTokenLimit:     offering.OutputTokenLimit > 0,
+					reasoningEffort:         configuredReasoningEffortCapability(offering.ReasoningEffort),
+					mediaInputs:             configuredMediaInputSet(offering.MediaInputs),
+					mediaLimits:             cloneCatalogMediaLimits(offering.MediaLimits),
 				}
 				if slices.Contains(offering.DefaultOperations, ModelOperationText) {
 					definition.defaultTextModel = modelID(offering.Model)

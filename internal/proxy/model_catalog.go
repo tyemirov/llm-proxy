@@ -88,22 +88,23 @@ type ExactModel struct {
 
 // ProviderOffering declares one provider route for one exact model.
 type ProviderOffering struct {
-	Provider           string                     `mapstructure:"provider"`
-	Model              string                     `mapstructure:"model"`
-	ProviderModel      string                     `mapstructure:"provider_model"`
-	Transport          string                     `mapstructure:"transport"`
-	Operations         []string                   `mapstructure:"operations"`
-	DefaultOperations  []string                   `mapstructure:"default_operations"`
-	WireContract       string                     `mapstructure:"wire_contract"`
-	ExecutionLifecycle string                     `mapstructure:"execution_lifecycle"`
-	RequestProfile     string                     `mapstructure:"request_profile"`
-	WebSearch          bool                       `mapstructure:"web_search"`
-	OutputTokenLimit   int                        `mapstructure:"output_token_limit"`
-	ReasoningEffort    *ReasoningEffortCapability `mapstructure:"reasoning_effort"`
-	MediaInputs        []string                   `mapstructure:"media_inputs"`
-	MediaLimits        []CatalogMediaLimit        `mapstructure:"media_limits"`
-	Controls           []CatalogControl           `mapstructure:"controls"`
-	Limits             []CatalogLimit             `mapstructure:"limits"`
+	Provider                string                     `mapstructure:"provider"`
+	Model                   string                     `mapstructure:"model"`
+	ProviderModel           string                     `mapstructure:"provider_model"`
+	Transport               string                     `mapstructure:"transport"`
+	Operations              []string                   `mapstructure:"operations"`
+	DefaultOperations       []string                   `mapstructure:"default_operations"`
+	WireContract            string                     `mapstructure:"wire_contract"`
+	ExecutionLifecycle      string                     `mapstructure:"execution_lifecycle"`
+	MediaExecutionLifecycle string                     `mapstructure:"media_execution_lifecycle"`
+	RequestProfile          string                     `mapstructure:"request_profile"`
+	WebSearch               bool                       `mapstructure:"web_search"`
+	OutputTokenLimit        int                        `mapstructure:"output_token_limit"`
+	ReasoningEffort         *ReasoningEffortCapability `mapstructure:"reasoning_effort"`
+	MediaInputs             []string                   `mapstructure:"media_inputs"`
+	MediaLimits             []CatalogMediaLimit        `mapstructure:"media_limits"`
+	Controls                []CatalogControl           `mapstructure:"controls"`
+	Limits                  []CatalogLimit             `mapstructure:"limits"`
 }
 
 // ReasoningEffortCapability declares the configured upstream mapping for one
@@ -414,6 +415,9 @@ func validateTextOffering(offering ProviderOffering, fieldPrefix string) error {
 	if _, allowed := textRouteAdapters[capabilities]; !allowed {
 		return fmt.Errorf("%w: provider=%s model=%s wire_contract=%s execution_lifecycle=%s", ErrInvalidModelCatalog, offering.Provider, offering.Model, offering.WireContract, offering.ExecutionLifecycle)
 	}
+	if mediaLifecycleError := validateMediaExecutionLifecycle(offering, capabilities, fieldPrefix+".media_execution_lifecycle"); mediaLifecycleError != nil {
+		return mediaLifecycleError
+	}
 	if offering.WebSearch && capabilities.wireContract != textWireContractOpenAIResponses {
 		return fmt.Errorf("%w: field=%s.web_search provider=%s", ErrInvalidModelCatalog, fieldPrefix, offering.Provider)
 	}
@@ -442,6 +446,24 @@ func validateTextOffering(offering ProviderOffering, fieldPrefix string) error {
 				return fmt.Errorf("%w: field=%s.reasoning_effort adapter=%s", ErrInvalidModelCatalog, fieldPrefix, reasoningEffort.adapter)
 			}
 		}
+	}
+	return nil
+}
+
+func validateMediaExecutionLifecycle(offering ProviderOffering, capabilities textRouteCapabilities, field string) error {
+	mediaLifecycle := textExecutionLifecycle(offering.MediaExecutionLifecycle)
+	if mediaLifecycle != "" && !knownTextExecutionLifecycle(mediaLifecycle) {
+		return fmt.Errorf("%w: field=%s execution_lifecycle=%s", ErrInvalidModelCatalog, field, offering.MediaExecutionLifecycle)
+	}
+	if len(offering.MediaInputs) == 0 {
+		return nil
+	}
+	expectedLifecycle := capabilities.executionLifecycle
+	if capabilities.wireContract == textWireContractGeminiInteractions {
+		expectedLifecycle = textExecutionLifecycleSynchronousCompletion
+	}
+	if mediaLifecycle != expectedLifecycle {
+		return fmt.Errorf("%w: field=%s execution_lifecycle=%s", ErrInvalidModelCatalog, field, offering.MediaExecutionLifecycle)
 	}
 	return nil
 }

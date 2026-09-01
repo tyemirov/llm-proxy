@@ -139,13 +139,14 @@ type ProviderCatalogHeader struct {
 
 // ProviderCatalogProtocolParameters declares the adapter-owned wire fields and outcomes.
 type ProviderCatalogProtocolParameters struct {
-	ModelField        string                     `yaml:"model_field"`
-	TokenField        string                     `yaml:"token_field"`
-	OutputFields      []string                   `yaml:"output_fields"`
-	FinishRules       ProviderCatalogFinishRules `yaml:"finish_rules"`
-	ContinuationRules []string                   `yaml:"continuation_rules"`
-	ErrorRules        []string                   `yaml:"error_rules"`
-	UsageFields       ProviderCatalogUsageFields `yaml:"usage_fields"`
+	ModelField              string                     `yaml:"model_field"`
+	TokenField              string                     `yaml:"token_field"`
+	MediaExecutionLifecycle string                     `yaml:"media_execution_lifecycle,omitempty"`
+	OutputFields            []string                   `yaml:"output_fields"`
+	FinishRules             ProviderCatalogFinishRules `yaml:"finish_rules"`
+	ContinuationRules       []string                   `yaml:"continuation_rules"`
+	ErrorRules              []string                   `yaml:"error_rules"`
+	UsageFields             ProviderCatalogUsageFields `yaml:"usage_fields"`
 }
 
 // ProviderCatalogFinishRules declares exact complete and incomplete signals.
@@ -678,7 +679,7 @@ func validateProviderCatalogAdapterContract(transport ProviderCatalogTransport, 
 	case CatalogProtocolOpenAIResponses:
 		allowedLifecycles = []string{string(textExecutionLifecyclePollableResource), string(textExecutionLifecycleSynchronousCompletion)}
 		parameters = ProviderCatalogProtocolParameters{
-			ModelField: "model", TokenField: "max_output_tokens",
+			ModelField: "model", TokenField: "max_output_tokens", MediaExecutionLifecycle: transport.Lifecycle,
 			OutputFields: []string{"output[].content[].text"},
 			FinishRules: ProviderCatalogFinishRules{
 				Complete: []string{"completed"}, Continue: []string{"incomplete:max_output_tokens"},
@@ -696,7 +697,8 @@ func validateProviderCatalogAdapterContract(transport ProviderCatalogTransport, 
 		}
 		parameters = ProviderCatalogProtocolParameters{
 			ModelField: "model", TokenField: transport.ProtocolParameters.TokenField,
-			OutputFields: []string{"choices[].message.content"},
+			MediaExecutionLifecycle: string(textExecutionLifecycleSynchronousCompletion),
+			OutputFields:            []string{"choices[].message.content"},
 			FinishRules: ProviderCatalogFinishRules{
 				Complete: []string{"stop"}, Continue: []string{"length"},
 			},
@@ -714,7 +716,8 @@ func validateProviderCatalogAdapterContract(transport ProviderCatalogTransport, 
 		expectedHeaders = []ProviderCatalogHeader{{Name: "anthropic-version", Value: "2023-06-01"}}
 		parameters = ProviderCatalogProtocolParameters{
 			ModelField: "model", TokenField: "max_tokens",
-			OutputFields: []string{"content[].text"},
+			MediaExecutionLifecycle: string(textExecutionLifecycleSynchronousCompletion),
+			OutputFields:            []string{"content[].text"},
 			FinishRules: ProviderCatalogFinishRules{
 				Complete: []string{"end_turn", "stop_sequence"}, Continue: []string{"max_tokens"},
 			},
@@ -732,7 +735,8 @@ func validateProviderCatalogAdapterContract(transport ProviderCatalogTransport, 
 		expectedHeaders = []ProviderCatalogHeader{{Name: "Api-Revision", Value: "2026-05-20"}}
 		parameters = ProviderCatalogProtocolParameters{
 			ModelField: "model", TokenField: "generation_config.max_output_tokens",
-			OutputFields: []string{"outputs[].text"},
+			MediaExecutionLifecycle: string(textExecutionLifecycleSynchronousCompletion),
+			OutputFields:            []string{"outputs[].text"},
 			FinishRules: ProviderCatalogFinishRules{
 				Complete: []string{"completed"}, Continue: []string{"incomplete"},
 			},
@@ -789,6 +793,7 @@ func providerCatalogHeadersEqual(actual []ProviderCatalogHeader, expected []Prov
 func providerCatalogProtocolParametersEqual(actual ProviderCatalogProtocolParameters, expected ProviderCatalogProtocolParameters) bool {
 	return actual.ModelField == expected.ModelField &&
 		actual.TokenField == expected.TokenField &&
+		actual.MediaExecutionLifecycle == expected.MediaExecutionLifecycle &&
 		slices.Equal(actual.OutputFields, expected.OutputFields) &&
 		slices.Equal(actual.FinishRules.Complete, expected.FinishRules.Complete) &&
 		slices.Equal(actual.FinishRules.Continue, expected.FinishRules.Continue) &&
@@ -830,22 +835,23 @@ func compileProviderCatalogSchema(schema ProviderCatalogSchema, revision string)
 		for _, rawOffering := range provider.Offerings {
 			transport := transports[rawOffering.Transport]
 			offering := ProviderOffering{
-				Provider:           provider.ID,
-				Model:              rawOffering.Model,
-				ProviderModel:      rawOffering.UpstreamModel,
-				Transport:          rawOffering.Transport,
-				Operations:         append([]string(nil), rawOffering.Operations...),
-				DefaultOperations:  append([]string(nil), rawOffering.DefaultOperations...),
-				WireContract:       transport.RequestProtocol,
-				ExecutionLifecycle: transport.Lifecycle,
-				RequestProfile:     rawOffering.RequestProfile,
-				WebSearch:          rawOffering.WebSearch,
-				OutputTokenLimit:   rawOffering.OutputTokenLimit,
-				ReasoningEffort:    rawOffering.ReasoningEffort,
-				MediaInputs:        append([]string(nil), rawOffering.MediaInputs...),
-				MediaLimits:        cloneCatalogMediaLimits(rawOffering.MediaLimits),
-				Controls:           append([]CatalogControl(nil), rawOffering.Controls...),
-				Limits:             append([]CatalogLimit(nil), rawOffering.Limits...),
+				Provider:                provider.ID,
+				Model:                   rawOffering.Model,
+				ProviderModel:           rawOffering.UpstreamModel,
+				Transport:               rawOffering.Transport,
+				Operations:              append([]string(nil), rawOffering.Operations...),
+				DefaultOperations:       append([]string(nil), rawOffering.DefaultOperations...),
+				WireContract:            transport.RequestProtocol,
+				ExecutionLifecycle:      transport.Lifecycle,
+				MediaExecutionLifecycle: transport.ProtocolParameters.MediaExecutionLifecycle,
+				RequestProfile:          rawOffering.RequestProfile,
+				WebSearch:               rawOffering.WebSearch,
+				OutputTokenLimit:        rawOffering.OutputTokenLimit,
+				ReasoningEffort:         rawOffering.ReasoningEffort,
+				MediaInputs:             append([]string(nil), rawOffering.MediaInputs...),
+				MediaLimits:             cloneCatalogMediaLimits(rawOffering.MediaLimits),
+				Controls:                append([]CatalogControl(nil), rawOffering.Controls...),
+				Limits:                  append([]CatalogLimit(nil), rawOffering.Limits...),
 			}
 			modelCatalog.Offerings = append(modelCatalog.Offerings, offering)
 			for _, rawPrice := range rawOffering.Prices {

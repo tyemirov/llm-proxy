@@ -270,19 +270,20 @@ func (capability *reasoningEffortCapability) supports(effort string) bool {
 }
 
 type textModelDefinition struct {
-	identifier          modelID
-	providerIdentifier  modelID
-	transportIdentifier string
-	wireContract        textWireContract
-	executionLifecycle  textExecutionLifecycle
-	routeAdapter        textRouteAdapter
-	requestProfile      modelRequestProfile
-	supportsWebSearch   bool
-	outputTokenLimit    int
-	hasOutputTokenLimit bool
-	reasoningEffort     *reasoningEffortCapability
-	mediaInputs         map[messageMediaType]struct{}
-	mediaLimits         []CatalogMediaLimit
+	identifier              modelID
+	providerIdentifier      modelID
+	transportIdentifier     string
+	wireContract            textWireContract
+	executionLifecycle      textExecutionLifecycle
+	mediaExecutionLifecycle textExecutionLifecycle
+	routeAdapter            textRouteAdapter
+	requestProfile          modelRequestProfile
+	supportsWebSearch       bool
+	outputTokenLimit        int
+	hasOutputTokenLimit     bool
+	reasoningEffort         *reasoningEffortCapability
+	mediaInputs             map[messageMediaType]struct{}
+	mediaLimits             []CatalogMediaLimit
 }
 
 func (definition textModelDefinition) string() string {

@@ -423,8 +423,12 @@ func TestGeminiPrepareInteractionPayloadFailureContracts(t *testing.T) {
 	if _, _, prepareError := client.prepareInteractionPayload(context.Background(), "key", "https://provider.test", boundedModel, messages, nil, "", nil); !errors.Is(prepareError, ErrProviderAPI) {
 		t.Fatalf("upload error=%v", prepareError)
 	}
-	if _, requestError := newGeminiInteractionRequest(textModelDefinition{}, messages, []string{"one", "two"}, nil, "", nil); !errors.Is(requestError, ErrProviderAPI) {
+	if _, requestError := newGeminiInteractionExecution(textModelDefinition{mediaExecutionLifecycle: textExecutionLifecycleSynchronousCompletion}, messages, []string{"one", "two"}, nil, "", nil); !errors.Is(requestError, ErrProviderAPI) {
 		t.Fatalf("request input error=%v", requestError)
+	}
+	textMessages := chatMessages{{role: chatRoleUser, content: "answer"}}
+	if _, requestError := newGeminiInteractionExecution(textModelDefinition{}, textMessages, nil, nil, "", nil); !errors.Is(requestError, ErrProviderAPI) {
+		t.Fatalf("invalid lifecycle error=%v", requestError)
 	}
 }
 

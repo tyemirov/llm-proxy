@@ -77,14 +77,23 @@ func TestModelCatalogValidationRejectsEveryOfferingBoundary(t *testing.T) {
 			catalog.Offerings[0].DefaultOperations = []string{ModelOperationDictation}
 		}, expected: "unsupported_by_offering"},
 		{name: "output token limit", mutate: func(catalog *ModelCatalog) { catalog.Offerings[0].OutputTokenLimit = -1 }, expected: ".output_token_limit"},
-		{name: "media unsupported by model", mutate: func(catalog *ModelCatalog) { catalog.Offerings[0].MediaInputs = []string{CatalogArtifactImage} }, expected: "unsupported_by_model"},
+		{name: "media lifecycle missing", mutate: func(catalog *ModelCatalog) {
+			catalog.Models[0].MediaInputs = []string{CatalogArtifactImage}
+			catalog.Offerings[0].MediaInputs = []string{CatalogArtifactImage}
+		}, expected: ".media_execution_lifecycle"},
+		{name: "media unsupported by model", mutate: func(catalog *ModelCatalog) {
+			catalog.Offerings[0].MediaInputs = []string{CatalogArtifactImage}
+			catalog.Offerings[0].MediaExecutionLifecycle = string(textExecutionLifecyclePollableResource)
+		}, expected: "unsupported_by_model"},
 		{name: "media duplicate", mutate: func(catalog *ModelCatalog) {
 			catalog.Models[0].MediaInputs = []string{CatalogArtifactImage}
 			catalog.Offerings[0].MediaInputs = []string{CatalogArtifactImage, CatalogArtifactImage}
+			catalog.Offerings[0].MediaExecutionLifecycle = string(textExecutionLifecyclePollableResource)
 		}, expected: "duplicate=image"},
 		{name: "media limit", mutate: func(catalog *ModelCatalog) {
 			catalog.Models[0].MediaInputs = []string{CatalogArtifactImage}
 			catalog.Offerings[0].MediaInputs = []string{CatalogArtifactImage}
+			catalog.Offerings[0].MediaExecutionLifecycle = string(textExecutionLifecyclePollableResource)
 			catalog.Offerings[0].MediaLimits = []CatalogMediaLimit{{ID: "future", MediaType: CatalogArtifactImage, Transport: CatalogMediaTransportInline, Status: CatalogMediaLimitStatusBounded}}
 		}, expected: ".media_limits"},
 		{name: "exact model without offering", mutate: func(catalog *ModelCatalog) {
@@ -116,6 +125,7 @@ func TestTextOfferingValidationRejectsEveryAdapterBoundary(t *testing.T) {
 		{name: "lifecycle shape", mutate: func(offering *ProviderOffering) { offering.ExecutionLifecycle = " " }, expected: ".execution_lifecycle"},
 		{name: "unknown wire contract", mutate: func(offering *ProviderOffering) { offering.WireContract = "future" }, expected: "wire_contract=future"},
 		{name: "unknown lifecycle", mutate: func(offering *ProviderOffering) { offering.ExecutionLifecycle = "future" }, expected: "execution_lifecycle=future"},
+		{name: "unknown media lifecycle", mutate: func(offering *ProviderOffering) { offering.MediaExecutionLifecycle = "future" }, expected: "media_execution_lifecycle"},
 		{name: "adapter pair", mutate: func(offering *ProviderOffering) {
 			offering.WireContract = string(textWireContractAnthropicMessages)
 			offering.ExecutionLifecycle = string(textExecutionLifecyclePollableResource)

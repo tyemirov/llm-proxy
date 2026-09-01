@@ -16,19 +16,18 @@ import (
 
 func TestV2RoutesExactOrderedImageAndAudioAttachmentsThroughGemini(testingInstance *testing.T) {
 	var capturedPayload map[string]any
-	deleteCount := 0
+	requestCount := 0
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 		assertGeminiInteractionHeaders(testingInstance, httpRequest, testGeminiKey)
-		if httpRequest.Method == http.MethodDelete && httpRequest.URL.Path == testGeminiInteractionsPath+"/media-input" {
-			deleteCount++
-			writeGeminiInteractionDeleted(testingInstance, responseWriter)
-			return
-		}
 		if httpRequest.Method != http.MethodPost || httpRequest.URL.Path != testGeminiInteractionsPath {
 			testingInstance.Fatalf("upstream request=%s %s", httpRequest.Method, httpRequest.URL.Path)
 		}
+		requestCount++
 		capturedPayload = decodeGeminiInteractionRequest(testingInstance, httpRequest)
-		writeGeminiInteractionSnapshot(testingInstance, responseWriter, "media-input", "completed", "media accepted", nil)
+		if capturedPayload["background"] != false || capturedPayload["store"] != false {
+			testingInstance.Fatalf("Gemini media execution=%v", capturedPayload)
+		}
+		writeGeminiInteractionSnapshot(testingInstance, responseWriter, "", "completed", "media accepted", nil)
 	}))
 	defer upstreamServer.Close()
 
@@ -65,8 +64,8 @@ func TestV2RoutesExactOrderedImageAndAudioAttachmentsThroughGemini(testingInstan
 		testingInstance.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
 	}
 	input, inputOK := capturedPayload["input"].([]any)
-	if !inputOK || len(input) != 1 || deleteCount != 1 {
-		testingInstance.Fatalf("input=%v deletes=%d", capturedPayload["input"], deleteCount)
+	if !inputOK || len(input) != 1 || requestCount != 1 {
+		testingInstance.Fatalf("input=%v requests=%d", capturedPayload["input"], requestCount)
 	}
 	userStep, stepOK := input[0].(map[string]any)
 	if !stepOK || userStep["type"] != testGeminiInteractionUserStep {

@@ -48,10 +48,14 @@ func TestStructuredOutputSchemaAndProviderMappings(testingInstance *testing.T) {
 	if !jsonContainsPath(openAIPayload, "text", "format", "schema") {
 		testingInstance.Fatalf("OpenAI payload lacks text.format.schema: %s", openAIPayload)
 	}
-	geminiPayload, geminiError := newGeminiInteractionRequest(
-		textModelDefinition{providerIdentifier: newModelID("gemini-3-pro-preview")},
+	geminiExecution, geminiError := newGeminiInteractionExecution(
+		textModelDefinition{
+			providerIdentifier: newModelID("gemini-3-pro-preview"),
+			executionLifecycle: textExecutionLifecyclePollableResource,
+		},
 		chatMessages{{role: chatRoleUser, content: "review"}}, nil, nil, "", schema,
 	)
+	geminiPayload := geminiExecution.request
 	if geminiError != nil || len(geminiPayload.ResponseFormat) != 1 || geminiPayload.ResponseFormat[0].MIMEType != "application/json" {
 		testingInstance.Fatalf("Gemini payload=%+v error=%v", geminiPayload, geminiError)
 	}
