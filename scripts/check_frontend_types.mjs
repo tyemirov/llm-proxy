@@ -10,7 +10,7 @@ const mirrorParent = join(repositoryRoot, "node_modules", ".cache");
 const browserSourceRoot = join("site", "assets", "llm-proxy", "js");
 const sourceRoots = ["scripts", browserSourceRoot];
 const cacheBustedImportPattern = /(\.js)\?v=[0-9a-z]+(?=["'])/g;
-const alpineCDNImport = "https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/module.esm.js";
+const alpineCDNImport = "https://cdn.jsdelivr.net/npm/alpinejs@3.17.1/dist/module.esm.js";
 const alpineTypecheckImport = "./alpineRuntimeDependency.js";
 const alpineTypecheckDeclaration = `declare const Alpine: {
   data(name: string, factory: () => object): void;

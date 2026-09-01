@@ -9,7 +9,7 @@ export const MPR_UI_CSS_URL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/
 export const MPR_UI_CONFIG_URL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js";
 export const MPR_UI_BUNDLE_URL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js";
 export const GOOGLE_IDENTITY_URL = "https://accounts.google.com/gsi/client";
-export const JS_YAML_URL = "https://cdn.jsdelivr.net/npm/js-yaml@4.3.0/dist/js-yaml.min.js";
+export const JS_YAML_URL = "https://cdn.jsdelivr.net/npm/js-yaml@5.4.1/dist/browser/js-yaml.umd.min.js";
 export const LOOPAWARE_PIXEL_URL = "https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440";
 export const PUBLIC_FOOTER_COMPACT_MAX_HEIGHT = 56;
 
