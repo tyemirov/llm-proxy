@@ -25,7 +25,38 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
-- [!] [B164] (P0) Use one version for each current release surface.
+- [x] [B165] (P0) Prepare the next official client version.
+  Goal:
+  Current source and each official client use the next valid version.
+  Evidence:
+  - Release `v1.2.2` identifies commit `aea550bb2a5f3728e7fbe058446f11ade11a53c3`.
+  - The default branch contains seven later commits with new public behavior.
+  - Expected: current source uses the next SemVer minor version, `1.3.0`.
+  - Actual: the Python source and lock metadata still use `1.2.2`.
+  - Actual: the Python installation example selects the default branch.
+  - Actual: the changelog keeps released `v1.2.2` changes under `Unreleased`.
+  Requirements:
+  - Set the Python source and lock metadata to `1.3.0`.
+  - Keep the Go module path unchanged.
+  - Require the release decision to match `v1.3.0`.
+  - Keep the completed `v1.2.2` changes in one dated changelog section.
+  - Keep only later changes under `Unreleased`.
+  - Install the Python client from an exact released tag in the main example.
+  - Keep release, publication, and deployment outside this development issue.
+  Resolution:
+  - The Python source and lock metadata use `1.3.0`.
+  - The release decision tests accept only the exact `v1.3.0` version.
+  - The Go module path is unchanged.
+  - The changelog has a dated `v1.2.2` section and a new `Unreleased` section.
+  - The Python installation example uses the released `v1.2.2` tag.
+  - `make python-package-install-test` passed for version `1.3.0`.
+  - `make ci` passed all 11 gates with 100 percent Go coverage.
+  Validation:
+  - Run `make python-package-install-test`.
+  - Run `make ci` after the last application change.
+  - Run the STE check on each changed technical document.
+  - Run `git diff --check`.
+- [x] [B164] (P0) Use one version for each current release surface.
   Goal:
   The application and each official client use one current `v1` release.
   Evidence:
@@ -50,7 +81,7 @@ retain satisfied historical dependencies.
   - Verify that GitHub, GHCR, Pages, and production report `v1.2.2`.
   - Verify that no release tag has a major version above `1`.
   - Run `make ci`.
-  Blocked:
+  Progress:
   - Source and lock metadata now set the Python client version to `1.2.2`.
   - The application-owned validator requires the exact `v1.2.2` decision.
   - The gateway runs the validator for each prepared or reused decision.
@@ -59,8 +90,13 @@ retain satisfied historical dependencies.
   - `make python-package-install-test` passed for version `1.2.2`.
   - `make ci` passed all 11 gates with 100 percent Go coverage.
   - The gateway formatting, lint, and test suites passed.
-  - The execution chain must commit and push the current source changes.
-  - Keep the v7 GHCR and Pages artifacts until deployment and live tests pass.
+  - The execution chain committed and pushed the source changes.
+  - GitHub, GHCR, Pages, and the deployment selection use `v1.2.2`.
+  - The live Pages marker identifies `v1.2.2` and the exact release commit.
+  - The API authentication and configuration checks return the expected status.
+  - The obsolete v7 GHCR version and Pages tag were removed.
+  - GitHub and GHCR contain no release identity above major version `1`.
+  - `make ci` passed all 11 gates with 100 percent Go coverage.
 - [x] [B163] (P0) {F022} Remove content hashes from the canonical media contract.
   Goal:
   Identify public media through semantic fields and opaque owner identifiers.
@@ -1541,7 +1577,7 @@ retain satisfied historical dependencies.
   `.mprlab/POLICY.md` and `.mprlab/issues-md-format.md`. The Governor check is
   clean. M013 still blocks completion because the root product-context decision
   is open.
-- [ ] [M019] (P2) Refresh non-security direct dependency pins.
+- [x] [M019] (P2) Refresh non-security direct dependency pins.
   Goal:
   Bring direct Go, frontend, and Python development dependencies to their current supported releases after the security graph is stable.
   Requirements:
@@ -1553,6 +1589,13 @@ retain satisfied historical dependencies.
   - A concise compatibility note for any package intentionally left at its current supported version.
   Validation:
   - Run `go mod verify`, `npm audit --json`, the locked Python audit, and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - Gin `v1.12.0`, JWT `v5.3.1`, Viper `v1.21.0`, Zap `v1.28.0`, and GORM `v1.31.2` remain unchanged because they are current.
+  - TAuth now uses `v1.2.7`. Its imported session-validator contract is unchanged.
+  - Alpine, js-yaml, Playwright, and the Node.js type definitions now use their current releases. The obsolete separate js-yaml type package was removed, and the public site uses the js-yaml v5 browser export.
+  - The Python lock now selects mypy `2.3.1`, pytest `9.1.1`, and their current transitive development dependencies.
+  - `go mod verify`, `npm audit --json`, and the exported locked Python audit passed with no known vulnerabilities.
+  - The required baseline and final CI commands passed all 11 gates with 100 percent Go coverage.
 
 
 ## Features
