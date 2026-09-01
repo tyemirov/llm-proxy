@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Added a separate media execution lifecycle to each media-capable provider
+  offering. The public capability resource and official Go client now expose
+  this lifecycle.
+- Changed Gemini media Interactions to use synchronous completion. Gemini text
+  Interactions continue to use a stored, pollable resource.
+- Added contract and live-harness checks for the media execution lifecycle.
+- Updated the TAuth session validator, frontend runtime and test dependencies,
+  and Python development tools to their current supported releases.
+
+## [v1.2.2] - 2026-08-31
+
 - Set the application, Go client, and Python client release to `v1.2.2`.
   Added an application-owned validator for the exact gateway release decision.
   Required that decision to match the official client version.
