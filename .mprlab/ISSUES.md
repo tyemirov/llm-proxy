@@ -25,6 +25,28 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B170] (P1) Apply each theme to the route explorer.
+  Goal:
+  The selected theme must change all route explorer colors. The route explorer
+  keeps dark backgrounds after a user selects a light theme.
+  Requirements:
+  - Map each route explorer color to the selected palette.
+  - Keep the current default dark appearance.
+  - Keep the route explorer readable in each light and dark theme.
+  Deliverables:
+  - Add route explorer tokens to each canonical palette.
+  - Replace fixed route explorer colors with the canonical tokens.
+  - Add browser coverage for route explorer theme changes.
+  Validation:
+  - Select each theme with the footer control.
+  - Verify the route explorer surface and control colors for each theme.
+  Resolution:
+  - Each palette now owns the route explorer surface, control, node, connector,
+    focus, and shadow colors.
+  - The route explorer redraws its canvas when MPR UI changes the theme.
+  - Browser tests verified all four palettes. `make ci` passed all 11 gates with
+    100.0% Go statement coverage.
+
 - [x] [B169] (P1) Make all four theme positions selectable.
   Goal:
   The footer theme control shows four theme positions, but only two positions
