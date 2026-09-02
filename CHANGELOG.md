@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Made provider card settings compact and automatic. Each card now starts with
+  the Default tenant and keeps its tenant selector available. The card collapses
+  its system prompt and accepts pasted replacement keys directly. Key links and
+  deletion controls now stay beside their related fields. Removed the repeated
+  tenant heading. Isolated each tenant change to the open card and preserved
+  the management site context.
 - Separated provider API, model family, and capability labels on Usage Overview
   cards. Added explicit API service titles, media analysis capabilities, and API
   key settings gear controls. Added request volume bars with one shared scale.
