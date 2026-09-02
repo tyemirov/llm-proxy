@@ -616,7 +616,7 @@ outside `make ci`. `LLM_PROXY_LIVE_ALL_MODELS=true` expands media mode to
 every image route for each selected provider, including all four Kimi routes.
 
 `make live-test` is deliberately a different boundary. It calls only the
-production API origin. It requires `LLM_PROXY_SECRET`, the Default tenant
+production API origin. It requires `LLM_PROXY_DEFAULT_TENANT_KEY`, the Default tenant
 client secret, and `LLM_PROXY_EXPECTED_TENANT_ID`, the exact Default tenant
 identifier. It never loads a dotenv file or local provider credential. The
 command first calls authenticated `GET /v2/identity`. It compares the returned
