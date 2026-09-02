@@ -88,7 +88,7 @@
             <h2>How it works</h2>
             <ol class="resource-steps">
               <li>Install with go install github.com/tyemirov/llm-proxy/llm-proxy-client@latest.</li>
-<li>Set --base-url and --secret, or use LLM_PROXY_BASE_URL and LLM_PROXY_SECRET.</li>
+<li>Set --base-url and --secret, or use LLM_PROXY_BASE_URL and LLM_PROXY_DEFAULT_TENANT_KEY.</li>
 <li>Send --prompt, --prompt-file, or stdin content.</li>
 <li>Optionally include --system-prompt, --model, --max-tokens, --reasoning-effort, or --request-timeout-seconds; keep provider in the base URL.</li>
             </ol>
@@ -189,7 +189,7 @@
             <h2>Repository evidence</h2>
             <pre class="usage-snippet"><code>llm-proxy-client \
   --base-url &quot;http://localhost:8080/?provider=openai&quot; \
-  --secret &quot;$LLM_PROXY_SECRET&quot; \
+  --secret &quot;$LLM_PROXY_DEFAULT_TENANT_KEY&quot; \
   --model &quot;gpt-5.5&quot; \
   --reasoning-effort &quot;high&quot; \
   --request-timeout-seconds 900 \

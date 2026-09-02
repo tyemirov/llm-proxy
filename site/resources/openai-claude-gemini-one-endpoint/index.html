@@ -179,7 +179,7 @@
           <section>
             <h2>Repository evidence</h2>
             <pre class="usage-snippet"><code>for provider in openai anthropic gemini; do
-  curl -X POST     &quot;https://llm-proxy-api.mprlab.com/v2?key=$LLM_PROXY_SECRET&amp;provider=$provider&quot;     -H &quot;Content-Type: application/json&quot;     -d '{&quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;Summarize this&quot;}]}'
+  curl -X POST     &quot;https://llm-proxy-api.mprlab.com/v2?key=$LLM_PROXY_DEFAULT_TENANT_KEY&amp;provider=$provider&quot;     -H &quot;Content-Type: application/json&quot;     -d '{&quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;Summarize this&quot;}]}'
 done</code></pre>
             <p>Verified 2026-08-22 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
           </section>
