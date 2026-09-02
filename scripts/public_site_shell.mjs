@@ -3,6 +3,7 @@
 import {
   APPLICATION_PATH,
   LANDING_AUTHENTICATED_REDIRECT_ATTRIBUTE,
+  PUBLIC_THEME,
 } from "../site/assets/llm-proxy/js/constants.js";
 
 export const MPR_UI_CSS_URL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css";
@@ -31,29 +32,29 @@ const PUBLIC_FOOTER_LINKS = Object.freeze({
   ]),
 });
 const PUBLIC_THEME_CONFIG = Object.freeze({
-  attribute: "data-mpr-theme",
+  attribute: PUBLIC_THEME.ATTRIBUTE,
   targets: Object.freeze(["document", "body"]),
   initialMode: "default-dark",
   modes: Object.freeze([
     Object.freeze({
       value: "default-light",
       attributeValue: "light",
-      dataset: Object.freeze({ "data-llm-proxy-palette": "default" }),
+      dataset: Object.freeze({ [PUBLIC_THEME.PALETTE_ATTRIBUTE]: "default" }),
     }),
     Object.freeze({
       value: "sunrise-light",
       attributeValue: "light",
-      dataset: Object.freeze({ "data-llm-proxy-palette": "sunrise" }),
+      dataset: Object.freeze({ [PUBLIC_THEME.PALETTE_ATTRIBUTE]: "sunrise" }),
     }),
     Object.freeze({
       value: "default-dark",
       attributeValue: "dark",
-      dataset: Object.freeze({ "data-llm-proxy-palette": "default" }),
+      dataset: Object.freeze({ [PUBLIC_THEME.PALETTE_ATTRIBUTE]: "default" }),
     }),
     Object.freeze({
       value: "forest-dark",
       attributeValue: "dark",
-      dataset: Object.freeze({ "data-llm-proxy-palette": "forest" }),
+      dataset: Object.freeze({ [PUBLIC_THEME.PALETTE_ATTRIBUTE]: "forest" }),
     }),
   ]),
 });
