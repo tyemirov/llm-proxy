@@ -1,6 +1,6 @@
 // @ts-check
 
-import { ADMIN_USER_MENU_ITEMS, MPR_UI, USER_MENU_ITEMS } from "../constants.js?v=20260811c131";
+import { ADMIN_USER_MENU_ITEMS, MPR_UI, USER_MENU_ITEMS } from "../constants.js?v=20260902a237";
 
 /**
  * @returns {void}

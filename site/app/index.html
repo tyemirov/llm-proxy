@@ -28,8 +28,8 @@
       type="application/json"
       data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
     ></script>
-    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260811c131"></script>
-    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260811c131"></script>
+    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260902a237"></script>
+    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260902a237"></script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440"></script>
   </head>
   <body x-data="llmProxyManagementApplication" x-init="init()">
@@ -306,17 +306,41 @@
                             x-bind:inert="providerCardIsOpen(provider) ? true : null"
                           >
                             <header>
-                              <h3 x-text="provider.label"></h3>
+                              <div class="provider-card-heading">
+                                <p class="eyebrow" x-text="copy.providerAPIConnection"></p>
+                                <h3 x-text="provider.api_service_label"></h3>
+                              </div>
                               <provider-card-statuses>
                                 <span x-show="providerCardIsActive(provider)" x-text="copy.providerActive"></span>
                                 <span x-show="providerCardActivity(provider).used" x-text="copy.providerUsed"></span>
                               </provider-card-statuses>
                             </header>
-                            <provider-capability-list aria-label="Capabilities">
-                              <template x-for="capability in provider.capabilities" x-bind:key="capability">
-                                <span x-text="providerCapabilityLabel(capability)"></span>
-                              </template>
-                            </provider-capability-list>
+                            <dl class="provider-card-taxonomy">
+                              <div>
+                                <dt x-text="copy.providerModelPublishers"></dt>
+                                <dd>
+                                  <template x-for="publisher in provider.model_publishers" x-bind:key="publisher.id">
+                                    <span x-text="publisher.label"></span>
+                                  </template>
+                                </dd>
+                              </div>
+                              <div>
+                                <dt x-text="copy.providerModelFamilies"></dt>
+                                <dd>
+                                  <template x-for="family in provider.model_families" x-bind:key="family.id">
+                                    <span x-text="family.label"></span>
+                                  </template>
+                                </dd>
+                              </div>
+                              <div>
+                                <dt x-text="copy.providerCapabilities"></dt>
+                                <dd>
+                                  <template x-for="capability in provider.capabilities" x-bind:key="capability">
+                                    <span x-text="providerCapabilityLabel(capability)"></span>
+                                  </template>
+                                </dd>
+                              </div>
+                            </dl>
                             <dl class="provider-card-usage">
                               <div><dt x-text="copy.providerRequests"></dt><dd x-text="providerCardActivity(provider).requests"></dd></div>
                               <div><dt x-text="copy.providerTokens"></dt><dd x-text="providerCardActivity(provider).tokens"></dd></div>
@@ -341,7 +365,7 @@
                           >
                             <header>
                               <div>
-                                <p class="eyebrow" x-text="provider.label"></p>
+                                <p class="eyebrow" x-text="provider.api_service_label"></p>
                                 <h3 x-text="providerCardTenantID ? settingsTenantName : copy.providerSelectTenant"></h3>
                               </div>
                               <button type="button" class="icon-only" x-on:click="closeProviderCard()" x-bind:aria-label="copy.providerDone">×</button>

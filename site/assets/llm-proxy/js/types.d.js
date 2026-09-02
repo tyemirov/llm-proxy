@@ -52,10 +52,20 @@
 /**
  * @typedef {{
  *   id: string,
+ *   label: string
+ * }} CatalogIdentityProfile
+ */
+
+/**
+ * @typedef {{
+ *   id: string,
  *   label: string,
+ *   api_service_label: string,
  *   key_acquisition_url: string,
  *   aliases: string[],
  *   capabilities: string[],
+ *   model_publishers: CatalogIdentityProfile[],
+ *   model_families: CatalogIdentityProfile[],
  *   configured: boolean,
  *   fields: ProviderFieldProfile[],
  *   text_model: string,

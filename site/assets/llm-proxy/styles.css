@@ -67,7 +67,6 @@ usage-row,
 usage-bar,
 provider-card-grid,
 provider-card-statuses,
-provider-capability-list,
 usage-failures-overlay,
 usage-failures-dialog,
 usage-failures-body,
@@ -362,15 +361,14 @@ provider-card-grid {
   transform: rotateY(180deg);
 }
 
-provider-card-statuses,
-provider-capability-list {
+provider-card-statuses {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
 }
 
 provider-card-statuses span,
-provider-capability-list span {
+.provider-card-taxonomy dd span {
   border: 1px solid var(--llm-border);
   border-radius: 999px;
   color: var(--llm-muted);
@@ -382,6 +380,39 @@ provider-capability-list span {
 provider-card-statuses span {
   border-color: var(--llm-accent);
   color: var(--llm-accent);
+}
+
+.provider-card-heading {
+  min-width: 0;
+}
+
+.provider-card-heading h3 {
+  overflow-wrap: anywhere;
+}
+
+.provider-card-taxonomy {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.provider-card-taxonomy div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.provider-card-taxonomy dt {
+  color: var(--llm-muted);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.provider-card-taxonomy dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0;
 }
 
 .provider-card-usage {

@@ -4,7 +4,7 @@ import {
   APP_INTEGRITY_ERROR,
   COPY,
   ROUTING_DEFAULTS_INVALID_ERROR,
-} from "../constants.js?v=20260811c131";
+} from "../constants.js?v=20260902a237";
 
 const EMPTY_STRING = "";
 const TENANT_NAME_MAXIMUM_CHARACTERS = 80;
@@ -234,11 +234,17 @@ function assertProviderCatalog(provider) {
     !provider.id ||
     typeof provider.label !== "string" ||
     !provider.label ||
+    typeof provider.api_service_label !== "string" ||
+    !provider.api_service_label ||
     typeof provider.key_acquisition_url !== "string" ||
     !provider.key_acquisition_url.startsWith("https://") ||
     !Array.isArray(provider.capabilities) ||
     provider.capabilities.length === 0 ||
     !provider.capabilities.every((capability) => ["text", "dictation", "video_generation"].includes(capability)) ||
+    !Array.isArray(provider.model_publishers) ||
+    provider.model_publishers.length === 0 ||
+    !Array.isArray(provider.model_families) ||
+    provider.model_families.length === 0 ||
     typeof provider.configured !== "boolean" ||
     !Array.isArray(provider.fields) ||
     provider.fields.length === 0 ||
@@ -248,6 +254,8 @@ function assertProviderCatalog(provider) {
   ) {
     throw new Error(APP_INTEGRITY_ERROR);
   }
+  assertCatalogIdentityList(provider.model_publishers);
+  assertCatalogIdentityList(provider.model_families);
   const fieldIDs = new Set();
   for (const field of provider.fields) {
     assertProviderField(field);
@@ -272,6 +280,17 @@ function assertProviderCatalog(provider) {
       !provider.dictation_models.includes(provider.dictation_default_model))
   ) {
     throw new Error(APP_INTEGRITY_ERROR);
+  }
+}
+
+/** @param {import("../types.d.js").CatalogIdentityProfile[]} identities */
+function assertCatalogIdentityList(identities) {
+  const identifiers = new Set();
+  for (const identity of identities) {
+    if (!identity || typeof identity.id !== "string" || !identity.id || typeof identity.label !== "string" || !identity.label || identifiers.has(identity.id)) {
+      throw new Error(APP_INTEGRITY_ERROR);
+    }
+    identifiers.add(identity.id);
   }
 }
 
