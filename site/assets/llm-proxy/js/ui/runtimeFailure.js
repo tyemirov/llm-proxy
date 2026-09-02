@@ -1,6 +1,6 @@
 // @ts-check
 
-import { COPY, RUNTIME_UI } from "../constants.js?v=20260902a237";
+import { COPY, RUNTIME_UI } from "../constants.js?v=20260902c237";
 
 /**
  * @returns {HTMLElement}

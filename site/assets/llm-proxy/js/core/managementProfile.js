@@ -3,8 +3,9 @@
 import {
   APP_INTEGRITY_ERROR,
   COPY,
+  PROVIDER_CAPABILITY_LABELS,
   ROUTING_DEFAULTS_INVALID_ERROR,
-} from "../constants.js?v=20260902a237";
+} from "../constants.js?v=20260902c237";
 
 const EMPTY_STRING = "";
 const TENANT_NAME_MAXIMUM_CHARACTERS = 80;
@@ -240,9 +241,7 @@ function assertProviderCatalog(provider) {
     !provider.key_acquisition_url.startsWith("https://") ||
     !Array.isArray(provider.capabilities) ||
     provider.capabilities.length === 0 ||
-    !provider.capabilities.every((capability) => ["text", "dictation", "video_generation"].includes(capability)) ||
-    !Array.isArray(provider.model_publishers) ||
-    provider.model_publishers.length === 0 ||
+    !provider.capabilities.every((capability) => Object.hasOwn(PROVIDER_CAPABILITY_LABELS, capability)) ||
     !Array.isArray(provider.model_families) ||
     provider.model_families.length === 0 ||
     typeof provider.configured !== "boolean" ||
@@ -254,7 +253,6 @@ function assertProviderCatalog(provider) {
   ) {
     throw new Error(APP_INTEGRITY_ERROR);
   }
-  assertCatalogIdentityList(provider.model_publishers);
   assertCatalogIdentityList(provider.model_families);
   const fieldIDs = new Set();
   for (const field of provider.fields) {

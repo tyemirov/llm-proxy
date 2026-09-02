@@ -5,12 +5,12 @@ import {
   COPY,
   NOTICE_KINDS,
   PROVIDER_KEY_VERIFICATION_ERRORS,
-} from "../constants.js?v=20260902a237";
-import { saveProviderConnection as requestSaveProviderConnection } from "../core/backendClient.js?v=20260902a237";
+} from "../constants.js?v=20260902c237";
+import { saveProviderConnection as requestSaveProviderConnection } from "../core/backendClient.js?v=20260902c237";
 import {
   isAbortError,
   profileFailureMessage,
-} from "../core/managementProfile.js?v=20260902a237";
+} from "../core/managementProfile.js?v=20260902c237";
 
 const EMPTY_STRING = "";
 

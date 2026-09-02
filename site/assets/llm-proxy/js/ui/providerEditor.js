@@ -1,7 +1,7 @@
 // @ts-check
 
-import { AUTH_STATES } from "../constants.js?v=20260902a237";
-import { profileProvider } from "../core/managementProfile.js?v=20260902a237";
+import { AUTH_STATES } from "../constants.js?v=20260902c237";
+import { profileProvider } from "../core/managementProfile.js?v=20260902c237";
 
 const EMPTY_STRING = "";
 

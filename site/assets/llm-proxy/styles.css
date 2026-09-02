@@ -351,6 +351,10 @@ provider-card-grid {
   gap: 0.5rem;
 }
 
+.provider-card-front {
+  grid-template-rows: auto auto auto minmax(3rem, 1fr);
+}
+
 .provider-card-face h3,
 .provider-card-face p,
 .provider-card-face dl {
@@ -361,10 +365,19 @@ provider-card-grid {
   transform: rotateY(180deg);
 }
 
+provider-card-controls,
 provider-card-statuses {
   display: flex;
-  flex-wrap: wrap;
   gap: 0.3rem;
+}
+
+provider-card-controls {
+  align-items: flex-start;
+  flex: 0 0 auto;
+}
+
+provider-card-statuses {
+  flex-wrap: wrap;
 }
 
 provider-card-statuses span,
@@ -382,11 +395,8 @@ provider-card-statuses span {
   color: var(--llm-accent);
 }
 
-.provider-card-heading {
+.provider-card-face > header h3 {
   min-width: 0;
-}
-
-.provider-card-heading h3 {
   overflow-wrap: anywhere;
 }
 
@@ -437,9 +447,41 @@ provider-card-statuses span {
   text-align: end;
 }
 
-.provider-card-front > button {
+provider-request-graph {
   align-self: end;
-  margin-top: auto;
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+provider-request-graph > span {
+  color: var(--llm-muted);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+provider-request-track {
+  display: block;
+  overflow: hidden;
+  block-size: 2.25rem;
+  border: 1px solid var(--llm-border);
+  border-radius: 3px;
+  background: var(--llm-panel-strong);
+}
+
+provider-request-track i {
+  display: block;
+  block-size: 100%;
+  background: color-mix(in srgb, var(--llm-accent) 34%, transparent);
+  transition: width 150ms ease;
+}
+
+.provider-card-settings-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .provider-card-back provider-settings-fields {

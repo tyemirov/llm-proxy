@@ -5,13 +5,13 @@ import {
   COPY,
   NOTICE_KINDS,
   NOTICE_SURFACES,
-} from "../constants.js?v=20260902a237";
+} from "../constants.js?v=20260902c237";
 import {
   BackendClientError,
   createTenant as requestCreateTenant,
   deleteTenant as requestDeleteTenant,
   renameTenant as requestRenameTenant,
-} from "../core/backendClient.js?v=20260902a237";
+} from "../core/backendClient.js?v=20260902c237";
 import {
   assertManagementTenantProfile,
   isAbortError,
@@ -19,10 +19,10 @@ import {
   profileFailureMessage,
   tenantSummaryFromProfile,
   validatedTenantName,
-} from "../core/managementProfile.js?v=20260902a237";
-import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260902a237";
-import { trapDialogFocus } from "./dialogFocus.js?v=20260902a237";
-import { emptyUsageSummary } from "./usagePresentation.js?v=20260902a237";
+} from "../core/managementProfile.js?v=20260902c237";
+import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260902c237";
+import { trapDialogFocus } from "./dialogFocus.js?v=20260902c237";
+import { emptyUsageSummary } from "./usagePresentation.js?v=20260902c237";
 
 const EMPTY_STRING = "";
 

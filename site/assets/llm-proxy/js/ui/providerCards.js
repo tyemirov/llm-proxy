@@ -1,7 +1,7 @@
 // @ts-check
 
-import { AUTH_STATES, DASHBOARD_VIEWS } from "../constants.js?v=20260902a237";
-import { formatNumber } from "./usageFailurePresentation.js?v=20260902a237";
+import { AUTH_STATES, COPY, DASHBOARD_VIEWS, PROVIDER_CAPABILITY_LABELS } from "../constants.js?v=20260902c237";
+import { formatNumber } from "./usageFailurePresentation.js?v=20260902c237";
 
 const EMPTY_STRING = "";
 
@@ -39,10 +39,24 @@ export function createProviderCardsResponsibility() {
       if (this.usageLoadState !== "available") {
         return { available: false, requests: "Unavailable", tokens: "Unavailable", used: false };
       }
-      const activity = this.usage.providers.find((candidate) => candidate.provider === provider.id);
+      const activity = providerUsageAggregate(this.usage, provider.id);
       const requests = activity ? activity.data.requests : 0;
       const tokens = activity ? activity.data.total_tokens : 0;
       return { available: true, requests: formatNumber(requests), tokens: formatNumber(tokens), used: requests > 0 };
+    },
+
+    /** @param {import("../types.d.js").ProviderProfile} provider */
+    providerCardRequestGraph(provider) {
+      const activity = providerUsageAggregate(this.usage, provider.id);
+      const requests = activity ? activity.data.requests : 0;
+      const maximumRequests = Math.max(0, ...this.usage.providers.map((candidate) => candidate.data.requests));
+      const scalePercentage = maximumRequests === 0 || requests === 0
+        ? 0
+        : Math.max(1, Math.round((requests / maximumRequests) * 100));
+      return {
+        width: `${scalePercentage}%`,
+        accessibleLabel: `${formatNumber(requests)} ${COPY.usageBreakdownRequests}. ${scalePercentage}% ${COPY.providerRequestGraphScale}.`,
+      };
     },
 
     /** @param {import("../types.d.js").ProviderProfile} provider */
@@ -63,9 +77,7 @@ export function createProviderCardsResponsibility() {
 
     /** @param {string} capability */
     providerCapabilityLabel(capability) {
-      if (capability === "video_generation") return "Video generation";
-      if (capability === "dictation") return "Dictation";
-      return "Text";
+      return /** @type {Record<string, string>} */ (PROVIDER_CAPABILITY_LABELS)[capability];
     },
 
     /** @param {import("../types.d.js").ProviderProfile} provider */
@@ -129,4 +141,12 @@ export function createProviderCardsResponsibility() {
       this.replaceProviderEditorSession(EMPTY_STRING);
     },
   });
+}
+
+/**
+ * @param {import("../types.d.js").ManagementUsageSummary} usage
+ * @param {string} providerID
+ */
+function providerUsageAggregate(usage, providerID) {
+  return usage.providers.find((candidate) => candidate.provider === providerID);
 }

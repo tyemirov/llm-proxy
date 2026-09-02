@@ -64,7 +64,6 @@
  *   key_acquisition_url: string,
  *   aliases: string[],
  *   capabilities: string[],
- *   model_publishers: CatalogIdentityProfile[],
  *   model_families: CatalogIdentityProfile[],
  *   configured: boolean,
  *   fields: ProviderFieldProfile[],

@@ -110,6 +110,14 @@ export const PROVIDER_KEY_VERIFICATION_ERRORS = Object.freeze({
   UNAVAILABLE: "provider_key_verification_unavailable",
 });
 
+export const PROVIDER_CAPABILITY_LABELS = Object.freeze({
+  text: "Text",
+  image_input: "Image analysis",
+  audio_input: "Audio analysis",
+  dictation: "Dictation",
+  video_generation: "Video generation",
+});
+
 export const USER_MENU_ITEMS = Object.freeze([
   Object.freeze({
     label: "Settings",
@@ -138,7 +146,7 @@ export const MPR_UI = Object.freeze({
 });
 
 export const RUNTIME_UI = Object.freeze({
-  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20260902a237",
+  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20260902c237",
   APPLICATION_MODULE_ID: "llm-proxy-application-module",
   APPLICATION_MODULE_MISSING: "llm_proxy_application_module_missing",
   APPLICATION_READY_ATTRIBUTE: "data-llm-proxy-application",
@@ -289,11 +297,11 @@ export const COPY = Object.freeze({
   providersEyebrow: "Providers",
   providerCardsTitle: "API connections",
   providerCardsDescription: "Usage, model identities, and tenant-specific API key settings.",
-  providerAPIConnection: "API connection",
-  providerModelPublishers: "Model publishers",
   providerModelFamilies: "Model families",
   providerCapabilities: "Capabilities",
   providerRequests: "Requests",
+  providerRequestVolume: "Request volume",
+  providerRequestGraphScale: "of the highest provider request count",
   providerTokens: "Tokens",
   providerActive: "active",
   providerUsed: "used",
