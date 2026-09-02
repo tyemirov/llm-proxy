@@ -576,7 +576,7 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
-- [ ] [I237] (P1) {I027} Separate provider APIs from model publishers and model families on provider cards.
+- [x] [I237] (P1) {I027} Separate provider APIs from model publishers and model families on provider cards.
   Goal:
   Provider cards show provider APIs, model publishers, model families, and
   capabilities as different catalog concepts. A user can identify where an API
@@ -628,6 +628,11 @@ retain satisfied historical dependencies.
   - Cover keyboard access, semantic labels, desktop layout, and narrow-screen
     layout through Playwright.
   - Run `make ci` after the last application change.
+  Resolution:
+  Added a catalog-owned API service label to each provider. The management
+  response now returns model publishers and model families from exact catalog
+  offerings. Provider cards show separate API, publisher, family, and
+  capability groups with explicit API key actions.
 - [ ] [I235] (P1) Add explicit model activation to the provider catalog.
   Goal:
   Keep exact model data in the provider catalog without exposing an unaccepted
