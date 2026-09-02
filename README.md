@@ -359,6 +359,8 @@ when the provider offering has a code-owned transport.
 | All 11 OpenAI text models in the GPT-4 and GPT-5 families | OpenAI | `image` |
 | All 10 Claude text models in the Fable, Sonnet, Opus, and Haiku families | Anthropic | `image` |
 | Both Gemini text models | Gemini | `image`, `audio` |
+| `qwen3.7-plus`, `qwen3.6-flash` | DashScope/Qwen | `image` |
+| All four Kimi text models | Moonshot/Kimi | `image` |
 | `grok-4.5` | xAI | `image` |
 | Every other configured model | Its configured provider | None |
 
@@ -901,21 +903,26 @@ These charts are a client-side presentation of existing aggregate request
 data. They are not billing, provider-performance, provider-key, token-share,
 exact-event-time, or new management-API features. Usage Overview also renders
 every provider in catalog order. Each card names the provider API with its
-catalog-owned API service label. Separate groups identify model publishers,
-model families, and capabilities. Each provider card shows its exact
+catalog-owned API service label. Separate groups identify model families and
+capabilities. Each provider card shows its exact
 selected-scope request and token totals. A tenant-filtered view also shows the
 tenant's selected provider model and marks only its default text route as
 `active`. Account-wide usage does not synthesize one model across tenants. A
 card's `used` state means that its canonical provider ID has requests in the
 selected interval.
 
-The explicit `Set API key` or `API key settings` action opens one tenant-bound
-card back. It contains the catalog fields, official key-acquisition link,
-selected text model, and provider system prompt. A saved key appears only as a
-generic mask with `Replace key` and `Delete key` actions. The app does not
-retrieve or render the saved raw value. Key deletion preserves non-secret
-provider fields, the provider profile, historical usage, and valid routing
-defaults.
+Each card includes a request volume bar. The highest provider request count in
+the current Usage scope sets the full scale. Other cards use the same scale, and
+a zero-request card shows an empty track. The graph uses the existing provider
+aggregates and does not make another request.
+
+The settings gear opens one tenant-bound card back. Its accessible name is
+`Set API key` or `API key settings`, based on the key state. The card back
+contains the catalog fields, official key-acquisition link, selected text model,
+and provider system prompt. A saved key appears only as a generic mask with
+`Replace key` and `Delete key` actions. The app does not retrieve or render the
+saved raw value. Key deletion preserves non-secret provider fields, the provider
+profile, historical usage, and valid routing defaults.
 
 The Settings modal contains client access, generated secret, routing defaults,
 the tenant prompt, and copyable request examples. It has no duplicate provider
@@ -1316,8 +1323,8 @@ failure screen completes the shared MPR transition without making a protected
 management request.
 
 Use the **API connections** cards in **Usage Overview** to save each provider
-API key. Each card separates the provider API, model publishers, model families,
-and capabilities. Use the card back to select its default text model and set its
+API key. Each card separates the provider API, model families, and capabilities.
+Use the card back to select its default text model and set its
 provider prompt. Use **Settings** to select the Default tenant's text and
 dictation routes. Supported routes can save a `reasoning_effort` default. A
 supported per-request value overrides that saved default for one request. The
@@ -2444,10 +2451,11 @@ effort through the proxy.
 | `grok-code-fast-1` | Grok/xAI | No | - | No |
 | `grok-code-fast-1-0825` | Grok/xAI | No | - | No |
 
-The three current Qwen routes are text-only proxy offerings. Each uses the
-tenant's exact Singapore workspace URL and the OpenAI-compatible Chat
-Completions endpoint. `max_tokens` is the request control and has an inclusive
-`1..65536` proxy boundary. Each model has a 1,000,000-token context window.
+Qwen 3.7 Plus and Qwen 3.6 Flash accept image input and return text. Qwen Plus
+and Qwen 3.7 Max remain text-only offerings. Each route uses the tenant's exact
+Singapore workspace URL and the OpenAI-compatible Chat Completions endpoint.
+`max_tokens` is the request control and has an inclusive `1..65536` proxy
+boundary. Each versioned model has a 1,000,000-token context window.
 The catalog records Singapore pay-as-you-go list rates for the lowest published
 input tier. Qwen 3.7 Max costs $2.50 for input and $7.50 for output per million
 tokens. Qwen 3.7 Plus costs $0.40 for input and $1.60 for output. Qwen 3.6 Flash
@@ -2457,6 +2465,9 @@ availability, and workspace URL were verified on 2026-08-13 against Alibaba's
 [model catalog](https://www.alibabacloud.com/help/en/model-studio/models),
 [OpenAI compatibility guide](https://www.alibabacloud.com/help/en/model-studio/compatibility-with-openai-responses-api),
 and [pricing page](https://www.alibabacloud.com/help/en/model-studio/model-pricing).
+The image input declarations were verified on 2026-09-02 against Alibaba's
+[visual understanding guide](https://www.alibabacloud.com/help/en/model-studio/vision-model)
+and [Chat Completions guide](https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions).
 
 All seven MiniMax M2 routes are text-only Chat Completions offerings with a
 204,800-token context record and output boundary. M2.7 input and output cost
