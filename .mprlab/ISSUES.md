@@ -25,6 +25,31 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B171] (P1) {I238} Keep tenant changes inside the open provider card.
+  Goal:
+  The tenant selector must be the only tenant name in an open provider card.
+  A tenant change reloads the management site instead of only the provider card.
+  Requirements:
+  - Remove the tenant heading below the provider API label.
+  - Keep the tenant selector as the only tenant name.
+  - Load the selected tenant profile without a change to the application context.
+  - Preserve the dashboard view and the Usage tenant during a provider tenant change.
+  - Save pending provider edits before a provider tenant change.
+  - Keep the system prompt collapsed after a provider tenant change.
+  Deliverables:
+  - Isolate provider card tenant state from the management site tenant state.
+  - Add browser coverage for the tenant name and tenant change behavior.
+  Validation:
+  - Prove that an open provider card shows one tenant name.
+  - Prove that a provider tenant change does not reload the management site.
+  - Prove that the Usage tenant and dashboard view do not change.
+  - Prove that the selected provider settings use the new tenant profile.
+  - Run `make ci` after the last application change.
+  Resolution:
+  Removed the repeated tenant heading. The open card now owns its tenant profile
+  and load request. Tenant changes preserve the dashboard, provider grid, Usage
+  tenant, and Settings modal tenant. Browser coverage verifies the isolated load
+  and the selected tenant profile.
 - [x] [B170] (P1) Apply each theme to the route explorer.
   Goal:
   The selected theme must change all route explorer colors. The route explorer
@@ -576,6 +601,48 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [x] [I238] (P1) {I027,I237} Make provider card settings compact and automatic.
+  Goal:
+  A user can manage one provider connection without a manual completion action
+  or an initial tenant selection.
+  Requirements:
+  - Use the first account tenant as the initial provider Settings tenant.
+  - Always show the tenant selector on an open provider card.
+  - Keep the provider Settings tenant independent from the Usage tenant.
+  - Save provider model and prompt changes without a `Done` action.
+  - Wait for pending provider saves when the user closes the card or changes
+    the tenant.
+  - Collapse the provider system prompt when the card or tenant context changes.
+  - Let pointer and keyboard actions expand the provider system prompt.
+  - Put `Get API key` on the same row as the catalog API service label.
+  - Remove the `Replace key` action.
+  - Accept a new key directly in the masked key field.
+  - Verify each pasted key before the application saves it.
+  - Preserve the prior key and provider settings when verification fails.
+  - Put an icon-only `Delete key` action on the key input row.
+  - Keep the provider card compact, accessible, and responsive.
+  Deliverables:
+  - Update the provider card editor and its saved state behavior.
+  - Update the durable provider Settings documentation.
+  - Add browser coverage for the new controls and save behavior.
+  Validation:
+  - Prove that a card opens with the Default tenant selected.
+  - Prove that the tenant selector can change the provider Settings tenant.
+  - Prove that Usage tenant selection does not change this context.
+  - Prove that the card has no `Done` or `Replace key` action.
+  - Prove that the prompt starts collapsed and autosaves after an edit.
+  - Prove that a pasted replacement key is accepted or rejected automatically.
+  - Prove that the trash icon has the `Delete key` accessible name.
+  - Prove that the API key link and API service label share one row.
+  - Prove that the card stays within each supported viewport.
+  - Run `make ci` after the last application change.
+  Resolution:
+  Made provider card settings compact and automatic. The Default Settings
+  tenant is ready when a card opens, while a persistent selector changes the
+  tenant context. Provider edits now autosave. The key link and delete icon are
+  inline, replacement keys validate on entry, and the system prompt starts
+  collapsed. Browser coverage verifies the save, accessibility, and responsive
+  layout contracts.
 - [x] [I237] (P1) {I027} Separate provider APIs from model families and capabilities on provider cards.
   Goal:
   Provider cards show provider APIs, model families, and capabilities as
