@@ -724,7 +724,7 @@ print(tenants[0]["id"])
     redact_log
     exit 1
   fi
-  if ! LLM_PROXY_DEFAULT_TENANT_KEY="$(python3 -c '
+  if ! live_tenant_key="$(python3 -c '
 import json
 import pathlib
 import sys
@@ -851,7 +851,7 @@ run_text_smoke() {
       --data "${request_body}" \
       -o "${response_path}" \
       -w "%{http_code}" \
-      "${LIVE_ORIGIN}/v2?provider=${provider}&format=text/plain&key=${LLM_PROXY_DEFAULT_TENANT_KEY}"
+      "${LIVE_ORIGIN}/v2?provider=${provider}&format=text/plain&key=${live_tenant_key}"
   )"
 
   response_text="$(tr -d '\r\n' < "${response_path}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
@@ -989,7 +989,7 @@ run_image_smoke() {
       --data-binary "@${request_path}" \
       -o "${response_path}" \
       -w "%{http_code}" \
-      "${LIVE_ORIGIN}/v2?provider=${provider}&format=text/plain&key=${LLM_PROXY_DEFAULT_TENANT_KEY}"
+      "${LIVE_ORIGIN}/v2?provider=${provider}&format=text/plain&key=${live_tenant_key}"
   )"
 
   response_text="$(tr -d '\r\n' <"${response_path}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
