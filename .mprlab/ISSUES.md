@@ -25,6 +25,53 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B170] (P1) Apply each theme to the route explorer.
+  Goal:
+  The selected theme must change all route explorer colors. The route explorer
+  keeps dark backgrounds after a user selects a light theme.
+  Requirements:
+  - Map each route explorer color to the selected palette.
+  - Keep the current default dark appearance.
+  - Keep the route explorer readable in each light and dark theme.
+  Deliverables:
+  - Add route explorer tokens to each canonical palette.
+  - Replace fixed route explorer colors with the canonical tokens.
+  - Add browser coverage for route explorer theme changes.
+  Validation:
+  - Select each theme with the footer control.
+  - Verify the route explorer surface and control colors for each theme.
+  Resolution:
+  - Each palette now owns the route explorer surface, control, node, connector,
+    focus, and shadow colors.
+  - The route explorer redraws its canvas when MPR UI changes the theme.
+  - Browser tests verified all four palettes. `make ci` passed all 11 gates with
+    100.0% Go statement coverage.
+
+- [x] [B169] (P1) Make all four theme positions selectable.
+  Goal:
+  The footer theme control shows four theme positions, but only two positions
+  select a theme.
+  Requirements:
+  - Keep the MPR UI quadrant picker presentation.
+  - Configure default light, sunrise light, default dark, and forest dark modes.
+  - Keep default dark as the initial theme.
+  - Apply each selected palette to the complete page.
+  - Keep MPR UI ownership of the theme state.
+  - Use the same footer theme control on every HTML route.
+  Deliverables:
+  - Add the four-mode configuration to the canonical footer generator.
+  - Add shared theme tokens for all four modes.
+  - Regenerate all footer markup.
+  - Add browser coverage for all four theme positions.
+  Validation:
+  - Prove that each quadrant selects its configured mode and palette.
+  - Prove that the four modes use four different page colors.
+  - Run `make ci` after the last application change.
+  Resolution:
+  - The canonical footer defines four modes for the MPR UI quadrant picker.
+  - Shared theme tokens apply each palette to all HTML route types.
+  - The browser test selects each quadrant and proves four different page colors.
+  - `make ci` passed all 11 gates with 100% Go statement coverage.
 - [x] [B168] (P1) Separate the disposable live-test tenant key.
   Goal:
   The local live-provider harness uses an internal name for its disposable
@@ -529,6 +576,58 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [ ] [I237] (P1) {I027} Separate provider APIs from model publishers and model families on provider cards.
+  Goal:
+  Provider cards show provider APIs, model publishers, model families, and
+  capabilities as different catalog concepts. A user can identify where an API
+  key applies and which model families the provider offers.
+  Requirements:
+  - Rename the provider card section to `API connections`.
+  - Show the provider definition as the primary API connection identity.
+  - Add one catalog-owned API service label to each provider definition.
+  - Use explicit service labels, such as `Gemini API` and `Meta API`.
+  - Show model publishers, model families, and capabilities in separate labeled
+    groups.
+  - Show capabilities only under a visible `Capabilities` label.
+  - Do not show capability chips next to the provider title without a group
+    label.
+  - Get publisher and family relationships from provider offerings and exact
+    models in the provider catalog.
+  - Add the necessary publisher and family presentation fields to the
+    authenticated management provider response.
+  - Do not infer labels or catalog relationships from identifiers in the
+    browser.
+  - Keep canonical provider identifiers and provider offering selectors
+    unchanged.
+  - Change `Set key` to `Set API key`.
+  - Change `Key settings` to `API key settings`.
+  - Preserve the activity, tenant scope, key safety, and card interaction
+    contracts from I027.
+  - Keep the cards compact, accessible, and responsive in the MPR visual
+    language.
+  Deliverables:
+  - Add the catalog and management presentation data for the separate identity
+    groups.
+  - Update the provider card front, card back, user-visible copy, and canonical
+    API documentation.
+  - Add browser coverage for single-publisher and multiple-publisher provider
+    APIs.
+  Validation:
+  - Prove that `OpenAI API` shows OpenAI as its publisher.
+  - Prove that `OpenAI API` shows GPT-4, GPT-5, and GPT Transcribe as model
+    families.
+  - Prove that `Gemini API` shows Google as its publisher and Gemini as its
+    model family.
+  - Prove that `Meta API` shows Meta as its publisher and Muse Spark as its
+    model family.
+  - Prove that `SiliconFlow API` shows DeepSeek and FunAudioLLM as publishers.
+  - Prove that `SiliconFlow API` shows DeepSeek R1 and SenseVoice as model
+    families.
+  - Prove that capability labels remain separate from all identity labels.
+  - Prove that each catalog provider still produces exactly one card.
+  - Cover keyboard access, semantic labels, desktop layout, and narrow-screen
+    layout through Playwright.
+  - Run `make ci` after the last application change.
 - [ ] [I235] (P1) Add explicit model activation to the provider catalog.
   Goal:
   Keep exact model data in the provider catalog without exposing an unaccepted
