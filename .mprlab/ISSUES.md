@@ -25,6 +25,42 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B168] (P1) Separate the disposable live-test tenant key.
+  Goal:
+  The local live-provider harness uses an internal name for its disposable
+  tenant key. The private Gemini input contains one canonical assignment.
+  Evidence:
+  - The harness stores a generated disposable tenant key in the public Default
+    tenant key variable.
+  - `configs/.env` contains two different `GEMINI_API_KEY` assignments.
+  - One Gemini assignment matches the single private deployment assignment.
+  Requirements:
+  - Use a lowercase internal variable for the disposable tenant key.
+  - Keep `LLM_PROXY_DEFAULT_TENANT_KEY` for the CLI and production live test.
+  - Remove only the noncanonical duplicate Gemini assignment.
+  - Keep the private files ignored, untracked, nonempty, and mode `0600`.
+  - Do not print or record a credential value.
+  - Do not change `mprlab-gateway`.
+  Validation:
+  - Prove that the local provider harness has no Default tenant key variable.
+  - Run the focused operational contract test.
+  - Run the Gemini provider harness with the canonical private input.
+  - Run `make ci` after the last application change.
+  - Run the STE check on the changed issue text.
+  - Run `git diff --check`.
+  Resolution:
+  - The local harness stores its disposable tenant key in the internal
+    `live_tenant_key` variable.
+  - The CLI and production live test retain
+    `LLM_PROXY_DEFAULT_TENANT_KEY` as their canonical input.
+  - The private Gemini input retains one nonempty canonical assignment that
+    matches the private deployment input. Both files remain ignored and mode
+    `0600`.
+  - The focused Go contract suite passed with 100 percent statement coverage.
+  - The Gemini verification and smoke request passed with HTTP status 200 for
+    both private inputs.
+  - `make ci` passed all 11 gates with 100 percent Go statement coverage.
+
 - [x] [B167] (P0) Use the canonical Default tenant key variable.
   Goal:
   Each client and live test uses `LLM_PROXY_DEFAULT_TENANT_KEY` for the Default tenant key.
