@@ -46,7 +46,7 @@ const apiDocumentationPath = "/docs/";
 const openAPIPath = "/openapi.yaml";
 const openAPISchemaViewerPath = `${apiDocumentationPath}#openapi-schema`;
 const openAPIDownloadFilename = "llm-proxy-openapi.yaml";
-const applicationModuleRevision = "20260811c131";
+const applicationModuleRevision = "20260902a237";
 const applicationModuleFiles = Object.freeze([
   "alpineRuntime.js",
   "app.js",
@@ -2747,12 +2747,27 @@ test("provider cards follow catalog order and keep all-tenant activity provider-
   const cards = page.locator("[data-provider-card]");
   await expect(cards).toHaveCount(11);
   await expect(cards.locator(".provider-card-front h3")).toHaveText([
-    "OpenAI", "DeepSeek", "DashScope", "Moonshot", "MiniMax", "SiliconFlow", "Z.AI", "Gemini", "Anthropic", "Meta", "xAI",
+    "OpenAI API", "DeepSeek API", "DashScope API", "Moonshot API", "MiniMax API", "SiliconFlow API", "Z.AI API", "Gemini API", "Anthropic API", "Meta API", "xAI API",
   ]);
+  const openAICard = page.locator('[data-provider-card="openai"]');
+  await expect(openAICard.locator(".provider-card-taxonomy dt")).toHaveText(["Model publishers", "Model families", "Capabilities"]);
+  await expect(openAICard.locator(".provider-card-taxonomy dd").nth(0).locator("span")).toHaveText(["OpenAI"]);
+  await expect(openAICard.locator(".provider-card-taxonomy dd").nth(1).locator("span")).toHaveText(["GPT-4", "GPT-5", "GPT Transcribe"]);
+  await expect(openAICard.locator(".provider-card-taxonomy dd").nth(2).locator("span")).toHaveText(["Text", "Dictation"]);
+  await expect(openAICard.locator(".provider-card-front > header")).not.toContainText("Text");
+  const geminiCard = page.locator('[data-provider-card="gemini"]');
+  await expect(geminiCard.locator(".provider-card-taxonomy dd").nth(0).locator("span")).toHaveText(["Google"]);
+  await expect(geminiCard.locator(".provider-card-taxonomy dd").nth(1).locator("span")).toHaveText(["Gemini"]);
+  const metaCard = page.locator('[data-provider-card="meta"]');
+  await expect(metaCard.locator(".provider-card-taxonomy dd").nth(0).locator("span")).toHaveText(["Meta"]);
+  await expect(metaCard.locator(".provider-card-taxonomy dd").nth(1).locator("span")).toHaveText(["Muse Spark"]);
+  const siliconFlowCard = page.locator('[data-provider-card="siliconflow"]');
+  await expect(siliconFlowCard.locator(".provider-card-taxonomy dd").nth(0).locator("span")).toHaveText(["DeepSeek", "FunAudioLLM"]);
+  await expect(siliconFlowCard.locator(".provider-card-taxonomy dd").nth(1).locator("span")).toHaveText(["DeepSeek R1", "SenseVoice"]);
   expect(await cards.locator("provider-card-statuses span:visible").allTextContents()).not.toContain("active");
   expect(await cards.locator(".provider-card-front dt:visible").allTextContents()).not.toContain("Provider default model");
-  await expect(cards.first().getByRole("button", { name: "Set key" })).toBeVisible();
-  await expect(page.locator('[data-provider-card="dashscope"] .provider-card-front dd:visible')).toHaveText(["0", "0"]);
+  await expect(cards.first().getByRole("button", { name: "Set API key" })).toBeVisible();
+  await expect(page.locator('[data-provider-card="dashscope"] .provider-card-usage dd:visible')).toHaveText(["0", "0"]);
   expect(await cards.first().locator(".provider-card-inner").evaluate((element) => getComputedStyle(element).transitionDuration)).toBe("0s");
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -2768,7 +2783,7 @@ test("an explicit Usage tenant opens one safe provider card editor", async ({ pa
   await expect(card.getByText("active", { exact: true })).toBeVisible();
   await expect(card.getByText("used", { exact: true })).toBeVisible();
   await expect(card.getByText("gpt-4.1", { exact: true })).toBeVisible();
-  await card.getByRole("button", { name: "Key settings" }).click();
+  await card.getByRole("button", { name: "API key settings" }).click();
 
   const back = card.locator(".provider-card-back");
   const keyInput = back.getByRole("textbox", { name: "OpenAI API key" });
@@ -2793,8 +2808,8 @@ test("provider cards distinguish unavailable activity from a successful zero", a
 
   const cards = page.locator("[data-provider-card]");
   await expect(cards).toHaveCount(11);
-  await expect(cards.locator(".provider-card-front dd:visible")).toHaveText(Array(22).fill("Unavailable"));
-  await expect(cards.locator(".provider-card-front dd:visible").getByText("0", { exact: true })).toHaveCount(0);
+  await expect(cards.locator(".provider-card-usage dd:visible")).toHaveText(Array(22).fill("Unavailable"));
+  await expect(cards.locator(".provider-card-usage dd:visible").getByText("0", { exact: true })).toHaveCount(0);
 });
 
 test("provider card key verification is transient and preserves the prior key on safe failures", async ({ page }) => {
@@ -2835,7 +2850,7 @@ test("provider card key verification is transient and preserves the prior key on
   await page.goto(baseURL + applicationPath);
   await page.getByRole("combobox", { name: "Usage tenant" }).selectOption("tenant_1");
   const card = page.locator('[data-provider-card="openai"]');
-  const action = card.getByRole("button", { name: "Set key" });
+  const action = card.getByRole("button", { name: "Set API key" });
   await action.click();
   const back = card.locator(".provider-card-back");
   const input = back.getByRole("textbox", { name: "OpenAI API key" });
@@ -2867,7 +2882,7 @@ test("all-tenant provider cards require an exact tenant before key controls", as
   await page.goto(baseURL + applicationPath);
 
   const card = page.locator('[data-provider-card="openai"]');
-  await card.getByRole("button", { name: "Set key" }).click();
+  await card.getByRole("button", { name: "Set API key" }).click();
   await expect(card.getByRole("textbox", { name: "OpenAI API key" })).toHaveCount(0);
   await card.getByRole("combobox", { name: "Tenant" }).selectOption("tenant_2");
   await expect(card.getByRole("heading", { name: "Research" })).toBeVisible();
@@ -2893,8 +2908,8 @@ test("deleting a provider key preserves its model, prompt, setting, and usage ca
 
   const card = page.locator('[data-provider-card="dashscope"]');
   await expect(card.getByText("used", { exact: true })).toBeVisible();
-  await expect(card.locator(".provider-card-front dd:visible")).toHaveText(["5", "321", "qwen3.7-max"]);
-  await card.getByRole("button", { name: "Key settings" }).click();
+  await expect(card.locator(".provider-card-usage dd:visible")).toHaveText(["5", "321", "qwen3.7-max"]);
+  await card.getByRole("button", { name: "API key settings" }).click();
   await card.getByRole("button", { name: "Delete key" }).click();
   await page.getByRole("alertdialog", { name: "Remove provider key?" }).getByRole("button", { name: "Remove key" }).click();
   await expect(card.getByRole("textbox", { name: "DashScope API key" })).toHaveValue("");
@@ -2903,7 +2918,7 @@ test("deleting a provider key preserves its model, prompt, setting, and usage ca
   await expect(card.getByRole("textbox", { name: "System prompt" })).toHaveValue("Preserve this prompt.");
   await expect(card).toBeVisible();
   await expect(card.getByText("used", { exact: true })).toBeVisible();
-  await expect(card.locator(".provider-card-front dd:visible")).toHaveText(["5", "321", "qwen3.7-max"]);
+  await expect(card.locator(".provider-card-usage dd:visible")).toHaveText(["5", "321", "qwen3.7-max"]);
 });
 
 test("routing defaults autosave complete provider and model pairs without a manual action", async ({ page }) => {
@@ -5647,6 +5662,95 @@ function managementProfile(isAdmin = false, hasSecret = true) {
     dictation_default_model: "sensevoice-small",
     dictation_models: ["sensevoice-small"],
   });
+  /** @type {Record<string, {api_service_label: string, model_publishers: Array<{id: string, label: string}>, model_families: Array<{id: string, label: string}>}>} */
+  const providerIdentities = {
+    openai: {
+      api_service_label: "OpenAI API",
+      model_publishers: [{ id: "openai", label: "OpenAI" }],
+      model_families: [
+        { id: "gpt-4", label: "GPT-4" },
+        { id: "gpt-5", label: "GPT-5" },
+        { id: "gpt-transcribe", label: "GPT Transcribe" },
+      ],
+    },
+    deepseek: {
+      api_service_label: "DeepSeek API",
+      model_publishers: [{ id: "deepseek", label: "DeepSeek" }],
+      model_families: [
+        { id: "deepseek-v4", label: "DeepSeek V4" },
+        { id: "deepseek-v3", label: "DeepSeek V3" },
+        { id: "deepseek-r1", label: "DeepSeek R1" },
+      ],
+    },
+    dashscope: {
+      api_service_label: "DashScope API",
+      model_publishers: [{ id: "alibaba", label: "Alibaba" }],
+      model_families: [{ id: "qwen", label: "Qwen" }],
+    },
+    moonshot: {
+      api_service_label: "Moonshot API",
+      model_publishers: [{ id: "moonshot", label: "Moonshot AI" }],
+      model_families: [
+        { id: "kimi-k2", label: "Kimi K2" },
+        { id: "kimi-k3", label: "Kimi K3" },
+      ],
+    },
+    minimax: {
+      api_service_label: "MiniMax API",
+      model_publishers: [{ id: "minimax", label: "MiniMax" }],
+      model_families: [{ id: "minimax-m2", label: "MiniMax M2" }],
+    },
+    siliconflow: {
+      api_service_label: "SiliconFlow API",
+      model_publishers: [
+        { id: "deepseek", label: "DeepSeek" },
+        { id: "funaudio", label: "FunAudioLLM" },
+      ],
+      model_families: [
+        { id: "deepseek-r1", label: "DeepSeek R1" },
+        { id: "sensevoice", label: "SenseVoice" },
+      ],
+    },
+    zai: {
+      api_service_label: "Z.AI API",
+      model_publishers: [{ id: "zai", label: "Z.AI" }],
+      model_families: [
+        { id: "glm-5", label: "GLM-5" },
+        { id: "glm-asr", label: "GLM ASR" },
+      ],
+    },
+    gemini: {
+      api_service_label: "Gemini API",
+      model_publishers: [{ id: "google", label: "Google" }],
+      model_families: [{ id: "gemini", label: "Gemini" }],
+    },
+    anthropic: {
+      api_service_label: "Anthropic API",
+      model_publishers: [{ id: "anthropic", label: "Anthropic" }],
+      model_families: [
+        { id: "claude-fable", label: "Claude Fable" },
+        { id: "claude-sonnet", label: "Claude Sonnet" },
+        { id: "claude-opus", label: "Claude Opus" },
+        { id: "claude-haiku", label: "Claude Haiku" },
+      ],
+    },
+    meta: {
+      api_service_label: "Meta API",
+      model_publishers: [{ id: "meta", label: "Meta" }],
+      model_families: [{ id: "muse-spark", label: "Muse Spark" }],
+    },
+    xai: {
+      api_service_label: "xAI API",
+      model_publishers: [{ id: "xai", label: "xAI" }],
+      model_families: [
+        { id: "grok", label: "Grok" },
+        { id: "grok-build", label: "Grok Build" },
+        { id: "grok-code", label: "Grok Code" },
+        { id: "grok-imagine", label: "Grok Imagine" },
+        { id: "xai-stt", label: "xAI STT" },
+      ],
+    },
+  };
   const catalogOrder = ["openai", "deepseek", "dashscope", "moonshot", "minimax", "siliconflow", "zai", "gemini", "anthropic", "meta", "xai"];
   const acquisitionURLs = {
     openai: "https://platform.openai.com/api-keys",
@@ -5662,8 +5766,11 @@ function managementProfile(isAdmin = false, hasSecret = true) {
     xai: "https://console.x.ai/team/default/api-keys",
   };
   for (const provider of profile.providers) {
+    const identity = providerIdentities[provider.id];
+    if (!identity) throw new Error(`management_fixture_provider_identity_missing:${provider.id}`);
+    Object.assign(provider, identity);
     provider.key_acquisition_url = acquisitionURLs[provider.id];
-    provider.capabilities = ["text", ...(provider.supports_dictation ? ["dictation"] : [])];
+    provider.capabilities = ["text", ...(provider.supports_dictation ? ["dictation"] : []), ...(provider.id === "xai" ? ["video_generation"] : [])];
   }
   profile.providers.sort((first, second) => catalogOrder.indexOf(first.id) - catalogOrder.indexOf(second.id));
   return profile;
