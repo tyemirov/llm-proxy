@@ -877,6 +877,99 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await browserContext.close();
 });
 
+test("the route explorer applies each canonical theme palette", async ({ page }) => {
+  await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(baseURL);
+
+  const routingTree = page.locator("routing-tree");
+  const routeOverview = page.locator(".route-overview");
+  const routeFilter = routingTree.locator('[data-route-weight-access="open_weights"]');
+  const routeBranch = routingTree.locator('.routing-tree__family[aria-pressed="false"]:visible').first();
+  const routeProduct = routingTree.locator("[data-route-product]");
+  const routeProxy = routingTree.locator("[data-route-proxy]");
+  const routeCanvas = routingTree.locator("[data-route-canvas]");
+  await expect(routingTree).toHaveAttribute("data-enhanced", "true");
+
+  const themeModes = [
+    {
+      theme: "light",
+      palette: "default",
+      routeColors: {
+        section: "rgb(238, 242, 247)",
+        surface: "rgb(255, 255, 255)",
+        filter: "rgb(248, 250, 252)",
+        branch: "rgb(248, 250, 252)",
+        product: "rgb(248, 250, 252)",
+        proxy: "rgb(236, 253, 245)",
+      },
+    },
+    {
+      theme: "light",
+      palette: "sunrise",
+      routeColors: {
+        section: "rgb(255, 237, 213)",
+        surface: "rgb(255, 251, 235)",
+        filter: "rgb(255, 247, 237)",
+        branch: "rgb(255, 247, 237)",
+        product: "rgb(255, 247, 237)",
+        proxy: "rgb(254, 243, 199)",
+      },
+    },
+    {
+      theme: "dark",
+      palette: "default",
+      routeColors: {
+        section: "rgb(18, 21, 26)",
+        surface: "rgb(17, 20, 25)",
+        filter: "rgb(23, 26, 31)",
+        branch: "rgb(24, 27, 32)",
+        product: "rgb(24, 27, 32)",
+        proxy: "rgb(20, 38, 34)",
+      },
+    },
+    {
+      theme: "dark",
+      palette: "forest",
+      routeColors: {
+        section: "rgb(5, 46, 43)",
+        surface: "rgb(8, 40, 32)",
+        filter: "rgb(11, 48, 39)",
+        branch: "rgb(13, 53, 43)",
+        product: "rgb(13, 53, 43)",
+        proxy: "rgb(15, 61, 46)",
+      },
+    },
+  ];
+  const routeCanvasImages = [];
+  for (const themeMode of themeModes) {
+    await page.evaluate(({ theme, palette }) => {
+      document.documentElement.setAttribute("data-mpr-theme", theme);
+      document.documentElement.setAttribute("data-llm-proxy-palette", palette);
+      document.body.setAttribute("data-mpr-theme", theme);
+      document.body.setAttribute("data-llm-proxy-palette", palette);
+    }, themeMode);
+    await expect.poll(async () => ({
+      section: await routeOverview.evaluate((sectionElement) => getComputedStyle(sectionElement).backgroundColor),
+      surface: await routingTree.evaluate((treeElement) => getComputedStyle(treeElement).backgroundColor),
+      filter: await routeFilter.evaluate((filterElement) => getComputedStyle(filterElement).backgroundColor),
+      branch: await routeBranch.evaluate((branchElement) => getComputedStyle(branchElement).backgroundColor),
+      product: await routeProduct.evaluate((productElement) => getComputedStyle(productElement).backgroundColor),
+      proxy: await routeProxy.evaluate((proxyElement) => getComputedStyle(proxyElement).backgroundColor),
+    })).toEqual(themeMode.routeColors);
+    await page.evaluate(() => new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)));
+    }));
+    routeCanvasImages.push(await routeCanvas.evaluate((canvasElement) => {
+      if (!(canvasElement instanceof HTMLCanvasElement)) {
+        throw new Error("routing_tree_canvas_missing");
+      }
+      return canvasElement.toDataURL();
+    }));
+  }
+  expect(new Set(routeCanvasImages).size).toBe(4);
+});
+
 test("visitors can filter and choose a model family, exact model, and provider offering", async ({ page }) => {
   await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
   await page.setViewportSize({ width: 1280, height: 800 });
