@@ -918,11 +918,21 @@ aggregates and does not make another request.
 
 The settings gear opens one tenant-bound card back. Its accessible name is
 `Set API key` or `API key settings`, based on the key state. The card back
-contains the catalog fields, official key-acquisition link, selected text model,
-and provider system prompt. A saved key appears only as a generic mask with
-`Replace key` and `Delete key` actions. The app does not retrieve or render the
-saved raw value. Key deletion preserves non-secret provider fields, the provider
-profile, historical usage, and valid routing defaults.
+starts with the Default tenant and keeps its tenant selector available. This
+Settings tenant remains independent from the Usage tenant. The selector is the
+only tenant name in the card. A tenant change loads only the open card. It does
+not change the Settings modal tenant, Usage tenant, or dashboard. The official
+key link shares one row with the catalog API service label. A saved key appears
+only as a generic mask. A paste into that field verifies and saves the new key
+without a replacement action. The icon-only `Delete key` action stays on the
+key input row. The app does not retrieve or render the saved raw value. Key
+deletion preserves non-secret provider fields, the provider profile, historical
+usage, and valid routing defaults.
+
+Provider model changes autosave immediately. The provider system prompt starts
+collapsed and autosaves when the user leaves the changed field. The prompt
+collapses again when the card or its Settings tenant changes. The card has no
+manual completion action. Its close control waits for pending provider saves.
 
 The Settings modal contains client access, generated secret, routing defaults,
 the tenant prompt, and copyable request examples. It has no duplicate provider
@@ -1324,8 +1334,8 @@ management request.
 
 Use the **API connections** cards in **Usage Overview** to save each provider
 API key. Each card separates the provider API, model families, and capabilities.
-Use the card back to select its default text model and set its
-provider prompt. Use **Settings** to select the Default tenant's text and
+Use the card back to select the Settings tenant, set its default text model,
+and set its provider prompt. Use **Settings** to select the Default tenant's text and
 dictation routes. Supported routes can save a `reasoning_effort` default. A
 supported per-request value overrides that saved default for one request. The
 proxy rejects a default that the selected provider/model route does not declare.
