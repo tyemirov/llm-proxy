@@ -248,11 +248,18 @@ connection records and provider profile records.
 
 The management API returns provider definitions in catalog order. Its safe
 tenant profile projection includes the API service label and the key-acquisition
-URL. It also includes offering-derived model publishers, model families, and
-capabilities. The projection includes field definitions, the selected model,
+URL. It also includes offering-derived model families and capabilities.
+Capabilities include operations and accepted media inputs. The projection
+includes field definitions, the selected model,
 the provider prompt, and masked connection state. The management app builds one
 provider card from each item. It never uses key presence or usage history to
 define provider membership.
+
+The DashScope catalog declares image input for `qwen3.7-plus` and
+`qwen3.6-flash`. These models accept image content and return text. The
+`qwen-plus` and `qwen3.7-max` aliases accept text only. The management UI labels
+image input as `Image analysis`. It does not present image input as an image
+generation capability.
 
 The card editor never requests a saved raw credential. Credential deletion
 removes only encrypted credential fields. It preserves non-secret connection

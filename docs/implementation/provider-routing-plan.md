@@ -670,9 +670,11 @@ The management UI is served as a static GitHub Pages app from `site/` on `https:
 Usage Overview renders one semantic provider card for every tenant-profile
 provider in deterministic catalog order. The front matches interval activity by
 exact provider ID. Its primary title uses the catalog API service label. Separate
-labeled groups show model publishers, model families, and capabilities. The card
-also shows requests and tokens. A tenant-filtered scope also shows that tenant's
-selected text model. Account-wide usage does not synthesize a model. `active`
+labeled groups show model families and capabilities. Media input capabilities
+use analysis labels. The card also shows requests and tokens. A request volume
+bar scales each provider against the highest provider request count in the
+current Usage scope. It uses the existing provider aggregates. A tenant-filtered
+scope also shows that tenant's selected text model. Account-wide usage does not synthesize a model. `active`
 identifies only the tenant's default text route. `used` identifies only interval
 activity.
 
