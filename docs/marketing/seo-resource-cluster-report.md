@@ -1,6 +1,6 @@
 # LLM Proxy SEO Resource Cluster Report
 
-Generated: 2026-08-22
+Generated: 2026-09-01
 
 ## Repo Analysis Report
 
@@ -164,7 +164,7 @@ Generated: 2026-08-22
 
 ## Evaluation Report
 
-Independent quality and risk evaluation: 2026-08-22
+Independent quality and risk evaluation: 2026-09-01
 
 | Category | Score | Notes |
 |---|---:|---|

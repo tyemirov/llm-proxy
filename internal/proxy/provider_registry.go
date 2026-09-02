@@ -11,6 +11,7 @@ import (
 
 type providerRegistry struct {
 	definitions     map[providerID]providerDefinition
+	order           []providerID
 	aliases         map[string]providerID
 	modelMigrations map[int][]managedModelMigration
 }
@@ -25,7 +26,9 @@ type managedModelMigration struct {
 type providerSummary struct {
 	identifier            string
 	label                 string
+	keyAcquisitionURL     string
 	aliases               []string
+	capabilities          []string
 	textDefaultModel      string
 	textModels            []textModelSummary
 	supportsDictation     bool
@@ -40,11 +43,14 @@ type textModelSummary struct {
 
 func newProviderRegistry(configuration Configuration) *providerRegistry {
 	definitions := make(map[providerID]providerDefinition, len(configuration.ProviderCatalog.schema.Providers))
+	order := make([]providerID, 0, len(configuration.ProviderCatalog.schema.Providers))
 	for _, provider := range configuration.ProviderCatalog.schema.Providers {
 		identifier := providerID(provider.ID)
+		order = append(order, identifier)
 		definition := providerDefinition{
 			identifier:          identifier,
 			label:               provider.Label,
+			keyAcquisitionURL:   provider.KeyAcquisitionURL,
 			aliases:             append([]string(nil), provider.Aliases...),
 			fields:              make(map[string]ProviderCatalogField, len(provider.Fields)),
 			fieldOrder:          make([]string, 0, len(provider.Fields)),
@@ -76,6 +82,11 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			}
 		}
 		for _, offering := range provider.Offerings {
+			for _, operation := range offering.Operations {
+				if !slices.Contains(definition.capabilities, operation) {
+					definition.capabilities = append(definition.capabilities, operation)
+				}
+			}
 			transport := definition.transports[offering.Transport]
 			if slices.Contains(offering.Operations, ModelOperationText) {
 				routeCapabilities := textRouteCapabilities{
@@ -120,6 +131,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 
 	registry := &providerRegistry{
 		definitions:     definitions,
+		order:           order,
 		aliases:         map[string]providerID{},
 		modelMigrations: make(map[int][]managedModelMigration),
 	}
@@ -195,6 +207,7 @@ func (registry *providerRegistry) forTenant(requestTenant tenant) *providerRegis
 	}
 	return &providerRegistry{
 		definitions:     definitions,
+		order:           registry.order,
 		aliases:         registry.aliases,
 		modelMigrations: registry.modelMigrations,
 	}
@@ -236,24 +249,16 @@ func (registry *providerRegistry) canonicalProviderID(rawProvider string) (provi
 }
 
 func (registry *providerRegistry) providerSummaries() []providerSummary {
-	identifiers := make([]string, 0, len(registry.definitions))
-	identifierLookup := map[string]providerID{}
-	for identifier := range registry.definitions {
-		identifierString := identifier.string()
-		identifiers = append(identifiers, identifierString)
-		identifierLookup[identifierString] = identifier
-	}
-	sort.Strings(identifiers)
-	summaries := make([]providerSummary, 0, len(identifiers))
-	for _, identifierString := range identifiers {
-		identifier := identifierLookup[identifierString]
+	summaries := make([]providerSummary, 0, len(registry.order))
+	for _, identifier := range registry.order {
 		definition := registry.definitions[identifier]
 		aliases := append([]string(nil), definition.aliases...)
-		sort.Strings(aliases)
 		summaries = append(summaries, providerSummary{
 			identifier:            definition.identifier.string(),
 			label:                 definition.label,
+			keyAcquisitionURL:     definition.keyAcquisitionURL,
 			aliases:               aliases,
+			capabilities:          append([]string(nil), definition.capabilities...),
 			textDefaultModel:      definition.defaultTextModel.string(),
 			textModels:            sortedTextModelSummaries(definition.textModels),
 			supportsDictation:     definition.supportsDictation,

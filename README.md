@@ -871,8 +871,8 @@ requests, tokens, success rate, buckets, status codes, providers, and models
 across every owned tenant. Choosing one tenant narrows the same dashboard
 surfaces to that tenant. `Refresh` and interval changes retain the Usage tenant
 selection, and changes to the Tenant control in Settings do not affect it. Users whose
-client/provider setup is incomplete enter the mandatory Settings modal instead;
-after setup, the modal remains available from the avatar dropdown. The
+client setup is incomplete enter the mandatory Settings modal instead.
+After setup, the modal remains available from the avatar dropdown. The
 success-rate metric renders an **N failed requests** action only when the selected
 snapshot contains failures. It opens a keyboard- and focus-managed dialog with
 the current non-success status breakdown and newest-first safe failure metadata.
@@ -883,15 +883,44 @@ display name; a tenant-scoped row retains the tenant-less safe shape. A
 details error stays inside the dialog and never replaces aggregate dashboard
 data. The
 `Settings` menu item is inserted before `Sign out` through the shared
-`<mpr-user>` menu contract. The modal contains client access, generated secret,
-routing defaults, copyable default request examples, copyable selected-provider
-request examples, and one selected-provider editor for API key, provider text
-model, and provider system prompt settings. The routing-default form exposes
-Reasoning effort only for the exact selected text route, clears an incompatible
-value when that route changes, and shows `Not supported` when the route has no
-declaration. Its provider/model/effort selections autosave immediately and its
-system prompt autosaves on field exit. Default examples omit `provider`;
-selected-provider examples include the current provider selector and text model.
+`<mpr-user>` menu contract.
+
+Provider usage and Model usage share one local `Breakdown view` control. Its
+default `Bar graph` view ranks exact request counts against the largest row.
+Its `Donut chart` view presents the same ordered request counts as shares of
+the complete provider or model breakdown, with a visible count-and-percentage
+legend. Rounded shares total 100 percent, and every category remains separate.
+The selection changes both panels without a request. It survives
+interval, Refresh, and Usage tenant changes and resets after authentication
+reset or page reload. Requests and Tokens remain separate line charts. Their
+visible X axes use the summary's UTC hour or date buckets. Their zero-based,
+integer Y axes identify requests or tokens per hour or day. Exact bucket starts
+and values remain available to assistive technology.
+
+These charts are a client-side presentation of existing aggregate request
+data. They are not billing, provider-performance, provider-key, token-share,
+exact-event-time, or new management-API features. Usage Overview also renders every provider in
+catalog order. Each provider card shows its exact selected-scope request and
+token totals. A tenant-filtered view also shows the tenant's selected provider
+model and marks only its default text route as `active`. Account-wide usage does
+not synthesize one model across tenants. A card's `used` state means that its
+canonical provider ID has requests in the selected interval.
+
+The explicit `Set key` or `Key settings` action opens one tenant-bound card
+back. It contains the catalog fields, official key-acquisition link, selected
+text model, and provider system prompt. A saved key appears only as a generic
+mask with `Replace key` and `Delete key` actions. The app does not retrieve or
+render the saved raw value. Key deletion preserves non-secret provider fields,
+the provider profile, historical usage, and valid routing defaults.
+
+The Settings modal contains client access, generated secret, routing defaults,
+the tenant prompt, and copyable request examples. It has no duplicate provider
+editor. The routing-default form exposes Reasoning effort only for the exact
+selected text route. It clears an incompatible value when that route changes.
+It shows `Not supported` when the route has no declaration. Its
+provider/model/effort selections autosave immediately. Its system prompt
+autosaves on field exit. Default examples omit `provider`. Selected-provider
+examples include the current provider selector and text model.
 
 Administrators are configured only through `management.admin_emails`; use the
 plural `${LLM_PROXY_MANAGEMENT_ADMIN_EMAILS}` placeholder in public config files
@@ -1282,9 +1311,9 @@ module graph. LLM Proxy does not try another CDN or a bundled fallback; the
 failure screen completes the shared MPR transition without making a protected
 management request.
 
-Use **Settings** in `/app/` to save each provider API key and select the
-Default tenant's text and dictation routes. The same settings store the
-provider-specific default model. Supported routes can also save a
+Use the provider cards in **Usage Overview** to save each provider API key,
+select its default text model, and set its provider prompt. Use **Settings** to
+select the Default tenant's text and dictation routes. Supported routes can save a
 `reasoning_effort` default. A supported per-request value overrides that saved
 default for one request. The proxy rejects a default that the selected
 provider/model route does not declare.

@@ -9,6 +9,7 @@ import { createManagementApplicationState } from "./managementApplicationState.j
 import { createNotificationsResponsibility } from "./notifications.js?v=20260811c131";
 import { createProfileMutationsResponsibility } from "./profileMutations.js?v=20260811c131";
 import { createProviderCredentialsResponsibility } from "./providerCredentials.js?v=20260811c131";
+import { createProviderCardsResponsibility } from "./providerCards.js?v=20260811c131";
 import { createProviderEditorResponsibility } from "./providerEditor.js?v=20260811c131";
 import { createProviderSettingsResponsibility } from "./providerSettings.js?v=20260811c131";
 import { createRequestExamplesResponsibility } from "./requestExamples.js?v=20260811c131";
@@ -33,6 +34,7 @@ export function createManagementApplication() {
     createUsageDashboardResponsibility(),
     createAdminDashboardResponsibility(),
     createSettingsDialogResponsibility(),
+    createProviderCardsResponsibility(),
     createProviderEditorResponsibility(),
     createProviderCredentialsResponsibility(),
     createProviderSettingsResponsibility(),

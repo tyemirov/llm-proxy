@@ -275,6 +275,36 @@ func TestCatalogDefinedProviderFlowsThroughEveryGenericConsumer(testingInstance 
 			testingInstance.Fatalf("public capabilities exposed private catalog value %q: %s", privateValue, capabilitiesBody)
 		}
 	}
+
+	deleteRequest := authenticatedJSONRequest(http.MethodDelete, tenantPath+"/provider-connections/"+testCatalogProviderID, `{}`, sessionCookie)
+	deleteResponse := httptest.NewRecorder()
+	reloadedRouter.ServeHTTP(deleteResponse, deleteRequest)
+	if deleteResponse.Code != http.StatusOK {
+		testingInstance.Fatalf("delete catalog credential status=%d body=%s", deleteResponse.Code, deleteResponse.Body.String())
+	}
+	var deletedProfile struct {
+		Providers []struct {
+			ID           string `json:"id"`
+			Configured   bool   `json:"configured"`
+			TextModel    string `json:"text_model"`
+			SystemPrompt string `json:"system_prompt"`
+			Fields       []struct {
+				ID         string  `json:"id"`
+				Configured bool    `json:"configured"`
+				Value      *string `json:"value"`
+			} `json:"fields"`
+		} `json:"providers"`
+	}
+	if decodeError := json.Unmarshal(deleteResponse.Body.Bytes(), &deletedProfile); decodeError != nil {
+		testingInstance.Fatalf("decode credential-deleted profile: %v", decodeError)
+	}
+	deletedProvider := deletedProfile.Providers[len(deletedProfile.Providers)-1]
+	if deletedProvider.ID != testCatalogProviderID || deletedProvider.Configured || deletedProvider.TextModel != testCatalogModelID || deletedProvider.SystemPrompt != testCatalogProviderSystem {
+		testingInstance.Fatalf("credential-deleted provider profile=%+v", deletedProvider)
+	}
+	if deletedProvider.Fields[0].Configured || deletedProvider.Fields[1].Value == nil || *deletedProvider.Fields[1].Value != upstreamServer.URL {
+		testingInstance.Fatalf("credential deletion changed provider fields=%+v", deletedProvider.Fields)
+	}
 }
 
 func TestProviderCatalogRejectsStructuralAndAdapterContractViolations(testingInstance *testing.T) {
@@ -468,7 +498,7 @@ func catalogWithTestProvider(testingInstance *testing.T) *proxy.ProviderCatalog 
 		Operations: []string{proxy.ModelOperationText}, MediaInputs: []string{},
 	})
 	schema.Providers = append(schema.Providers, proxy.ProviderCatalogProvider{
-		ID: testCatalogProviderID, Label: "Catalog Test", Aliases: []string{testCatalogProviderAlias},
+		ID: testCatalogProviderID, Label: "Catalog Test", KeyAcquisitionURL: "https://provider.example/keys", Aliases: []string{testCatalogProviderAlias},
 		Fields: []proxy.ProviderCatalogField{
 			{
 				ID: testCatalogCredentialField, Label: "Access token",
@@ -534,10 +564,12 @@ func assertTestCatalogManagementSchema(testingInstance *testing.T, responseBody 
 	testingInstance.Helper()
 	var profile struct {
 		Providers []struct {
-			ID         string `json:"id"`
-			Configured bool   `json:"configured"`
-			TextModel  string `json:"text_model"`
-			Fields     []struct {
+			ID                string   `json:"id"`
+			KeyAcquisitionURL string   `json:"key_acquisition_url"`
+			Capabilities      []string `json:"capabilities"`
+			Configured        bool     `json:"configured"`
+			TextModel         string   `json:"text_model"`
+			Fields            []struct {
 				ID          string  `json:"id"`
 				Kind        string  `json:"kind"`
 				Type        string  `json:"type"`
@@ -556,11 +588,14 @@ func assertTestCatalogManagementSchema(testingInstance *testing.T, responseBody 
 	if decodeError := json.Unmarshal(responseBody, &profile); decodeError != nil {
 		testingInstance.Fatalf("decode catalog management schema: %v", decodeError)
 	}
+	if len(profile.Providers) == 0 || profile.Providers[len(profile.Providers)-1].ID != testCatalogProviderID {
+		testingInstance.Fatalf("management provider order=%v", profile.Providers)
+	}
 	for _, provider := range profile.Providers {
 		if provider.ID != testCatalogProviderID {
 			continue
 		}
-		if provider.Configured != configured || provider.TextModel != testCatalogModelID || len(provider.Fields) != 2 {
+		if provider.KeyAcquisitionURL != "https://provider.example/keys" || !slices.Equal(provider.Capabilities, []string{proxy.ModelOperationText}) || provider.Configured != configured || provider.TextModel != testCatalogModelID || len(provider.Fields) != 2 {
 			testingInstance.Fatalf("catalog management provider=%+v", provider)
 		}
 		credentialField := provider.Fields[0]

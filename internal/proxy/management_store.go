@@ -222,7 +222,7 @@ type managedTenantDatabase interface {
 	saveTenant(record managedTenantRecord) error
 	deleteTenant(ownerUserID string, tenantID string) error
 	saveProviderConnections(requestContext context.Context, ownerUserID string, records []managedProviderConnectionRecord, profile managedProviderProfileRecord, defaults managedRoutingDefaults, updatedAt time.Time) error
-	deleteProviderConnections(ownerUserID string, tenantID string, providerID string, defaults managedRoutingDefaults, updatedAt time.Time) error
+	deleteProviderConnections(ownerUserID string, tenantID string, providerID string, credentialFieldIDs []string, defaults managedRoutingDefaults, updatedAt time.Time) error
 	createUsageEvent(requestContext context.Context, record managedUsageEventRecord) error
 	earliestUsageEventByTenantIDsThrough(tenantIDs []string, periodEnd time.Time) (time.Time, error)
 	streamUsageEventsByTenantIDsBetween(tenantIDs []string, periodStart time.Time, periodEnd time.Time, visit managedUsageEventVisitor) error
@@ -2663,16 +2663,16 @@ func (database *gormManagedTenantDatabase) saveProviderConnections(requestContex
 	})
 }
 
-func (database *gormManagedTenantDatabase) deleteProviderConnections(ownerUserID string, tenantID string, providerID string, defaults managedRoutingDefaults, updatedAt time.Time) error {
+func (database *gormManagedTenantDatabase) deleteProviderConnections(ownerUserID string, tenantID string, providerID string, credentialFieldIDs []string, defaults managedRoutingDefaults, updatedAt time.Time) error {
 	return database.database.Transaction(func(transaction *gorm.DB) error {
 		var tenantRecord managedTenantRecord
 		if queryError := transaction.Where(&managedTenantRecord{OwnerUserID: ownerUserID, TenantID: tenantID}).First(&tenantRecord).Error; queryError != nil {
 			return queryError
 		}
-		if deleteError := transaction.Where(&managedProviderConnectionRecord{TenantID: tenantID, ProviderID: providerID}).Delete(&managedProviderConnectionRecord{}).Error; deleteError != nil {
-			return deleteError
-		}
-		if deleteError := transaction.Where(&managedProviderProfileRecord{TenantID: tenantID, ProviderID: providerID}).Delete(&managedProviderProfileRecord{}).Error; deleteError != nil {
+		if deleteError := transaction.
+			Where(&managedProviderConnectionRecord{TenantID: tenantID, ProviderID: providerID}).
+			Where("field_id IN ?", credentialFieldIDs).
+			Delete(&managedProviderConnectionRecord{}).Error; deleteError != nil {
 			return deleteError
 		}
 		return transaction.Model(&managedTenantRecord{}).
@@ -3134,7 +3134,22 @@ func (store *managedTenantStore) removeProviderConnections(principal managementP
 	if providerSettingsError != nil {
 		return managedTenantSnapshot{}, providerSettingsError
 	}
-	delete(providerSettings, providerIdentifier)
+	definition := store.routingDefaults.definitions[providerIdentifier]
+	settings, configured := providerSettings[providerIdentifier]
+	credentialFieldIDs := make([]string, 0, len(definition.fields))
+	if configured {
+		for _, fieldIdentifier := range definition.fieldOrder {
+			field := definition.fields[fieldIdentifier]
+			if field.Kind != CatalogProviderFieldKindCredential {
+				continue
+			}
+			credentialFieldIDs = append(credentialFieldIDs, fieldIdentifier)
+			settings.connectionValues[fieldIdentifier] = *field.Default
+			delete(settings.connectionVersions, fieldIdentifier)
+			delete(settings.configuredFields, fieldIdentifier)
+		}
+		providerSettings[providerIdentifier] = settings
+	}
 	currentDefaults, defaultsError := validateCanonicalManagedRoutingDefaults(store.routingDefaults, record.defaults())
 	if defaultsError != nil {
 		return managedTenantSnapshot{}, managedRoutingDefaultsTenantError(record.TenantID, defaultsError)
@@ -3144,7 +3159,7 @@ func (store *managedTenantStore) removeProviderConnections(principal managementP
 		managedRoutingProvidersFromValidatedSettings(store.routingDefaults, providerSettings),
 	)
 	timestamp := store.now()
-	if persistError := store.database.deleteProviderConnections(principal.userID, tenantIdentifier.string(), providerIdentifier.string(), reconciledDefaults, timestamp); persistError != nil {
+	if persistError := store.database.deleteProviderConnections(principal.userID, tenantIdentifier.string(), providerIdentifier.string(), credentialFieldIDs, reconciledDefaults, timestamp); persistError != nil {
 		return managedTenantSnapshot{}, managedTenantMutationError(principal.userID, tenantIdentifier.string(), persistError)
 	}
 	return store.snapshotByOwnerAndIDLocked(principal.userID, tenantIdentifier.string())
@@ -3476,8 +3491,11 @@ func managedProviderSettingsFromConnectionRecords(providerKeyCipher managedProvi
 		settingsByProvider[providerIdentifier] = settings
 	}
 	for providerIdentifier, settings := range settingsByProvider {
-		if !settings.hasRequiredConnectionFields(providers.definitions[providerIdentifier]) {
-			return nil, fmt.Errorf("%w: provider=%s required_field_missing", errManagedProviderKeyInvalid, providerIdentifier.string())
+		definition := providers.definitions[providerIdentifier]
+		for fieldIdentifier, field := range definition.fields {
+			if field.Kind != CatalogProviderFieldKindCredential && field.Required && settings.connectionValue(fieldIdentifier) == constants.EmptyString {
+				return nil, fmt.Errorf("%w: provider=%s field=%s required_field_missing", errManagedProviderKeyInvalid, providerIdentifier.string(), fieldIdentifier)
+			}
 		}
 	}
 	return settingsByProvider, nil

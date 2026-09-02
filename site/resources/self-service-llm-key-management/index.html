@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Self-service LLM key management for internal teams</title>
-    <meta name="description" content="Log in to the LLM Proxy app, create a client key for the selected tenant, and autosave one provider API key before leaving Settings.">
+    <meta name="description" content="Log in to LLM Proxy, create a tenant client key, and manage provider credentials from catalog-owned Usage Overview cards.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/">
     <meta property="og:title" content="Self-service LLM key management for internal teams">
-    <meta property="og:description" content="Log in to the LLM Proxy app, create a client key for the selected tenant, and autosave one provider API key before leaving Settings.">
+    <meta property="og:description" content="Log in to LLM Proxy, create a tenant client key, and manage provider credentials from catalog-owned Usage Overview cards.">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/">
     <meta name="twitter:card" content="summary">
@@ -27,9 +27,9 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Self-service LLM key management for internal teams","description":"Log in to the LLM Proxy app, create a client key for the selected tenant, and autosave one provider API key before leaving Settings.","url":"https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/","datePublished":"2026-07-06","dateModified":"2026-08-08","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/","about":["LLM Proxy","Management UI","self-service LLM key management"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Self-service LLM key management for internal teams","description":"Log in to LLM Proxy, create a tenant client key, and manage provider credentials from catalog-owned Usage Overview cards.","url":"https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/","datePublished":"2026-07-06","dateModified":"2026-08-08","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/","about":["LLM Proxy","Management UI","self-service LLM key management"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Self-service LLM key management for internal teams","item":"https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/"}]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How does first-run LLM Proxy setup begin?","acceptedAnswer":{"@type":"Answer","text":"After MPR UI reports an authenticated session, the account and selected tenant profile load. The app automatically creates a client key when that tenant has none."}},{"@type":"Question","name":"What lets a user leave Settings?","acceptedAnswer":{"@type":"Answer","text":"The loaded profile must report a client key and at least one persisted managed provider key. Until both conditions are true, close actions explain what is missing and keep Settings open."}},{"@type":"Question","name":"Does typing a provider key unlock Settings?","acceptedAnswer":{"@type":"Answer","text":"No. Only a provider record returned with has_key after a successful autosave counts; drafts and local dotenv credentials do not satisfy managed onboarding."}},{"@type":"Question","name":"Does onboarding change provider or model defaults?","acceptedAnswer":{"@type":"Answer","text":"No. Automatic client-key creation and provider-key validation leave the user's existing provider and model defaults unchanged."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Bring-your-own provider key portal for AI access, which covers bring your own provider key portal."}}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How does first-run LLM Proxy setup begin?","acceptedAnswer":{"@type":"Answer","text":"After MPR UI reports an authenticated session, the account and selected tenant profile load. The app automatically creates a client key when that tenant has none."}},{"@type":"Question","name":"What lets a user leave Settings?","acceptedAnswer":{"@type":"Answer","text":"The loaded tenant profile must report a client key. Provider keys are managed separately from the provider cards in Usage Overview."}},{"@type":"Question","name":"Where does a user enter a provider key?","acceptedAnswer":{"@type":"Answer","text":"The user opens Set key or Key settings on the provider's Usage Overview card and selects an exact tenant for account-wide usage."}},{"@type":"Question","name":"Does onboarding change provider or model defaults?","acceptedAnswer":{"@type":"Answer","text":"No. Automatic client-key creation and provider-key validation leave the user's existing provider and model defaults unchanged."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Bring-your-own provider key portal for AI access, which covers bring your own provider key portal."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440"></script>
   </head>
   <body class="resource-page">
@@ -65,12 +65,12 @@
           <header class="resource-hero">
             <p class="eyebrow">Management UI</p>
             <h1>Self-service LLM key management for internal teams</h1>
-            <p class="resource-deck">Log in to the LLM Proxy app, create a client key for the selected tenant, and autosave one provider API key before leaving Settings.</p>
+            <p class="resource-deck">Log in to LLM Proxy, create a tenant client key, and manage provider credentials from catalog-owned Usage Overview cards.</p>
             <p class="resource-audience">Teams that want user-owned AI access without asking operators to edit YAML for every change.</p>
             <p class="resource-byline">Reviewed 2026-08-08 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
             <aside class="resource-verdict" aria-label="Quick verdict">
               <strong>Quick verdict</strong>
-              <p>Use this flow when every authenticated user must leave first-run Settings with a client key and at least one server-stored provider credential.</p>
+              <p>Use this flow when authenticated users need separate client-key onboarding and tenant-bound provider credential management.</p>
             </aside>
             <div class="resource-actions">
               <a class="resource-button" href="/docs/">Open API reference</a>
@@ -85,7 +85,7 @@
 
           <section>
             <h2>How LLM Proxy helps</h2>
-            <p>LLM Proxy includes a TAuth-protected management UI that creates a missing client key after authentication, autosaves provider settings, and keeps Settings open until at least one managed provider key persists.</p>
+            <p>LLM Proxy includes a TAuth-protected management UI that creates a missing client key after authentication and gives every catalog provider one tenant-bound Usage Overview card for key and profile settings.</p>
           </section>
 
           <section>
@@ -94,7 +94,7 @@
               <li>Configure TAuth, the management database, and provider-key encryption.</li>
 <li>Publish the static Pages UI and serve runtime config from the API backend.</li>
 <li>Users sign in; the UI creates and presents a missing client key once.</li>
-<li>Users enter at least one provider key; the selected provider settings autosave before they leave Settings.</li>
+<li>Users open a provider card, select the exact tenant, and paste a provider key for verification and atomic save.</li>
             </ol>
           </section>
 
@@ -119,16 +119,16 @@
 
 
                         <tr>
-                          <td>Required first-run setup</td>
-                          <td>Settings stays open until a client key and one persisted provider key exist.</td>
-                          <td>Typed drafts and local dotenv credentials do not bypass onboarding.</td>
+                          <td>Client-key onboarding</td>
+                          <td>Settings stays open only until the selected tenant has its generated client key.</td>
+                          <td>Provider credentials remain a separate tenant-owned concern.</td>
                         </tr>
 
 
                         <tr>
-                          <td>Selected-provider editor</td>
-                          <td>Provider key, text model, and system prompt live together and autosave.</td>
-                          <td>A user can update one provider without scanning every provider card or pressing a save button.</td>
+                          <td>Catalog provider cards</td>
+                          <td>Every provider card combines interval activity with a tenant-bound key, text model, and system prompt editor.</td>
+                          <td>Key presence never adds or removes a provider card.</td>
                         </tr>
 
 
@@ -149,13 +149,13 @@
 
                     <section class="resource-card">
                       <h3>New team onboarding</h3>
-                      <p>A user signs in, copies the automatically created client key, enters an OpenAI key, and closes Settings after autosave completes.</p>
+                      <p>A user signs in, copies the automatically created client key, closes Settings, and opens the OpenAI card to set its key.</p>
                     </section>
 
 
                     <section class="resource-card">
                       <h3>Provider update</h3>
-                      <p>A user switches the selected provider editor to DeepSeek and its changed model autosaves.</p>
+                      <p>A user opens the DeepSeek card and its changed model autosaves for the selected tenant.</p>
                     </section>
 
 
@@ -172,7 +172,7 @@
             <ul class="resource-list">
               <li>Management requires configured TAuth, CORS origins, database settings, and a provider-key encryption key.</li>
 <li>The backend serves management APIs and runtime config; the static Pages app is only the shell.</li>
-<li>Autosave responses return masked key status; raw retrieval requires the separate owner-authenticated reveal action.</li>
+<li>The card shows only a generic saved-key mask and never retrieves the stored raw credential.</li>
             </ul>
           </section>
 
@@ -199,13 +199,13 @@ if (!this.hasSecret) {
 
                     <details>
                       <summary>What lets a user leave Settings?</summary>
-                      <p>The loaded profile must report a client key and at least one persisted managed provider key. Until both conditions are true, close actions explain what is missing and keep Settings open.</p>
+                      <p>The loaded tenant profile must report a client key. Provider keys are managed separately from the provider cards in Usage Overview.</p>
                     </details>
 
 
                     <details>
-                      <summary>Does typing a provider key unlock Settings?</summary>
-                      <p>No. Only a provider record returned with has_key after a successful autosave counts; drafts and local dotenv credentials do not satisfy managed onboarding.</p>
+                      <summary>Where does a user enter a provider key?</summary>
+                      <p>The user opens Set key or Key settings on the provider's Usage Overview card and selects an exact tenant for account-wide usage.</p>
                     </details>
 
 

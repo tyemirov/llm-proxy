@@ -69,6 +69,7 @@ Each item in `providers` is one provider definition.
 |---|---|---|
 | Canonical provider identifier | `providers[].id` | Owns routing, persistence, and public identity. |
 | Display label | `providers[].label` | Supplies the management and public label. |
+| Key-acquisition URL | `providers[].key_acquisition_url` | Supplies the official HTTPS destination for the provider card. It cannot contain credentials, a query, or a fragment. |
 | Request aliases | `providers[].aliases` | Resolve to the canonical provider identifier. |
 | Provider fields | `providers[].fields` | Define tenant and environment connection inputs. |
 | Provider transports | `providers[].transports` | Select endpoints and protocol adapters. |
@@ -244,9 +245,15 @@ connection identity. It encrypts every secret value with the current
 management encryption boundary. Current-schema reads use only provider
 connection records and provider profile records.
 
-The management API returns safe provider field definitions and connection
-state. It masks secret values and reveals one secret only through the explicit
-field reveal operation.
+The management API returns provider definitions in catalog order. Its safe
+tenant profile projection includes the key-acquisition URL, offering-derived
+capabilities, field definitions, selected model, provider prompt, and masked
+connection state. The management app builds one provider card from each item.
+It never uses key presence or usage history to define provider membership.
+
+The card editor never requests a saved raw credential. Credential deletion
+removes only encrypted credential fields. It preserves non-secret connection
+fields and the provider profile.
 
 The public capability resource omits provider fields, environment names,
 authentication rules, private settings, and upstream model identifiers.
@@ -259,10 +266,10 @@ authentication rules, private settings, and upstream model identifiers.
 | Provider registry | Compiles providers, aliases, fields, transports, offerings, and defaults. |
 | Request router | Resolves a provider and exact model to one provider offering. |
 | Credential verifier | Uses the selected transport and exact model. |
-| Management API | Returns provider fields and safe connection state. |
+| Management API | Returns ordered provider-card definitions, fields, capabilities, and safe connection state. |
 | Persistence layer | Validates provider and field identities before each read or write. |
 | Public capability API | Publishes the safe exact model and offering projection. |
-| Management UI | Builds provider forms from returned field definitions. |
+| Management UI | Builds ordered Usage Overview cards and tenant-bound editors from returned definitions. |
 | Live test harness | Discovers provider environment bindings from the catalog-only CLI output. |
 
 ## Startup validation

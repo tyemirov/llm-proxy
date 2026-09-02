@@ -53,7 +53,9 @@
  * @typedef {{
  *   id: string,
  *   label: string,
+ *   key_acquisition_url: string,
  *   aliases: string[],
+ *   capabilities: string[],
  *   configured: boolean,
  *   fields: ProviderFieldProfile[],
  *   text_model: string,
@@ -199,6 +201,71 @@
 
 /**
  * @typedef {"all" | "30d" | "7d" | "1d"} UsageInterval
+ */
+
+/**
+ * @typedef {"bar" | "donut"} UsageBreakdownView
+ */
+
+/**
+ * @typedef {{
+ *   label: string,
+ *   requests: number,
+ *   width: string,
+ *   percentage: number,
+ *   percentageLabel: string,
+ *   color: string,
+ *   dashArray: string,
+ *   dashOffset: number
+ * }} UsageDistributionRow
+ */
+
+/**
+ * @typedef {{
+ *   totalRequests: number,
+ *   rows: UsageDistributionRow[]
+ * }} UsageDistribution
+ */
+
+/**
+ * @typedef {{
+ *   x: number,
+ *   label: string,
+ *   exactLabel: string
+ * }} UsageXAxisTick
+ */
+
+/**
+ * @typedef {{
+ *   y: number,
+ *   label: string,
+ *   exactValue: string
+ * }} UsageYAxisTick
+ */
+
+/**
+ * @typedef {{
+ *   x: number,
+ *   y: number,
+ *   start: string,
+ *   value: number,
+ *   accessibleLabel: string
+ * }} UsageChartPoint
+ */
+
+/**
+ * @typedef {{
+ *   viewBox: string,
+ *   polyline: string,
+ *   xAxisY: number,
+ *   yAxisX: number,
+ *   xTicks: UsageXAxisTick[],
+ *   yTicks: UsageYAxisTick[],
+ *   points: UsageChartPoint[],
+ *   xAxisTitle: string,
+ *   yAxisTitle: string,
+ *   accessibleLabel: string
+ * }} UsageTimeSeriesChart
  */
 
 /**

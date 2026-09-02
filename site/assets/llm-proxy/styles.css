@@ -60,9 +60,14 @@ usage-metrics,
 usage-card,
 usage-chart-panel,
 usage-breakdown,
+breakdown-view-control,
+usage-donut,
 usage-row-list,
 usage-row,
 usage-bar,
+provider-card-grid,
+provider-card-statuses,
+provider-capability-list,
 usage-failures-overlay,
 usage-failures-dialog,
 usage-failures-body,
@@ -296,6 +301,136 @@ usage-dashboard {
   gap: 0.5rem;
 }
 
+.provider-cards-section {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+provider-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.provider-card {
+  min-width: 0;
+  min-height: 19rem;
+  perspective: 80rem;
+}
+
+.provider-card-inner {
+  position: relative;
+  min-height: inherit;
+  transform-style: preserve-3d;
+  transition: transform 200ms ease;
+}
+
+.provider-card.is-open .provider-card-inner {
+  transform: rotateY(180deg);
+}
+
+.provider-card-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: start;
+  gap: 0.65rem;
+  overflow: auto;
+  min-width: 0;
+  border: 1px solid var(--llm-border);
+  border-radius: 6px;
+  background: var(--llm-panel);
+  padding: 0.75rem;
+  backface-visibility: hidden;
+}
+
+.provider-card-face > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.provider-card-face h3,
+.provider-card-face p,
+.provider-card-face dl {
+  margin: 0;
+}
+
+.provider-card-back {
+  transform: rotateY(180deg);
+}
+
+provider-card-statuses,
+provider-capability-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+provider-card-statuses span,
+provider-capability-list span {
+  border: 1px solid var(--llm-border);
+  border-radius: 999px;
+  color: var(--llm-muted);
+  padding: 0.12rem 0.4rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+provider-card-statuses span {
+  border-color: var(--llm-accent);
+  color: var(--llm-accent);
+}
+
+.provider-card-usage {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.provider-card-usage div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--llm-border);
+  padding-bottom: 0.25rem;
+}
+
+.provider-card-usage dt {
+  color: var(--llm-muted);
+}
+
+.provider-card-usage dd {
+  overflow-wrap: anywhere;
+  text-align: end;
+}
+
+.provider-card-front > button {
+  align-self: end;
+  margin-top: auto;
+}
+
+.provider-card-back provider-settings-fields {
+  grid-template-columns: 1fr;
+  align-items: stretch;
+}
+
+.provider-key-acquisition {
+  color: var(--llm-accent);
+  font-size: 0.75rem;
+}
+
+.provider-card-back provider-connection-input {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .provider-card-inner {
+    transition-duration: 0ms;
+  }
+}
+
 .dashboard-hero {
   border: 1px solid var(--llm-border);
   border-radius: 6px;
@@ -370,7 +505,8 @@ usage-breakdown {
 
 .usage-chart-svg {
   width: 100%;
-  height: 132px;
+  height: auto;
+  aspect-ratio: 640 / 240;
   box-sizing: border-box;
   border: 1px solid var(--llm-border);
   border-radius: 6px;
@@ -382,7 +518,33 @@ usage-breakdown {
   stroke: var(--llm-accent);
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 3;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.usage-chart-svg .usage-axis,
+.usage-chart-svg .usage-x-tick line,
+.usage-chart-svg .usage-y-tick line {
+  stroke: var(--llm-border-strong);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.usage-chart-svg text {
+  fill: var(--llm-muted);
+  font-size: 9px;
+}
+
+.usage-chart-svg .usage-axis-title {
+  fill: var(--llm-subtle);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.usage-chart-point {
+  fill: var(--llm-accent);
+  stroke: var(--llm-bg);
+  stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
 
@@ -434,6 +596,99 @@ usage-bar i {
   height: 100%;
   border-radius: inherit;
   background: var(--llm-good);
+}
+
+breakdown-view-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+breakdown-view-control > span {
+  margin-right: 0.15rem;
+  color: var(--llm-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+llm-proxy-management-application breakdown-view-control button {
+  min-height: 28px;
+  padding-inline: 0.55rem;
+}
+
+llm-proxy-management-application breakdown-view-control button.is-active,
+llm-proxy-management-application breakdown-view-control button.is-active:hover:not(:disabled) {
+  border-color: var(--llm-accent);
+  background: rgba(93, 147, 255, 0.14);
+  color: var(--llm-accent);
+}
+
+usage-donut {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 0.7fr) minmax(0, 1.3fr);
+  align-items: center;
+  gap: 0.65rem;
+}
+
+usage-donut svg {
+  display: block;
+  width: min(100%, 10rem);
+  margin-inline: auto;
+}
+
+.usage-donut-track,
+.usage-donut-segment {
+  fill: none;
+  stroke-width: 18;
+  transform: rotate(-90deg);
+  transform-origin: 60px 60px;
+}
+
+.usage-donut-track {
+  stroke: var(--llm-bg);
+}
+
+.usage-donut-segment {
+  stroke-linecap: butt;
+}
+
+usage-donut ul {
+  display: grid;
+  gap: 0.32rem;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+usage-donut li {
+  display: grid;
+  grid-template-columns: 0.55rem minmax(0, 1fr) auto auto auto auto;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  color: var(--llm-muted);
+  font-size: 0.7rem;
+}
+
+usage-donut li > i {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 2px;
+}
+
+usage-donut li > span:nth-child(2) {
+  overflow: hidden;
+  color: var(--llm-subtle);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+usage-donut li strong {
+  color: var(--llm-text);
 }
 
 admin-user-list {
@@ -1528,6 +1783,24 @@ settings-section,
   .text-routing-controls,
   provider-settings-fields {
     grid-template-columns: 1fr;
+  }
+
+  provider-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  usage-donut {
+    grid-template-columns: 1fr;
+  }
+
+  breakdown-view-control {
+    align-items: stretch;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  breakdown-view-control > span {
+    flex-basis: 100%;
   }
 
   .section-header,

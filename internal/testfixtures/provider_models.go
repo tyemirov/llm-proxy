@@ -113,7 +113,7 @@ func NewProviderCatalogFromModelCatalog(modelCatalog proxy.ModelCatalog) (*proxy
 			providerIndex = len(schema.Providers)
 			providerIndexes[offering.Provider] = providerIndex
 			schema.Providers = append(schema.Providers, proxy.ProviderCatalogProvider{
-				ID: offering.Provider, Label: providerLabels[offering.Provider],
+				ID: offering.Provider, Label: providerLabels[offering.Provider], KeyAcquisitionURL: "https://provider.example/keys",
 				Fields: []proxy.ProviderCatalogField{{
 					ID: proxy.CatalogCredentialAPIKey, Label: "Test API key", Kind: proxy.CatalogProviderFieldKindCredential,
 					Type: proxy.CatalogProviderFieldTypeOpaque, Required: true, Default: &empty, Secret: true,
