@@ -441,15 +441,14 @@ returns the complete tenant profile.
 Every failure preserves the prior connection, profile, and defaults. A blank
 saved secret field retains the current encrypted value.
 
-Settings starts this operation automatically when a paste updates the selected
-provider key. It announces `Verifying key`, leaves only that input available
-for a newer paste, and locks tenant, provider, model, reveal, remove, routing,
-and close actions until settlement. Per-candidate abort ownership plus the
-existing app/editor versions prevent newer paste, authentication, tenant,
-provider, model, or editor context changes from applying a stale result.
-Success clears the raw draft and restores the masked key. A safe failure keeps
-the draft only in that editor, distinguishes an unsaved first key from an active
-prior key, and exposes an explicit retry.
+The selected provider card starts this operation when a paste updates its key.
+It announces `Checking key...` only during the request and locks conflicting
+card actions until settlement. Per-candidate abort ownership plus the existing
+app/editor versions prevent a provider, tenant, interval, view, authentication,
+or draft change from applying a stale result. Success clears the raw draft,
+shows the generic mask, and keeps the card back open. A safe failure keeps the
+candidate only in that editor, preserves any prior key and settings, and
+exposes an explicit retry.
 
 ## Managed Routing Defaults
 
@@ -668,6 +667,25 @@ private input.
 
 The management UI is served as a static GitHub Pages app from `site/` on `https://llm-proxy.mprlab.com`; the Go backend does not serve management HTML or assets. The backend owns the secret-free `/api/public/capabilities` REST resource and the public browser config file at `/config-ui.yaml`; credentialed config CORS remains restricted to `management.public_origin`. The declared `docker/pages/Dockerfile` starts the backend's public-capabilities-only surface during the build, then the frontend-owned Node renderer fetches that resource and validates the static Pages archive. The final Pages image contains only static files. The gateway publishes that immutable archive without changing the live site and deploy activates it on `gh-pages` after the backend rollout.
 
+Usage Overview renders one semantic provider card for every tenant-profile
+provider in deterministic catalog order. The front matches interval activity by
+exact provider ID and shows label, capabilities, requests, and tokens. A
+tenant-filtered scope also shows that tenant's selected text model. Account-wide
+usage does not synthesize a model. `active` identifies only the tenant's default
+text route, and `used` identifies only interval activity.
+
+An explicit card action opens one back face at a time. Account-wide usage
+requires an exact owned tenant before it enables key controls. The card uses the
+canonical tenant profile instead of an owner-wide key projection or browser
+fan-out. Its official HTTPS acquisition link comes from the validated catalog
+and has no query, fragment, tenant ID, authentication value, key, or tracking
+value. A saved key appears as a generic mask. The card never calls the raw-key
+reveal operation. Deleting a key removes only encrypted credential fields and
+preserves the provider definition, non-secret fields, profile, usage history,
+and every routing default that remains valid. Settings retains tenant-owned
+client access, routing defaults, tenant prompt, and request examples. It does
+not contain provider fields, provider models, or provider prompts.
+
 The static app owns the canonical MPR UI contract: API-served `config-ui.yaml`, literal `mpr-ui@latest` assets, `mpr-ui-config.js`, `<mpr-header data-config-url="...">`, the `@latest` bundle marker, `<mpr-user>`, and `<mpr-footer>`. The config declares the current `/auth/session` path and keeps login-button presentation in static MPR UI markup; obsolete `authButton` payloads are not emitted. The Pages artifact contains no static `config-ui.yaml` or `llm-proxy-config.json`; the declared Pages container writes the canonical `https://llm-proxy-api.mprlab.com/config-ui.yaml` URL into the declarative header attribute, and `mpr-ui-config.js` applies that single backend-served YAML before loading the bundle.
 
 The shared bundle registers `mpr-legal-document`; P005 remains the sole owner of legal-page routes and document rendering.
@@ -681,11 +699,11 @@ tenant-scoped management endpoints. The service verifies each new credential
 with its exact provider transport and selected text model. It encrypts every
 secret provider field with `management.provider_key_encryption_key`.
 
-Normal responses return masked secret state. The owner can reveal one secret
-through
+Normal responses return masked secret state. The management API retains an
+explicit owner operation to reveal one secret through
 `POST /api/management/tenants/:tenant_id/provider-connections/:provider/fields/:field/reveal`.
 That action requires the configured management origin and returns
-`Cache-Control: no-store`.
+`Cache-Control: no-store`. The management app does not call this operation.
 
 Provider profile records store the selected text model and provider system
 prompt. Provider connection records store only catalog field values. Current

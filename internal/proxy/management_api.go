@@ -99,7 +99,9 @@ type managementTenantDefaultsResponse struct {
 type managementProviderResponse struct {
 	ID                    string                            `json:"id"`
 	Label                 string                            `json:"label"`
+	KeyAcquisitionURL     string                            `json:"key_acquisition_url"`
 	Aliases               []string                          `json:"aliases"`
+	Capabilities          []string                          `json:"capabilities"`
 	Configured            bool                              `json:"configured"`
 	Fields                []managementProviderFieldResponse `json:"fields"`
 	TextModel             string                            `json:"text_model"`
@@ -863,7 +865,9 @@ func (service *managementService) providerResponses(providerSettings map[provide
 		response := managementProviderResponse{
 			ID:                    summary.identifier,
 			Label:                 summary.label,
+			KeyAcquisitionURL:     summary.keyAcquisitionURL,
 			Aliases:               append([]string{}, summary.aliases...),
+			Capabilities:          append([]string{}, summary.capabilities...),
 			Configured:            configured && settings.hasRequiredConnectionFields(definition),
 			Fields:                make([]managementProviderFieldResponse, 0, len(definition.fieldOrder)),
 			TextModel:             summary.textDefaultModel,

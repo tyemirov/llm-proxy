@@ -1085,7 +1085,7 @@ retain satisfied historical dependencies.
   unreadable through the bounded probe. Both cleanup delete requests returned
   HTTP 200. Neither model supplied the required active retrieve and cancel
   proof. The provider catalog does not register these two routes.
-- [ ] [I027] (P1) Put provider usage and key settings on provider cards.
+- [x] [I027] (P1) Put provider usage and key settings on provider cards.
   Goal:
   The authenticated dashboard has one catalog-owned card for each supported
   provider. Each card combines provider activity with tenant-owned key and
@@ -1212,6 +1212,9 @@ retain satisfied historical dependencies.
     cutover.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for implementation.
+  Resolution: Added catalog-owned Usage Overview provider cards, tenant-bound
+  key controls, safe catalog links, and credential-only deletion. Removed the
+  duplicate Settings editor.
 - [ ] [I038] (P2) Adopt DashScope's synchronous Responses API without background mode.
   Goal:
   Move eligible DashScope Qwen models from Chat Completions to Alibaba's newer

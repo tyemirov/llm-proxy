@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Added catalog-owned provider cards to Usage Overview with exact interval
+  activity, tenant-bound key and provider profile settings, safe official key
+  links, transient key verification, and credential-only deletion. Removed the
+  duplicate provider editor from Settings.
 - Replaced the obsolete generic tenant-key environment variable with
   `LLM_PROXY_DEFAULT_TENANT_KEY` across the CLI, live tests, and documentation.
 

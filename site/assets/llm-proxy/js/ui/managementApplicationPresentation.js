@@ -39,18 +39,12 @@ export function createManagementApplicationPresentationResponsibility() {
       return (
         this.authState === AUTH_STATES.AUTHENTICATED &&
         Boolean(this.profile) &&
-        (!this.hasSecret || !this.hasSavedProviderKey)
+        !this.hasSecret
       );
     },
 
     get settingsRequirementCopy() {
-      if (!this.hasSecret && !this.hasSavedProviderKey) {
-        return COPY.settingsRequiresClientAndProviderKey;
-      }
-      if (!this.hasSecret) {
-        return COPY.settingsRequiresClientKey;
-      }
-      return COPY.settingsRequiresProviderKey;
+      return COPY.settingsRequiresClientKey;
     },
 
     get settingsControlsDisabled() {

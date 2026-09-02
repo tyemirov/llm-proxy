@@ -1027,7 +1027,7 @@ func TestManagedProviderConnectionProjectionRejectsPersistedDrift(t *testing.T) 
 		{name: "profile model", registry: providers, profiles: []managedProviderProfileRecord{{TenantID: "tenant", ProviderID: ProviderNameOpenAI, TextModel: "missing"}}},
 		{name: "connection identity", registry: providers, profiles: []managedProviderProfileRecord{validProfile}, connections: []managedProviderConnectionRecord{{TenantID: "tenant", ProviderID: ProviderNameOpenAI, FieldID: "future", Value: "value"}}},
 		{name: "connection value", registry: providers, profiles: []managedProviderProfileRecord{{TenantID: "tenant", ProviderID: ProviderNameDashScope, TextModel: ModelNameDashScopeQwenPlus}}, connections: []managedProviderConnectionRecord{{TenantID: "tenant", ProviderID: ProviderNameDashScope, FieldID: "base_url", Value: "invalid"}}},
-		{name: "required field", registry: providers, profiles: []managedProviderProfileRecord{validProfile}},
+		{name: "required noncredential field missing", registry: providers, profiles: []managedProviderProfileRecord{{TenantID: "tenant", ProviderID: ProviderNameDashScope, TextModel: ModelNameDashScopeQwenPlus}}},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -1035,6 +1035,10 @@ func TestManagedProviderConnectionProjectionRejectsPersistedDrift(t *testing.T) 
 				t.Fatal("persisted provider drift was accepted")
 			}
 		})
+	}
+	settings, projectionError := managedProviderSettingsFromConnectionRecords(cipher, providers, nil, []managedProviderProfileRecord{validProfile})
+	if projectionError != nil || settings[newProviderID(ProviderNameOpenAI)].hasRequiredConnectionFields(providers.definitions[newProviderID(ProviderNameOpenAI)]) {
+		t.Fatalf("credential-free provider profile projection settings=%+v error=%v", settings, projectionError)
 	}
 }
 

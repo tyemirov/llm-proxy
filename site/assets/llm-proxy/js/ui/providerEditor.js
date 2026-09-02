@@ -45,7 +45,7 @@ export function createProviderEditorResponsibility() {
         this.restoreSelectedProviderControl();
         return;
       }
-      if (!this.settingsOpen || this.authState !== AUTH_STATES.AUTHENTICATED) {
+      if (!this.providerCardTenantID || this.authState !== AUTH_STATES.AUTHENTICATED) {
         return;
       }
       this.dismissProviderKeyRemovalConfirmation();
@@ -54,7 +54,7 @@ export function createProviderEditorResponsibility() {
 
     restoreSelectedProviderControl() {
       this.$nextTick(() => {
-        if (this.settingsOpen && this.$refs.providerSelector) {
+        if (this.providerCardTenantID && this.$refs.providerSelector) {
           this.$refs.providerSelector.value = this.selectedProviderID;
         }
       });

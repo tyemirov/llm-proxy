@@ -652,6 +652,7 @@ models:
 providers:
     - id: openai
       label: OpenAI
+      key_acquisition_url: https://platform.openai.com/api-keys
       fields:
         - id: api_key
           label: OpenAI API key
@@ -1291,6 +1292,7 @@ providers:
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: deepseek
       label: DeepSeek
+      key_acquisition_url: https://platform.deepseek.com/api_keys
       fields:
         - id: api_key
           label: DeepSeek API key
@@ -1388,6 +1390,7 @@ providers:
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: dashscope
       label: DashScope
+      key_acquisition_url: https://help.aliyun.com/en/model-studio/get-api-key
       aliases:
         - qwen
       fields:
@@ -1571,6 +1574,7 @@ providers:
               last_verified: "2026-08-13"
     - id: moonshot
       label: Moonshot
+      key_acquisition_url: https://platform.kimi.ai/console/api-keys
       aliases:
         - kimi
       fields:
@@ -1788,6 +1792,7 @@ providers:
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: minimax
       label: MiniMax
+      key_acquisition_url: https://platform.minimax.io/docs/guides/quickstart-preparation
       fields:
         - id: api_key
           label: MiniMax API key
@@ -2156,6 +2161,7 @@ providers:
               last_verified: "2026-08-13"
     - id: siliconflow
       label: SiliconFlow
+      key_acquisition_url: https://cloud.siliconflow.com/account/ak
       fields:
         - id: api_key
           label: SiliconFlow API key
@@ -2264,6 +2270,7 @@ providers:
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: zai
       label: Z.AI
+      key_acquisition_url: https://z.ai/manage-apikey/apikey-list
       fields:
         - id: api_key
           label: Z.AI API key
@@ -2384,6 +2391,7 @@ providers:
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: gemini
       label: Gemini
+      key_acquisition_url: https://aistudio.google.com/app/apikey
       fields:
         - id: api_key
           label: Gemini API key
@@ -2566,6 +2574,7 @@ providers:
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: anthropic
       label: Anthropic
+      key_acquisition_url: https://platform.claude.com/settings/keys
       aliases:
         - claude
       fields:
@@ -3046,6 +3055,7 @@ providers:
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: meta
       label: Meta
+      key_acquisition_url: https://dev.meta.ai/
       fields:
         - id: api_key
           label: Meta API key
@@ -3121,6 +3131,7 @@ providers:
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: xai
       label: xAI
+      key_acquisition_url: https://console.x.ai/team/default/api-keys
       fields:
         - id: api_key
           label: xAI API key

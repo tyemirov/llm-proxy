@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Bring-your-own provider key portal for AI access</title>
-    <meta name="description" content="Use LLM Proxy Settings to let users save provider keys and keep public proxy calls key-free.">
+    <meta name="description" content="Use tenant-bound provider cards to save provider keys while public proxy calls remain free of upstream credentials.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/">
     <meta property="og:title" content="Bring-your-own provider key portal for AI access">
-    <meta property="og:description" content="Use LLM Proxy Settings to let users save provider keys and keep public proxy calls key-free.">
+    <meta property="og:description" content="Use tenant-bound provider cards to save provider keys while public proxy calls remain free of upstream credentials.">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/">
     <meta name="twitter:card" content="summary">
@@ -27,7 +27,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Bring-your-own provider key portal for AI access","description":"Use LLM Proxy Settings to let users save provider keys and keep public proxy calls key-free.","url":"https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/","about":["LLM Proxy","Management UI","bring your own provider key portal"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Bring-your-own provider key portal for AI access","description":"Use tenant-bound provider cards to save provider keys while public proxy calls remain free of upstream credentials.","url":"https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/","about":["LLM Proxy","Management UI","bring your own provider key portal"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Bring-your-own provider key portal for AI access","item":"https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of bring your own provider key portal?","acceptedAnswer":{"@type":"Answer","text":"The management UI accepts provider API keys only through authenticated management endpoints and keeps public proxy requests on the tenant-secret contract."}},{"@type":"Question","name":"Who should read this management ui resource?","acceptedAnswer":{"@type":"Answer","text":"Organizations where users or teams own their upstream provider accounts."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Self-service LLM key management for internal teams, which covers self-service LLM key management."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440"></script>
@@ -65,7 +65,7 @@
           <header class="resource-hero">
             <p class="eyebrow">Management UI</p>
             <h1>Bring-your-own provider key portal for AI access</h1>
-            <p class="resource-deck">Use LLM Proxy Settings to let users save provider keys and keep public proxy calls key-free.</p>
+            <p class="resource-deck">Use tenant-bound provider cards to save provider keys while public proxy calls remain free of upstream credentials.</p>
             <p class="resource-audience">Organizations where users or teams own their upstream provider accounts.</p>
             <p class="resource-byline">Reviewed 2026-07-11 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
             <div class="resource-actions">
@@ -88,8 +88,8 @@
             <h2>How it works</h2>
             <ol class="resource-steps">
               <li>Sign in through the configured MPR/TAuth shell.</li>
-<li>Open Settings and select the provider to configure.</li>
-<li>Save the provider API key with the selected text model and provider system prompt.</li>
+<li>Open the provider's Usage Overview card and select the exact tenant.</li>
+<li>Paste the provider API key for verification with the selected text model and provider system prompt.</li>
 <li>Use generated proxy examples that never include upstream provider credentials.</li>
             </ol>
           </section>
@@ -108,16 +108,16 @@
                 <tbody>
 
                         <tr>
-                          <td>Provider selector in Settings</td>
-                          <td>Users edit one provider at a time with explicit fields.</td>
-                          <td>The UI avoids a wall of provider cards.</td>
+                          <td>Catalog provider cards</td>
+                          <td>Every supported provider remains visible in deterministic catalog order.</td>
+                          <td>Credential presence and historical activity do not define membership.</td>
                         </tr>
 
 
                         <tr>
-                          <td>Masked key status</td>
-                          <td>Saved keys are represented by status, not raw values.</td>
-                          <td>Users can confirm a key exists without retrieving it.</td>
+                          <td>Generic saved-key mask</td>
+                          <td>The card exposes Replace key and Delete key without retrieving the stored raw credential.</td>
+                          <td>Users can manage a key without placing it on the card front.</td>
                         </tr>
 
 
@@ -149,8 +149,8 @@
 
 
                     <section class="resource-card">
-                      <h3>Key removal</h3>
-                      <p>The user removes a provider key and related settings from the selected-provider editor.</p>
+                      <h3>Key deletion</h3>
+                      <p>The user deletes only a provider credential while its model, prompt, non-secret settings, card, and usage history remain.</p>
                     </section>
 
             </div>

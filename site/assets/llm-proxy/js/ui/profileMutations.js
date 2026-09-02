@@ -110,7 +110,7 @@ export function createProfileMutationsResponsibility() {
      */
     canApplyProfileMutation(appVersion) {
       return (
-        this.settingsOpen &&
+        (this.settingsOpen || this.providerCardTenantID !== EMPTY_STRING) &&
         this.authState === AUTH_STATES.AUTHENTICATED &&
         this.appVersion === appVersion
       );
@@ -133,6 +133,9 @@ export function createProfileMutationsResponsibility() {
       this.dismissProviderKeyRemovalConfirmation();
       this.profile = nextProfile;
       this.providers = nextProfile.providers;
+      if (this.selectedUsageTenantID === this.settingsTenantID) {
+        this.usageProfile = nextProfile;
+      }
       if (!this.tenantNameDirty) {
         this.tenantNameDraft = nextProfile.tenant.name;
       }

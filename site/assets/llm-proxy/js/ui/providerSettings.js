@@ -172,7 +172,8 @@ export function createProviderSettingsResponsibility() {
      */
     canApplyProviderAutosave(providerID, revealVersion, appVersion) {
       return (
-        this.settingsOpen &&
+        this.providerCardTenantID !== EMPTY_STRING &&
+        this.settingsTenantID === this.providerCardTenantID &&
         this.authState === AUTH_STATES.AUTHENTICATED &&
         this.appVersion === appVersion &&
         this.selectedProviderID === providerID &&

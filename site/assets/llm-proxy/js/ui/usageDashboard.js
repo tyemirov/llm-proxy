@@ -11,10 +11,11 @@ import {
 import {
   fetchAccountUsageFailures,
   fetchAccountUsageSummary,
+  fetchTenant,
   fetchUsageFailures,
   fetchUsageSummary,
 } from "../core/backendClient.js?v=20260811c131";
-import { isAbortError } from "../core/managementProfile.js?v=20260811c131";
+import { assertManagementTenantProfile, isAbortError } from "../core/managementProfile.js?v=20260811c131";
 import { trapDialogFocus } from "./dialogFocus.js?v=20260811c131";
 import {
   formatNumber,
@@ -40,6 +41,7 @@ const HTTP_ERROR_STATUS_MINIMUM = 400;
  *   hasUsageFailures: boolean,
  *   hasLoadedUsageFailures: boolean,
  *   refreshAdminUsers: () => Promise<void>,
+ *   resetProviderCard: () => void,
  *   setPageNotice: (kind: string, message: string) => void
  * }} UsageDashboardHost */
 
@@ -88,7 +90,7 @@ export function createUsageDashboardResponsibility() {
     },
 
     get usageProviderCount() {
-      return formatNumber(this.usage.providers.length);
+      return formatNumber(this.usage.providers.filter((/** @type {{ provider: string, data: import("../types.d.js").UsageAggregate }} */ provider) => provider.data.requests > 0).length);
     },
 
     get hasUsageFailures() {
@@ -164,9 +166,11 @@ export function createUsageDashboardResponsibility() {
       if (!this.usageIntervals.some((candidate) => candidate.id === interval)) {
         throw new Error(`usage_interval_invalid:${interval}`);
       }
+      this.resetProviderCard();
       this.clearUsageFailures(false);
       this.selectedUsageInterval = interval;
       this.usage = emptyUsageSummary(interval);
+      this.usageProfile = null;
       await this.loadUsageSummary(false);
     },
 
@@ -182,9 +186,11 @@ export function createUsageDashboardResponsibility() {
       if (tenantID === this.selectedUsageTenantID) {
         return;
       }
+      this.resetProviderCard();
       this.clearUsageFailures(false);
       this.selectedUsageTenantID = tenantID;
       this.usage = emptyUsageSummary(this.selectedUsageInterval);
+      this.usageProfile = null;
       await this.loadUsageSummary(false);
     },
 
@@ -325,17 +331,24 @@ export function createUsageDashboardResponsibility() {
       const usageRequestController = new AbortController();
       this.usageRequestController = usageRequestController;
       this.usageLoading = true;
+      this.usageLoadState = "loading";
       try {
-        const usage = tenantID
-          ? await fetchUsageSummary(tenantID, interval, usageRequestController.signal)
-          : await fetchAccountUsageSummary(interval, usageRequestController.signal);
+        const [usage, usageProfile] = tenantID
+          ? await Promise.all([
+            fetchUsageSummary(tenantID, interval, usageRequestController.signal),
+            fetchTenant(tenantID, usageRequestController.signal),
+          ])
+          : [await fetchAccountUsageSummary(interval, usageRequestController.signal), null];
         if (!this.canApplyUsageSummary(tenantID, loadVersion, interval)) {
           return;
         }
         if (usage.interval !== interval) {
           throw new Error(APP_INTEGRITY_ERROR);
         }
+        if (usageProfile) assertManagementTenantProfile(usageProfile, tenantID);
         this.usage = usage;
+        this.usageProfile = usageProfile;
+        this.usageLoadState = "available";
         if (!this.hasUsageFailures) {
           this.clearUsageFailures(false);
         }
@@ -346,6 +359,8 @@ export function createUsageDashboardResponsibility() {
         if (!isAbortError(requestError) && this.canApplyUsageSummary(tenantID, loadVersion, interval)) {
           this.clearUsageFailures(false);
           this.usage = emptyUsageSummary(interval);
+          this.usageProfile = null;
+          this.usageLoadState = "unavailable";
           this.setPageNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
         }
       } finally {
@@ -379,8 +394,10 @@ export function createUsageDashboardResponsibility() {
     clearUsageState() {
       this.usageLoadVersion += 1;
       this.usageLoading = false;
+      this.usageLoadState = "loading";
       this.clearUsageFailures(false);
       this.usage = emptyUsageSummary(this.selectedUsageInterval);
+      this.usageProfile = null;
     },
   });
 }

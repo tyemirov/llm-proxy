@@ -66,12 +66,13 @@ type ProviderCatalogModelMigration struct {
 
 // ProviderCatalogProvider defines one provider and all provider-owned routes.
 type ProviderCatalogProvider struct {
-	ID         string                     `yaml:"id"`
-	Label      string                     `yaml:"label"`
-	Aliases    []string                   `yaml:"aliases,omitempty"`
-	Fields     []ProviderCatalogField     `yaml:"fields"`
-	Transports []ProviderCatalogTransport `yaml:"transports"`
-	Offerings  []ProviderCatalogOffering  `yaml:"offerings"`
+	ID                string                     `yaml:"id"`
+	Label             string                     `yaml:"label"`
+	KeyAcquisitionURL string                     `yaml:"key_acquisition_url"`
+	Aliases           []string                   `yaml:"aliases,omitempty"`
+	Fields            []ProviderCatalogField     `yaml:"fields"`
+	Transports        []ProviderCatalogTransport `yaml:"transports"`
+	Offerings         []ProviderCatalogOffering  `yaml:"offerings"`
 }
 
 // ProviderCatalogField defines one tenant connection input.
@@ -388,6 +389,9 @@ func validateProviderCatalogSchema(schema ProviderCatalogSchema) error {
 		if strings.TrimSpace(provider.Label) == constants.EmptyString || provider.Label != strings.TrimSpace(provider.Label) {
 			return fmt.Errorf("%w: field=%s.label", ErrInvalidModelCatalog, fieldPrefix)
 		}
+		if !validProviderKeyAcquisitionURL(provider.KeyAcquisitionURL) {
+			return fmt.Errorf("%w: field=%s.key_acquisition_url", ErrInvalidModelCatalog, fieldPrefix)
+		}
 		for aliasIndex, rawAlias := range provider.Aliases {
 			alias, aliasError := canonicalCatalogIdentifier(rawAlias, fmt.Sprintf("%s.aliases[%d]", fieldPrefix, aliasIndex))
 			if aliasError != nil {
@@ -429,6 +433,17 @@ func validateProviderCatalogSchema(schema ProviderCatalogSchema) error {
 		}
 	}
 	return nil
+}
+
+func validProviderKeyAcquisitionURL(value string) bool {
+	parsedURL, parseError := url.Parse(value)
+	return parseError == nil &&
+		parsedURL.Scheme == "https" &&
+		parsedURL.Host != constants.EmptyString &&
+		parsedURL.User == nil &&
+		parsedURL.RawQuery == constants.EmptyString &&
+		parsedURL.Fragment == constants.EmptyString &&
+		value == strings.TrimSpace(value)
 }
 
 func validateProviderCatalogFields(rawFields []ProviderCatalogField, field string) (map[string]ProviderCatalogField, error) {

@@ -182,31 +182,31 @@ const pages = Object.freeze([
     modifiedDate: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE,
     primaryKeyword: "self-service LLM key management",
     title: "Self-service LLM key management for internal teams",
-    description: "Log in to the LLM Proxy app, create a client key for the selected tenant, and autosave one provider API key before leaving Settings.",
+    description: "Log in to LLM Proxy, create a tenant client key, and manage provider credentials from catalog-owned Usage Overview cards.",
     audience: "Teams that want user-owned AI access without asking operators to edit YAML for every change.",
     problem: "Operator-provisioned AI access does not scale when each user or team needs provider keys, defaults, generated secrets, and examples updated separately.",
-    solution: "LLM Proxy includes a TAuth-protected management UI that creates a missing client key after authentication, autosaves provider settings, and keeps Settings open until at least one managed provider key persists.",
+    solution: "LLM Proxy includes a TAuth-protected management UI that creates a missing client key after authentication and gives every catalog provider one tenant-bound Usage Overview card for key and profile settings.",
     steps: [
       "Configure TAuth, the management database, and provider-key encryption.",
       "Publish the static Pages UI and serve runtime config from the API backend.",
       "Users sign in; the UI creates and presents a missing client key once.",
-      "Users enter at least one provider key; the selected provider settings autosave before they leave Settings.",
+      "Users open a provider card, select the exact tenant, and paste a provider key for verification and atomic save.",
     ],
     features: [
       ["TAuth-gated UI", "Management controls appear only after login.", "Unauthenticated users see the sign-in state, not tenant controls."],
-      ["Required first-run setup", "Settings stays open until a client key and one persisted provider key exist.", "Typed drafts and local dotenv credentials do not bypass onboarding."],
-      ["Selected-provider editor", "Provider key, text model, and system prompt live together and autosave.", "A user can update one provider without scanning every provider card or pressing a save button."],
+      ["Client-key onboarding", "Settings stays open only until the selected tenant has its generated client key.", "Provider credentials remain a separate tenant-owned concern."],
+      ["Catalog provider cards", "Every provider card combines interval activity with a tenant-bound key, text model, and system prompt editor.", "Key presence never adds or removes a provider card."],
       ["Copyable examples", "Default and provider-specific curl examples use the current proxy origin and generated-secret placeholder.", "Users can start with the exact request shape shown in Settings."],
     ],
     examples: [
-      ["New team onboarding", "A user signs in, copies the automatically created client key, enters an OpenAI key, and closes Settings after autosave completes."],
-      ["Provider update", "A user switches the selected provider editor to DeepSeek and its changed model autosaves."],
+      ["New team onboarding", "A user signs in, copies the automatically created client key, closes Settings, and opens the OpenAI card to set its key."],
+      ["Provider update", "A user opens the DeepSeek card and its changed model autosaves for the selected tenant."],
       ["Usage review", "The user returns to the dashboard and selects all-time, 30-day, 7-day, or 1-day request and token summaries."],
     ],
     limitations: [
       "Management requires configured TAuth, CORS origins, database settings, and a provider-key encryption key.",
       "The backend serves management APIs and runtime config; the static Pages app is only the shell.",
-      "Autosave responses return masked key status; raw retrieval requires the separate owner-authenticated reveal action.",
+      "The card shows only a generic saved-key mask and never retrieves the stored raw credential.",
     ],
     repoExample: {
       source: "site/assets/llm-proxy/js/ui/authenticationLifecycle.js",
@@ -218,7 +218,7 @@ if (!this.hasSecret) {
   await this.requestAndApplyGeneratedSecret();
 }`,
     },
-    quickVerdict: "Use this flow when every authenticated user must leave first-run Settings with a client key and at least one server-stored provider credential.",
+    quickVerdict: "Use this flow when authenticated users need separate client-key onboarding and tenant-bound provider credential management.",
     faq: [
       {
         question: "How does first-run LLM Proxy setup begin?",
@@ -226,11 +226,11 @@ if (!this.hasSecret) {
       },
       {
         question: "What lets a user leave Settings?",
-        answer: "The loaded profile must report a client key and at least one persisted managed provider key. Until both conditions are true, close actions explain what is missing and keep Settings open.",
+        answer: "The loaded tenant profile must report a client key. Provider keys are managed separately from the provider cards in Usage Overview.",
       },
       {
-        question: "Does typing a provider key unlock Settings?",
-        answer: "No. Only a provider record returned with has_key after a successful autosave counts; drafts and local dotenv credentials do not satisfy managed onboarding.",
+        question: "Where does a user enter a provider key?",
+        answer: "The user opens Set key or Key settings on the provider's Usage Overview card and selects an exact tenant for account-wide usage.",
       },
       {
         question: "Does onboarding change provider or model defaults?",
@@ -243,25 +243,25 @@ if (!this.hasSecret) {
     category: "Management UI",
     primaryKeyword: "bring your own provider key portal",
     title: "Bring-your-own provider key portal for AI access",
-    description: "Use LLM Proxy Settings to let users save provider keys and keep public proxy calls key-free.",
+    description: "Use tenant-bound provider cards to save provider keys while public proxy calls remain free of upstream credentials.",
     audience: "Organizations where users or teams own their upstream provider accounts.",
     problem: "BYO provider keys can become risky when users paste keys into product apps, scripts, or support messages instead of a controlled backend surface.",
     solution: "The management UI accepts provider API keys only through authenticated management endpoints and keeps public proxy requests on the tenant-secret contract.",
     steps: [
       "Sign in through the configured MPR/TAuth shell.",
-      "Open Settings and select the provider to configure.",
-      "Save the provider API key with the selected text model and provider system prompt.",
+      "Open the provider's Usage Overview card and select the exact tenant.",
+      "Paste the provider API key for verification with the selected text model and provider system prompt.",
       "Use generated proxy examples that never include upstream provider credentials.",
     ],
     features: [
-      ["Provider selector in Settings", "Users edit one provider at a time with explicit fields.", "The UI avoids a wall of provider cards."],
-      ["Masked key status", "Saved keys are represented by status, not raw values.", "Users can confirm a key exists without retrieving it."],
+      ["Catalog provider cards", "Every supported provider remains visible in deterministic catalog order.", "Credential presence and historical activity do not define membership."],
+      ["Generic saved-key mask", "The card exposes Replace key and Delete key without retrieving the stored raw credential.", "Users can manage a key without placing it on the card front."],
       ["Provider-specific examples", "Examples include provider selection when users need a provider route.", "The copy action stays separate for default and selected-provider examples."],
     ],
     examples: [
       ["Team-owned OpenAI account", "A team saves its own OpenAI key and uses the generated tenant secret in internal tools."],
       ["Specialized provider trial", "A user adds a Gemini key for one workflow while leaving default examples available."],
-      ["Key removal", "The user removes a provider key and related settings from the selected-provider editor."],
+      ["Key deletion", "The user deletes only a provider credential while its model, prompt, non-secret settings, card, and usage history remain."],
     ],
     limitations: [
       "Users need an authenticated management session before saving provider keys.",

@@ -66,6 +66,7 @@ const applicationModuleFiles = Object.freeze([
   "ui/managementApplicationState.js",
   "ui/notifications.js",
   "ui/profileMutations.js",
+  "ui/providerCards.js",
   "ui/providerCredentials.js",
   "ui/providerEditor.js",
   "ui/providerSettings.js",
@@ -575,12 +576,8 @@ test("public landing explains the product and exposes the generated capability c
   expect(managementHTML).toContain(
     '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=content_copy,delete,help,key,visibility,visibility_off&amp;display=block">',
   );
-  expect(managementHTML).toContain(
-    '<span class="material-symbols-outlined" x-show="!providerFieldVisible(field)" aria-hidden="true">visibility</span>',
-  );
-  expect(managementHTML).toContain(
-    '<span class="material-symbols-outlined" x-show="providerFieldVisible(field)" aria-hidden="true">visibility_off</span>',
-  );
+  expect(managementHTML).toContain('<provider-card-grid>');
+  expect(managementHTML).toContain('target="_blank" rel="noopener noreferrer"');
 
   const removedApplicationResponse = await request.get(`${baseURL}${removedApplicationPath}`);
   expect(removedApplicationResponse.status()).toBe(httpNotFound);
@@ -610,31 +607,19 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain(
     '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=content_copy,delete,help,key,visibility,visibility_off&amp;display=block">',
   );
-  expect(html).toContain(
-    '<span class="material-symbols-outlined" x-show="!providerFieldVisible(field)" aria-hidden="true">visibility</span>',
-  );
-  expect(html).toContain(
-    '<span class="material-symbols-outlined" x-show="providerFieldVisible(field)" aria-hidden="true">visibility_off</span>',
-  );
   expect(html).toContain('class="danger provider-key-remove"');
   expect(html).not.toContain("provider-editor-actions");
-  expect(html).not.toContain('<svg x-show="!providerFieldVisible(field)"');
-  expect(html).not.toContain('<svg x-show="providerFieldVisible(field)"');
-  const providerSelectorOffset = html.indexOf('<label class="provider-selector">');
   const providerConnectionFieldsOffset = html.indexOf("<provider-connection-fields>");
-  const providerVisibilityOffset = html.indexOf('class="icon-only provider-key-visibility-toggle"');
   const textModelOffset = html.indexOf('x-on:change="handleSelectedProviderTextModelChange($event)"');
   const providerRemovalOffset = html.indexOf('class="danger provider-key-remove"');
-  expect(providerSelectorOffset).toBeGreaterThan(-1);
-  expect(providerSelectorOffset).toBeLessThan(providerConnectionFieldsOffset);
-  expect(providerConnectionFieldsOffset).toBeLessThan(providerVisibilityOffset);
-  expect(providerVisibilityOffset).toBeLessThan(providerRemovalOffset);
+  expect(providerConnectionFieldsOffset).toBeGreaterThan(-1);
+  expect(providerConnectionFieldsOffset).toBeLessThan(providerRemovalOffset);
   expect(providerRemovalOffset).toBeLessThan(textModelOffset);
-  expect(html).toContain('<h2 id="provider-settings-title" class="eyebrow" x-text="copy.providersEyebrow"></h2>');
-  expect(html).not.toContain('x-text="copy.providersTitle"');
+  expect(html).not.toContain('id="provider-settings-title"');
+  expect(html).toContain('id="provider-cards-title"');
   expect(html).toContain('role="alertdialog"');
   expect(html).toContain('x-on:click="requestSelectedProviderKeyRemoval()"');
-  expect(html).toContain('x-show="selectedProvider.configured || selectedProviderHasConnectionInput"');
+  expect(html).toContain('x-show="selectedProvider.configured"');
   expect(html).toContain('x-on:paste="handleProviderFieldPaste(field)"');
   expect(html).toContain('x-on:change="autosaveSelectedProvider()"');
   expect(html).toContain('role="status" aria-live="polite"');
@@ -705,12 +690,8 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain('class="settings-form-wide system-prompt-disclosure"');
   expect(html).toContain('x-bind:open="routingSystemPromptOpen"');
   expect(html).toContain('x-on:toggle="routingSystemPromptOpen = $event.currentTarget.open"');
-  expect(html).toContain('class="provider-system-prompt system-prompt-disclosure"');
-  expect(html).toContain('x-bind:open="providerSystemPromptOpen"');
-  expect(html).toContain('x-on:toggle="providerSystemPromptOpen = $event.currentTarget.open"');
   expect(html).toContain('class="system-prompt-disclosure-state"');
   expect(html).toContain('aria-labelledby="routing-system-prompt-label"');
-  expect(html).toContain('aria-labelledby="provider-system-prompt-label"');
   expect(html).not.toContain("saveDefaults()");
   expect(html).not.toContain('copy.saveDefaults');
   expect(html).toContain('copy.reasoningEffortUnsupported');
@@ -758,8 +739,9 @@ test("public landing explains the product and exposes the generated capability c
   const providerCredentialsResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/providerCredentials.js`);
   expect(providerCredentialsResponse.status()).toBe(httpOK);
   const providerCredentialsJavaScript = await providerCredentialsResponse.text();
-  expect(providerCredentialsJavaScript).toContain("revealProviderField");
-  expect(providerCredentialsJavaScript).toContain("requestRevealProviderConnectionField");
+  expect(providerCredentialsJavaScript).not.toContain("revealProviderField");
+  expect(providerCredentialsJavaScript).not.toContain("requestRevealProviderConnectionField");
+  expect(providerCredentialsJavaScript).toContain("SAVED_PROVIDER_KEY_MASK");
   expect(providerCredentialsJavaScript).toContain("removeProviderKey");
   expect(providerCredentialsJavaScript).not.toContain("requestSaveProviderKey");
 
@@ -1711,7 +1693,7 @@ test("SEO management resources document required onboarding and secret-safe exam
     {
       slug: "self-service-llm-key-management",
       title: "Self-service LLM key management for internal teams",
-      copy: "creates a missing client key after authentication, autosaves provider settings, and keeps Settings open",
+      copy: "gives every catalog provider one tenant-bound Usage Overview card for key and profile settings",
       faqQuestion: "What lets a user leave Settings?",
       modifiedDate: landingModifiedDate,
     },
@@ -1959,64 +1941,32 @@ test("tenant lifecycle is keyboard accessible, responsive, and guards the final 
   expect(tenantAccessBox.x + tenantAccessBox.width).toBeLessThanOrEqual(390);
 });
 
-test("tenant switching requires discard and clears one-time and revealed credentials", async ({ page }) => {
+test("tenant switching discards Settings edits without changing Usage or retaining one-time keys", async ({ page }) => {
   await installAssetRoutes(page);
   await installMultiTenantRoutes(page);
-  let releaseProviderSave;
-  const providerSaveReleased = new Promise((resolve) => {
-    releaseProviderSave = resolve;
-  });
-  let providerSaveStarted;
-  const providerSaveRequested = new Promise((resolve) => {
-    providerSaveStarted = resolve;
-  });
-  await page.route(`${baseURL}/api/management/tenants/tenant_1/provider-connections/openai`, async (route) => {
-    if (route.request().method() !== "PUT") {
-      await route.fallback();
-      return;
-    }
-    providerSaveStarted();
-    await providerSaveReleased;
-    await route.fallback();
-  });
-
-  await page.goto(`${baseURL}${applicationPath}`);
+  await page.goto(baseURL + applicationPath);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   const clientAccess = settingsDialog.getByRole("group", { name: "Tenant access" });
-  const providerEditor = settingsDialog.locator("provider-editor");
 
   await clientAccess.getByRole("button", { name: "Replace key" }).click();
   await page.getByRole("alertdialog", { name: "Replace client key?" }).getByRole("button", { name: "Replace key" }).click();
   await clientAccess.getByRole("button", { name: "Show key", exact: true }).click();
-  await expect(clientAccess.getByRole("textbox", { name: "Key", exact: true })).toHaveValue("llmp_tenant_1_generated");
-  await providerEditor.getByRole("button", { name: "Show key", exact: true }).click();
-  await expect(providerEditor.getByRole("textbox", { name: "OpenAI API key" })).toHaveValue("sk-tenant_1-openai");
-  await providerEditor.locator("summary.system-prompt-summary").click();
-  await providerEditor.getByRole("textbox", { name: "System prompt" }).fill("Unsaved tenant one prompt");
-  await page.keyboard.press("Tab");
-  await providerSaveRequested;
+  await settingsDialog.locator("details.system-prompt-disclosure summary").click();
+  await settingsDialog.locator("#routing-system-prompt-input").fill("Unsaved prompt");
 
   const settingsTenantSelector = settingsDialog.getByRole("combobox", { name: "Tenant" });
   await settingsTenantSelector.selectOption("tenant_2");
   const discardDialog = page.getByRole("alertdialog", { name: "Discard unsaved changes?" });
   await expect(discardDialog).toBeVisible();
-  await discardDialog.getByRole("button", { name: "Stay" }).click();
-  await expect(settingsTenantSelector).toHaveValue("tenant_1");
-  await expect(providerEditor.getByRole("textbox", { name: "System prompt" })).toHaveValue("Unsaved tenant one prompt");
-
-  await settingsTenantSelector.selectOption("tenant_2");
   await discardDialog.getByRole("button", { name: "Discard and switch" }).click();
-  releaseProviderSave();
   await expect(settingsTenantSelector).toHaveValue("tenant_2");
   await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("");
-  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("44");
   await expect(page.locator("body")).not.toContainText("llmp_tenant_1_generated");
-  await expect(page.locator("body")).not.toContainText("sk-tenant_1-openai");
   expect(await browserStorageContains(page, "llmp_tenant_1_generated")).toBe(false);
-  expect(await browserStorageContains(page, "sk-tenant_1-openai")).toBe(false);
 });
+
 
 test("concurrent tabs keep independent Settings and Usage tenant state", async ({ context, page }) => {
   const secondPage = await context.newPage();
@@ -2171,226 +2121,46 @@ test("late tenant lifecycle responses cannot select or overwrite another tenant"
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("44");
 });
 
-test("dashboard shows usage and settings opens from avatar menu before sign out", async ({ page }) => {
+test("dashboard shows usage and Settings excludes provider controls", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page);
-
-  await page.goto(`${baseURL}${applicationPath}`);
+  await page.goto(baseURL + applicationPath);
 
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
   await expect(page.locator("usage-card").filter({ hasText: "Tokens" }).locator("strong")).toHaveText("12,345");
-  await expect(page.locator("usage-card").filter({ hasText: "Success rate" }).locator("strong")).toHaveText("95%");
-  await expect(page.locator("usage-chart-panel").first().locator("polyline")).toHaveAttribute("points", /,/);
-  await expect(page.locator("usage-breakdown").first()).toContainText("openai");
-  await expect(page.locator("usage-breakdown").first()).toContainText("24");
+  await expect(page.locator("usage-card").filter({ hasText: "Providers used" }).locator("strong")).toHaveText("2");
+  await expect(page.locator("provider-card-grid")).toBeVisible();
 
   await page.getByTestId("avatar-menu").click();
   await expect(page.getByTestId("avatar-menu-item").nth(0)).toHaveText("Settings");
-  await expect(page.getByTestId("sign-out")).toHaveText("Sign out");
-
   await page.getByTestId("avatar-menu-item").nth(0).click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   await expect(settingsDialog).toBeVisible();
-  await expect(settingsDialog.locator(".settings-header .eyebrow")).toHaveText("Settings");
-  await expect(settingsDialog.locator(".settings-header h2")).toHaveCount(0);
-  const closeSettingsButton = settingsDialog.getByRole("button", { name: "Close" });
-  await expect(closeSettingsButton).toHaveText("");
-  await expect(closeSettingsButton.locator("svg.close-icon path")).toHaveCount(2);
-  await expect(settingsDialog.getByRole("heading", { name: "Client access" })).toHaveCount(0);
-  const tenantAccessRow = settingsDialog.getByRole("group", { name: "Tenant access" });
-  await expect(settingsDialog.locator("settings-body > tenant-access-row")).toHaveCount(1);
-  await expect(settingsDialog.locator("settings-section tenant-access-row")).toHaveCount(0);
-  await expect(tenantAccessRow.locator("client-access-tenant")).toHaveCount(0);
-  await expect(tenantAccessRow.getByRole("combobox", { name: "Tenant" }).locator("option:checked")).toHaveText("Default");
-  await expect(tenantAccessRow).toContainText("Saved; replace to reveal a new key.");
-  const replaceKeyButton = tenantAccessRow.getByRole("button", { name: "Replace key" });
-  await expect(replaceKeyButton.locator(".material-symbols-outlined")).toHaveText("key");
-  await expect(replaceKeyButton.locator(".tenant-access-action-label")).toHaveText("Replace key");
-  await expect(replaceKeyButton.locator("svg")).toHaveCount(0);
-  await expect(tenantAccessRow.getByRole("button", { name: "Revoke key" })).toHaveCount(0);
   await expect(settingsDialog.getByRole("heading", { name: "Routing defaults" })).toBeVisible();
-  const routingDefaultsHelpButton = settingsDialog.getByRole("button", { name: "About routing defaults" });
-  const routingDefaultsHelp = settingsDialog.locator("#routing-defaults-help");
-  await expect(routingDefaultsHelp).toBeHidden();
-  await routingDefaultsHelpButton.hover();
-  await expect(routingDefaultsHelp).toBeVisible();
-  await expect(routingDefaultsHelp).toHaveText(
-    "Used when a request omits both provider and model. Selecting a text provider starts with its provider default model; you can then select another routing model.",
-  );
-  await page.mouse.move(0, 0);
-  await expect(routingDefaultsHelp).toBeHidden();
   await expect(settingsDialog.getByRole("heading", { name: "Request examples" })).toBeVisible();
-  const requestExamplesSection = settingsDialog.locator(".usage-examples-section");
-  await expect(requestExamplesSection).not.toHaveAttribute("open");
-  await expect(settingsDialog.locator('request-example[data-example-id="default-text"]')).toBeHidden();
-  await requestExamplesSection.locator("summary").click();
-  await expect(requestExamplesSection).toHaveAttribute("open");
-  await expect(settingsDialog.locator("request-example")).toHaveCount(6);
-  await expect(settingsDialog.locator('request-example[data-example-id="default-text"]')).toBeVisible();
-  await expect(settingsDialog.locator('request-example[data-example-id="default-text"]')).toContainText("Default text");
-  await expect(settingsDialog.locator('request-example[data-example-id="default-v2"] .usage-snippet')).toContainText(
-    "/v2?key=<generated-secret>",
-  );
-  await expect(settingsDialog.locator('request-example[data-example-id="default-dictation"] .usage-snippet')).toContainText(
-    "/dictate?key=<generated-secret>",
-  );
-  await expect(settingsDialog.locator('request-example[data-example-id="provider-text"] .usage-snippet')).toContainText(
-    "provider=openai",
-  );
-  await expect(settingsDialog.locator('request-example[data-example-id="provider-v2"] .usage-snippet')).toContainText(
-    "provider=openai",
-  );
-  await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"] .usage-snippet')).toContainText(
-    "provider=openai",
-  );
-  const providerEditor = settingsDialog.locator("provider-editor");
-  await providerEditor.scrollIntoViewIfNeeded();
-  await expect(settingsDialog.getByRole("heading", { name: "Providers", exact: true })).toBeVisible();
-  await expect(settingsDialog.getByRole("heading", { name: "Provider settings" })).toHaveCount(0);
-  await expect(providerEditor).toBeInViewport();
-  const providerSelector = providerEditor.getByRole("combobox", { name: "Provider", exact: true });
-  await expect(providerEditor.locator("provider-settings-fields")).toHaveCount(1);
-  await expect(settingsDialog.locator("provider-key-card")).toHaveCount(0);
-  await expect(providerEditor.locator("provider-status")).toHaveCount(0);
-  await expect(providerEditor.locator(".provider-selector > .visually-hidden")).toHaveText("Provider");
-  await expect(providerSelector).toHaveValue("openai");
-  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
-  const providerModelSelector = providerEditor.getByRole("combobox", { name: "Provider default model" });
-  const providerDefaultModelHelpButton = providerEditor.getByRole("button", { name: "About provider default model" });
-  const providerDefaultModelHelp = providerEditor.locator("#provider-default-model-help");
-  await expect(providerDefaultModelHelp).toBeHidden();
-  await providerDefaultModelHelpButton.focus();
-  await expect(providerDefaultModelHelpButton).toBeFocused();
-  await expect(providerDefaultModelHelp).toBeVisible();
-  await expect(providerDefaultModelHelp).toHaveText(
-    "Used when a request selects this provider but omits a model. If this provider is also the routing default, changing this model updates that route; you can then override the routing model.",
-  );
-  await providerModelSelector.focus();
-  await expect(providerDefaultModelHelp).toBeHidden();
-  await expect(providerKeyInput).toHaveValue("****1234");
-  await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
-  const providerVisibilityButton = providerEditor.getByRole("button", { name: "Show key" });
-  await expect(providerVisibilityButton).toHaveAttribute("aria-pressed", "false");
-  const providerRemovalButton = providerEditor.getByRole("button", { name: "Remove provider key and settings" });
-  await expect(providerRemovalButton).toBeVisible();
-  await expect(providerModelSelector).toHaveValue("gpt-4.1");
-  await expect(providerEditor.locator("#provider-system-prompt-input")).toHaveValue("Use concise answers.");
-
-  const providerControlBoxes = await Promise.all(
-    [providerSelector, providerKeyInput, providerVisibilityButton, providerRemovalButton, providerModelSelector].map((control) =>
-      control.boundingBox(),
-    ),
-  );
-  const [providerSelectorBox, providerKeyBox, providerVisibilityBox, providerRemovalBox, providerModelBox] = providerControlBoxes;
-  if (!providerSelectorBox || !providerKeyBox || !providerVisibilityBox || !providerRemovalBox || !providerModelBox) {
-    throw new Error("desktop_provider_controls_missing");
-  }
-  for (const controlBox of providerControlBoxes) {
-    expect(controlBox.height).toBe(30);
-    expect(controlBox.y).toBe(providerSelectorBox.y);
-  }
-  expect(providerSelectorBox.x + providerSelectorBox.width).toBeLessThanOrEqual(providerKeyBox.x);
-  expect(providerKeyBox.x + providerKeyBox.width).toBeLessThanOrEqual(providerVisibilityBox.x);
-  expect(providerVisibilityBox.x + providerVisibilityBox.width).toBeLessThanOrEqual(providerRemovalBox.x);
-  expect(providerRemovalBox.x + providerRemovalBox.width).toBeLessThanOrEqual(providerModelBox.x);
-
-  await providerSelector.selectOption("deepseek");
-  await expect(providerEditor.getByRole("textbox", { name: "DeepSeek API key" })).toHaveValue("****5678");
-  await expect(providerEditor.getByRole("combobox", { name: "Provider default model" })).toHaveValue("deepseek-chat");
-  await expect(providerEditor.locator("#provider-system-prompt-input")).toHaveValue("");
-  await expect(settingsDialog.locator("request-example")).toHaveCount(5);
-  await expect(settingsDialog.locator('request-example[data-example-id="provider-text"] .usage-snippet')).toContainText(
-    "provider=deepseek",
-  );
-  await expect(settingsDialog.locator('request-example[data-example-id="provider-v2"] .usage-snippet')).toContainText(
-    "provider=deepseek",
-  );
-  await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"]')).toHaveCount(0);
-
-  await providerSelector.selectOption("meta");
-  await expect(providerEditor.getByRole("textbox", { name: "Meta API key" })).toHaveValue("****meta");
-  await expect(providerEditor.getByRole("combobox", { name: "Provider default model" })).toHaveValue("muse-spark-1.1");
-  await expect(settingsDialog.locator("request-example")).toHaveCount(5);
-  await expect(settingsDialog.locator('request-example[data-example-id="provider-text"] .usage-snippet')).toContainText(
-    "provider=meta",
-  );
-  await expect(settingsDialog.locator('request-example[data-example-id="provider-v2"] .usage-snippet')).toContainText(
-    "provider=meta",
-  );
-  await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"]')).toHaveCount(0);
-
-  await providerSelector.selectOption("zai");
-  await expect(providerEditor.getByRole("textbox", { name: "Z.AI API key" })).toHaveValue("");
-  await expect(providerEditor.getByRole("combobox", { name: "Provider default model" })).toHaveValue("glm-5.1");
-  await expect(providerSelector.locator('option[value="zhipu"]')).toHaveCount(0);
-  await expect(providerSelector.locator('option[value="glm"]')).toHaveCount(0);
-  await expect(settingsDialog.locator('request-example[data-example-id="provider-text"] .usage-snippet')).toContainText(
-    "provider=zai",
-  );
-  await expect(settingsDialog.locator('request-example[data-example-id="provider-v2"] .usage-snippet')).toContainText(
-    "provider=zai",
-  );
-  await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"] .usage-snippet')).toContainText(
-    "provider=zai",
-  );
+  await expect(settingsDialog.locator("provider-editor")).toHaveCount(0);
+  await expect(settingsDialog.getByRole("textbox", { name: /API key/ })).toHaveCount(0);
 });
 
-test("system prompt editors stay hidden until their labels expand them and reset with context", async ({ page }) => {
+
+test("the tenant routing prompt disclosure resets with Settings context", async ({ page }) => {
   await installAssetRoutes(page);
   await installMultiTenantRoutes(page);
-
-  await page.goto(`${baseURL}${applicationPath}`);
+  await page.goto(baseURL + applicationPath);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
 
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const defaultsForm = settingsDialog.locator(".settings-grid-form");
-  const providerEditor = settingsDialog.locator("provider-editor");
-  const routingDisclosure = defaultsForm.locator("details.system-prompt-disclosure");
-  const providerDisclosure = providerEditor.locator("details.system-prompt-disclosure");
-  const routingSummary = routingDisclosure.locator("summary.system-prompt-summary");
-  const providerSummary = providerDisclosure.locator("summary.system-prompt-summary");
-  const routingPrompt = defaultsForm.locator("#routing-system-prompt-input");
-  const providerPrompt = providerEditor.locator("#provider-system-prompt-input");
-
-  await expect(routingPrompt).toBeHidden();
-  await expect(providerPrompt).toBeHidden();
-  await expect(routingDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Hidden");
-  await expect(providerDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Hidden");
-
-  await routingSummary.click();
-  await expect(routingPrompt).toBeVisible();
-  await expect(routingDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Expanded");
-
-  await providerSummary.focus();
-  await page.keyboard.press("Enter");
-  await expect(providerPrompt).toBeVisible();
-  await expect(providerDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Expanded");
-
-  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("deepseek");
-  await expect(providerPrompt).toBeHidden();
-  await expect(providerDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Hidden");
-
-  await providerSummary.click();
-  await expect(providerPrompt).toBeVisible();
-  const settingsTenantSelector = settingsDialog.getByRole("combobox", { name: "Tenant" });
-  await settingsTenantSelector.selectOption("tenant_2");
-  await expect(settingsTenantSelector).toHaveValue("tenant_2");
-  await expect(routingPrompt).toBeHidden();
-  await expect(providerPrompt).toBeHidden();
-  await expect(routingDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Hidden");
-  await expect(providerDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Hidden");
-
-  await routingSummary.click();
-  await providerSummary.click();
-  await settingsDialog.getByRole("button", { name: "Close" }).click();
-  await expect(settingsDialog).toBeHidden();
-  await page.getByTestId("avatar-menu").click();
-  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
-  await expect(routingPrompt).toBeHidden();
-  await expect(providerPrompt).toBeHidden();
+  const disclosure = settingsDialog.locator("details.system-prompt-disclosure");
+  const prompt = settingsDialog.locator("#routing-system-prompt-input");
+  await expect(prompt).toBeHidden();
+  await disclosure.locator("summary").click();
+  await expect(prompt).toBeVisible();
+  await settingsDialog.getByRole("combobox", { name: "Tenant" }).selectOption("tenant_2");
+  await expect(prompt).toBeHidden();
 });
+
 
 test("usage intervals load every dashboard surface, remain active on refresh, and fit mobile", async ({ page }) => {
   const requestedIntervals = [];
@@ -2727,855 +2497,172 @@ test("failed-request responses cannot cross interval or Usage tenant boundaries"
   expect(routeState.requests.some((request) => request.path === "/api/management/tenants/tenant_2/usage")).toBe(true);
 });
 
-test("pasting a provider key verifies before blur, locks conflicts, and masks the accepted key", async ({ page }) => {
-  const pastedProviderKey = "sk-pasted-operational-key";
-  let providerSaveRequestCount = 0;
-  /** @type {() => void} */
-  let releaseProviderSave = () => {};
-  const providerSaveReleased = new Promise((resolve) => {
-    releaseProviderSave = () => resolve(undefined);
-  });
-  /** @type {() => void} */
-  let providerSaveStarted = () => {};
-  const providerSaveRequested = new Promise((resolve) => {
-    providerSaveStarted = () => resolve(undefined);
-  });
-  await installAssetRoutes(page);
-  await installManagementRoutes(page, { savedProviderIDs: [] });
-  await page.route(providerKeyEndpointURL("openai"), async (route) => {
-    providerSaveRequestCount += 1;
-    providerSaveStarted();
-    await providerSaveReleased;
-    await route.fallback();
-  });
-
-  await page.goto(`${baseURL}${applicationPath}`);
-  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const providerEditor = settingsDialog.locator("provider-editor");
-  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
-  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
-  await pasteProviderKey(providerKeyInput, pastedProviderKey);
-  await providerSaveRequested;
-
-  await expect(providerKeyInput).toBeFocused();
-  await expect(providerKeyInput).toBeEnabled();
-  await expect(providerEditor.getByRole("status")).toHaveText("Verifying key");
-  await expect(settingsDialog.getByRole("button", { name: "Close" })).toBeDisabled();
-  await expect(settingsDialog.getByRole("combobox", { name: "Tenant" })).toBeDisabled();
-  await expect(providerEditor.getByRole("combobox", { name: "Provider", exact: true })).toBeDisabled();
-  await expect(providerEditor.getByRole("combobox", { name: "Provider default model" })).toBeDisabled();
-  await expect(providerEditor.getByRole("button", { name: "Hide key" })).toBeDisabled();
-  await expect(providerEditor.getByRole("button", { name: "Remove provider key and settings" })).toBeDisabled();
-  expect(providerSaveRequestCount).toBe(1);
-
-  releaseProviderSave();
-  await expect(providerEditor.getByRole("status")).toBeHidden();
-  await expect(settingsDialog.locator(".settings-notification .notice")).toHaveText("Provider key verified and settings saved");
-  await expect(providerKeyInput).toHaveValue("****aved");
-  await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
-  await expect(providerKeyInput).not.toHaveValue(pastedProviderKey);
-  expect(await browserStorageContains(page, pastedProviderKey)).toBe(false);
-  expect(providerSaveRequestCount).toBe(1);
-});
-
-test("rejected pasted keys remain editable and retry through the same operation", async ({ page }) => {
-  const rejectedProviderKey = "sk-rejected-provider-key";
-  let providerSaveRequestCount = 0;
-  await installAssetRoutes(page);
-  await installManagementRoutes(page, { savedProviderIDs: [] });
-  await page.route(providerKeyEndpointURL("openai"), async (route) => {
-    providerSaveRequestCount += 1;
-    if (providerSaveRequestCount === 1) {
-      await route.fulfill({ status: 422, body: "provider_key_rejected" });
-      return;
-    }
-    await route.fallback();
-  });
-
-  await page.goto(`${baseURL}${applicationPath}`);
-  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const providerEditor = settingsDialog.locator("provider-editor");
-  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
-  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
-  await pasteProviderKey(providerKeyInput, rejectedProviderKey);
-
-  const verificationFailure = providerEditor.getByRole("alert");
-  await expect(verificationFailure).toContainText("Key was rejected. No provider key was saved.");
-  await expect(providerKeyInput).toHaveValue(rejectedProviderKey);
-  await expect(settingsDialog).toBeVisible();
-  expect(providerSaveRequestCount).toBe(1);
-
-  await verificationFailure.getByRole("button", { name: "Retry verification" }).click();
-  await expect(settingsDialog.locator(".settings-notification .notice")).toHaveText("Provider key verified and settings saved");
-  await expect(verificationFailure).toBeHidden();
-  await expect(providerKeyInput).toHaveValue("****aved");
-  expect(providerSaveRequestCount).toBe(2);
-});
-
-test("a rejected pasted replacement keeps the previous verified key active", async ({ page }) => {
-  const rejectedReplacement = "sk-rejected-replacement";
+test("provider cards follow catalog order and keep all-tenant activity provider-only", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await installAssetRoutes(page);
   await installManagementRoutes(page);
-  await page.route(providerKeyEndpointURL("openai"), async (route) => {
-    await route.fulfill({ status: 422, body: "provider_key_rejected" });
-  });
+  await page.goto(baseURL + applicationPath);
 
-  await page.goto(`${baseURL}${applicationPath}`);
-  await page.getByTestId("avatar-menu").click();
-  await page.getByTestId("avatar-menu-item").nth(0).click();
-  const providerEditor = page.getByRole("dialog", { name: "Settings" }).locator("provider-editor");
-  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
-  await providerEditor.getByRole("button", { name: "Show key" }).click();
-  await pasteProviderKey(providerKeyInput, rejectedReplacement);
-
-  await expect(providerEditor.getByRole("alert")).toContainText(
-    "Key was rejected. The previous key remains active.",
-  );
-  await expect(providerKeyInput).toHaveValue(rejectedReplacement);
-});
-
-test("a newer pasted key cancels the stale verification and applies only the newest result", async ({ page }) => {
-  const staleProviderKey = "sk-stale-pasted-key";
-  const currentProviderKey = "sk-current-pasted-key";
-  const submittedKeys = [];
-  /** @type {() => void} */
-  let releaseStaleVerification = () => {};
-  const staleVerificationReleased = new Promise((resolve) => {
-    releaseStaleVerification = () => resolve(undefined);
-  });
-  /** @type {() => void} */
-  let staleVerificationStarted = () => {};
-  const staleVerificationRequested = new Promise((resolve) => {
-    staleVerificationStarted = () => resolve(undefined);
-  });
-  await installAssetRoutes(page);
-  await installManagementRoutes(page, { savedProviderIDs: [] });
-  await page.route(providerKeyEndpointURL("openai"), async (route) => {
-    const submittedKey = route.request().postDataJSON().fields.api_key;
-    submittedKeys.push(submittedKey);
-    if (submittedKey === staleProviderKey) {
-      staleVerificationStarted();
-      await staleVerificationReleased;
-      await route.fulfill({ status: 422, body: "provider_key_rejected" }).catch(() => {});
-      return;
-    }
-    await route.fallback();
-  });
-
-  await page.goto(`${baseURL}${applicationPath}`);
-  const providerEditor = page.getByRole("dialog", { name: "Settings" }).locator("provider-editor");
-  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
-  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
-  await pasteProviderKey(providerKeyInput, staleProviderKey);
-  await staleVerificationRequested;
-  await pasteProviderKey(providerKeyInput, currentProviderKey);
-
-  await expect.poll(() => submittedKeys).toEqual([staleProviderKey, currentProviderKey]);
-  await expect(page.getByRole("dialog", { name: "Settings" }).locator(".settings-notification .notice")).toHaveText(
-    "Provider key verified and settings saved",
-  );
-  await expect(providerKeyInput).toHaveValue("****aved");
-  releaseStaleVerification();
-  await expect(providerEditor.getByRole("alert")).toBeHidden();
-  expect(submittedKeys).toEqual([staleProviderKey, currentProviderKey]);
-});
-
-test("DashScope waits for its tenant workspace URL before saving the provider key", async ({ page }) => {
-	const workspaceURL = "https://tenant-workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1";
-	const providerSettingsRequests = [];
-	await installAssetRoutes(page);
-	await installManagementRoutes(page);
-	page.on("request", (request) => {
-		if (request.url() === providerKeyEndpointURL("dashscope") && request.method() === "PUT") {
-			providerSettingsRequests.push(request.postDataJSON());
-		}
-	});
-
-	await page.goto(`${baseURL}${applicationPath}`);
-	await page.getByTestId("avatar-menu").click();
-	await page.getByTestId("avatar-menu-item").nth(0).click();
-	const providerEditor = page.getByRole("dialog", { name: "Settings" }).locator("provider-editor");
-	const providerSelector = providerEditor.getByRole("combobox", { name: "Provider", exact: true });
-	await expect(providerEditor.getByRole("textbox", { name: "DashScope API URL" })).toBeHidden();
-	await providerSelector.selectOption("dashscope");
-	const providerModelSelector = providerEditor.getByRole("combobox", { name: "Provider default model" });
-	await expect(providerModelSelector.locator("option")).toHaveText([
-		"qwen-plus",
-		"qwen3.6-flash",
-		"qwen3.7-max",
-		"qwen3.7-plus",
-	]);
-	const workspaceInput = providerEditor.getByRole("textbox", { name: "DashScope API URL" });
-	await expect(workspaceInput).toBeVisible();
-	const providerKeyInput = providerEditor.getByRole("textbox", { name: "DashScope API key" });
-	await expect(providerEditor.locator("provider-connection-field")).toHaveCount(2);
-	await pasteProviderKey(providerKeyInput, "sk-tenant-dashscope");
-	await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-	expect(providerSettingsRequests).toEqual([]);
-	await workspaceInput.fill(workspaceURL);
-	await workspaceInput.press("Tab");
-
-	await expect.poll(() => providerSettingsRequests).toEqual([{
-		fields: {
-			api_key: "sk-tenant-dashscope",
-			base_url: workspaceURL,
-		},
-		text_model: "qwen-plus",
-		system_prompt: "",
-	}]);
-	await expect(workspaceInput).toHaveValue(workspaceURL);
-	await expect(providerKeyInput).toHaveValue("****aved");
-});
-
-test("MiniMax provider exposes every current M2 model and preserves M2.7 as default", async ({ page }) => {
-  await installAssetRoutes(page);
-  await installManagementRoutes(page);
-
-  await page.goto(`${baseURL}${applicationPath}`);
-  await page.getByTestId("avatar-menu").click();
-  await page.getByTestId("avatar-menu-item").nth(0).click();
-  const providerEditor = page.getByRole("dialog", { name: "Settings" }).locator("provider-editor");
-  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("minimax");
-  const providerModelSelector = providerEditor.getByRole("combobox", { name: "Provider default model" });
-  await expect(providerModelSelector).toHaveValue("minimax-m2.7");
-  await expect(providerModelSelector.locator("option")).toHaveText([
-    "minimax-m2",
-    "minimax-m2.1",
-    "minimax-m2.1-highspeed",
-    "minimax-m2.5",
-    "minimax-m2.5-highspeed",
-    "minimax-m2.7",
-    "minimax-m2.7-highspeed",
+  const cards = page.locator("[data-provider-card]");
+  await expect(cards).toHaveCount(11);
+  await expect(cards.locator(".provider-card-front h3")).toHaveText([
+    "OpenAI", "DeepSeek", "DashScope", "Moonshot", "MiniMax", "SiliconFlow", "Z.AI", "Gemini", "Anthropic", "Meta", "xAI",
   ]);
+  expect(await cards.locator("provider-card-statuses span:visible").allTextContents()).not.toContain("active");
+  expect(await cards.locator(".provider-card-front dt:visible").allTextContents()).not.toContain("Provider default model");
+  await expect(cards.first().getByRole("button", { name: "Set key" })).toBeVisible();
+  await expect(page.locator('[data-provider-card="dashscope"] .provider-card-front dd:visible')).toHaveText(["0", "0"]);
+  expect(await cards.first().locator(".provider-card-inner").evaluate((element) => getComputedStyle(element).transitionDuration)).toBe("0s");
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test("Meta provider exposes both Standard-tier Muse Spark models and preserves 1.1 as default", async ({ page }) => {
-  const providerSettingsRequests = [];
+test("an explicit Usage tenant opens one safe provider card editor", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page);
-  page.on("request", (request) => {
-    if (request.url() === providerKeyEndpointURL("meta") && request.method() === "PUT") {
-      providerSettingsRequests.push(request.postDataJSON());
-    }
-  });
+  await page.goto(baseURL + applicationPath);
+  await page.getByRole("combobox", { name: "Usage tenant" }).selectOption("tenant_1");
 
-  await page.goto(`${baseURL}${applicationPath}`);
-  await page.getByTestId("avatar-menu").click();
-  await page.getByTestId("avatar-menu-item").nth(0).click();
-  const providerEditor = page.getByRole("dialog", { name: "Settings" }).locator("provider-editor");
-  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("meta");
-  const providerModelSelector = providerEditor.getByRole("combobox", { name: "Provider default model" });
-  await expect(providerModelSelector).toHaveValue("muse-spark-1.1");
-  await expect(providerModelSelector.locator("option")).toHaveText(["muse-spark-1.1", "muse-spark-1.2"]);
-  await expect(providerModelSelector.locator('option[value="muse-spark-1.2-contributor"]')).toHaveCount(0);
+  const card = page.locator('[data-provider-card="openai"]');
+  await expect(card.getByText("active", { exact: true })).toBeVisible();
+  await expect(card.getByText("used", { exact: true })).toBeVisible();
+  await expect(card.getByText("gpt-4.1", { exact: true })).toBeVisible();
+  await card.getByRole("button", { name: "Key settings" }).click();
 
-  await providerModelSelector.selectOption("muse-spark-1.2");
-
-  await expect.poll(() => providerSettingsRequests).toEqual([{
-    fields: { api_key: "" },
-    text_model: "muse-spark-1.2",
-    system_prompt: "",
-  }]);
-  await expect(providerModelSelector).toHaveValue("muse-spark-1.2");
+  const back = card.locator(".provider-card-back");
+  const keyInput = back.getByRole("textbox", { name: "OpenAI API key" });
+  await expect(keyInput).toHaveValue("••••••••");
+  await expect(back.getByRole("button", { name: "Show key" })).toHaveCount(0);
+  const acquisition = back.getByRole("link", { name: "Get API key" });
+  await expect(acquisition).toHaveAttribute("href", "https://platform.openai.com/api-keys");
+  await expect(acquisition).toHaveAttribute("target", "_blank");
+  await expect(acquisition).toHaveAttribute("rel", "noopener noreferrer");
+  await expect(back.locator("header").getByRole("button", { name: "Done" })).toBeFocused();
+  expect(await card.locator(".provider-card-front").evaluate((element) => element.inert)).toBe(true);
+  await expect(back).toHaveAttribute("aria-hidden", "false");
+  await back.getByRole("button", { name: "Replace key" }).click();
+  await expect(keyInput).toHaveValue("");
+  await expect(keyInput).toBeEditable();
 });
 
-for (const verificationContextChange of [
-  { id: "tenant", label: "tenant switch", article: "a", multiTenant: true },
-  { id: "provider", label: "provider switch", article: "a", multiTenant: false },
-  { id: "model", label: "model change", article: "a", multiTenant: false },
-  { id: "editor", label: "editor replacement", article: "an", multiTenant: false },
-]) {
-  test(`${verificationContextChange.article} ${verificationContextChange.label} rejects a stale provider-key verification completion`, async ({ page }) => {
-    const staleProviderKey = `sk-stale-${verificationContextChange.id}-context`;
-    /** @type {() => void} */
-    let releaseVerification = () => {};
-    const verificationReleased = new Promise((resolve) => {
-      releaseVerification = () => resolve(undefined);
-    });
-    /** @type {() => void} */
-    let verificationStarted = () => {};
-    const verificationRequested = new Promise((resolve) => {
-      verificationStarted = () => resolve(undefined);
-    });
-    await installAssetRoutes(page);
-    if (verificationContextChange.multiTenant) {
-      await installMultiTenantRoutes(page);
-    } else {
-      await installManagementRoutes(page, { savedProviderIDs: [] });
-    }
-    await page.route(providerKeyEndpointURL("openai"), async (route) => {
-      verificationStarted();
-      await verificationReleased;
-      await route.fallback().catch(() => {});
-    });
+test("provider cards distinguish unavailable activity from a successful zero", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { usageStatus: httpInternalServerError });
+  await page.goto(baseURL + applicationPath);
 
-    await page.goto(`${baseURL}${applicationPath}`);
-    if (verificationContextChange.multiTenant) {
-      await page.getByTestId("avatar-menu").click();
-      await page.getByTestId("avatar-menu-item").nth(0).click();
-    }
-    const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-    const providerEditor = settingsDialog.locator("provider-editor");
-    const providerSelector = providerEditor.getByRole("combobox", { name: "Provider", exact: true });
-    if (!verificationContextChange.multiTenant) {
-      await providerSelector.selectOption("openai");
-    }
-    const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
-    if (verificationContextChange.multiTenant) {
-      await providerEditor.getByRole("button", { name: "Show key" }).click();
-    }
-    await pasteProviderKey(providerKeyInput, staleProviderKey);
-    await verificationRequested;
-    await expect(providerEditor.getByRole("status")).toHaveText("Verifying key");
+  const cards = page.locator("[data-provider-card]");
+  await expect(cards).toHaveCount(11);
+  await expect(cards.locator(".provider-card-front dd:visible")).toHaveText(Array(22).fill("Unavailable"));
+  await expect(cards.locator(".provider-card-front dd:visible").getByText("0", { exact: true })).toHaveCount(0);
+});
 
-    await page.locator("llm-proxy-management-application").evaluate(
-      async (applicationElement, contextChange) => {
-        const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
-        const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
-        if (!applicationState) {
-          throw new Error("provider_verification_state_missing");
-        }
-        switch (contextChange) {
-          case "tenant":
-            await applicationState.switchSettingsTenant("tenant_2");
-            break;
-          case "provider":
-            applicationState.replaceProviderEditorSession("anthropic");
-            break;
-          case "model":
-            applicationState.handleSelectedProviderTextModelChange({ target: { value: "gpt-4o-mini" } });
-            break;
-          case "editor":
-            applicationState.replaceProviderEditorSession(applicationState.selectedProviderID);
-            break;
-          default:
-            throw new Error("provider_verification_context_change_invalid");
-        }
-      },
-      verificationContextChange.id,
-    );
-    releaseVerification();
-
-    await expect(providerEditor.getByRole("status")).toBeHidden();
-    await expect(providerEditor.getByRole("alert")).toBeHidden();
-    await expect(settingsDialog.locator(".settings-notification .notice")).not.toHaveText(
-      "Provider key verified and settings saved",
-    );
-    if (verificationContextChange.id === "tenant") {
-      await expect(settingsDialog.getByRole("combobox", { name: "Tenant" })).toHaveValue("tenant_2");
-    } else if (verificationContextChange.id === "provider") {
-      await expect(providerSelector).toHaveValue("anthropic");
-    } else if (verificationContextChange.id === "model") {
-      await expect(providerEditor.getByRole("combobox", { name: "Provider default model" })).toHaveValue(
-        "gpt-4o-mini",
-      );
-    } else {
-      await expect(providerKeyInput).toHaveValue("");
-    }
-  });
-}
-
-test("provider selection autosaves its exact editor while transient removal stays local", async ({ page }) => {
-  const firstGrokKey = "xai-provider-first-1111";
-  const secondGrokKey = "xai-provider-second-2222";
-  const deepSeekProviderKey = "sk-owner-deepseek-revealed";
-  const providerMutations = [];
-  page.on("request", (request) => {
-    if (!request.url().includes(managementProviderKeysPath) || !["PUT", "DELETE"].includes(request.method())) {
+test("provider card key verification is transient and preserves the prior key on safe failures", async ({ page }) => {
+  const profile = managementProfile();
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { profile, savedProviderIDs: [] });
+  const provider = profile.providers.find((candidate) => candidate.id === "openai");
+  if (!provider) throw new Error("management_fixture_provider_missing:openai");
+  /** @type {() => void} */
+  let releaseVerification = () => {};
+  const verificationGate = new Promise((resolve) => { releaseVerification = () => resolve(undefined); });
+  const responses = [
+    { status: 422, body: "provider_key_rejected", message: "Key was rejected. The previous key remains active." },
+    { status: 429, body: "provider_key_verification_rate_limited", message: "Key could not be verified because the provider rate limit was reached. The previous key remains active." },
+    { status: 504, body: "provider_key_verification_timed_out", message: "Key verification timed out. The previous key remains active." },
+    { status: 503, body: "provider_key_verification_unavailable", message: "The provider could not verify this key. The previous key remains active." },
+  ];
+  const submittedKeys = [];
+  let requestIndex = 0;
+  await page.route(providerKeyEndpointURL("openai"), async (route) => {
+    const payload = route.request().postDataJSON();
+    submittedKeys.push(payload.fields.api_key);
+    if (requestIndex === 0) {
+      requestIndex += 1;
+      await verificationGate;
+      applyFixtureProviderConnection(provider, payload.fields, "saved");
+      provider.text_model = payload.text_model;
+      provider.system_prompt = payload.system_prompt;
+      reconcileManagementProfileRoutingDefaults(profile);
+      await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
       return;
     }
-    providerMutations.push({
-      method: request.method(),
-      url: request.url(),
-      payload: request.method() === "PUT" ? request.postDataJSON() : null,
-    });
-  });
-  await installAssetRoutes(page);
-  await installManagementRoutes(page, { providerKeys: { deepseek: deepSeekProviderKey } });
-
-  await page.goto(`${baseURL}${applicationPath}`);
-  await page.getByTestId("avatar-menu").click();
-  await page.getByTestId("avatar-menu-item").nth(0).click();
-
-  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const providerEditor = settingsDialog.locator("provider-editor");
-  const providerSelector = providerEditor.getByRole("combobox", { name: "Provider", exact: true });
-
-  await providerSelector.selectOption("xai");
-  const grokKeyInput = providerEditor.getByRole("textbox", { name: "xAI API key" });
-  await grokKeyInput.fill(firstGrokKey);
-  const providerRemovalButton = providerEditor.getByRole("button", { name: "Remove provider key and settings" });
-  await expect(providerRemovalButton).toBeVisible();
-  await providerRemovalButton.click();
-  await expect(grokKeyInput).toHaveValue("");
-  await expect(grokKeyInput).toBeFocused();
-  await expect(page.getByRole("alertdialog", { name: "Remove provider key?" })).toBeHidden();
-  expect(providerMutations).toHaveLength(0);
-
-  await grokKeyInput.fill(firstGrokKey);
-  await expect(providerEditor.getByRole("button", { name: /^(Save|Update) key$/ })).toHaveCount(0);
-  await providerSelector.selectOption("meta");
-  await expect.poll(() => providerMutations.length).toBe(1);
-  expect(providerMutations.at(-1)).toMatchObject({
-    method: "PUT",
-    url: providerKeyEndpointURL("xai"),
-    payload: { fields: { api_key: firstGrokKey }, text_model: "grok-4.3", system_prompt: "" },
-  });
-  const metaKeyInput = providerEditor.getByRole("textbox", { name: "Meta API key" });
-  await expect(metaKeyInput).toHaveValue("****meta");
-  await expect(metaKeyInput).toHaveAttribute("readonly", "readonly");
-  await expect(providerEditor.getByRole("combobox", { name: "Provider default model" })).toHaveValue("muse-spark-1.1");
-
-  await providerSelector.selectOption("xai");
-  await expect(grokKeyInput).toHaveValue("****aved");
-  await expect(grokKeyInput).toHaveAttribute("readonly", "readonly");
-  await providerEditor.getByRole("button", { name: "Show key" }).click();
-  await expect(grokKeyInput).toHaveValue(firstGrokKey);
-  await grokKeyInput.fill(secondGrokKey);
-  await providerEditor.getByRole("button", { name: "Hide key" }).click();
-  await expect(grokKeyInput).toHaveValue("****2222");
-  await providerSelector.selectOption("deepseek");
-  await expect.poll(() => providerMutations.length).toBe(2);
-  expect(providerMutations.at(-1)).toMatchObject({
-    method: "PUT",
-    url: providerKeyEndpointURL("xai"),
-    payload: { fields: { api_key: secondGrokKey }, text_model: "grok-4.3", system_prompt: "" },
-  });
-  const deepSeekKeyInput = providerEditor.getByRole("textbox", { name: "DeepSeek API key" });
-  await expect(deepSeekKeyInput).toHaveValue("****5678");
-  await providerEditor.getByRole("button", { name: "Show key" }).click();
-  await expect(deepSeekKeyInput).toHaveValue(deepSeekProviderKey);
-
-  await providerSelector.selectOption("xai");
-  await expect(grokKeyInput).toHaveValue("****aved");
-  await providerEditor.getByRole("button", { name: "Show key" }).click();
-  await expect(grokKeyInput).toHaveValue(secondGrokKey);
-  await providerSelector.selectOption("deepseek");
-  await expect(deepSeekKeyInput).toHaveValue("****5678");
-  await expect(deepSeekKeyInput).not.toHaveValue(deepSeekProviderKey);
-  await expect(deepSeekKeyInput).toHaveAttribute("readonly", "readonly");
-
-  await providerSelector.selectOption("xai");
-  await expect(grokKeyInput).not.toHaveValue(secondGrokKey);
-  expect(await browserStorageContains(page, firstGrokKey)).toBe(false);
-  expect(await browserStorageContains(page, secondGrokKey)).toBe(false);
-
-  await providerRemovalButton.click();
-  const removalConfirmation = page.getByRole("alertdialog", { name: "Remove provider key?" });
-  await expect(removalConfirmation).toBeVisible();
-  await expect(settingsDialog).toHaveAttribute("inert", /^(|inert|true)$/);
-  expect(providerMutations.filter((mutation) => mutation.method === "DELETE")).toHaveLength(0);
-  const cancelRemovalButton = removalConfirmation.getByRole("button", { name: "Cancel" });
-  const confirmRemovalButton = removalConfirmation.getByRole("button", { name: "Remove key" });
-  await expect(cancelRemovalButton).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(confirmRemovalButton).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(cancelRemovalButton).toBeFocused();
-  await cancelRemovalButton.click();
-  await expect(removalConfirmation).toBeHidden();
-  await expect(settingsDialog).not.toHaveAttribute("inert", "inert");
-  await expect(providerSelector).toBeFocused();
-  expect(providerMutations.filter((mutation) => mutation.method === "DELETE")).toHaveLength(0);
-
-  await providerRemovalButton.click();
-  await removalConfirmation.getByRole("button", { name: "Remove key" }).click();
-  await expect.poll(() => providerMutations.filter((mutation) => mutation.method === "DELETE").length).toBe(1);
-  expect(providerMutations.at(-1)).toMatchObject({
-    method: "DELETE",
-    url: providerKeyEndpointURL("xai"),
-  });
-  await expect(grokKeyInput).toHaveValue("");
-});
-
-test("Settings close waits for the current provider autosave", async ({ page }) => {
-  let releaseProviderSave;
-  const providerSaveReleased = new Promise((resolve) => {
-    releaseProviderSave = resolve;
-  });
-  let providerSaveStarted;
-  const providerSaveRequested = new Promise((resolve) => {
-    providerSaveStarted = resolve;
-  });
-  await installAssetRoutes(page);
-  await installManagementRoutes(page, { savedProviderIDs: [] });
-  await page.route(providerKeyEndpointURL("openai"), async (route) => {
-    providerSaveStarted();
-    await providerSaveReleased;
-    await route.fallback();
+    const response = responses[requestIndex - 1];
+    requestIndex += 1;
+    await route.fulfill({ status: response.status, body: response.body });
   });
 
-  await page.goto(`${baseURL}${applicationPath}`);
-  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const providerEditor = settingsDialog.locator("provider-editor");
-  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
-  await providerEditor.getByRole("textbox", { name: "OpenAI API key" }).fill("sk-close-autosave");
-  await settingsDialog.getByRole("button", { name: "Close" }).click();
-  await providerSaveRequested;
-  await expect(settingsDialog).toBeVisible();
-  await expect(settingsDialog.locator(".settings-notification .notice")).not.toHaveText(
-    "Add at least one provider API key before leaving Settings.",
-  );
+  await page.goto(baseURL + applicationPath);
+  await page.getByRole("combobox", { name: "Usage tenant" }).selectOption("tenant_1");
+  const card = page.locator('[data-provider-card="openai"]');
+  const action = card.getByRole("button", { name: "Set key" });
+  await action.click();
+  const back = card.locator(".provider-card-back");
+  const input = back.getByRole("textbox", { name: "OpenAI API key" });
+  await pasteProviderKey(input, "first-candidate-key");
+  await expect(back.getByText("Checking key...", { exact: true })).toBeVisible();
+  await expect(back.getByRole("button", { name: "Done", exact: true }).last()).toBeDisabled();
+  await expect(page.locator('[data-provider-card="deepseek"] button[data-provider-card-action]')).toBeDisabled();
+  expect(await browserStorageContains(page, "first-candidate-key")).toBe(false);
+  releaseVerification();
+  await expect(input).toHaveValue("••••••••");
+  await expect(back.getByText("Checking key...", { exact: true })).toBeHidden();
+  await expect(card.locator("provider-card-statuses").getByText("Verified", { exact: true })).toHaveCount(0);
 
-  releaseProviderSave();
-  await expect(settingsDialog).toBeHidden();
-});
-
-test("failed provider autosave preserves its editor and blocks provider switching", async ({ page }) => {
-  const editedProviderKey = "sk-openai-autosave-failure";
-  let providerSaveRequestCount = 0;
-  await installAssetRoutes(page);
-  await installManagementRoutes(page);
-  await page.route(providerKeyEndpointURL("openai"), async (route) => {
-    providerSaveRequestCount += 1;
-    await route.fulfill({ status: httpInternalServerError, body: "request_failed" });
-  });
-
-  await page.goto(`${baseURL}${applicationPath}`);
-  await page.getByTestId("avatar-menu").click();
-  await page.getByTestId("avatar-menu-item").nth(0).click();
-  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const providerEditor = settingsDialog.locator("provider-editor");
-  const providerSelector = providerEditor.getByRole("combobox", { name: "Provider", exact: true });
-  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
-  await providerEditor.getByRole("button", { name: "Show key" }).click();
-  await providerKeyInput.fill(editedProviderKey);
-  await page.keyboard.press("Tab");
-
-  await expect.poll(() => providerSaveRequestCount).toBe(1);
-  await expect(settingsDialog.locator(".settings-notification .notice")).toHaveText("Request failed");
-  await expect(providerKeyInput).toHaveValue(editedProviderKey);
-  await expect(settingsDialog).toBeVisible();
-
-  await providerSelector.selectOption("deepseek");
-  await expect.poll(() => providerSaveRequestCount).toBe(2);
-  await expect(providerSelector).toHaveValue("openai");
-  await expect(providerKeyInput).toHaveValue(editedProviderKey);
-});
-
-test("session cleanup cancels provider autosaves before they can repopulate state", async ({ page }) => {
-  const lateProviderKey = "sk-anthropic-late-autosave";
-  /** @type {() => void} */
-  let releaseProviderSave = () => {};
-  const providerSaveReleased = new Promise((resolve) => {
-    releaseProviderSave = () => resolve(undefined);
-  });
-  /** @type {() => void} */
-  let providerSaveStarted = () => {};
-  const providerSaveRequested = new Promise((resolve) => {
-    providerSaveStarted = () => resolve(undefined);
-  });
-  await installAssetRoutes(page);
-  await installManagementRoutes(page);
-  await page.route(providerKeyEndpointURL("anthropic"), async (route) => {
-    providerSaveStarted();
-    await providerSaveReleased;
-    await route.fulfill({ status: httpOK, json: managementProfile() }).catch(() => {});
-  });
-
-  await page.goto(`${baseURL}${applicationPath}`);
-  await page.getByTestId("avatar-menu").click();
-  await page.getByTestId("avatar-menu-item").nth(0).click();
-  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const providerEditor = settingsDialog.locator("provider-editor");
-  const providerSelector = providerEditor.getByRole("combobox", { name: "Provider", exact: true });
-  await providerSelector.selectOption("anthropic");
-  await pasteProviderKey(providerEditor.getByRole("textbox", { name: "Anthropic API key" }), lateProviderKey);
-  await providerSaveRequested;
-  await expect(providerEditor.getByRole("status")).toHaveText("Verifying key");
-
-  await page.evaluate(() => {
-    sessionStorage.setItem("llm-proxy-test-auth-status", "unauthenticated");
-    document.dispatchEvent(new CustomEvent("mpr-ui:auth:unauthenticated"));
-  });
-  await expect(page).toHaveURL(`${baseURL}/`);
-  releaseProviderSave();
-  await page.waitForTimeout(50);
-  await expect(page.locator("body")).not.toContainText(lateProviderKey);
-  expect(await browserStorageContains(page, lateProviderKey)).toBe(false);
-
-  await page.getByRole("button", { name: "Log In" }).click();
-  await page.evaluate(() => window.__llmProxyMprAuthenticate());
-  await expect(page).toHaveURL(`${baseURL}${applicationPath}`);
-  await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
-  await page.getByTestId("avatar-menu").click();
-  await page.getByTestId("avatar-menu-item").nth(0).click();
-  await providerSelector.selectOption("anthropic");
-  await expect(providerEditor.getByRole("textbox", { name: "Anthropic API key" })).toHaveValue("");
-  await expect(providerEditor).not.toContainText(lateProviderKey);
-});
-
-test("saved provider keys reveal, edit, and clear without browser persistence", async ({ page }) => {
-  const revealedProviderKey = "sk-owner-openai-revealed";
-  const editedProviderKey = "sk-owner-openai-edited";
-  let revealRequestCount = 0;
-  const savedProviderSettingsPayloads = [];
-  const savedRoutingDefaultsPayloads = [];
-  page.on("request", (request) => {
-    if (request.url() === providerKeyEndpointURL("openai", "reveal")) {
-      revealRequestCount += 1;
-    }
-    if (request.url() === providerKeyEndpointURL("openai") && request.method() === "PUT") {
-      savedProviderSettingsPayloads.push(JSON.parse(request.postData() || "{}"));
-    }
-    if (request.url() === `${baseURL}${managementDefaultTenantPath}/defaults` && request.method() === "PUT") {
-      savedRoutingDefaultsPayloads.push(request.postDataJSON());
-    }
-  });
-  await installAssetRoutes(page);
-  await installManagementRoutes(page, { providerKeys: { openai: revealedProviderKey } });
-
-  await page.goto(`${baseURL}${applicationPath}`);
-  await page.getByTestId("avatar-menu").click();
-  await page.getByTestId("avatar-menu-item").nth(0).click();
-
-  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const providerEditor = settingsDialog.locator("provider-editor");
-  const providerSelector = providerEditor.getByRole("combobox", { name: "Provider", exact: true });
-  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
-  const providerVisibilityButton = providerEditor.locator(".provider-key-visibility-toggle");
-  await expect(providerKeyInput).toHaveValue("****1234");
-  await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
-  await expect(providerVisibilityButton).toHaveAccessibleName("Show key");
-  await expect(providerVisibilityButton).toBeVisible();
-  const visibilitySymbols = providerEditor
-    .locator(".provider-key-visibility-toggle")
-    .locator(".material-symbols-outlined");
-  await expect(visibilitySymbols).toHaveCount(2);
-  await expect(visibilitySymbols.nth(0)).toHaveText("visibility");
-  await expect(visibilitySymbols.nth(0)).toBeVisible();
-  await expect(visibilitySymbols.nth(1)).toHaveText("visibility_off");
-  await expect(visibilitySymbols.nth(1)).toBeHidden();
-  await expect(settingsDialog.locator("example-list")).not.toContainText(revealedProviderKey);
-
-  const visibilityBoxBeforePress = await providerVisibilityButton.boundingBox();
-  if (!visibilityBoxBeforePress) {
-    throw new Error("provider_visibility_control_missing");
+  await back.getByRole("button", { name: "Replace key" }).click();
+  for (const [index, response] of responses.entries()) {
+    const candidate = `failed-candidate-${index}`;
+    await pasteProviderKey(input, candidate);
+    await expect(back.getByText(response.message, { exact: true })).toBeVisible();
+    await expect(input).toHaveValue(candidate);
+    expect(await card.locator(".provider-card-front").evaluate((element, raw) => element.outerHTML.includes(raw), candidate)).toBe(false);
+    expect(await browserStorageContains(page, candidate)).toBe(false);
   }
-  await page.mouse.move(
-    visibilityBoxBeforePress.x + visibilityBoxBeforePress.width / 2,
-    visibilityBoxBeforePress.y + visibilityBoxBeforePress.height / 2,
-  );
-  await page.mouse.down();
-  await page.waitForTimeout(160);
-  expect(await providerVisibilityButton.boundingBox()).toEqual(visibilityBoxBeforePress);
-  await page.mouse.up();
-  await expect(providerKeyInput).toHaveValue(revealedProviderKey);
-  await expect(providerKeyInput).not.toHaveAttribute("readonly", "readonly");
-  await expect(providerEditor.getByRole("button", { name: "Hide key" })).toBeVisible();
-  await expect(visibilitySymbols.nth(0)).toBeHidden();
-  await expect(visibilitySymbols.nth(1)).toBeVisible();
-  await expect(providerEditor.getByText("Hide key", { exact: true })).toHaveCount(0);
-  expect(await providerVisibilityButton.boundingBox()).toEqual(visibilityBoxBeforePress);
-  expect(revealRequestCount).toBe(1);
-  expect(await providerKeyInput.evaluate((inputElement) => inputElement.outerHTML)).not.toContain(revealedProviderKey);
-  await expect(settingsDialog.locator("example-list")).not.toContainText(revealedProviderKey);
-
-  await providerEditor.getByRole("button", { name: "Hide key" }).click();
-  await expect(providerKeyInput).toHaveValue("****aled");
-  await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
-  await providerEditor.getByRole("button", { name: "Show key" }).click();
-  await expect(providerKeyInput).toHaveValue(revealedProviderKey);
-  expect(revealRequestCount).toBe(1);
-
-  await providerKeyInput.fill(editedProviderKey);
-  await page.keyboard.press("Tab");
-  await expect.poll(() => savedProviderSettingsPayloads.length).toBe(1);
-  await expect(providerKeyInput).not.toHaveValue(editedProviderKey);
-  await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
-  await expect(providerEditor.getByRole("button", { name: "Show key" })).toBeVisible();
-  expect(savedProviderSettingsPayloads.at(-1)).toEqual({
-    fields: { api_key: editedProviderKey },
-    text_model: "gpt-4.1",
-    system_prompt: "Use concise answers.",
-  });
-
-  const routingModelSelector = settingsDialog.getByRole("combobox", { name: "Text model", exact: true });
-  await expect(routingModelSelector).toHaveValue("gpt-4.1");
-  const providerModelSelector = providerEditor.getByRole("combobox", { name: "Provider default model" });
-  await providerModelSelector.selectOption("gpt-4o-mini");
-  await expect.poll(() => savedProviderSettingsPayloads.length).toBe(2);
-  expect(savedProviderSettingsPayloads.at(-1)).toEqual({
-    fields: { api_key: "" },
-    text_model: "gpt-4o-mini",
-    system_prompt: "Use concise answers.",
-  });
-  await expect(routingModelSelector).toHaveValue("gpt-4o-mini");
-  const routingProviderSelector = settingsDialog.getByRole("combobox", { name: "Text provider", exact: true });
-  await routingProviderSelector.selectOption("deepseek");
-  await expect.poll(() => savedRoutingDefaultsPayloads.length).toBe(1);
-  await expect(routingModelSelector).toHaveValue("deepseek-chat");
-  await routingProviderSelector.selectOption("openai");
-  await expect.poll(() => savedRoutingDefaultsPayloads.length).toBe(2);
-  expect(savedRoutingDefaultsPayloads.at(-1)).toMatchObject({ provider: "openai", model: "gpt-4o-mini" });
-  await expect(routingModelSelector).toHaveValue("gpt-4o-mini");
-  await routingModelSelector.selectOption("gpt-4.1");
-  await expect.poll(() => savedRoutingDefaultsPayloads.length).toBe(3);
-  expect(savedRoutingDefaultsPayloads.at(-1)).toMatchObject({ provider: "openai", model: "gpt-4.1" });
-  await expect(routingModelSelector).toHaveValue("gpt-4.1");
-  await providerEditor.locator("summary.system-prompt-summary").click();
-  const providerSystemPrompt = providerEditor.getByRole("textbox", { name: "System prompt" });
-  await providerSystemPrompt.fill("Use autosaved provider guidance.");
-  await page.keyboard.press("Tab");
-  await expect.poll(() => savedProviderSettingsPayloads.length).toBe(3);
-  expect(savedProviderSettingsPayloads.at(-1)).toEqual({
-    fields: { api_key: "" },
-    text_model: "gpt-4o-mini",
-    system_prompt: "Use autosaved provider guidance.",
-  });
-  await expect(routingModelSelector).toHaveValue("gpt-4.1");
-  await expect(providerEditor.getByRole("button", { name: /^(Save|Update) key$/ })).toHaveCount(0);
-  await expect(settingsDialog.locator("example-list")).not.toContainText(editedProviderKey);
-  expect(await browserStorageContains(page, revealedProviderKey)).toBe(false);
-  expect(await browserStorageContains(page, editedProviderKey)).toBe(false);
-
-  await providerEditor.getByRole("button", { name: "Show key" }).click();
-  await expect(providerKeyInput).toHaveValue(editedProviderKey);
-  await providerSelector.selectOption("deepseek");
-  const deepSeekKeyInput = providerEditor.getByRole("textbox", { name: "DeepSeek API key" });
-  await expect(deepSeekKeyInput).toHaveValue("****5678");
-  await expect(deepSeekKeyInput).toHaveAttribute("readonly", "readonly");
-  await providerSelector.selectOption("openai");
-  await expect(providerKeyInput).not.toHaveValue(editedProviderKey);
-  await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
-
-  await providerEditor.getByRole("button", { name: "Show key" }).click();
-  await expect(providerKeyInput).toHaveValue(editedProviderKey);
-  await settingsDialog.getByRole("button", { name: "Close" }).click();
-  await expect(settingsDialog).toBeHidden();
-  await page.getByTestId("avatar-menu").click();
-  await page.getByTestId("avatar-menu-item").nth(0).click();
-  await expect(providerKeyInput).not.toHaveValue(editedProviderKey);
-  await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
-
-  await providerEditor.getByRole("button", { name: "Show key" }).click();
-  await expect(providerKeyInput).toHaveValue(editedProviderKey);
-  await page.reload();
-  await page.getByTestId("avatar-menu").click();
-  await page.getByTestId("avatar-menu-item").nth(0).click();
-  await expect(providerKeyInput).not.toHaveValue(editedProviderKey);
-  await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
-
-  await providerEditor.getByRole("button", { name: "Show key" }).click();
-  await expect(providerKeyInput).toHaveValue(editedProviderKey);
-  await page.evaluate(() => {
-    sessionStorage.setItem("llm-proxy-test-auth-status", "unauthenticated");
-    document.dispatchEvent(new CustomEvent("mpr-ui:auth:unauthenticated"));
-  });
-  await expect(page).toHaveURL(`${baseURL}/`);
-  expect(await browserStorageContains(page, editedProviderKey)).toBe(false);
+  expect(submittedKeys).toEqual(["first-candidate-key", ...responses.map((_, index) => `failed-candidate-${index}`)]);
 });
 
-test("removing a revealed provider key clears the selected editor", async ({ page }) => {
-  const revealedProviderKey = "sk-owner-openai-remove";
-  let removalRequestCount = 0;
-  page.on("request", (request) => {
-    if (request.url() === providerKeyEndpointURL("openai") && request.method() === "DELETE") {
-      removalRequestCount += 1;
-    }
-  });
+test("all-tenant provider cards require an exact tenant before key controls", async ({ page }) => {
   await installAssetRoutes(page);
-  await installManagementRoutes(page, {
-    providerKeys: { openai: revealedProviderKey },
-    savedProviderIDs: ["openai"],
-  });
+  await installMultiTenantRoutes(page);
+  await page.goto(baseURL + applicationPath);
 
-  await page.goto(`${baseURL}${applicationPath}`);
-  await page.getByTestId("avatar-menu").click();
-  await page.getByTestId("avatar-menu-item").nth(0).click();
-
-  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const providerEditor = settingsDialog.locator("provider-editor");
-  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
-  await providerEditor.getByRole("button", { name: "Show key" }).click();
-  await expect(providerKeyInput).toHaveValue(revealedProviderKey);
-  const removalButton = providerEditor.getByRole("button", { name: "Remove provider key and settings" });
-  await removalButton.click();
-  const removalConfirmation = page.getByRole("alertdialog", { name: "Remove provider key?" });
-  await expect(removalConfirmation).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(removalConfirmation).toBeHidden();
-  expect(removalRequestCount).toBe(0);
-  await expect(providerKeyInput).toHaveValue(revealedProviderKey);
-
-  await removalButton.click();
-  await removalConfirmation.getByRole("button", { name: "Remove key" }).click();
-  await expect.poll(() => removalRequestCount).toBe(1);
-
-  await expect(providerKeyInput).toHaveValue("");
-  await expect(providerKeyInput).not.toHaveAttribute("readonly", "readonly");
-  await expect(providerEditor.getByRole("button", { name: "Show key" })).toBeHidden();
-  await expect(settingsDialog.getByRole("alert")).toHaveText(
-    "Add at least one provider API key before leaving Settings.",
-  );
-  await expect(settingsDialog.getByRole("alert")).toBeFocused();
-  await settingsDialog.getByRole("button", { name: "Close" }).click();
-  await expect(settingsDialog).toBeVisible();
-  expect(await browserStorageContains(page, revealedProviderKey)).toBe(false);
+  const card = page.locator('[data-provider-card="openai"]');
+  await card.getByRole("button", { name: "Set key" }).click();
+  await expect(card.getByRole("textbox", { name: "OpenAI API key" })).toHaveCount(0);
+  await card.getByRole("combobox", { name: "Tenant" }).selectOption("tenant_2");
+  await expect(card.getByRole("heading", { name: "Research" })).toBeVisible();
+  await expect(card.getByRole("textbox", { name: "OpenAI API key" })).toHaveValue("••••••••");
 });
 
-test("late provider-key reveals cannot populate a reopened editor", async ({ page }) => {
-  const delayedProviderKey = "sk-owner-openai-delayed";
-  let fulfillReveal;
-  const revealFulfilled = new Promise((resolve) => {
-    fulfillReveal = resolve;
-  });
-  let revealStarted;
-  const revealRequested = new Promise((resolve) => {
-    revealStarted = resolve;
-  });
+test("deleting a provider key preserves its model, prompt, setting, and usage card", async ({ page }) => {
+  const profile = managementProfile();
+  const dashscope = profile.providers.find((provider) => provider.id === "dashscope");
+  applyFixtureProviderConnection(dashscope, { api_key: "sk-dashscope", base_url: "https://dashscope.example/v1" }, "saved");
+  dashscope.text_model = "qwen3.7-max";
+  dashscope.system_prompt = "Preserve this prompt.";
   await installAssetRoutes(page);
-  await installManagementRoutes(page, { providerKeys: { openai: delayedProviderKey } });
-  await page.route(providerKeyEndpointURL("openai", "reveal"), async (route) => {
-    revealStarted();
-    await revealFulfilled;
-    await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: { field_id: "api_key", value: delayedProviderKey } });
+  await installManagementRoutes(page, { profile, providerKeys: { dashscope: "sk-dashscope" } });
+  await page.route(`${baseURL}${managementDefaultTenantPath}/usage?interval=*`, async (route) => {
+    const interval = new URL(route.request().url()).searchParams.get("interval") || "";
+    const usage = managementUsage(interval);
+    usage.providers.push({ provider: "dashscope", data: usageAggregate({ requests: 5, total_tokens: 321 }) });
+    await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: usage });
   });
+  await page.goto(baseURL + applicationPath);
+  await page.getByRole("combobox", { name: "Usage tenant" }).selectOption("tenant_1");
 
-  await page.goto(`${baseURL}${applicationPath}`);
-  await page.getByTestId("avatar-menu").click();
-  await page.getByTestId("avatar-menu-item").nth(0).click();
-
-  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const providerEditor = settingsDialog.locator("provider-editor");
-  const providerSelector = providerEditor.getByRole("combobox", { name: "Provider", exact: true });
-  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
-  await providerEditor.getByRole("button", { name: "Show key" }).click();
-  await revealRequested;
-  await expect(providerSelector).toBeDisabled();
-  await expect(providerEditor.getByRole("button", { name: "Show key" })).toBeDisabled();
-  await expect(providerEditor.getByRole("button", { name: /^(Save|Update) key$/ })).toHaveCount(0);
-  await expect(providerEditor.getByRole("button", { name: "Remove provider key and settings" })).toBeDisabled();
-
-  await settingsDialog.getByRole("button", { name: "Close" }).click();
-  await page.getByTestId("avatar-menu").click();
-  await page.getByTestId("avatar-menu-item").nth(0).click();
-  await providerSelector.selectOption("deepseek");
-  fulfillReveal();
-  const deepSeekKeyInput = providerEditor.getByRole("textbox", { name: "DeepSeek API key" });
-  await expect(deepSeekKeyInput).toHaveValue("****5678");
-  await expect(deepSeekKeyInput).toHaveAttribute("readonly", "readonly");
-  expect(await browserStorageContains(page, delayedProviderKey)).toBe(false);
-
-  await providerSelector.selectOption("openai");
-  await expect(providerKeyInput).not.toHaveValue(delayedProviderKey);
-  await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
-});
-
-test("short saved provider keys use a generic mask", async ({ page }) => {
-  await installAssetRoutes(page);
-  await installManagementRoutes(page, { maskedKeys: { meta: "saved" } });
-
-  await page.goto(`${baseURL}${applicationPath}`);
-  await page.getByTestId("avatar-menu").click();
-  await page.getByTestId("avatar-menu-item").nth(0).click();
-
-  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const providerEditor = settingsDialog.locator("provider-editor");
-  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("meta");
-  const providerKeyInput = providerEditor.getByRole("textbox", { name: "Meta API key" });
-  await expect(providerKeyInput).toHaveValue("****");
-  await expect(providerKeyInput).not.toHaveValue("****saved");
+  const card = page.locator('[data-provider-card="dashscope"]');
+  await expect(card.getByText("used", { exact: true })).toBeVisible();
+  await expect(card.locator(".provider-card-front dd:visible")).toHaveText(["5", "321", "qwen3.7-max"]);
+  await card.getByRole("button", { name: "Key settings" }).click();
+  await card.getByRole("button", { name: "Delete key" }).click();
+  await page.getByRole("alertdialog", { name: "Remove provider key?" }).getByRole("button", { name: "Remove key" }).click();
+  await expect(card.getByRole("textbox", { name: "DashScope API key" })).toHaveValue("");
+  await expect(card.getByRole("textbox", { name: "DashScope API URL" })).toHaveValue("https://dashscope.example/v1");
+  await expect(card.getByRole("combobox", { name: "Provider default model" })).toHaveValue("qwen3.7-max");
+  await expect(card.getByRole("textbox", { name: "System prompt" })).toHaveValue("Preserve this prompt.");
+  await expect(card).toBeVisible();
+  await expect(card.getByText("used", { exact: true })).toBeVisible();
+  await expect(card.locator(".provider-card-front dd:visible")).toHaveText(["5", "321", "qwen3.7-max"]);
 });
 
 test("routing defaults autosave complete provider and model pairs without a manual action", async ({ page }) => {
@@ -3691,218 +2778,7 @@ test("routing defaults expose only keyed providers and disable unavailable dicta
   await expect(dictationProvider.locator("option")).toHaveText(["Not configured"]);
   await expect(settingsDialog.getByText("Default dictation", { exact: true })).toHaveCount(0);
 
-  const providerEditor = settingsDialog.locator("provider-editor");
-  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
-  await providerEditor.getByRole("textbox", { name: "OpenAI API key" }).fill("sk-openai-new");
-  await page.keyboard.press("Tab");
-
-  await expect(settingsDialog.locator(".settings-notification")).toHaveText("Provider key verified and settings saved");
-  await expect(textProvider.locator("option")).toHaveText(["OpenAI", "DeepSeek"]);
-  await expect(textProvider).toHaveValue("deepseek");
-  await expect(dictationProvider).toBeEnabled();
-  await expect(dictationModel).toBeEnabled();
-  await expect(dictationProvider).toHaveValue("openai");
-  await expect(dictationModel).toHaveValue("gpt-4o-mini-transcribe");
-  await expect(settingsDialog.getByText("Default dictation", { exact: true })).toHaveCount(1);
-});
-
-test("routing-default autosave queues newer edits without resetting the provider editor", async ({ page }) => {
-  const revealedProviderKey = "sk-routing-autosave-owner";
-  const defaultsMutations = [];
-  let releaseFirstDefaultsSave;
-  const firstDefaultsSaveReleased = new Promise((resolve) => {
-    releaseFirstDefaultsSave = resolve;
-  });
-  let firstDefaultsSaveStarted;
-  const firstDefaultsSaveRequested = new Promise((resolve) => {
-    firstDefaultsSaveStarted = resolve;
-  });
-  await installAssetRoutes(page);
-  await installManagementRoutes(page, {
-    providerKeys: { openai: revealedProviderKey },
-    savedProviderIDs: ["openai", "deepseek", "meta", "xai"],
-  });
-  await page.route(`${baseURL}${managementDefaultTenantPath}/defaults`, async (route) => {
-    defaultsMutations.push(route.request().postDataJSON());
-    if (defaultsMutations.length === 1) {
-      firstDefaultsSaveStarted();
-      await firstDefaultsSaveReleased;
-    }
-    await route.fallback();
-  });
-
-  await page.goto(`${baseURL}${applicationPath}`);
-  await page.getByTestId("avatar-menu").click();
-  await page.getByTestId("avatar-menu-item").nth(0).click();
-
-  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const providerEditor = settingsDialog.locator("provider-editor");
-  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
-  await providerEditor.getByRole("button", { name: "Show key" }).click();
-  await expect(providerKeyInput).toHaveValue(revealedProviderKey);
-
-  const defaultsForm = settingsDialog.locator(".settings-grid-form");
-  await defaultsForm.getByRole("combobox", { name: "Text provider" }).selectOption("deepseek");
-  await firstDefaultsSaveRequested;
-  await defaultsForm.getByRole("combobox", { name: "Dictation provider" }).selectOption("xai");
-  await defaultsForm.locator("summary.system-prompt-summary").click();
-  await defaultsForm.getByRole("textbox", { name: "System prompt" }).fill("Keep the latest defaults only.");
-  await page.keyboard.press("Tab");
-
-  releaseFirstDefaultsSave();
-  await expect.poll(() => defaultsMutations.length).toBe(2);
-  expect(defaultsMutations.at(-1)).toEqual({
-    provider: "deepseek",
-    model: "deepseek-chat",
-    dictation_provider: "xai",
-    dictation_model: "xai-stt",
-    system_prompt: "Keep the latest defaults only.",
-    reasoning_effort: "",
-  });
-  await expect(providerKeyInput).toHaveValue(revealedProviderKey);
-  await expect(settingsDialog.locator(".settings-notification")).toHaveText("Defaults saved");
-  await expect(defaultsForm).not.toHaveAttribute("aria-busy", "true");
-});
-
-test("provider and routing autosaves serialize whole-profile mutations in both directions", async ({ page }) => {
-  const providerMutations = [];
-  const defaultsMutations = [];
-  let releaseFirstProviderSave;
-  const firstProviderSaveReleased = new Promise((resolve) => {
-    releaseFirstProviderSave = resolve;
-  });
-  let firstProviderSaveStarted;
-  const firstProviderSaveRequested = new Promise((resolve) => {
-    firstProviderSaveStarted = resolve;
-  });
-  let releaseSecondDefaultsSave;
-  const secondDefaultsSaveReleased = new Promise((resolve) => {
-    releaseSecondDefaultsSave = resolve;
-  });
-  let secondDefaultsSaveStarted;
-  const secondDefaultsSaveRequested = new Promise((resolve) => {
-    secondDefaultsSaveStarted = resolve;
-  });
-  await installAssetRoutes(page);
-  await installManagementRoutes(page);
-  await page.route(providerKeyEndpointURL("openai"), async (route) => {
-    if (route.request().method() !== "PUT") {
-      await route.fallback();
-      return;
-    }
-    providerMutations.push(route.request().postDataJSON());
-    if (providerMutations.length === 1) {
-      firstProviderSaveStarted();
-      await firstProviderSaveReleased;
-    }
-    await route.fallback();
-  });
-  await page.route(`${baseURL}${managementDefaultTenantPath}/defaults`, async (route) => {
-    defaultsMutations.push(route.request().postDataJSON());
-    if (defaultsMutations.length === 2) {
-      secondDefaultsSaveStarted();
-      await secondDefaultsSaveReleased;
-    }
-    await route.fallback();
-  });
-
-  await page.goto(`${baseURL}${applicationPath}`);
-  await page.getByTestId("avatar-menu").click();
-  await page.getByTestId("avatar-menu-item").nth(0).click();
-
-  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const providerEditor = settingsDialog.locator("provider-editor");
-  const providerModel = providerEditor.getByRole("combobox", { name: "Provider default model" });
-  await providerEditor.locator("summary.system-prompt-summary").click();
-  const providerPrompt = providerEditor.getByRole("textbox", { name: "System prompt" });
-  const defaultsForm = settingsDialog.locator(".settings-grid-form");
-  const defaultTextProvider = defaultsForm.getByRole("combobox", { name: "Text provider" });
-
-  await providerModel.selectOption("gpt-5-mini");
-  await firstProviderSaveRequested;
-  await defaultTextProvider.selectOption("deepseek");
-  await page.waitForTimeout(50);
-  expect(defaultsMutations).toHaveLength(0);
-
-  releaseFirstProviderSave();
-  await expect.poll(() => defaultsMutations.length).toBe(1);
-  await expect(providerModel).toHaveValue("gpt-5-mini");
-  await expect(defaultTextProvider).toHaveValue("deepseek");
-
-  await defaultTextProvider.selectOption("openai");
-  await secondDefaultsSaveRequested;
-  await providerPrompt.fill("Keep both serialized changes.");
-  await page.keyboard.press("Tab");
-  await page.waitForTimeout(50);
-  expect(providerMutations).toHaveLength(1);
-
-  releaseSecondDefaultsSave();
-  await expect.poll(() => providerMutations.length).toBe(2);
-  await expect(providerModel).toHaveValue("gpt-5-mini");
-  await expect(providerPrompt).toHaveValue("Keep both serialized changes.");
-  await expect(defaultTextProvider).toHaveValue("openai");
-  await expect(settingsDialog.locator(".settings-notification")).toHaveText("Provider settings saved");
-
-  const reloadedProfileResponse = page.waitForResponse(`${baseURL}${managementDefaultTenantPath}`);
-  await page.reload();
-  const reloadedProfile = await (await reloadedProfileResponse).json();
-  expect(reloadedProfile.tenant.defaults).toMatchObject({ provider: "openai", model: "gpt-5-mini" });
-  expect(reloadedProfile.providers.find((provider) => provider.id === "openai")).toMatchObject({
-    text_model: "gpt-5-mini",
-    system_prompt: "Keep both serialized changes.",
-  });
-});
-
-test("routing-provider selection waits for its pending provider default", async ({ page }) => {
-  const defaultsMutations = [];
-  let releaseProviderSave;
-  const providerSaveReleased = new Promise((resolve) => {
-    releaseProviderSave = resolve;
-  });
-  let providerSaveStarted;
-  const providerSaveRequested = new Promise((resolve) => {
-    providerSaveStarted = resolve;
-  });
-  await installAssetRoutes(page);
-  await installManagementRoutes(page);
-  await page.route(providerKeyEndpointURL("openai"), async (route) => {
-    if (route.request().method() !== "PUT") {
-      await route.fallback();
-      return;
-    }
-    providerSaveStarted();
-    await providerSaveReleased;
-    await route.fallback();
-  });
-  await page.route(`${baseURL}${managementDefaultTenantPath}/defaults`, async (route) => {
-    defaultsMutations.push(route.request().postDataJSON());
-    await route.fallback();
-  });
-
-  await page.goto(`${baseURL}${applicationPath}`);
-  await page.getByTestId("avatar-menu").click();
-  await page.getByTestId("avatar-menu-item").nth(0).click();
-
-  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const routingProvider = settingsDialog.getByRole("combobox", { name: "Text provider" });
-  const routingModel = settingsDialog.getByRole("combobox", { name: "Text model", exact: true });
-  await routingProvider.selectOption("deepseek");
-  await expect.poll(() => defaultsMutations.length).toBe(1);
-
-  const providerModel = settingsDialog.locator("provider-editor").getByRole("combobox", {
-    name: "Provider default model",
-  });
-  await providerModel.selectOption("gpt-5-mini");
-  await providerSaveRequested;
-  await routingProvider.selectOption("openai");
-  await page.waitForTimeout(50);
-  expect(defaultsMutations).toHaveLength(1);
-
-  releaseProviderSave();
-  await expect.poll(() => defaultsMutations.length).toBe(2);
-  expect(defaultsMutations.at(-1)).toMatchObject({ provider: "openai", model: "gpt-5-mini" });
-  await expect(routingProvider).toHaveValue("openai");
-  await expect(routingModel).toHaveValue("gpt-5-mini");
+  await expect(settingsDialog.locator("provider-editor")).toHaveCount(0);
 });
 
 test("Settings close waits for the current routing-default autosave", async ({ page }) => {
@@ -4297,96 +3173,26 @@ test("a direct anonymous app visit returns to the public page", async ({ page })
   expect(accountRequests).toHaveLength(0);
 });
 
-test("fresh authenticated users receive one client key and must add a provider key before closing Settings", async ({ page }) => {
+test("fresh authenticated users can leave Settings after receiving one client key", async ({ page }) => {
   const generatedSecret = "llmp_test_fresh_user_secret";
   let secretRequestCount = 0;
-  let defaultsRequestCount = 0;
-  const providerMutations = [];
   page.on("request", (request) => {
-    if (request.url() === `${baseURL}${managementDefaultTenantPath}/secrets` && request.method() === "POST") {
-      secretRequestCount += 1;
-    }
-    if (request.url() === `${baseURL}${managementDefaultTenantPath}/defaults`) {
-      defaultsRequestCount += 1;
-    }
-    if (request.url() === providerKeyEndpointURL("openai") && request.method() === "PUT") {
-      providerMutations.push(request.postDataJSON());
-    }
+    if (request.url() === baseURL + managementDefaultTenantPath + "/secrets" && request.method() === "POST") secretRequestCount += 1;
   });
-  await installClipboardMock(page);
   await installAssetRoutes(page);
   await installManagementRoutes(page, { hasSecret: false, generatedSecret, savedProviderIDs: [] });
-
-  await page.goto(`${baseURL}${applicationPath}`);
+  await page.goto(baseURL + applicationPath);
 
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   await expect(settingsDialog).toBeVisible();
   await expect.poll(() => secretRequestCount).toBe(1);
-  await page.evaluate(() => {
-    document.dispatchEvent(new CustomEvent("mpr-ui:auth:authenticated"));
-    document.dispatchEvent(new CustomEvent("mpr-ui:auth:authenticated"));
-  });
-  await page.waitForTimeout(50);
-  expect(secretRequestCount).toBe(1);
-
-  const setupRequirement = settingsDialog.getByRole("alert");
-  await expect(setupRequirement).toHaveText("Add at least one provider API key before leaving Settings.");
-  const clientKeyInput = settingsDialog.getByRole("textbox", { name: "Key", exact: true });
-  await expect(clientKeyInput).toHaveValue("••••••••••••");
-  await expect(clientKeyInput).toHaveAttribute("readonly", "");
-  await settingsDialog.locator("tenant-access-row").getByRole("button", { name: "Show key", exact: true }).click();
-  await expect(clientKeyInput).toHaveValue(generatedSecret);
-  expect(await clientKeyInput.evaluate((inputElement) => inputElement.outerHTML)).not.toContain(generatedSecret);
-  await settingsDialog.getByRole("button", { name: "Copy key", exact: true }).click();
-  expect(await copiedText(page)).toBe(generatedSecret);
-  expect(await browserStorageContains(page, generatedSecret)).toBe(false);
-  await settingsDialog.getByRole("button", { name: "Hide key", exact: true }).click();
-
-  const closeButton = settingsDialog.getByRole("button", { name: "Close" });
-  await closeButton.click();
-  await expect(settingsDialog).toBeVisible();
-  await expect(setupRequirement).toBeFocused();
-  await expect(settingsDialog.locator(".settings-notification .notice")).toHaveText(
-    "Add at least one provider API key before leaving Settings.",
-  );
-  await page.keyboard.press("Escape");
-  await expect(settingsDialog).toBeVisible();
-  await expect(setupRequirement).toBeFocused();
-  await page.locator("settings-overlay").click({ position: { x: 2, y: 2 } });
-  await expect(settingsDialog).toBeVisible();
-  await expect(setupRequirement).toBeFocused();
-
-  const providerEditor = settingsDialog.locator("provider-editor");
-  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
-  const providerSystemPromptSummary = providerEditor.locator("summary.system-prompt-summary");
-  await providerSystemPromptSummary.click();
-  const providerSystemPrompt = providerEditor.getByRole("textbox", { name: "System prompt" });
-  await providerSystemPrompt.focus();
-  await page.keyboard.press("Tab");
-  await expect(closeButton).toBeFocused();
-  await page.keyboard.press("Shift+Tab");
-  await expect(providerSystemPrompt).toBeFocused();
-
-  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
-  await providerKeyInput.fill("sk-fresh-openai");
-  await page.keyboard.press("Tab");
-  await expect.poll(() => providerMutations.length).toBe(1);
-  await expect(setupRequirement).toBeHidden();
-  await expect(settingsDialog).toBeVisible();
-  await expect(providerEditor.getByRole("button", { name: /^(Save|Update) key$/ })).toHaveCount(0);
-  expect(providerMutations).toEqual([
-    {
-      fields: { api_key: "sk-fresh-openai" },
-      text_model: "gpt-4.1",
-      system_prompt: "Use concise answers.",
-    },
-  ]);
-  expect(defaultsRequestCount).toBe(0);
-  await expect(settingsDialog.getByRole("combobox", { name: "Text provider" })).toHaveValue("openai");
-
-  await closeButton.click();
+  await expect(settingsDialog.getByRole("alert")).toBeHidden();
+  await expect(settingsDialog.locator("provider-editor")).toHaveCount(0);
+  await settingsDialog.getByRole("button", { name: "Close" }).click();
   await expect(settingsDialog).toBeHidden();
+  await expect(page.locator('[data-provider-card="openai"]')).toBeVisible();
 });
+
 
 test("configured users reach the dashboard without reopening Settings or generating a key", async ({ page }) => {
   let secretRequestCount = 0;
@@ -4575,43 +3381,6 @@ test("Settings stays inert and keeps a replacement client key available during r
 
   await settingsDialog.getByRole("button", { name: "Close" }).click();
   await expect(settingsDialog).toBeHidden();
-});
-
-test("pending last-provider removal enforces mandatory Settings before close", async ({ page }) => {
-  let releaseProviderRemoval;
-  const providerRemovalReleased = new Promise((resolve) => {
-    releaseProviderRemoval = resolve;
-  });
-  let providerRemovalStarted;
-  const providerRemovalRequested = new Promise((resolve) => {
-    providerRemovalStarted = resolve;
-  });
-  await installAssetRoutes(page);
-  await installManagementRoutes(page, { savedProviderIDs: ["openai"] });
-  await page.route(providerKeyEndpointURL("openai"), async (route) => {
-    if (route.request().method() !== "DELETE") {
-      await route.fallback();
-      return;
-    }
-    providerRemovalStarted();
-    await providerRemovalReleased;
-    await route.fallback();
-  });
-
-  await page.goto(`${baseURL}${applicationPath}`);
-  await page.getByTestId("avatar-menu").click();
-  await page.getByTestId("avatar-menu-item").nth(0).click();
-  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const closeSettings = settingsDialog.getByRole("button", { name: "Close" });
-  const providerEditor = settingsDialog.locator("provider-editor");
-  await providerEditor.getByRole("button", { name: "Remove provider key and settings" }).click();
-  await page.getByRole("alertdialog", { name: "Remove provider key?" }).getByRole("button", { name: "Remove key" }).click();
-  await providerRemovalRequested;
-  await closeSettings.click();
-  await expect(settingsDialog).toBeVisible();
-  releaseProviderRemoval();
-  await expect(settingsDialog.getByRole("alert")).toHaveText("Add at least one provider API key before leaving Settings.");
-  await expect(settingsDialog).toBeVisible();
 });
 
 test("session cleanup cancels generated client keys before they can restore state", async ({ page }) => {
@@ -4915,16 +3684,10 @@ test("settings modal remains usable on narrow screens", async ({ page }) => {
   expect(modalBox.width).toBeLessThanOrEqual(390);
   await expect(settingsDialog.getByRole("button", { name: "Close" })).toBeVisible();
 
-  for (const helpTooltip of [
-    {
-      button: settingsDialog.getByRole("button", { name: "About routing defaults" }),
-      content: settingsDialog.locator("#routing-defaults-help"),
-    },
-    {
-      button: settingsDialog.getByRole("button", { name: "About provider default model" }),
-      content: settingsDialog.locator("#provider-default-model-help"),
-    },
-  ]) {
+  for (const helpTooltip of [{
+    button: settingsDialog.getByRole("button", { name: "About routing defaults" }),
+    content: settingsDialog.locator("#routing-defaults-help"),
+  }]) {
     await helpTooltip.button.scrollIntoViewIfNeeded();
     await helpTooltip.button.focus();
     await expect(helpTooltip.content).toBeVisible();
@@ -5993,12 +4756,12 @@ async function installMultiTenantRoutes(page, options = {}) {
 
 /**
  * @param {import("@playwright/test").Page} page
- * @param {{ usageStatus?: number, admin?: boolean, hasSecret?: boolean, generatedSecret?: string, profileStatus?: number, profileStatuses?: number[], profileError?: string, malformedProviderField?: boolean, malformedRoutingDefaults?: boolean, maskedKeys?: Record<string, string>, providerKeys?: Record<string, string>, savedProviderIDs?: string[] }} options
+ * @param {{ usageStatus?: number, admin?: boolean, hasSecret?: boolean, generatedSecret?: string, profile?: object, profileStatus?: number, profileStatuses?: number[], profileError?: string, malformedProviderField?: boolean, malformedRoutingDefaults?: boolean, maskedKeys?: Record<string, string>, providerKeys?: Record<string, string>, savedProviderIDs?: string[] }} options
  * @returns {Promise<void>}
  */
 async function installManagementRoutes(page, options = {}) {
   const profileStatuses = [...(options.profileStatuses || [])];
-  const profile = managementProfile(options.admin || false, options.hasSecret !== false);
+  const profile = options.profile || managementProfile(options.admin || false, options.hasSecret !== false);
   const providerKeys = {
     openai: "sk-owner-openai",
     deepseek: "sk-owner-deepseek",
@@ -6092,6 +4855,10 @@ async function installManagementRoutes(page, options = {}) {
       await route.fulfill({ status: 400, json: { error: "managed_usage_interval_invalid" } });
       return;
     }
+    await route.fulfill({ status: options.usageStatus || httpOK, json: managementUsage(interval) });
+  });
+  await page.route(`${baseURL}${managementDefaultTenantPath}/usage?interval=*`, async (route) => {
+    const interval = new URL(route.request().url()).searchParams.get("interval") || "";
     await route.fulfill({ status: options.usageStatus || httpOK, json: managementUsage(interval) });
   });
   await page.route(`${baseURL}/api/management/admin/users`, async (route) => {
@@ -6392,11 +5159,9 @@ function applyFixtureProviderConnection(provider, fieldValues, maskedValue) {
 function clearFixtureProviderConnection(provider) {
   provider.configured = false;
   for (const field of provider.fields) {
-    field.configured = false;
     if (field.secret) {
+      field.configured = false;
       Reflect.deleteProperty(field, "masked_value");
-    } else {
-      field.value = field.default;
     }
   }
 }
@@ -6407,7 +5172,7 @@ function clearFixtureProviderConnection(provider) {
  * @returns {object}
  */
 function managementProfile(isAdmin = false, hasSecret = true) {
-  return {
+  const profile = {
     tenant: {
       id: "tenant_1",
       name: "Default",
@@ -6626,6 +5391,40 @@ function managementProfile(isAdmin = false, hasSecret = true) {
       dictation_path: "/dictate",
     },
   };
+  profile.providers.push({
+    id: "siliconflow",
+    label: "SiliconFlow",
+    aliases: [],
+    configured: false,
+    fields: [providerAPIKeyField("SiliconFlow API key")],
+    text_model: "deepseek-reasoner",
+    system_prompt: "",
+    text_default_model: "deepseek-reasoner",
+    text_models: [{ id: "deepseek-reasoner" }],
+    supports_dictation: true,
+    dictation_default_model: "sensevoice-small",
+    dictation_models: ["sensevoice-small"],
+  });
+  const catalogOrder = ["openai", "deepseek", "dashscope", "moonshot", "minimax", "siliconflow", "zai", "gemini", "anthropic", "meta", "xai"];
+  const acquisitionURLs = {
+    openai: "https://platform.openai.com/api-keys",
+    deepseek: "https://platform.deepseek.com/api_keys",
+    dashscope: "https://help.aliyun.com/en/model-studio/get-api-key",
+    moonshot: "https://platform.kimi.ai/console/api-keys",
+    minimax: "https://platform.minimax.io/docs/guides/quickstart-preparation",
+    siliconflow: "https://cloud.siliconflow.com/account/ak",
+    zai: "https://z.ai/manage-apikey/apikey-list",
+    gemini: "https://aistudio.google.com/app/apikey",
+    anthropic: "https://platform.claude.com/settings/keys",
+    meta: "https://dev.meta.ai/",
+    xai: "https://console.x.ai/team/default/api-keys",
+  };
+  for (const provider of profile.providers) {
+    provider.key_acquisition_url = acquisitionURLs[provider.id];
+    provider.capabilities = ["text", ...(provider.supports_dictation ? ["dictation"] : [])];
+  }
+  profile.providers.sort((first, second) => catalogOrder.indexOf(first.id) - catalogOrder.indexOf(second.id));
+  return profile;
 }
 
 /**

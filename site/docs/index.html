@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="32a117b3dc91a01c7076161f4733467bb3833b11afb68da7f92ef7e59f9c07af">
+    <meta name="openapi-source-sha256" content="744b852998d310ec5131b8f241d95a814e5267fb70e256f891451380c91532f8">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="32a117b3dc91a01c7076161f4733467bb3833b11afb68da7f92ef7e59f9c07af">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="744b852998d310ec5131b8f241d95a814e5267fb70e256f891451380c91532f8">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>32a117b3dc91a01c7076161f4733467bb3833b11afb68da7f92ef7e59f9c07af</code></span>
+          <span>Source SHA-256 <code>744b852998d310ec5131b8f241d95a814e5267fb70e256f891451380c91532f8</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -712,7 +712,12 @@ paths:
           $ref: &#39;#/components/responses/ProviderKeyVerificationTimedOut&#39;
     delete:
       operationId: deleteManagementProviderConnection
-      summary: Remove all saved fields and settings for one provider
+      summary: Delete saved credential fields for one provider
+      description: &gt;-
+        Deletes only the provider&#39;s encrypted credential fields. The provider
+        definition, non-secret connection fields, selected text model,
+        provider system prompt, historical usage, and every still-valid tenant
+        routing default remain unchanged.
       tags:
         - Management
       security:
@@ -2879,7 +2884,9 @@ components:
       required:
         - id
         - label
+        - key_acquisition_url
         - aliases
+        - capabilities
         - configured
         - fields
         - text_model
@@ -2893,10 +2900,24 @@ components:
           type: string
         label:
           type: string
+        key_acquisition_url:
+          type: string
+          format: uri
+          pattern: &#39;^https://[^?#]+$&#39;
         aliases:
           type: array
           items:
             type: string
+        capabilities:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - text
+              - dictation
+              - video_generation
         configured:
           type: boolean
         fields:
@@ -3459,7 +3480,7 @@ components:
 <a href="#operation-getManagementTenant"><span class="api-method api-method-get">GET</span><code>/api/management/tenants/{tenant_id}</code><span>Read an owned tenant profile</span></a>
 <a href="#operation-renameManagementTenant"><span class="api-method api-method-put">PUT</span><code>/api/management/tenants/{tenant_id}</code><span>Rename an owned tenant</span></a>
 <a href="#operation-putManagementTenantDefaults"><span class="api-method api-method-put">PUT</span><code>/api/management/tenants/{tenant_id}/defaults</code><span>Replace the tenant routing defaults</span></a>
-<a href="#operation-deleteManagementProviderConnection"><span class="api-method api-method-delete">DELETE</span><code>/api/management/tenants/{tenant_id}/provider-connections/{provider}</code><span>Remove all saved fields and settings for one provider</span></a>
+<a href="#operation-deleteManagementProviderConnection"><span class="api-method api-method-delete">DELETE</span><code>/api/management/tenants/{tenant_id}/provider-connections/{provider}</code><span>Delete saved credential fields for one provider</span></a>
 <a href="#operation-putManagementProviderConnection"><span class="api-method api-method-put">PUT</span><code>/api/management/tenants/{tenant_id}/provider-connections/{provider}</code><span>Verify and save catalog-defined provider connection fields</span></a>
 <a href="#operation-revealManagementProviderConnectionField"><span class="api-method api-method-post">POST</span><code>/api/management/tenants/{tenant_id}/provider-connections/{provider}/fields/{field}/reveal</code><span>Reveal one saved secret provider field</span></a>
 <a href="#operation-postManagementTenantSecret"><span class="api-method api-method-post">POST</span><code>/api/management/tenants/{tenant_id}/secrets</code><span>Generate and replace the tenant client secret</span></a>
@@ -3894,7 +3915,8 @@ components:
           <code>/api/management/tenants/{tenant_id}/provider-connections/{provider}</code>
           <span class="api-operation-id">deleteManagementProviderConnection</span>
         </header>
-        <h2>Remove all saved fields and settings for one provider</h2>
+        <h2>Delete saved credential fields for one provider</h2>
+        <p>Deletes only the provider&#39;s encrypted credential fields. The provider definition, non-secret connection fields, selected text model, provider system prompt, historical usage, and every still-valid tenant routing default remain unchanged.</p>
         <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
         <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
         <div class="api-contract-block">

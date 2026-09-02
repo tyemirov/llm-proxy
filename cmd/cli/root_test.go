@@ -755,7 +755,7 @@ func TestRootCommandRejectsObsoleteTenantConfiguration(t *testing.T) {
 func TestRootCommandRejectsStaleProviderLevelReasoningEffortDeclaration(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := writeTestConfig(t, tempDir, completeManagementYAML())
-	providerCatalog := strings.Replace(canonicalProviderCatalogYAML(), "      label: OpenAI\n      fields:", "      label: OpenAI\n      reasoning_effort: high\n      fields:", 1)
+	providerCatalog := strings.Replace(canonicalProviderCatalogYAML(), "      label: OpenAI\n      key_acquisition_url:", "      label: OpenAI\n      reasoning_effort: high\n      key_acquisition_url:", 1)
 	writeTestProviderCatalog(t, tempDir, providerCatalog)
 	withServeProxy(t, failingServeProxy(t))
 

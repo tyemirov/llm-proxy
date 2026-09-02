@@ -368,22 +368,15 @@ func TestManagedTenantGORMLowLevelMutationEdges(t *testing.T) {
 	})
 	t.Run("delete provider ownership query", func(subTest *testing.T) {
 		database := newCanonicalGORMFixture(subTest, now)
-		if deleteError := database.deleteProviderConnections("other", "managed-first", ProviderNameOpenAI, defaultManagedRoutingDefaults(), now); !errors.Is(deleteError, gorm.ErrRecordNotFound) {
+		if deleteError := database.deleteProviderConnections("other", "managed-first", ProviderNameOpenAI, []string{CatalogCredentialAPIKey}, defaultManagedRoutingDefaults(), now); !errors.Is(deleteError, gorm.ErrRecordNotFound) {
 			subTest.Fatalf("provider ownership delete error=%v", deleteError)
 		}
 	})
 	t.Run("delete provider record", func(subTest *testing.T) {
 		database := newCanonicalGORMFixture(subTest, now)
 		registerManagedGORMError(subTest, database.database, "delete_provider", "delete", managedProviderConnectionTable, errInternalTestDatabase)
-		if deleteError := database.deleteProviderConnections("owner", "managed-first", ProviderNameOpenAI, defaultManagedRoutingDefaults(), now); !errors.Is(deleteError, errInternalTestDatabase) {
+		if deleteError := database.deleteProviderConnections("owner", "managed-first", ProviderNameOpenAI, []string{CatalogCredentialAPIKey}, defaultManagedRoutingDefaults(), now); !errors.Is(deleteError, errInternalTestDatabase) {
 			subTest.Fatalf("provider record delete error=%v", deleteError)
-		}
-	})
-	t.Run("delete provider profile", func(subTest *testing.T) {
-		database := newCanonicalGORMFixture(subTest, now)
-		registerManagedGORMError(subTest, database.database, "delete_provider_profile", "delete", managedProviderProfileTable, errInternalTestDatabase)
-		if deleteError := database.deleteProviderConnections("owner", "managed-first", ProviderNameOpenAI, defaultManagedRoutingDefaults(), now); !errors.Is(deleteError, errInternalTestDatabase) {
-			subTest.Fatalf("provider profile delete error=%v", deleteError)
 		}
 	})
 }

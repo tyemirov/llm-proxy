@@ -232,6 +232,13 @@ function assertProviderCatalog(provider) {
     !provider ||
     typeof provider.id !== "string" ||
     !provider.id ||
+    typeof provider.label !== "string" ||
+    !provider.label ||
+    typeof provider.key_acquisition_url !== "string" ||
+    !provider.key_acquisition_url.startsWith("https://") ||
+    !Array.isArray(provider.capabilities) ||
+    provider.capabilities.length === 0 ||
+    !provider.capabilities.every((capability) => ["text", "dictation", "video_generation"].includes(capability)) ||
     typeof provider.configured !== "boolean" ||
     !Array.isArray(provider.fields) ||
     provider.fields.length === 0 ||

@@ -197,32 +197,30 @@ test("public Log In opens the authenticated app and the TAuth session survives u
   await expect(settingsDialog).toBeVisible();
   await expect(settingsDialog.getByRole("combobox", { name: "Tenant" })).toHaveValue(firstTenantID);
   await expect(settingsDialog.getByRole("button", { name: "Create tenant" })).toBeVisible();
-  await expect(settingsDialog.getByRole("alert")).toHaveText(
-    "Add at least one provider API key before leaving Settings.",
-  );
+  await expect(settingsDialog.getByRole("alert")).toBeHidden();
   const clientKeyInput = settingsDialog.getByRole("textbox", { name: "Key", exact: true });
   await expect(clientKeyInput).toHaveValue("••••••••••••");
   await expect(clientKeyInput).toHaveAttribute("readonly", "");
   await settingsDialog.locator("tenant-access-row").getByRole("button", { name: "Show key", exact: true }).click();
   await expect(clientKeyInput).toHaveValue(/^llmp_/);
+  await settingsDialog.getByRole("button", { name: "Close" }).click();
+  await expect(settingsDialog).toBeHidden();
 
-  const providerEditor = settingsDialog.locator("provider-editor");
-  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
-  await providerEditor.getByRole("textbox", { name: "OpenAI API key" }).fill("sk-local-blackbox-provider-key");
+  await expectAuthenticatedDashboard(page);
+  await page.getByRole("combobox", { name: "Usage tenant" }).selectOption(firstTenantID);
+  const openAIProviderCard = page.locator('[data-provider-card="openai"]');
+  await openAIProviderCard.getByRole("button", { name: "Set key" }).click();
+  const providerKeyInput = openAIProviderCard.getByRole("textbox", { name: "OpenAI API key" });
   const providerSaveResponsePromise = page.waitForResponse(
     (response) =>
       response.url() === `${stack.llmProxyOrigin}/api/management/tenants/${firstTenantID}/provider-connections/openai` &&
       response.request().method() === "PUT",
   );
-  await page.keyboard.press("Tab");
+  await pasteProviderKey(providerKeyInput, "sk-local-blackbox-provider-key");
   expect((await providerSaveResponsePromise).status()).toBe(httpOK);
-  await expect(providerEditor.getByRole("button", { name: /^(Save|Update) key$/ })).toHaveCount(0);
-  await expect(settingsDialog.getByRole("alert")).toBeHidden();
-  await expect(settingsDialog).toBeVisible();
-  await settingsDialog.getByRole("button", { name: "Close" }).click();
-  await expect(settingsDialog).toBeHidden();
-
-  await expectAuthenticatedDashboard(page);
+  await expect(providerKeyInput).toHaveValue("••••••••");
+  await openAIProviderCard.getByRole("button", { name: "Done", exact: true }).last().click();
+  await expect(openAIProviderCard.getByRole("button", { name: "Key settings" })).toBeVisible();
   await expectNoSignedOutStateAfterAuthentication(page);
 
   const restoredLandingSessionResponsePromise = waitForSessionRestore(page);
@@ -493,6 +491,26 @@ async function expectCookies(context, expected) {
   const cookies = await context.cookies();
   expect(cookies.some((cookie) => cookie.name === localManagementProfile.sessionCookieName)).toBe(expected.session);
   expect(cookies.some((cookie) => cookie.name === localManagementProfile.refreshCookieName)).toBe(expected.refresh);
+}
+
+async function pasteProviderKey(providerKeyInput, value) {
+  await providerKeyInput.focus();
+  await providerKeyInput.evaluate((inputElement, pastedValue) => {
+    const input = /** @type {HTMLInputElement} */ (inputElement);
+    const clipboardData = new DataTransfer();
+    clipboardData.setData("text/plain", pastedValue);
+    input.dispatchEvent(new ClipboardEvent("paste", {
+      bubbles: true,
+      cancelable: true,
+      clipboardData,
+    }));
+    input.value = pastedValue;
+    input.dispatchEvent(new InputEvent("input", {
+      bubbles: true,
+      data: pastedValue,
+      inputType: "insertFromPaste",
+    }));
+  }, value);
 }
 
 /**

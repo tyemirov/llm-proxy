@@ -63,6 +63,9 @@ usage-breakdown,
 usage-row-list,
 usage-row,
 usage-bar,
+provider-card-grid,
+provider-card-statuses,
+provider-capability-list,
 usage-failures-overlay,
 usage-failures-dialog,
 usage-failures-body,
@@ -294,6 +297,136 @@ llm-proxy-management-application .usage-interval-button.is-active:hover:not(:dis
 usage-dashboard {
   display: grid;
   gap: 0.5rem;
+}
+
+.provider-cards-section {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+provider-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.provider-card {
+  min-width: 0;
+  min-height: 19rem;
+  perspective: 80rem;
+}
+
+.provider-card-inner {
+  position: relative;
+  min-height: inherit;
+  transform-style: preserve-3d;
+  transition: transform 200ms ease;
+}
+
+.provider-card.is-open .provider-card-inner {
+  transform: rotateY(180deg);
+}
+
+.provider-card-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: start;
+  gap: 0.65rem;
+  overflow: auto;
+  min-width: 0;
+  border: 1px solid var(--llm-border);
+  border-radius: 6px;
+  background: var(--llm-panel);
+  padding: 0.75rem;
+  backface-visibility: hidden;
+}
+
+.provider-card-face > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.provider-card-face h3,
+.provider-card-face p,
+.provider-card-face dl {
+  margin: 0;
+}
+
+.provider-card-back {
+  transform: rotateY(180deg);
+}
+
+provider-card-statuses,
+provider-capability-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+provider-card-statuses span,
+provider-capability-list span {
+  border: 1px solid var(--llm-border);
+  border-radius: 999px;
+  color: var(--llm-muted);
+  padding: 0.12rem 0.4rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+provider-card-statuses span {
+  border-color: var(--llm-accent);
+  color: var(--llm-accent);
+}
+
+.provider-card-usage {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.provider-card-usage div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--llm-border);
+  padding-bottom: 0.25rem;
+}
+
+.provider-card-usage dt {
+  color: var(--llm-muted);
+}
+
+.provider-card-usage dd {
+  overflow-wrap: anywhere;
+  text-align: end;
+}
+
+.provider-card-front > button {
+  align-self: end;
+  margin-top: auto;
+}
+
+.provider-card-back provider-settings-fields {
+  grid-template-columns: 1fr;
+  align-items: stretch;
+}
+
+.provider-key-acquisition {
+  color: var(--llm-accent);
+  font-size: 0.75rem;
+}
+
+.provider-card-back provider-connection-input {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .provider-card-inner {
+    transition-duration: 0ms;
+  }
 }
 
 .dashboard-hero {
@@ -1527,6 +1660,10 @@ settings-section,
   .settings-grid-form,
   .text-routing-controls,
   provider-settings-fields {
+    grid-template-columns: 1fr;
+  }
+
+  provider-card-grid {
     grid-template-columns: 1fr;
   }
 

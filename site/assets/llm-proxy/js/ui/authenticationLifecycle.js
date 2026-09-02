@@ -47,6 +47,7 @@ const EMPTY_STRING = "";
  *   openSettings: () => void,
  *   replaceProviderEditorSession: (providerID: string) => void,
  *   replaceTenantLifetimeController: () => void,
+ *   resetProviderCard: () => void,
  *   requestAndApplyGeneratedSecret: (successMessage?: string) => Promise<boolean>,
  *   setNotice: (kind: string, message: string, surface: string) => void,
  *   setPageNotice: (kind: string, message: string) => void
@@ -267,6 +268,7 @@ export function createAuthenticationLifecycleResponsibility() {
 
     clearAuthenticatedState() {
       this.appVersion += 1;
+      this.resetProviderCard();
       if (this.accountRequestController) {
         this.accountRequestController.abort();
         this.accountRequestController = null;

@@ -53,7 +53,9 @@
  * @typedef {{
  *   id: string,
  *   label: string,
+ *   key_acquisition_url: string,
  *   aliases: string[],
+ *   capabilities: string[],
  *   configured: boolean,
  *   fields: ProviderFieldProfile[],
  *   text_model: string,

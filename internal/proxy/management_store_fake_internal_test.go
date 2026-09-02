@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -252,7 +253,7 @@ func (database *fakeManagedTenantDatabase) saveProviderConnections(requestContex
 	return nil
 }
 
-func (database *fakeManagedTenantDatabase) deleteProviderConnections(ownerUserID string, tenantID string, providerID string, defaults managedRoutingDefaults, updatedAt time.Time) error {
+func (database *fakeManagedTenantDatabase) deleteProviderConnections(ownerUserID string, tenantID string, providerID string, credentialFieldIDs []string, defaults managedRoutingDefaults, updatedAt time.Time) error {
 	if deleteError, configured := popFakeError(&database.deleteProviderConnectionsErrors); configured && deleteError != nil {
 		return deleteError
 	}
@@ -262,18 +263,11 @@ func (database *fakeManagedTenantDatabase) deleteProviderConnections(ownerUserID
 	}
 	connections := tenantRecord.ProviderConnections[:0]
 	for _, existing := range tenantRecord.ProviderConnections {
-		if existing.ProviderID != providerID {
+		if existing.ProviderID != providerID || !slices.Contains(credentialFieldIDs, existing.FieldID) {
 			connections = append(connections, existing)
 		}
 	}
-	profiles := tenantRecord.ProviderProfiles[:0]
-	for _, existing := range tenantRecord.ProviderProfiles {
-		if existing.ProviderID != providerID {
-			profiles = append(profiles, existing)
-		}
-	}
 	tenantRecord.ProviderConnections = connections
-	tenantRecord.ProviderProfiles = profiles
 	tenantRecord.applyRoutingDefaults(defaults)
 	tenantRecord.UpdatedAt = updatedAt
 	database.tenantsByID[tenantID] = cloneManagedTenantRecord(tenantRecord)

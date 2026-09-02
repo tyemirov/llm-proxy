@@ -225,6 +225,128 @@
                     <p class="usage-empty" x-show="!hasUsage" x-text="copy.usageEmpty"></p>
                   </usage-breakdown>
                 </section>
+
+                <section class="provider-cards-section" aria-labelledby="provider-cards-title">
+                  <header class="section-header compact">
+                    <div>
+                      <p class="eyebrow" x-text="copy.providersEyebrow"></p>
+                      <h2 id="provider-cards-title" x-text="copy.providerCardsTitle"></h2>
+                      <p class="section-description" x-text="copy.providerCardsDescription"></p>
+                    </div>
+                  </header>
+                  <provider-card-grid>
+                    <template x-for="provider in providerCards" x-bind:key="provider.id">
+                      <article class="provider-card" x-bind:class="{ 'is-open': providerCardIsOpen(provider) }" x-bind:data-provider-card="provider.id">
+                        <div class="provider-card-inner">
+                          <section
+                            class="provider-card-face provider-card-front"
+                            x-bind:aria-hidden="providerCardIsOpen(provider) ? 'true' : 'false'"
+                            x-bind:inert="providerCardIsOpen(provider) ? true : null"
+                          >
+                            <header>
+                              <h3 x-text="provider.label"></h3>
+                              <provider-card-statuses>
+                                <span x-show="providerCardIsActive(provider)" x-text="copy.providerActive"></span>
+                                <span x-show="providerCardActivity(provider).used" x-text="copy.providerUsed"></span>
+                              </provider-card-statuses>
+                            </header>
+                            <provider-capability-list aria-label="Capabilities">
+                              <template x-for="capability in provider.capabilities" x-bind:key="capability">
+                                <span x-text="providerCapabilityLabel(capability)"></span>
+                              </template>
+                            </provider-capability-list>
+                            <dl class="provider-card-usage">
+                              <div><dt x-text="copy.providerRequests"></dt><dd x-text="providerCardActivity(provider).requests"></dd></div>
+                              <div><dt x-text="copy.providerTokens"></dt><dd x-text="providerCardActivity(provider).tokens"></dd></div>
+                              <div x-show="providerCardModel(provider)"><dt x-text="copy.providerTextModel"></dt><dd x-text="providerCardModel(provider)"></dd></div>
+                            </dl>
+                            <button
+                              type="button"
+                              x-bind:data-provider-card-action="provider.id"
+                              x-bind:aria-expanded="providerCardIsOpen(provider)"
+                              x-bind:aria-controls="'provider-card-back-' + provider.id"
+                              x-bind:disabled="Boolean(providerCardProviderID && !providerCardIsOpen(provider))"
+                              x-on:click="openProviderCard(provider)"
+                              x-text="providerCardConfigured(provider) ? copy.providerKeySettings : copy.providerSetKey"
+                            ></button>
+                          </section>
+
+                          <section
+                            class="provider-card-face provider-card-back"
+                            x-bind:id="'provider-card-back-' + provider.id"
+                            x-bind:aria-hidden="providerCardIsOpen(provider) ? 'false' : 'true'"
+                            x-bind:inert="providerCardIsOpen(provider) ? null : true"
+                          >
+                            <header>
+                              <div>
+                                <p class="eyebrow" x-text="provider.label"></p>
+                                <h3 x-text="providerCardTenantID ? settingsTenantName : copy.providerSelectTenant"></h3>
+                              </div>
+                              <button type="button" class="icon-only" x-on:click="closeProviderCard()" x-bind:aria-label="copy.providerDone">×</button>
+                            </header>
+                            <label x-show="providerCardIsOpen(provider) && !providerCardTenantID">
+                              <span x-text="copy.providerTenant"></span>
+                              <select x-on:change="handleProviderCardTenantSelection($event)" x-bind:disabled="busy">
+                                <option value="">Select tenant</option>
+                                <template x-for="tenant in tenants" x-bind:key="tenant.id">
+                                  <option x-bind:value="tenant.id" x-text="tenant.name"></option>
+                                </template>
+                              </select>
+                            </label>
+                            <template x-if="providerCardIsOpen(provider) && providerCardTenantID && selectedProvider">
+                              <provider-settings-fields>
+                                <a class="provider-key-acquisition" x-bind:href="selectedProvider.key_acquisition_url" target="_blank" rel="noopener noreferrer" x-text="copy.providerGetKey"></a>
+                                <provider-connection-fields>
+                                  <template x-for="field in selectedProvider.fields" x-bind:key="field.id">
+                                    <provider-connection-field>
+                                      <label x-bind:for="'provider-card-field-' + selectedProvider.id + '-' + field.id" x-text="field.label"></label>
+                                      <provider-connection-input>
+                                        <input
+                                          x-bind:id="'provider-card-field-' + selectedProvider.id + '-' + field.id"
+                                          x-bind:type="field.type === 'url' ? 'url' : 'text'"
+                                          x-bind:autocomplete="field.type === 'url' ? 'url' : 'off'"
+                                          x-bind:required="field.required"
+                                          x-bind:minlength="field.validation.minimum_length || null"
+                                          x-bind:pattern="field.validation.pattern || null"
+                                          x-bind:value="providerFieldInputValue(field)"
+                                          x-on:paste="handleProviderFieldPaste(field)"
+                                          x-on:input="handleProviderFieldInput(field, $event)"
+                                          x-on:change="autosaveSelectedProvider()"
+                                          x-bind:readonly="providerFieldInputReadOnly(field)"
+                                          x-bind:disabled="busy || providerAutosavePending"
+                                        >
+                                        <button type="button" x-show="field.secret && field.configured" x-on:click="beginProviderKeyReplacement(field)" x-bind:disabled="busy || providerAutosavePending" x-text="copy.providerReplaceKey"></button>
+                                      </provider-connection-input>
+                                    </provider-connection-field>
+                                  </template>
+                                </provider-connection-fields>
+                                <button type="button" class="danger provider-key-remove" x-show="selectedProvider.configured" x-on:click="requestSelectedProviderKeyRemoval()" x-bind:disabled="busy || providerAutosavePending" x-text="copy.removeProviderKey"></button>
+                                <p class="field-hint provider-key-verification-pending" role="status" aria-live="polite" x-cloak x-show="providerKeyVerificationPending" x-text="copy.providerKeyVerifying"></p>
+                                <provider-key-verification-error class="field-error" role="alert" x-cloak x-show="providerKeyVerificationFailed">
+                                  <span x-text="providerKeyVerificationFailure"></span>
+                                  <button type="button" x-on:click="retrySelectedProviderKeyVerification()" x-bind:disabled="busy" x-text="copy.providerKeyRetry"></button>
+                                </provider-key-verification-error>
+                                <provider-model-field>
+                                  <label x-bind:for="'provider-card-model-' + selectedProvider.id" x-text="copy.providerTextModel"></label>
+                                  <select x-bind:id="'provider-card-model-' + selectedProvider.id" x-bind:value="providerEditorSession.textModel" x-on:change="handleSelectedProviderTextModelChange($event)" x-bind:disabled="busy || providerAutosavePending">
+                                    <template x-for="model in selectedProvider.text_models" x-bind:key="model.id">
+                                      <option x-bind:value="model.id" x-bind:selected="model.id === providerEditorSession.textModel" x-text="model.id"></option>
+                                    </template>
+                                  </select>
+                                </provider-model-field>
+                                <label>
+                                  <span x-text="copy.providerSystemPrompt"></span>
+                                  <textarea rows="3" x-bind:value="providerEditorSession.systemPrompt" x-on:input="handleSelectedProviderSystemPromptInput($event)" x-on:change="autosaveSelectedProvider()" x-bind:disabled="busy || providerAutosavePending"></textarea>
+                                </label>
+                                <button type="button" x-on:click="closeProviderCard()" x-bind:disabled="busy || providerAutosavePending" x-text="copy.providerDone"></button>
+                              </provider-settings-fields>
+                            </template>
+                          </section>
+                        </div>
+                      </article>
+                    </template>
+                  </provider-card-grid>
+                </section>
               </usage-dashboard>
             </template>
 
@@ -677,140 +799,8 @@
                     </example-list>
                   </details>
 
-                  <settings-section aria-labelledby="provider-settings-title">
-                    <header class="section-header compact provider-section-header">
-                      <h2 id="provider-settings-title" class="eyebrow" x-text="copy.providersEyebrow"></h2>
-                    </header>
-                    <provider-editor>
-                      <template x-if="selectedProvider">
-                        <provider-settings-fields>
-                          <label class="provider-selector">
-                            <span class="visually-hidden" x-text="copy.providerSelector"></span>
-                            <select x-ref="providerSelector" x-on:change="selectProvider($event.target.value)" x-bind:disabled="settingsControlsDisabled || providerKeyRevealPending">
-                              <template x-for="provider in providers" x-bind:key="provider.id">
-                                <option x-bind:value="provider.id" x-bind:selected="provider.id === selectedProviderID" x-text="provider.label"></option>
-                              </template>
-                            </select>
-                          </label>
-                          <provider-connection-fields>
-                            <template x-for="field in selectedProvider.fields" x-bind:key="field.id">
-                              <provider-connection-field>
-                                <label x-bind:for="'provider-field-' + field.id" x-text="field.label"></label>
-                                <provider-connection-input>
-                                  <input
-                                    x-bind:id="'provider-field-' + field.id"
-                                    x-bind:type="field.type === 'url' ? 'url' : 'text'"
-                                    x-bind:autocomplete="field.type === 'url' ? 'url' : 'off'"
-                                    x-bind:required="field.required"
-                                    x-bind:minlength="field.validation.minimum_length || null"
-                                    x-bind:pattern="field.validation.pattern || null"
-                                    x-bind:value="providerFieldInputValue(field)"
-                                    x-on:paste="handleProviderFieldPaste(field)"
-                                    x-on:input="handleProviderFieldInput(field, $event)"
-                                    x-on:change="autosaveSelectedProvider()"
-                                    x-bind:readonly="providerFieldInputReadOnly(field)"
-                                    x-bind:disabled="busy || settingsClosePending || providerKeyRevealPending"
-                                  >
-                                  <button
-                                    type="button"
-                                    class="icon-only provider-key-visibility-toggle"
-                                    x-show="field.secret && (field.configured || providerFieldHasInput(field))"
-                                    x-on:mousedown.prevent
-                                    x-on:click="handleProviderFieldAction(field)"
-                                    x-bind:disabled="settingsControlsDisabled || providerAutosavePending || providerKeyRevealPending"
-                                    x-bind:title="providerFieldActionCopy(field)"
-                                    x-bind:aria-label="providerFieldActionCopy(field)"
-                                    x-bind:aria-pressed="providerFieldVisible(field)"
-                                  >
-                                    <span class="material-symbols-outlined" x-show="!providerFieldVisible(field)" aria-hidden="true">visibility</span>
-                                    <span class="material-symbols-outlined" x-show="providerFieldVisible(field)" aria-hidden="true">visibility_off</span>
-                                  </button>
-                                </provider-connection-input>
-                              </provider-connection-field>
-                            </template>
-                          </provider-connection-fields>
-                          <button type="button" class="danger provider-key-remove" x-show="selectedProvider.configured || selectedProviderHasConnectionInput" x-on:mousedown.prevent x-on:click="requestSelectedProviderKeyRemoval()" x-bind:disabled="settingsControlsDisabled || providerAutosavePending || providerKeyRevealPending" x-bind:title="copy.removeProviderKey" x-text="copy.removeProviderKey"></button>
-                          <p class="field-hint provider-key-verification-pending" role="status" aria-live="polite" x-cloak x-show="providerKeyVerificationPending" x-text="copy.providerKeyVerifying"></p>
-                          <provider-key-verification-error class="field-error" role="alert" x-cloak x-show="providerKeyVerificationFailed">
-                            <span x-text="providerKeyVerificationFailure"></span>
-                            <button type="button" x-on:click="retrySelectedProviderKeyVerification()" x-bind:disabled="settingsControlsDisabled" x-text="copy.providerKeyRetry"></button>
-                          </provider-key-verification-error>
-                          <provider-model-field>
-                            <div class="field-label-with-help">
-                              <label id="provider-default-model-label" for="provider-default-model-select" x-text="copy.providerTextModel"></label>
-                              <help-tooltip>
-                                <button
-                                  type="button"
-                                  class="help-tooltip-trigger"
-                                  x-bind:aria-label="copy.providerDefaultModelHelpLabel"
-                                  aria-describedby="provider-default-model-help"
-                                >
-                                  <span class="material-symbols-outlined" aria-hidden="true">help</span>
-                                </button>
-                                <span
-                                  id="provider-default-model-help"
-                                  class="help-tooltip-content"
-                                  role="tooltip"
-                                  x-text="copy.providerDefaultModelHelp"
-                                ></span>
-                              </help-tooltip>
-                            </div>
-                            <select id="provider-default-model-select" x-bind:value="providerEditorSession.textModel" x-on:change="handleSelectedProviderTextModelChange($event)" x-bind:disabled="settingsControlsDisabled || providerKeyRevealPending">
-                              <template x-for="model in selectedProvider.text_models" x-bind:key="model.id">
-                                <option x-bind:value="model.id" x-bind:selected="model.id === providerEditorSession.textModel" x-text="model.id"></option>
-                              </template>
-                            </select>
-                          </provider-model-field>
-                          <details
-                            class="provider-system-prompt system-prompt-disclosure"
-                            x-bind:open="providerSystemPromptOpen"
-                            x-on:toggle="providerSystemPromptOpen = $event.currentTarget.open"
-                          >
-                            <summary class="system-prompt-summary">
-                              <span id="provider-system-prompt-label" x-text="copy.providerSystemPrompt"></span>
-                              <span
-                                class="system-prompt-disclosure-state"
-                                aria-hidden="true"
-                                x-text="providerSystemPromptOpen ? copy.systemPromptExpanded : copy.systemPromptHidden"
-                              ></span>
-                            </summary>
-                            <textarea
-                              id="provider-system-prompt-input"
-                              rows="3"
-                              aria-labelledby="provider-system-prompt-label"
-                              x-bind:value="providerEditorSession.systemPrompt"
-                              x-on:input="handleSelectedProviderSystemPromptInput($event)"
-                              x-on:change="autosaveSelectedProvider()"
-                              x-bind:disabled="settingsControlsDisabled || providerKeyRevealPending"
-                            ></textarea>
-                          </details>
-                        </provider-settings-fields>
-                      </template>
-                    </provider-editor>
-                  </settings-section>
                 </settings-body>
               </settings-modal>
-              <provider-removal-overlay
-                x-cloak
-                x-show="providerRemovalConfirmationOpen"
-                x-on:click.self="cancelProviderKeyRemoval()"
-                role="presentation"
-              >
-                <provider-removal-dialog
-                  role="alertdialog"
-                  aria-modal="true"
-                  aria-labelledby="provider-removal-title"
-                  aria-describedby="provider-removal-description"
-                  x-on:keydown.tab="trapProviderKeyRemovalFocus($event)"
-                >
-                  <h3 id="provider-removal-title" x-text="copy.removeProviderKeyConfirmationTitle"></h3>
-                  <p id="provider-removal-description" x-text="copy.removeProviderKeyConfirmationMessage"></p>
-                  <footer class="provider-removal-actions">
-                    <button type="button" x-ref="providerRemovalCancel" x-on:click="cancelProviderKeyRemoval()" x-text="copy.cancelProviderKeyRemoval"></button>
-                    <button type="button" class="danger provider-removal-confirm" x-ref="providerRemovalConfirm" x-on:click="confirmProviderKeyRemoval()" x-text="copy.confirmProviderKeyRemoval"></button>
-                  </footer>
-                </provider-removal-dialog>
-              </provider-removal-overlay>
               <tenant-dialog-overlay
                 class="tenant-rename-overlay"
                 x-cloak
@@ -917,6 +907,29 @@
                 </tenant-delete-dialog>
               </tenant-delete-overlay>
             </settings-overlay>
+
+            <provider-removal-overlay
+              x-cloak
+              x-show="providerRemovalConfirmationOpen"
+              x-on:click.self="cancelProviderKeyRemoval()"
+              x-on:keydown.escape.stop.prevent="cancelProviderKeyRemoval()"
+              role="presentation"
+            >
+              <provider-removal-dialog
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="provider-removal-title"
+                aria-describedby="provider-removal-description"
+                x-on:keydown.tab="trapProviderKeyRemovalFocus($event)"
+              >
+                <h3 id="provider-removal-title" x-text="copy.removeProviderKeyConfirmationTitle"></h3>
+                <p id="provider-removal-description" x-text="copy.removeProviderKeyConfirmationMessage"></p>
+                <footer class="provider-removal-actions">
+                  <button type="button" x-ref="providerRemovalCancel" x-on:click="cancelProviderKeyRemoval()" x-text="copy.cancelProviderKeyRemoval"></button>
+                  <button type="button" class="danger provider-removal-confirm" x-ref="providerRemovalConfirm" x-on:click="confirmProviderKeyRemoval()" x-text="copy.confirmProviderKeyRemoval"></button>
+                </footer>
+              </provider-removal-dialog>
+            </provider-removal-overlay>
 
           </app-surface>
         </template>
