@@ -217,7 +217,7 @@ func publicProviderOffering(offering ProviderOffering) PublicProviderOffering {
 		capabilities = append(capabilities, PublicModelCapabilityWebSearch)
 	}
 	for _, mediaInput := range offering.MediaInputs {
-		capabilities = append(capabilities, publicMediaInputCapability(mediaInput))
+		capabilities = append(capabilities, mediaInputCapability(mediaInput))
 	}
 	reasoningEfforts := publicReasoningEfforts(offering.ReasoningEffort)
 	if len(reasoningEfforts) != 0 {
@@ -291,7 +291,7 @@ func ServePublicCapabilities(capabilityCatalog PublicCapabilityCatalog, port int
 	return BuildPublicCapabilityRouter(capabilityCatalog, logLevel).Run(fmt.Sprintf(":%d", port))
 }
 
-func publicMediaInputCapability(mediaInput string) string {
+func mediaInputCapability(mediaInput string) string {
 	if mediaInput == string(messageMediaTypeImage) {
 		return PublicModelCapabilityImageInput
 	}

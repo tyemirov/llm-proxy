@@ -30,7 +30,6 @@ type providerSummary struct {
 	keyAcquisitionURL     string
 	aliases               []string
 	capabilities          []string
-	modelPublishers       []ModelPublisher
 	modelFamilies         []ModelFamily
 	textDefaultModel      string
 	textModels            []textModelSummary
@@ -45,10 +44,6 @@ type textModelSummary struct {
 }
 
 func newProviderRegistry(configuration Configuration) *providerRegistry {
-	publishers := make(map[string]ModelPublisher, len(configuration.ProviderCatalog.schema.Publishers))
-	for _, publisher := range configuration.ProviderCatalog.schema.Publishers {
-		publishers[publisher.ID] = publisher
-	}
 	families := make(map[string]ModelFamily, len(configuration.ProviderCatalog.schema.Families))
 	for _, family := range configuration.ProviderCatalog.schema.Families {
 		families[family.ID] = family
@@ -75,7 +70,6 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			textModels:          map[string]textModelDefinition{},
 			transcriptionModels: map[string]dictationModelDefinition{},
 		}
-		publisherIDs := map[string]struct{}{}
 		familyIDs := map[string]struct{}{}
 		for _, field := range provider.Fields {
 			definition.fields[field.ID] = field
@@ -101,10 +95,6 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 		}
 		for _, offering := range provider.Offerings {
 			model := models[offering.Model]
-			if _, exists := publisherIDs[model.Publisher]; !exists {
-				definition.modelPublishers = append(definition.modelPublishers, publishers[model.Publisher])
-				publisherIDs[model.Publisher] = struct{}{}
-			}
 			if _, exists := familyIDs[model.Family]; !exists {
 				definition.modelFamilies = append(definition.modelFamilies, families[model.Family])
 				familyIDs[model.Family] = struct{}{}
@@ -112,6 +102,12 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			for _, operation := range offering.Operations {
 				if !slices.Contains(definition.capabilities, operation) {
 					definition.capabilities = append(definition.capabilities, operation)
+				}
+			}
+			for _, mediaInput := range offering.MediaInputs {
+				capability := mediaInputCapability(mediaInput)
+				if !slices.Contains(definition.capabilities, capability) {
+					definition.capabilities = append(definition.capabilities, capability)
 				}
 			}
 			transport := definition.transports[offering.Transport]
@@ -287,7 +283,6 @@ func (registry *providerRegistry) providerSummaries() []providerSummary {
 			keyAcquisitionURL:     definition.keyAcquisitionURL,
 			aliases:               aliases,
 			capabilities:          append([]string(nil), definition.capabilities...),
-			modelPublishers:       append([]ModelPublisher(nil), definition.modelPublishers...),
 			modelFamilies:         append([]ModelFamily(nil), definition.modelFamilies...),
 			textDefaultModel:      definition.defaultTextModel.string(),
 			textModels:            sortedTextModelSummaries(definition.textModels),

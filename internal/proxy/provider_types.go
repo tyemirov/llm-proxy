@@ -306,7 +306,6 @@ type providerDefinition struct {
 	keyAcquisitionURL         string
 	aliases                   []string
 	capabilities              []string
-	modelPublishers           []ModelPublisher
 	modelFamilies             []ModelFamily
 	fields                    map[string]ProviderCatalogField
 	fieldOrder                []string

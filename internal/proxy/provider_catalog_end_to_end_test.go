@@ -87,7 +87,7 @@ func TestProviderCatalogDeclaresGeminiInteractionsWithoutReplayContinuation(test
 	testingInstance.Fatal("Gemini Interactions transport is missing")
 }
 
-func TestProviderCatalogProjectsDistinctProviderCardIdentities(testingInstance *testing.T) {
+func TestProviderCatalogProjectsProviderCardTaxonomy(testingInstance *testing.T) {
 	configuration := proxy.Configuration{ProviderCatalog: testfixtures.ProviderCatalog(testingInstance)}
 	router := newManagementRouterWithDatabasePath(testingInstance, configuration, filepath.Join(testingInstance.TempDir(), "managed-tenants.db"))
 	sessionCookie := managementSessionCookie(testingInstance, "tauth-provider-card-owner")
@@ -103,10 +103,7 @@ func TestProviderCatalogProjectsDistinctProviderCardIdentities(testingInstance *
 		Providers []struct {
 			ID              string `json:"id"`
 			APIServiceLabel string `json:"api_service_label"`
-			ModelPublishers []struct {
-				Label string `json:"label"`
-			} `json:"model_publishers"`
-			ModelFamilies []struct {
+			ModelFamilies   []struct {
 				Label string `json:"label"`
 			} `json:"model_families"`
 			Capabilities []string `json:"capabilities"`
@@ -117,14 +114,14 @@ func TestProviderCatalogProjectsDistinctProviderCardIdentities(testingInstance *
 	}
 	expected := map[string]struct {
 		apiServiceLabel string
-		publishers      []string
 		families        []string
 		capabilities    []string
 	}{
-		proxy.ProviderNameOpenAI:      {apiServiceLabel: "OpenAI API", publishers: []string{"OpenAI"}, families: []string{"GPT-4", "GPT-5", "GPT Transcribe"}, capabilities: []string{proxy.ModelOperationText, proxy.ModelOperationDictation}},
-		proxy.ProviderNameGemini:      {apiServiceLabel: "Gemini API", publishers: []string{"Google"}, families: []string{"Gemini"}, capabilities: []string{proxy.ModelOperationText}},
-		proxy.ProviderNameMeta:        {apiServiceLabel: "Meta API", publishers: []string{"Meta"}, families: []string{"Muse Spark"}, capabilities: []string{proxy.ModelOperationText}},
-		proxy.ProviderNameSiliconFlow: {apiServiceLabel: "SiliconFlow API", publishers: []string{"DeepSeek", "FunAudioLLM"}, families: []string{"DeepSeek R1", "SenseVoice"}, capabilities: []string{proxy.ModelOperationText, proxy.ModelOperationDictation}},
+		proxy.ProviderNameOpenAI:      {apiServiceLabel: "OpenAI API", families: []string{"GPT-4", "GPT-5", "GPT Transcribe"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.ModelOperationDictation}},
+		proxy.ProviderNameDashScope:   {apiServiceLabel: "DashScope API", families: []string{"Qwen"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput}},
+		proxy.ProviderNameGemini:      {apiServiceLabel: "Gemini API", families: []string{"Gemini"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityAudioInput}},
+		proxy.ProviderNameMeta:        {apiServiceLabel: "Meta API", families: []string{"Muse Spark"}, capabilities: []string{proxy.ModelOperationText}},
+		proxy.ProviderNameSiliconFlow: {apiServiceLabel: "SiliconFlow API", families: []string{"DeepSeek R1", "SenseVoice"}, capabilities: []string{proxy.ModelOperationText, proxy.ModelOperationDictation}},
 	}
 	observed := map[string]bool{}
 	for _, provider := range profile.Providers {
@@ -132,16 +129,12 @@ func TestProviderCatalogProjectsDistinctProviderCardIdentities(testingInstance *
 		if !required {
 			continue
 		}
-		publisherLabels := make([]string, 0, len(provider.ModelPublishers))
-		for _, publisher := range provider.ModelPublishers {
-			publisherLabels = append(publisherLabels, publisher.Label)
-		}
 		familyLabels := make([]string, 0, len(provider.ModelFamilies))
 		for _, family := range provider.ModelFamilies {
 			familyLabels = append(familyLabels, family.Label)
 		}
-		if provider.APIServiceLabel != expectedProvider.apiServiceLabel || !slices.Equal(publisherLabels, expectedProvider.publishers) || !slices.Equal(familyLabels, expectedProvider.families) || !slices.Equal(provider.Capabilities, expectedProvider.capabilities) {
-			testingInstance.Fatalf("provider card identity provider=%s API=%q publishers=%v families=%v capabilities=%v", provider.ID, provider.APIServiceLabel, publisherLabels, familyLabels, provider.Capabilities)
+		if provider.APIServiceLabel != expectedProvider.apiServiceLabel || !slices.Equal(familyLabels, expectedProvider.families) || !slices.Equal(provider.Capabilities, expectedProvider.capabilities) {
+			testingInstance.Fatalf("provider card taxonomy provider=%s API=%q families=%v capabilities=%v", provider.ID, provider.APIServiceLabel, familyLabels, provider.Capabilities)
 		}
 		observed[provider.ID] = true
 	}
@@ -631,11 +624,7 @@ func assertTestCatalogManagementSchema(testingInstance *testing.T, responseBody 
 			APIServiceLabel   string   `json:"api_service_label"`
 			KeyAcquisitionURL string   `json:"key_acquisition_url"`
 			Capabilities      []string `json:"capabilities"`
-			ModelPublishers   []struct {
-				ID    string `json:"id"`
-				Label string `json:"label"`
-			} `json:"model_publishers"`
-			ModelFamilies []struct {
+			ModelFamilies     []struct {
 				ID    string `json:"id"`
 				Label string `json:"label"`
 			} `json:"model_families"`
@@ -669,9 +658,6 @@ func assertTestCatalogManagementSchema(testingInstance *testing.T, responseBody 
 		}
 		if provider.APIServiceLabel != "Catalog Test API" || provider.KeyAcquisitionURL != "https://provider.example/keys" || !slices.Equal(provider.Capabilities, []string{proxy.ModelOperationText}) || provider.Configured != configured || provider.TextModel != testCatalogModelID || len(provider.Fields) != 2 {
 			testingInstance.Fatalf("catalog management provider=%+v", provider)
-		}
-		if len(provider.ModelPublishers) != 1 || provider.ModelPublishers[0].ID != testCatalogProviderPublisherID || provider.ModelPublishers[0].Label != "Catalog Test Publisher" {
-			testingInstance.Fatalf("catalog management publishers=%+v", provider.ModelPublishers)
 		}
 		if len(provider.ModelFamilies) != 1 || provider.ModelFamilies[0].ID != testCatalogProviderFamilyID || provider.ModelFamilies[0].Label != "Catalog Test Family" {
 			testingInstance.Fatalf("catalog management families=%+v", provider.ModelFamilies)

@@ -103,7 +103,6 @@ type managementProviderResponse struct {
 	KeyAcquisitionURL     string                              `json:"key_acquisition_url"`
 	Aliases               []string                            `json:"aliases"`
 	Capabilities          []string                            `json:"capabilities"`
-	ModelPublishers       []managementCatalogIdentityResponse `json:"model_publishers"`
 	ModelFamilies         []managementCatalogIdentityResponse `json:"model_families"`
 	Configured            bool                                `json:"configured"`
 	Fields                []managementProviderFieldResponse   `json:"fields"`
@@ -870,10 +869,6 @@ func (service *managementService) providerResponses(providerSettings map[provide
 				ReasoningEffort: managementReasoningEffortCapabilityResponseFor(model.reasoningEffort),
 			})
 		}
-		modelPublishers := make([]managementCatalogIdentityResponse, 0, len(summary.modelPublishers))
-		for _, publisher := range summary.modelPublishers {
-			modelPublishers = append(modelPublishers, managementCatalogIdentityResponse(publisher))
-		}
 		modelFamilies := make([]managementCatalogIdentityResponse, 0, len(summary.modelFamilies))
 		for _, family := range summary.modelFamilies {
 			modelFamilies = append(modelFamilies, managementCatalogIdentityResponse{ID: family.ID, Label: family.Label})
@@ -885,7 +880,6 @@ func (service *managementService) providerResponses(providerSettings map[provide
 			KeyAcquisitionURL:     summary.keyAcquisitionURL,
 			Aliases:               append([]string{}, summary.aliases...),
 			Capabilities:          append([]string{}, summary.capabilities...),
-			ModelPublishers:       modelPublishers,
 			ModelFamilies:         modelFamilies,
 			Configured:            configured && settings.hasRequiredConnectionFields(definition),
 			Fields:                make([]managementProviderFieldResponse, 0, len(definition.fieldOrder)),
