@@ -335,14 +335,16 @@ models:
       version: qwen3.7-plus
       operations:
         - text
-      media_inputs: []
+      media_inputs:
+        - image
     - id: qwen3.6-flash
       publisher: alibaba
       family: qwen
       version: qwen3.6-flash
       operations:
         - text
-      media_inputs: []
+      media_inputs:
+        - image
     - id: kimi-k2.6
       publisher: moonshot
       family: kimi-k2
@@ -1520,6 +1522,34 @@ providers:
             - id: context_tokens
               value: 1000000
               unit: tokens
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions
+              last_verified: "2026-09-02"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 2048
+              unit: files
+              scope: request
+              source: https://www.alibabacloud.com/help/en/model-studio/vision-model
+              last_verified: "2026-09-02"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions
+              last_verified: "2026-09-02"
           prices:
             - operation: text
               available: true
@@ -1555,6 +1585,34 @@ providers:
             - id: context_tokens
               value: 1000000
               unit: tokens
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions
+              last_verified: "2026-09-02"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 256
+              unit: files
+              scope: request
+              source: https://www.alibabacloud.com/help/en/model-studio/vision-model
+              last_verified: "2026-09-02"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions
+              last_verified: "2026-09-02"
           prices:
             - operation: text
               available: true
