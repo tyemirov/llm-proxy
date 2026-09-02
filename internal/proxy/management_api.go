@@ -97,20 +97,28 @@ type managementTenantDefaultsResponse struct {
 }
 
 type managementProviderResponse struct {
-	ID                    string                            `json:"id"`
-	Label                 string                            `json:"label"`
-	KeyAcquisitionURL     string                            `json:"key_acquisition_url"`
-	Aliases               []string                          `json:"aliases"`
-	Capabilities          []string                          `json:"capabilities"`
-	Configured            bool                              `json:"configured"`
-	Fields                []managementProviderFieldResponse `json:"fields"`
-	TextModel             string                            `json:"text_model"`
-	SystemPrompt          string                            `json:"system_prompt"`
-	TextDefaultModel      string                            `json:"text_default_model"`
-	TextModels            []managementTextModelResponse     `json:"text_models"`
-	SupportsDictation     bool                              `json:"supports_dictation"`
-	DictationDefaultModel string                            `json:"dictation_default_model,omitempty"`
-	DictationModels       []string                          `json:"dictation_models"`
+	ID                    string                              `json:"id"`
+	Label                 string                              `json:"label"`
+	APIServiceLabel       string                              `json:"api_service_label"`
+	KeyAcquisitionURL     string                              `json:"key_acquisition_url"`
+	Aliases               []string                            `json:"aliases"`
+	Capabilities          []string                            `json:"capabilities"`
+	ModelPublishers       []managementCatalogIdentityResponse `json:"model_publishers"`
+	ModelFamilies         []managementCatalogIdentityResponse `json:"model_families"`
+	Configured            bool                                `json:"configured"`
+	Fields                []managementProviderFieldResponse   `json:"fields"`
+	TextModel             string                              `json:"text_model"`
+	SystemPrompt          string                              `json:"system_prompt"`
+	TextDefaultModel      string                              `json:"text_default_model"`
+	TextModels            []managementTextModelResponse       `json:"text_models"`
+	SupportsDictation     bool                                `json:"supports_dictation"`
+	DictationDefaultModel string                              `json:"dictation_default_model,omitempty"`
+	DictationModels       []string                            `json:"dictation_models"`
+}
+
+type managementCatalogIdentityResponse struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
 }
 
 type managementProviderFieldResponse struct {
@@ -862,12 +870,23 @@ func (service *managementService) providerResponses(providerSettings map[provide
 				ReasoningEffort: managementReasoningEffortCapabilityResponseFor(model.reasoningEffort),
 			})
 		}
+		modelPublishers := make([]managementCatalogIdentityResponse, 0, len(summary.modelPublishers))
+		for _, publisher := range summary.modelPublishers {
+			modelPublishers = append(modelPublishers, managementCatalogIdentityResponse(publisher))
+		}
+		modelFamilies := make([]managementCatalogIdentityResponse, 0, len(summary.modelFamilies))
+		for _, family := range summary.modelFamilies {
+			modelFamilies = append(modelFamilies, managementCatalogIdentityResponse{ID: family.ID, Label: family.Label})
+		}
 		response := managementProviderResponse{
 			ID:                    summary.identifier,
 			Label:                 summary.label,
+			APIServiceLabel:       summary.apiServiceLabel,
 			KeyAcquisitionURL:     summary.keyAcquisitionURL,
 			Aliases:               append([]string{}, summary.aliases...),
 			Capabilities:          append([]string{}, summary.capabilities...),
+			ModelPublishers:       modelPublishers,
+			ModelFamilies:         modelFamilies,
 			Configured:            configured && settings.hasRequiredConnectionFields(definition),
 			Fields:                make([]managementProviderFieldResponse, 0, len(definition.fieldOrder)),
 			TextModel:             summary.textDefaultModel,

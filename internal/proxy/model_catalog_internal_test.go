@@ -124,7 +124,7 @@ func internalTestProviderCatalog(modelCatalog ModelCatalog) *ProviderCatalog {
 			providerIndex = len(schema.Providers)
 			providerIndexes[offering.Provider] = providerIndex
 			schema.Providers = append(schema.Providers, ProviderCatalogProvider{
-				ID: offering.Provider, Label: providerLabels[offering.Provider], KeyAcquisitionURL: "https://provider.example/keys",
+				ID: offering.Provider, Label: providerLabels[offering.Provider], APIServiceLabel: providerLabels[offering.Provider] + " API", KeyAcquisitionURL: "https://provider.example/keys",
 				Fields: []ProviderCatalogField{{
 					ID: CatalogCredentialAPIKey, Label: "Test API key", Kind: CatalogProviderFieldKindCredential,
 					Type: CatalogProviderFieldTypeOpaque, Required: true, Default: &empty, Secret: true,

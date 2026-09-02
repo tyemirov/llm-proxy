@@ -302,9 +302,12 @@ func (definition textModelDefinition) supportsMediaInput(mediaInput messageMedia
 type providerDefinition struct {
 	identifier                providerID
 	label                     string
+	apiServiceLabel           string
 	keyAcquisitionURL         string
 	aliases                   []string
 	capabilities              []string
+	modelPublishers           []ModelPublisher
+	modelFamilies             []ModelFamily
 	fields                    map[string]ProviderCatalogField
 	fieldOrder                []string
 	connectionValues          map[string]string

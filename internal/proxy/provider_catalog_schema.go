@@ -68,6 +68,7 @@ type ProviderCatalogModelMigration struct {
 type ProviderCatalogProvider struct {
 	ID                string                     `yaml:"id"`
 	Label             string                     `yaml:"label"`
+	APIServiceLabel   string                     `yaml:"api_service_label"`
 	KeyAcquisitionURL string                     `yaml:"key_acquisition_url"`
 	Aliases           []string                   `yaml:"aliases,omitempty"`
 	Fields            []ProviderCatalogField     `yaml:"fields"`
@@ -388,6 +389,9 @@ func validateProviderCatalogSchema(schema ProviderCatalogSchema) error {
 		providerAliases[identifier] = identifier
 		if strings.TrimSpace(provider.Label) == constants.EmptyString || provider.Label != strings.TrimSpace(provider.Label) {
 			return fmt.Errorf("%w: field=%s.label", ErrInvalidModelCatalog, fieldPrefix)
+		}
+		if strings.TrimSpace(provider.APIServiceLabel) == constants.EmptyString || provider.APIServiceLabel != strings.TrimSpace(provider.APIServiceLabel) {
+			return fmt.Errorf("%w: field=%s.api_service_label", ErrInvalidModelCatalog, fieldPrefix)
 		}
 		if !validProviderKeyAcquisitionURL(provider.KeyAcquisitionURL) {
 			return fmt.Errorf("%w: field=%s.key_acquisition_url", ErrInvalidModelCatalog, fieldPrefix)
