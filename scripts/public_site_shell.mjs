@@ -30,6 +30,33 @@ const PUBLIC_FOOTER_LINKS = Object.freeze({
     Object.freeze({ label: "GitHub", href: "https://github.com/tyemirov/llm-proxy" }),
   ]),
 });
+const PUBLIC_THEME_CONFIG = Object.freeze({
+  attribute: "data-mpr-theme",
+  targets: Object.freeze(["document", "body"]),
+  initialMode: "default-dark",
+  modes: Object.freeze([
+    Object.freeze({
+      value: "default-light",
+      attributeValue: "light",
+      dataset: Object.freeze({ "data-llm-proxy-palette": "default" }),
+    }),
+    Object.freeze({
+      value: "sunrise-light",
+      attributeValue: "light",
+      dataset: Object.freeze({ "data-llm-proxy-palette": "sunrise" }),
+    }),
+    Object.freeze({
+      value: "default-dark",
+      attributeValue: "dark",
+      dataset: Object.freeze({ "data-llm-proxy-palette": "default" }),
+    }),
+    Object.freeze({
+      value: "forest-dark",
+      attributeValue: "dark",
+      dataset: Object.freeze({ "data-llm-proxy-palette": "forest" }),
+    }),
+  ]),
+});
 const MPR_PROJECT_LINKS = Object.freeze({
   style: "drop-up",
   text: "Built by Marco Polo Research Lab",
@@ -101,6 +128,7 @@ export function renderPublicFooter() {
       privacy-link-label="Privacy"
       privacy-link-href="/privacy/"
       theme-switcher="square"
+      theme-config='${JSON.stringify(PUBLIC_THEME_CONFIG)}'
       horizontal-links='${JSON.stringify(PUBLIC_FOOTER_LINKS)}'
       links-collection='${JSON.stringify(MPR_PROJECT_LINKS)}'
     >
