@@ -899,19 +899,23 @@ and values remain available to assistive technology.
 
 These charts are a client-side presentation of existing aggregate request
 data. They are not billing, provider-performance, provider-key, token-share,
-exact-event-time, or new management-API features. Usage Overview also renders every provider in
-catalog order. Each provider card shows its exact selected-scope request and
-token totals. A tenant-filtered view also shows the tenant's selected provider
-model and marks only its default text route as `active`. Account-wide usage does
-not synthesize one model across tenants. A card's `used` state means that its
-canonical provider ID has requests in the selected interval.
+exact-event-time, or new management-API features. Usage Overview also renders
+every provider in catalog order. Each card names the provider API with its
+catalog-owned API service label. Separate groups identify model publishers,
+model families, and capabilities. Each provider card shows its exact
+selected-scope request and token totals. A tenant-filtered view also shows the
+tenant's selected provider model and marks only its default text route as
+`active`. Account-wide usage does not synthesize one model across tenants. A
+card's `used` state means that its canonical provider ID has requests in the
+selected interval.
 
-The explicit `Set key` or `Key settings` action opens one tenant-bound card
-back. It contains the catalog fields, official key-acquisition link, selected
-text model, and provider system prompt. A saved key appears only as a generic
-mask with `Replace key` and `Delete key` actions. The app does not retrieve or
-render the saved raw value. Key deletion preserves non-secret provider fields,
-the provider profile, historical usage, and valid routing defaults.
+The explicit `Set API key` or `API key settings` action opens one tenant-bound
+card back. It contains the catalog fields, official key-acquisition link,
+selected text model, and provider system prompt. A saved key appears only as a
+generic mask with `Replace key` and `Delete key` actions. The app does not
+retrieve or render the saved raw value. Key deletion preserves non-secret
+provider fields, the provider profile, historical usage, and valid routing
+defaults.
 
 The Settings modal contains client access, generated secret, routing defaults,
 the tenant prompt, and copyable request examples. It has no duplicate provider
@@ -1311,12 +1315,13 @@ module graph. LLM Proxy does not try another CDN or a bundled fallback; the
 failure screen completes the shared MPR transition without making a protected
 management request.
 
-Use the provider cards in **Usage Overview** to save each provider API key,
-select its default text model, and set its provider prompt. Use **Settings** to
-select the Default tenant's text and dictation routes. Supported routes can save a
-`reasoning_effort` default. A supported per-request value overrides that saved
-default for one request. The proxy rejects a default that the selected
-provider/model route does not declare.
+Use the **API connections** cards in **Usage Overview** to save each provider
+API key. Each card separates the provider API, model publishers, model families,
+and capabilities. Use the card back to select its default text model and set its
+provider prompt. Use **Settings** to select the Default tenant's text and
+dictation routes. Supported routes can save a `reasoning_effort` default. A
+supported per-request value overrides that saved default for one request. The
+proxy rejects a default that the selected provider/model route does not declare.
 
 Create or replace the tenant's client key separately in **Settings**. That
 generated client key is the value that applications store as
