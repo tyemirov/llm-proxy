@@ -362,7 +362,35 @@ provider-card-grid {
 }
 
 .provider-card-back {
+  gap: 0.45rem;
   transform: rotateY(180deg);
+}
+
+provider-api-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.provider-card-back provider-api-heading .provider-key-acquisition {
+  border-left: 1px solid var(--llm-border);
+  padding-left: 0.35rem;
+}
+
+.provider-card-tenant {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--llm-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.provider-card-tenant select {
+  min-width: 0;
+  min-height: 30px;
 }
 
 provider-card-controls,
@@ -487,6 +515,7 @@ provider-request-track i {
 .provider-card-back provider-settings-fields {
   grid-template-columns: 1fr;
   align-items: stretch;
+  gap: 0.4rem;
 }
 
 .provider-key-acquisition {
@@ -495,7 +524,15 @@ provider-request-track i {
 }
 
 .provider-card-back provider-connection-input {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.provider-card-back provider-connection-input.has-key-action {
+  grid-template-columns: minmax(0, 1fr) 30px;
+}
+
+.provider-card-back .provider-system-prompt {
+  min-width: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

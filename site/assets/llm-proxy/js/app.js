@@ -1,9 +1,9 @@
 // @ts-check
 
-import { RUNTIME_UI } from "./constants.js?v=20260902c237";
-import { initializeMprShell } from "./core/mprShell.js?v=20260902c237";
-import { failApplicationStartup } from "./ui/applicationStartup.js?v=20260902c237";
-import { createManagementApplication } from "./ui/managementApplication.js?v=20260902c237";
+import { RUNTIME_UI } from "./constants.js?v=20260902c239";
+import { initializeMprShell } from "./core/mprShell.js?v=20260902c239";
+import { failApplicationStartup } from "./ui/applicationStartup.js?v=20260902c239";
+import { createManagementApplication } from "./ui/managementApplication.js?v=20260902c239";
 
 initializeMprShell();
 

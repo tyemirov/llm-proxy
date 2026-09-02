@@ -1,8 +1,8 @@
 // @ts-check
 
-import { COPY } from "../constants.js?v=20260902c237";
-import { removeProviderConnection as requestRemoveProviderConnection } from "../core/backendClient.js?v=20260902c237";
-import { profileProvider } from "../core/managementProfile.js?v=20260902c237";
+import { COPY } from "../constants.js?v=20260902c239";
+import { removeProviderConnection as requestRemoveProviderConnection } from "../core/backendClient.js?v=20260902c239";
+import { profileProvider } from "../core/managementProfile.js?v=20260902c239";
 
 const EMPTY_STRING = "";
 const SAVED_PROVIDER_KEY_MASK = "••••••••";
@@ -14,7 +14,7 @@ const SAVED_PROVIDER_KEY_MASK = "••••••••";
  *   autosaveSelectedProvider: () => Promise<boolean>,
  *   markSelectedProviderDirty: () => void,
  *   replaceProviderEditorSession: (providerID: string) => void,
- *   runProfileMutation: (mutation: () => Promise<import("../types.d.js").ManagementTenantProfile>, successMessage: string) => Promise<boolean>
+ *   runProviderCardMutation: (mutation: () => Promise<import("../types.d.js").ManagementTenantProfile>, successMessage: string) => Promise<boolean>
  * }} ProviderCredentialsHost */
 
 /** @template {object} Responsibility @param {Responsibility & ThisType<ProviderCredentialsHost & Responsibility>} responsibility */
@@ -43,22 +43,15 @@ export function createProviderCredentialsResponsibility() {
       return String(this.providerEditorSession.fieldInputs[field.id] ?? EMPTY_STRING);
     },
 
-    /** @param {import("../types.d.js").ProviderFieldProfile} field */
-    providerFieldInputReadOnly(field) {
-      return Boolean(field.secret && field.configured && !this.providerEditorSession.fieldDirty[field.id]);
-    },
-
-    /** @param {import("../types.d.js").ProviderFieldProfile} field */
-    beginProviderKeyReplacement(field) {
-      if (!field.secret) return;
+    /** @param {import("../types.d.js").ProviderFieldProfile} field @param {Event} event */
+    prepareProviderFieldEntry(field, event) {
+      if (!field.secret || !field.configured || this.providerEditorSession.fieldDirty[field.id]) return;
       this.abortProviderKeyVerification();
       this.providerKeyVerificationFailure = EMPTY_STRING;
       this.providerEditorSession.fieldInputs[field.id] = EMPTY_STRING;
       this.providerEditorSession.fieldDirty[field.id] = true;
-      this.$nextTick(() => {
-        const input = document.getElementById(`provider-card-field-${this.selectedProviderID}-${field.id}`);
-        if (input instanceof HTMLInputElement) input.focus();
-      });
+      const providerInput = /** @type {HTMLInputElement} */ (event.target);
+      providerInput.value = EMPTY_STRING;
     },
 
     /** @param {import("../types.d.js").ProviderFieldProfile} field @param {Event} event */
@@ -72,9 +65,10 @@ export function createProviderCredentialsResponsibility() {
       this.markSelectedProviderDirty();
     },
 
-    /** @param {import("../types.d.js").ProviderFieldProfile} field */
-    handleProviderFieldPaste(field) {
+    /** @param {import("../types.d.js").ProviderFieldProfile} field @param {Event} event */
+    handleProviderFieldPaste(field, event) {
       if (!field.secret) return;
+      this.prepareProviderFieldEntry(field, event);
       this.$nextTick(() => { void this.verifyPastedProviderField(field.id); });
     },
 
@@ -142,7 +136,7 @@ export function createProviderCredentialsResponsibility() {
       const lifetimeController = this.tenantLifetimeController;
       if (!tenantID || !lifetimeController) return;
       try {
-        await this.runProfileMutation(
+        await this.runProviderCardMutation(
           async () => requestRemoveProviderConnection(tenantID, provider.id, lifetimeController.signal),
           COPY.providerKeyRemoved,
         );

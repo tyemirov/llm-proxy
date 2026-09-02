@@ -1,6 +1,6 @@
 // @ts-check
 
-import { COPY, DEFAULT_USAGE_INTERVAL, USAGE_INTERVALS } from "../constants.js?v=20260902c237";
+import { COPY, DEFAULT_USAGE_INTERVAL, USAGE_INTERVALS } from "../constants.js?v=20260902c239";
 
 const CHART_WIDTH = 640;
 const CHART_HEIGHT = 240;

@@ -9,25 +9,25 @@ import {
   NOTICE_KINDS,
   NOTICE_SURFACES,
   PUBLIC_SITE_PATH,
-} from "../constants.js?v=20260902c237";
+} from "../constants.js?v=20260902c239";
 import {
   fetchAccount,
   fetchTenant,
   loadFrontendRuntimeConfig,
-} from "../core/backendClient.js?v=20260902c237";
+} from "../core/backendClient.js?v=20260902c239";
 import {
   assertManagementAccount,
   assertManagementTenantProfile,
   emptyDefaults,
   isAbortError,
   profileFailureMessage,
-} from "../core/managementProfile.js?v=20260902c237";
+} from "../core/managementProfile.js?v=20260902c239";
 import {
   applyUserMenuItems,
   readMprUIAuthStatus,
   waitForMprUIAutoOrchestrationReady,
-} from "../core/mprShell.js?v=20260902c237";
-import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260902c237";
+} from "../core/mprShell.js?v=20260902c239";
+import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260902c239";
 
 const EMPTY_STRING = "";
 

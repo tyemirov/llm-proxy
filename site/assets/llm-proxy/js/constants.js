@@ -146,7 +146,7 @@ export const MPR_UI = Object.freeze({
 });
 
 export const RUNTIME_UI = Object.freeze({
-  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20260902c237",
+  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20260902c239",
   APPLICATION_MODULE_ID: "llm-proxy-application-module",
   APPLICATION_MODULE_MISSING: "llm_proxy_application_module_missing",
   APPLICATION_READY_ATTRIBUTE: "data-llm-proxy-application",
@@ -306,13 +306,12 @@ export const COPY = Object.freeze({
   providerActive: "active",
   providerUsed: "used",
   providerUnavailable: "Unavailable",
-  providerSelectTenant: "Select a tenant to manage this provider.",
   providerTenant: "Tenant",
   providerSetKey: "Set API key",
   providerKeySettings: "API key settings",
   providerGetKey: "Get API key",
-  providerReplaceKey: "Replace key",
-  providerDone: "Done",
+  providerClose: "Close provider settings",
+  providerSettingsLoading: "Loading provider settings...",
   providerSelector: "Provider",
   showProviderKey: "Show key",
   hideProviderKey: "Hide key",

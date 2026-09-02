@@ -1,7 +1,14 @@
 // @ts-check
 
-import { AUTH_STATES, COPY, DASHBOARD_VIEWS, PROVIDER_CAPABILITY_LABELS } from "../constants.js?v=20260902c237";
-import { formatNumber } from "./usageFailurePresentation.js?v=20260902c237";
+import { AUTH_STATES, COPY, DASHBOARD_VIEWS, NOTICE_KINDS, PROVIDER_CAPABILITY_LABELS } from "../constants.js?v=20260902c239";
+import { fetchTenant } from "../core/backendClient.js?v=20260902c239";
+import {
+  assertManagementTenantProfile,
+  isAbortError,
+  profileFailureMessage,
+  profileProvider,
+} from "../core/managementProfile.js?v=20260902c239";
+import { formatNumber } from "./usageFailurePresentation.js?v=20260902c239";
 
 const EMPTY_STRING = "";
 
@@ -9,9 +16,10 @@ const EMPTY_STRING = "";
 /** @typedef {ManagementApplicationState & import("../types.d.js").AlpineMagic & {
  *   autosaveSelectedProvider: () => Promise<boolean>,
  *   abortProviderKeyVerification: () => void,
+ *   applyProfile: (profile: import("../types.d.js").ManagementTenantProfile, preserveProviderEditor?: boolean, preserveRoutingDefaults?: boolean) => void,
  *   dismissProviderKeyRemovalConfirmation: () => void,
  *   replaceProviderEditorSession: (providerID: string) => void,
- *   switchSettingsTenant: (tenantID: string) => Promise<void>
+ *   setPageNotice: (kind: string, message: string) => void
  * }} ProviderCardsHost */
 
 /** @template {object} Responsibility @param {Responsibility & ThisType<ProviderCardsHost & Responsibility>} responsibility */
@@ -24,6 +32,14 @@ export function createProviderCardsResponsibility() {
   return providerCardsResponsibility({
     get providerCards() {
       return this.providers;
+    },
+
+    get providerCardTenantSelectionID() {
+      return this.providerCardPendingTenantID || this.providerCardTenantID;
+    },
+
+    get providerCardTenantLoadPending() {
+      return this.providerCardPendingTenantID !== EMPTY_STRING;
     },
 
     /** @param {import("../types.d.js").ProviderProfile} provider */
@@ -85,30 +101,98 @@ export function createProviderCardsResponsibility() {
       if (this.dashboardView !== DASHBOARD_VIEWS.USAGE || this.authState !== AUTH_STATES.AUTHENTICATED) return;
       this.providerCardProviderID = provider.id;
       this.providerCardTenantID = EMPTY_STRING;
+      this.providerCardPendingTenantID = EMPTY_STRING;
+      this.providerCardProfile = null;
+      this.providerSystemPromptOpen = false;
       this.providerCardVersion += 1;
-      if (this.selectedUsageTenantID) {
-        await this.selectProviderCardTenant(this.selectedUsageTenantID);
-        return;
-      }
-      this.focusProviderCardControl(provider.id, "select");
+      await this.selectProviderCardTenant(this.settingsTenantID);
     },
 
     /** @param {Event} event */
     async handleProviderCardTenantSelection(event) {
-      const tenantID = /** @type {HTMLSelectElement} */ (event.target).value;
-      if (tenantID) await this.selectProviderCardTenant(tenantID);
+      const tenantSelect = /** @type {HTMLSelectElement} */ (event.target);
+      const tenantID = tenantSelect.value;
+      if (!tenantID || !(await this.selectProviderCardTenant(tenantID))) {
+        tenantSelect.value = this.providerCardTenantID;
+      }
     },
 
-    /** @param {string} tenantID */
+    /** @param {string} tenantID @returns {Promise<boolean>} */
     async selectProviderCardTenant(tenantID) {
       const providerID = this.providerCardProviderID;
       const version = this.providerCardVersion;
-      if (!this.tenants.some((tenant) => tenant.id === tenantID)) return;
-      if (this.settingsTenantID !== tenantID) await this.switchSettingsTenant(tenantID);
-      if (this.providerCardProviderID !== providerID || this.providerCardVersion !== version) return;
-      this.providerCardTenantID = tenantID;
-      this.replaceProviderEditorSession(providerID);
-      this.focusProviderCardControl(providerID, "a, input, select, textarea, button");
+      if (!this.tenants.some((tenant) => tenant.id === tenantID)) return false;
+      if (tenantID === this.providerCardTenantID && this.providerCardProfile) return true;
+      if (this.providerCardTenantID && this.providerCardTenantID !== tenantID && !(await this.autosaveSelectedProvider())) {
+        return false;
+      }
+      this.providerSystemPromptOpen = false;
+      if (this.providerCardRequestController) this.providerCardRequestController.abort();
+      const requestController = new AbortController();
+      this.providerCardRequestController = requestController;
+      this.providerCardPendingTenantID = tenantID;
+      try {
+        const profile = tenantID === this.settingsTenantID && this.profile
+          ? this.profile
+          : await fetchTenant(tenantID, requestController.signal);
+        if (!this.canApplyProviderCardTenantLoad(providerID, tenantID, version, requestController)) return false;
+        assertManagementTenantProfile(profile, tenantID);
+        profileProvider(profile.providers, providerID);
+        this.providerCardProfile = profile;
+        this.providerCardTenantID = tenantID;
+        this.providerCardPendingTenantID = EMPTY_STRING;
+        this.replaceProviderEditorSession(providerID);
+        this.focusProviderCardControl(providerID, ".provider-card-tenant select");
+        return true;
+      } catch (requestError) {
+        if (!isAbortError(requestError) && this.canApplyProviderCardTenantLoad(providerID, tenantID, version, requestController)) {
+          this.setPageNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
+        }
+        return false;
+      } finally {
+        if (this.providerCardRequestController === requestController) {
+          this.providerCardRequestController = null;
+          this.providerCardPendingTenantID = EMPTY_STRING;
+        }
+      }
+    },
+
+    /**
+     * @param {string} providerID
+     * @param {string} tenantID
+     * @param {number} version
+     * @param {AbortController} requestController
+     */
+    canApplyProviderCardTenantLoad(providerID, tenantID, version, requestController) {
+      return (
+        this.authState === AUTH_STATES.AUTHENTICATED &&
+        this.providerCardProviderID === providerID &&
+        this.providerCardPendingTenantID === tenantID &&
+        this.providerCardVersion === version &&
+        this.providerCardRequestController === requestController
+      );
+    },
+
+    /**
+     * @param {import("../types.d.js").ManagementTenantProfile} nextProfile
+     * @param {boolean} [preserveProviderEditor]
+     */
+    applyProviderCardProfile(nextProfile, preserveProviderEditor = false) {
+      const tenantID = this.providerCardTenantID;
+      const providerID = this.providerCardProviderID;
+      assertManagementTenantProfile(nextProfile, tenantID);
+      profileProvider(nextProfile.providers, providerID);
+      this.providerCardProfile = nextProfile;
+      if (this.settingsTenantID === tenantID) {
+        this.applyProfile(
+          nextProfile,
+          true,
+          this.routingDefaultsDirty || this.routingDefaultsAutosavePending,
+        );
+      } else if (this.selectedUsageTenantID === tenantID) {
+        this.usageProfile = nextProfile;
+      }
+      if (!preserveProviderEditor) this.replaceProviderEditorSession(providerID);
     },
 
     /** @param {string} providerID @param {string} selector */
@@ -134,9 +218,15 @@ export function createProviderCardsResponsibility() {
 
     resetProviderCard() {
       this.abortProviderKeyVerification();
+      if (this.providerCardRequestController) {
+        this.providerCardRequestController.abort();
+        this.providerCardRequestController = null;
+      }
       this.dismissProviderKeyRemovalConfirmation();
       this.providerCardProviderID = EMPTY_STRING;
       this.providerCardTenantID = EMPTY_STRING;
+      this.providerCardPendingTenantID = EMPTY_STRING;
+      this.providerCardProfile = null;
       this.providerCardVersion += 1;
       this.replaceProviderEditorSession(EMPTY_STRING);
     },

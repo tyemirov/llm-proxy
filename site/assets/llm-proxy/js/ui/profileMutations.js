@@ -1,21 +1,23 @@
 // @ts-check
 
-import { AUTH_STATES, NOTICE_KINDS } from "../constants.js?v=20260902c237";
+import { AUTH_STATES, NOTICE_KINDS } from "../constants.js?v=20260902c239";
 import {
   assertManagementTenantProfile,
   createAppRoutingDefaults,
   profileFailureMessage,
   profileProvider,
-} from "../core/managementProfile.js?v=20260902c237";
+} from "../core/managementProfile.js?v=20260902c239";
 
 const EMPTY_STRING = "";
 
 /** @typedef {ReturnType<typeof import("./managementApplicationState.js").createManagementApplicationState>} ManagementApplicationState */
 /** @typedef {ManagementApplicationState & import("../types.d.js").AlpineMagic & {
  *   selectedProviderID: string,
+ *   applyProviderCardProfile: (profile: import("../types.d.js").ManagementTenantProfile, preserveProviderEditor?: boolean) => void,
+ *   canApplyProviderAutosave: (providerID: string, revealVersion: number, appVersion: number) => boolean,
  *   dismissProviderKeyRemovalConfirmation: () => void,
  *   replaceProviderEditorSession: (providerID: string) => void,
- *   setSettingsNotice: (kind: string, message: string) => void
+ *   setPageNotice: (kind: string, message: string) => void
  * }} ProfileMutationHost */
 
 /**
@@ -35,31 +37,29 @@ export function createProfileMutationsResponsibility() {
      * @param {string} successMessage
      * @returns {Promise<boolean>}
      */
-    async runProfileMutation(mutation, successMessage) {
+    async runProviderCardMutation(mutation, successMessage) {
       const appVersion = this.appVersion;
-      this.busy = true;
+      const providerID = this.selectedProviderID;
+      const revealVersion = this.providerEditorSession.revealVersion;
+      this.providerAutosavePending = true;
       try {
         const profileApplied = await this.enqueueProfileMutation(appVersion, async () => {
           const updatedProfile = await mutation();
-          if (!this.canApplyProfileMutation(appVersion)) {
+          if (!this.canApplyProviderAutosave(providerID, revealVersion, appVersion)) {
             return false;
           }
-          this.applyProfile(
-            updatedProfile,
-            this.providerEditorSession.dirty || this.providerAutosavePending,
-            this.routingDefaultsDirty || this.routingDefaultsAutosavePending,
-          );
-          this.setSettingsNotice(NOTICE_KINDS.SUCCESS, successMessage);
+          this.applyProviderCardProfile(updatedProfile);
+          this.setPageNotice(NOTICE_KINDS.SUCCESS, successMessage);
           return true;
         });
         return Boolean(profileApplied);
       } catch (requestError) {
-        if (this.canApplyProfileMutation(appVersion)) {
-          this.setSettingsNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
+        if (this.canApplyProviderAutosave(providerID, revealVersion, appVersion)) {
+          this.setPageNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
         }
         return false;
       } finally {
-        this.busy = false;
+        this.providerAutosavePending = false;
       }
     },
 
