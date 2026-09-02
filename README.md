@@ -883,7 +883,23 @@ display name; a tenant-scoped row retains the tenant-less safe shape. A
 details error stays inside the dialog and never replaces aggregate dashboard
 data. The
 `Settings` menu item is inserted before `Sign out` through the shared
-`<mpr-user>` menu contract. Usage Overview also renders every provider in
+`<mpr-user>` menu contract.
+
+Provider usage and Model usage share one local `Breakdown view` control. Its
+default `Bar graph` view ranks exact request counts against the largest row.
+Its `Donut chart` view presents the same ordered request counts as shares of
+the complete provider or model breakdown, with a visible count-and-percentage
+legend. Rounded shares total 100 percent, and every category remains separate.
+The selection changes both panels without a request. It survives
+interval, Refresh, and Usage tenant changes and resets after authentication
+reset or page reload. Requests and Tokens remain separate line charts. Their
+visible X axes use the summary's UTC hour or date buckets. Their zero-based,
+integer Y axes identify requests or tokens per hour or day. Exact bucket starts
+and values remain available to assistive technology.
+
+These charts are a client-side presentation of existing aggregate request
+data. They are not billing, provider-performance, provider-key, token-share,
+exact-event-time, or new management-API features. Usage Overview also renders every provider in
 catalog order. Each provider card shows its exact selected-scope request and
 token totals. A tenant-filtered view also shows the tenant's selected provider
 model and marks only its default text route as `active`. Account-wide usage does

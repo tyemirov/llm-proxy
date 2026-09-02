@@ -686,6 +686,24 @@ and every routing default that remains valid. Settings retains tenant-owned
 client access, routing defaults, tenant prompt, and request examples. It does
 not contain provider fields, provider models, or provider prompts.
 
+Provider usage and Model usage share one mounted-dashboard presentation mode.
+Bar graph is the default and retains every ordered request-count row. Donut
+chart derives each segment and its count-and-percentage legend from those same
+request counts. The rounded shares total 100 percent. The donut keeps every
+category and does not create an Other tail. The browser keeps this
+mode through interval, Refresh, and Usage tenant changes. It resets the mode on
+authentication reset and page reload. Changing the mode performs no request
+and changes no tenant or interval state.
+
+The Requests and Tokens line charts use one typed presentation model over the
+accepted summary buckets. Their X axes show bounded, locale-independent UTC
+hours for hourly buckets and UTC dates for daily buckets. Their zero-based
+integer Y axes state requests or tokens per hour or day. The plot preserves
+bucket order and exact values without smoothing. Assistive data lists each
+exact RFC3339 bucket start and metric value. This client-side presentation of
+existing aggregates is not billing, provider performance, provider-key state,
+token share, exact event time, or a new management API contract.
+
 The static app owns the canonical MPR UI contract: API-served `config-ui.yaml`, literal `mpr-ui@latest` assets, `mpr-ui-config.js`, `<mpr-header data-config-url="...">`, the `@latest` bundle marker, `<mpr-user>`, and `<mpr-footer>`. The config declares the current `/auth/session` path and keeps login-button presentation in static MPR UI markup; obsolete `authButton` payloads are not emitted. The Pages artifact contains no static `config-ui.yaml` or `llm-proxy-config.json`; the declared Pages container writes the canonical `https://llm-proxy-api.mprlab.com/config-ui.yaml` URL into the declarative header attribute, and `mpr-ui-config.js` applies that single backend-served YAML before loading the bundle.
 
 The shared bundle registers `mpr-legal-document`; P005 remains the sole owner of legal-page routes and document rendering.

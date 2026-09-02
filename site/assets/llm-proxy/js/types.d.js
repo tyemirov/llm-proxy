@@ -204,6 +204,71 @@
  */
 
 /**
+ * @typedef {"bar" | "donut"} UsageBreakdownView
+ */
+
+/**
+ * @typedef {{
+ *   label: string,
+ *   requests: number,
+ *   width: string,
+ *   percentage: number,
+ *   percentageLabel: string,
+ *   color: string,
+ *   dashArray: string,
+ *   dashOffset: number
+ * }} UsageDistributionRow
+ */
+
+/**
+ * @typedef {{
+ *   totalRequests: number,
+ *   rows: UsageDistributionRow[]
+ * }} UsageDistribution
+ */
+
+/**
+ * @typedef {{
+ *   x: number,
+ *   label: string,
+ *   exactLabel: string
+ * }} UsageXAxisTick
+ */
+
+/**
+ * @typedef {{
+ *   y: number,
+ *   label: string,
+ *   exactValue: string
+ * }} UsageYAxisTick
+ */
+
+/**
+ * @typedef {{
+ *   x: number,
+ *   y: number,
+ *   start: string,
+ *   value: number,
+ *   accessibleLabel: string
+ * }} UsageChartPoint
+ */
+
+/**
+ * @typedef {{
+ *   viewBox: string,
+ *   polyline: string,
+ *   xAxisY: number,
+ *   yAxisX: number,
+ *   xTicks: UsageXAxisTick[],
+ *   yTicks: UsageYAxisTick[],
+ *   points: UsageChartPoint[],
+ *   xAxisTitle: string,
+ *   yAxisTitle: string,
+ *   accessibleLabel: string
+ * }} UsageTimeSeriesChart
+ */
+
+/**
  * @typedef {"success" |
  *   "invalid_request" |
  *   "payload_too_large" |

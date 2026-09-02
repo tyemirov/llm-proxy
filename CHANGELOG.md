@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Added a shared Bar graph or Donut chart view for provider and model request
+  breakdowns. Added visible UTC and metric-specific integer axes to the
+  Requests and Tokens line charts without changing the management API.
 - Added catalog-owned provider cards to Usage Overview with exact interval
   activity, tenant-bound key and provider profile settings, safe official key
   links, transient key verification, and credential-only deletion. Removed the

@@ -25,11 +25,13 @@ import {
 } from "./usageFailurePresentation.js?v=20260811c131";
 import {
   emptyUsageSummary,
-  modelRows,
-  providerRows,
+  modelDistribution,
+  providerDistribution,
+  renderUsageChartPlot,
+  renderUsageDonutSegments,
   successRateLabel,
-  usagePolyline,
-  USAGE_CHART,
+  usageTimeSeriesChart,
+  USAGE_BREAKDOWN_VIEWS,
   USAGE_METRICS,
 } from "./usagePresentation.js?v=20260811c131";
 
@@ -63,10 +65,6 @@ export function createUsageDashboardResponsibility() {
 
     get usageControlsDisabled() {
       return this.busy || this.usageLoading;
-    },
-
-    get chartViewBox() {
-      return `0 0 ${USAGE_CHART.width} ${USAGE_CHART.height}`;
     },
 
     get hasUsage() {
@@ -133,20 +131,54 @@ export function createUsageDashboardResponsibility() {
       return Boolean(this.usageFailuresNextCursor);
     },
 
-    get usageRequestPolyline() {
-      return usagePolyline(this.usage, USAGE_METRICS.REQUESTS);
+    get usageRequestChart() {
+      return usageTimeSeriesChart(this.usage, USAGE_METRICS.REQUESTS);
     },
 
-    get usageTokenPolyline() {
-      return usagePolyline(this.usage, USAGE_METRICS.TOTAL_TOKENS);
+    get usageTokenChart() {
+      return usageTimeSeriesChart(this.usage, USAGE_METRICS.TOTAL_TOKENS);
     },
 
-    get providerUsageRows() {
-      return providerRows(this.usage);
+    get providerUsageDistribution() {
+      return providerDistribution(this.usage);
     },
 
-    get modelUsageRows() {
-      return modelRows(this.usage);
+    get modelUsageDistribution() {
+      return modelDistribution(this.usage);
+    },
+
+    get hasProviderUsageBreakdown() {
+      return this.providerUsageDistribution.totalRequests > 0;
+    },
+
+    get hasModelUsageBreakdown() {
+      return this.modelUsageDistribution.totalRequests > 0;
+    },
+
+    get usageBreakdownIsBar() {
+      return this.usageBreakdownView === USAGE_BREAKDOWN_VIEWS.BAR;
+    },
+
+    get usageBreakdownIsDonut() {
+      return this.usageBreakdownView === USAGE_BREAKDOWN_VIEWS.DONUT;
+    },
+
+    /** @param {import("../types.d.js").UsageBreakdownView} view */
+    selectUsageBreakdownView(view) {
+      if (!Object.values(USAGE_BREAKDOWN_VIEWS).includes(view)) {
+        throw new Error(`usage_breakdown_view_invalid:${view}`);
+      }
+      this.usageBreakdownView = view;
+    },
+
+    /** @param {SVGElement} target @param {import("../types.d.js").UsageTimeSeriesChart} chart */
+    renderUsageChartPlot(target, chart) {
+      renderUsageChartPlot(target, chart);
+    },
+
+    /** @param {SVGElement} target @param {import("../types.d.js").UsageDistributionRow[]} rows */
+    renderUsageDonutSegments(target, rows) {
+      renderUsageDonutSegments(target, rows);
     },
 
     async refreshDashboard() {

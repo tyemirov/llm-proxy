@@ -27,9 +27,9 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Account-wide managed tenant usage dashboard for LLMs","description":"See all owned tenants by default, filter one tenant when needed, and inspect safe failed-request details without exposing secrets.","url":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/","datePublished":"2026-07-06","dateModified":"2026-07-26","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/","about":["LLM Proxy","Usage","managed tenant usage dashboard"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Account-wide managed tenant usage dashboard for LLMs","description":"See all owned tenants by default, filter one tenant when needed, and inspect safe failed-request details without exposing secrets.","url":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/","datePublished":"2026-07-06","dateModified":"2026-09-01","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/","about":["LLM Proxy","Usage","managed tenant usage dashboard"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Account-wide managed tenant usage dashboard for LLMs","item":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/"}]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Does selecting a tenant activate or deactivate it?","acceptedAnswer":{"@type":"Answer","text":"No. Every owned tenant remains independently routable through its own generated secret; the Settings and Usage selectors only choose an editor or report scope."}},{"@type":"Question","name":"What does Usage Overview show by default?","acceptedAnswer":{"@type":"Answer","text":"It selects All tenants and the 30-day interval, then aggregates the owned tenants at the server's database boundary."}},{"@type":"Question","name":"Does changing the Tenant control in Settings change Usage Overview?","acceptedAnswer":{"@type":"Answer","text":"No. The Tenant control in Settings and the Usage tenant control are independent; changing one does not change the other."}},{"@type":"Question","name":"What tenant data appears in account-wide failure rows?","acceptedAnswer":{"@type":"Answer","text":"Only the safe opaque tenant ID and current display name are added. Credentials, prompts, responses, provider bodies, and free-form errors remain excluded."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Normalized token usage metadata across providers, which covers normalized token usage metadata."}}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Does selecting a tenant activate or deactivate it?","acceptedAnswer":{"@type":"Answer","text":"No. Every owned tenant remains independently routable through its own generated secret; the Settings and Usage selectors only choose an editor or report scope."}},{"@type":"Question","name":"What does Usage Overview show by default?","acceptedAnswer":{"@type":"Answer","text":"It selects All tenants and the 30-day interval, then aggregates the owned tenants at the server's database boundary."}},{"@type":"Question","name":"Does changing Breakdown view request new usage data?","acceptedAnswer":{"@type":"Answer","text":"No. Bar graph and Donut chart are local presentations of the same provider and model request aggregates."}},{"@type":"Question","name":"Does changing the Tenant control in Settings change Usage Overview?","acceptedAnswer":{"@type":"Answer","text":"No. The Tenant control in Settings and the Usage tenant control are independent; changing one does not change the other."}},{"@type":"Question","name":"What tenant data appears in account-wide failure rows?","acceptedAnswer":{"@type":"Answer","text":"Only the safe opaque tenant ID and current display name are added. Credentials, prompts, responses, provider bodies, and free-form errors remain excluded."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Normalized token usage metadata across providers, which covers normalized token usage metadata."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440"></script>
   </head>
   <body class="resource-page">
@@ -67,10 +67,10 @@
             <h1>Account-wide managed tenant usage dashboard for LLMs</h1>
             <p class="resource-deck">See all owned tenants by default, filter one tenant when needed, and inspect safe failed-request details without exposing secrets.</p>
             <p class="resource-audience">Teams giving users self-service AI access while keeping usage visible.</p>
-            <p class="resource-byline">Reviewed 2026-07-26 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <p class="resource-byline">Reviewed 2026-09-01 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
             <aside class="resource-verdict" aria-label="Quick verdict">
               <strong>Quick verdict</strong>
-              <p>Every tenant remains independently routable. Usage opens on All tenants and 30 days, while Settings has its own editor-only tenant selector.</p>
+              <p>Every tenant remains independently routable. Usage opens on All tenants and 30 days, while client-side chart choices change no usage request or persisted setting.</p>
             </aside>
             <div class="resource-actions">
               <a class="resource-button" href="/docs/">Open API reference</a>
@@ -85,7 +85,7 @@
 
           <section>
             <h2>How LLM Proxy helps</h2>
-            <p>LLM Proxy's authenticated Usage Overview defaults to account-wide aggregates across every owned tenant, with an independent tenant filter and safe scope-bound failure details.</p>
+            <p>LLM Proxy's authenticated Usage Overview defaults to account-wide aggregates across every owned tenant, offers one local Bar graph or Donut chart view for provider and model request breakdowns, and gives Requests and Tokens distinct UTC and per-bucket quantity axes.</p>
           </section>
 
           <section>
@@ -95,6 +95,8 @@
 <li>Send proxy requests through any owned tenant's generated secret; each tenant remains operational independently.</li>
 <li>Record canonical outcome metadata for managed-tenant requests without storing request or provider-error content.</li>
 <li>Open Usage Overview on All tenants and 30 days, or use the Usage tenant selector immediately before ALL to narrow the report.</li>
+<li>Use Breakdown view to show both provider and model request distributions as ranked bars or count-and-percentage donuts.</li>
+<li>Read Requests and Tokens against their visible UTC and zero-based per-hour or per-day axes.</li>
 <li>Read account-wide totals from GET /api/management/usage or one tenant from GET /api/management/tenants/:tenant_id/usage.</li>
 <li>When failures exist, open N failed requests; account-wide rows include safe tenant context and tenant-scoped rows do not repeat it.</li>
             </ol>
@@ -124,6 +126,20 @@
                           <td>Independent selectors</td>
                           <td>The Tenant control in Settings chooses only the editor; Usage tenant chooses only the report.</td>
                           <td>Changing provider settings for one tenant cannot silently narrow the usage dashboard.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Shared request breakdown</td>
+                          <td>One keyboard-operable control changes both provider and model panels between Bar graph and Donut chart.</td>
+                          <td>Both views derive from the same ordered aggregate request counts without another management request.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Explicit time-series axes</td>
+                          <td>Requests and Tokens each show UTC X ticks and a zero-based integer Y scale for the canonical hour or day bucket.</td>
+                          <td>The charts do not imply one shared numeric scale or an exact event time.</td>
                         </tr>
 
 
@@ -173,6 +189,9 @@
             <h2>Objections and limitations</h2>
             <ul class="resource-list">
               <li>Usage is recorded for managed tenants using generated secrets.</li>
+<li>The donut is a request-share view, not a token-share or provider-performance comparison.</li>
+<li>Every provider and model category stays separate; the donut does not create an Other tail.</li>
+<li>The charts are client-side presentations of existing aggregates, not billing, provider-key, exact-event-time, or new management-API features.</li>
 <li>Failure rows are operational metadata, not reconstructed provider error messages or a billing system.</li>
 <li>Administrators receive aggregate summaries only; per-event rows remain owner-only.</li>
             </ul>
@@ -182,7 +201,7 @@
             <h2>Repository evidence</h2>
             <pre class="usage-snippet"><code>GET /api/management/usage?interval=30d
 GET /api/management/tenants/:tenant_id/usage?interval=30d</code></pre>
-            <p>Verified 2026-07-26 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
+            <p>Verified 2026-09-01 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
           </section>
 
           <section>
@@ -198,6 +217,12 @@ GET /api/management/tenants/:tenant_id/usage?interval=30d</code></pre>
                     <details>
                       <summary>What does Usage Overview show by default?</summary>
                       <p>It selects All tenants and the 30-day interval, then aggregates the owned tenants at the server's database boundary.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Does changing Breakdown view request new usage data?</summary>
+                      <p>No. Bar graph and Donut chart are local presentations of the same provider and model request aggregates.</p>
                     </details>
 
 

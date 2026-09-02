@@ -291,6 +291,7 @@ export function createAuthenticationLifecycleResponsibility() {
       }
       this.selectedUsageInterval = DEFAULT_USAGE_INTERVAL;
       this.selectedUsageTenantID = EMPTY_STRING;
+      this.usageBreakdownView = "bar";
       this.clearNotice();
       this.clearSettingsTenantState();
       this.clearUsageState();

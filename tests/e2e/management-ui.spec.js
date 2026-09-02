@@ -254,7 +254,7 @@ const generatedResourcePageCount = 46;
 const landingModifiedDate = "2026-08-08";
 const seoContentModifiedDate = "2026-07-11";
 const seoCurrentContentModifiedDate = "2026-07-22";
-const seoUsageContentModifiedDate = "2026-07-26";
+const seoUsageContentModifiedDate = "2026-09-01";
 const seoProviderCatalogModifiedDate = "2026-08-22";
 const seoClientDocumentationPublishedDate = landingModifiedDate;
 const seoClientDocumentationModifiedDate = seoProviderCatalogModifiedDate;
@@ -1682,6 +1682,9 @@ test("SEO usage resource documents account-wide and tenant-filtered intervals", 
   expect(pageHTML).toContain(`"dateModified":"${seoUsageContentModifiedDate}"`);
   expect(pageHTML).toContain("Usage opens on All tenants and 30 days");
   expect(pageHTML).toContain("Usage tenant selector immediately before ALL");
+  expect(pageHTML).toContain("Bar graph or Donut chart");
+  expect(pageHTML).toContain("UTC and zero-based per-hour or per-day axes");
+  expect(pageHTML).toContain("not billing, provider-key, exact-event-time, or new management-API features");
   expect(pageHTML).toContain("GET /api/management/usage?interval=30d");
   expect(pageHTML).toContain(
     "GET /api/management/tenants/:tenant_id/usage?interval=30d",
@@ -1764,6 +1767,7 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
       `<lastmod>${seoContentModifiedDate}</lastmod>`,
       `<lastmod>${seoCurrentContentModifiedDate}</lastmod>`,
       `<lastmod>${seoUsageContentModifiedDate}</lastmod>`,
+      `<lastmod>${seoSecretRotationModifiedDate}</lastmod>`,
       `<lastmod>${seoProviderCatalogModifiedDate}</lastmod>`,
       `<lastmod>${seoClientDocumentationModifiedDate}</lastmod>`,
       `<lastmod>${landingModifiedDate}</lastmod>`,
@@ -2250,6 +2254,137 @@ test("usage intervals load every dashboard surface, remain active on refresh, an
   }
 });
 
+test("one local Breakdown view controls both request distributions without fetching", async ({ page }) => {
+  let usageRequestCount = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.match(/^\/api\/management\/(?:usage|tenants\/[^/]+\/usage)$/u)) {
+      usageRequestCount += 1;
+    }
+  });
+  await installAssetRoutes(page);
+  await installMultiTenantRoutes(page);
+  await page.goto(`${baseURL}${applicationPath}`);
+
+  const viewControl = page.getByRole("group", { name: "Breakdown view" });
+  const barButton = viewControl.getByRole("button", { name: "Bar graph" });
+  const donutButton = viewControl.getByRole("button", { name: "Donut chart" });
+  await expect(barButton).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("usage-breakdown usage-row-list:visible")).toHaveCount(2);
+  await expect(page.locator("usage-breakdown usage-donut:visible")).toHaveCount(0);
+  const requestsBeforeModeChange = usageRequestCount;
+
+  await donutButton.focus();
+  await donutButton.press("Enter");
+  await expect(donutButton).toBeFocused();
+  await expect(donutButton).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("usage-breakdown usage-row-list:visible")).toHaveCount(0);
+  await expect(page.locator("usage-breakdown usage-donut:visible")).toHaveCount(2);
+  expect(usageRequestCount).toBe(requestsBeforeModeChange);
+
+  const providerLegend = page.getByRole("list", { name: "Provider request shares" });
+  expect((await providerLegend.getByRole("listitem").allTextContents()).map((value) => value.replace(/\s/gu, ""))).toEqual([
+    "openai24requests·65%",
+    "deepseek13requests·35%",
+  ]);
+  const modelLegend = page.getByRole("list", { name: "Model request shares" });
+  expect((await modelLegend.getByRole("listitem").allTextContents()).map((value) => value.replace(/\s/gu, ""))).toEqual([
+    "openai / gpt-4.121requests·57%",
+    "deepseek / deepseek-chat13requests·35%",
+    "openai / gpt-4o-mini-transcribe3requests·8%",
+  ].map((value) => value.replace(/\s/gu, "")));
+  const modelShares = await modelLegend.getByRole("listitem").locator("span:last-child").allTextContents();
+  expect(modelShares.reduce((sum, share) => sum + Number.parseInt(share, 10), 0)).toBe(100);
+  const modelRequests = await modelLegend.getByRole("listitem").locator("strong").allTextContents();
+  expect(modelRequests.reduce((sum, requests) => sum + Number.parseInt(requests, 10), 0)).toBe(37);
+  await expect(page.getByText("Other", { exact: true })).toHaveCount(0);
+
+  await page.getByRole("group", { name: "Usage interval" }).getByRole("button", { name: "7 days" }).click();
+  await expect(donutButton).toHaveAttribute("aria-pressed", "true");
+  expect((await providerLegend.getByRole("listitem").innerText()).replace(/\s/gu, "")).toBe("provider-7d7requests·100%");
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect(donutButton).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("combobox", { name: "Usage tenant" }).selectOption("tenant_2");
+  await expect(donutButton).toHaveAttribute("aria-pressed", "true");
+
+  await page.setViewportSize({ width: 390, height: 800 });
+  const application = page.locator("llm-proxy-management-application");
+  const viewportGeometry = await application.evaluate((element) => ({
+    scrollWidth: element.scrollWidth,
+    clientWidth: element.clientWidth,
+  }));
+  expect(viewportGeometry.scrollWidth).toBeLessThanOrEqual(viewportGeometry.clientWidth);
+  await expect(viewControl).toBeVisible();
+
+  await page.reload();
+  await expect(barButton).toHaveAttribute("aria-pressed", "true");
+  await donutButton.click();
+  await expect(donutButton).toHaveAttribute("aria-pressed", "true");
+
+  const resetView = await application.evaluate((applicationElement) => {
+    const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
+    const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
+    if (!applicationState) {
+      throw new Error("usage_breakdown_state_missing");
+    }
+    applicationState.clearAuthenticatedState();
+    return applicationState.usageBreakdownView;
+  });
+  expect(resetView).toBe("bar");
+});
+
+test("Usage time series expose UTC and metric-specific integer axes", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+  await page.goto(`${baseURL}${applicationPath}`);
+
+  const requestChart = page.locator("usage-chart-panel").first();
+  const tokenChart = page.locator("usage-chart-panel").nth(1);
+  await expect(requestChart.locator(".usage-axis-title-y")).toHaveText("Requests per day");
+  await expect(tokenChart.locator(".usage-axis-title-y")).toHaveText("Tokens per day");
+  await expect(requestChart.locator(".usage-axis-title-x")).toHaveText("Time (UTC)");
+  await expect(tokenChart.locator(".usage-axis-title-x")).toHaveText("Time (UTC)");
+  await expect(requestChart.locator(".usage-x-tick text")).toHaveText([
+    "2026-06-01", "2026-06-08", "2026-06-16", "2026-06-23", "2026-06-30",
+  ]);
+  await expect(requestChart.locator(".usage-y-tick text").first()).toHaveText("0");
+  await expect(tokenChart.locator(".usage-y-tick text").first()).toHaveText("0");
+  await expect(requestChart.locator(".usage-chart-point")).toHaveCount(30);
+  await expect(tokenChart.locator(".usage-chart-point")).toHaveCount(30);
+  const requestPoints = await requestChart.locator("polyline").getAttribute("points");
+  const tokenPoints = await tokenChart.locator("polyline").getAttribute("points");
+  expect(requestPoints).not.toBe(tokenPoints);
+  await expect(requestChart.getByRole("list", { name: /Requests by day/u }).getByRole("listitem")).toHaveCount(30);
+  await expect(tokenChart.getByRole("list", { name: /Tokens by day/u }).getByRole("listitem").last()).toContainText(
+    "2026-06-30T00:00:00.000Z: 6,345 tokens",
+  );
+
+  await page.getByRole("group", { name: "Usage interval" }).getByRole("button", { name: "ALL" }).click();
+  await expect(requestChart.locator(".usage-axis-title-y")).toHaveText("Requests per day");
+  await expect(requestChart.locator(".usage-x-tick text")).toHaveText("2026-06-01");
+
+  await page.getByRole("group", { name: "Usage interval" }).getByRole("button", { name: "1 day" }).click();
+  await expect(requestChart.locator(".usage-axis-title-y")).toHaveText("Requests per hour");
+  await expect(tokenChart.locator(".usage-axis-title-y")).toHaveText("Tokens per hour");
+  await expect(requestChart.locator(".usage-x-tick text")).toHaveText(["00:00", "06:00", "12:00", "17:00", "23:00"]);
+  await expect(requestChart.getByRole("list", { name: /Requests by hour/u }).getByRole("listitem")).toHaveCount(24);
+
+  await page.unroute(usageRequestPattern());
+  await page.route(usageRequestPattern(), async (route) => {
+    const largeUsage = managementUsage("7d", { total_tokens: 1_250_000 });
+    for (const bucket of largeUsage.buckets) {
+      bucket.data.total_tokens = 0;
+    }
+    largeUsage.buckets.at(-1).data.total_tokens = 1_250_000;
+    await route.fulfill({ status: httpOK, json: largeUsage });
+  });
+  await page.getByRole("group", { name: "Usage interval" }).getByRole("button", { name: "7 days" }).click();
+  const compactTick = tokenChart.locator(".usage-y-tick text").filter({ hasText: "1.5M" });
+  await expect(compactTick).toHaveAttribute("aria-label", "1,500,000");
+  await expect(tokenChart.getByRole("list", { name: /Tokens by day/u }).getByRole("listitem").last()).toContainText(
+    "1,250,000 tokens",
+  );
+});
+
 test("usage interval loading blocks controls, ignores stale responses, and clears failed selections", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page);
@@ -2270,6 +2405,8 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
 
   const intervalGroup = page.getByRole("group", { name: "Usage interval" });
   const sevenDayButton = intervalGroup.getByRole("button", { name: "7 days" });
+  const donutButton = page.getByRole("group", { name: "Breakdown view" }).getByRole("button", { name: "Donut chart" });
+  await donutButton.click();
   try {
     await sevenDayButton.click();
     for (const intervalButton of await intervalGroup.getByRole("button").all()) {
@@ -2279,6 +2416,7 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
     await expect(sevenDayButton).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
     await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
+    await expect(donutButton).toHaveAttribute("aria-pressed", "true");
     await page.locator("llm-proxy-management-application").evaluate((applicationElement) => {
       const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
       const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
@@ -2289,6 +2427,7 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
     });
     await expect(intervalGroup.getByRole("button", { name: "1 day" })).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("1");
+    await expect(donutButton).toHaveAttribute("aria-pressed", "true");
   } finally {
     releaseSevenDayResponse();
   }
@@ -2304,6 +2443,9 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
   await expect(intervalGroup.getByRole("button", { name: "1 day" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
   await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
+  await expect(page.locator("usage-breakdown").first()).toContainText("No usage recorded");
+  await expect(page.locator("usage-breakdown").nth(1)).toContainText("No usage recorded");
+  await expect(donutButton).toHaveAttribute("aria-pressed", "true");
 });
 
 test("failed-request details expose 10 of 22 requests as safe, focus-managed metadata on desktop and mobile", async ({ page }) => {
@@ -4022,6 +4164,7 @@ test("admin menu opens all users dashboard", async ({ page }) => {
   await expect(page.locator("admin-dashboard")).not.toContainText("masked_key");
   await expect(page.getByRole("button", { name: /failed request/ })).toHaveCount(0);
   await expect(page.getByRole("dialog", { name: "Failed request details" })).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "Breakdown view" })).toHaveCount(0);
 });
 
 /**
@@ -5522,7 +5665,7 @@ function managementUsage(interval = "30d", totalOverrides = {}) {
   const bucketCount = interval === "all" ? 1 : interval === "1d" ? 24 : Number.parseInt(interval, 10);
   const bucketUnit = interval === "1d" ? "hour" : "day";
   const buckets = Array.from({ length: bucketCount }, (_, index) => ({
-    start: new Date(Date.UTC(2026, 5, index + 1)).toISOString(),
+    start: new Date(Date.UTC(2026, 5, interval === "1d" ? 1 : index + 1, interval === "1d" ? index : 0)).toISOString(),
     data: usageAggregate(),
   }));
   buckets[buckets.length - 1].data = usageAggregate({

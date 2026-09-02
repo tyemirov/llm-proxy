@@ -1326,7 +1326,7 @@ retain satisfied historical dependencies.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
-- [ ] [I032] (P2) {I027} Add donut breakdowns and meaningful axes to Usage Overview charts.
+- [x] [I032] (P2) {I027} Add donut breakdowns and meaningful axes to Usage Overview charts.
   Goal:
   Let a signed-in user choose one clear presentation for both the selected
   Usage scope's Provider usage and Model usage activity breakdowns, and make
@@ -1469,6 +1469,8 @@ retain satisfied historical dependencies.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
+  Resolution: Added one local bar/donut control and semantic request-share
+  legends. Added zero-based UTC quantity axes and exact accessible bucket data.
 
 
 ## Maintenance
