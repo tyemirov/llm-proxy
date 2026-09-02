@@ -1605,7 +1605,7 @@ test("SEO resource pages are crawlable from the public site", async ({ request }
   expect(pageHTML).toContain(`<a class="resource-button" href="${apiDocumentationPath}">Open API reference</a>`);
   expect(pageHTML).toContain('href="/resources/openai-claude-gemini-one-endpoint/"');
   expect(pageHTML).toContain(`"dateModified":"${landingModifiedDate}"`);
-  expect(pageHTML).toContain("https://llm-proxy-api.mprlab.com/v2?key=$LLM_PROXY_SECRET&amp;provider=gemini");
+  expect(pageHTML).toContain("https://llm-proxy-api.mprlab.com/v2?key=$LLM_PROXY_DEFAULT_TENANT_KEY&amp;provider=gemini");
   expect(pageHTML).toContain(`Reviewed ${landingModifiedDate}`);
   expect(pageHTML).toContain('href="https://github.com/tyemirov" rel="author"');
 
@@ -1654,7 +1654,7 @@ test("SEO client-authentication guide documents the credential and configuration
   expect(pageHTML).toContain("curl -X POST");
   expect(pageHTML).toContain("/v2?key=mysecret&amp;provider=deepseek");
   expect(pageHTML).toContain("no user-level or system-level YAML lookup");
-  expect(pageHTML).toContain("LLM_PROXY_BASE_URL and LLM_PROXY_SECRET");
+  expect(pageHTML).toContain("LLM_PROXY_BASE_URL and LLM_PROXY_DEFAULT_TENANT_KEY");
   expect(pageHTML).toContain("config.yml and providers.yml belong to the service runtime");
   expect(pageHTML).toContain("configured MPR UI and TAuth session");
   expect(pageHTML).toContain(`"label":"GitHub","href":"${repositoryURL}"`);

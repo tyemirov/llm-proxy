@@ -1484,7 +1484,7 @@ builtin printf '%s' '200'
 		os.Environ(),
 		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"CURL_CAPTURE_DIRECTORY="+captureDirectory,
-		"LLM_PROXY_SECRET="+defaultTenantSecret,
+		"LLM_PROXY_DEFAULT_TENANT_KEY="+defaultTenantSecret,
 		"LLM_PROXY_EXPECTED_TENANT_ID="+defaultTenantID,
 		"FAKE_TENANT_ID="+defaultTenantID,
 	)
@@ -1606,7 +1606,7 @@ func TestOperationalProductionLiveTestRequiresDefaultTenantSecret(testingInstanc
 	if commandError == nil {
 		testingInstance.Fatalf("make live-test accepted a missing Default-tenant secret: %s", output)
 	}
-	if !strings.Contains(string(output), "LLM_PROXY_SECRET must contain the Default-tenant client secret") {
+	if !strings.Contains(string(output), "LLM_PROXY_DEFAULT_TENANT_KEY must contain the Default-tenant client secret") {
 		testingInstance.Fatalf("missing-secret error omitted the Default-tenant contract: %s", output)
 	}
 
@@ -1614,7 +1614,7 @@ func TestOperationalProductionLiveTestRequiresDefaultTenantSecret(testingInstanc
 	command.Dir = fixtureRoot
 	command.Env = []string{
 		"PATH=" + os.Getenv("PATH"),
-		"LLM_PROXY_SECRET=default-tenant-client-secret",
+		"LLM_PROXY_DEFAULT_TENANT_KEY=default-tenant-client-secret",
 	}
 	output, commandError = command.CombinedOutput()
 	if commandError == nil {
@@ -1683,7 +1683,7 @@ builtin printf '%s' '403'
 		os.Environ(),
 		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"CURL_CALL_COUNT_PATH="+callCountPath,
-		"LLM_PROXY_SECRET="+rejectedTenantSecret,
+		"LLM_PROXY_DEFAULT_TENANT_KEY="+rejectedTenantSecret,
 		"LLM_PROXY_EXPECTED_TENANT_ID=managed-11111111111111111111111111111111",
 	)
 	output, commandError := command.CombinedOutput()
@@ -1762,7 +1762,7 @@ builtin printf '%s' '200'
 		os.Environ(),
 		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"CURL_CALL_COUNT_PATH="+callCountPath,
-		"LLM_PROXY_SECRET="+unexpectedTenantSecret,
+		"LLM_PROXY_DEFAULT_TENANT_KEY="+unexpectedTenantSecret,
 		"LLM_PROXY_EXPECTED_TENANT_ID=managed-11111111111111111111111111111111",
 	)
 	output, commandError := command.CombinedOutput()
@@ -1804,7 +1804,7 @@ exit 7
 	command.Env = append(
 		os.Environ(),
 		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
-		"LLM_PROXY_SECRET="+defaultTenantSecret,
+		"LLM_PROXY_DEFAULT_TENANT_KEY="+defaultTenantSecret,
 		"LLM_PROXY_EXPECTED_TENANT_ID=managed-11111111111111111111111111111111",
 	)
 	output, commandError := command.CombinedOutput()
