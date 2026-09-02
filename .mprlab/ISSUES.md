@@ -576,63 +576,81 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
-- [x] [I237] (P1) {I027} Separate provider APIs from model publishers and model families on provider cards.
+- [x] [I237] (P1) {I027} Separate provider APIs from model families and capabilities on provider cards.
   Goal:
-  Provider cards show provider APIs, model publishers, model families, and
-  capabilities as different catalog concepts. A user can identify where an API
-  key applies and which model families the provider offers.
+  Provider cards show provider APIs, model families, and capabilities as
+  different catalog concepts. A user can identify where an API key applies and
+  what each provider offering can accept or produce.
   Requirements:
   - Rename the provider card section to `API connections`.
   - Show the provider definition as the primary API connection identity.
   - Add one catalog-owned API service label to each provider definition.
   - Use explicit service labels, such as `Gemini API` and `Meta API`.
-  - Show model publishers, model families, and capabilities in separate labeled
-    groups.
+  - Do not show an `API connection` label above the provider title.
+  - Do not show a model publisher group on provider cards.
+  - Show model families and capabilities in separate labeled groups.
   - Show capabilities only under a visible `Capabilities` label.
   - Do not show capability chips next to the provider title without a group
     label.
-  - Get publisher and family relationships from provider offerings and exact
-    models in the provider catalog.
-  - Add the necessary publisher and family presentation fields to the
-    authenticated management provider response.
+  - Get family relationships from provider offerings and exact models in the
+    provider catalog.
+  - Add the necessary family presentation fields to the authenticated
+    management provider response.
+  - Include offering media inputs in the provider capability list.
+  - Use `Image analysis` for an image input capability.
+  - Do not use `Image generation` for an image input capability.
+  - Keep `Video generation` for an actual video generation operation.
+  - Declare image input for `qwen3.7-plus` and `qwen3.6-flash`.
+  - Keep `qwen-plus` and `qwen3.7-max` as text-only models.
   - Do not infer labels or catalog relationships from identifiers in the
     browser.
   - Keep canonical provider identifiers and provider offering selectors
     unchanged.
   - Change `Set key` to `Set API key`.
   - Change `Key settings` to `API key settings`.
+  - Put the provider settings control in the top-right corner of each card.
+  - Show only a settings gear icon in the control.
+  - Use `Set API key` or `API key settings` as the accessible control name.
+  - Show one request volume bar on each provider card.
+  - Scale each bar against the highest provider request count in the current
+    Usage scope.
+  - Show an empty graph track when the provider has zero requests.
+  - Use the existing provider aggregates without an additional request.
+  - Give each graph an accessible label with its exact count and scale.
+  - Keep the front and back faces at the same width and height.
   - Preserve the activity, tenant scope, key safety, and card interaction
     contracts from I027.
   - Keep the cards compact, accessible, and responsive in the MPR visual
     language.
   Deliverables:
-  - Add the catalog and management presentation data for the separate identity
-    groups.
+  - Add the catalog and management data for model families and capabilities.
   - Update the provider card front, card back, user-visible copy, and canonical
     API documentation.
-  - Add browser coverage for single-publisher and multiple-publisher provider
-    APIs.
+  - Add browser coverage for provider identities, families, and capabilities.
   Validation:
-  - Prove that `OpenAI API` shows OpenAI as its publisher.
   - Prove that `OpenAI API` shows GPT-4, GPT-5, and GPT Transcribe as model
     families.
-  - Prove that `Gemini API` shows Google as its publisher and Gemini as its
-    model family.
-  - Prove that `Meta API` shows Meta as its publisher and Muse Spark as its
-    model family.
-  - Prove that `SiliconFlow API` shows DeepSeek and FunAudioLLM as publishers.
+  - Prove that `Gemini API` shows Gemini as its model family.
+  - Prove that `Meta API` shows Muse Spark as its model family.
   - Prove that `SiliconFlow API` shows DeepSeek R1 and SenseVoice as model
     families.
+  - Prove that `DashScope API` shows image analysis and not image generation.
+  - Prove that Qwen image input uses the OpenAI-compatible message shape.
   - Prove that capability labels remain separate from all identity labels.
   - Prove that each catalog provider still produces exactly one card.
+  - Prove that the provider settings control has no visible text.
+  - Prove that the provider settings control keeps its state-specific accessible
+    name.
+  - Prove that request bars update from the current provider aggregates.
+  - Prove that each graph exposes its exact count and relative scale.
+  - Prove that the two card faces have the same dimensions after a flip.
   - Cover keyboard access, semantic labels, desktop layout, and narrow-screen
     layout through Playwright.
   - Run `make ci` after the last application change.
-  Resolution:
-  Added a catalog-owned API service label to each provider. The management
-  response now returns model publishers and model families from exact catalog
-  offerings. Provider cards show separate API, publisher, family, and
-  capability groups with explicit API key actions.
+  Resolution: Separated API services, model families, and capabilities. Added
+  verified Qwen image input, icon-only provider settings controls, and request
+  volume bars that use existing provider aggregates. Browser coverage confirms
+  accessible graphs and equal card-face dimensions.
 - [ ] [I235] (P1) Add explicit model activation to the provider catalog.
   Goal:
   Keep exact model data in the provider catalog without exposing an unaccepted
