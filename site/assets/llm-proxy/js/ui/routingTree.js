@@ -1,5 +1,7 @@
 // @ts-check
 
+import { PUBLIC_THEME } from "../constants.js";
+
 const ROUTING_TREE_ELEMENT_NAME = "routing-tree";
 const SELECTED_ATTRIBUTE_VALUE = "true";
 const MOBILE_LAYOUT_MAX_WIDTH = 680;
@@ -76,6 +78,8 @@ class RoutingTreeElement extends HTMLElement {
     this.proxyNode = null;
     /** @type {ResizeObserver | null} */
     this.resizeObserver = null;
+    /** @type {MutationObserver | null} */
+    this.themeObserver = null;
     this.drawFrameRequest = 0;
   }
 
@@ -135,6 +139,11 @@ class RoutingTreeElement extends HTMLElement {
     }
     this.resizeObserver = new ResizeObserver(() => this.scheduleRouteDraw());
     this.resizeObserver.observe(this.routeMap);
+    this.themeObserver = new MutationObserver(() => this.scheduleRouteDraw());
+    this.themeObserver.observe(document.documentElement, {
+      attributeFilter: [PUBLIC_THEME.ATTRIBUTE, PUBLIC_THEME.PALETTE_ATTRIBUTE],
+      attributes: true,
+    });
     this.dataset.enhanced = SELECTED_ATTRIBUTE_VALUE;
     this.applyFilters();
   }
@@ -251,6 +260,7 @@ class RoutingTreeElement extends HTMLElement {
 
   disconnectedCallback() {
     this.resizeObserver?.disconnect();
+    this.themeObserver?.disconnect();
     if (this.drawFrameRequest !== 0) {
       cancelAnimationFrame(this.drawFrameRequest);
       this.drawFrameRequest = 0;

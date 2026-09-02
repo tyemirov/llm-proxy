@@ -11,6 +11,11 @@ export const PUBLIC_SITE_PATH = "/";
 export const APPLICATION_PATH = "/app/";
 export const LANDING_AUTHENTICATED_REDIRECT_ATTRIBUTE = "data-llm-proxy-authenticated-redirect-url";
 
+export const PUBLIC_THEME = Object.freeze({
+  ATTRIBUTE: "data-mpr-theme",
+  PALETTE_ATTRIBUTE: "data-llm-proxy-palette",
+});
+
 export const NOTICE_KINDS = Object.freeze({
   INFO: "info",
   SUCCESS: "success",
