@@ -1822,6 +1822,21 @@ exit 7
 	}
 }
 
+func TestOperationalLiveProviderHarnessKeepsDisposableTenantKeyInternal(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	scriptBytes, readError := os.ReadFile(filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"))
+	if readError != nil {
+		testingInstance.Fatalf("read live-provider harness: %v", readError)
+	}
+	scriptText := string(scriptBytes)
+	if strings.Contains(scriptText, "LLM_PROXY_DEFAULT_TENANT_KEY") {
+		testingInstance.Fatal("live-provider harness uses the production Default tenant key variable")
+	}
+	if !strings.Contains(scriptText, `if ! live_tenant_key="$(python3`) || strings.Count(scriptText, `key=${live_tenant_key}`) != 2 {
+		testingInstance.Fatal("live-provider harness does not keep its generated tenant key internal")
+	}
+}
+
 func TestOperationalLiveConfigRequiresManagementAndSafelyLoadsDotenv(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	fixtureRoot := testingInstance.TempDir()
