@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Replaced the obsolete generic tenant-key environment variable with
+  `LLM_PROXY_DEFAULT_TENANT_KEY` across the CLI, live tests, and documentation.
+
+## [v1.3.0] - 2026-09-01
+
 - Added a separate media execution lifecycle to each media-capable provider
   offering. The public capability resource and official Go client now expose
   this lifecycle.
