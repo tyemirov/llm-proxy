@@ -96,6 +96,35 @@ test("public Log In opens the authenticated app and the TAuth session survives u
     applicationPath,
   );
   await expect(page.locator("mpr-header")).not.toHaveAttribute("sign-in-redirect-url", applicationPath);
+  const themeSwitcher = page.locator('[data-mpr-theme-toggle="control"][data-variant="square"]');
+  await expect(page.locator("mpr-footer")).toHaveAttribute("theme-switcher", "square");
+  await expect(themeSwitcher).toBeVisible();
+  await expect(page.locator('[data-mpr-footer="theme-toggle"]')).toHaveAttribute(
+    "data-mpr-theme-toggle-variant",
+    "square",
+  );
+  const themeQuadrants = page.locator('[data-mpr-theme-toggle="quad"]');
+  await expect(themeQuadrants).toHaveCount(4);
+  const themeModes = [
+    { mode: "default-light", theme: "light", palette: "default" },
+    { mode: "sunrise-light", theme: "light", palette: "sunrise" },
+    { mode: "default-dark", theme: "dark", palette: "default" },
+    { mode: "forest-dark", theme: "dark", palette: "forest" },
+  ];
+  const pageBackgroundColors = [];
+  for (const [themeIndex, themeMode] of themeModes.entries()) {
+    await themeQuadrants.nth(themeIndex).click();
+    await expect(themeSwitcher).toHaveAttribute("data-square-index", String(themeIndex));
+    await expect(themeSwitcher).toHaveAttribute("data-square-mode", themeMode.mode);
+    await expect(page.locator("html")).toHaveAttribute("data-mpr-theme", themeMode.theme);
+    await expect(page.locator("html")).toHaveAttribute("data-llm-proxy-palette", themeMode.palette);
+    await expect(page.locator("body")).toHaveAttribute("data-mpr-theme", themeMode.theme);
+    await expect(page.locator("body")).toHaveAttribute("data-llm-proxy-palette", themeMode.palette);
+    pageBackgroundColors.push(
+      await page.locator("body").evaluate((bodyElement) => getComputedStyle(bodyElement).backgroundColor),
+    );
+  }
+  expect(new Set(pageBackgroundColors).size).toBe(4);
   expect(browserAccountRequestCount).toBe(0);
   const signInButton = page.locator('[data-mpr-header="google-signin-button"]');
   await expect(signInButton).toBeVisible();

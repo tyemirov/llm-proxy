@@ -1323,6 +1323,12 @@ test("every public HTML page publishes its canonical MPR header and the identica
     expect(shell.footer, publicPath).toContain('<a href="/privacy/">Privacy</a>');
     expect(shell.footer, publicPath).toContain('<a href="/terms/">Terms</a>');
     expect(shell.footer, publicPath).toContain('sticky="true"');
+    expect(shell.footer, publicPath).toContain('theme-switcher="square"');
+    expect(shell.footer, publicPath).toContain('"initialMode":"default-dark"');
+    expect(shell.footer, publicPath).toContain('"value":"default-light"');
+    expect(shell.footer, publicPath).toContain('"value":"sunrise-light"');
+    expect(shell.footer, publicPath).toContain('"value":"default-dark"');
+    expect(shell.footer, publicPath).toContain('"value":"forest-dark"');
     expect(shell.headerOffset, publicPath).toBeLessThan(shell.mainOffset);
     expect(shell.mainOffset, publicPath).toBeLessThan(shell.footerOffset);
   }
