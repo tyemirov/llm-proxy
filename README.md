@@ -1291,7 +1291,7 @@ provider/model route does not declare.
 
 Create or replace the tenant's client key separately in **Settings**. That
 generated client key is the value that applications store as
-`LLM_PROXY_SECRET`. It is not an upstream provider credential.
+`LLM_PROXY_DEFAULT_TENANT_KEY`. It is not an upstream provider credential.
 
 ## Local Automation
 
@@ -1309,7 +1309,7 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make test-live-gemini` | Run direct acceptance for the exact Gemini 3.6 Flash and Gemini 3.7 Flash candidates, then run registered Gemini routes through `make test-live-providers`. |
 | `make test-live-local-providers` | Build an isolated local Compose project, verify selected provider keys, and send paid `POST /v2` requests through its Dockerized API. |
 | `make test-live-local-gemini` | Run every registered Gemini model and reasoning level through the isolated local Compose API. |
-| `make live-test` | Send paid production `POST /v2` requests through the Default tenant using only `LLM_PROXY_SECRET`: echo checks for OpenAI, Anthropic, Meta, Gemini, and Moonshot, plus large completion cases for OpenAI, Anthropic, Meta, and Gemini. |
+| `make live-test` | Send paid production `POST /v2` requests through the Default tenant using only `LLM_PROXY_DEFAULT_TENANT_KEY`: echo checks for OpenAI, Anthropic, Meta, Gemini, and Moonshot, plus large completion cases for OpenAI, Anthropic, Meta, and Gemini. |
 | `make release` | Delegate the clean checkout to the exact sibling `../mprlab-gateway`. The transaction validates its exact prepared or reused decision before CI. |
 | `make publish` | Delegate publication of the exact sealed release to `../mprlab-gateway`; it does not rebuild or deploy. |
 | `make deploy` | Delegate convergence of only this app's declared runtime, route, health, Pages, and TAuth resources to `../mprlab-gateway`. |
@@ -1476,13 +1476,13 @@ temporary proxy and provider children that it starts.
 
 `make live-test` is a separate paid production check. It calls only
 `https://llm-proxy-api.mprlab.com` and requires exactly one local credential:
-`LLM_PROXY_SECRET`, the Default tenant's generated client secret. It neither
+`LLM_PROXY_DEFAULT_TENANT_KEY`, the Default tenant's generated client secret. It neither
 loads a dotenv file nor reads, accepts, or sends a local upstream-provider key.
 The saved provider credentials and per-provider default models remain entirely
 on the production tenant.
 
 Before any paid provider call, the command sends an intentionally incomplete
-`POST /v2` request with `LLM_PROXY_SECRET`. A valid client key must reach normal
+`POST /v2` request with `LLM_PROXY_DEFAULT_TENANT_KEY`. A valid client key must reach normal
 request validation and return `400` with a proxy request ID. A missing,
 rejected, or unreachable client key stops the command before the provider
 matrix starts.
@@ -1509,7 +1509,7 @@ Set the Default-tenant client secret and its exact tenant identifier before
 you invoke the target:
 
 ```shell
-export LLM_PROXY_SECRET='...'
+export LLM_PROXY_DEFAULT_TENANT_KEY='...'
 export LLM_PROXY_EXPECTED_TENANT_ID='managed-...'
 make live-test
 ```
@@ -1578,7 +1578,7 @@ integration.
 
 The installable `llm-proxy-client` command does not discover a user-level or
 system-level YAML configuration file. It accepts `--base-url` and `--secret`,
-with `LLM_PROXY_BASE_URL` and `LLM_PROXY_SECRET` as their environment
+with `LLM_PROXY_BASE_URL` and `LLM_PROXY_DEFAULT_TENANT_KEY` as their environment
 counterparts; the Go and Python libraries accept the same values through
 application-supplied configuration. The only optional file-based client
 configuration input is an application-owned JSON model profile for per-user
@@ -1607,7 +1607,7 @@ Use it with explicit flags:
 ```shell
 llm-proxy-client \
   --base-url "http://localhost:8080/?provider=gemini" \
-  --secret "$LLM_PROXY_SECRET" \
+  --secret "$LLM_PROXY_DEFAULT_TENANT_KEY" \
   --prompt "Summarize this"
 ```
 
@@ -1615,7 +1615,7 @@ Or read configuration and prompt text from environment/stdin:
 
 ```shell
 export LLM_PROXY_BASE_URL="http://localhost:8080/"
-export LLM_PROXY_SECRET="..."
+export LLM_PROXY_DEFAULT_TENANT_KEY="..."
 printf 'large prompt...\n' | llm-proxy-client --max-tokens 4096
 ```
 
@@ -1625,7 +1625,7 @@ one request with `--reasoning-effort`:
 ```shell
 llm-proxy-client \
   --base-url "http://localhost:8080/?provider=openai" \
-  --secret "$LLM_PROXY_SECRET" \
+  --secret "$LLM_PROXY_DEFAULT_TENANT_KEY" \
   --model gpt-5.5 \
   --reasoning-effort high \
   --request-timeout-seconds 900 \
@@ -1838,7 +1838,7 @@ Use the profile directly from the installable CLI:
 ```shell
 llm-proxy-client \
   --base-url "http://localhost:8080/" \
-  --secret "$LLM_PROXY_SECRET" \
+  --secret "$LLM_PROXY_DEFAULT_TENANT_KEY" \
   --model-profile "/var/lib/my-app/users/42/model.json" \
   --prompt "Summarize this"
 ```
@@ -1882,7 +1882,7 @@ remains the separate normal contract.
 The same transport contract is available as an importable Python package:
 
 ```shell
-uv pip install --upgrade "llm-proxy-client @ git+https://github.com/tyemirov/llm-proxy.git@v1.2.2#subdirectory=python"
+uv pip install --upgrade "llm-proxy-client @ git+https://github.com/tyemirov/llm-proxy.git@v1.3.0#subdirectory=python"
 ```
 
 Use an exact released repository tag for each application build. The default
