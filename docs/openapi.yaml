@@ -2821,9 +2821,12 @@ components:
       required:
         - id
         - label
+        - api_service_label
         - key_acquisition_url
         - aliases
         - capabilities
+        - model_publishers
+        - model_families
         - configured
         - fields
         - text_model
@@ -2837,6 +2840,10 @@ components:
           type: string
         label:
           type: string
+        api_service_label:
+          type: string
+          minLength: 1
+          description: Catalog-owned provider API label for the authenticated provider card.
         key_acquisition_url:
           type: string
           format: uri
@@ -2855,6 +2862,16 @@ components:
               - text
               - dictation
               - video_generation
+        model_publishers:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ManagementCatalogIdentity'
+        model_families:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ManagementCatalogIdentity'
         configured:
           type: boolean
         fields:
@@ -2880,6 +2897,19 @@ components:
           type: array
           items:
             type: string
+    ManagementCatalogIdentity:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - label
+      properties:
+        id:
+          type: string
+          minLength: 1
+        label:
+          type: string
+          minLength: 1
     ProviderField:
       type: object
       additionalProperties: false

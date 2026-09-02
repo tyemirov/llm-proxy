@@ -69,6 +69,7 @@ Each item in `providers` is one provider definition.
 |---|---|---|
 | Canonical provider identifier | `providers[].id` | Owns routing, persistence, and public identity. |
 | Display label | `providers[].label` | Supplies the management and public label. |
+| API service label | `providers[].api_service_label` | Supplies the authenticated provider card title. |
 | Key-acquisition URL | `providers[].key_acquisition_url` | Supplies the official HTTPS destination for the provider card. It cannot contain credentials, a query, or a fragment. |
 | Request aliases | `providers[].aliases` | Resolve to the canonical provider identifier. |
 | Provider fields | `providers[].fields` | Define tenant and environment connection inputs. |
@@ -246,10 +247,12 @@ management encryption boundary. Current-schema reads use only provider
 connection records and provider profile records.
 
 The management API returns provider definitions in catalog order. Its safe
-tenant profile projection includes the key-acquisition URL, offering-derived
-capabilities, field definitions, selected model, provider prompt, and masked
-connection state. The management app builds one provider card from each item.
-It never uses key presence or usage history to define provider membership.
+tenant profile projection includes the API service label and the key-acquisition
+URL. It also includes offering-derived model publishers, model families, and
+capabilities. The projection includes field definitions, the selected model,
+the provider prompt, and masked connection state. The management app builds one
+provider card from each item. It never uses key presence or usage history to
+define provider membership.
 
 The card editor never requests a saved raw credential. Credential deletion
 removes only encrypted credential fields. It preserves non-secret connection
