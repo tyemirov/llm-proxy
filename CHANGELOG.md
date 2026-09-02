@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Separated provider API, model publisher, model family, and capability labels
+  on Usage Overview cards. Added explicit API service titles and API key action
+  labels.
 - Added a shared Bar graph or Donut chart view for provider and model request
   breakdowns. Added visible UTC and metric-specific integer axes to the
   Requests and Tokens line charts without changing the management API.
