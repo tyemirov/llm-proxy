@@ -46,7 +46,7 @@ const apiDocumentationPath = "/docs/";
 const openAPIPath = "/openapi.yaml";
 const openAPISchemaViewerPath = `${apiDocumentationPath}#openapi-schema`;
 const openAPIDownloadFilename = "llm-proxy-openapi.yaml";
-const applicationModuleRevision = "20260902a237";
+const applicationModuleRevision = "20260902c237";
 const applicationModuleFiles = Object.freeze([
   "alpineRuntime.js",
   "app.js",
@@ -1017,10 +1017,10 @@ test("visitors can filter and choose a model family, exact model, and provider o
   await imageInputFilter.click();
   await expect(imageInputFilter).toHaveAttribute("aria-pressed", "true");
   await expect(textFilter).toHaveAttribute("aria-pressed", "false");
-  await expect(counts).toHaveText("8 families · 24 exact models · 24 offerings");
-  await expect(routingTree.locator("[data-route-family]:visible")).toHaveCount(8);
+  await expect(counts).toHaveText("9 families · 26 exact models · 26 offerings");
+  await expect(routingTree.locator("[data-route-family]:visible")).toHaveCount(9);
   await openWeightsFilter.click();
-  await expect(counts).toHaveText("10 families · 28 exact models · 28 offerings");
+  await expect(counts).toHaveText("11 families · 30 exact models · 30 offerings");
   await expect(routingTree.locator('[data-route-family="kimi-k2"]')).toBeVisible();
   await expect(routingTree.locator('[data-route-family="kimi-k3"]')).toBeVisible();
   await openWeightsFilter.click();
@@ -2750,30 +2750,61 @@ test("provider cards follow catalog order and keep all-tenant activity provider-
     "OpenAI API", "DeepSeek API", "DashScope API", "Moonshot API", "MiniMax API", "SiliconFlow API", "Z.AI API", "Gemini API", "Anthropic API", "Meta API", "xAI API",
   ]);
   const openAICard = page.locator('[data-provider-card="openai"]');
-  await expect(openAICard.locator(".provider-card-taxonomy dt")).toHaveText(["Model publishers", "Model families", "Capabilities"]);
-  await expect(openAICard.locator(".provider-card-taxonomy dd").nth(0).locator("span")).toHaveText(["OpenAI"]);
-  await expect(openAICard.locator(".provider-card-taxonomy dd").nth(1).locator("span")).toHaveText(["GPT-4", "GPT-5", "GPT Transcribe"]);
-  await expect(openAICard.locator(".provider-card-taxonomy dd").nth(2).locator("span")).toHaveText(["Text", "Dictation"]);
+  await expect(openAICard.locator(".provider-card-taxonomy dt")).toHaveText(["Model families", "Capabilities"]);
+  await expect(openAICard.locator(".provider-card-taxonomy dd").nth(0).locator("span")).toHaveText(["GPT-4", "GPT-5", "GPT Transcribe"]);
+  await expect(openAICard.locator(".provider-card-taxonomy dd").nth(1).locator("span")).toHaveText(["Text", "Image analysis", "Dictation"]);
+  await expect(openAICard.locator(".provider-card-front")).not.toContainText("API connection");
+  await expect(openAICard.locator(".provider-card-front")).not.toContainText("Model publishers");
   await expect(openAICard.locator(".provider-card-front > header")).not.toContainText("Text");
   const geminiCard = page.locator('[data-provider-card="gemini"]');
-  await expect(geminiCard.locator(".provider-card-taxonomy dd").nth(0).locator("span")).toHaveText(["Google"]);
-  await expect(geminiCard.locator(".provider-card-taxonomy dd").nth(1).locator("span")).toHaveText(["Gemini"]);
+  await expect(geminiCard.locator(".provider-card-taxonomy dd").nth(0).locator("span")).toHaveText(["Gemini"]);
   const metaCard = page.locator('[data-provider-card="meta"]');
-  await expect(metaCard.locator(".provider-card-taxonomy dd").nth(0).locator("span")).toHaveText(["Meta"]);
-  await expect(metaCard.locator(".provider-card-taxonomy dd").nth(1).locator("span")).toHaveText(["Muse Spark"]);
+  await expect(metaCard.locator(".provider-card-taxonomy dd").nth(0).locator("span")).toHaveText(["Muse Spark"]);
   const siliconFlowCard = page.locator('[data-provider-card="siliconflow"]');
-  await expect(siliconFlowCard.locator(".provider-card-taxonomy dd").nth(0).locator("span")).toHaveText(["DeepSeek", "FunAudioLLM"]);
-  await expect(siliconFlowCard.locator(".provider-card-taxonomy dd").nth(1).locator("span")).toHaveText(["DeepSeek R1", "SenseVoice"]);
+  await expect(siliconFlowCard.locator(".provider-card-taxonomy dd").nth(0).locator("span")).toHaveText(["DeepSeek R1", "SenseVoice"]);
+  const dashScopeCard = page.locator('[data-provider-card="dashscope"]');
+  await expect(dashScopeCard.locator(".provider-card-taxonomy dd").nth(1).locator("span")).toHaveText(["Text", "Image analysis"]);
+  await expect(dashScopeCard.locator(".provider-card-front")).not.toContainText("Image generation");
   expect(await cards.locator("provider-card-statuses span:visible").allTextContents()).not.toContain("active");
   expect(await cards.locator(".provider-card-front dt:visible").allTextContents()).not.toContain("Provider default model");
-  await expect(cards.first().getByRole("button", { name: "Set API key" })).toBeVisible();
+  const providerSettingsAction = cards.first().getByRole("button", { name: "Set API key" });
+  await expect(providerSettingsAction).toBeVisible();
+  await expect(providerSettingsAction).toHaveAttribute("title", "Set API key");
+  await expect(providerSettingsAction.locator("svg.provider-settings-icon")).toBeVisible();
+  await expect(providerSettingsAction.locator("svg.provider-settings-icon")).toHaveAttribute("aria-hidden", "true");
+  await expect(providerSettingsAction).toHaveText("");
+  const cardFrontBounds = await openAICard.locator(".provider-card-front").boundingBox();
+  const providerSettingsActionBounds = await providerSettingsAction.boundingBox();
+  if (!cardFrontBounds || !providerSettingsActionBounds) throw new Error("provider_card_settings_bounds_missing");
+  const actionRightInset = cardFrontBounds.x + cardFrontBounds.width - providerSettingsActionBounds.x - providerSettingsActionBounds.width;
+  const actionTopInset = providerSettingsActionBounds.y - cardFrontBounds.y;
+  expect(actionRightInset).toBeGreaterThanOrEqual(0);
+  expect(actionRightInset).toBeLessThanOrEqual(14);
+  expect(actionTopInset).toBeGreaterThanOrEqual(0);
+  expect(actionTopInset).toBeLessThanOrEqual(14);
+  const openAIRequestGraph = openAICard.getByRole("img", { name: "24 requests. 100% of the highest provider request count." });
+  const deepSeekRequestGraph = page.locator('[data-provider-card="deepseek"]').getByRole("img", { name: "13 requests. 54% of the highest provider request count." });
+  const metaRequestGraph = metaCard.getByRole("img", { name: "0 requests. 0% of the highest provider request count." });
+  const openAIRequestTrackBounds = await openAIRequestGraph.locator("provider-request-track").boundingBox();
+  const openAIRequestFillBounds = await openAIRequestGraph.locator("provider-request-track i").boundingBox();
+  const deepSeekRequestTrackBounds = await deepSeekRequestGraph.locator("provider-request-track").boundingBox();
+  const deepSeekRequestFillBounds = await deepSeekRequestGraph.locator("provider-request-track i").boundingBox();
+  if (!openAIRequestTrackBounds || !openAIRequestFillBounds || !deepSeekRequestTrackBounds || !deepSeekRequestFillBounds) {
+    throw new Error("provider_card_request_graph_bounds_missing");
+  }
+  expect(Math.abs(openAIRequestFillBounds.width - openAIRequestTrackBounds.width)).toBeLessThanOrEqual(2);
+  expect(deepSeekRequestFillBounds.width / deepSeekRequestTrackBounds.width).toBeCloseTo(0.54, 2);
+  expect(await deepSeekRequestGraph.locator("provider-request-track i").evaluate((element) => /** @type {HTMLElement} */ (element).style.width)).toBe("54%");
+  expect(await metaRequestGraph.locator("provider-request-track i").evaluate((element) => /** @type {HTMLElement} */ (element).style.width)).toBe("0%");
   await expect(page.locator('[data-provider-card="dashscope"] .provider-card-usage dd:visible')).toHaveText(["0", "0"]);
   expect(await cards.first().locator(".provider-card-inner").evaluate((element) => getComputedStyle(element).transitionDuration)).toBe("0s");
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(async () => openAICard.locator(".provider-card-front").evaluate((element) => element.scrollHeight <= element.clientHeight)).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test("an explicit Usage tenant opens one safe provider card editor", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await installAssetRoutes(page);
   await installManagementRoutes(page);
   await page.goto(baseURL + applicationPath);
@@ -2783,9 +2814,18 @@ test("an explicit Usage tenant opens one safe provider card editor", async ({ pa
   await expect(card.getByText("active", { exact: true })).toBeVisible();
   await expect(card.getByText("used", { exact: true })).toBeVisible();
   await expect(card.getByText("gpt-4.1", { exact: true })).toBeVisible();
-  await card.getByRole("button", { name: "API key settings" }).click();
+  const providerSettingsAction = card.getByRole("button", { name: "API key settings" });
+  await expect(providerSettingsAction).toHaveAttribute("title", "API key settings");
+  const cardFrontBounds = await card.locator(".provider-card-front").boundingBox();
+  if (!cardFrontBounds) throw new Error("provider_card_front_bounds_missing");
+  await providerSettingsAction.click();
 
   const back = card.locator(".provider-card-back");
+  await expect(back).toHaveAttribute("aria-hidden", "false");
+  const cardBackBounds = await back.boundingBox();
+  if (!cardBackBounds) throw new Error("provider_card_back_bounds_missing");
+  expect(cardBackBounds.width).toBe(cardFrontBounds.width);
+  expect(cardBackBounds.height).toBe(cardFrontBounds.height);
   const keyInput = back.getByRole("textbox", { name: "OpenAI API key" });
   await expect(keyInput).toHaveValue("••••••••");
   await expect(back.getByRole("button", { name: "Show key" })).toHaveCount(0);
@@ -2809,6 +2849,7 @@ test("provider cards distinguish unavailable activity from a successful zero", a
   const cards = page.locator("[data-provider-card]");
   await expect(cards).toHaveCount(11);
   await expect(cards.locator(".provider-card-usage dd:visible")).toHaveText(Array(22).fill("Unavailable"));
+  await expect(cards.locator("provider-request-graph:visible")).toHaveCount(0);
   await expect(cards.locator(".provider-card-usage dd:visible").getByText("0", { exact: true })).toHaveCount(0);
 });
 
@@ -5662,11 +5703,10 @@ function managementProfile(isAdmin = false, hasSecret = true) {
     dictation_default_model: "sensevoice-small",
     dictation_models: ["sensevoice-small"],
   });
-  /** @type {Record<string, {api_service_label: string, model_publishers: Array<{id: string, label: string}>, model_families: Array<{id: string, label: string}>}>} */
+  /** @type {Record<string, {api_service_label: string, model_families: Array<{id: string, label: string}>}>} */
   const providerIdentities = {
     openai: {
       api_service_label: "OpenAI API",
-      model_publishers: [{ id: "openai", label: "OpenAI" }],
       model_families: [
         { id: "gpt-4", label: "GPT-4" },
         { id: "gpt-5", label: "GPT-5" },
@@ -5675,7 +5715,6 @@ function managementProfile(isAdmin = false, hasSecret = true) {
     },
     deepseek: {
       api_service_label: "DeepSeek API",
-      model_publishers: [{ id: "deepseek", label: "DeepSeek" }],
       model_families: [
         { id: "deepseek-v4", label: "DeepSeek V4" },
         { id: "deepseek-v3", label: "DeepSeek V3" },
@@ -5684,12 +5723,10 @@ function managementProfile(isAdmin = false, hasSecret = true) {
     },
     dashscope: {
       api_service_label: "DashScope API",
-      model_publishers: [{ id: "alibaba", label: "Alibaba" }],
       model_families: [{ id: "qwen", label: "Qwen" }],
     },
     moonshot: {
       api_service_label: "Moonshot API",
-      model_publishers: [{ id: "moonshot", label: "Moonshot AI" }],
       model_families: [
         { id: "kimi-k2", label: "Kimi K2" },
         { id: "kimi-k3", label: "Kimi K3" },
@@ -5697,15 +5734,10 @@ function managementProfile(isAdmin = false, hasSecret = true) {
     },
     minimax: {
       api_service_label: "MiniMax API",
-      model_publishers: [{ id: "minimax", label: "MiniMax" }],
       model_families: [{ id: "minimax-m2", label: "MiniMax M2" }],
     },
     siliconflow: {
       api_service_label: "SiliconFlow API",
-      model_publishers: [
-        { id: "deepseek", label: "DeepSeek" },
-        { id: "funaudio", label: "FunAudioLLM" },
-      ],
       model_families: [
         { id: "deepseek-r1", label: "DeepSeek R1" },
         { id: "sensevoice", label: "SenseVoice" },
@@ -5713,7 +5745,6 @@ function managementProfile(isAdmin = false, hasSecret = true) {
     },
     zai: {
       api_service_label: "Z.AI API",
-      model_publishers: [{ id: "zai", label: "Z.AI" }],
       model_families: [
         { id: "glm-5", label: "GLM-5" },
         { id: "glm-asr", label: "GLM ASR" },
@@ -5721,12 +5752,10 @@ function managementProfile(isAdmin = false, hasSecret = true) {
     },
     gemini: {
       api_service_label: "Gemini API",
-      model_publishers: [{ id: "google", label: "Google" }],
       model_families: [{ id: "gemini", label: "Gemini" }],
     },
     anthropic: {
       api_service_label: "Anthropic API",
-      model_publishers: [{ id: "anthropic", label: "Anthropic" }],
       model_families: [
         { id: "claude-fable", label: "Claude Fable" },
         { id: "claude-sonnet", label: "Claude Sonnet" },
@@ -5736,12 +5765,10 @@ function managementProfile(isAdmin = false, hasSecret = true) {
     },
     meta: {
       api_service_label: "Meta API",
-      model_publishers: [{ id: "meta", label: "Meta" }],
       model_families: [{ id: "muse-spark", label: "Muse Spark" }],
     },
     xai: {
       api_service_label: "xAI API",
-      model_publishers: [{ id: "xai", label: "xAI" }],
       model_families: [
         { id: "grok", label: "Grok" },
         { id: "grok-build", label: "Grok Build" },
@@ -5765,12 +5792,21 @@ function managementProfile(isAdmin = false, hasSecret = true) {
     meta: "https://dev.meta.ai/",
     xai: "https://console.x.ai/team/default/api-keys",
   };
+  /** @type {Record<string, string[]>} */
+  const mediaCapabilities = {
+    openai: ["image_input"],
+    dashscope: ["image_input"],
+    moonshot: ["image_input"],
+    gemini: ["image_input", "audio_input"],
+    anthropic: ["image_input"],
+    xai: ["image_input"],
+  };
   for (const provider of profile.providers) {
     const identity = providerIdentities[provider.id];
     if (!identity) throw new Error(`management_fixture_provider_identity_missing:${provider.id}`);
     Object.assign(provider, identity);
     provider.key_acquisition_url = acquisitionURLs[provider.id];
-    provider.capabilities = ["text", ...(provider.supports_dictation ? ["dictation"] : []), ...(provider.id === "xai" ? ["video_generation"] : [])];
+    provider.capabilities = ["text", ...(mediaCapabilities[provider.id] || []), ...(provider.supports_dictation ? ["dictation"] : []), ...(provider.id === "xai" ? ["video_generation"] : [])];
   }
   profile.providers.sort((first, second) => catalogOrder.indexOf(first.id) - catalogOrder.indexOf(second.id));
   return profile;
