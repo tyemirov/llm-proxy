@@ -25,7 +25,7 @@ usage() {
     'Usage: make live-test' \
     '' \
     'Runs paid production requests against the Default tenant at https://llm-proxy-api.mprlab.com.' \
-    'Requires LLM_PROXY_SECRET, the Default-tenant client secret.' \
+    'Requires LLM_PROXY_DEFAULT_TENANT_KEY, the Default-tenant client secret.' \
     'Requires LLM_PROXY_EXPECTED_TENANT_ID, the exact Default-tenant identifier.' \
     'It never loads dotenv files or local upstream-provider credentials.' \
     '' \
@@ -50,7 +50,7 @@ cleanup() {
 }
 
 encode_tenant_secret() {
-  printf '%s' "${LLM_PROXY_SECRET}" | python3 -c 'import sys; from urllib.parse import quote; print(quote(sys.stdin.read(), safe=""), end="")'
+  printf '%s' "${LLM_PROXY_DEFAULT_TENANT_KEY}" | python3 -c 'import sys; from urllib.parse import quote; print(quote(sys.stdin.read(), safe=""), end="")'
 }
 
 build_echo_request() {
@@ -315,8 +315,8 @@ if [[ $# -ne 0 ]]; then
   usage >&2
   fail 'make live-test accepts no arguments'
 fi
-if [[ -z "${LLM_PROXY_SECRET:-}" ]]; then
-  fail 'LLM_PROXY_SECRET must contain the Default-tenant client secret'
+if [[ -z "${LLM_PROXY_DEFAULT_TENANT_KEY:-}" ]]; then
+  fail 'LLM_PROXY_DEFAULT_TENANT_KEY must contain the Default-tenant client secret'
 fi
 if [[ -z "${LLM_PROXY_EXPECTED_TENANT_ID:-}" ]]; then
   fail 'LLM_PROXY_EXPECTED_TENANT_ID must contain the Default-tenant identifier'

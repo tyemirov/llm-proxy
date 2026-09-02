@@ -77,7 +77,7 @@ const pages = Object.freeze([
       source: "README.md",
       verifiedOn: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE,
       code: `curl -X POST \
-  "https://llm-proxy-api.mprlab.com/v2?key=$LLM_PROXY_SECRET&provider=gemini" \
+  "https://llm-proxy-api.mprlab.com/v2?key=$LLM_PROXY_DEFAULT_TENANT_KEY&provider=gemini" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Summarize this"}]}'`,
     },
@@ -407,7 +407,7 @@ if (!this.hasSecret) {
       verifiedOn: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
       code: `for provider in openai anthropic gemini; do
   curl -X POST \
-    "https://llm-proxy-api.mprlab.com/v2?key=$LLM_PROXY_SECRET&provider=$provider" \
+    "https://llm-proxy-api.mprlab.com/v2?key=$LLM_PROXY_DEFAULT_TENANT_KEY&provider=$provider" \
     -H "Content-Type: application/json" \
     -d '{"messages":[{"role":"user","content":"Summarize this"}]}'
 done`,
@@ -1060,7 +1060,7 @@ return database.Transaction(func(transaction *gorm.DB) error {`,
     solution: "LLM Proxy authenticates public client requests with key=<tenant secret>. The bundled text clients send canonical POST /v2 messages, while the TAuth-protected management UI creates or manages client access and provider settings separately.",
     steps: [
       "A signed-in management user creates or replaces the tenant client key and receives its value once.",
-      "Give the client a proxy base URL and tenant secret through its application configuration; the installable CLI accepts flags or LLM_PROXY_BASE_URL and LLM_PROXY_SECRET.",
+      "Give the client a proxy base URL and tenant secret through its application configuration; the installable CLI accepts flags or LLM_PROXY_BASE_URL and LLM_PROXY_DEFAULT_TENANT_KEY.",
       "Send canonical POST /v2 messages with the tenant secret in the key query parameter.",
       "Omit provider and model to use the authenticated tenant default, or select a configured provider when the request needs an override.",
       "Confirm replacement when the client key must change; future proxy requests with the prior, missing, or invalid key return 403.",
@@ -1092,7 +1092,7 @@ return database.Transaction(func(transaction *gorm.DB) error {`,
     faq: [
       {
         question: "Does the LLM Proxy client load user-level or system-level YAML?",
-        answer: "No. The client uses explicit flags or LLM_PROXY_BASE_URL and LLM_PROXY_SECRET. Its optional file input is an application-owned JSON model profile. config.yml and providers.yml belong to the service runtime.",
+        answer: "No. The client uses explicit flags or LLM_PROXY_BASE_URL and LLM_PROXY_DEFAULT_TENANT_KEY. Its optional file input is an application-owned JSON model profile. config.yml and providers.yml belong to the service runtime.",
       },
       {
         question: "What authenticates a public text request?",
@@ -1243,7 +1243,7 @@ text = client.post_messages(
     solution: "The installable Go CLI reads prompt text from flags, files, or stdin, maps it into a v2 user message, and sends POST /v2 through the reusable Go client.",
     steps: [
       "Install with go install github.com/tyemirov/llm-proxy/llm-proxy-client@latest.",
-      "Set --base-url and --secret, or use LLM_PROXY_BASE_URL and LLM_PROXY_SECRET.",
+      "Set --base-url and --secret, or use LLM_PROXY_BASE_URL and LLM_PROXY_DEFAULT_TENANT_KEY.",
       "Send --prompt, --prompt-file, or stdin content.",
       "Optionally include --system-prompt, --model, --max-tokens, --reasoning-effort, or --request-timeout-seconds; keep provider in the base URL.",
     ],
@@ -1270,7 +1270,7 @@ text = client.post_messages(
       verifiedOn: CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE,
       code: `llm-proxy-client \\
   --base-url "http://localhost:8080/?provider=openai" \\
-  --secret "$LLM_PROXY_SECRET" \\
+  --secret "$LLM_PROXY_DEFAULT_TENANT_KEY" \\
   --model "gpt-5.5" \\
   --reasoning-effort "high" \\
   --request-timeout-seconds 900 \\
