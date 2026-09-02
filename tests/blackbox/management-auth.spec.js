@@ -248,7 +248,7 @@ test("public Log In opens the authenticated app and the TAuth session survives u
   await pasteProviderKey(providerKeyInput, "sk-local-blackbox-provider-key");
   expect((await providerSaveResponsePromise).status()).toBe(httpOK);
   await expect(providerKeyInput).toHaveValue("••••••••");
-  await openAIProviderCard.getByRole("button", { name: "Done", exact: true }).last().click();
+  await openAIProviderCard.getByRole("button", { name: "Close provider settings" }).click();
   await expect(openAIProviderCard.getByRole("button", { name: "API key settings" })).toBeVisible();
   await expectNoSignedOutStateAfterAuthentication(page);
 

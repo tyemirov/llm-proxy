@@ -46,7 +46,7 @@ const apiDocumentationPath = "/docs/";
 const openAPIPath = "/openapi.yaml";
 const openAPISchemaViewerPath = `${apiDocumentationPath}#openapi-schema`;
 const openAPIDownloadFilename = "llm-proxy-openapi.yaml";
-const applicationModuleRevision = "20260902c237";
+const applicationModuleRevision = "20260902c239";
 const applicationModuleFiles = Object.freeze([
   "alpineRuntime.js",
   "app.js",
@@ -607,11 +607,11 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain(
     '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=content_copy,delete,help,key,visibility,visibility_off&amp;display=block">',
   );
-  expect(html).toContain('class="danger provider-key-remove"');
+  expect(html).toContain('class="icon-only danger provider-key-remove"');
   expect(html).not.toContain("provider-editor-actions");
   const providerConnectionFieldsOffset = html.indexOf("<provider-connection-fields>");
   const textModelOffset = html.indexOf('x-on:change="handleSelectedProviderTextModelChange($event)"');
-  const providerRemovalOffset = html.indexOf('class="danger provider-key-remove"');
+  const providerRemovalOffset = html.indexOf('class="icon-only danger provider-key-remove"');
   expect(providerConnectionFieldsOffset).toBeGreaterThan(-1);
   expect(providerConnectionFieldsOffset).toBeLessThan(providerRemovalOffset);
   expect(providerRemovalOffset).toBeLessThan(textModelOffset);
@@ -619,8 +619,8 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain('id="provider-cards-title"');
   expect(html).toContain('role="alertdialog"');
   expect(html).toContain('x-on:click="requestSelectedProviderKeyRemoval()"');
-  expect(html).toContain('x-show="selectedProvider.configured"');
-  expect(html).toContain('x-on:paste="handleProviderFieldPaste(field)"');
+  expect(html).toContain('x-show="field.secret && field.configured"');
+  expect(html).toContain('x-on:paste="handleProviderFieldPaste(field, $event)"');
   expect(html).toContain('x-on:change="autosaveSelectedProvider()"');
   expect(html).toContain('role="status" aria-live="polite"');
   expect(html).toContain('x-show="providerKeyVerificationPending"');
@@ -646,6 +646,9 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain('x-bind:aria-label="copy.usageTenant"');
   expect(html).toContain('x-on:change="handleUsageTenantSelection($event)"');
   expect(html).toContain('x-text="copy.allTenants"');
+  expect(html).not.toContain('<h3 x-text="settingsTenantName"></h3>');
+  expect(html).toContain('x-bind:value="providerCardTenantSelectionID"');
+  expect(html).toContain('x-show="providerCardTenantLoadPending"');
   expect(html).toContain('<tenant-access-row role="group" x-bind:aria-label="copy.tenantAccess">');
   expect(html).toContain('x-on:change="handleSettingsTenantSelection($event)"');
   expect(html).toContain('x-bind:aria-label="copy.tenantContext"');
@@ -690,8 +693,14 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain('class="settings-form-wide system-prompt-disclosure"');
   expect(html).toContain('x-bind:open="routingSystemPromptOpen"');
   expect(html).toContain('x-on:toggle="routingSystemPromptOpen = $event.currentTarget.open"');
+  expect(html).toContain('class="provider-system-prompt system-prompt-disclosure"');
+  expect(html).toContain('x-bind:open="providerSystemPromptOpen"');
+  expect(html).toContain('x-on:change="autosaveSelectedProvider()"');
+  expect(html).toContain('x-on:beforeinput="prepareProviderFieldEntry(field, $event)"');
   expect(html).toContain('class="system-prompt-disclosure-state"');
   expect(html).toContain('aria-labelledby="routing-system-prompt-label"');
+  expect(html).not.toContain('x-text="copy.providerDone"');
+  expect(html).not.toContain('x-text="copy.providerReplaceKey"');
   expect(html).not.toContain("saveDefaults()");
   expect(html).not.toContain('copy.saveDefaults');
   expect(html).toContain('copy.reasoningEffortUnsupported');
@@ -766,7 +775,15 @@ test("public landing explains the product and exposes the generated capability c
   expect(applicationStateResponse.status()).toBe(httpOK);
   const applicationStateJavaScript = await applicationStateResponse.text();
   expect(applicationStateJavaScript).toContain("providerEditorSession");
+  expect(applicationStateJavaScript).toContain("providerCardProfile");
   expect(applicationStateJavaScript).toContain("routingDefaultsAutosavePromise");
+
+  const providerCardsResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/providerCards.js`);
+  expect(providerCardsResponse.status()).toBe(httpOK);
+  const providerCardsJavaScript = await providerCardsResponse.text();
+  expect(providerCardsJavaScript).toContain("fetchTenant");
+  expect(providerCardsJavaScript).toContain("providerCardProfile");
+  expect(providerCardsJavaScript).not.toContain("switchSettingsTenant");
 
   const notificationsResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/notifications.js`);
   expect(notificationsResponse.status()).toBe(httpOK);
@@ -781,6 +798,9 @@ test("public landing explains the product and exposes the generated capability c
   expect(constantsJavaScript).toContain("Provider settings saved");
   expect(constantsJavaScript).toContain('systemPromptHidden: "Hidden"');
   expect(constantsJavaScript).toContain('systemPromptExpanded: "Expanded"');
+  expect(constantsJavaScript).toContain('providerClose: "Close provider settings"');
+  expect(constantsJavaScript).not.toContain("providerReplaceKey");
+  expect(constantsJavaScript).not.toContain("providerDone");
   expect(constantsJavaScript).not.toContain('saveProviderKey: "Save key"');
   expect(constantsJavaScript).not.toContain('updateProviderKey: "Update key"');
   expect(constantsJavaScript).not.toContain('saveDefaults: "Save defaults"');
@@ -2803,7 +2823,7 @@ test("provider cards follow catalog order and keep all-tenant activity provider-
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test("an explicit Usage tenant opens one safe provider card editor", async ({ page }) => {
+test("an explicit Usage tenant opens one safe compact provider card editor", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await installAssetRoutes(page);
   await installManagementRoutes(page);
@@ -2833,12 +2853,31 @@ test("an explicit Usage tenant opens one safe provider card editor", async ({ pa
   await expect(acquisition).toHaveAttribute("href", "https://platform.openai.com/api-keys");
   await expect(acquisition).toHaveAttribute("target", "_blank");
   await expect(acquisition).toHaveAttribute("rel", "noopener noreferrer");
-  await expect(back.locator("header").getByRole("button", { name: "Done" })).toBeFocused();
+  const apiHeading = back.locator("provider-api-heading");
+  await expect(apiHeading.getByText("OpenAI API", { exact: true })).toBeVisible();
+  await expect(apiHeading.getByRole("link", { name: "Get API key" })).toBeVisible();
+  const apiLabelBounds = await apiHeading.getByText("OpenAI API", { exact: true }).boundingBox();
+  const acquisitionBounds = await acquisition.boundingBox();
+  if (!apiLabelBounds || !acquisitionBounds) throw new Error("provider_api_heading_bounds_missing");
+  expect(Math.abs(apiLabelBounds.y - acquisitionBounds.y)).toBeLessThanOrEqual(4);
+  await expect(back.getByRole("combobox", { name: "Tenant" })).toBeFocused();
+  await expect(back.getByRole("button", { name: "Done" })).toHaveCount(0);
+  await expect(back.getByRole("button", { name: "Replace key" })).toHaveCount(0);
+  const promptDisclosure = back.locator("details.provider-system-prompt");
+  await expect(promptDisclosure).toHaveJSProperty("open", false);
+  await expect(promptDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Hidden");
+  const promptSummary = promptDisclosure.locator("summary");
+  await promptSummary.focus();
+  await promptSummary.press("Enter");
+  await expect(promptDisclosure).toHaveJSProperty("open", true);
+  await promptSummary.press("Enter");
+  await expect(promptDisclosure).toHaveJSProperty("open", false);
   expect(await card.locator(".provider-card-front").evaluate((element) => element.inert)).toBe(true);
   await expect(back).toHaveAttribute("aria-hidden", "false");
-  await back.getByRole("button", { name: "Replace key" }).click();
-  await expect(keyInput).toHaveValue("");
   await expect(keyInput).toBeEditable();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(async () => back.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test("provider cards distinguish unavailable activity from a successful zero", async ({ page }) => {
@@ -2897,7 +2936,7 @@ test("provider card key verification is transient and preserves the prior key on
   const input = back.getByRole("textbox", { name: "OpenAI API key" });
   await pasteProviderKey(input, "first-candidate-key");
   await expect(back.getByText("Checking key...", { exact: true })).toBeVisible();
-  await expect(back.getByRole("button", { name: "Done", exact: true }).last()).toBeDisabled();
+  await expect(back.getByRole("button", { name: "Replace key" })).toHaveCount(0);
   await expect(page.locator('[data-provider-card="deepseek"] button[data-provider-card-action]')).toBeDisabled();
   expect(await browserStorageContains(page, "first-candidate-key")).toBe(false);
   releaseVerification();
@@ -2905,7 +2944,6 @@ test("provider card key verification is transient and preserves the prior key on
   await expect(back.getByText("Checking key...", { exact: true })).toBeHidden();
   await expect(card.locator("provider-card-statuses").getByText("Verified", { exact: true })).toHaveCount(0);
 
-  await back.getByRole("button", { name: "Replace key" }).click();
   for (const [index, response] of responses.entries()) {
     const candidate = `failed-candidate-${index}`;
     await pasteProviderKey(input, candidate);
@@ -2917,17 +2955,64 @@ test("provider card key verification is transient and preserves the prior key on
   expect(submittedKeys).toEqual(["first-candidate-key", ...responses.map((_, index) => `failed-candidate-${index}`)]);
 });
 
-test("all-tenant provider cards require an exact tenant before key controls", async ({ page }) => {
+test("provider cards select the Default tenant and keep tenant settings independent from Usage", async ({ page }) => {
   await installAssetRoutes(page);
-  await installMultiTenantRoutes(page);
+  const routeState = await installMultiTenantRoutes(page);
+  /** @type {() => void} */
+  let releaseTenantProfileLoad = () => {};
+  const tenantProfileLoadGate = new Promise((resolve) => {
+    releaseTenantProfileLoad = () => resolve(undefined);
+  });
+  await page.route(`${baseURL}/api/management/tenants/tenant_2`, async (route) => {
+    if (route.request().method() === "GET") await tenantProfileLoadGate;
+    await route.fallback();
+  });
+  let documentRequestCount = 0;
+  page.on("request", (request) => {
+    if (request.resourceType() === "document") documentRequestCount += 1;
+  });
   await page.goto(baseURL + applicationPath);
 
   const card = page.locator('[data-provider-card="openai"]');
   await card.getByRole("button", { name: "Set API key" }).click();
-  await expect(card.getByRole("textbox", { name: "OpenAI API key" })).toHaveCount(0);
-  await card.getByRole("combobox", { name: "Tenant" }).selectOption("tenant_2");
-  await expect(card.getByRole("heading", { name: "Research" })).toBeVisible();
+  const cardBack = card.locator(".provider-card-back");
+  const tenantSelector = card.getByRole("combobox", { name: "Tenant" });
+  await expect(tenantSelector).toHaveValue("tenant_1");
+  await expect(tenantSelector.locator("option:checked")).toHaveText("Default");
+  await expect(cardBack.locator("header h3")).toHaveCount(0);
+  await expect(cardBack.getByText("Default", { exact: true })).toHaveCount(1);
   await expect(card.getByRole("textbox", { name: "OpenAI API key" })).toHaveValue("••••••••");
+  await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("");
+
+  const promptDisclosure = card.locator("details.provider-system-prompt");
+  await promptDisclosure.locator("summary").click();
+  await expect(promptDisclosure).toHaveJSProperty("open", true);
+  await card.getByRole("textbox", { name: "System prompt" }).fill("Default provider prompt.");
+  await tenantSelector.selectOption("tenant_2");
+  await expect.poll(() => routeState.profiles.get("tenant_1").providers.find((provider) => provider.id === "openai").system_prompt).toBe("Default provider prompt.");
+  await expect(card.getByText("Loading provider settings...", { exact: true })).toBeVisible();
+  await expect(page.locator("[data-provider-card]")).toHaveCount(11);
+  await expect(page.locator('[data-provider-card="deepseek"]')).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("");
+  expect(documentRequestCount).toBe(1);
+  releaseTenantProfileLoad();
+  await expect(card.getByText("Loading provider settings...", { exact: true })).toBeHidden();
+  await expect(tenantSelector).toHaveValue("tenant_2");
+  await expect(cardBack.getByText("Research", { exact: true })).toHaveCount(1);
+  await expect(card.getByRole("textbox", { name: "OpenAI API key" })).toHaveValue("••••••••");
+  await expect(promptDisclosure).toHaveJSProperty("open", false);
+  await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("");
+
+  await promptDisclosure.locator("summary").click();
+  await card.getByRole("textbox", { name: "System prompt" }).fill("Research provider prompt.");
+  await card.getByRole("button", { name: "Close provider settings" }).click();
+  await expect.poll(() => routeState.profiles.get("tenant_2").providers.find((provider) => provider.id === "openai").system_prompt).toBe("Research provider prompt.");
+  await expect(card.locator(".provider-card-back")).toHaveAttribute("aria-hidden", "true");
+  await expect(card.getByRole("button", { name: "Set API key" })).toBeFocused();
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  await expect(page.getByRole("dialog", { name: "Settings" }).getByRole("combobox", { name: "Tenant" })).toHaveValue("tenant_1");
 });
 
 test("deleting a provider key preserves its model, prompt, setting, and usage card", async ({ page }) => {
@@ -2951,11 +3036,16 @@ test("deleting a provider key preserves its model, prompt, setting, and usage ca
   await expect(card.getByText("used", { exact: true })).toBeVisible();
   await expect(card.locator(".provider-card-usage dd:visible")).toHaveText(["5", "321", "qwen3.7-max"]);
   await card.getByRole("button", { name: "API key settings" }).click();
-  await card.getByRole("button", { name: "Delete key" }).click();
+  const keyInputRow = card.getByRole("textbox", { name: "DashScope API key" }).locator("..");
+  const deleteKey = keyInputRow.getByRole("button", { name: "Delete key" });
+  await expect(deleteKey).toHaveAttribute("title", "Delete key");
+  await expect(deleteKey.locator(".material-symbols-outlined")).toHaveText("delete");
+  await deleteKey.click();
   await page.getByRole("alertdialog", { name: "Remove provider key?" }).getByRole("button", { name: "Remove key" }).click();
   await expect(card.getByRole("textbox", { name: "DashScope API key" })).toHaveValue("");
   await expect(card.getByRole("textbox", { name: "DashScope API URL" })).toHaveValue("https://dashscope.example/v1");
   await expect(card.getByRole("combobox", { name: "Provider default model" })).toHaveValue("qwen3.7-max");
+  await card.locator("details.provider-system-prompt summary").click();
   await expect(card.getByRole("textbox", { name: "System prompt" })).toHaveValue("Preserve this prompt.");
   await expect(card).toBeVisible();
   await expect(card.getByText("used", { exact: true })).toBeVisible();
