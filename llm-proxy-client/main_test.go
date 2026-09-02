@@ -248,7 +248,7 @@ func TestCommandReadsEnvironmentAndStdin(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 	t.Setenv(envNameBaseURL, server.URL)
-	t.Setenv(envNameSecret, "env-secret")
+	t.Setenv(envNameDefaultTenantKey, "env-secret")
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -499,7 +499,7 @@ func TestCommandRejectsCompetingModelProfileSourcesBeforeHTTP(t *testing.T) {
 
 func TestCommandRejectsInvalidInputs(t *testing.T) {
 	t.Setenv(envNameBaseURL, "")
-	t.Setenv(envNameSecret, "")
+	t.Setenv(envNameDefaultTenantKey, "")
 
 	testCases := []struct {
 		name        string

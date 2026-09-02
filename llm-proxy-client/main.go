@@ -29,8 +29,8 @@ const (
 	flagReasoningEffort       = "reasoning-effort"
 	flagRequestTimeoutSeconds = "request-timeout-seconds"
 
-	envNameBaseURL = "LLM_PROXY_BASE_URL"
-	envNameSecret  = "LLM_PROXY_SECRET"
+	envNameBaseURL          = "LLM_PROXY_BASE_URL"
+	envNameDefaultTenantKey = "LLM_PROXY_DEFAULT_TENANT_KEY"
 )
 
 type commandOptions struct {
@@ -101,7 +101,7 @@ func newRootCommand(
 			}
 			configInput := llmproxyclient.ConfigInput{
 				BaseURL:          configuredString(command, flagBaseURL, envNameBaseURL, options.baseURL),
-				Secret:           configuredString(command, flagSecret, envNameSecret, options.secret),
+				Secret:           configuredString(command, flagSecret, envNameDefaultTenantKey, options.secret),
 				Provider:         options.provider,
 				ModelProfilePath: options.modelProfilePath,
 			}
