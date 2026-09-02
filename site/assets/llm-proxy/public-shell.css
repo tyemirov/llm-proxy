@@ -1,3 +1,145 @@
+:root[data-mpr-theme][data-llm-proxy-palette] {
+  color-scheme: var(--llm-theme-color-scheme);
+  --canvas: var(--llm-theme-canvas);
+  --overlay: var(--llm-theme-surface-strong);
+  --panel: var(--llm-theme-surface);
+  --border: var(--llm-theme-border);
+  --border-strong: var(--llm-theme-border-strong);
+  --text: var(--llm-theme-text);
+  --text-support: var(--llm-theme-text-support);
+  --text-muted: var(--llm-theme-text-muted);
+  --primary: var(--llm-theme-accent);
+  --success: var(--llm-theme-good);
+  --warning: var(--llm-theme-warning);
+  --info: var(--llm-theme-info);
+  --llm-bg: var(--llm-theme-canvas);
+  --llm-panel: var(--llm-theme-surface);
+  --llm-panel-strong: var(--llm-theme-surface-strong);
+  --llm-border: var(--llm-theme-border);
+  --llm-border-strong: var(--llm-theme-border-strong);
+  --llm-text: var(--llm-theme-text);
+  --llm-muted: var(--llm-theme-text-muted);
+  --llm-subtle: var(--llm-theme-text-support);
+  --llm-accent: var(--llm-theme-accent);
+  --llm-accent-surface: var(--llm-theme-accent-surface);
+  --llm-good: var(--llm-theme-good);
+  --llm-danger: var(--llm-theme-danger);
+  --llm-shadow: var(--llm-theme-shadow);
+  --legal-bg: var(--llm-theme-canvas);
+  --legal-surface: var(--llm-theme-surface);
+  --legal-border: var(--llm-theme-border);
+  --legal-text: var(--llm-theme-text);
+  --legal-muted: var(--llm-theme-text-muted);
+  --legal-accent: var(--llm-theme-accent);
+  --mpr-color-surface-primary: var(--llm-theme-surface-strong);
+  --mpr-color-surface-elevated: var(--llm-theme-surface);
+  --mpr-color-text-primary: var(--llm-theme-text);
+  --mpr-color-text-muted: var(--llm-theme-text-muted);
+  --mpr-color-border: var(--llm-theme-border);
+  --mpr-color-divider: var(--llm-theme-border-strong);
+  --mpr-color-accent: var(--llm-theme-accent);
+  --mpr-color-accent-alt: var(--llm-theme-info);
+  --mpr-color-accent-contrast: var(--llm-theme-accent-contrast);
+  --mpr-chip-bg: var(--llm-theme-accent-surface);
+  --mpr-chip-hover-bg: var(--llm-theme-accent-surface-strong);
+  --mpr-menu-hover-bg: var(--llm-theme-accent-surface);
+  --mpr-theme-toggle-bg: var(--llm-theme-accent-surface);
+  --mpr-shadow-elevated: var(--llm-theme-shadow);
+  --mpr-shadow-flyout: var(--llm-theme-shadow-flyout);
+  --mpr-theme-square-quad-0: #f8fafc;
+  --mpr-theme-square-quad-1: #fde68a;
+  --mpr-theme-square-quad-2: #0f172a;
+  --mpr-theme-square-quad-3: #a7f3d0;
+}
+
+:root[data-mpr-theme="light"][data-llm-proxy-palette="default"] {
+  --llm-theme-color-scheme: light;
+  --llm-theme-canvas: #f8fafc;
+  --llm-theme-surface: #ffffff;
+  --llm-theme-surface-strong: #eef2f7;
+  --llm-theme-border: #cbd5e1;
+  --llm-theme-border-strong: #94a3b8;
+  --llm-theme-text: #0f172a;
+  --llm-theme-text-support: #334155;
+  --llm-theme-text-muted: #64748b;
+  --llm-theme-accent: #2563eb;
+  --llm-theme-accent-contrast: #ffffff;
+  --llm-theme-accent-surface: rgba(37, 99, 235, 0.12);
+  --llm-theme-accent-surface-strong: rgba(37, 99, 235, 0.22);
+  --llm-theme-good: #3f6212;
+  --llm-theme-warning: #a16207;
+  --llm-theme-info: #6d28d9;
+  --llm-theme-danger: #b91c1c;
+  --llm-theme-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+  --llm-theme-shadow-flyout: 0 18px 36px rgba(15, 23, 42, 0.2);
+}
+
+:root[data-mpr-theme="light"][data-llm-proxy-palette="sunrise"] {
+  --llm-theme-color-scheme: light;
+  --llm-theme-canvas: #fff7ed;
+  --llm-theme-surface: #fffbeb;
+  --llm-theme-surface-strong: #ffedd5;
+  --llm-theme-border: #fed7aa;
+  --llm-theme-border-strong: #fb923c;
+  --llm-theme-text: #7c2d12;
+  --llm-theme-text-support: #9a3412;
+  --llm-theme-text-muted: #c2410c;
+  --llm-theme-accent: #c2410c;
+  --llm-theme-accent-contrast: #fff7ed;
+  --llm-theme-accent-surface: rgba(234, 88, 12, 0.14);
+  --llm-theme-accent-surface-strong: rgba(234, 88, 12, 0.24);
+  --llm-theme-good: #3f6212;
+  --llm-theme-warning: #a16207;
+  --llm-theme-info: #9a3412;
+  --llm-theme-danger: #b91c1c;
+  --llm-theme-shadow: 0 10px 24px rgba(124, 45, 18, 0.18);
+  --llm-theme-shadow-flyout: 0 18px 36px rgba(124, 45, 18, 0.22);
+}
+
+:root[data-mpr-theme="dark"][data-llm-proxy-palette="default"] {
+  --llm-theme-color-scheme: dark;
+  --llm-theme-canvas: #0f1114;
+  --llm-theme-surface: #1f2126;
+  --llm-theme-surface-strong: #16181c;
+  --llm-theme-border: #2c2f36;
+  --llm-theme-border-strong: #3b3f48;
+  --llm-theme-text: #e3e5ec;
+  --llm-theme-text-support: #c4c7d1;
+  --llm-theme-text-muted: #858b99;
+  --llm-theme-accent: #5d93ff;
+  --llm-theme-accent-contrast: #0d1421;
+  --llm-theme-accent-surface: rgba(93, 147, 255, 0.14);
+  --llm-theme-accent-surface-strong: rgba(93, 147, 255, 0.24);
+  --llm-theme-good: #95c23d;
+  --llm-theme-warning: #f2b84b;
+  --llm-theme-info: #b487ff;
+  --llm-theme-danger: #cc4b4b;
+  --llm-theme-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  --llm-theme-shadow-flyout: 0 18px 36px rgba(0, 0, 0, 0.42);
+}
+
+:root[data-mpr-theme="dark"][data-llm-proxy-palette="forest"] {
+  --llm-theme-color-scheme: dark;
+  --llm-theme-canvas: #052e2b;
+  --llm-theme-surface: #0d352b;
+  --llm-theme-surface-strong: #082820;
+  --llm-theme-border: #1d5a49;
+  --llm-theme-border-strong: #2f7d60;
+  --llm-theme-text: #dcfce7;
+  --llm-theme-text-support: #bbf7d0;
+  --llm-theme-text-muted: #86efac;
+  --llm-theme-accent: #4ade80;
+  --llm-theme-accent-contrast: #052e16;
+  --llm-theme-accent-surface: rgba(74, 222, 128, 0.14);
+  --llm-theme-accent-surface-strong: rgba(74, 222, 128, 0.24);
+  --llm-theme-good: #a3e635;
+  --llm-theme-warning: #fbbf24;
+  --llm-theme-info: #5eead4;
+  --llm-theme-danger: #fb7185;
+  --llm-theme-shadow: 0 10px 24px rgba(5, 46, 22, 0.4);
+  --llm-theme-shadow-flyout: 0 18px 36px rgba(5, 46, 22, 0.5);
+}
+
 .public-site-brand {
   display: inline-flex;
   margin-right: auto;
