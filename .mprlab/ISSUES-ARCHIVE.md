@@ -1649,7 +1649,7 @@ issue titles discoverable without making the active tracker noisy.
   Requirements:
   - Add `make live-test`, separate from the disposable local provider harness
     and excluded from `make ci`.
-  - Require only the canonical `LLM_PROXY_SECRET` tenant client secret. The
+  - Require only the canonical `LLM_PROXY_DEFAULT_TENANT_KEY` tenant client secret. The
     command must call `https://llm-proxy-api.mprlab.com`, must not load a dotenv
     file, and must never read, accept, or send local provider API keys.
   - Use that secret to select the Default tenant and test exactly OpenAI,
@@ -5872,7 +5872,7 @@ issue titles discoverable without making the active tracker noisy.
     fields as unknown configuration. Do not add a migration or compatibility
     path.
   - Remove `SERVICE_SECRET` from environment documentation, examples, test
-    inputs, and generated public content. Use `LLM_PROXY_SECRET` only for
+    inputs, and generated public content. Use `LLM_PROXY_DEFAULT_TENANT_KEY` only for
     registered client keys.
   - Replace the static live-provider preflight with a non-paid managed
     preflight. Create a disposable user, tenant, client key, and provider
@@ -5908,7 +5908,7 @@ issue titles discoverable without making the active tracker noisy.
   - The non-paid preflight now saves a generated OpenAI key through the
     management API. It routes one prompt through a loopback Responses server.
   - Updated current configuration, tests, documentation, and generated public
-    content to use `LLM_PROXY_SECRET` as the only client-key input.
+    content to use `LLM_PROXY_DEFAULT_TENANT_KEY` as the only client-key input.
   - The follow-up `make ci` passed all 11 gates with 100.0% Go statement
     coverage and the managed provider preflight.
 

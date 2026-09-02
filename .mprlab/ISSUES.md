@@ -25,6 +25,58 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B167] (P0) Use the canonical Default tenant key variable.
+  Goal:
+  Each client and live test uses `LLM_PROXY_DEFAULT_TENANT_KEY` for the Default tenant key.
+  Evidence:
+  - The private source defines `LLM_PROXY_DEFAULT_TENANT_KEY` with the current key.
+  - The inherited generic secret value selects a different tenant.
+  - Current source, tests, and documents still require the obsolete variable.
+  Requirements:
+  - Replace each obsolete reference with `LLM_PROXY_DEFAULT_TENANT_KEY`.
+  - Keep one canonical variable name without an alias or fallback.
+  - Preserve secret redaction and tenant identity verification.
+  - Update the CLI, live tests, public resources, documents, and issue records.
+  - Do not change `mprlab-gateway`.
+  Validation:
+  - Prove that the live test requires the canonical variable.
+  - Prove that the CLI reads the canonical variable.
+  - Confirm that no tracked obsolete reference remains.
+  - Run `make ci` after the last application change.
+  - Run the STE check on each changed technical document.
+  - Run `git diff --check`.
+  Resolution:
+  - The CLI, live-test commands, tests, generated public resources, and
+    documents use only `LLM_PROXY_DEFAULT_TENANT_KEY`.
+  - The owned generator rebuilt all 46 public resource pages.
+  - The focused Go contract suite passed with 100 percent statement coverage.
+  - `make ci` passed all 11 gates with 100 percent Go statement coverage.
+  - The production identity preflight selected the expected Default tenant.
+    All nine production provider cases passed.
+
+- [x] [B166] (P1) Identify the current release in the client documentation.
+  Goal:
+  The main Python install command and changelog identify the current release.
+  Evidence:
+  - GitHub, Go Proxy, GHCR, Pages, and production use `v1.3.0`.
+  - The Python install command still selects `v1.2.2`.
+  - The changelog still puts the `v1.3.0` changes under `Unreleased`.
+  Requirements:
+  - Select the exact `v1.3.0` tag in the main Python install command.
+  - Put the released changes in a dated `v1.3.0` changelog section.
+  - Keep a new `Unreleased` section for later changes.
+  - Do not change an immutable release identity.
+  Resolution:
+  - The main Python install command selects the exact `v1.3.0` tag.
+  - The changelog has a dated `v1.3.0` section and a new `Unreleased` section.
+  - The installed package from the exact tag reports version `1.3.0`.
+  - Go Proxy resolves the exact tag to the released application commit.
+  Validation:
+  - Install the Python package from the exact `v1.3.0` tag.
+  - Confirm that the installed package reports version `1.3.0`.
+  - Run the STE check on each changed technical document.
+  - Run `git diff --check`.
+
 - [x] [B165] (P0) Prepare the next official client version.
   Goal:
   Current source and each official client use the next valid version.
@@ -51,6 +103,10 @@ retain satisfied historical dependencies.
   - The Python installation example uses the released `v1.2.2` tag.
   - `make python-package-install-test` passed for version `1.3.0`.
   - `make ci` passed all 11 gates with 100 percent Go coverage.
+  - GitHub published `v1.3.0` for application commit `7a61fc55f36786086cb887a6f9b91f4450119e8d`.
+  - Go Proxy resolves `v1.3.0` to the same application commit.
+  - The installed Python package from the exact `v1.3.0` tag reports version `1.3.0`.
+  - GHCR, Pages, and the production state use the exact `v1.3.0` publication.
   Validation:
   - Run `make python-package-install-test`.
   - Run `make ci` after the last application change.
@@ -223,12 +279,12 @@ retain satisfied historical dependencies.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
-- [ ] [B160] (P1) Reject a production live test for an unexpected tenant.
+- [x] [B160] (P1) Reject a production live test for an unexpected tenant.
   Goal:
   `make live-test` must prove the expected production tenant identity before it
   sends paid provider requests.
   Evidence:
-  - The command states that `LLM_PROXY_SECRET` is the Default tenant client
+  - The command states that `LLM_PROXY_DEFAULT_TENANT_KEY` is the Default tenant client
     secret.
   - `run_client_authentication_preflight` accepts HTTP `400` from an invalid
     request body as sufficient client authentication proof.
@@ -290,7 +346,22 @@ retain satisfied historical dependencies.
   - Correlate each production request with its tenant identifier and I045 phase
     summary.
   - Run `make ci` after the last repository change.
-- [!] [B128] (P1) Restore Gemini long-completion production acceptance after first-read visibility failure.
+  Production evidence:
+  - Release `v1.3.0` deployed application commit
+    `7a61fc55f36786086cb887a6f9b91f4450119e8d`.
+  - The canonical Default tenant key returned HTTP `200` for tenant
+    `managed-60634d2470f31557462f52e319f07d07`. The validated request ID was
+    `G44SXGGQTV36CVIAKMSGB24DGZ`.
+  - The unchanged production matrix ran only after identity verification. All
+    nine cases passed.
+  Resolution:
+  - The authenticated identity resource and live-test preflight require an
+    exact expected tenant identifier before provider traffic.
+  - Black-box contracts reject another valid tenant and send no provider
+    request after that rejection.
+  - Production accepted the canonical Default tenant key and the exact Default
+    tenant identifier before all nine provider requests.
+- [x] [B128] (P1) Restore Gemini long-completion production acceptance after first-read visibility failure.
   Goal:
   Make the Default tenant's Gemini 3.5 Flash background case complete the
   production live-test contract. Release the corrected pollable-resource
@@ -355,7 +426,7 @@ retain satisfied historical dependencies.
   - Prove a lost lifecycle response does not retry its provider operation.
   - Prove an oversized lifecycle response rejects the candidate.
   - After the identified boundary is resolved, run the exact Gemini echo and
-    background cases with only `LLM_PROXY_SECRET`. Prove HTTP `200`, the final
+    background cases with only `LLM_PROXY_DEFAULT_TENANT_KEY`. Prove HTTP `200`, the final
     markers, validated request ids, and no response-body disclosure.
   - For any source change, run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
@@ -391,10 +462,21 @@ retain satisfied historical dependencies.
     status or safe terminal code.
   - B162 development now preserves validated terminal codes before resource
     deletion and records each Gemini lifecycle operation in I045.
-  - The corrected source has not been released or deployed.
-  Blocked: Release and deploy the B162 correction. Confirm that the stored
-  Authorization key is not the exposed credential. Rerun the exact Gemini
-  background case.
+  - Release `v1.3.0` deployed the B162 correction from application commit
+    `7a61fc55f36786086cb887a6f9b91f4450119e8d`.
+  - The deployed image uses digest
+    `sha256:291b5b3226ce442e4c0a46a9132602e4029e1ae1d849b5b5aad3edf611e58732`.
+  - The current private canonical key passed the Default tenant identity
+    preflight and the exact Gemini echo case.
+  - The exact Gemini background case returned HTTP `200` with validated request
+    ID `SPMKDEPJ7PVRNOVVMRZQYPJWQT` and 16,624 response bytes.
+  - All nine cases in the production matrix passed without response-body or
+    credential disclosure.
+  Production resolution:
+  - The deployed lifecycle correction completed the exact Gemini background
+    case through the canonical Default tenant key.
+  - The passing production matrix satisfies this issue's production acceptance
+    condition.
 - [ ] [B141] (P1) Center the X icon inside the top-right square.
   Goal:
   Align the X icon so it is visually centered within the square control in the top-right corner, matching the intended UI layout shown in the attached screenshot.
@@ -1410,10 +1492,10 @@ retain satisfied historical dependencies.
   - Use repository-native `make` targets or documented release helpers for checks.
   - Confirm release and deployment ownership boundaries remain separate.
   - Confirm public or published artifacts match the intended source revision when that surface is inspected.
-  Last run: 2026-07-23 triage follow-up. Release `v0.2.39` and GHCR `latest`
-  are current, while the public Pages marker remains at `v0.2.38`; B063 records
-  the exact activation boundary. The live API management boundaries responded
-  as expected, but no production deployment was performed.
+  Last run: 2026-09-01 after release `v1.3.0`. The release and publication
+  receipts select application commit `7a61fc55f36786086cb887a6f9b91f4450119e8d`.
+  GitHub, Go Proxy, GHCR, Pages, and the installed Python client use `v1.3.0`.
+  The Pages build and public marker select the exact published commit.
 - [ ] [M006R] (P1) Code contract and static hygiene.
   Goal:
   Keep source contracts explicit, current, and statically guarded against policy drift.
@@ -1448,11 +1530,14 @@ retain satisfied historical dependencies.
   - Verify inspected production or public surfaces directly where access is available.
   - Confirm any deploy-required finding is filed with the exact publish/deploy boundary and owner.
   - Confirm no production state was changed by the audit unless explicitly requested.
-  Last run: 2026-08-19 B128 production audit. The running service uses the
-  `v3.1.1` container manifest and source commit. The public Pages marker reports
-  the same version and commit. The live API returned the expected proxy (`403`)
-  and configuration (`200`) boundaries. B126 records the reconciled activation
-  receipt. B128 records the remaining Gemini provider-permission blocker.
+  Last run: 2026-09-01 after deployment `v1.3.0`. State revision 180 selects
+  LLM Proxy generation 14 and application commit
+  `7a61fc55f36786086cb887a6f9b91f4450119e8d`. All eight resources, Caddy, and
+  TAuth have current verified observations. The runtime uses the published
+  image digest. The API returned the required `403` and `200` responses. The
+  Pages marker reports `v1.3.0` and the exact application commit. The canonical
+  Default tenant key passed identity verification and all nine production
+  provider cases. B128 and B160 are resolved.
 - [ ] [M001R] (P2) Backlog hygiene and archive.
   Goal:
   Keep the issue tracker reliable, readable, and focused on active work while preserving resolved history in the appropriate archive.
