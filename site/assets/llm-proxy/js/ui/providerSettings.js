@@ -5,12 +5,12 @@ import {
   COPY,
   NOTICE_KINDS,
   PROVIDER_KEY_VERIFICATION_ERRORS,
-} from "../constants.js?v=20260811c131";
-import { saveProviderConnection as requestSaveProviderConnection } from "../core/backendClient.js?v=20260811c131";
+} from "../constants.js?v=20260902c240";
+import { saveProviderConnection as requestSaveProviderConnection } from "../core/backendClient.js?v=20260902c240";
 import {
   isAbortError,
   profileFailureMessage,
-} from "../core/managementProfile.js?v=20260811c131";
+} from "../core/managementProfile.js?v=20260902c240";
 
 const EMPTY_STRING = "";
 
@@ -19,7 +19,7 @@ const EMPTY_STRING = "";
  *   selectedProvider: import("../types.d.js").ProviderProfile | null,
  *   selectedProviderID: string,
  *   abortProviderKeyVerification: () => void,
- *   applyProfile: (profile: import("../types.d.js").ManagementTenantProfile, preserveProviderEditor?: boolean, preserveRoutingDefaults?: boolean) => void,
+ *   applyProviderCardProfile: (profile: import("../types.d.js").ManagementTenantProfile, preserveProviderEditor?: boolean) => void,
  *   enqueueProfileMutation: (appVersion: number, mutation: () => Promise<boolean>) => Promise<boolean | null>,
  *   setSettingsNotice: (kind: string, message: string) => void
  * }} ProviderSettingsHost */
@@ -72,7 +72,7 @@ export function createProviderSettingsResponsibility() {
         const revealVersion = editorSession.revealVersion;
         const editVersion = editorSession.editVersion;
         const appVersion = this.appVersion;
-        const tenantID = this.settingsTenantID;
+        const tenantID = this.providerCardTenantID;
         const lifetimeController = this.tenantLifetimeController;
         if (!lifetimeController) {
           return false;
@@ -119,11 +119,7 @@ export function createProviderSettingsResponsibility() {
               return false;
             }
             const preserveProviderEditor = this.providerEditorSession.editVersion !== editVersion;
-            this.applyProfile(
-              updatedProfile,
-              preserveProviderEditor,
-              this.routingDefaultsDirty || this.routingDefaultsAutosavePending,
-            );
+            this.applyProviderCardProfile(updatedProfile, preserveProviderEditor);
             if (!preserveProviderEditor) {
               this.setSettingsNotice(
                 NOTICE_KINDS.SUCCESS,
@@ -173,7 +169,7 @@ export function createProviderSettingsResponsibility() {
     canApplyProviderAutosave(providerID, revealVersion, appVersion) {
       return (
         this.providerCardTenantID !== EMPTY_STRING &&
-        this.settingsTenantID === this.providerCardTenantID &&
+        this.providerCardProfile?.tenant.id === this.providerCardTenantID &&
         this.authState === AUTH_STATES.AUTHENTICATED &&
         this.appVersion === appVersion &&
         this.selectedProviderID === providerID &&

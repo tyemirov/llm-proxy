@@ -170,6 +170,12 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 		proxy.ModelNameMoonshotKimiK27Code:          {},
 		proxy.ModelNameMoonshotKimiK27CodeHighSpeed: {},
 	}
+	expectedQwenCapabilities := map[string][]string{
+		proxy.ModelNameDashScopeQwenPlus:    {proxy.PublicModelCapabilityText},
+		proxy.ModelNameDashScopeQwen37Max:   {proxy.PublicModelCapabilityText},
+		proxy.ModelNameDashScopeQwen37Plus:  {proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityText},
+		proxy.ModelNameDashScopeQwen36Flash: {proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityText},
+	}
 	expectedMetaModels := map[string]struct{}{
 		proxy.ModelNameMuseSpark11: {},
 		proxy.ModelNameMuseSpark12: {},
@@ -198,6 +204,13 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 			}
 			delete(expectedMetaModels, model.Identifier)
 		default:
+			if expectedCapabilities, expected := expectedQwenCapabilities[model.Identifier]; expected {
+				if !slices.Equal(model.Capabilities, expectedCapabilities) {
+					testingInstance.Fatalf("Qwen model=%s capabilities=%v", model.Identifier, model.Capabilities)
+				}
+				delete(expectedQwenCapabilities, model.Identifier)
+				continue
+			}
 			if expectedCapabilities, expected := expectedGeminiModels[model.Identifier]; expected {
 				if !slices.Equal(model.Capabilities, expectedCapabilities) {
 					testingInstance.Fatalf("Gemini model=%s capabilities=%v", model.Identifier, model.Capabilities)
@@ -239,17 +252,17 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 			}
 		}
 	}
-	if len(expectedGeminiModels) != 0 || !openAIDictationCapabilityFound || len(expectedKimiModels) != 0 || len(expectedMetaModels) != 0 {
-		testingInstance.Fatalf("public capability catalog projections missing Gemini=%v openai_dictation=%t Kimi=%v Meta=%v", expectedGeminiModels, openAIDictationCapabilityFound, expectedKimiModels, expectedMetaModels)
+	if len(expectedGeminiModels) != 0 || !openAIDictationCapabilityFound || len(expectedKimiModels) != 0 || len(expectedQwenCapabilities) != 0 || len(expectedMetaModels) != 0 {
+		testingInstance.Fatalf("public capability catalog projections missing Gemini=%v openai_dictation=%t Kimi=%v Qwen=%v Meta=%v", expectedGeminiModels, openAIDictationCapabilityFound, expectedKimiModels, expectedQwenCapabilities, expectedMetaModels)
 	}
 
-	expectedQwenModels := map[string]struct{}{
+	expectedQwenOfferings := map[string]struct{}{
 		proxy.ModelNameDashScopeQwen37Max:   {},
 		proxy.ModelNameDashScopeQwen37Plus:  {},
 		proxy.ModelNameDashScopeQwen36Flash: {},
 	}
 	for _, offering := range catalog.Offerings {
-		if _, expected := expectedQwenModels[offering.Model]; !expected || offering.Provider != proxy.ProviderNameDashScope {
+		if _, expected := expectedQwenOfferings[offering.Model]; !expected || offering.Provider != proxy.ProviderNameDashScope {
 			continue
 		}
 		if offering.WireContract != "openai_chat_completions" || offering.ExecutionLifecycle != "synchronous_completion" || offering.OutputTokenLimit != 65536 {
@@ -261,10 +274,17 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 		if len(offering.Limits) != 1 || offering.Limits[0].ID != "context_tokens" || offering.Limits[0].Value == nil || *offering.Limits[0].Value != 1000000 || offering.Limits[0].Unit != "tokens" {
 			testingInstance.Fatalf("Qwen offering limits=%+v", offering.Limits)
 		}
-		delete(expectedQwenModels, offering.Model)
+		expectedCapabilities := []string{proxy.PublicModelCapabilityText}
+		if offering.Model == proxy.ModelNameDashScopeQwen37Plus || offering.Model == proxy.ModelNameDashScopeQwen36Flash {
+			expectedCapabilities = []string{proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityText}
+		}
+		if !slices.Equal(offering.Capabilities, expectedCapabilities) {
+			testingInstance.Fatalf("Qwen offering capabilities=%+v", offering)
+		}
+		delete(expectedQwenOfferings, offering.Model)
 	}
-	if len(expectedQwenModels) != 0 {
-		testingInstance.Fatalf("public capability catalog omitted Qwen models=%v", expectedQwenModels)
+	if len(expectedQwenOfferings) != 0 {
+		testingInstance.Fatalf("public capability catalog omitted Qwen offerings=%v", expectedQwenOfferings)
 	}
 
 	expectedQwenRates := map[string][]float64{
@@ -343,10 +363,15 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 	}
 	expectedOfferingCounts := map[string]int{
 		proxy.ProviderNameOpenAI:    11,
+		proxy.ProviderNameDashScope: 2,
 		proxy.ProviderNameGemini:    2,
 		proxy.ProviderNameAnthropic: 10,
 		proxy.ProviderNameMoonshot:  4,
 		proxy.ProviderNameXAI:       1,
+	}
+	expectedDashScopeImageCounts := map[string]int64{
+		proxy.ModelNameDashScopeQwen37Plus:  2048,
+		proxy.ModelNameDashScopeQwen36Flash: 256,
 	}
 	observedOfferingCounts := map[string]int{}
 	for _, offering := range catalog.Offerings {
@@ -366,6 +391,8 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 			expectedVerificationDate := "2026-08-11"
 			if offering.Provider == proxy.ProviderNameMoonshot {
 				expectedVerificationDate = "2026-08-13"
+			} else if offering.Provider == proxy.ProviderNameDashScope {
+				expectedVerificationDate = "2026-09-02"
 			}
 			if limit.LastVerified != expectedVerificationDate {
 				testingInstance.Fatalf("media limit=%+v", limit)
@@ -393,9 +420,18 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 			if requestLimit.Status != proxy.CatalogMediaLimitStatusBounded || requestLimit.Value == nil || *requestLimit.Value != 100000000 || imageCount.Status != proxy.CatalogMediaLimitStatusUnbounded || imageCount.Value != nil || imageBytes.Status != proxy.CatalogMediaLimitStatusUnknown || imageBytes.Value != nil {
 				testingInstance.Fatalf("Moonshot media limits=%+v", offering.MediaLimits)
 			}
+		} else if offering.Provider == proxy.ProviderNameDashScope {
+			requestLimit := observedLimitIDs[proxy.CatalogMediaLimitIDInlineRequestBytes]
+			imageCount := observedLimitIDs[proxy.CatalogMediaLimitIDImageCount]
+			imageBytes := observedLimitIDs[proxy.CatalogMediaLimitIDImageInlineBytes]
+			expectedImageCount, expected := expectedDashScopeImageCounts[offering.Model]
+			if !expected || requestLimit.Status != proxy.CatalogMediaLimitStatusUnknown || requestLimit.Value != nil || imageCount.Status != proxy.CatalogMediaLimitStatusBounded || imageCount.Value == nil || *imageCount.Value != expectedImageCount || imageBytes.Status != proxy.CatalogMediaLimitStatusUnknown || imageBytes.Value != nil {
+				testingInstance.Fatalf("DashScope media limits=%+v", offering.MediaLimits)
+			}
+			delete(expectedDashScopeImageCounts, offering.Model)
 		}
 	}
-	if !reflect.DeepEqual(observedOfferingCounts, expectedOfferingCounts) {
+	if !reflect.DeepEqual(observedOfferingCounts, expectedOfferingCounts) || len(expectedDashScopeImageCounts) != 0 {
 		testingInstance.Fatalf("media offering counts=%v want=%v", observedOfferingCounts, expectedOfferingCounts)
 	}
 }

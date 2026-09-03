@@ -230,7 +230,7 @@ if (!this.hasSecret) {
       },
       {
         question: "Where does a user enter a provider key?",
-        answer: "The user opens Set key or Key settings on the provider's Usage Overview card and selects an exact tenant for account-wide usage.",
+        answer: "The user opens Set API key or API key settings on the provider's Usage Overview card and selects an exact tenant for account-wide usage.",
       },
       {
         question: "Does onboarding change provider or model defaults?",

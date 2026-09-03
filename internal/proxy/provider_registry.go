@@ -26,9 +26,11 @@ type managedModelMigration struct {
 type providerSummary struct {
 	identifier            string
 	label                 string
+	apiServiceLabel       string
 	keyAcquisitionURL     string
 	aliases               []string
 	capabilities          []string
+	modelFamilies         []ModelFamily
 	textDefaultModel      string
 	textModels            []textModelSummary
 	supportsDictation     bool
@@ -42,6 +44,14 @@ type textModelSummary struct {
 }
 
 func newProviderRegistry(configuration Configuration) *providerRegistry {
+	families := make(map[string]ModelFamily, len(configuration.ProviderCatalog.schema.Families))
+	for _, family := range configuration.ProviderCatalog.schema.Families {
+		families[family.ID] = family
+	}
+	models := make(map[string]ExactModel, len(configuration.ProviderCatalog.schema.Models))
+	for _, model := range configuration.ProviderCatalog.schema.Models {
+		models[model.ID] = model
+	}
 	definitions := make(map[providerID]providerDefinition, len(configuration.ProviderCatalog.schema.Providers))
 	order := make([]providerID, 0, len(configuration.ProviderCatalog.schema.Providers))
 	for _, provider := range configuration.ProviderCatalog.schema.Providers {
@@ -50,6 +60,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 		definition := providerDefinition{
 			identifier:          identifier,
 			label:               provider.Label,
+			apiServiceLabel:     provider.APIServiceLabel,
 			keyAcquisitionURL:   provider.KeyAcquisitionURL,
 			aliases:             append([]string(nil), provider.Aliases...),
 			fields:              make(map[string]ProviderCatalogField, len(provider.Fields)),
@@ -59,6 +70,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			textModels:          map[string]textModelDefinition{},
 			transcriptionModels: map[string]dictationModelDefinition{},
 		}
+		familyIDs := map[string]struct{}{}
 		for _, field := range provider.Fields {
 			definition.fields[field.ID] = field
 			definition.fieldOrder = append(definition.fieldOrder, field.ID)
@@ -82,9 +94,20 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			}
 		}
 		for _, offering := range provider.Offerings {
+			model := models[offering.Model]
+			if _, exists := familyIDs[model.Family]; !exists {
+				definition.modelFamilies = append(definition.modelFamilies, families[model.Family])
+				familyIDs[model.Family] = struct{}{}
+			}
 			for _, operation := range offering.Operations {
 				if !slices.Contains(definition.capabilities, operation) {
 					definition.capabilities = append(definition.capabilities, operation)
+				}
+			}
+			for _, mediaInput := range offering.MediaInputs {
+				capability := mediaInputCapability(mediaInput)
+				if !slices.Contains(definition.capabilities, capability) {
+					definition.capabilities = append(definition.capabilities, capability)
 				}
 			}
 			transport := definition.transports[offering.Transport]
@@ -256,9 +279,11 @@ func (registry *providerRegistry) providerSummaries() []providerSummary {
 		summaries = append(summaries, providerSummary{
 			identifier:            definition.identifier.string(),
 			label:                 definition.label,
+			apiServiceLabel:       definition.apiServiceLabel,
 			keyAcquisitionURL:     definition.keyAcquisitionURL,
 			aliases:               aliases,
 			capabilities:          append([]string(nil), definition.capabilities...),
+			modelFamilies:         append([]ModelFamily(nil), definition.modelFamilies...),
 			textDefaultModel:      definition.defaultTextModel.string(),
 			textModels:            sortedTextModelSummaries(definition.textModels),
 			supportsDictation:     definition.supportsDictation,

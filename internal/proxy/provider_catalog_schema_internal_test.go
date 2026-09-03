@@ -41,6 +41,7 @@ func TestProviderCatalogSchemaRejectsEveryStructuralBoundary(t *testing.T) {
 			schema.Providers[0].Aliases = append(schema.Providers[0].Aliases, schema.Providers[1].ID)
 		}, expected: "alias_collision=deepseek"},
 		{name: "provider label", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].Label = " OpenAI" }, expected: ".label"},
+		{name: "provider API service label", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].APIServiceLabel = " OpenAI API" }, expected: ".api_service_label"},
 		{name: "provider key acquisition URL missing", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].KeyAcquisitionURL = "" }, expected: ".key_acquisition_url"},
 		{name: "provider key acquisition URL insecure", mutate: func(schema *ProviderCatalogSchema) {
 			schema.Providers[0].KeyAcquisitionURL = "http://provider.example/keys"

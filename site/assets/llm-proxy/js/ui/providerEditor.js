@@ -1,7 +1,7 @@
 // @ts-check
 
-import { AUTH_STATES } from "../constants.js?v=20260811c131";
-import { profileProvider } from "../core/managementProfile.js?v=20260811c131";
+import { AUTH_STATES } from "../constants.js?v=20260902c240";
+import { profileProvider } from "../core/managementProfile.js?v=20260902c240";
 
 const EMPTY_STRING = "";
 
@@ -26,7 +26,8 @@ export function createProviderEditorResponsibility() {
   return providerEditorResponsibility({
     /** @returns {import("../types.d.js").ProviderProfile | null} */
     get selectedProvider() {
-      return this.providers.find((candidateProvider) => candidateProvider.id === this.selectedProviderID) || null;
+      const providers = this.providerCardProfile ? this.providerCardProfile.providers : this.providers;
+      return providers.find((candidateProvider) => candidateProvider.id === this.selectedProviderID) || null;
     },
 
     get selectedProviderID() {
@@ -87,7 +88,8 @@ export function createProviderEditorResponsibility() {
       this.abortProviderKeyVerification();
       this.providerKeyVerificationFailure = EMPTY_STRING;
       const providerChanged = providerID !== this.selectedProviderID;
-      const provider = providerID === EMPTY_STRING ? null : profileProvider(this.providers, providerID);
+      const providers = this.providerCardProfile ? this.providerCardProfile.providers : this.providers;
+      const provider = providerID === EMPTY_STRING ? null : profileProvider(providers, providerID);
       this.providerEditorSession = createProviderEditorSession(
         providerID,
         this.providerEditorSession.revealVersion + 1,

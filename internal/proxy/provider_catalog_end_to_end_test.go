@@ -87,6 +87,62 @@ func TestProviderCatalogDeclaresGeminiInteractionsWithoutReplayContinuation(test
 	testingInstance.Fatal("Gemini Interactions transport is missing")
 }
 
+func TestProviderCatalogProjectsProviderCardTaxonomy(testingInstance *testing.T) {
+	configuration := proxy.Configuration{ProviderCatalog: testfixtures.ProviderCatalog(testingInstance)}
+	router := newManagementRouterWithDatabasePath(testingInstance, configuration, filepath.Join(testingInstance.TempDir(), "managed-tenants.db"))
+	sessionCookie := managementSessionCookie(testingInstance, "tauth-provider-card-owner")
+	tenantPath := managementDefaultTenantTestPath(testingInstance, router, sessionCookie, "")
+	request := httptest.NewRequest(http.MethodGet, tenantPath, nil)
+	request.AddCookie(sessionCookie)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		testingInstance.Fatalf("provider card profile status=%d body=%s", response.Code, response.Body.String())
+	}
+	var profile struct {
+		Providers []struct {
+			ID              string `json:"id"`
+			APIServiceLabel string `json:"api_service_label"`
+			ModelFamilies   []struct {
+				Label string `json:"label"`
+			} `json:"model_families"`
+			Capabilities []string `json:"capabilities"`
+		} `json:"providers"`
+	}
+	if decodeError := json.Unmarshal(response.Body.Bytes(), &profile); decodeError != nil {
+		testingInstance.Fatalf("decode provider card profile: %v", decodeError)
+	}
+	expected := map[string]struct {
+		apiServiceLabel string
+		families        []string
+		capabilities    []string
+	}{
+		proxy.ProviderNameOpenAI:      {apiServiceLabel: "OpenAI API", families: []string{"GPT-4", "GPT-5", "GPT Transcribe"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.ModelOperationDictation}},
+		proxy.ProviderNameDashScope:   {apiServiceLabel: "DashScope API", families: []string{"Qwen"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput}},
+		proxy.ProviderNameGemini:      {apiServiceLabel: "Gemini API", families: []string{"Gemini"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityAudioInput}},
+		proxy.ProviderNameMeta:        {apiServiceLabel: "Meta API", families: []string{"Muse Spark"}, capabilities: []string{proxy.ModelOperationText}},
+		proxy.ProviderNameSiliconFlow: {apiServiceLabel: "SiliconFlow API", families: []string{"DeepSeek R1", "SenseVoice"}, capabilities: []string{proxy.ModelOperationText, proxy.ModelOperationDictation}},
+	}
+	observed := map[string]bool{}
+	for _, provider := range profile.Providers {
+		expectedProvider, required := expected[provider.ID]
+		if !required {
+			continue
+		}
+		familyLabels := make([]string, 0, len(provider.ModelFamilies))
+		for _, family := range provider.ModelFamilies {
+			familyLabels = append(familyLabels, family.Label)
+		}
+		if provider.APIServiceLabel != expectedProvider.apiServiceLabel || !slices.Equal(familyLabels, expectedProvider.families) || !slices.Equal(provider.Capabilities, expectedProvider.capabilities) {
+			testingInstance.Fatalf("provider card taxonomy provider=%s API=%q families=%v capabilities=%v", provider.ID, provider.APIServiceLabel, familyLabels, provider.Capabilities)
+		}
+		observed[provider.ID] = true
+	}
+	if len(observed) != len(expected) {
+		testingInstance.Fatalf("provider card identities=%v want=%v", observed, expected)
+	}
+}
+
 func TestCatalogDefinedProviderFlowsThroughEveryGenericConsumer(testingInstance *testing.T) {
 	var requestMutex sync.Mutex
 	routedModels := []string{}
@@ -498,7 +554,7 @@ func catalogWithTestProvider(testingInstance *testing.T) *proxy.ProviderCatalog 
 		Operations: []string{proxy.ModelOperationText}, MediaInputs: []string{},
 	})
 	schema.Providers = append(schema.Providers, proxy.ProviderCatalogProvider{
-		ID: testCatalogProviderID, Label: "Catalog Test", KeyAcquisitionURL: "https://provider.example/keys", Aliases: []string{testCatalogProviderAlias},
+		ID: testCatalogProviderID, Label: "Catalog Test", APIServiceLabel: "Catalog Test API", KeyAcquisitionURL: "https://provider.example/keys", Aliases: []string{testCatalogProviderAlias},
 		Fields: []proxy.ProviderCatalogField{
 			{
 				ID: testCatalogCredentialField, Label: "Access token",
@@ -565,11 +621,16 @@ func assertTestCatalogManagementSchema(testingInstance *testing.T, responseBody 
 	var profile struct {
 		Providers []struct {
 			ID                string   `json:"id"`
+			APIServiceLabel   string   `json:"api_service_label"`
 			KeyAcquisitionURL string   `json:"key_acquisition_url"`
 			Capabilities      []string `json:"capabilities"`
-			Configured        bool     `json:"configured"`
-			TextModel         string   `json:"text_model"`
-			Fields            []struct {
+			ModelFamilies     []struct {
+				ID    string `json:"id"`
+				Label string `json:"label"`
+			} `json:"model_families"`
+			Configured bool   `json:"configured"`
+			TextModel  string `json:"text_model"`
+			Fields     []struct {
 				ID          string  `json:"id"`
 				Kind        string  `json:"kind"`
 				Type        string  `json:"type"`
@@ -595,8 +656,11 @@ func assertTestCatalogManagementSchema(testingInstance *testing.T, responseBody 
 		if provider.ID != testCatalogProviderID {
 			continue
 		}
-		if provider.KeyAcquisitionURL != "https://provider.example/keys" || !slices.Equal(provider.Capabilities, []string{proxy.ModelOperationText}) || provider.Configured != configured || provider.TextModel != testCatalogModelID || len(provider.Fields) != 2 {
+		if provider.APIServiceLabel != "Catalog Test API" || provider.KeyAcquisitionURL != "https://provider.example/keys" || !slices.Equal(provider.Capabilities, []string{proxy.ModelOperationText}) || provider.Configured != configured || provider.TextModel != testCatalogModelID || len(provider.Fields) != 2 {
 			testingInstance.Fatalf("catalog management provider=%+v", provider)
+		}
+		if len(provider.ModelFamilies) != 1 || provider.ModelFamilies[0].ID != testCatalogProviderFamilyID || provider.ModelFamilies[0].Label != "Catalog Test Family" {
+			testingInstance.Fatalf("catalog management families=%+v", provider.ModelFamilies)
 		}
 		credentialField := provider.Fields[0]
 		settingField := provider.Fields[1]

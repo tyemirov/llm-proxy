@@ -8,10 +8,10 @@ import {
   NOTICE_KINDS,
   NOTICE_SURFACES,
   USAGE_INTERVALS,
-} from "../constants.js?v=20260811c131";
-import { emptyDefaults } from "../core/managementProfile.js?v=20260811c131";
-import { createProviderEditorSession } from "./providerEditor.js?v=20260811c131";
-import { emptyUsageSummary } from "./usagePresentation.js?v=20260811c131";
+} from "../constants.js?v=20260902c240";
+import { emptyDefaults } from "../core/managementProfile.js?v=20260902c240";
+import { createProviderEditorSession } from "./providerEditor.js?v=20260902c240";
+import { emptyUsageSummary } from "./usagePresentation.js?v=20260902c240";
 
 const EMPTY_STRING = "";
 
@@ -57,6 +57,9 @@ const EMPTY_STRING = "";
  *   providerRemovalConfirmationProviderID: string,
  *   providerCardProviderID: string,
  *   providerCardTenantID: string,
+ *   providerCardPendingTenantID: string,
+ *   providerCardProfile: import("../types.d.js").ManagementTenantProfile | null,
+ *   providerCardRequestController: AbortController | null,
  *   providerCardVersion: number,
  *   defaults: import("../types.d.js").TenantDefaults,
  *   usage: import("../types.d.js").ManagementUsageSummary,
@@ -148,6 +151,9 @@ export function createManagementApplicationState() {
     providerRemovalConfirmationProviderID: EMPTY_STRING,
     providerCardProviderID: EMPTY_STRING,
     providerCardTenantID: EMPTY_STRING,
+    providerCardPendingTenantID: EMPTY_STRING,
+    providerCardProfile: /** @type {import("../types.d.js").ManagementTenantProfile | null} */ (null),
+    providerCardRequestController: /** @type {AbortController | null} */ (null),
     providerCardVersion: 0,
     defaults: emptyDefaults(),
     usage: emptyUsageSummary(DEFAULT_USAGE_INTERVAL),

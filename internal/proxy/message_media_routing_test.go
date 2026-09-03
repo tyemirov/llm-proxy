@@ -169,6 +169,18 @@ func TestV2RoutesExactOrderedImagesThroughProviderAdapters(testingInstance *test
 				assertChatCompletionImageInput(subTest, payload, firstImage, secondImage)
 			},
 		},
+		{
+			name: "DashScope Qwen 3.7 Plus", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen37Plus, path: "/chat/completions",
+			assertBody: func(subTest *testing.T, payload map[string]any) {
+				assertChatCompletionImageInput(subTest, payload, firstImage, secondImage)
+			},
+		},
+		{
+			name: "DashScope Qwen 3.6 Flash", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen36Flash, path: "/chat/completions",
+			assertBody: func(subTest *testing.T, payload map[string]any) {
+				assertChatCompletionImageInput(subTest, payload, firstImage, secondImage)
+			},
+		},
 	} {
 		testingInstance.Run(testCase.name, func(subTest *testing.T) {
 			var capturedPayload map[string]any
@@ -184,7 +196,7 @@ func TestV2RoutesExactOrderedImagesThroughProviderAdapters(testingInstance *test
 					_, _ = responseWriter.Write([]byte(`{"content":[{"type":"text","text":"media accepted"}],"stop_reason":"end_turn"}`))
 					return
 				}
-				if testCase.provider == proxy.ProviderNameMoonshot {
+				if testCase.provider == proxy.ProviderNameMoonshot || testCase.provider == proxy.ProviderNameDashScope {
 					_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"media accepted"},"finish_reason":"stop"}]}`))
 					return
 				}
@@ -193,7 +205,7 @@ func TestV2RoutesExactOrderedImagesThroughProviderAdapters(testingInstance *test
 			defer upstreamServer.Close()
 
 			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
-				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameOpenAI, proxy.ProviderNameAnthropic, proxy.ProviderNameMoonshot, proxy.ProviderNameXAI),
+				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameOpenAI, proxy.ProviderNameAnthropic, proxy.ProviderNameMoonshot, proxy.ProviderNameDashScope, proxy.ProviderNameXAI),
 				LogLevel:              proxy.LogLevelInfo,
 				WorkerCount:           1,
 				QueueSize:             1,
@@ -402,7 +414,7 @@ func TestV2RejectsInvalidOrUnsupportedMediaBeforeUpstreamWork(testingInstance *t
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
-		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek, proxy.ProviderNameGemini, proxy.ProviderNameMoonshot, proxy.ProviderNameXAI),
+		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek, proxy.ProviderNameDashScope, proxy.ProviderNameGemini, proxy.ProviderNameMoonshot, proxy.ProviderNameXAI),
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -437,6 +449,8 @@ func TestV2RejectsInvalidOrUnsupportedMediaBeforeUpstreamWork(testingInstance *t
 		{name: "provider MIME", provider: proxy.ProviderNameXAI, model: proxy.ModelNameGrok45, role: "user", attachments: []any{messageMediaPayload("image", "image/webp", []byte("webp"))}},
 		{name: "Moonshot unsupported audio", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK3, role: "user", attachments: []any{validAudio}},
 		{name: "text-only provider", provider: proxy.ProviderNameDeepSeek, model: proxy.ModelNameDeepSeekV4Flash, role: "user", attachments: []any{validImage}},
+		{name: "Qwen Plus text only", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwenPlus, role: "user", attachments: []any{validImage}},
+		{name: "Qwen 3.7 Max text only", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen37Max, role: "user", attachments: []any{validImage}},
 	} {
 		testingInstance.Run(testCase.name, func(subTest *testing.T) {
 			bodyBytes, marshalError := json.Marshal(map[string]any{

@@ -28,8 +28,8 @@
       type="application/json"
       data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
     ></script>
-    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260811c131"></script>
-    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260811c131"></script>
+    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260902c240"></script>
+    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260902c240"></script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440"></script>
   </head>
   <body x-data="llmProxyManagementApplication" x-init="init()">
@@ -306,31 +306,63 @@
                             x-bind:inert="providerCardIsOpen(provider) ? true : null"
                           >
                             <header>
-                              <h3 x-text="provider.label"></h3>
-                              <provider-card-statuses>
-                                <span x-show="providerCardIsActive(provider)" x-text="copy.providerActive"></span>
-                                <span x-show="providerCardActivity(provider).used" x-text="copy.providerUsed"></span>
-                              </provider-card-statuses>
+                              <h3 x-text="provider.api_service_label"></h3>
+                              <provider-card-controls>
+                                <provider-card-statuses>
+                                  <span x-show="providerCardIsActive(provider)" x-text="copy.providerActive"></span>
+                                  <span x-show="providerCardActivity(provider).used" x-text="copy.providerUsed"></span>
+                                </provider-card-statuses>
+                                <button
+                                  type="button"
+                                  class="icon-only provider-card-settings-action"
+                                  x-bind:data-provider-card-action="provider.id"
+                                  x-bind:aria-expanded="providerCardIsOpen(provider)"
+                                  x-bind:aria-controls="'provider-card-back-' + provider.id"
+                                  x-bind:aria-label="providerCardConfigured(provider) ? copy.providerKeySettings : copy.providerSetKey"
+                                  x-bind:title="providerCardConfigured(provider) ? copy.providerKeySettings : copy.providerSetKey"
+                                  x-bind:disabled="Boolean(providerCardProviderID && !providerCardIsOpen(provider))"
+                                  x-on:click="openProviderCard(provider)"
+                                >
+                                  <svg class="utility-icon provider-settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">
+                                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                  </svg>
+                                </button>
+                              </provider-card-controls>
                             </header>
-                            <provider-capability-list aria-label="Capabilities">
-                              <template x-for="capability in provider.capabilities" x-bind:key="capability">
-                                <span x-text="providerCapabilityLabel(capability)"></span>
-                              </template>
-                            </provider-capability-list>
+                            <dl class="provider-card-taxonomy">
+                              <div>
+                                <dt x-text="copy.providerModelFamilies"></dt>
+                                <dd>
+                                  <template x-for="family in provider.model_families" x-bind:key="family.id">
+                                    <span x-text="family.label"></span>
+                                  </template>
+                                </dd>
+                              </div>
+                              <div>
+                                <dt x-text="copy.providerCapabilities"></dt>
+                                <dd>
+                                  <template x-for="capability in provider.capabilities" x-bind:key="capability">
+                                    <span x-text="providerCapabilityLabel(capability)"></span>
+                                  </template>
+                                </dd>
+                              </div>
+                            </dl>
                             <dl class="provider-card-usage">
                               <div><dt x-text="copy.providerRequests"></dt><dd x-text="providerCardActivity(provider).requests"></dd></div>
                               <div><dt x-text="copy.providerTokens"></dt><dd x-text="providerCardActivity(provider).tokens"></dd></div>
                               <div x-show="providerCardModel(provider)"><dt x-text="copy.providerTextModel"></dt><dd x-text="providerCardModel(provider)"></dd></div>
                             </dl>
-                            <button
-                              type="button"
-                              x-bind:data-provider-card-action="provider.id"
-                              x-bind:aria-expanded="providerCardIsOpen(provider)"
-                              x-bind:aria-controls="'provider-card-back-' + provider.id"
-                              x-bind:disabled="Boolean(providerCardProviderID && !providerCardIsOpen(provider))"
-                              x-on:click="openProviderCard(provider)"
-                              x-text="providerCardConfigured(provider) ? copy.providerKeySettings : copy.providerSetKey"
-                            ></button>
+                            <provider-request-graph
+                              x-show="providerCardActivity(provider).available"
+                              role="img"
+                              x-bind:aria-label="providerCardRequestGraph(provider).accessibleLabel"
+                            >
+                              <span x-text="copy.providerRequestVolume"></span>
+                              <provider-request-track aria-hidden="true">
+                                <i x-bind:style="`width: ${providerCardRequestGraph(provider).width}`"></i>
+                              </provider-request-track>
+                            </provider-request-graph>
                           </section>
 
                           <section
@@ -341,28 +373,29 @@
                           >
                             <header>
                               <div>
-                                <p class="eyebrow" x-text="provider.label"></p>
-                                <h3 x-text="providerCardTenantID ? settingsTenantName : copy.providerSelectTenant"></h3>
+                                <provider-api-heading>
+                                  <p class="eyebrow" x-text="provider.api_service_label"></p>
+                                  <a class="provider-key-acquisition" x-bind:href="provider.key_acquisition_url" target="_blank" rel="noopener noreferrer" x-text="copy.providerGetKey"></a>
+                                </provider-api-heading>
                               </div>
-                              <button type="button" class="icon-only" x-on:click="closeProviderCard()" x-bind:aria-label="copy.providerDone">×</button>
+                              <button type="button" class="icon-only" x-on:click="closeProviderCard()" x-bind:title="copy.providerClose" x-bind:aria-label="copy.providerClose">×</button>
                             </header>
-                            <label x-show="providerCardIsOpen(provider) && !providerCardTenantID">
+                            <label class="provider-card-tenant">
                               <span x-text="copy.providerTenant"></span>
-                              <select x-on:change="handleProviderCardTenantSelection($event)" x-bind:disabled="busy">
-                                <option value="">Select tenant</option>
+                              <select x-bind:value="providerCardTenantSelectionID" x-on:change="handleProviderCardTenantSelection($event)" x-bind:disabled="providerCardTenantLoadPending || providerAutosavePending">
                                 <template x-for="tenant in tenants" x-bind:key="tenant.id">
-                                  <option x-bind:value="tenant.id" x-text="tenant.name"></option>
+                                  <option x-bind:value="tenant.id" x-bind:selected="tenant.id === providerCardTenantSelectionID" x-text="tenant.name"></option>
                                 </template>
                               </select>
                             </label>
-                            <template x-if="providerCardIsOpen(provider) && providerCardTenantID && selectedProvider">
+                            <p class="field-hint provider-card-loading" role="status" aria-live="polite" x-cloak x-show="providerCardTenantLoadPending" x-text="copy.providerSettingsLoading"></p>
+                            <template x-if="providerCardIsOpen(provider) && providerCardTenantID && !providerCardTenantLoadPending && selectedProvider">
                               <provider-settings-fields>
-                                <a class="provider-key-acquisition" x-bind:href="selectedProvider.key_acquisition_url" target="_blank" rel="noopener noreferrer" x-text="copy.providerGetKey"></a>
                                 <provider-connection-fields>
                                   <template x-for="field in selectedProvider.fields" x-bind:key="field.id">
                                     <provider-connection-field>
                                       <label x-bind:for="'provider-card-field-' + selectedProvider.id + '-' + field.id" x-text="field.label"></label>
-                                      <provider-connection-input>
+                                      <provider-connection-input x-bind:class="{ 'has-key-action': field.secret && field.configured }">
                                         <input
                                           x-bind:id="'provider-card-field-' + selectedProvider.id + '-' + field.id"
                                           x-bind:type="field.type === 'url' ? 'url' : 'text'"
@@ -371,18 +404,27 @@
                                           x-bind:minlength="field.validation.minimum_length || null"
                                           x-bind:pattern="field.validation.pattern || null"
                                           x-bind:value="providerFieldInputValue(field)"
-                                          x-on:paste="handleProviderFieldPaste(field)"
+                                          x-on:beforeinput="prepareProviderFieldEntry(field, $event)"
+                                          x-on:paste="handleProviderFieldPaste(field, $event)"
                                           x-on:input="handleProviderFieldInput(field, $event)"
                                           x-on:change="autosaveSelectedProvider()"
-                                          x-bind:readonly="providerFieldInputReadOnly(field)"
                                           x-bind:disabled="busy || providerAutosavePending"
                                         >
-                                        <button type="button" x-show="field.secret && field.configured" x-on:click="beginProviderKeyReplacement(field)" x-bind:disabled="busy || providerAutosavePending" x-text="copy.providerReplaceKey"></button>
+                                        <button
+                                          type="button"
+                                          class="icon-only danger provider-key-remove"
+                                          x-show="field.secret && field.configured"
+                                          x-on:click="requestSelectedProviderKeyRemoval()"
+                                          x-bind:disabled="busy || providerAutosavePending"
+                                          x-bind:title="copy.removeProviderKey"
+                                          x-bind:aria-label="copy.removeProviderKey"
+                                        >
+                                          <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                                        </button>
                                       </provider-connection-input>
                                     </provider-connection-field>
                                   </template>
                                 </provider-connection-fields>
-                                <button type="button" class="danger provider-key-remove" x-show="selectedProvider.configured" x-on:click="requestSelectedProviderKeyRemoval()" x-bind:disabled="busy || providerAutosavePending" x-text="copy.removeProviderKey"></button>
                                 <p class="field-hint provider-key-verification-pending" role="status" aria-live="polite" x-cloak x-show="providerKeyVerificationPending" x-text="copy.providerKeyVerifying"></p>
                                 <provider-key-verification-error class="field-error" role="alert" x-cloak x-show="providerKeyVerificationFailed">
                                   <span x-text="providerKeyVerificationFailure"></span>
@@ -396,11 +438,24 @@
                                     </template>
                                   </select>
                                 </provider-model-field>
-                                <label>
-                                  <span x-text="copy.providerSystemPrompt"></span>
-                                  <textarea rows="3" x-bind:value="providerEditorSession.systemPrompt" x-on:input="handleSelectedProviderSystemPromptInput($event)" x-on:change="autosaveSelectedProvider()" x-bind:disabled="busy || providerAutosavePending"></textarea>
-                                </label>
-                                <button type="button" x-on:click="closeProviderCard()" x-bind:disabled="busy || providerAutosavePending" x-text="copy.providerDone"></button>
+                                <details
+                                  class="provider-system-prompt system-prompt-disclosure"
+                                  x-bind:open="providerSystemPromptOpen"
+                                  x-on:toggle="providerSystemPromptOpen = $event.currentTarget.open"
+                                >
+                                  <summary class="system-prompt-summary">
+                                    <span x-bind:id="'provider-system-prompt-label-' + selectedProvider.id" x-text="copy.providerSystemPrompt"></span>
+                                    <span class="system-prompt-disclosure-state" x-text="providerSystemPromptOpen ? copy.systemPromptExpanded : copy.systemPromptHidden"></span>
+                                  </summary>
+                                  <textarea
+                                    rows="3"
+                                    x-bind:aria-labelledby="'provider-system-prompt-label-' + selectedProvider.id"
+                                    x-bind:value="providerEditorSession.systemPrompt"
+                                    x-on:input="handleSelectedProviderSystemPromptInput($event)"
+                                    x-on:change="autosaveSelectedProvider()"
+                                    x-bind:disabled="busy || providerAutosavePending"
+                                  ></textarea>
+                                </details>
                               </provider-settings-fields>
                             </template>
                           </section>

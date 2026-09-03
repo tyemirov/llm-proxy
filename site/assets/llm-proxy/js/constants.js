@@ -110,6 +110,14 @@ export const PROVIDER_KEY_VERIFICATION_ERRORS = Object.freeze({
   UNAVAILABLE: "provider_key_verification_unavailable",
 });
 
+export const PROVIDER_CAPABILITY_LABELS = Object.freeze({
+  text: "Text",
+  image_input: "Image analysis",
+  audio_input: "Audio analysis",
+  dictation: "Dictation",
+  video_generation: "Video generation",
+});
+
 export const USER_MENU_ITEMS = Object.freeze([
   Object.freeze({
     label: "Settings",
@@ -138,7 +146,7 @@ export const MPR_UI = Object.freeze({
 });
 
 export const RUNTIME_UI = Object.freeze({
-  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20260811c131",
+  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20260902c240",
   APPLICATION_MODULE_ID: "llm-proxy-application-module",
   APPLICATION_MODULE_MISSING: "llm_proxy_application_module_missing",
   APPLICATION_READY_ATTRIBUTE: "data-llm-proxy-application",
@@ -287,20 +295,23 @@ export const COPY = Object.freeze({
   providerDictationExampleSuffix: " dictation",
   copyExample: "Copy",
   providersEyebrow: "Providers",
-  providerCardsTitle: "Provider access",
-  providerCardsDescription: "Usage and tenant-specific provider key settings.",
+  providerCardsTitle: "API connections",
+  providerCardsDescription: "Usage, model identities, and tenant-specific API key settings.",
+  providerModelFamilies: "Model families",
+  providerCapabilities: "Capabilities",
   providerRequests: "Requests",
+  providerRequestVolume: "Request volume",
+  providerRequestGraphScale: "of the highest provider request count",
   providerTokens: "Tokens",
   providerActive: "active",
   providerUsed: "used",
   providerUnavailable: "Unavailable",
-  providerSelectTenant: "Select a tenant to manage this provider.",
   providerTenant: "Tenant",
-  providerSetKey: "Set key",
-  providerKeySettings: "Key settings",
+  providerSetKey: "Set API key",
+  providerKeySettings: "API key settings",
   providerGetKey: "Get API key",
-  providerReplaceKey: "Replace key",
-  providerDone: "Done",
+  providerClose: "Close provider settings",
+  providerSettingsLoading: "Loading provider settings...",
   providerSelector: "Provider",
   showProviderKey: "Show key",
   hideProviderKey: "Hide key",

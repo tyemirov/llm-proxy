@@ -25,6 +25,53 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B172] (P1) {I238,B171} Start each provider card with the Default tenant.
+  Goal:
+  A provider card must start with the first account tenant. It starts with the
+  retained Settings modal tenant after that tenant changes.
+  Requirements:
+  - Initialize each newly opened provider card with the first account tenant.
+  - Keep provider card initialization independent from the Settings modal tenant.
+  - Preserve the isolated provider card tenant change behavior.
+  Deliverables:
+  - Correct the provider card tenant initialization boundary.
+  - Add browser coverage for a retained non-default Settings modal tenant.
+  Validation:
+  - Select a non-default tenant in the Settings modal.
+  - Close the Settings modal.
+  - Open a provider card.
+  - Prove that the provider card selects the first account tenant.
+  - Prove that the Settings modal keeps its prior tenant.
+  - Run `make ci` after the last application change.
+  Resolution:
+  New provider cards now select the first account tenant. This selection does
+  not use the retained Settings modal tenant. Browser coverage verifies the
+  Default provider profile and the retained Settings modal context.
+- [x] [B171] (P1) {I238} Keep tenant changes inside the open provider card.
+  Goal:
+  The tenant selector must be the only tenant name in an open provider card.
+  A tenant change reloads the management site instead of only the provider card.
+  Requirements:
+  - Remove the tenant heading below the provider API label.
+  - Keep the tenant selector as the only tenant name.
+  - Load the selected tenant profile without a change to the application context.
+  - Preserve the dashboard view and the Usage tenant during a provider tenant change.
+  - Save pending provider edits before a provider tenant change.
+  - Keep the system prompt collapsed after a provider tenant change.
+  Deliverables:
+  - Isolate provider card tenant state from the management site tenant state.
+  - Add browser coverage for the tenant name and tenant change behavior.
+  Validation:
+  - Prove that an open provider card shows one tenant name.
+  - Prove that a provider tenant change does not reload the management site.
+  - Prove that the Usage tenant and dashboard view do not change.
+  - Prove that the selected provider settings use the new tenant profile.
+  - Run `make ci` after the last application change.
+  Resolution:
+  Removed the repeated tenant heading. The open card now owns its tenant profile
+  and load request. Tenant changes preserve the dashboard, provider grid, Usage
+  tenant, and Settings modal tenant. Browser coverage verifies the isolated load
+  and the selected tenant profile.
 - [x] [B170] (P1) Apply each theme to the route explorer.
   Goal:
   The selected theme must change all route explorer colors. The route explorer
@@ -576,58 +623,123 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
-- [ ] [I237] (P1) {I027} Separate provider APIs from model publishers and model families on provider cards.
+- [x] [I238] (P1) {I027,I237} Make provider card settings compact and automatic.
   Goal:
-  Provider cards show provider APIs, model publishers, model families, and
-  capabilities as different catalog concepts. A user can identify where an API
-  key applies and which model families the provider offers.
+  A user can manage one provider connection without a manual completion action
+  or an initial tenant selection.
+  Requirements:
+  - Use the first account tenant as the initial provider Settings tenant.
+  - Always show the tenant selector on an open provider card.
+  - Keep the provider Settings tenant independent from the Usage tenant.
+  - Save provider model and prompt changes without a `Done` action.
+  - Wait for pending provider saves when the user closes the card or changes
+    the tenant.
+  - Collapse the provider system prompt when the card or tenant context changes.
+  - Let pointer and keyboard actions expand the provider system prompt.
+  - Put `Get API key` on the same row as the catalog API service label.
+  - Remove the `Replace key` action.
+  - Accept a new key directly in the masked key field.
+  - Verify each pasted key before the application saves it.
+  - Preserve the prior key and provider settings when verification fails.
+  - Put an icon-only `Delete key` action on the key input row.
+  - Keep the provider card compact, accessible, and responsive.
+  Deliverables:
+  - Update the provider card editor and its saved state behavior.
+  - Update the durable provider Settings documentation.
+  - Add browser coverage for the new controls and save behavior.
+  Validation:
+  - Prove that a card opens with the Default tenant selected.
+  - Prove that the tenant selector can change the provider Settings tenant.
+  - Prove that Usage tenant selection does not change this context.
+  - Prove that the card has no `Done` or `Replace key` action.
+  - Prove that the prompt starts collapsed and autosaves after an edit.
+  - Prove that a pasted replacement key is accepted or rejected automatically.
+  - Prove that the trash icon has the `Delete key` accessible name.
+  - Prove that the API key link and API service label share one row.
+  - Prove that the card stays within each supported viewport.
+  - Run `make ci` after the last application change.
+  Resolution:
+  Made provider card settings compact and automatic. The Default Settings
+  tenant is ready when a card opens, while a persistent selector changes the
+  tenant context. Provider edits now autosave. The key link and delete icon are
+  inline, replacement keys validate on entry, and the system prompt starts
+  collapsed. Browser coverage verifies the save, accessibility, and responsive
+  layout contracts.
+- [x] [I237] (P1) {I027} Separate provider APIs from model families and capabilities on provider cards.
+  Goal:
+  Provider cards show provider APIs, model families, and capabilities as
+  different catalog concepts. A user can identify where an API key applies and
+  what each provider offering can accept or produce.
   Requirements:
   - Rename the provider card section to `API connections`.
   - Show the provider definition as the primary API connection identity.
   - Add one catalog-owned API service label to each provider definition.
   - Use explicit service labels, such as `Gemini API` and `Meta API`.
-  - Show model publishers, model families, and capabilities in separate labeled
-    groups.
+  - Do not show an `API connection` label above the provider title.
+  - Do not show a model publisher group on provider cards.
+  - Show model families and capabilities in separate labeled groups.
   - Show capabilities only under a visible `Capabilities` label.
   - Do not show capability chips next to the provider title without a group
     label.
-  - Get publisher and family relationships from provider offerings and exact
-    models in the provider catalog.
-  - Add the necessary publisher and family presentation fields to the
-    authenticated management provider response.
+  - Get family relationships from provider offerings and exact models in the
+    provider catalog.
+  - Add the necessary family presentation fields to the authenticated
+    management provider response.
+  - Include offering media inputs in the provider capability list.
+  - Use `Image analysis` for an image input capability.
+  - Do not use `Image generation` for an image input capability.
+  - Keep `Video generation` for an actual video generation operation.
+  - Declare image input for `qwen3.7-plus` and `qwen3.6-flash`.
+  - Keep `qwen-plus` and `qwen3.7-max` as text-only models.
   - Do not infer labels or catalog relationships from identifiers in the
     browser.
   - Keep canonical provider identifiers and provider offering selectors
     unchanged.
   - Change `Set key` to `Set API key`.
   - Change `Key settings` to `API key settings`.
+  - Put the provider settings control in the top-right corner of each card.
+  - Show only a settings gear icon in the control.
+  - Use `Set API key` or `API key settings` as the accessible control name.
+  - Show one request volume bar on each provider card.
+  - Scale each bar against the highest provider request count in the current
+    Usage scope.
+  - Show an empty graph track when the provider has zero requests.
+  - Use the existing provider aggregates without an additional request.
+  - Give each graph an accessible label with its exact count and scale.
+  - Keep the front and back faces at the same width and height.
   - Preserve the activity, tenant scope, key safety, and card interaction
     contracts from I027.
   - Keep the cards compact, accessible, and responsive in the MPR visual
     language.
   Deliverables:
-  - Add the catalog and management presentation data for the separate identity
-    groups.
+  - Add the catalog and management data for model families and capabilities.
   - Update the provider card front, card back, user-visible copy, and canonical
     API documentation.
-  - Add browser coverage for single-publisher and multiple-publisher provider
-    APIs.
+  - Add browser coverage for provider identities, families, and capabilities.
   Validation:
-  - Prove that `OpenAI API` shows OpenAI as its publisher.
   - Prove that `OpenAI API` shows GPT-4, GPT-5, and GPT Transcribe as model
     families.
-  - Prove that `Gemini API` shows Google as its publisher and Gemini as its
-    model family.
-  - Prove that `Meta API` shows Meta as its publisher and Muse Spark as its
-    model family.
-  - Prove that `SiliconFlow API` shows DeepSeek and FunAudioLLM as publishers.
+  - Prove that `Gemini API` shows Gemini as its model family.
+  - Prove that `Meta API` shows Muse Spark as its model family.
   - Prove that `SiliconFlow API` shows DeepSeek R1 and SenseVoice as model
     families.
+  - Prove that `DashScope API` shows image analysis and not image generation.
+  - Prove that Qwen image input uses the OpenAI-compatible message shape.
   - Prove that capability labels remain separate from all identity labels.
   - Prove that each catalog provider still produces exactly one card.
+  - Prove that the provider settings control has no visible text.
+  - Prove that the provider settings control keeps its state-specific accessible
+    name.
+  - Prove that request bars update from the current provider aggregates.
+  - Prove that each graph exposes its exact count and relative scale.
+  - Prove that the two card faces have the same dimensions after a flip.
   - Cover keyboard access, semantic labels, desktop layout, and narrow-screen
     layout through Playwright.
   - Run `make ci` after the last application change.
+  Resolution: Separated API services, model families, and capabilities. Added
+  verified Qwen image input, icon-only provider settings controls, and request
+  volume bars that use existing provider aggregates. Browser coverage confirms
+  accessible graphs and equal card-face dimensions.
 - [ ] [I235] (P1) Add explicit model activation to the provider catalog.
   Goal:
   Keep exact model data in the provider catalog without exposing an unaccepted
