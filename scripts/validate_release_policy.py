@@ -12,6 +12,7 @@ from typing import Any
 
 
 VERSION_DECISION_CONTRACT = "mprlab.version-decision/v2"
+FIXED_MAJOR = 1
 V1_VERSION = re.compile(r"^v1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 PYTHON_PROJECT_PATH = Path("python/pyproject.toml")
 
@@ -21,7 +22,7 @@ def official_client_version() -> str:
         project = tomllib.load(project_file)
     version = project.get("project", {}).get("version")
     if not isinstance(version, str) or re.fullmatch(
-        r"1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version
+        rf"{FIXED_MAJOR}\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version
     ) is None:
         raise SystemExit(
             "llm_proxy.release_policy_invalid: official client version must use major 1"
@@ -41,8 +42,10 @@ def main() -> int:
             "llm_proxy.release_policy_invalid: expected one release decision document"
         )
     policy = decision.get("policy")
-    if policy != {"scheme": "semver"}:
-        raise SystemExit("llm_proxy.release_policy_invalid: expected standard SemVer decision")
+    if policy != {"scheme": "semver", "fixed_major": FIXED_MAJOR}:
+        raise SystemExit(
+            "llm_proxy.release_policy_invalid: expected SemVer decision with fixed major 1"
+        )
 
     client_version = official_client_version()
     expected_version = f"v{client_version}"

@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Set the next official client version to `v1.4.0`. Fixed the application
+  release policy at major version `1` for Go module compatibility.
 - Made provider card settings compact and automatic. Each card now starts with
   the Default tenant and keeps its tenant selector available. The card collapses
   its system prompt and accepts pasted replacement keys directly. Key links and

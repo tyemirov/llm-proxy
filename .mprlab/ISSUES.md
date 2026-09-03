@@ -25,6 +25,47 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B173] (P0) Keep release versions in Go major version 1.
+  Goal:
+  The release policy must keep each release version in major version `1`.
+  The current release transaction selects `v2.0.0`, and the release decision
+  validator rejects that version.
+  Evidence:
+  - B164 requires the removal of each release identity above major version `1`.
+  - The selected manifest does not declare the permanent fixed-major policy.
+  - Gix selects `v2.0.0` for the current breaking change.
+  - The official Python client version and release decision validator still use
+    `v1.3.0`.
+  Requirements:
+  - Set the selected manifest fixed major to `1`.
+  - Set the official Python client and lock metadata version to `1.4.0`.
+  - Require the exact fixed-major release decision for `v1.4.0`.
+  - Keep the Go module path unchanged.
+  - Do not create a version above major version `1`.
+  - Do not change `mprlab-gateway`.
+  - Preserve each sealed historical lifecycle record.
+  Deliverables:
+  - Correct the application release policy and official client version.
+  - Add public lifecycle coverage for the fixed-major release decision.
+  Validation:
+  - Prove that Gix selects `v1.4.0` with fixed major `1`.
+  - Prove that the release decision validator accepts only the exact decision.
+  - Run `make python-package-install-test`.
+  - Run `make ci` after the last application change.
+  - Run the STE check on each changed technical document.
+  - Run `git diff --check`.
+  Resolution:
+  - The selected manifest declares SemVer with fixed major `1`.
+  - The official Python client and lock metadata use version `1.4.0`.
+  - The release decision validator requires fixed major `1` and exact version
+    `v1.4.0`.
+  - Public lifecycle tests reject a missing fixed major, a different fixed
+    major, an incorrect `v1` version, and a version above major `1`.
+  - Gix selected `v1.4.0` for the current source with fixed major `1`.
+  - The failed unsealed `v2.0.0` staging record was removed. Each sealed
+    historical lifecycle record remains unchanged.
+  - `make python-package-install-test` passed for version `1.4.0`.
+  - `make ci` passed all 11 gates with 100 percent Go statement coverage.
 - [x] [B172] (P1) {I238,B171} Start each provider card with the Default tenant.
   Goal:
   A provider card must start with the first account tenant. It starts with the
@@ -253,7 +294,7 @@ retain satisfied historical dependencies.
   - Expected result: each current release surface uses `v1.2.2`.
   - Actual result: current release surfaces use different versions.
   Requirements:
-  - Keep the selected manifest free of application release policy.
+  - Set the selected manifest fixed major to `1`.
   - Validate the exact decision that the gateway transaction prepares or reuses.
   - Require the release decision to match the official client version.
   - Set the Python client version to `1.2.2`.
@@ -271,7 +312,7 @@ retain satisfied historical dependencies.
   - Source and lock metadata now set the Python client version to `1.2.2`.
   - The application-owned validator requires the exact `v1.2.2` decision.
   - The gateway runs the validator for each prepared or reused decision.
-  - The selected manifest contains only the generic SemVer scheme.
+  - The selected manifest declares SemVer with fixed major `1`.
   - The gateway contains no LLM Proxy version policy or cutover exception.
   - `make python-package-install-test` passed for version `1.2.2`.
   - `make ci` passed all 11 gates with 100 percent Go coverage.
