@@ -15,7 +15,7 @@ export PLAYWRIGHT_BROWSERS_PATH
 
 GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 
-.PHONY: fmt check-format lint go-lint python-lint frontend-dependencies frontend-lint test go-test python-test python-package-install-test frontend-test test-frontend-dependency-contract test-openapi-pages-artifact test-management-auth-blackbox test-live-provider-harness test-live-providers test-live-provider-media test-live-gemini test-live-local-providers test-live-local-gemini live-test build clean ci up down
+.PHONY: fmt check-format check-release-version set-release-version lint go-lint python-lint frontend-dependencies frontend-lint test go-test python-test python-package-install-test frontend-test test-frontend-dependency-contract test-openapi-pages-artifact test-management-auth-blackbox test-live-provider-harness test-live-providers test-live-provider-media test-live-gemini test-live-local-providers test-live-local-gemini live-test build clean ci up down
 
 fmt:
 	$(GOFMT) -w $(GO_SOURCES)
@@ -27,6 +27,12 @@ check-format:
 		echo "$$formatted"; \
 		exit 1; \
 	fi
+
+check-release-version:
+	@python3 scripts/release_version.py check
+
+set-release-version:
+	@python3 scripts/release_version.py set "$(RELEASE_VERSION)"
 
 lint: go-lint python-lint frontend-lint
 
