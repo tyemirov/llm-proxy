@@ -1,14 +1,14 @@
 // @ts-check
 
-import { AUTH_STATES, COPY, DASHBOARD_VIEWS, NOTICE_KINDS, PROVIDER_CAPABILITY_LABELS } from "../constants.js?v=20260902c239";
-import { fetchTenant } from "../core/backendClient.js?v=20260902c239";
+import { AUTH_STATES, COPY, DASHBOARD_VIEWS, NOTICE_KINDS, PROVIDER_CAPABILITY_LABELS } from "../constants.js?v=20260902c240";
+import { fetchTenant } from "../core/backendClient.js?v=20260902c240";
 import {
   assertManagementTenantProfile,
   isAbortError,
   profileFailureMessage,
   profileProvider,
-} from "../core/managementProfile.js?v=20260902c239";
-import { formatNumber } from "./usageFailurePresentation.js?v=20260902c239";
+} from "../core/managementProfile.js?v=20260902c240";
+import { formatNumber } from "./usageFailurePresentation.js?v=20260902c240";
 
 const EMPTY_STRING = "";
 
@@ -105,7 +105,7 @@ export function createProviderCardsResponsibility() {
       this.providerCardProfile = null;
       this.providerSystemPromptOpen = false;
       this.providerCardVersion += 1;
-      await this.selectProviderCardTenant(this.settingsTenantID);
+      await this.selectProviderCardTenant(this.tenants[0].id);
     },
 
     /** @param {Event} event */

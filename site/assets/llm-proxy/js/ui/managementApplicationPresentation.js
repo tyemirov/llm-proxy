@@ -1,6 +1,6 @@
 // @ts-check
 
-import { AUTH_STATES, COPY } from "../constants.js?v=20260902c239";
+import { AUTH_STATES, COPY } from "../constants.js?v=20260902c240";
 
 /** @typedef {ReturnType<typeof import("./managementApplicationState.js").createManagementApplicationState>} ManagementApplicationState */
 /** @typedef {ManagementApplicationState & { hasSecret: boolean }} ManagementApplicationPresentationHost */

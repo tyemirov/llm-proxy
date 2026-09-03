@@ -5,7 +5,7 @@ import {
   COPY,
   PROVIDER_CAPABILITY_LABELS,
   ROUTING_DEFAULTS_INVALID_ERROR,
-} from "../constants.js?v=20260902c239";
+} from "../constants.js?v=20260902c240";
 
 const EMPTY_STRING = "";
 const TENANT_NAME_MAXIMUM_CHARACTERS = 80;

@@ -1,8 +1,8 @@
 // @ts-check
 
-import { COPY } from "../constants.js?v=20260902c239";
-import { removeProviderConnection as requestRemoveProviderConnection } from "../core/backendClient.js?v=20260902c239";
-import { profileProvider } from "../core/managementProfile.js?v=20260902c239";
+import { COPY } from "../constants.js?v=20260902c240";
+import { removeProviderConnection as requestRemoveProviderConnection } from "../core/backendClient.js?v=20260902c240";
+import { profileProvider } from "../core/managementProfile.js?v=20260902c240";
 
 const EMPTY_STRING = "";
 const SAVED_PROVIDER_KEY_MASK = "••••••••";

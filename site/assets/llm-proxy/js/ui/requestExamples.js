@@ -1,6 +1,6 @@
 // @ts-check
 
-import { COPY, NOTICE_KINDS } from "../constants.js?v=20260902c239";
+import { COPY, NOTICE_KINDS } from "../constants.js?v=20260902c240";
 
 const EMPTY_SECRET_PLACEHOLDER = "<generated-secret>";
 const DEFAULT_TEXT_EXAMPLE_ID = "default-text";
