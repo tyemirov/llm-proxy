@@ -29,6 +29,7 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `provider transport`: One provider route that defines an endpoint, authentication, protocol adapter, and lifecycle.
 - `request intent`: The tenant-bound semantic inputs that one idempotency key identifies.
 - `release decision validator`: A committed application program that validates the exact release decision that the gateway transaction uses.
+- `repository release version`: The canonical major-version-1 SemVer value in the root `VERSION` file.
 - `resolved typed route`: An exact provider and model pair that passed route validation.
 - `structured request`: A canonical text request that requires one caller JSON Schema for its output.
 - `production acceptance`: Evidence that the production runtime satisfies the checks that an issue specifies.

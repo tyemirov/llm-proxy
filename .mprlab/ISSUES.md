@@ -25,6 +25,59 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B175] (P0) Use one repository release version.
+  Goal:
+  One neutral repository value must identify the application and each bundled
+  client release. The Python client currently owns the accepted application
+  version by accident. A new release decision fails until its version is
+  manually copied into the Python project and lock metadata.
+  Evidence:
+  - The last sealed release is `v1.4.0`.
+  - Gix selected `v1.4.1` for the current application commit.
+  - The release decision validator rejected `v1.4.1` because the Python client
+    still declared `1.4.0`.
+  Requirements:
+  - Add one canonical repository release version.
+  - Set the canonical version to `1.4.1`.
+  - Keep the application and each bundled client on the exact canonical
+    version.
+  - Keep each release in major version `1`.
+  - Make the Python project and lock metadata consumers of the canonical
+    version.
+  - Make the release decision validator use the canonical version.
+  - Add one repository command that updates all explicit version values.
+  - Reject a malformed version, a version above major `1`, and a version
+    decrease before any file changes.
+  - Make CI reject version drift before the test gates.
+  - Do not change `mprlab-gateway` or the selected manifest schema.
+  - Preserve all sealed and unsealed lifecycle records.
+  Deliverables:
+  - Add the canonical version file and version management program.
+  - Update the release decision validator and repository automation.
+  - Document the version authority and release preparation step.
+  - Add public command and validator coverage.
+  Validation:
+  - Prove that the canonical version, Python project, and Python lock agree.
+  - Prove that one command updates all explicit values together.
+  - Prove that invalid or decreasing values do not change any file.
+  - Prove that the validator accepts only `v1.4.1` with fixed major `1`.
+  - Run `make python-package-install-test`.
+  - Run `make ci` after the last application change.
+  - Run the STE check on each changed technical document.
+  - Run `git diff --check`.
+  Resolution:
+  - The root `VERSION` file now owns repository release version `1.4.1`.
+  - The Python project and lock metadata now match that version.
+  - The Go clients receive the same version from the repository tag.
+  - One version command updates all explicit version values and rejects invalid
+    or decreasing values before it changes a file.
+  - CI checks version equality before all test gates.
+  - The release decision validator now requires the exact repository version
+    and fixed major `1`.
+  - Public command and validator tests cover updates, drift, and rejection
+    without file changes.
+  - `make python-package-install-test` passed for version `1.4.1`.
+  - `make ci` passed all 12 gates with 100 percent Go statement coverage.
 - [x] [B174] (P1) Exclude unresolved routes from usage dimensions.
   Goal:
   Usage reports must not identify a raw request value as a provider or model.
