@@ -74,6 +74,7 @@ export COVERAGE_FILE="$RUN_DIRECTORY/coverage.out"
 cd "$ROOT_DIR"
 
 STAGE_NAMES=(
+  "Release version contract"
   "Go formatting"
   "Go static analysis"
   "Python static analysis"
@@ -86,6 +87,7 @@ STAGE_NAMES=(
   "Live-provider harness preflight"
 )
 STAGE_TARGETS=(
+  "check-release-version"
   "check-format"
   "go-lint"
   "python-lint"
