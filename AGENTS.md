@@ -30,6 +30,42 @@ llm-proxy repository managed through `.mprlab/ISSUES.md` workflow. See README.md
 - Unresolved: Needs decision and/or implementation (`[ ]`).
 - Blocked: Requires an external dependency or policy decision (`[!]`); must include a `Blocked:` explanation in the issue body.
 
+### Issue Classification
+
+Classify each issue by its requested outcome. Priority, urgency, affected code,
+and title words do not control the section.
+
+Use this ordered classification test:
+
+1. Use BugFixes only for an observed and reproducible violation of a current
+   canonical contract.
+2. Use Features for a new capability, public interface, resource kind,
+   workflow, or product behavior.
+3. Use Improvements for a one-time change to quality, architecture, test
+   design, or acceptance evidence.
+4. Use Maintenance for repeatable work under an unchanged solution contract.
+5. Use Planning for analysis, a decision, or a plan that does not authorize
+   implementation.
+
+File each reproducible defect from an umbrella issue as a separate BugFix
+issue. Split mixed outcomes across the correct sections.
+
+Treat priority and blocked state as separate attributes. Correct a
+misclassified open issue before implementation. Preserve completed issue IDs.
+
+### Resolved Issue Hygiene
+
+Before archival, review each resolved non-recurring issue for durable product,
+architecture, operator, security, test, and skill results.
+
+Update each affected current source document or skill before archival. Keep
+implementation details in code and tests when they do not define a durable
+contract.
+
+Preserve the complete resolved issue and its ID in the repository archive.
+Keep open, blocked, planning, and recurring issues in the active tracker.
+Validate IDs, dependencies, and duplicate IDs across both files.
+
 ### Validation & Confidence Policy
 
 All rules for validation, error handling, invariants, and “confident programming” (no defensive checks, edge-only validation, smart constructors, CI gates) are defined in `.mprlab/POLICY.md`. Treat that document as binding; this file does not restate them.
@@ -60,7 +96,7 @@ Operational playbook for working in this repository. Use it to coordinate planni
 - `.mprlab/AGENTS.GIT.md` for Git/GitHub workflow.
 - `.mprlab/AGENTS.DOCKER.md` for container expectations.
 - `docs/` for adjacent documentation: third-party library notes, integration docs/runbooks, and API/contract references. Agents MUST search/check `docs/` whenever changing behavior or touching an integration.
-- `README.md`, `PRD.md`, and `ARCHITECTURE.md` for product context.
+- `README.md` for product context.
 
 ### Workflow Overview
 
@@ -116,7 +152,7 @@ If any checklist item is incomplete, do not claim completion. Complete the missi
 
 ### Action Items Reminder
 
-- Read guiding docs (`README.md`, `PRD.md`, `docs/`, `.mprlab/AGENTS*`, `AGENTS.md`, `ARCHITECTURE.md`) before planning.
+- Read guiding docs (`README.md`, `docs/`, `.mprlab/AGENTS*`, and `AGENTS.md`) before planning.
 - Keep working sequentially through the backlog—never parallelize issues.
 - Add missing issues to `.mprlab/ISSUES.md` if you discover new work while investigating; plan and resolve them in order.
 
@@ -126,7 +162,8 @@ If any checklist item is incomplete, do not claim completion. Complete the missi
 - We **strive for (approximately) 100% test coverage**, with CI enforcing an agreed threshold. If coverage drops, add scenarios at the public entry points; do not chase coverage with isolated unit tests.
 - For CLI and backend services, tests compile or run the real program/CLI entrypoints or run the service and call real HTTP endpoints, capture exit codes and output (stdout/stderr, files, side effects), and assert observable results—not internal functions.
 - For web/UI, tests run the app and backing web server, drive flows through the browser, and assert against the rendered page, DOM state, events, and other user-visible behavior.
-- Unit tests are generally discouraged and may be prohibited by your stack guide. Only use unit tests when the relevant stack guide explicitly allows them (for example, `.mprlab/AGENTS.PY.md`), keep them as narrow guardrails for pure, deterministic helpers, and never use them as a substitute for black-box coverage or to pad coverage numbers.
+- Do not use unit tests. Cover each behavior through a public API, CLI, service,
+  or browser entry point.
 
 ## Tech Stack Guides
 
@@ -168,6 +205,9 @@ Read these files before editing:
 - `.mprlab/AGENTS.PY.md`: Python guidance.
 - `.mprlab/AGENTS.FRONTEND.md`: browser frontend guidance.
 - `.mprlab/AGENTS.DOCKER.md`: Docker and container guidance.
+
+Always reference each issue by its ID, for example `B001` or `I027`.
+Never use an `ISSUES.md` file path, line number, or `path:line` syntax as an issue reference.
 
 Do not create `.mprlab/AGENTS.md`. Scoped guidance belongs in `.mprlab/AGENTS.*.md` files.
 If guidance conflicts, follow `.mprlab/POLICY.md` first, then root `AGENTS.md`, then the relevant scoped guide.
