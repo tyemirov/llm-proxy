@@ -25,6 +25,51 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [ ] [B174] (P1) Exclude unresolved routes from usage dimensions.
+  Goal:
+  Usage reports must not identify a raw request value as a provider or model.
+  A rejected request with provider `__credential_validation__` and no model
+  currently creates a `__credential_validation__ /` model row.
+  Route validation rejects the request before it creates a typed route. The
+  failure recorder then persists the raw provider and blank model. Usage
+  aggregation treats these values as canonical dimensions, and the browser
+  displays them.
+  Requirements:
+  - Give the usage recorder a provider and model only from a resolved typed
+    route.
+  - Do not copy raw provider or model request values into a usage event when
+    route validation fails.
+  - Keep each invalid request in the total, status, outcome, latency, and
+    failure-report data.
+  - Exclude an event without a resolved route from provider and model
+    breakdowns.
+  - Keep resolved provider and model dimensions for a request that fails after
+    route resolution.
+  - Add one bounded migration for persisted events whose provider and model do
+    not identify a canonical catalog route.
+  - The migration must remove both invalid dimension values and preserve all
+    other usage data.
+  - Do not add a browser filter, compatibility path, or special rule for
+    `__credential_validation__`.
+  Deliverables:
+  - Move usage dimension ownership from raw request fields to the resolved
+    typed route.
+  - Update usage aggregation to omit events without a resolved route from the
+    provider and model buckets.
+  - Add the bounded persisted-data migration and its startup verification.
+  - Add public API and real-store regression coverage.
+  Validation:
+  - Submit a request with provider `__credential_validation__` and no model.
+  - Prove that route validation rejects the request.
+  - Prove that totals, status reporting, and the failure report include the
+    rejected request.
+  - Prove that no provider or model bucket contains the raw provider value or
+    a blank model value.
+  - Prove that an upstream failure after route resolution retains its canonical
+    provider and model dimensions.
+  - Upgrade a store that contains invalid persisted dimensions and prove that
+    the migration removes only those dimensions.
+  - Run `make ci` after the last application change.
 - [x] [B173] (P0) Keep release versions in Go major version 1.
   Goal:
   The release policy must keep each release version in major version `1`.
@@ -663,6 +708,246 @@ retain satisfied historical dependencies.
 
 
 ## Improvements
+
+- [ ] [I241] (P1) Show provider requests over time on each provider card.
+  Goal:
+  Each provider card shows request activity across the selected Usage time
+  span. The current `Request volume` meter compares one provider total with
+  the largest provider total. It does not show when the requests occurred.
+  The replacement is a miniature `Requests over time` chart.
+  Requirements:
+  - Use the current Usage tenant scope and interval for each provider chart.
+  - Update each chart from the accepted Usage summary response.
+  - Do not make a separate browser request for a provider chart.
+  - Keep account-wide aggregation in one database operation.
+  - Use the same captured server time for summary and provider buckets.
+  - Extend authenticated Usage provider entries with required
+    `request_buckets` data.
+  - Define each request bucket with one RFC 3339 `start` and one nonnegative
+    integer `requests` value.
+  - Align each provider request bucket with the corresponding top-level Usage
+    bucket.
+  - Include one provider request bucket for each top-level bucket.
+  - Preserve each zero-valued provider request bucket.
+  - Keep provider aggregate totals in the existing `data` object.
+  - Define a separate OpenAPI provider-series schema for authenticated Usage
+    summaries.
+  - Keep the aggregate administrator Usage response unchanged.
+  - Validate the new response data once in the browser backend adapter.
+  - Reject missing, repeated, unordered, or misaligned provider bucket data.
+  - Reject a provider request sum that differs from its aggregate request
+    total.
+  - Build provider bucket data during the existing usage-record aggregation
+    pass.
+  - Do not add a presentation-specific endpoint or persisted chart data.
+  - Remove the comparison with the provider that has the largest total.
+  - Remove the old percentage, track, fill, copy, markup, and CSS contract.
+  - Label the replacement chart `Requests over time`.
+  - Show the active interval label in the chart header.
+  - Use the accepted summary bucket order without interpolation or smoothing.
+  - Use a compact semantic SVG line chart with a restrained area fill.
+  - Keep the SVG plot within the current `2.25rem` graph height.
+  - Use current chart, surface, and border tokens in each theme.
+  - Do not use color as the only activity indicator.
+  - Use a provider-local Y scale that starts at zero.
+  - Keep a zero series on the baseline without a false nonzero range.
+  - Build a zero series from the top-level buckets for a catalog provider with
+    no provider aggregate.
+  - Show the existing unavailable state when the Usage summary is unavailable.
+  - Show an empty time-span state when an all-time summary has no buckets.
+  - Do not show visible axes or tick labels in the miniature chart.
+  - Keep the exact request total in the existing provider activity row.
+  - Give each chart an accessible provider, scope, interval, and metric name.
+  - Make each exact UTC bucket start and request count available to assistive
+    technology.
+  - Do not require pointer hover to get an exact bucket value.
+  - Reuse the canonical UTC bucket-label function.
+  - Keep all chart copy in the centralized frontend copy contract.
+  - Replace a chart only after the selected scope and interval response wins
+    the current request identity check.
+  - Preserve the selected Usage tenant during an interval change.
+  - Preserve the selected interval during a Usage tenant change.
+  - Keep each provider card size and the responsive provider grid unchanged.
+  - Keep the miniature chart inside the card at every supported viewport.
+  - Preserve the provider settings, card flip, and catalog membership
+    contracts.
+  - Update the OpenAPI contract and the managed usage implementation document.
+  - Update generated public usage content through its owning generator when
+    that content describes provider cards.
+  - Do not add a compatibility response, optional legacy shape, or UI fallback.
+  Deliverables:
+  - Add typed provider request buckets to authenticated Usage summaries.
+  - Add one shared miniature time-series presentation transform.
+  - Replace the provider request meter with the compact semantic SVG chart.
+  - Remove all obsolete request-meter code and styles.
+  - Add public API, real-store, and browser regression coverage.
+  - Update current contract documents and applicable generated resources.
+  Validation:
+  - Prove that `1d` uses the same 24 starts in top-level and provider series.
+  - Prove that other intervals align top-level and provider daily starts.
+  - Prove that account and tenant scopes return their exact provider values.
+  - Prove that each provider series sum equals its aggregate request total.
+  - Prove that zero, flat, and single-spike series produce valid SVG geometry.
+  - Prove that a provider without usage shows an exact zero series.
+  - Prove that an empty all-time result does not show false activity.
+  - Prove that a scope change updates every provider chart without page reload.
+  - Prove that an interval change updates every provider chart without an
+    additional HTTP request.
+  - Prove that a stale response cannot replace the current provider charts.
+  - Prove that the UI contains `Requests over time` and no `Request volume`.
+  - Prove that assistive technology can read each exact bucket value.
+  - Prove that provider cards do not overflow desktop or narrow viewports.
+  - Prove that the administrator Usage response retains its current schema.
+  - Validate the updated OpenAPI document against real HTTP responses.
+  - Run `make ci` after the last application change.
+
+- [ ] [I240] (P0) Add first-class client protocol adapters.
+  Goal:
+  Make llm-proxy directly usable by OpenCode and standard OpenAI clients.
+  Keep `/v2` as the canonical llm-proxy contract for repository-owned clients.
+  Support multiple public protocols without duplicate provider logic or
+  inconsistent request accounting.
+
+  Requirements:
+  - Add a client protocol adapter boundary between public handlers and the
+    canonical completion coordinator.
+  - Give each adapter ownership of its paths, authentication input, request
+    validation, canonical translation, response encoding, and error encoding.
+  - Register all client protocol adapters through one typed route registry.
+  - Fail startup when two adapters register the same HTTP method and path.
+  - Do not let a client protocol adapter call a provider transport directly.
+  - Do not let one client protocol adapter call another client protocol adapter.
+  - Keep outbound provider protocol adapters separate from client protocol
+    adapters.
+  - Put the current text and dictation interfaces behind explicit client
+    protocol adapters.
+  - Keep capability, asset, management, and health resources outside this
+    adapter registry.
+  - Route each accepted request through the same tenant, catalog, timeout,
+    admission, continuation, usage, and request identifier services.
+  - Keep one canonical domain request and one closed canonical result type.
+  - Let the canonical result contain final text, structured data, or client
+    tool calls.
+  - Do not expose an upstream resource identifier or native provider payload.
+  - Treat each new endpoint as a current product interface, not a fallback or
+    deprecated compatibility path.
+  - Keep `docs/openapi.yaml` as the sole HTTP contract for every public endpoint.
+
+  - Keep `POST /v2` as the native messages endpoint.
+  - Keep the official Go package, Python package, and Go CLI on `/v2`.
+  - Keep the current root, `/v2`, `/dictate`, asset, and management wire
+    contracts unchanged.
+  - Extend `/v2` with provider-neutral function declarations and tool results.
+  - Represent a tool request as a typed result, not as failed provider text.
+  - Accept assistant tool calls and `tool` role results in later `/v2` turns.
+  - Require one exact tool call identifier for each tool result.
+  - Keep `/v2` blocking and retain its current provider lifecycle ownership.
+
+  - Add `POST /v1/chat/completions` for the supported OpenAI Chat Completions
+    subset.
+  - Add `POST /v1/responses` for the supported OpenAI Responses subset.
+  - Add `GET /v1/models` for authenticated route discovery.
+  - Add `POST /v1/audio/transcriptions` for supported dictation routes.
+  - Publish an exact supported-field matrix for each OpenAI-style endpoint.
+  - Reject each unsupported field with the documented OpenAI-style error shape.
+  - Do not claim support for an OpenAI operation that the proxy does not expose.
+
+  - Require `Authorization: Bearer <tenant-client-key>` on each `/v1` endpoint.
+  - Do not accept a tenant key in a `/v1` URL or request body.
+  - Use the bearer value only as an llm-proxy tenant client key.
+  - Never forward the bearer value as an upstream provider credential.
+  - Preserve the current server-side provider credential boundary.
+  - Keep each `/v1` request stateless.
+  - Accept `store: false` or omission and reject `store: true`.
+  - Reject `previous_response_id` until a separate durable conversation
+    contract exists.
+  - Use proxy-owned identifiers in Chat Completions and Responses objects.
+
+  - Use `provider/model` as the exact `/v1` model identifier.
+  - Resolve that identifier to one enabled provider offering before dispatch.
+  - Reject aliases, ambiguous model-only identifiers, and unknown offerings.
+  - Return only routes that the authenticated tenant can use from `/v1/models`.
+  - Derive model records from the immutable provider catalog and tenant key
+    state.
+  - Do not invent a model owner, creation date, capability, or limit.
+  - Add required catalog metadata when an OpenAI model field needs that data.
+
+  - Support text messages, system instructions, output limits, and supported
+    reasoning controls on both text endpoints.
+  - Support caller function declarations, tool selection, and parallel tool
+    calls where the exact provider offering supports them.
+  - Relay client tool calls to the caller without executing those tools.
+  - Preserve exact tool names, call identifiers, and JSON argument text.
+  - Validate each tool result against an earlier assistant tool call in the
+    submitted messages.
+  - Reject client tools before dispatch when the selected offering lacks the
+    explicit capability.
+  - Keep built-in provider web search separate from caller function tools.
+  - Add an explicit caller-tool capability to each eligible provider offering.
+  - Do not infer caller-tool support from a provider protocol or model name.
+  - Map supported JSON Schema output controls to the canonical structured
+    request contract.
+
+  - Return protocol-correct non-streaming Chat Completions and Responses objects.
+  - Support `stream: true` with the required server-sent event sequence.
+  - Emit canonical result events without exposing native provider events.
+  - For a blocking provider transport, emit the event sequence after the final
+    canonical result exists.
+  - Do not describe a buffered event sequence as provider token streaming.
+  - Propagate caller cancellation through the coordinator to active provider
+    work.
+  - Keep each streaming response within the current request timeout policy.
+  - Return normalized usage in each protocol's documented usage fields.
+  - Record one managed usage event for one accepted client request.
+  - Do not record one usage event for each streamed event or tool item.
+
+  - Map validation, authentication, rate limit, capacity, timeout, and provider
+    failures to one documented OpenAI-style error object.
+  - Include the proxy request identifier in each error response.
+  - Keep provider bodies, provider errors, credentials, prompts, tool arguments,
+    and generated content out of logs.
+  - Keep the current safe management failure records and usage summaries.
+  - Use the same response headers and request timing evidence across adapters.
+
+  - Add an OpenCode example that uses the OpenAI-compatible provider package.
+  - Add an OpenCode example that uses the Responses provider package.
+  - Require no custom OpenCode provider code for either example.
+  - Require only a base URL and tenant client key in standard OpenAI SDKs.
+  - Do not require an official llm-proxy client for a `/v1` request.
+  - Load the tenant client key from an environment variable in each example.
+  - Do not put a tenant client key in a tracked configuration file or URL.
+  - Keep provider selection visible in the configured `provider/model` value.
+  - Document the native `/v2` advantages and each compatibility boundary.
+  - Update the public integration routes and API reference from verified
+    contracts.
+
+  Deliverables:
+  - Add the typed client adapter registry and canonical tool-call domain types.
+  - Add the Chat Completions, Responses, model discovery, and transcription
+    endpoints.
+  - Update `/v2`, the official clients, the provider catalog, and OpenAPI.
+  - Add OpenCode configuration examples and an exact compatibility matrix.
+  - Add black-box tests through the real HTTP server and fake provider servers.
+  - Pin each tested OpenCode and OpenAI SDK version in test dependencies.
+
+  Validation:
+  - Prove each public adapter reaches the same route and completion coordinator.
+  - Prove no adapter calls a provider transport or another adapter directly.
+  - Prove bearer authentication selects one tenant and never reaches upstream.
+  - Prove `/v1/models` returns only exact usable `provider/model` routes.
+  - Prove Chat Completions text and tool-call rounds with the official SDK.
+  - Prove Responses text and function-call rounds with the official SDK.
+  - Prove one OpenCode task calls a safe local tool through Chat Completions.
+  - Prove one OpenCode task calls a safe local tool through Responses.
+  - Prove both OpenCode tasks use llm-proxy tenant authentication.
+  - Prove non-streaming and event-stream results have valid protocol shapes.
+  - Prove a blocking provider produces a valid buffered event sequence.
+  - Prove caller cancellation stops active provider work.
+  - Prove unsupported fields and capabilities fail before provider dispatch.
+  - Prove public errors and logs do not expose protected request data.
+  - Prove each accepted request records exactly one managed usage event.
+  - Prove current `/v2` text, media, structured output, and lifecycle behavior.
+  - Run `make ci` after the last application change.
 
 - [ ] [I239] (P1) Standardize HTTP health at `/healthz`.
   Goal:

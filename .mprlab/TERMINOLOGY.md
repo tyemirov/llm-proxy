@@ -8,6 +8,7 @@ Give each term one meaning. Use the same term for the same concept in all docume
 ## Repository Technical Nouns
 
 - `activation issue`: An issue that changes an external runtime to use completed development work.
+- `client protocol adapter`: Code that translates one public client protocol to and from canonical request and result types.
 - `development completion`: Completion of the specified repository changes and repository validation.
 - `exact model`: One canonical model version that a client can select.
 - `GPU lease`: An exclusive permit for one runtime to use one GPU during an operation.
