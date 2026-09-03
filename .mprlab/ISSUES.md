@@ -25,6 +25,28 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B172] (P1) {I238,B171} Start each provider card with the Default tenant.
+  Goal:
+  A provider card must start with the first account tenant. It starts with the
+  retained Settings modal tenant after that tenant changes.
+  Requirements:
+  - Initialize each newly opened provider card with the first account tenant.
+  - Keep provider card initialization independent from the Settings modal tenant.
+  - Preserve the isolated provider card tenant change behavior.
+  Deliverables:
+  - Correct the provider card tenant initialization boundary.
+  - Add browser coverage for a retained non-default Settings modal tenant.
+  Validation:
+  - Select a non-default tenant in the Settings modal.
+  - Close the Settings modal.
+  - Open a provider card.
+  - Prove that the provider card selects the first account tenant.
+  - Prove that the Settings modal keeps its prior tenant.
+  - Run `make ci` after the last application change.
+  Resolution:
+  New provider cards now select the first account tenant. This selection does
+  not use the retained Settings modal tenant. Browser coverage verifies the
+  Default provider profile and the retained Settings modal context.
 - [x] [B171] (P1) {I238} Keep tenant changes inside the open provider card.
   Goal:
   The tenant selector must be the only tenant name in an open provider card.
