@@ -31,8 +31,7 @@ type requestTelemetry struct {
 	endpoint  string
 	startedAt time.Time
 
-	provider              string
-	model                 string
+	route                 managedUsageRoute
 	requestTimeoutSeconds int
 	routeBound            bool
 
@@ -89,13 +88,22 @@ func requestTelemetryFromContext(requestContext context.Context) *requestTelemet
 	return telemetry
 }
 
-func (telemetry *requestTelemetry) bindRoute(provider string, model string, requestTimeoutSeconds int) {
+func (telemetry *requestTelemetry) bindRoute(route managedUsageRoute, requestTimeoutSeconds int) {
 	telemetry.mutex.Lock()
 	defer telemetry.mutex.Unlock()
-	telemetry.provider = provider
-	telemetry.model = model
+	telemetry.route = route
 	telemetry.requestTimeoutSeconds = requestTimeoutSeconds
 	telemetry.routeBound = true
+}
+
+func (telemetry *requestTelemetry) usageRoute() *managedUsageRoute {
+	telemetry.mutex.Lock()
+	defer telemetry.mutex.Unlock()
+	if !telemetry.routeBound {
+		return nil
+	}
+	route := telemetry.route
+	return &route
 }
 
 func (telemetry *requestTelemetry) addPhase(phase requestTelemetryPhase, elapsed time.Duration) {
@@ -151,8 +159,8 @@ func (telemetry *requestTelemetry) recordOpenAIProgress(structuredLogger *zap.Su
 	createCount := telemetry.openAICreateCount
 	pollCount := telemetry.openAIPollCount
 	requestID := telemetry.requestID
-	provider := telemetry.provider
-	model := telemetry.model
+	provider := telemetry.route.providerIdentifier.string()
+	model := telemetry.route.modelIdentifier.string()
 	elapsedMilliseconds := time.Since(telemetry.startedAt).Milliseconds()
 	accumulatedOutputBytes := telemetry.completedOutputBytes + currentOutputBytes
 	telemetry.mutex.Unlock()
@@ -209,8 +217,8 @@ func (telemetry *requestTelemetry) recordGeminiProgress(structuredLogger *zap.Su
 		progressCount = telemetry.geminiDeleteCount
 	}
 	requestID := telemetry.requestID
-	provider := telemetry.provider
-	model := telemetry.model
+	provider := telemetry.route.providerIdentifier.string()
+	model := telemetry.route.modelIdentifier.string()
 	elapsedMilliseconds := time.Since(telemetry.startedAt).Milliseconds()
 	telemetry.mutex.Unlock()
 
@@ -325,8 +333,8 @@ func recordContinuationProgress(requestContext context.Context, structuredLogger
 	attemptCount := telemetry.continuationAttemptCount
 	telemetry.completedOutputBytes = accumulatedOutputBytes
 	requestID := telemetry.requestID
-	provider := telemetry.provider
-	model := telemetry.model
+	provider := telemetry.route.providerIdentifier.string()
+	model := telemetry.route.modelIdentifier.string()
 	elapsedMilliseconds := time.Since(telemetry.startedAt).Milliseconds()
 	telemetry.mutex.Unlock()
 
@@ -362,8 +370,8 @@ func (telemetry *requestTelemetry) snapshot() (requestTelemetrySnapshot, bool) {
 	return requestTelemetrySnapshot{
 		requestID:             telemetry.requestID,
 		endpoint:              telemetry.endpoint,
-		provider:              telemetry.provider,
-		model:                 telemetry.model,
+		provider:              telemetry.route.providerIdentifier.string(),
+		model:                 telemetry.route.modelIdentifier.string(),
 		requestTimeoutSeconds: telemetry.requestTimeoutSeconds,
 		totalLatency:          time.Since(telemetry.startedAt),
 		authentication:        telemetry.authentication,

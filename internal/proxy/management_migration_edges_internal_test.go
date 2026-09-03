@@ -526,6 +526,7 @@ func TestMigrateLegacyManagedTenantSchemaRollsBackTransactionalFailures(t *testi
 		}
 		if createError := database.Table(managedUsageEventTable).Create(&legacyManagedUsageEventRecord{
 			ID: 1, UserID: tenantRecord.UserID, TenantID: tenantRecord.TenantID,
+			Endpoint: usageEndpointText, ProviderID: "__credential_validation__",
 			StatusCode: http.StatusOK, Success: true, CreatedAt: now,
 		}).Error; createError != nil {
 			subTest.Fatalf("seed usage: %v", createError)
@@ -609,6 +610,12 @@ func TestMigrateLegacyManagedTenantSchemaRollsBackTransactionalFailures(t *testi
 		{
 			name:      "provider connection data",
 			providers: invalidConnectionProviders,
+		},
+		{
+			name: "clear invalid usage route",
+			configure: func(subTest *testing.T, database *gorm.DB) {
+				registerManagedGORMError(subTest, database, "migrate_clear_invalid_usage_route", "update", managedUsageEventTable, errInternalTestDatabase)
+			},
 		},
 		{
 			name: "drop legacy table",

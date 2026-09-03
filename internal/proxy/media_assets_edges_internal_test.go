@@ -820,7 +820,9 @@ func TestV2RouteMIMERejectionClosesTheResolvedAsset(t *testing.T) {
 	payload := chatV2RequestPayload{Messages: &messages, Model: ModelNameGrok45}
 	response := httptest.NewRecorder()
 	ginContext, _ := gin.CreateTestContext(response)
-	ginContext.Request = httptest.NewRequest(http.MethodPost, "/v2?provider="+ProviderNameXAI, nil)
+	ginContext.Set(contextKeyRequestTimeoutState, &requestTimeoutState{budget: newRequestTimeoutBudget(10)})
+	request := httptest.NewRequest(http.MethodPost, "/v2?provider="+ProviderNameXAI, nil)
+	ginContext.Request = request.WithContext(requestContextWithTelemetry(request.Context(), newRequestTelemetry("route-mime", "/v2")))
 	_, accepted := chatRequestFromV2Payload(
 		ginContext,
 		payload,

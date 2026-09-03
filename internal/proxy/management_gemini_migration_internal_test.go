@@ -177,11 +177,11 @@ func TestManagedGeminiModelSelectionMigrationsMoveRoutingStateAndPreserveUsage(t
 				}
 			}
 			var historicalUsage []managedUsageEventRecord
-			if queryError := fixture.database.Where(&managedUsageEventRecord{ProviderID: ProviderNameGemini}).Order("id").Find(&historicalUsage).Error; queryError != nil || len(historicalUsage) != len(fixture.usage) {
+			if queryError := fixture.database.Order("id").Find(&historicalUsage).Error; queryError != nil || len(historicalUsage) != len(fixture.usage) {
 				t.Fatalf("historical Gemini usage=%+v error=%v", historicalUsage, queryError)
 			}
 			for index := range historicalUsage {
-				if historicalUsage[index].ModelID != fixture.usage[index].ModelID {
+				if historicalUsage[index] != managedUsageRecordWithoutRoute(fixture.usage[index]) {
 					t.Fatalf("historical Gemini usage changed=%+v", historicalUsage)
 				}
 			}
@@ -257,7 +257,7 @@ func TestManagedGeminiModelSelectionMigrationsStartFromSchemaEight(t *testing.T)
 			}
 
 			var migratedUsage managedUsageEventRecord
-			if queryError := fixture.database.First(&migratedUsage, historicalUsage.ID).Error; queryError != nil || migratedUsage != historicalUsage {
+			if queryError := fixture.database.First(&migratedUsage, historicalUsage.ID).Error; queryError != nil || migratedUsage != managedUsageRecordWithoutRoute(historicalUsage) {
 				t.Fatalf("migrated Gemini usage=%+v error=%v", migratedUsage, queryError)
 			}
 			var latest managedSchemaMigrationRecord

@@ -59,10 +59,14 @@ type usageBucketUnit string
 
 type managedUsageOutcomeCode string
 
+type managedUsageRoute struct {
+	providerIdentifier providerID
+	modelIdentifier    modelID
+}
+
 type managedUsageEvent struct {
 	endpoint            string
-	providerIdentifier  string
-	modelIdentifier     string
+	route               *managedUsageRoute
 	statusCode          int
 	outcomeCode         managedUsageOutcomeCode
 	latencyMilliseconds int64
@@ -357,21 +361,27 @@ func (interval usageInterval) finiteWindow() (time.Duration, int, usageBucketUni
 
 func (store *managedTenantStore) newManagedUsageRecord(requestTenant tenant, event managedUsageEvent) (managedUsageEventRecord, error) {
 	timestamp := store.now()
+	providerIdentifier := constants.EmptyString
+	modelIdentifier := constants.EmptyString
+	if event.route != nil {
+		providerIdentifier = event.route.providerIdentifier.string()
+		modelIdentifier = event.route.modelIdentifier.string()
+	}
 	outcomeCode, outcomeError := newManagedUsageOutcomeCode(string(event.outcomeCode))
 	if outcomeError != nil {
 		return managedUsageEventRecord{
 			TenantID:   requestTenant.identifier.string(),
 			Endpoint:   event.endpoint,
-			ProviderID: event.providerIdentifier,
-			ModelID:    event.modelIdentifier,
+			ProviderID: providerIdentifier,
+			ModelID:    modelIdentifier,
 			StatusCode: event.statusCode,
 		}, fmt.Errorf("%w: tenant_id=%s: %w", errManagedTenantStorePersist, requestTenant.identifier.string(), outcomeError)
 	}
 	usageRecord := managedUsageEventRecord{
 		TenantID:            requestTenant.identifier.string(),
 		Endpoint:            event.endpoint,
-		ProviderID:          event.providerIdentifier,
-		ModelID:             event.modelIdentifier,
+		ProviderID:          providerIdentifier,
+		ModelID:             modelIdentifier,
 		StatusCode:          event.statusCode,
 		Success:             outcomeCode == managedUsageOutcomeSuccess,
 		OutcomeCode:         outcomeCode,
@@ -745,16 +755,18 @@ func newManagedUsageAccumulator() managedUsageAccumulator {
 
 func (accumulator *managedUsageAccumulator) apply(record managedUsageEventRecord) {
 	applyUsageRecord(&accumulator.totals, record)
-	providerAggregate := accumulator.providers[record.ProviderID]
-	applyUsageRecord(&providerAggregate, record)
-	accumulator.providers[record.ProviderID] = providerAggregate
+	if record.ProviderID != constants.EmptyString && record.ModelID != constants.EmptyString {
+		providerAggregate := accumulator.providers[record.ProviderID]
+		applyUsageRecord(&providerAggregate, record)
+		accumulator.providers[record.ProviderID] = providerAggregate
 
-	modelKey := record.ProviderID + "\x00" + record.ModelID
-	modelBucket := accumulator.models[modelKey]
-	modelBucket.providerIdentifier = record.ProviderID
-	modelBucket.modelIdentifier = record.ModelID
-	applyUsageRecord(&modelBucket.aggregate, record)
-	accumulator.models[modelKey] = modelBucket
+		modelKey := record.ProviderID + "\x00" + record.ModelID
+		modelBucket := accumulator.models[modelKey]
+		modelBucket.providerIdentifier = record.ProviderID
+		modelBucket.modelIdentifier = record.ModelID
+		applyUsageRecord(&modelBucket.aggregate, record)
+		accumulator.models[modelKey] = modelBucket
+	}
 	accumulator.statuses[record.StatusCode]++
 }
 
