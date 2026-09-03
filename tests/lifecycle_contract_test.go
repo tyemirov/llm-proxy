@@ -336,7 +336,7 @@ func TestOperationalProductionLifecycleKeepsPolicyInAppAndDelegatesToSiblingGate
 	}
 }
 
-func TestOperationalReleaseDecisionMustMatchOfficialClientVersion(testingInstance *testing.T) {
+func TestOperationalReleaseDecisionMustMatchRepositoryVersion(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 
 	testCases := []struct {
@@ -346,29 +346,29 @@ func TestOperationalReleaseDecisionMustMatchOfficialClientVersion(testingInstanc
 		wantText   string
 	}{
 		{
-			name:       "exact official version",
-			output:     `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"v1.4.0"}`,
+			name:       "exact repository version",
+			output:     `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"v1.4.1"}`,
 			wantStatus: true,
-			wantText:   "LLM_PROXY_RELEASE_POLICY_OK version=v1.4.0",
+			wantText:   "LLM_PROXY_RELEASE_POLICY_OK version=v1.4.1",
 		},
 		{
 			name:     "different major one version",
 			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"v1.3.0"}`,
-			wantText: "llm_proxy.release_version_invalid: release version must match official client version v1.4.0",
+			wantText: "llm_proxy.release_version_invalid: release version must match repository version v1.4.1",
 		},
 		{
 			name:     "higher major",
 			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"v2.0.0"}`,
-			wantText: "llm_proxy.release_version_invalid: release version must match official client version v1.4.0",
+			wantText: "llm_proxy.release_version_invalid: release version must match repository version v1.4.1",
 		},
 		{
 			name:     "missing fixed major",
-			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver"},"next_version":"v1.4.0"}`,
+			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver"},"next_version":"v1.4.1"}`,
 			wantText: "llm_proxy.release_policy_invalid: expected SemVer decision with fixed major 1",
 		},
 		{
 			name:     "different fixed major",
-			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":2},"next_version":"v1.4.0"}`,
+			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":2},"next_version":"v1.4.1"}`,
 			wantText: "llm_proxy.release_policy_invalid: expected SemVer decision with fixed major 1",
 		},
 		{
@@ -389,6 +389,126 @@ func TestOperationalReleaseDecisionMustMatchOfficialClientVersion(testingInstanc
 			}
 		})
 	}
+
+	testingInstance.Run("repository version drift", func(testingInstance *testing.T) {
+		fixtureRoot := newOperationalReleaseVersionFixture(testingInstance, repositoryRoot)
+		projectPath := filepath.Join(fixtureRoot, "python", "pyproject.toml")
+		projectBytes, readError := os.ReadFile(projectPath)
+		if readError != nil {
+			testingInstance.Fatalf("read fixture Python project: %v", readError)
+		}
+		writeOperationalFile(
+			testingInstance,
+			projectPath,
+			strings.Replace(string(projectBytes), `version = "1.4.1"`, `version = "1.4.0"`, 1),
+			0o644,
+		)
+		command := exec.Command(filepath.Join(fixtureRoot, "scripts", "validate-release-decision"))
+		command.Dir = fixtureRoot
+		command.Stdin = strings.NewReader(`{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"v1.4.1"}`)
+		output, runError := command.CombinedOutput()
+		if runError == nil || !strings.Contains(string(output), "llm_proxy.release_policy_invalid: Python project version must match repository version 1.4.1") {
+			testingInstance.Fatalf("repository version drift error=%v output=%s", runError, output)
+		}
+	})
+}
+
+func TestOperationalRepositoryReleaseVersionCommand(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	checkCommand := exec.Command("make", "check-release-version")
+	checkCommand.Dir = repositoryRoot
+	checkOutput, checkError := checkCommand.CombinedOutput()
+	if checkError != nil || !strings.Contains(string(checkOutput), "LLM_PROXY_RELEASE_VERSION_OK version=v1.4.1") {
+		testingInstance.Fatalf("repository release version check error=%v output=%s", checkError, checkOutput)
+	}
+
+	testingInstance.Run("updates all explicit versions", func(testingInstance *testing.T) {
+		fixtureRoot := newOperationalReleaseVersionFixture(testingInstance, repositoryRoot)
+		setOutput, setError := runOperationalReleaseVersionMakeCommand(testingInstance, fixtureRoot, "set-release-version", "1.4.2")
+		if setError != nil || !strings.Contains(setOutput, "LLM_PROXY_RELEASE_VERSION_UPDATED version=v1.4.2") {
+			testingInstance.Fatalf("set repository release version error=%v output=%s", setError, setOutput)
+		}
+		checkOutput, checkError := runOperationalReleaseVersionMakeCommand(testingInstance, fixtureRoot, "check-release-version", "")
+		if checkError != nil || !strings.Contains(checkOutput, "LLM_PROXY_RELEASE_VERSION_OK version=v1.4.2") {
+			testingInstance.Fatalf("check updated repository release version error=%v output=%s", checkError, checkOutput)
+		}
+		for relativePath, expectedText := range map[string]string{
+			"VERSION":               "1.4.2\n",
+			"python/pyproject.toml": `version = "1.4.2"`,
+			"python/uv.lock":        `version = "1.4.2"`,
+		} {
+			fileBytes, readError := os.ReadFile(filepath.Join(fixtureRoot, filepath.FromSlash(relativePath)))
+			if readError != nil || !strings.Contains(string(fileBytes), expectedText) {
+				testingInstance.Errorf("updated %s error=%v contents=%s", relativePath, readError, fileBytes)
+			}
+		}
+	})
+
+	for _, testCase := range []struct {
+		name    string
+		version string
+		want    string
+	}{
+		{name: "rejects malformed value", version: "v1.4.2", want: "target version must use canonical major version 1"},
+		{name: "rejects major two", version: "2.0.0", want: "target version must use canonical major version 1"},
+		{name: "rejects decrease", version: "1.4.0", want: "repository version cannot decrease from 1.4.1 to 1.4.0"},
+	} {
+		testingInstance.Run(testCase.name, func(testingInstance *testing.T) {
+			fixtureRoot := newOperationalReleaseVersionFixture(testingInstance, repositoryRoot)
+			paths := []string{"VERSION", "python/pyproject.toml", "python/uv.lock"}
+			before := make(map[string]string, len(paths))
+			for _, relativePath := range paths {
+				fileBytes, readError := os.ReadFile(filepath.Join(fixtureRoot, filepath.FromSlash(relativePath)))
+				if readError != nil {
+					testingInstance.Fatalf("read %s before rejected update: %v", relativePath, readError)
+				}
+				before[relativePath] = string(fileBytes)
+			}
+			output, runError := runOperationalReleaseVersionMakeCommand(testingInstance, fixtureRoot, "set-release-version", testCase.version)
+			if runError == nil || !strings.Contains(output, testCase.want) {
+				testingInstance.Fatalf("rejected version error=%v output=%s", runError, output)
+			}
+			for _, relativePath := range paths {
+				fileBytes, readError := os.ReadFile(filepath.Join(fixtureRoot, filepath.FromSlash(relativePath)))
+				if readError != nil || string(fileBytes) != before[relativePath] {
+					testingInstance.Errorf("rejected update changed %s error=%v", relativePath, readError)
+				}
+			}
+		})
+	}
+}
+
+func newOperationalReleaseVersionFixture(testingInstance *testing.T, repositoryRoot string) string {
+	testingInstance.Helper()
+	fixtureRoot := testingInstance.TempDir()
+	for _, relativePath := range []string{
+		"Makefile",
+		"VERSION",
+		"python/pyproject.toml",
+		"python/uv.lock",
+		"scripts/release_version.py",
+		"scripts/validate-release-decision",
+		"scripts/validate_release_policy.py",
+	} {
+		copyOperationalFile(
+			testingInstance,
+			filepath.Join(repositoryRoot, filepath.FromSlash(relativePath)),
+			filepath.Join(fixtureRoot, filepath.FromSlash(relativePath)),
+		)
+	}
+	return fixtureRoot
+}
+
+func runOperationalReleaseVersionMakeCommand(testingInstance *testing.T, fixtureRoot string, target string, version string) (string, error) {
+	testingInstance.Helper()
+	commandArguments := []string{"--no-print-directory", target}
+	if version != "" {
+		commandArguments = append(commandArguments, "RELEASE_VERSION="+version)
+	}
+	command := exec.Command("make", commandArguments...)
+	command.Dir = fixtureRoot
+	output, runError := command.CombinedOutput()
+	return string(output), runError
 }
 
 func TestOperationalPagesArtifactUsesFrontendRendererWithBackendRESTData(testingInstance *testing.T) {
