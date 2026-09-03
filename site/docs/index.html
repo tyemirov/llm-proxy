@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="6430e23194529167bbe043291270aa43d3bed22fc0553a49fa8179a295dbab2b">
+    <meta name="openapi-source-sha256" content="2788c8bc52b7632d2d49ae42284aa387f6b4be695d2abce1ff066fe4d4a60f3f">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="6430e23194529167bbe043291270aa43d3bed22fc0553a49fa8179a295dbab2b">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="2788c8bc52b7632d2d49ae42284aa387f6b4be695d2abce1ff066fe4d4a60f3f">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>6430e23194529167bbe043291270aa43d3bed22fc0553a49fa8179a295dbab2b</code></span>
+          <span>Source SHA-256 <code>2788c8bc52b7632d2d49ae42284aa387f6b4be695d2abce1ff066fe4d4a60f3f</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -3202,6 +3202,8 @@ components:
       properties:
         provider:
           type: string
+          minLength: 1
+          description: Exact provider identifier from a resolved typed route.
         data:
           $ref: &#39;#/components/schemas/UsageAggregate&#39;
     UsageModel:
@@ -3214,8 +3216,12 @@ components:
       properties:
         provider:
           type: string
+          minLength: 1
+          description: Exact provider identifier from a resolved typed route.
         model:
           type: string
+          minLength: 1
+          description: Exact model identifier from the same resolved typed route.
         data:
           $ref: &#39;#/components/schemas/UsageAggregate&#39;
     UsageStatus:
@@ -3303,8 +3309,10 @@ components:
           type: string
         provider:
           type: string
+          description: Exact resolved provider identifier, or blank when the request failed before route resolution.
         model:
           type: string
+          description: Exact resolved model identifier, or blank when the request failed before route resolution.
         status_code:
           type: integer
           minimum: 100
@@ -3362,8 +3370,10 @@ components:
           type: string
         provider:
           type: string
+          description: Exact resolved provider identifier, or blank when the request failed before route resolution.
         model:
           type: string
+          description: Exact resolved model identifier, or blank when the request failed before route resolution.
         status_code:
           type: integer
           minimum: 100
