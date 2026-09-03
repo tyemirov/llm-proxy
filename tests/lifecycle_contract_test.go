@@ -53,7 +53,7 @@ func TestOperationalRepositoryOwnsVersionlessLifecycle(testingInstance *testing.
 		testingInstance.Fatalf("unexpected lifecycle owner: %#v", resourcesDocument["owner"])
 	}
 	release, releaseAvailable := resourcesDocument["release"].(map[string]any)
-	if !releaseAvailable || len(release) != 1 || release["scheme"] != "semver" {
+	if !releaseAvailable || len(release) != 2 || release["scheme"] != "semver" || release["fixed_major"] != 1 {
 		testingInstance.Fatalf("unexpected lifecycle release policy: %#v", resourcesDocument["release"])
 	}
 	if _, dependenciesAvailable := resourcesDocument["dependencies"]; dependenciesAvailable {
@@ -347,24 +347,29 @@ func TestOperationalReleaseDecisionMustMatchOfficialClientVersion(testingInstanc
 	}{
 		{
 			name:       "exact official version",
-			output:     `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver"},"next_version":"v1.3.0"}`,
+			output:     `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"v1.4.0"}`,
 			wantStatus: true,
-			wantText:   "LLM_PROXY_RELEASE_POLICY_OK version=v1.3.0",
+			wantText:   "LLM_PROXY_RELEASE_POLICY_OK version=v1.4.0",
 		},
 		{
 			name:     "different major one version",
-			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver"},"next_version":"v1.2.2"}`,
-			wantText: "llm_proxy.release_version_invalid: release version must match official client version v1.3.0",
+			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"v1.3.0"}`,
+			wantText: "llm_proxy.release_version_invalid: release version must match official client version v1.4.0",
 		},
 		{
 			name:     "higher major",
-			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver"},"next_version":"v2.0.0"}`,
-			wantText: "llm_proxy.release_version_invalid: release version must match official client version v1.3.0",
+			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"v2.0.0"}`,
+			wantText: "llm_proxy.release_version_invalid: release version must match official client version v1.4.0",
 		},
 		{
-			name:     "gateway version override",
-			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"v1.3.0"}`,
-			wantText: "llm_proxy.release_policy_invalid: expected standard SemVer decision",
+			name:     "missing fixed major",
+			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver"},"next_version":"v1.4.0"}`,
+			wantText: "llm_proxy.release_policy_invalid: expected SemVer decision with fixed major 1",
+		},
+		{
+			name:     "different fixed major",
+			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":2},"next_version":"v1.4.0"}`,
+			wantText: "llm_proxy.release_policy_invalid: expected SemVer decision with fixed major 1",
 		},
 		{
 			name:     "missing decision",
