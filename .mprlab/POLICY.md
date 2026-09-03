@@ -25,7 +25,19 @@ This policy controls all agent work in this repository.
 - Increasing waits or timeouts as the primary fix for flakiness.
 - Boolean parameters that switch unrelated behaviors.
 - Hardcoded workflow, path, event, or message literals when a canonical constant or backend payload exists.
-- Unit tests as a substitute for public contract coverage.
+- Unit tests in any stack.
+
+## Selected Manifest Contract
+
+- Keep the selected application manifest versionless.
+- Keep `owner`, `release`, and `resources` as the current baseline fields.
+- Each later gateway must accept every manifest that an earlier versionless gateway accepted.
+- Keep each accepted field name, type, requirement, and function.
+- A field added to an existing shape must be optional.
+- A field added to an existing shape must have one canonical default.
+- Normalize that default before manifest identity calculation.
+- Add a resource kind only with one closed shape.
+- Reject unknown fields and `schema_version`.
 
 ## Credential Discovery
 
@@ -45,13 +57,13 @@ This policy controls all agent work in this repository.
 
 ## Validation
 
-- Use repository-native `make` targets when available.
-- Use a satisfactory CI result only when the source code, tests, config, dependencies, and build files stay the same.
-- If there is no applicable satisfactory result, run `make ci` once before you change files.
-- During the change, run the smallest repository target that validates the changed contract.
-- After the last source, test, config, dependency, or build change, run `make ci` once.
+- Use repository-native `make` targets.
+- Do not run a pre-edit or per-issue `make ci` baseline.
+- During the change, run the smallest public-entrypoint target that validates the changed contract.
+- After the last stack change, run `make ci` once at the documented stack completion checkpoint.
 - If this run reports an error, run the target that reports the error during the correction.
 - After the last correction, run `make ci` once.
+- Run `make verify` only when the operator explicitly selects the complete qualification lane.
 - When `make ci` includes `make fmt`, `make lint`, and `make test`, use its result for those targets.
 - During the change or error diagnosis, run the necessary component target.
 - Run a component target when `make ci` does not include the necessary check.
@@ -89,8 +101,8 @@ This policy controls all agent work in this repository.
 - Use `@dataclass(frozen=True)` or Pydantic when already in use.
 - Validate in constructors or edge adapters.
 - Use type hints throughout.
-- Prefer pytest scenarios through public entry points.
-- Unit tests are allowed only as narrow guardrails for pure deterministic helpers.
+- Use pytest only for integration and end-to-end scenarios through public entry points.
+- Do not use unit tests.
 
 ### JavaScript And Frontend
 

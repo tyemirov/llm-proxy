@@ -19,7 +19,12 @@ Docker and container guidance for this repository. Use this guide only when Dock
 
 - Treat local orchestration and production orchestration as different contracts.
 - MPR Lab has no current plan to put these contracts together.
-- Keep app-owned local orchestration separate from the current selected application manifest.
+- Use the permanent versionless selected-manifest contract for production.
+- Reject a selected manifest that contains `schema_version`.
+- Each later gateway must accept every manifest that an earlier versionless gateway accepted.
+- A field added to an existing shape must be optional and have one canonical default.
+- The gateway must normalize that default before manifest identity calculation.
+- Keep app-owned local orchestration during a versionless selected-manifest cutover.
 - A local topology can be different from the production topology.
 - Keep local orchestration files outside `.mprlab/deploy/`.
 - Do not use local orchestration files as production lifecycle inputs.
