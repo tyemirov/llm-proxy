@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Added one canonical repository release version and set it to `v1.4.1`.
+  Added one command that updates the canonical version, Python project, and
+  Python lock metadata. CI and the release decision validator now reject a
+  version difference.
 - Excluded unresolved and invalid routes from provider and model usage
   dimensions. Invalid requests remain in totals, status, outcome, latency, and
   failure reports. Added a bounded store migration that clears only invalid
