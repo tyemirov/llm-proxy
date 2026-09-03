@@ -9,7 +9,8 @@ All notable changes to this project will be documented in this file.
   its system prompt and accepts pasted replacement keys directly. Key links and
   deletion controls now stay beside their related fields. Removed the repeated
   tenant heading. Isolated each tenant change to the open card and preserved
-  the management site context.
+  the management site context. Corrected new cards to use the Default tenant
+  after the Settings modal retains another tenant.
 - Separated provider API, model family, and capability labels on Usage Overview
   cards. Added explicit API service titles, media analysis capabilities, and API
   key settings gear controls. Added request volume bars with one shared scale.
