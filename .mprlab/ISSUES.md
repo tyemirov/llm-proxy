@@ -664,6 +664,43 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [ ] [I239] (P1) Standardize HTTP health at `/healthz`.
+  Goal:
+  Make `/healthz` the canonical health endpoint for the LLM Proxy API and
+  static web origins. Use the endpoint for readiness without business-resource requests.
+
+  Requirements:
+  - Add unauthenticated `GET /healthz` to the API origin.
+  - Publish a static `/healthz` resource for the GitHub Pages origin.
+  - Return `200` only when each origin can serve its current application contract.
+  - Return a non-success status when a required runtime dependency prevents API service.
+  - Send `Cache-Control: no-store` on every health response.
+  - Keep each response free from credentials, provider data, and internal state.
+  - Do not verify provider credentials or dispatch a provider during a probe.
+  - Do not mutate application state during a probe.
+  - Do not record a probe as application usage or an audit event.
+  - Do not emit routine information-level request events for successful probes.
+  - Keep failed probe evidence in container and deployment diagnostics.
+  - Replace capability, config, and business-root readiness probes with `/healthz`.
+  - Keep capability and config endpoints for their application functions only.
+  - Use `/healthz` for local Compose, runtime capability, and public health checks.
+  - Set `start_interval: 1s` and `interval: 30s` for Docker probes.
+  - Set a bounded `start_period` for the API startup contract.
+  - Keep the selected manifest contract unchanged.
+
+  Deliverables:
+  - Update the API, static artifact, request logging, orchestration, manifest, documentation, and black-box tests.
+
+  Validation:
+  - Verify unauthenticated `GET /healthz` returns `200` and `Cache-Control: no-store` on each origin.
+  - Verify a required dependency failure returns a non-success API status without provider work.
+  - Verify the static publication artifact contains `/healthz`.
+  - Verify no readiness probe requests a capability, config, or business resource.
+  - Verify Docker probes use the required startup and steady intervals.
+  - Verify successful probes create no routine request events.
+  - Verify failed probes retain diagnostic evidence.
+  - Run `make ci`.
+
 - [x] [I238] (P1) {I027,I237} Make provider card settings compact and automatic.
   Goal:
   A user can manage one provider connection without a manual completion action
