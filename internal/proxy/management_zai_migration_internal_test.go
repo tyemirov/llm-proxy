@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -163,8 +162,8 @@ func TestManagedZAIProviderMigrationCanonicalizesCurrentRoutesAndPreservesUsage(
 	if tenantRecord.defaults() != expectedDefaults || !tenantRecord.UpdatedAt.Equal(fixture.tenant.UpdatedAt) {
 		t.Fatalf("migrated defaults=%+v updated_at=%s", tenantRecord.defaults(), tenantRecord.UpdatedAt)
 	}
-	var historicalUsage []managedUsageEventRecord
-	if queryError := fixture.database.Where(&managedUsageEventRecord{ProviderID: retiredZhipuProviderIdentifier}).Order("id").Find(&historicalUsage).Error; queryError != nil || !slices.Equal(historicalUsage, []managedUsageEventRecord{fixture.usage}) {
+	var historicalUsage managedUsageEventRecord
+	if queryError := fixture.database.First(&historicalUsage, fixture.usage.ID).Error; queryError != nil || historicalUsage != managedUsageRecordWithoutRoute(fixture.usage) {
 		t.Fatalf("historical usage=%+v error=%v", historicalUsage, queryError)
 	}
 	var latest managedSchemaMigrationRecord

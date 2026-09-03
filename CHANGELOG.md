@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Excluded unresolved and invalid routes from provider and model usage
+  dimensions. Invalid requests remain in totals, status, outcome, latency, and
+  failure reports. Added a bounded store migration that clears only invalid
+  provider and model dimensions.
 - Set the next official client version to `v1.4.0`. Fixed the application
   release policy at major version `1` for Go module compatibility.
 - Made provider card settings compact and automatic. Each card now starts with

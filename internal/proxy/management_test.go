@@ -1831,11 +1831,27 @@ func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
 	if usage.Totals.TextRequests != 3 || usage.Totals.DictationRequests != 2 || usage.Totals.RequestTokens != 4 || usage.Totals.ResponseTokens != 6 || usage.Totals.TotalTokens != 10 {
 		t.Fatalf("usage totals=%+v", usage.Totals)
 	}
-	if len(usage.Providers) != 2 || usage.Providers[0].Provider != proxy.ProviderNameDeepSeek || usage.Providers[0].Data.Requests != 3 || usage.Providers[1].Provider != proxy.ProviderNameOpenAI || usage.Providers[1].Data.Requests != 2 {
+	if len(usage.Providers) != 2 || usage.Providers[0].Provider != proxy.ProviderNameDeepSeek || usage.Providers[0].Data.Requests != 1 || usage.Providers[1].Provider != proxy.ProviderNameOpenAI || usage.Providers[1].Data.Requests != 1 {
 		t.Fatalf("providers=%+v", usage.Providers)
+	}
+	if len(usage.Models) != 2 || usage.Models[0].Provider != proxy.ProviderNameDeepSeek || usage.Models[0].Model != proxy.ModelNameDeepSeekV4Flash || usage.Models[0].Data.Requests != 1 || usage.Models[1].Provider != proxy.ProviderNameOpenAI || usage.Models[1].Model != proxy.DefaultDictationModel || usage.Models[1].Data.Requests != 1 {
+		t.Fatalf("models=%+v", usage.Models)
 	}
 	if len(usage.StatusCodes) != 3 || usage.StatusCodes[0].StatusCode != http.StatusOK || usage.StatusCodes[0].Requests != 1 || usage.StatusCodes[1].StatusCode != http.StatusBadRequest || usage.StatusCodes[1].Requests != 3 || usage.StatusCodes[2].StatusCode != http.StatusBadGateway || usage.StatusCodes[2].Requests != 1 {
 		t.Fatalf("status codes=%+v", usage.StatusCodes)
+	}
+	failures := requestManagementUsageFailures(t, router, userOneCookie, userOneTenantPath, "30d", 10, "")
+	if len(failures.Failures) != 4 {
+		t.Fatalf("failures=%+v", failures)
+	}
+	resolvedUpstreamFailureFound := false
+	for _, failure := range failures.Failures {
+		if failure.StatusCode == http.StatusBadGateway {
+			resolvedUpstreamFailureFound = failure.Provider == proxy.ProviderNameOpenAI && failure.Model == proxy.DefaultDictationModel
+		}
+	}
+	if !resolvedUpstreamFailureFound {
+		t.Fatalf("resolved upstream failure lost route: %+v", failures.Failures)
 	}
 	if isolatedUsage := requestManagementUsage(t, router, userTwoCookie, "all"); isolatedUsage.Totals.Requests != 0 || len(isolatedUsage.Buckets) != 0 {
 		t.Fatalf("user two usage leaked: %+v", isolatedUsage.Totals)
@@ -1875,31 +1891,10 @@ func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
 	}
 }
 
-func TestManagementValidationFailureUsageUsesSelectedProviderDefaultModel(t *testing.T) {
+func TestManagementPreRouteValidationFailuresHaveNoUsageDimensions(t *testing.T) {
 	router := newManagementRouter(t, proxy.Configuration{})
 	sessionCookie := managementSessionCookie(t, "usage-provider-default-user")
 	tenantPath := managementDefaultTenantTestPath(t, router, sessionCookie, "")
-
-	for _, providerKey := range []struct {
-		provider string
-		apiKey   string
-		model    string
-	}{
-		{provider: proxy.ProviderNameOpenAI, apiKey: testManagementOpenAIKey, model: proxy.ModelNameGPT41},
-		{provider: proxy.ProviderNameGemini, apiKey: testGeminiKey, model: proxy.ModelNameGemini35Flash},
-	} {
-		request := authenticatedJSONRequest(
-			http.MethodPut,
-			tenantPath+"/provider-connections/"+providerKey.provider,
-			managementProviderKeyRequestBody(t, providerKey.apiKey, providerKey.model, ""),
-			sessionCookie,
-		)
-		response := httptest.NewRecorder()
-		router.ServeHTTP(response, request)
-		if response.Code != http.StatusOK {
-			t.Fatalf("save provider=%s status=%d body=%s", providerKey.provider, response.Code, response.Body.String())
-		}
-	}
 
 	secretRequest := authenticatedJSONRequest(http.MethodPost, tenantPath+"/secrets", `{}`, sessionCookie)
 	secretResponse := httptest.NewRecorder()
@@ -1914,53 +1909,44 @@ func TestManagementValidationFailureUsageUsesSelectedProviderDefaultModel(t *tes
 		t.Fatalf("decode secret: %v", decodeError)
 	}
 
-	requestCases := []struct {
-		method string
-		path   string
-		body   string
-	}{
-		{method: http.MethodGet, path: "/"},
-		{method: http.MethodPost, path: "/", body: `{"prompt":"hello","max_tokens":0}`},
-		{method: http.MethodPost, path: "/v2", body: `{"messages":[{"role":"user","content":"hello"}],"max_tokens":0}`},
+	query := url.Values{
+		"key":      []string{secretPayload.Secret},
+		"provider": []string{"__credential_validation__"},
+		"prompt":   []string{"hello"},
 	}
-	for _, requestCase := range requestCases {
-		query := url.Values{
-			"key":      []string{secretPayload.Secret},
-			"provider": []string{proxy.ProviderNameGemini},
-		}
-		if requestCase.method == http.MethodGet {
-			query.Set("prompt", "hello")
-			query.Set("max_tokens", "0")
-		}
-		request := httptest.NewRequest(
-			requestCase.method,
-			requestCase.path+"?"+query.Encode(),
-			strings.NewReader(requestCase.body),
-		)
-		if requestCase.method == http.MethodPost {
-			request.Header.Set("Content-Type", "application/json")
-		}
-		response := httptest.NewRecorder()
-		router.ServeHTTP(response, request)
-		if response.Code != http.StatusBadRequest {
-			t.Fatalf("method=%s path=%s status=%d body=%s", requestCase.method, requestCase.path, response.Code, response.Body.String())
-		}
+	request := httptest.NewRequest(http.MethodGet, "/?"+query.Encode(), nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 
 	usage := waitForManagementValue(t, func() managementUsageTestResponse {
 		return requestManagementUsage(t, router, sessionCookie, "30d")
 	}, func(payload managementUsageTestResponse) bool {
-		return payload.Totals.Requests == len(requestCases)
+		return payload.Totals.Requests == 1
 	})
-	if len(usage.Providers) != 1 || usage.Providers[0].Provider != proxy.ProviderNameGemini || usage.Providers[0].Data.Requests != len(requestCases) {
+	if usage.Totals.FailedRequests != 1 || len(usage.StatusCodes) != 1 || usage.StatusCodes[0].StatusCode != http.StatusBadRequest || usage.StatusCodes[0].Requests != 1 {
+		t.Fatalf("usage=%+v", usage)
+	}
+	if len(usage.Providers) != 0 {
 		t.Fatalf("providers=%+v", usage.Providers)
 	}
-	if len(usage.Models) != 1 || usage.Models[0].Provider != proxy.ProviderNameGemini || usage.Models[0].Model != proxy.ModelNameGemini35Flash || usage.Models[0].Data.Requests != len(requestCases) {
+	if len(usage.Models) != 0 {
 		t.Fatalf("models=%+v", usage.Models)
+	}
+	failures := requestManagementUsageFailures(t, router, sessionCookie, tenantPath, "30d", 10, "")
+	if len(failures.Failures) != 1 {
+		t.Fatalf("failures=%+v", failures)
+	}
+	for _, failure := range failures.Failures {
+		if failure.Provider != "" || failure.Model != "" {
+			t.Fatalf("failure retained unresolved route: %+v", failure)
+		}
 	}
 }
 
-func TestManagementUnconfiguredProviderUsageUsesCatalogDefaultModel(t *testing.T) {
+func TestManagementUnconfiguredProviderUsageHasNoRouteDimensions(t *testing.T) {
 	router := newManagementRouter(t, proxy.Configuration{})
 	sessionCookie := managementSessionCookie(t, "usage-catalog-default-user")
 	tenantPath := managementDefaultTenantTestPath(t, router, sessionCookie, "")
@@ -2027,10 +2013,10 @@ func TestManagementUnconfiguredProviderUsageUsesCatalogDefaultModel(t *testing.T
 	}, func(payload managementUsageTestResponse) bool {
 		return payload.Totals.Requests == len(requestCases)
 	})
-	if len(usage.Providers) != 1 || usage.Providers[0].Provider != proxy.ProviderNameGemini || usage.Providers[0].Data.Requests != len(requestCases) {
+	if len(usage.Providers) != 0 {
 		t.Fatalf("providers=%+v", usage.Providers)
 	}
-	if len(usage.Models) != 1 || usage.Models[0].Provider != proxy.ProviderNameGemini || usage.Models[0].Model != proxy.ModelNameGemini35Flash || usage.Models[0].Data.Requests != len(requestCases) {
+	if len(usage.Models) != 0 {
 		t.Fatalf("models=%+v", usage.Models)
 	}
 }

@@ -164,6 +164,7 @@ func TestManagedTenantSQLiteOwnershipMigrationPreservesAndRebindsData(t *testing
 	}
 	if len(usageRecords) != 3 || usageRecords[0].ID != 11 || usageRecords[0].TenantID != firstTenant.TenantID ||
 		usageRecords[0].TotalTokens != 5 || usageRecords[1].ID != 29 || usageRecords[1].TenantID != secondTenant.TenantID ||
+		usageRecords[1].ProviderID != "" || usageRecords[1].ModelID != "" ||
 		usageRecords[2].ID != 41 || usageRecords[2].TenantID != firstTenant.TenantID ||
 		usageRecords[2].StatusCode != statusClientClosedRequest ||
 		usageRecords[2].OutcomeCode != managedUsageOutcomeRequestTimeout {
@@ -251,7 +252,7 @@ func TestManagedTenantSQLiteOwnershipMigrationCanonicalizesConfirmedRouteIdentit
 		t.Fatalf("migrated native legacy provider models=%v", modelsByProvider)
 	}
 	var migratedUsage managedUsageEventRecord
-	if queryError := database.database.First(&migratedUsage, legacyUsage.ID).Error; queryError != nil || migratedUsage.ProviderID != legacyUsage.ProviderID || migratedUsage.ModelID != legacyUsage.ModelID {
+	if queryError := database.database.First(&migratedUsage, legacyUsage.ID).Error; queryError != nil || migratedUsage.ProviderID != "" || migratedUsage.ModelID != "" {
 		t.Fatalf("migrated native legacy usage=%+v error=%v", migratedUsage, queryError)
 	}
 	if initializeError := initializeManagedTenantSchema(database.database, providerKeyCipher, providers); initializeError != nil {
@@ -445,7 +446,12 @@ func TestManagedTenantModelIdentityMigrationCanonicalizesCurrentRoutesAndPreserv
 		t.Fatalf("canonical tenant changed=%+v", migratedCanonicalTenant)
 	}
 	var migratedUsage []managedUsageEventRecord
-	if queryError := database.Order("id").Find(&migratedUsage).Error; queryError != nil || !slices.Equal(migratedUsage, historicalUsage) {
+	expectedUsage := []managedUsageEventRecord{
+		managedUsageRecordWithoutRoute(historicalUsage[0]),
+		managedUsageRecordWithoutRoute(historicalUsage[1]),
+		managedUsageRecordWithoutRoute(historicalUsage[2]),
+	}
+	if queryError := database.Order("id").Find(&migratedUsage).Error; queryError != nil || !slices.Equal(migratedUsage, expectedUsage) {
 		t.Fatalf("historical usage=%+v error=%v", migratedUsage, queryError)
 	}
 	var latest managedSchemaMigrationRecord
@@ -573,7 +579,7 @@ func TestManagedTenantQwenCloudRetirementMigrationReconcilesCurrentTenants(t *te
 		t.Fatalf("migrated qwen-only tenant=%+v connections=%+v profiles=%+v", migratedQwenOnly, migratedQwenOnly.ProviderConnections, migratedQwenOnly.ProviderProfiles)
 	}
 	var migratedUsage managedUsageEventRecord
-	if queryError := database.First(&migratedUsage, historicalUsage.ID).Error; queryError != nil || migratedUsage != historicalUsage {
+	if queryError := database.First(&migratedUsage, historicalUsage.ID).Error; queryError != nil || migratedUsage != managedUsageRecordWithoutRoute(historicalUsage) {
 		t.Fatalf("historical usage=%+v error=%v", migratedUsage, queryError)
 	}
 	var latest managedSchemaMigrationRecord

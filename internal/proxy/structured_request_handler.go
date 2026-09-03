@@ -139,39 +139,38 @@ func submitStructuredChatRequest(
 		return
 	}
 
-	bindRequestTelemetryRoute(ginContext, chatRequest.provider.identifier.string(), chatRequest.model.string())
 	generation, requestError := upstreamProviders.generateText(ginContext.Request.Context(), chatRequest, structuredLogger)
 	if requestError != nil {
 		if requestContextEnded(ginContext) {
 			_ = store.uncertain(requestTenant, chatRequest.idempotencyKey, intentSHA256)
-			recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, chatRequest.provider.identifier.string(), chatRequest.model.string(), ginContext.Writer.Status(), generation.usage, requestStart)
+			recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, ginContext.Writer.Status(), generation.usage, requestStart)
 			return
 		}
 		markRequestOutcome(ginContext, requestFailureOutcome(requestError), managedRequestFailureOutcome(requestError))
 		statusCode := statusCodeForError(requestError)
 		if failError := store.fail(requestTenant, chatRequest.idempotencyKey, intentSHA256, statusCode, structuredRequestFailureCause(statusCode)); failError != nil {
 			writeStructuredRequestError(ginContext, http.StatusInternalServerError, llmproxycontract.ErrorCodeStructuredRequestStore, "", "", "")
-			recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, chatRequest.provider.identifier.string(), chatRequest.model.string(), http.StatusInternalServerError, generation.usage, requestStart)
+			recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, http.StatusInternalServerError, generation.usage, requestStart)
 			return
 		}
 		writeProviderRequestErrorResponse(ginContext, chatRequest.provider.identifier.string(), requestError, structuredLogger)
-		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, chatRequest.provider.identifier.string(), chatRequest.model.string(), statusCode, generation.usage, requestStart)
+		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, statusCode, generation.usage, requestStart)
 		return
 	}
 	if persistError := store.succeed(requestTenant, chatRequest.idempotencyKey, intentSHA256, generation.text); persistError != nil {
 		writeStructuredRequestError(ginContext, http.StatusInternalServerError, llmproxycontract.ErrorCodeStructuredRequestStore, "", "", "")
-		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, chatRequest.provider.identifier.string(), chatRequest.model.string(), http.StatusInternalServerError, generation.usage, requestStart)
+		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, http.StatusInternalServerError, generation.usage, requestStart)
 		return
 	}
 	if requestContextEnded(ginContext) {
-		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, chatRequest.provider.identifier.string(), chatRequest.model.string(), ginContext.Writer.Status(), generation.usage, requestStart)
+		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, ginContext.Writer.Status(), generation.usage, requestStart)
 		return
 	}
 	markRequestOutcome(ginContext, requestOutcomeSuccess, managedUsageOutcomeSuccess)
 	writeTokenUsageHeaders(ginContext.Writer.Header(), generation.usage)
 	ginContext.Header(llmproxycontract.HeaderStructuredRequestState, structuredRequestStateSucceeded)
 	ginContext.Data(http.StatusOK, structuredJSONContentType, []byte(generation.text))
-	recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, chatRequest.provider.identifier.string(), chatRequest.model.string(), http.StatusOK, generation.usage, requestStart)
+	recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, http.StatusOK, generation.usage, requestStart)
 }
 
 func structuredRequestFailureCause(statusCode int) string {

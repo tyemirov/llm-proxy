@@ -789,7 +789,11 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 	}
 	database.createUsageEventError = nil
 	usageRecord, usageRecordError = store.newManagedUsageRecord(managedTenant, managedUsageEvent{
-		endpoint: usageEndpointText, providerIdentifier: ProviderNameOpenAI, modelIdentifier: ModelNameGPT41,
+		endpoint: usageEndpointText,
+		route: &managedUsageRoute{
+			providerIdentifier: newProviderID(ProviderNameOpenAI),
+			modelIdentifier:    newModelID(ModelNameGPT41),
+		},
 		statusCode: http.StatusOK, outcomeCode: managedUsageOutcomeSuccess, latencyMilliseconds: 12, usage: &tokenUsage{RequestTokens: 2, ResponseTokens: 3, TotalTokens: 5},
 	})
 	if usageRecordError != nil {

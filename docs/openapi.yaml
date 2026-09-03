@@ -3139,6 +3139,8 @@ components:
       properties:
         provider:
           type: string
+          minLength: 1
+          description: Exact provider identifier from a resolved typed route.
         data:
           $ref: '#/components/schemas/UsageAggregate'
     UsageModel:
@@ -3151,8 +3153,12 @@ components:
       properties:
         provider:
           type: string
+          minLength: 1
+          description: Exact provider identifier from a resolved typed route.
         model:
           type: string
+          minLength: 1
+          description: Exact model identifier from the same resolved typed route.
         data:
           $ref: '#/components/schemas/UsageAggregate'
     UsageStatus:
@@ -3240,8 +3246,10 @@ components:
           type: string
         provider:
           type: string
+          description: Exact resolved provider identifier, or blank when the request failed before route resolution.
         model:
           type: string
+          description: Exact resolved model identifier, or blank when the request failed before route resolution.
         status_code:
           type: integer
           minimum: 100
@@ -3299,8 +3307,10 @@ components:
           type: string
         provider:
           type: string
+          description: Exact resolved provider identifier, or blank when the request failed before route resolution.
         model:
           type: string
+          description: Exact resolved model identifier, or blank when the request failed before route resolution.
         status_code:
           type: integer
           minimum: 100

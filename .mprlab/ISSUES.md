@@ -25,7 +25,7 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
-- [ ] [B174] (P1) Exclude unresolved routes from usage dimensions.
+- [x] [B174] (P1) Exclude unresolved routes from usage dimensions.
   Goal:
   Usage reports must not identify a raw request value as a provider or model.
   A rejected request with provider `__credential_validation__` and no model
@@ -70,6 +70,18 @@ retain satisfied historical dependencies.
   - Upgrade a store that contains invalid persisted dimensions and prove that
     the migration removes only those dimensions.
   - Run `make ci` after the last application change.
+  Resolution:
+  - The route resolver now owns the typed provider and model usage dimensions.
+  - Pre-route failures keep totals and failure data without provider or model
+    dimensions.
+  - Failures after route resolution keep their exact canonical dimensions.
+  - Schema version 12 clears both dimensions from invalid persisted pairs and
+    preserves all other usage data.
+  - Public API and real SQLite tests cover recording, aggregation, migration,
+    startup verification, and rollback.
+  - Current startup validates distinct route combinations instead of all usage
+    events.
+  - `make ci` passed all 11 gates with 100 percent Go statement coverage.
 - [x] [B173] (P0) Keep release versions in Go major version 1.
   Goal:
   The release policy must keep each release version in major version `1`.

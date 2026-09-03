@@ -53,7 +53,8 @@ const (
 	managedProviderConnectionsSchemaVersion = 9
 	managedGemini3OnlySchemaVersion         = 10
 	managedGeminiRouteRetirementVersion     = 11
-	managedTenantSchemaVersion              = managedGeminiRouteRetirementVersion
+	managedResolvedUsageRouteSchemaVersion  = 12
+	managedTenantSchemaVersion              = managedResolvedUsageRouteSchemaVersion
 	managedSQLiteRuntimeQuery               = "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)"
 	retiredQwenCloudProviderIdentifier      = "qwencloud"
 	retiredGrokProviderIdentifier           = "grok"
@@ -79,8 +80,11 @@ const (
 	managedUsageIDColumn            = "id"
 	managedUsageTenantIDColumn      = "tenant_id"
 	managedUsageCreatedAtColumn     = "created_at"
+	managedUsageEndpointColumn      = "endpoint"
 	managedUsageSuccessColumn       = "success"
 	managedUsageOutcomeCodeColumn   = "outcome_code"
+	managedUsageProviderIDColumn    = "provider_id"
+	managedUsageModelIDColumn       = "model_id"
 	managedProviderBaseURLColumn    = "base_url"
 	managedSchemaVersionColumn      = "version"
 	managedUsageFailurePageIndex    = "idx_managed_usage_failure_page"
@@ -697,7 +701,21 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 		if migrator.HasTable(managedProviderKeyTable) || !migrator.HasTable(managedProviderConnectionTable) || !migrator.HasTable(managedProviderProfileTable) {
 			return fmt.Errorf("%w: operation=validate_current_schema table=%s", errManagedTenantSchemaMigration, managedProviderConnectionTable)
 		}
-		return validateManagedConnectionRoutingDefaults(database, providerKeyCipher, providers)
+		if validationError := validateManagedConnectionRoutingDefaults(database, providerKeyCipher, providers); validationError != nil {
+			return validationError
+		}
+		return migrateManagedResolvedUsageRoutes(database, providers)
+	case managedResolvedUsageRouteSchemaVersion:
+		if migrator.HasTable(managedProviderKeyTable) || !migrator.HasTable(managedProviderConnectionTable) || !migrator.HasTable(managedProviderProfileTable) {
+			return fmt.Errorf("%w: operation=validate_current_schema table=%s", errManagedTenantSchemaMigration, managedProviderConnectionTable)
+		}
+		if validationError := validateManagedConnectionRoutingDefaults(database, providerKeyCipher, providers); validationError != nil {
+			return validationError
+		}
+		if validationError := validateManagedResolvedUsageRoutes(database, providers); validationError != nil {
+			return validationError
+		}
+		return nil
 	default:
 		return fmt.Errorf("%w: operation=validate_version version=%d expected=%d", errManagedTenantSchemaMigration, migration.Version, managedTenantSchemaVersion)
 	}
@@ -746,7 +764,82 @@ func migrateManagedModelSelectionsAfter(database *gorm.DB, providerKeyCipher man
 		}
 		pendingVersions = append(pendingVersions, schemaVersion)
 	}
-	return migrateManagedModelSelections(database, providerKeyCipher, providers, pendingVersions...)
+	if migrationError := migrateManagedModelSelections(database, providerKeyCipher, providers, pendingVersions...); migrationError != nil {
+		return migrationError
+	}
+	return migrateManagedResolvedUsageRoutes(database, providers)
+}
+
+func migrateManagedResolvedUsageRoutes(database *gorm.DB, providers *providerRegistry) error {
+	return database.Transaction(func(transaction *gorm.DB) error {
+		if migrationError := clearInvalidManagedUsageRoutes(transaction, providers); migrationError != nil {
+			return migrationError
+		}
+		if createError := transaction.Create(&managedSchemaMigrationRecord{Version: managedResolvedUsageRouteSchemaVersion, AppliedAt: time.Now().UTC()}).Error; createError != nil {
+			return fmt.Errorf("%w: operation=record_version table=%s version=%d: %v", errManagedTenantSchemaMigration, managedSchemaMigrationTable, managedResolvedUsageRouteSchemaVersion, createError)
+		}
+		return nil
+	})
+}
+
+func clearInvalidManagedUsageRoutes(database *gorm.DB, providers *providerRegistry) error {
+	var records []managedUsageEventRecord
+	if queryError := database.Order(managedUsageIDColumn).Find(&records).Error; queryError != nil {
+		return fmt.Errorf("%w: operation=read table=%s: %v", errManagedTenantSchemaMigration, managedUsageEventTable, queryError)
+	}
+	for _, record := range records {
+		if managedUsageRouteIsCurrent(record, providers) {
+			continue
+		}
+		result := database.Model(&managedUsageEventRecord{}).
+			Where(&managedUsageEventRecord{ID: record.ID}).
+			Updates(map[string]any{
+				managedUsageProviderIDColumn: constants.EmptyString,
+				managedUsageModelIDColumn:    constants.EmptyString,
+			})
+		if result.Error != nil || result.RowsAffected != 1 {
+			return fmt.Errorf("%w: operation=clear_route table=%s id=%d rows=%d: %v", errManagedTenantSchemaMigration, managedUsageEventTable, record.ID, result.RowsAffected, result.Error)
+		}
+	}
+	return validateManagedResolvedUsageRoutes(database, providers)
+}
+
+func validateManagedResolvedUsageRoutes(database *gorm.DB, providers *providerRegistry) error {
+	var records []managedUsageEventRecord
+	if queryError := database.
+		Model(&managedUsageEventRecord{}).
+		Distinct(managedUsageEndpointColumn, managedUsageProviderIDColumn, managedUsageModelIDColumn).
+		Find(&records).
+		Error; queryError != nil {
+		return fmt.Errorf("%w: operation=validate_routes table=%s: %v", errManagedTenantSchemaMigration, managedUsageEventTable, queryError)
+	}
+	for _, record := range records {
+		if managedUsageRouteIsCurrent(record, providers) {
+			continue
+		}
+		return fmt.Errorf("%w: operation=validate_routes table=%s endpoint=%q provider=%q model=%q", errManagedTenantSchemaMigration, managedUsageEventTable, record.Endpoint, record.ProviderID, record.ModelID)
+	}
+	return nil
+}
+
+func managedUsageRouteIsCurrent(record managedUsageEventRecord, providers *providerRegistry) bool {
+	if record.ProviderID == constants.EmptyString && record.ModelID == constants.EmptyString {
+		return true
+	}
+	definition, exists := providers.definitions[providerID(record.ProviderID)]
+	if !exists || definition.identifier.string() != record.ProviderID {
+		return false
+	}
+	switch record.Endpoint {
+	case usageEndpointText, usageEndpointV2:
+		model, modelExists := definition.textModels[strings.ToLower(record.ModelID)]
+		return modelExists && model.identifier.string() == record.ModelID
+	case usageEndpointDictation:
+		model, modelExists := definition.transcriptionModels[strings.ToLower(record.ModelID)]
+		return modelExists && model.identifier.string() == record.ModelID
+	default:
+		return false
+	}
 }
 
 func migrateManagedModelSelections(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry, schemaVersions ...int) error {
@@ -2169,6 +2262,9 @@ func migrateLegacyManagedTenantSchema(database *gorm.DB, providerKeyCipher manag
 			return verifyError
 		}
 		if migrationError := migrateManagedProviderConnectionData(transaction, providerKeyCipher, providers); migrationError != nil {
+			return migrationError
+		}
+		if migrationError := clearInvalidManagedUsageRoutes(transaction, providers); migrationError != nil {
 			return migrationError
 		}
 		if createError := transaction.Create(&managedSchemaMigrationRecord{Version: managedTenantSchemaVersion, AppliedAt: time.Now().UTC()}).Error; createError != nil {
