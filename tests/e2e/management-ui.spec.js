@@ -46,7 +46,7 @@ const apiDocumentationPath = "/docs/";
 const openAPIPath = "/openapi.yaml";
 const openAPISchemaViewerPath = `${apiDocumentationPath}#openapi-schema`;
 const openAPIDownloadFilename = "llm-proxy-openapi.yaml";
-const applicationModuleRevision = "20260902c239";
+const applicationModuleRevision = "20260902c240";
 const applicationModuleFiles = Object.freeze([
   "alpineRuntime.js",
   "app.js",
@@ -3013,6 +3013,37 @@ test("provider cards select the Default tenant and keep tenant settings independ
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
   await expect(page.getByRole("dialog", { name: "Settings" }).getByRole("combobox", { name: "Tenant" })).toHaveValue("tenant_1");
+});
+
+test("provider cards start with Default after Settings retains another tenant", async ({ page }) => {
+  const defaultProfile = managementTenantProfile("tenant_1", "Default");
+  const researchProfile = managementTenantProfile("tenant_2", "Research");
+  defaultProfile.providers.find((provider) => provider.id === "openai").system_prompt = "Default card prompt.";
+  researchProfile.providers.find((provider) => provider.id === "openai").system_prompt = "Research settings prompt.";
+  await installAssetRoutes(page);
+  await installMultiTenantRoutes(page, { profiles: [defaultProfile, researchProfile] });
+  await page.goto(baseURL + applicationPath);
+
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const settingsTenantSelector = settingsDialog.getByRole("combobox", { name: "Tenant" });
+  await settingsTenantSelector.selectOption("tenant_2");
+  await expect(settingsTenantSelector).toHaveValue("tenant_2");
+  await settingsDialog.getByRole("button", { name: "Close" }).click();
+
+  const card = page.locator('[data-provider-card="openai"]');
+  await card.getByRole("button", { name: "Set API key" }).click();
+  const cardTenantSelector = card.getByRole("combobox", { name: "Tenant" });
+  await expect(cardTenantSelector).toHaveValue("tenant_1");
+  await expect(cardTenantSelector.locator("option:checked")).toHaveText("Default");
+  await card.locator("details.provider-system-prompt summary").click();
+  await expect(card.getByRole("textbox", { name: "System prompt" })).toHaveValue("Default card prompt.");
+  await card.getByRole("button", { name: "Close provider settings" }).click();
+
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  await expect(settingsDialog.getByRole("combobox", { name: "Tenant" })).toHaveValue("tenant_2");
 });
 
 test("deleting a provider key preserves its model, prompt, setting, and usage card", async ({ page }) => {
