@@ -1217,7 +1217,7 @@ retain satisfied historical dependencies.
   - Prove current `/v2` text, media, structured output, and lifecycle behavior.
   - Run `make ci` after the last application change.
 
-- [ ] [I239] (P1) Standardize HTTP health at `/healthz`.
+- [!] [I239] (P1) Standardize HTTP health at `/healthz`.
   Goal:
   Make `/healthz` the canonical health endpoint for the LLM Proxy API and
   static web origins. Use the endpoint for readiness without business-resource requests.
@@ -1253,6 +1253,16 @@ retain satisfied historical dependencies.
   - Verify successful probes create no routine request events.
   - Verify failed probes retain diagnostic evidence.
   - Run `make ci`.
+
+  Implementation:
+  - Added public API health with a bounded, read-only database check.
+  - Added the static health resource and its publication check.
+  - Changed readiness probes to use `/healthz` and kept failed probe evidence.
+  - Verified quiet success responses, dependency failures, and unchanged usage.
+  - Passed all 12 `make ci` gates, 85 browser tests, and 100% Go coverage.
+  Blocked:
+  GitHub Pages controls production response headers. The static origin cannot
+  meet the no-store requirement without a hosting or cache-policy decision.
 
 - [x] [I238] (P1) {I027,I237} Make provider card settings compact and automatic.
   Goal:

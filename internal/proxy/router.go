@@ -127,6 +127,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	}
 
 	router.Use(gin.Recovery())
+	router.GET(healthPath, healthHandler(managedTenants, structuredLogger))
 	registerPublicCapabilityRoutes(router, capabilityCatalog)
 	rootProxyHandler := tenantAuthenticatedHandler(
 		tenantAuthenticator,

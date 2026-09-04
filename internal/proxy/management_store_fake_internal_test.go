@@ -12,6 +12,7 @@ import (
 )
 
 type fakeManagedTenantDatabase struct {
+	managedTenantDatabase
 	usersByID                       map[string]managedUserRecord
 	tenantsByID                     map[string]managedTenantRecord
 	usageEvents                     []managedUsageEventRecord

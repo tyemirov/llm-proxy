@@ -40,6 +40,14 @@ func requestResponseLogger(structuredLogger *zap.SugaredLogger) gin.HandlerFunc 
 		requestPath := requestLogPath(ginContext.Request.URL)
 		requestClientIP := ginContext.ClientIP()
 
+		if requestPath == healthPath {
+			ginContext.Next()
+			if ginContext.Writer.Status() != http.StatusOK {
+				structuredLogger.Errorw("health request failed", logFieldStatus, ginContext.Writer.Status(), logFieldRequestID, requestIDFromContext(ginContext))
+			}
+			return
+		}
+
 		structuredLogger.Infow(
 			logEventRequestReceived,
 			logFieldMethod, requestMethod,
