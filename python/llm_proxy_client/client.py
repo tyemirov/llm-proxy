@@ -486,13 +486,14 @@ class ClientMessage:
     tool_call_id: str = ""
 
     def __post_init__(self) -> None:
-        if self.role.strip().lower() not in MESSAGE_ROLES:
+        role = self.role.strip().lower()
+        if role not in MESSAGE_ROLES:
             raise LLMProxyClientError("llm_proxy_client_invalid_request: unsupported message role")
-        if self.content == "" and not self.tool_calls and self.role != "tool":
+        if self.content == "" and not self.tool_calls and role != "tool":
             raise LLMProxyClientError("llm_proxy_client_invalid_request: empty message content")
         if self.order is not None and self.order < 0:
             raise LLMProxyClientError("llm_proxy_client_invalid_request: message order must be non-negative")
-        if self.attachments and self.role.strip().lower() != "user":
+        if self.attachments and role != "user":
             raise LLMProxyClientError("llm_proxy_client_invalid_request: attachments require user role")
         if any(not isinstance(attachment, ClientAttachment) for attachment in self.attachments):
             raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid attachment")
@@ -628,14 +629,15 @@ def validate_messages(messages: Sequence[ClientMessage]) -> None:
     pending: set[str] = set()
     seen: set[str] = set()
     for message in ordered_messages(messages):
-        if message.role == "tool":
+        role = message.role.strip().lower()
+        if role == "tool":
             if message.tool_call_id not in pending or message.tool_calls:
                 raise LLMProxyClientError("unmatched tool result")
             pending.remove(message.tool_call_id)
             continue
         if pending or message.tool_call_id:
             raise LLMProxyClientError("missing tool result")
-        if message.tool_calls and message.role != "assistant":
+        if message.tool_calls and role != "assistant":
             raise LLMProxyClientError("function calls require assistant role")
         for call in message.tool_calls:
             if call.id in seen:
