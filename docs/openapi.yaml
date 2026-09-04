@@ -62,6 +62,8 @@ paths:
           $ref: '#/components/responses/ProxyBadRequest'
         '403':
           $ref: '#/components/responses/ProxyForbidden'
+        '409':
+          $ref: '#/components/responses/ProviderNotConfigured'
         '429':
           $ref: '#/components/responses/ProxyRateLimited'
         '499':
@@ -96,6 +98,8 @@ paths:
           $ref: '#/components/responses/ProxyBadRequest'
         '403':
           $ref: '#/components/responses/ProxyForbidden'
+        '409':
+          $ref: '#/components/responses/ProviderNotConfigured'
         '413':
           $ref: '#/components/responses/ProxyPayloadTooLarge'
         '429':
@@ -157,7 +161,7 @@ paths:
         '410':
           $ref: '#/components/responses/AssetFailure'
         '409':
-          $ref: '#/components/responses/V2StructuredRequestConflict'
+          $ref: '#/components/responses/V2Conflict'
         '413':
           $ref: '#/components/responses/ProxyPayloadTooLarge'
         '429':
@@ -309,6 +313,8 @@ paths:
           $ref: '#/components/responses/ProxyBadRequest'
         '403':
           $ref: '#/components/responses/ProxyForbidden'
+        '409':
+          $ref: '#/components/responses/ProviderNotConfigured'
         '413':
           $ref: '#/components/responses/ProxyPayloadTooLarge'
         '429':
@@ -414,12 +420,35 @@ paths:
         - TAuthSession: []
       parameters:
         - $ref: '#/components/parameters/UsageInterval'
-        - $ref: '#/components/parameters/UsageFailureLimit'
-        - $ref: '#/components/parameters/UsageFailureCursor'
+        - $ref: '#/components/parameters/UsageDetailLimit'
+        - $ref: '#/components/parameters/UsageDetailCursor'
         - $ref: '#/components/parameters/OptionalOrigin'
       responses:
         '200':
           $ref: '#/components/responses/AccountUsageFailuresSuccess'
+        '400':
+          $ref: '#/components/responses/ManagementBadRequest'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '500':
+          $ref: '#/components/responses/ManagementInternalError'
+  /api/management/usage/rejections:
+    get:
+      operationId: getManagementAccountUsageRejections
+      summary: Read safe rejected-request details across every owned tenant and interval
+      description: Returns a newest-first snapshot page of rejected managed proxy requests across every tenant owned by the authenticated user. Rejected requests did not reach provider dispatch and are excluded from execution totals, failure totals, charts, dimensions, status breakdowns, and success rate. Each row exposes only bounded diagnostic metadata and its canonical rejection outcome.
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/UsageInterval'
+        - $ref: '#/components/parameters/UsageDetailLimit'
+        - $ref: '#/components/parameters/UsageDetailCursor'
+        - $ref: '#/components/parameters/OptionalOrigin'
+      responses:
+        '200':
+          $ref: '#/components/responses/AccountUsageRejectionsSuccess'
         '400':
           $ref: '#/components/responses/ManagementBadRequest'
         '401':
@@ -584,12 +613,38 @@ paths:
       parameters:
         - $ref: '#/components/parameters/TenantID'
         - $ref: '#/components/parameters/UsageInterval'
-        - $ref: '#/components/parameters/UsageFailureLimit'
-        - $ref: '#/components/parameters/UsageFailureCursor'
+        - $ref: '#/components/parameters/UsageDetailLimit'
+        - $ref: '#/components/parameters/UsageDetailCursor'
         - $ref: '#/components/parameters/OptionalOrigin'
       responses:
         '200':
           $ref: '#/components/responses/UsageFailuresSuccess'
+        '400':
+          $ref: '#/components/responses/ManagementBadRequest'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/ManagementNotFound'
+        '500':
+          $ref: '#/components/responses/ManagementInternalError'
+  /api/management/tenants/{tenant_id}/usage/rejections:
+    get:
+      operationId: getManagementTenantUsageRejections
+      summary: Read safe rejected-request details for an owned tenant and interval
+      description: Returns a newest-first snapshot page of rejected managed proxy requests. These requests did not reach provider dispatch and are excluded from execution and failure metrics. Rows expose only bounded diagnostic metadata and canonical rejection outcomes.
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/TenantID'
+        - $ref: '#/components/parameters/UsageInterval'
+        - $ref: '#/components/parameters/UsageDetailLimit'
+        - $ref: '#/components/parameters/UsageDetailCursor'
+        - $ref: '#/components/parameters/OptionalOrigin'
+      responses:
+        '200':
+          $ref: '#/components/responses/UsageRejectionsSuccess'
         '400':
           $ref: '#/components/responses/ManagementBadRequest'
         '401':
@@ -933,7 +988,7 @@ components:
           - 7d
           - 30d
           - all
-    UsageFailureLimit:
+    UsageDetailLimit:
       name: limit
       in: query
       required: false
@@ -943,7 +998,7 @@ components:
         minimum: 1
         maximum: 100
         default: 25
-    UsageFailureCursor:
+    UsageDetailCursor:
       name: cursor
       in: query
       required: false
@@ -1182,12 +1237,17 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/StructuredRequestStatus'
-    V2StructuredRequestConflict:
-      description: The key identifies a different intent or an uncertain provider outcome.
+    V2Conflict:
+      description: The provider is not configured, or the key identifies a different intent or an uncertain provider outcome.
       headers:
         X-LLM-Proxy-Request-Timeout-Seconds:
           $ref: '#/components/headers/ResolvedRequestTimeout'
       content:
+        text/plain:
+          schema:
+            type: string
+            enum:
+              - provider_not_configured
         application/json:
           schema:
             $ref: '#/components/schemas/StructuredRequestErrorEnvelope'
@@ -1317,7 +1377,7 @@ components:
           schema:
             $ref: '#/components/schemas/ProviderErrorEnvelope'
     ProxyUnavailable:
-      description: The selected provider is not configured or the bounded request queue is full.
+      description: The bounded request queue is full.
       headers:
         X-LLM-Proxy-Request-Timeout-Seconds:
           $ref: '#/components/headers/ResolvedRequestTimeout'
@@ -1325,6 +1385,17 @@ components:
         text/plain:
           schema:
             type: string
+    ProviderNotConfigured:
+      description: The selected catalog route cannot execute because its provider credentials are not configured. No provider dispatch occurs.
+      headers:
+        X-LLM-Proxy-Request-Timeout-Seconds:
+          $ref: '#/components/headers/ResolvedRequestTimeout'
+      content:
+        text/plain:
+          schema:
+            type: string
+            enum:
+              - provider_not_configured
     ProxyTimeout:
       description: The proxy request budget or upstream operation timed out.
       headers:
@@ -1391,6 +1462,24 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/AccountUsageFailurePage'
+    UsageRejectionsSuccess:
+      description: Snapshot page of safe tenant rejection details for the exact requested interval.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UsageRejectionPage'
+    AccountUsageRejectionsSuccess:
+      description: Snapshot page of safe rejection details across every owned tenant for the exact requested interval.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AccountUsageRejectionPage'
     AdminUsersSuccess:
       description: Administrative user and tenant usage summary.
       content:
@@ -3180,6 +3269,7 @@ components:
       required:
         - interval
         - bucket_unit
+        - rejected_requests
         - totals
         - buckets
         - providers
@@ -3199,6 +3289,10 @@ components:
             - hour
             - day
             - month
+        rejected_requests:
+          type: integer
+          minimum: 0
+          description: Requests rejected before provider dispatch. These requests are excluded from totals, buckets, provider and model dimensions, status codes, and success rate.
         totals:
           $ref: '#/components/schemas/UsageAggregate'
         buckets:
@@ -3217,16 +3311,20 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/UsageStatus'
-    UsageOutcomeCode:
+    UsageFailureOutcomeCode:
       type: string
       enum:
-        - success
-        - invalid_request
-        - payload_too_large
         - rate_limited
         - service_unavailable
         - request_timeout
         - upstream_error
+        - proxy_error
+    UsageRejectionOutcomeCode:
+      type: string
+      enum:
+        - invalid_request
+        - payload_too_large
+        - provider_not_configured
     UsageFailure:
       type: object
       additionalProperties: false
@@ -3255,7 +3353,7 @@ components:
           minimum: 100
           maximum: 599
         outcome_code:
-          $ref: '#/components/schemas/UsageOutcomeCode'
+          $ref: '#/components/schemas/UsageFailureOutcomeCode'
         latency_ms:
           type: integer
           minimum: 0
@@ -3316,7 +3414,7 @@ components:
           minimum: 100
           maximum: 599
         outcome_code:
-          $ref: '#/components/schemas/UsageOutcomeCode'
+          $ref: '#/components/schemas/UsageFailureOutcomeCode'
         latency_ms:
           type: integer
           minimum: 0
@@ -3341,11 +3439,126 @@ components:
         next_cursor:
           type: string
           minLength: 1
+    UsageRejection:
+      type: object
+      additionalProperties: false
+      required:
+        - occurred_at
+        - endpoint
+        - provider
+        - model
+        - status_code
+        - outcome_code
+        - latency_ms
+      properties:
+        occurred_at:
+          type: string
+          format: date-time
+        endpoint:
+          type: string
+        provider:
+          type: string
+          description: Exact resolved provider identifier, or blank when rejection occurred before route resolution.
+        model:
+          type: string
+          description: Exact resolved model identifier, or blank when rejection occurred before route resolution.
+        status_code:
+          type: integer
+          minimum: 100
+          maximum: 599
+        outcome_code:
+          $ref: '#/components/schemas/UsageRejectionOutcomeCode'
+        latency_ms:
+          type: integer
+          minimum: 0
+    UsageRejectionPage:
+      type: object
+      additionalProperties: false
+      required:
+        - interval
+        - rejections
+      properties:
+        interval:
+          type: string
+          enum:
+            - 1d
+            - 7d
+            - 30d
+            - all
+        rejections:
+          type: array
+          items:
+            $ref: '#/components/schemas/UsageRejection'
+        next_cursor:
+          type: string
+          minLength: 1
+    AccountUsageRejection:
+      type: object
+      additionalProperties: false
+      required:
+        - tenant_id
+        - tenant_name
+        - occurred_at
+        - endpoint
+        - provider
+        - model
+        - status_code
+        - outcome_code
+        - latency_ms
+      properties:
+        tenant_id:
+          type: string
+          minLength: 1
+        tenant_name:
+          type: string
+          minLength: 1
+        occurred_at:
+          type: string
+          format: date-time
+        endpoint:
+          type: string
+        provider:
+          type: string
+          description: Exact resolved provider identifier, or blank when rejection occurred before route resolution.
+        model:
+          type: string
+          description: Exact resolved model identifier, or blank when rejection occurred before route resolution.
+        status_code:
+          type: integer
+          minimum: 100
+          maximum: 599
+        outcome_code:
+          $ref: '#/components/schemas/UsageRejectionOutcomeCode'
+        latency_ms:
+          type: integer
+          minimum: 0
+    AccountUsageRejectionPage:
+      type: object
+      additionalProperties: false
+      required:
+        - interval
+        - rejections
+      properties:
+        interval:
+          type: string
+          enum:
+            - 1d
+            - 7d
+            - 30d
+            - all
+        rejections:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountUsageRejection'
+        next_cursor:
+          type: string
+          minLength: 1
     AdminUsageSummary:
       type: object
       additionalProperties: false
       required:
         - period_days
+        - rejected_requests
         - totals
         - daily
         - providers
@@ -3355,6 +3568,9 @@ components:
         period_days:
           type: integer
           minimum: 1
+        rejected_requests:
+          type: integer
+          minimum: 0
         totals:
           $ref: '#/components/schemas/UsageAggregate'
         daily:

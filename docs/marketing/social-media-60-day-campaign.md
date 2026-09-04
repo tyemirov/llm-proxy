@@ -72,7 +72,7 @@ Constraint: every post in the `Post` column is under 300 characters.
 | 31 | 2026-08-05 | PM | Upstream providers change model lists faster than app release cycles. LLM Proxy lets operators update catalogs in config and restart the service. |
 | 32 | 2026-08-06 | AM | Multi-provider routing can turn into branch soup. LLM Proxy uses provider selectors and aliases so callers can choose a route explicitly. |
 | 32 | 2026-08-06 | PM | Default routes should be boring. LLM Proxy lets omitted-provider requests use the authenticated tenant default instead of duplicating provider flags everywhere. |
-| 33 | 2026-08-07 | AM | AI errors are hard enough without vague status codes. LLM Proxy maps missing keys, bad inputs, rate limits, disabled providers, timeouts, and upstream failures clearly. |
+| 33 | 2026-08-07 | AM | AI errors are hard enough without vague status codes. LLM Proxy separates missing keys, bad inputs, unconfigured routes, rate limits, queue pressure, timeouts, and upstream failures. |
 | 33 | 2026-08-07 | PM | A timeout should not tell clients to guess the provider state. LLM Proxy returns a normal gateway timeout when the overall proxy deadline expires. |
 | 34 | 2026-08-08 | AM | Provider polling should not leak into product code. LLM Proxy hides synchronous, background, and provider-specific polling behind one REST request. |
 | 34 | 2026-08-08 | PM | Teams need predictable request limits. LLM Proxy enforces prompt and audio payload caps before routing upstream. |

@@ -1,6 +1,6 @@
 # LLM Proxy SEO Resource Cluster Report
 
-Generated: 2026-09-01
+Generated: 2026-09-03
 
 ## Repo Analysis Report
 
@@ -126,7 +126,7 @@ Generated: 2026-09-01
 | 43 | GitHub Pages management UI for LLM Proxy | Teams deploying the self-service management UI as a static site. | Serving the management frontend from the API backend couples static hosting, runtime config, and proxy endpoints in one deployment surface. | GitHub Pages LLM management UI | Deployment | /resources/github-pages-llm-management-ui/ | Low | Maintain existing resource |
 | 44 | Live provider smoke tests for LLM Proxy | Operators validating provider credentials and hosted provider routes after config or deployment changes. | CI should be deterministic and avoid paid provider calls, but some changes still need live confirmation against real upstream providers. | live provider smoke tests | Validation | /resources/live-provider-smoke-tests/ | Low | Maintain existing resource |
 | 45 | Internal AI gateway for durable product integrations | Institutional engineering and platform teams standardizing AI access across multiple applications and product groups. | Applications that adopt provider SDKs independently create duplicated credential handling, inconsistent route validation, provider-specific failures, and fragmented usage visibility. | internal AI gateway | Use cases | /resources/internal-ai-gateway-for-product-tools/ | Low | Refresh as cornerstone |
-| 46 | Provider overload and timeout handling for LLM calls | Developers building retry and alerting behavior around LLM Proxy. | Failures are harder to handle when overload, provider timeout, missing credentials, and upstream errors collapse into one generic exception. | LLM provider overload timeout handling | Reliability | /resources/provider-overload-timeout-handling/ | Low | Maintain existing resource |
+| 46 | Provider overload and timeout handling for LLM calls | Developers building retry and alerting behavior around LLM Proxy. | Errors are harder to handle when overload, provider timeout, missing credentials, and upstream failures collapse into one generic exception. | LLM provider overload timeout handling | Reliability | /resources/provider-overload-timeout-handling/ | Low | Maintain existing resource |
 
 ## Category Mix
 
@@ -151,6 +151,7 @@ Generated: 2026-09-01
 |---|---|---|---|---|---|---|---|
 | Integrate once through one multi-provider LLM proxy | One canonical POST /v2 contract, direct HTTP, official Go, Python, and CLI clients, explicit supported-route selection, server-side provider credentials, and a generated current capability matrix. | Universal upstream feature parity, automatic fallback, benchmark leadership, savings, provider longevity, model-onboarding time, or hosted uptime guarantees. | This is the integrate-once cornerstone: it explains how the client contract stays stable while provider and model routing change. | README.md, verified 2026-08-08 | Compare integration options | /resources/multi-provider-llm-proxy/ | 2026-08-08 |
 | Switch OpenAI, Claude, and Gemini behind one endpoint | One canonical messages body, native OpenAI Responses, Anthropic Messages, and Gemini Interactions adapters, explicit route selection, blocking caller behavior, and current catalog validation. | Identical upstream behavior, identical capabilities, provider performance rankings, automatic fallback, availability guarantees, or universal model access. | This page is a concrete three-provider comparison for product teams. It explains which contract stays shared and which behavior remains route-specific. | README.md, verified 2026-08-22 | Explore supported models | /resources/openai-claude-gemini-one-endpoint/ | 2026-08-22 |
+| Account-wide managed tenant usage dashboard for LLMs | Account-wide and tenant-scoped execution aggregates, separate safe failure and rejection reports, independent local provider and model chart toggles, and visible UTC axes. | Billing, provider performance, token-share donuts, exact event times, provider-key status, persisted chart choices, or complete audit logging. | This is the managed usage guide. It explains request dispositions, safe diagnostics, independent local breakdown controls, explicit chart axes, and tenant scope. | README.md, verified 2026-09-03 | Open API reference | /resources/managed-tenant-usage-dashboard/ | 2026-09-03 |
 | Transactional multi-tenant account ownership migration | Bounded preflight, atomic migration, preserved tenant ids and usage, and tenant-bound provider-key re-encryption. | Performance, pricing, compliance, benchmark, and zero-downtime claims. | Operator runbook for the one-tenant-per-user ownership upgrade, distinct from general GORM persistence guidance. | internal/proxy/management_store.go, verified 2026-08-22 | Read the migration runbook | /resources/multi-tenant-ownership-migration/ | 2026-08-22 |
 | Internal AI gateway for durable product integrations | One tenant-client-key boundary, canonical messages integration, server-side provider keys, managed routing defaults, route validation, official clients, and content-free usage summaries. | Complete AI governance, compliance certification, data residency, procurement guarantees, hosted availability, or replacement of organizational security controls. | This page addresses institutional ownership and operating boundaries across many applications rather than provider comparison or individual developer setup. | README.md, verified 2026-08-08 | Read the authentication guide | /resources/internal-ai-gateway-for-product-tools/ | 2026-08-08 |
 
@@ -164,7 +165,7 @@ Generated: 2026-09-01
 
 ## Evaluation Report
 
-Independent quality and risk evaluation: 2026-09-01
+Independent quality and risk evaluation: 2026-09-03
 
 | Category | Score | Notes |
 |---|---:|---|
