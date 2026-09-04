@@ -16,8 +16,10 @@ const RESOURCE_ROOT = "site/resources";
 const REPORT_PATH = "docs/marketing/seo-resource-cluster-report.md";
 const RESOURCE_PUBLISHED_DATE = "2026-07-06";
 const RESOURCE_DEFAULT_MODIFIED_DATE = "2026-07-11";
+const RESOURCE_INDEX_MODIFIED_DATE = "2026-09-01";
 const CURRENT_PUBLIC_CONTENT_MODIFIED_DATE = "2026-08-08";
 const PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE = "2026-08-22";
+const REQUEST_DISPOSITION_MODIFIED_DATE = "2026-09-03";
 const LANDING_MODIFIED_DATE = CURRENT_PUBLIC_CONTENT_MODIFIED_DATE;
 const PRODUCT_NAME = "LLM Proxy";
 const API_DOCUMENTATION_PATH = "/docs/";
@@ -639,49 +641,55 @@ done`,
   evidencedPage({
     slug: "managed-tenant-usage-dashboard",
     category: "Usage",
+    modifiedDate: REQUEST_DISPOSITION_MODIFIED_DATE,
     primaryKeyword: "managed tenant usage dashboard",
     title: "Account-wide managed tenant usage dashboard for LLMs",
-    description: "See all owned tenants by default, filter one tenant when needed, and inspect safe failed-request details without exposing secrets.",
+    description: "See execution usage across owned tenants and inspect failed and rejected requests separately without exposing secrets or request content.",
     audience: "Teams giving users self-service AI access while keeping usage visible.",
     problem: "A multi-tenant key-management portal is incomplete when its default dashboard hides every tenant except one or implies that selecting a tenant activates it.",
-    solution: "LLM Proxy's authenticated Usage Overview defaults to account-wide aggregates across every owned tenant, offers one local Bar graph or Donut chart view for provider and model request breakdowns, and gives Requests and Tokens distinct UTC and per-bucket quantity axes.",
-    quickVerdict: "Every tenant remains independently routable. Usage opens on All tenants and 30 days, while client-side chart choices change no usage request or persisted setting.",
+    solution: "LLM Proxy's authenticated Usage Overview defaults to account-wide execution aggregates across every owned tenant. It reports requests rejected before provider dispatch separately from failed executions. Independent chart toggles control the provider and model breakdowns. Requests and Tokens have distinct UTC and per-bucket quantity axes.",
+    quickVerdict: "Usage keeps impossible requests visible as rejections without counting them as executions or proxy failures. Every tenant remains independently routable, and local chart choices change no request or persisted setting.",
     steps: [
       "Create managed tenants and their generated client keys.",
       "Send proxy requests through any owned tenant's generated secret; each tenant remains operational independently.",
-      "Record canonical outcome metadata for managed-tenant requests without storing request or provider-error content.",
+      "Record one rejected, succeeded, or failed disposition with canonical outcome metadata and no request or provider-error content.",
       "Open Usage Overview on All tenants and 30 days, or use the Usage tenant selector immediately before ALL to narrow the report.",
-      "Use Breakdown view to show both provider and model request distributions as ranked bars or count-and-percentage donuts.",
+      "Use each breakdown card's icon button to switch that card between ranked bars and a count-and-percentage donut.",
       "Read Requests and Tokens against their visible UTC and zero-based per-hour or per-day axes.",
       "Read account-wide totals from GET /api/management/usage or one tenant from GET /api/management/tenants/:tenant_id/usage.",
       "When failures exist, open N failed requests; account-wide rows include safe tenant context and tenant-scoped rows do not repeat it.",
+      "When rejections exist, open N rejected requests to inspect requests that did not reach provider dispatch.",
     ],
     features: [
       ["All-tenant default", "The default All tenants and 30 days selections populate requests, tokens, success rate, providers, models, statuses, and buckets together.", "The first dashboard snapshot represents every owned tenant rather than the oldest one."],
       ["Independent selectors", "The Tenant control in Settings chooses only the editor; Usage tenant chooses only the report.", "Changing provider settings for one tenant cannot silently narrow the usage dashboard."],
-      ["Shared request breakdown", "One keyboard-operable control changes both provider and model panels between Bar graph and Donut chart.", "Both views derive from the same ordered aggregate request counts without another management request."],
+      ["Independent request breakdowns", "Each card has one keyboard-operable icon button that switches only that card between bars and a donut.", "Both views derive from the same ordered aggregate request counts without another management request."],
       ["Explicit time-series axes", "Requests and Tokens each show UTC X ticks and a zero-based integer Y scale for the canonical hour or day bucket.", "The charts do not imply one shared numeric scale or an exact event time."],
-      ["Safe failure vocabulary", "Rows distinguish validation, payload size, rate limit, unavailable, timeout, and upstream failures with canonical codes.", "A failed request is not automatically labeled a provider failure."],
+      ["Separate dispositions", "Execution metrics contain only succeeded and failed requests, while rejected_requests reports requests that could not dispatch.", "Invalid input or missing provider configuration does not reduce the proxy success rate."],
+      ["Safe detail reports", "Failure rows contain attempted execution errors; rejection rows contain invalid_request, payload_too_large, or provider_not_configured.", "Both reports expose bounded metadata without raw error content."],
       ["Scope-bound pagination", "Newest-first cursors remain bound to All tenants or one exact tenant.", "Prompts, responses, provider bodies, free-form errors, and credentials never enter the dialog."],
     ],
     examples: [
       ["Portfolio overview", "A user sees the combined request and token totals for every owned tenant without making one browser request per tenant."],
       ["Tenant investigation", "Selecting Research narrows every usage surface and failure row to that tenant while Settings can remain on Default."],
       ["Scope-safe failure review", "Changing from All tenants to one tenant invalidates the old dialog request so stale rows and cursors cannot cross scopes."],
+      ["Impossible request review", "A request for a recognized provider without a saved tenant credential appears as provider_not_configured in the rejection report and never reaches provider dispatch."],
     ],
     limitations: [
       "Usage is recorded for managed tenants using generated secrets.",
       "The donut is a request-share view, not a token-share or provider-performance comparison.",
       "Every provider and model category stays separate; the donut does not create an Other tail.",
       "The charts are client-side presentations of existing aggregates, not billing, provider-key, exact-event-time, or new management-API features.",
-      "Failure rows are operational metadata, not reconstructed provider error messages or a billing system.",
+      "Failure and rejection rows are operational metadata, not reconstructed provider error messages or a billing system.",
       "Administrators receive aggregate summaries only; per-event rows remain owner-only.",
     ],
     repoExample: {
       source: "README.md",
       code: `GET /api/management/usage?interval=30d
-GET /api/management/tenants/:tenant_id/usage?interval=30d`,
-      verifiedOn: "2026-09-01",
+GET /api/management/tenants/:tenant_id/usage?interval=30d
+GET /api/management/usage/failures?interval=30d
+GET /api/management/usage/rejections?interval=30d`,
+      verifiedOn: "2026-09-03",
     },
     faq: [
       {
@@ -693,8 +701,8 @@ GET /api/management/tenants/:tenant_id/usage?interval=30d`,
         answer: "It selects All tenants and the 30-day interval, then aggregates the owned tenants at the server's database boundary.",
       },
       {
-        question: "Does changing Breakdown view request new usage data?",
-        answer: "No. Bar graph and Donut chart are local presentations of the same provider and model request aggregates.",
+        question: "Does changing a breakdown chart request new usage data?",
+        answer: "No. Each independent chart toggle changes one local presentation of the same request aggregates.",
       },
       {
         question: "Does changing the Tenant control in Settings change Usage Overview?",
@@ -704,7 +712,22 @@ GET /api/management/tenants/:tenant_id/usage?interval=30d`,
         question: "What tenant data appears in account-wide failure rows?",
         answer: "Only the safe opaque tenant ID and current display name are added. Credentials, prompts, responses, provider bodies, and free-form errors remain excluded.",
       },
+      {
+        question: "Does an unconfigured provider count as a proxy failure?",
+        answer: "No. The proxy rejects the request before provider dispatch, increments rejected_requests, and exposes provider_not_configured only in the rejection report.",
+      },
     ],
+    cta: {
+      heading: "Inspect managed usage contracts",
+      body: "Review the account-wide and tenant-scoped usage endpoints before you inspect their aggregates in Usage Overview.",
+      label: "Open API reference",
+      href: "/docs/",
+    },
+    publicationBrief: {
+      allowedClaims: "Account-wide and tenant-scoped execution aggregates, separate safe failure and rejection reports, independent local provider and model chart toggles, and visible UTC axes.",
+      forbiddenClaims: "Billing, provider performance, token-share donuts, exact event times, provider-key status, persisted chart choices, or complete audit logging.",
+      differentiation: "This is the managed usage guide. It explains request dispositions, safe diagnostics, independent local breakdown controls, explicit chart axes, and tenant scope.",
+    },
   }),
   page({
     slug: "admin-usage-visibility-without-secrets",
@@ -1322,9 +1345,10 @@ text = client.post_messages(
   page({
     slug: "llm-proxy-status-code-map",
     category: "Reliability",
+    modifiedDate: REQUEST_DISPOSITION_MODIFIED_DATE,
     primaryKeyword: "LLM proxy status code map",
     title: "LLM Proxy status code map for callers",
-    description: "Handle missing keys, bad inputs, rate limits, disabled providers, timeouts, and upstream failures consistently.",
+    description: "Handle missing keys, bad inputs, unconfigured provider routes, rate limits, queue pressure, timeouts, and upstream failures consistently.",
     audience: "Developers who need predictable error handling around LLM and dictation calls.",
     problem: "Provider errors can be inconsistent. Callers need to know whether a request failed because of authentication, validation, capacity, provider rate limits, or upstream failure.",
     solution: "LLM Proxy maps public errors to documented HTTP status codes across text and dictation routes.",
@@ -1332,15 +1356,15 @@ text = client.post_messages(
       "Treat 400 as invalid request parameters or unsupported provider/model/capability.",
       "Treat 403 as missing or invalid tenant secret.",
       "Treat 413 as prompt or audio payload too large.",
-      "Handle 429, 503, 504, and 502 according to rate-limit, disabled-provider, timeout, and upstream-failure meanings.",
+      "Handle 409, 429, 503, 504, and 502 according to unconfigured-route, rate-limit, queue, timeout, and upstream-failure meanings.",
     ],
     features: [
       ["Client validation errors", "Bad provider/model choices and ambiguous bodies return 400.", "Callers can fix request shape."],
       ["Authentication boundary", "Missing or invalid key returns 403.", "The proxy does not reveal tenant internals."],
-      ["Provider/capacity signals", "429, 503, 504, and 502 communicate distinct runtime conditions.", "Retry behavior can be more precise."],
+      ["Routing and capacity signals", "409, 429, 503, 504, and 502 communicate distinct runtime conditions.", "Retry behavior can be more precise."],
     ],
     examples: [
-      ["Disabled provider", "A selected non-default provider without an API key returns 503 provider not configured."],
+      ["Unconfigured provider", "A recognized provider route without a tenant API key returns 409 provider_not_configured before dispatch."],
       ["Long provider work", "A request exceeding its accepted proxy work budget returns the canonical request_timeout 504 envelope."],
       ["Provider outage", "A non-rate-limit upstream provider failure maps to bad gateway behavior."],
     ],
@@ -1385,7 +1409,7 @@ text = client.post_messages(
   page({
     slug: "openai-compatible-provider-gateway",
     category: "Provider routing",
-    modifiedDate: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
+    modifiedDate: REQUEST_DISPOSITION_MODIFIED_DATE,
     primaryKeyword: "OpenAI-compatible provider gateway",
     title: "OpenAI-compatible provider gateway",
     description: "Route Meta Muse Spark, DeepSeek, DashScope Qwen, Kimi, MiniMax, SiliconFlow, Z.AI, and Grok text calls through one compatible adapter.",
@@ -1401,7 +1425,7 @@ text = client.post_messages(
     features: [
       ["Shared adapter", "Compatible chat providers use one proxy integration pattern.", "Provider-specific logic stays centralized."],
       ["Provider aliases", "Some providers expose aliases such as qwen or kimi.", "Callers can use documented selectors."],
-      ["Unconfigured-provider behavior", "A selected provider without a saved tenant key returns 503.", "Operators can add provider credentials without changing service config."],
+      ["Unconfigured-provider behavior", "A selected provider without a saved tenant key returns 409 provider_not_configured before dispatch.", "Operators can add provider credentials without changing service config."],
     ],
     examples: [
       ["Meta Muse route", "A caller sends provider=meta and model=muse-spark-1.2 through Chat Completions."],
@@ -1607,7 +1631,7 @@ text = client.post_messages(
   page({
     slug: "usage-metadata-without-prompts",
     category: "Usage",
-    modifiedDate: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE,
+    modifiedDate: REQUEST_DISPOSITION_MODIFIED_DATE,
     primaryKeyword: "usage metadata without prompts",
     title: "Usage metadata without storing prompts or responses",
     description: "Track managed-tenant usage signals while excluding prompt, transcript, audio, response, and secret content.",
@@ -1616,14 +1640,14 @@ text = client.post_messages(
     solution: "LLM Proxy records operational metadata for managed-tenant usage while excluding raw content and secret material.",
     steps: [
       "Authenticate managed proxy requests with generated tenant secrets.",
-      "Record endpoint, provider, model, status, success, canonical outcome code, latency, and token counts.",
+      "Record endpoint, resolved route, status, request disposition, canonical outcome code, latency, and token counts.",
       "Exclude prompts, audio, transcripts, responses, tenant secrets, and provider keys from usage events.",
-      "Expose aggregate summaries to users and admins, and safe per-failure metadata only to the owning user.",
+      "Expose execution aggregates to users and admins, and separate safe failure and rejection metadata only to the owning user.",
     ],
     features: [
-      ["Canonical outcomes", "Every event stores one bounded code such as invalid_request, rate_limited, request_timeout, or upstream_error.", "Dashboards do not persist raw error strings."],
-      ["Tenant isolation", "Signed-in owners can inspect their own safe failure rows.", "Admins remain aggregate-only and foreign tenant ids return the same not-found response."],
-      ["Bounded diagnostic rows", "Failure pages contain only occurred_at, endpoint, provider, model, status_code, outcome_code, and latency_ms.", "Operational investigation does not become content export."],
+      ["Canonical dispositions", "Every event is rejected, succeeded, or failed and has one matching bounded outcome code.", "Dashboards do not persist raw error strings."],
+      ["Tenant isolation", "Signed-in owners can inspect their own safe failure and rejection rows.", "Admins remain aggregate-only and foreign tenant ids return the same not-found response."],
+      ["Bounded diagnostic rows", "Failure and rejection pages contain only occurred_at, endpoint, provider, model, status_code, outcome_code, and latency_ms.", "Operational investigation does not become content export."],
     ],
     examples: [
       ["Privacy-conscious dashboard", "A user sees request counts and token totals but no prompt body."],
@@ -1903,14 +1927,16 @@ text = client.post_messages(
   page({
     slug: "provider-overload-timeout-handling",
     category: "Reliability",
+    modifiedDate: REQUEST_DISPOSITION_MODIFIED_DATE,
     primaryKeyword: "LLM provider overload timeout handling",
     title: "Provider overload and timeout handling for LLM calls",
     description: "Use clear 503 and 504 behavior for queue pressure and provider work that exceeds the proxy deadline.",
     audience: "Developers building retry and alerting behavior around LLM Proxy.",
-    problem: "Failures are harder to handle when overload, provider timeout, missing credentials, and upstream errors collapse into one generic exception.",
-    solution: "LLM Proxy separates request queue pressure, disabled provider credentials, upstream provider rate limits, gateway timeout, and provider failures through documented status codes.",
+    problem: "Errors are harder to handle when overload, provider timeout, missing credentials, and upstream failures collapse into one generic exception.",
+    solution: "LLM Proxy separates rejected unconfigured routes, request queue pressure, upstream provider rate limits, gateway timeout, and provider failures through documented status codes.",
     steps: [
-      "Use 503 request queue full or provider not configured as service-availability signals.",
+      "Use 409 provider_not_configured for a recognized route that cannot dispatch without its tenant credential.",
+      "Use 503 request queue full as the proxy capacity signal.",
       "Use 504 as the overall proxy request deadline expiring.",
       "Use server.upstream_rate_limits to pace calls at actual upstream admission for each configured origin.",
       "Use 429 for upstream provider rate limits.",
@@ -1924,7 +1950,7 @@ text = client.post_messages(
     examples: [
       ["Capacity alert", "A spike in queue-full responses points to proxy capacity tuning."],
       ["Long prompt timeout", "A semantic-review request returns 504 when provider work exceeds the configured deadline."],
-      ["Disabled provider", "A selected provider without an API key returns 503 provider not configured."],
+      ["Unconfigured provider", "A selected provider without an API key returns 409 provider_not_configured before dispatch."],
     ],
     limitations: [
       "Status codes do not guarantee safe automatic retries for every prompt.",
@@ -2506,10 +2532,9 @@ function latestResourceModifiedDate() {
  * @returns {string}
  */
 function renderSitemap() {
-  const currentResourceModifiedDate = latestResourceModifiedDate();
   const urls = [
     { loc: `${PUBLIC_ORIGIN}/`, lastmod: LANDING_MODIFIED_DATE },
-    { loc: `${PUBLIC_ORIGIN}/resources/`, lastmod: currentResourceModifiedDate },
+    { loc: `${PUBLIC_ORIGIN}/resources/`, lastmod: RESOURCE_INDEX_MODIFIED_DATE },
     { loc: `${PUBLIC_ORIGIN}${API_DOCUMENTATION_PATH}`, lastmod: CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE },
     { loc: `${PUBLIC_ORIGIN}/privacy/`, lastmod: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE },
     { loc: `${PUBLIC_ORIGIN}/terms/`, lastmod: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE },
