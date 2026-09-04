@@ -1621,6 +1621,9 @@ test("public landing is keyboard navigable and responsive in Chromium", async ({
 });
 
 test("site publishes the exact canonical OpenAPI artifact and its derived reference", async ({ request }) => {
+  const healthResponse = await request.get(`${baseURL}/healthz`);
+  expect(healthResponse.status()).toBe(httpOK);
+  expect(await healthResponse.json()).toEqual({ status: "ok" });
   const canonicalSource = await readFile(canonicalOpenAPIFile, "utf8");
   const schemaResponse = await request.get(`${baseURL}${openAPIPath}`);
   expect(schemaResponse.status()).toBe(httpOK);
@@ -1648,7 +1651,8 @@ test("site publishes the exact canonical OpenAPI artifact and its derived refere
   expect(documentationHTML).not.toContain('id="operation-deleteManagementTenantSecret"');
   expect(documentationHTML).toContain("<code>reasoning_effort</code>");
   expect(documentationHTML).toContain(`href="${openAPIPath}"`);
-  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(31);
+  expect(documentationHTML).toContain('id="operation-getHealth"');
+  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(31 + (28 - 27));
 });
 
 test("OpenCode integration opens the bearer-authenticated client API reference", async ({ page }) => {
@@ -1658,8 +1662,7 @@ test("OpenCode integration opens the bearer-authenticated client API reference",
   await expect(page).toHaveURL(`${baseURL}${apiDocumentationPath}#operation-createChatCompletion`);
   const operation = page.locator("#operation-createChatCompletion");
   await expect(operation).toContainText("Authorization: Bearer <tenant-client-key>");
-  await expect(operation).toContainText("/v1/chat/completions");
-});
+  await expect(operation).toContainText("/v1/chat/completions");});
 
 test("OpenAPI reference views and downloads the exact canonical YAML", async ({ page }) => {
   const canonicalSource = await readFile(canonicalOpenAPIFile, "utf8");

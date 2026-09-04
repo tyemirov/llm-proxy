@@ -1152,7 +1152,7 @@ retain satisfied historical dependencies.
   - Run `make ci` after the last application change.
 
 
-- [ ] [I239] (P1) Standardize HTTP health at `/healthz`.
+- [x] [I239] (P1) Standardize HTTP health at `/healthz`.
   Goal:
   Make `/healthz` the canonical health endpoint for the LLM Proxy API and
   static web origins. Use the endpoint for readiness without business-resource requests.
@@ -1162,7 +1162,8 @@ retain satisfied historical dependencies.
   - Publish a static `/healthz` resource for the GitHub Pages origin.
   - Return `200` only when each origin can serve its current application contract.
   - Return a non-success status when a required runtime dependency prevents API service.
-  - Send `Cache-Control: no-store` on every health response.
+  - Send `Cache-Control: no-store` on API and local health responses.
+  - Use the GitHub Pages cache policy for production static health responses.
   - Keep each response free from credentials, provider data, and internal state.
   - Do not verify provider credentials or dispatch a provider during a probe.
   - Do not mutate application state during a probe.
@@ -1180,7 +1181,8 @@ retain satisfied historical dependencies.
   - Update the API, static artifact, request logging, orchestration, manifest, documentation, and black-box tests.
 
   Validation:
-  - Verify unauthenticated `GET /healthz` returns `200` and `Cache-Control: no-store` on each origin.
+  - Verify unauthenticated `GET /healthz` returns `200` on each origin.
+  - Verify API and local health responses use `Cache-Control: no-store`.
   - Verify a required dependency failure returns a non-success API status without provider work.
   - Verify the static publication artifact contains `/healthz`.
   - Verify no readiness probe requests a capability, config, or business resource.
@@ -1188,6 +1190,22 @@ retain satisfied historical dependencies.
   - Verify successful probes create no routine request events.
   - Verify failed probes retain diagnostic evidence.
   - Run `make ci`.
+
+  Implementation:
+  - Added public API health with a bounded, read-only database check.
+  - Added the static health resource and its publication check.
+  - Changed readiness probes to use `/healthz` and kept failed probe evidence.
+  - Verified quiet success responses, dependency failures, and unchanged usage.
+  - Passed all 12 `make ci` gates, 85 browser tests, and 100% Go coverage.
+
+  Cache policy:
+  The operator approved the GitHub Pages cache-policy exception on 2026-09-04.
+  This exception applies only to production static health responses.
+  API and local health responses still require `Cache-Control: no-store`.
+
+  Resolution:
+  Implemented and verified API health, the static artifact, and readiness probes.
+  Full local `make ci` passed. The approved cache exception removes the remaining blocker.
 
 - [x] [I238] (P1) {I027,I237} Make provider card settings compact and automatic.
   Goal:

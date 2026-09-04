@@ -126,8 +126,7 @@ fi
 local_orchestration_verify_ready \
   "${LOCAL_ORCHESTRATION_COMPOSE_PROJECT}" \
   "${local_frontend_origin}" \
-  "${local_api_origin}" \
-  "${local_tauth_tenant_id}"
+  "${local_api_origin}"
 local_stack_ready="1"
 
 echo
@@ -139,6 +138,6 @@ echo "API: ${local_api_origin}/"
 echo "Public capabilities: ${local_api_origin}/api/public/capabilities"
 echo "TAuth: ${local_frontend_origin}/auth/ (ghttp to TAuth)"
 echo "Runtime config: ${local_frontend_origin}/config-ui.yaml (ghttp to API)"
-echo "Readiness contracts: static=200, OpenAPI schema=200, config=200, public capabilities=200, API=403 without a key, same-origin TAuth session=204 and nonce=200, management API=401 without a session."
+echo "Readiness contracts: static /healthz=200 and API /healthz=200 without credentials."
 
 local_orchestration_compose logs --follow --no-color

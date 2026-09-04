@@ -513,15 +513,15 @@ case "${arguments}" in
   *"http://localhost:4179/"*)
     status=200
     ;;
-  *"http://localhost:8080/api/public/capabilities"*)
+  *"http://localhost:8080/healthz"*)
     status=200
+    builtin printf '%s\n' ready >"${CURL_READY_CAPTURE:?}"
     ;;
   *"http://localhost:8080/?prompt=ready"*)
     status=403
     ;;
   *"http://localhost:8080/api/management/account"*)
     status=401
-    builtin printf '%s\n' ready >"${CURL_READY_CAPTURE:?}"
     ;;
   *)
     exit 1
@@ -628,27 +628,17 @@ exec "${REAL_AWK_PATH:?}" "$@"
 		testingInstance.Fatalf("read curl arguments: %v", readCurlArgumentsError)
 	}
 	for _, expectedURL := range []string{
-		"http://localhost:4179/",
-		"http://localhost:4179/openapi.yaml",
-		"http://localhost:4179/config-ui.yaml",
-		"http://localhost:4179/auth/session",
-		"http://localhost:4179/auth/nonce",
-		"http://localhost:8080/api/public/capabilities",
-		"http://localhost:8080/?prompt=ready",
-		"http://localhost:8080/api/management/account",
+		"http://localhost:4179/healthz",
+		"http://localhost:8080/healthz",
 	} {
 		if !strings.Contains(string(curlArguments), expectedURL) {
 			testingInstance.Fatalf("make up did not verify %s: %s", expectedURL, curlArguments)
 		}
 	}
-	if !strings.Contains(string(curlArguments), "--header X-TAuth-Tenant: llm-proxy-test http://localhost:4179/auth/session") {
-		testingInstance.Fatalf("make up did not verify TAuth client session restoration through the same-origin frontend: %s", curlArguments)
-	}
-	if strings.Contains(string(curlArguments), "Origin: http://localhost:4179 --header X-TAuth-Tenant: llm-proxy-test http://localhost:4179/auth/session") {
-		testingInstance.Fatalf("make up hid the same-origin TAuth session request shape behind a synthetic Origin: %s", curlArguments)
-	}
-	if !strings.Contains(string(curlArguments), "--request POST --header Origin: http://localhost:4179 --header Content-Type: application/json --header X-Requested-With: XMLHttpRequest --header X-TAuth-Tenant: llm-proxy-test http://localhost:4179/auth/nonce") {
-		testingInstance.Fatalf("make up did not verify TAuth client nonce issuance through the same-origin frontend: %s", curlArguments)
+	for _, businessResource := range []string{"/api/public/capabilities", "/config-ui.yaml", "/?prompt=ready", "/api/management/account", "/auth/nonce"} {
+		if strings.Contains(string(curlArguments), businessResource) {
+			testingInstance.Fatalf("readiness requested business resource %s", businessResource)
+		}
 	}
 
 	localEnvironment, readLocalEnvironmentError := os.ReadFile(filepath.Join(fixtureRoot, "configs", ".env.local"))
@@ -734,7 +724,7 @@ exec "${REAL_AWK_PATH:?}" "$@"
 				"./site:/app/site:ro",
 				"LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY",
 				"condition: service_healthy",
-				"curl --fail --silent http://127.0.0.1:8080/api/public/capabilities",
+				"[\"CMD\", \"curl\", \"--fail\", \"--silent\", \"--show-error\", \"http://127.0.0.1:8080/healthz\"]",
 				"./configs/config.yml:/app/configs/config.yml:ro",
 				"./configs/providers.yml:/app/configs/providers.yml:ro",
 				"GHTTP_SERVE_DIRECTORY: \"/app/docs\"",
@@ -885,7 +875,7 @@ case "${arguments}" in
   *"http://127.0.0.1:${LLM_PROXY_LOCAL_FRONTEND_HOST_PORT:?}/auth/session"*) status=204 ;;
   *"http://127.0.0.1:${LLM_PROXY_LOCAL_FRONTEND_HOST_PORT}/auth/nonce"*) status=200 ;;
   *"http://127.0.0.1:${LLM_PROXY_LOCAL_FRONTEND_HOST_PORT}/"*) status=200 ;;
-  *"http://127.0.0.1:${LLM_PROXY_LOCAL_API_HOST_PORT:?}/api/public/capabilities"*) status=200 ;;
+  *"http://127.0.0.1:${LLM_PROXY_LOCAL_API_HOST_PORT:?}/healthz"*) status=200 ;;
   *"http://127.0.0.1:${LLM_PROXY_LOCAL_API_HOST_PORT}/?prompt=ready"*) status=403 ;;
   *"http://127.0.0.1:${LLM_PROXY_LOCAL_API_HOST_PORT}/api/management/account"*) status=401 ;;
   *) exit 1 ;;
@@ -1080,7 +1070,7 @@ case "${arguments}" in
   *"http://localhost:4179/auth/nonce"*|*"http://localhost:4179/"*)
     status=200
     ;;
-  *"http://localhost:8080/api/public/capabilities"*)
+  *"http://localhost:8080/healthz"*)
     status=200
     ;;
   *"http://localhost:8080/?prompt=ready"*)

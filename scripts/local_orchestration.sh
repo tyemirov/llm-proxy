@@ -233,49 +233,11 @@ local_orchestration_wait_for_http_status() {
   return 1
 }
 
-local_orchestration_verify_capability_catalog() {
-  local frontend_origin="$1"
-  local landing_page
-
-  landing_page="$(curl --silent --show-error --max-time 5 "${frontend_origin}/")" || {
-    echo "error: ghttp did not return the rendered landing page" >&2
-    return 1
-  }
-  [[ "${landing_page}" == *'class="routing-tree"'* ]] || {
-    echo "error: ghttp landing page omitted the generated routing tree" >&2
-    return 1
-  }
-  [[ "${landing_page}" == *'class="catalog-table"'* ]] || {
-    echo "error: ghttp landing page omitted the generated capability matrix" >&2
-    return 1
-  }
-  [[ "${landing_page}" != *"llm-proxy-routing-tree"* ]] || {
-    echo "error: ghttp landing page retained the unrendered routing marker" >&2
-    return 1
-  }
-  [[ "${landing_page}" != *"llm-proxy-capability-catalog"* ]] || {
-    echo "error: ghttp landing page retained the unrendered capability marker" >&2
-    return 1
-  }
-  [[ "${landing_page}" != *"api_key"* && "${landing_page}" != *"base_url"* ]] || {
-    echo "error: ghttp landing page exposed private provider configuration" >&2
-    return 1
-  }
-}
-
 local_orchestration_verify_ready() {
   local compose_project="$1"
   local frontend_origin="$2"
   local api_origin="$3"
-  local tauth_tenant_id="$4"
 
-  local_orchestration_wait_for_http_status "${compose_project}" "ghttp static frontend" "200" "${frontend_origin}/"
-  local_orchestration_verify_capability_catalog "${frontend_origin}"
-  local_orchestration_wait_for_http_status "${compose_project}" "ghttp canonical OpenAPI schema" "200" "${frontend_origin}/openapi.yaml"
-  local_orchestration_wait_for_http_status "${compose_project}" "ghttp runtime configuration" "200" "${frontend_origin}/config-ui.yaml"
-  local_orchestration_wait_for_http_status "${compose_project}" "LLM Proxy public capabilities" "200" "${api_origin}/api/public/capabilities"
-  local_orchestration_wait_for_http_status "${compose_project}" "LLM Proxy API boundary" "403" "${api_origin}/?prompt=ready"
-  local_orchestration_wait_for_http_status "${compose_project}" "TAuth session through ghttp" "204" "${frontend_origin}/auth/session" --header "X-TAuth-Tenant: ${tauth_tenant_id}"
-  local_orchestration_wait_for_http_status "${compose_project}" "TAuth nonce through ghttp" "200" "${frontend_origin}/auth/nonce" --request POST --header "Origin: ${frontend_origin}" --header "Content-Type: application/json" --header "X-Requested-With: XMLHttpRequest" --header "X-TAuth-Tenant: ${tauth_tenant_id}"
-  local_orchestration_wait_for_http_status "${compose_project}" "LLM Proxy management API boundary" "401" "${api_origin}/api/management/account" --header "Origin: ${frontend_origin}"
+  local_orchestration_wait_for_http_status "${compose_project}" "ghttp static health" "200" "${frontend_origin}/healthz"
+  local_orchestration_wait_for_http_status "${compose_project}" "LLM Proxy API health" "200" "${api_origin}/healthz"
 }

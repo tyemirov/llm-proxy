@@ -6,8 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="fb989371843806f23df5ceb43ca21fe2d6d53ea872e7eba70d89760b4e6fb4d6">
-    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <meta name="openapi-source-sha256" content="f78dce2fbb27279052fbe2300907da5fdffcd9d066a2c0219de4ce8ad9dfee0d">    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -22,8 +21,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="fb989371843806f23df5ceb43ca21fe2d6d53ea872e7eba70d89760b4e6fb4d6">
-    <mpr-header
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="f78dce2fbb27279052fbe2300907da5fdffcd9d066a2c0219de4ce8ad9dfee0d">    <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
       brand-label="LLM Proxy"
@@ -50,8 +48,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>fb989371843806f23df5ceb43ca21fe2d6d53ea872e7eba70d89760b4e6fb4d6</code></span>
-        </div>
+          <span>Source SHA-256 <code>f78dce2fbb27279052fbe2300907da5fdffcd9d066a2c0219de4ce8ad9dfee0d</code></span>        </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
           <a class="resource-button" href="/openapi.yaml" download="llm-proxy-openapi.yaml">Download YAML</a>
@@ -715,6 +712,44 @@ paths:
             application/json:
               schema:
                 $ref: &#39;#/components/schemas/OpenAIError&#39;
+  /healthz:
+    get:
+      operationId: getHealth
+      summary: Read local datastore readiness without authentication or provider work.
+      security: []
+      responses:
+        &#39;200&#39;:
+          description: The local datastore is available.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                additionalProperties: false
+                properties:
+                  status:
+                    const: ok
+        &#39;503&#39;:
+          description: The local datastore is unavailable.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                additionalProperties: false
+                properties:
+                  status:
+                    const: unavailable
   /:
     get:
       operationId: getText
@@ -5654,6 +5689,7 @@ components:
 <a href="#operation-getPublicCapabilities"><span class="api-method api-method-get">GET</span><code>/api/public/capabilities</code><span>Read the public normalized model capability catalog</span></a>
 <a href="#operation-getBrowserConfiguration"><span class="api-method api-method-get">GET</span><code>/config-ui.yaml</code><span>Read the browser runtime configuration</span></a>
 <a href="#operation-postDictation"><span class="api-method api-method-post">POST</span><code>/dictate</code><span>Transcribe an audio upload</span></a>
+<a href="#operation-getHealth"><span class="api-method api-method-get">GET</span><code>/healthz</code><span>Read local datastore readiness without authentication or provider work.</span></a>
 <a href="#operation-uploadTenantAsset"><span class="api-method api-method-post">POST</span><code>/model/v1/assets</code><span>Upload exact tenant media bytes</span></a>
 <a href="#operation-deleteTenantAsset"><span class="api-method api-method-delete">DELETE</span><code>/model/v1/assets/{asset_id}</code><span>Delete one tenant asset</span></a>
 <a href="#operation-createTranscription"><span class="api-method api-method-post">POST</span><code>/v1/audio/transcriptions</code><span>createTranscription</span></a>
@@ -6599,6 +6635,29 @@ components:
 <tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. The response contains only sanitized provider metadata and never exposes partial generated text, token-count headers, a raw provider body, or a provider error message; provider-reported usage can still be retained in managed failure accounting.</td></tr>
 <tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The bounded request queue is full.</td></tr>
 <tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getHealth">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/healthz</code>
+          <span class="api-operation-id">getHealth</span>
+        </header>
+        <h2>Read local datastore readiness without authentication or provider work.</h2>
+        <p class="api-security"><strong>Authentication:</strong> None</p>
+        <div class="api-contract-block"><h3>Parameters</h3><p>None.</p></div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The local datastore is available.</td></tr>
+<tr><td><code>503</code></td><td>application/json</td><td>Cache-Control</td><td>The local datastore is unavailable.</td></tr>
               </tbody>
             </table>
           </div>

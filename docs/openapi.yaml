@@ -36,10 +36,51 @@ tags:
   - name: Management
     description: TAuth-session-authenticated tenant management operations.
 paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      summary: Read local datastore readiness without authentication or provider work.
+      security: []
+      responses:
+        '200':
+          description: The local datastore is available.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                additionalProperties: false
+                properties:
+                  status:
+                    const: ok
+        '503':
+          description: The local datastore is unavailable.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                additionalProperties: false
+                properties:
+                  status:
+                    const: unavailable
+  /:
+    get:
+      operationId: getText
+      summary: Generate text from a query prompt
   /v1/chat/completions:
     post:
-      operationId: createChatCompletion
-      tags:
+      operationId: createChatCompletion      tags:
         - Client protocols
       description: >-
         Authenticate with a tenant bearer key. Select one exact provider/model route. Reject unsupported fields

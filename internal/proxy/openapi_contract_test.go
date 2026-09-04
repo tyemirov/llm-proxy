@@ -105,8 +105,7 @@ func TestOpenAPIContractDocumentsActualAuthenticationBoundaries(t *testing.T) {
 			expectedSecurity = [][]string{{"TenantClientKey"}}
 		case "/v1/chat/completions", "/v1/responses", "/v1/models", "/v1/audio/transcriptions":
 			expectedSecurity = [][]string{{"TenantBearerKey"}}
-		case proxy.ManagementConfigUIPath, proxy.PublicCapabilitiesPath:
-			expectedSecurity = [][]string{}
+		case "/healthz", proxy.ManagementConfigUIPath, proxy.PublicCapabilitiesPath:			expectedSecurity = [][]string{}
 		}
 		actualSecurity, securityError := contract.SecurityRequirements(operation.Path, operation.Method)
 		if securityError != nil {

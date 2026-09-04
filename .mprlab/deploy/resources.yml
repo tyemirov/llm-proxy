@@ -96,7 +96,7 @@ mprlab_resources:
           readiness:
             protocol: http
             port: 8080
-            path: /config-ui.yaml
+            path: /healthz
             expected_status: 200
       volumes:
         - id: data
@@ -115,7 +115,7 @@ mprlab_resources:
         port: 8080
       health:
         protocol: http
-        path: /config-ui.yaml
+        path: /healthz
         expected_status: 200
     - kind: caddy_route
       id: public-api
@@ -141,14 +141,14 @@ mprlab_resources:
           events: 10
           window_seconds: 10
     - kind: health_check
-      id: api-auth-boundary
+      id: api-health
       protocol: http
-      url: https://llm-proxy-api.mprlab.com/
-      expected_status: 403
+      url: https://llm-proxy-api.mprlab.com/healthz
+      expected_status: 200
     - kind: health_check
-      id: management-config
+      id: website-health
       protocol: http
-      url: https://llm-proxy-api.mprlab.com/config-ui.yaml
+      url: https://llm-proxy.mprlab.com/healthz
       expected_status: 200
     - kind: github_pages
       id: website
