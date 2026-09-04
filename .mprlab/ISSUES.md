@@ -25,6 +25,17 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B183] (P1) Wait for usage persistence before DashScope test teardown.
+  The workspace routing test removes its temporary database while the usage writer is active.
+  Two `make go-test` runs failed with `TempDir RemoveAll cleanup: directory not empty`.
+  Read the tenant usage resource until the routed request is present before the test exits.
+  Validate the public usage assertion and the repository test gate.
+  Resolution: The test confirms one persisted request through the tenant usage API before teardown.
+  The focused test and all 12 CI gates passed.
+  Changed: `internal/proxy/management_provider_key_verification_test.go`.
+  No event contract changed.
+
+
 - [x] [B182] (P1) Bound the request-disposition migration insert.
   Goal:
   The schema 12 upgrade must retain a large usage history. The current copy uses
@@ -933,6 +944,30 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [x] [I243] (P2) Update Governor-managed documents to the current templates.
+  Goal:
+  Eight managed documents differ from the current Governor templates.
+  Requirements:
+  - Update the five stack guides, planning contract, policy, and root managed block.
+  - Preserve repository-owned instructions outside the root managed block.
+  - Preserve all pending application changes.
+  Validation:
+  - Run the Governor dry run and check.
+  - Review the changed prose.
+  - Run `git diff --check`.
+  - Compare application file contents before and after normalization.
+  Resolution:
+  - Updated the eight documents to the current Governor templates.
+  - Added the integration-test sequence, GitHub Pages rules, and file permission boundary.
+  - The Governor check reported no required changes.
+  - The changed prose check and `git diff --check` passed.
+  - Existing prose errors remain outside the managed sections and changed issue text.
+  - Application files and repository-owned root instructions remain unchanged.
+  Changed: `AGENTS.md`, `.mprlab/POLICY.md`, and `.mprlab/PLANNING.md`.
+  Changed: `.mprlab/AGENTS.API.md`, `.mprlab/AGENTS.DOCKER.md`, and `.mprlab/AGENTS.FRONTEND.md`.
+  Changed: `.mprlab/AGENTS.GO.md`, `.mprlab/AGENTS.PY.md`, and the issue tracker.
+  Event contracts: No change.
+
 - [x] [I242] (P1) Keep the application title and usage controls concise.
   Goal:
   The management application shows unnecessary words in two user-visible
@@ -1069,153 +1104,6 @@ retain satisfied historical dependencies.
   - Validate the updated OpenAPI document against real HTTP responses.
   - Run `make ci` after the last application change.
 
-- [ ] [I240] (P0) Add first-class client protocol adapters.
-  Goal:
-  Make llm-proxy directly usable by OpenCode and standard OpenAI clients.
-  Keep `/v2` as the canonical llm-proxy contract for repository-owned clients.
-  Support multiple public protocols without duplicate provider logic or
-  inconsistent request accounting.
-
-  Requirements:
-  - Add a client protocol adapter boundary between public handlers and the
-    canonical completion coordinator.
-  - Give each adapter ownership of its paths, authentication input, request
-    validation, canonical translation, response encoding, and error encoding.
-  - Register all client protocol adapters through one typed route registry.
-  - Fail startup when two adapters register the same HTTP method and path.
-  - Do not let a client protocol adapter call a provider transport directly.
-  - Do not let one client protocol adapter call another client protocol adapter.
-  - Keep outbound provider protocol adapters separate from client protocol
-    adapters.
-  - Put the current text and dictation interfaces behind explicit client
-    protocol adapters.
-  - Keep capability, asset, management, and health resources outside this
-    adapter registry.
-  - Route each accepted request through the same tenant, catalog, timeout,
-    admission, continuation, usage, and request identifier services.
-  - Keep one canonical domain request and one closed canonical result type.
-  - Let the canonical result contain final text, structured data, or client
-    tool calls.
-  - Do not expose an upstream resource identifier or native provider payload.
-  - Treat each new endpoint as a current product interface, not a fallback or
-    deprecated compatibility path.
-  - Keep `docs/openapi.yaml` as the sole HTTP contract for every public endpoint.
-
-  - Keep `POST /v2` as the native messages endpoint.
-  - Keep the official Go package, Python package, and Go CLI on `/v2`.
-  - Keep the current root, `/v2`, `/dictate`, asset, and management wire
-    contracts unchanged.
-  - Extend `/v2` with provider-neutral function declarations and tool results.
-  - Represent a tool request as a typed result, not as failed provider text.
-  - Accept assistant tool calls and `tool` role results in later `/v2` turns.
-  - Require one exact tool call identifier for each tool result.
-  - Keep `/v2` blocking and retain its current provider lifecycle ownership.
-
-  - Add `POST /v1/chat/completions` for the supported OpenAI Chat Completions
-    subset.
-  - Add `POST /v1/responses` for the supported OpenAI Responses subset.
-  - Add `GET /v1/models` for authenticated route discovery.
-  - Add `POST /v1/audio/transcriptions` for supported dictation routes.
-  - Publish an exact supported-field matrix for each OpenAI-style endpoint.
-  - Reject each unsupported field with the documented OpenAI-style error shape.
-  - Do not claim support for an OpenAI operation that the proxy does not expose.
-
-  - Require `Authorization: Bearer <tenant-client-key>` on each `/v1` endpoint.
-  - Do not accept a tenant key in a `/v1` URL or request body.
-  - Use the bearer value only as an llm-proxy tenant client key.
-  - Never forward the bearer value as an upstream provider credential.
-  - Preserve the current server-side provider credential boundary.
-  - Keep each `/v1` request stateless.
-  - Accept `store: false` or omission and reject `store: true`.
-  - Reject `previous_response_id` until a separate durable conversation
-    contract exists.
-  - Use proxy-owned identifiers in Chat Completions and Responses objects.
-
-  - Use `provider/model` as the exact `/v1` model identifier.
-  - Resolve that identifier to one enabled provider offering before dispatch.
-  - Reject aliases, ambiguous model-only identifiers, and unknown offerings.
-  - Return only routes that the authenticated tenant can use from `/v1/models`.
-  - Derive model records from the immutable provider catalog and tenant key
-    state.
-  - Do not invent a model owner, creation date, capability, or limit.
-  - Add required catalog metadata when an OpenAI model field needs that data.
-
-  - Support text messages, system instructions, output limits, and supported
-    reasoning controls on both text endpoints.
-  - Support caller function declarations, tool selection, and parallel tool
-    calls where the exact provider offering supports them.
-  - Relay client tool calls to the caller without executing those tools.
-  - Preserve exact tool names, call identifiers, and JSON argument text.
-  - Validate each tool result against an earlier assistant tool call in the
-    submitted messages.
-  - Reject client tools before dispatch when the selected offering lacks the
-    explicit capability.
-  - Keep built-in provider web search separate from caller function tools.
-  - Add an explicit caller-tool capability to each eligible provider offering.
-  - Do not infer caller-tool support from a provider protocol or model name.
-  - Map supported JSON Schema output controls to the canonical structured
-    request contract.
-
-  - Return protocol-correct non-streaming Chat Completions and Responses objects.
-  - Support `stream: true` with the required server-sent event sequence.
-  - Emit canonical result events without exposing native provider events.
-  - For a blocking provider transport, emit the event sequence after the final
-    canonical result exists.
-  - Do not describe a buffered event sequence as provider token streaming.
-  - Propagate caller cancellation through the coordinator to active provider
-    work.
-  - Keep each streaming response within the current request timeout policy.
-  - Return normalized usage in each protocol's documented usage fields.
-  - Record one managed usage event for one accepted client request.
-  - Do not record one usage event for each streamed event or tool item.
-
-  - Map validation, authentication, rate limit, capacity, timeout, and provider
-    failures to one documented OpenAI-style error object.
-  - Include the proxy request identifier in each error response.
-  - Keep provider bodies, provider errors, credentials, prompts, tool arguments,
-    and generated content out of logs.
-  - Keep the current safe management failure records and usage summaries.
-  - Use the same response headers and request timing evidence across adapters.
-
-  - Add an OpenCode example that uses the OpenAI-compatible provider package.
-  - Add an OpenCode example that uses the Responses provider package.
-  - Require no custom OpenCode provider code for either example.
-  - Require only a base URL and tenant client key in standard OpenAI SDKs.
-  - Do not require an official llm-proxy client for a `/v1` request.
-  - Load the tenant client key from an environment variable in each example.
-  - Do not put a tenant client key in a tracked configuration file or URL.
-  - Keep provider selection visible in the configured `provider/model` value.
-  - Document the native `/v2` advantages and each compatibility boundary.
-  - Update the public integration routes and API reference from verified
-    contracts.
-
-  Deliverables:
-  - Add the typed client adapter registry and canonical tool-call domain types.
-  - Add the Chat Completions, Responses, model discovery, and transcription
-    endpoints.
-  - Update `/v2`, the official clients, the provider catalog, and OpenAPI.
-  - Add OpenCode configuration examples and an exact compatibility matrix.
-  - Add black-box tests through the real HTTP server and fake provider servers.
-  - Pin each tested OpenCode and OpenAI SDK version in test dependencies.
-
-  Validation:
-  - Prove each public adapter reaches the same route and completion coordinator.
-  - Prove no adapter calls a provider transport or another adapter directly.
-  - Prove bearer authentication selects one tenant and never reaches upstream.
-  - Prove `/v1/models` returns only exact usable `provider/model` routes.
-  - Prove Chat Completions text and tool-call rounds with the official SDK.
-  - Prove Responses text and function-call rounds with the official SDK.
-  - Prove one OpenCode task calls a safe local tool through Chat Completions.
-  - Prove one OpenCode task calls a safe local tool through Responses.
-  - Prove both OpenCode tasks use llm-proxy tenant authentication.
-  - Prove non-streaming and event-stream results have valid protocol shapes.
-  - Prove a blocking provider produces a valid buffered event sequence.
-  - Prove caller cancellation stops active provider work.
-  - Prove unsupported fields and capabilities fail before provider dispatch.
-  - Prove public errors and logs do not expose protected request data.
-  - Prove each accepted request records exactly one managed usage event.
-  - Prove current `/v2` text, media, structured output, and lifecycle behavior.
-  - Run `make ci` after the last application change.
 
 - [ ] [I239] (P1) Standardize HTTP health at `/healthz`.
   Goal:
@@ -2591,6 +2479,171 @@ retain satisfied historical dependencies.
 
 
 ## Features
+
+- [x] [F038] (P0) Add first-class client protocol adapters.
+  Reclassified from I240 because this change adds public client interfaces.
+  Resolution: Added all four `/v1` interfaces through the shared completion coordinator.
+  Added native caller tools, tenant bearer authentication, exact model discovery, and buffered server-sent events.
+  Updated the Go and Python clients, provider catalog, OpenAPI, public site, and OpenCode examples.
+  Pinned OpenAI SDK and OpenCode tests passed through real HTTP with local provider fixtures.
+  All 12 CI gates passed with 100% Go statement coverage and no uncovered blocks.
+  The final API documentation and contract checks passed.
+  B183 corrected the discovered test teardown race.
+  Changed: `internal/proxy/client_*.go`, `caller_tools.go`, `completion_result.go`, and the shared router and provider adapters.
+  Changed: `pkg/llmproxyclient/`, `python/llm_proxy_client/`, `configs/providers.yml`, `Makefile`, and pinned test dependencies.
+  Changed: `docs/openapi.yaml`, `docs/client-protocols.md`, `README.md`, the provider routing document, and generated site files.
+  Changed: `examples/opencode/`, public contract tests, SDK scripts, and browser tests.
+  Event contracts: Chat Completions chunks and ordered Responses events describe a buffered canonical result.
+  I243 resolved the Governor-managed document drift after this feature.
+
+
+  Goal:
+  Make llm-proxy directly usable by OpenCode and standard OpenAI clients.
+  Keep `/v2` as the canonical llm-proxy contract for repository-owned clients.
+  Support multiple public protocols without duplicate provider logic or
+  inconsistent request accounting.
+
+  Requirements:
+  - Add a client protocol adapter boundary between public handlers and the
+    canonical completion coordinator.
+  - Give each adapter ownership of its paths, authentication input, request
+    validation, canonical translation, response encoding, and error encoding.
+  - Register all client protocol adapters through one typed route registry.
+  - Fail startup when two adapters register the same HTTP method and path.
+  - Do not let a client protocol adapter call a provider transport directly.
+  - Do not let one client protocol adapter call another client protocol adapter.
+  - Keep outbound provider protocol adapters separate from client protocol
+    adapters.
+  - Put the current text and dictation interfaces behind explicit client
+    protocol adapters.
+  - Keep capability, asset, management, and health resources outside this
+    adapter registry.
+  - Route each accepted request through the same tenant, catalog, timeout,
+    admission, continuation, usage, and request identifier services.
+  - Keep one canonical domain request and one closed canonical result type.
+  - Let the canonical result contain final text, structured data, or client
+    tool calls.
+  - Do not expose an upstream resource identifier or native provider payload.
+  - Treat each new endpoint as a current product interface, not a fallback or
+    deprecated compatibility path.
+  - Keep `docs/openapi.yaml` as the sole HTTP contract for every public endpoint.
+
+  - Keep `POST /v2` as the native messages endpoint.
+  - Keep the official Go package, Python package, and Go CLI on `/v2`.
+  - Keep the current root, `/v2`, `/dictate`, asset, and management wire
+    contracts unchanged.
+  - Extend `/v2` with provider-neutral function declarations and tool results.
+  - Represent a tool request as a typed result, not as failed provider text.
+  - Accept assistant tool calls and `tool` role results in later `/v2` turns.
+  - Require one exact tool call identifier for each tool result.
+  - Keep `/v2` blocking and retain its current provider lifecycle ownership.
+
+  - Add `POST /v1/chat/completions` for the supported OpenAI Chat Completions
+    subset.
+  - Add `POST /v1/responses` for the supported OpenAI Responses subset.
+  - Add `GET /v1/models` for authenticated route discovery.
+  - Add `POST /v1/audio/transcriptions` for supported dictation routes.
+  - Publish an exact supported-field matrix for each OpenAI-style endpoint.
+  - Reject each unsupported field with the documented OpenAI-style error shape.
+  - Do not claim support for an OpenAI operation that the proxy does not expose.
+
+  - Require `Authorization: Bearer <tenant-client-key>` on each `/v1` endpoint.
+  - Do not accept a tenant key in a `/v1` URL or request body.
+  - Use the bearer value only as an llm-proxy tenant client key.
+  - Never forward the bearer value as an upstream provider credential.
+  - Preserve the current server-side provider credential boundary.
+  - Keep each `/v1` request stateless.
+  - Accept `store: false` or omission and reject `store: true`.
+  - Reject `previous_response_id` until a separate durable conversation
+    contract exists.
+  - Use proxy-owned identifiers in Chat Completions and Responses objects.
+
+  - Use `provider/model` as the exact `/v1` model identifier.
+  - Resolve that identifier to one enabled provider offering before dispatch.
+  - Reject aliases, ambiguous model-only identifiers, and unknown offerings.
+  - Return only routes that the authenticated tenant can use from `/v1/models`.
+  - Derive model records from the immutable provider catalog and tenant key
+    state.
+  - Do not invent a model owner, creation date, capability, or limit.
+  - Add required catalog metadata when an OpenAI model field needs that data.
+
+  - Support text messages, system instructions, output limits, and supported
+    reasoning controls on both text endpoints.
+  - Support caller function declarations, tool selection, and parallel tool
+    calls where the exact provider offering supports them.
+  - Relay client tool calls to the caller without executing those tools.
+  - Preserve exact tool names, call identifiers, and JSON argument text.
+  - Validate each tool result against an earlier assistant tool call in the
+    submitted messages.
+  - Reject client tools before dispatch when the selected offering lacks the
+    explicit capability.
+  - Keep built-in provider web search separate from caller function tools.
+  - Add an explicit caller-tool capability to each eligible provider offering.
+  - Do not infer caller-tool support from a provider protocol or model name.
+  - Map supported JSON Schema output controls to the canonical structured
+    request contract.
+
+  - Return protocol-correct non-streaming Chat Completions and Responses objects.
+  - Support `stream: true` with the required server-sent event sequence.
+  - Emit canonical result events without exposing native provider events.
+  - For a blocking provider transport, emit the event sequence after the final
+    canonical result exists.
+  - Do not describe a buffered event sequence as provider token streaming.
+  - Propagate caller cancellation through the coordinator to active provider
+    work.
+  - Keep each streaming response within the current request timeout policy.
+  - Return normalized usage in each protocol's documented usage fields.
+  - Record one managed usage event for one accepted client request.
+  - Do not record one usage event for each streamed event or tool item.
+
+  - Map validation, authentication, rate limit, capacity, timeout, and provider
+    failures to one documented OpenAI-style error object.
+  - Include the proxy request identifier in each error response.
+  - Keep provider bodies, provider errors, credentials, prompts, tool arguments,
+    and generated content out of logs.
+  - Keep the current safe management failure records and usage summaries.
+  - Use the same response headers and request timing evidence across adapters.
+
+  - Add an OpenCode example that uses the OpenAI-compatible provider package.
+  - Add an OpenCode example that uses the Responses provider package.
+  - Require no custom OpenCode provider code for either example.
+  - Require only a base URL and tenant client key in standard OpenAI SDKs.
+  - Do not require an official llm-proxy client for a `/v1` request.
+  - Load the tenant client key from an environment variable in each example.
+  - Do not put a tenant client key in a tracked configuration file or URL.
+  - Keep provider selection visible in the configured `provider/model` value.
+  - Document the native `/v2` advantages and each compatibility boundary.
+  - Update the public integration routes and API reference from verified
+    contracts.
+
+  Deliverables:
+  - Add the typed client adapter registry and canonical tool-call domain types.
+  - Add the Chat Completions, Responses, model discovery, and transcription
+    endpoints.
+  - Update `/v2`, the official clients, the provider catalog, and OpenAPI.
+  - Add OpenCode configuration examples and an exact compatibility matrix.
+  - Add black-box tests through the real HTTP server and fake provider servers.
+  - Pin each tested OpenCode and OpenAI SDK version in test dependencies.
+
+  Validation:
+  - Prove each public adapter reaches the same route and completion coordinator.
+  - Prove no adapter calls a provider transport or another adapter directly.
+  - Prove bearer authentication selects one tenant and never reaches upstream.
+  - Prove `/v1/models` returns only exact usable `provider/model` routes.
+  - Prove Chat Completions text and tool-call rounds with the official SDK.
+  - Prove Responses text and function-call rounds with the official SDK.
+  - Prove one OpenCode task calls a safe local tool through Chat Completions.
+  - Prove one OpenCode task calls a safe local tool through Responses.
+  - Prove both OpenCode tasks use llm-proxy tenant authentication.
+  - Prove non-streaming and event-stream results have valid protocol shapes.
+  - Prove a blocking provider produces a valid buffered event sequence.
+  - Prove caller cancellation stops active provider work.
+  - Prove unsupported fields and capabilities fail before provider dispatch.
+  - Prove public errors and logs do not expose protected request data.
+  - Prove each accepted request records exactly one managed usage event.
+  - Prove current `/v2` text, media, structured output, and lifecycle behavior.
+  - Run `make ci` after the last application change.
+
 
 - [x] [F037] (P1) Report rejected requests separately from proxy failures.
   Goal:
