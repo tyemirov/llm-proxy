@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,6 +16,88 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 )
+
+func TestClientProtocolsBackgroundPartialFunctionCalls(t *testing.T) {
+	for _, protocol := range []struct{ path, body string }{
+		{"/v1/responses", `{"model":"openai/gpt-5.6","input":"read","tools":[{"type":"function","name":"read","parameters":{"type":"object"}}]}`},
+		{"/v1/chat/completions", `{"model":"openai/gpt-5.6","messages":[{"role":"user","content":"read"}],"tools":[{"type":"function","function":{"name":"read","parameters":{"type":"object"}}}]}`},
+	} {
+		for _, terminal := range []struct {
+			name, arguments string
+			status          int
+		}{
+			{"complete", `{"path":"hello.txt"}`, http.StatusOK},
+			{"malformed", `{"path":`, http.StatusBadGateway},
+		} {
+			t.Run(protocol.path+"/"+terminal.name, func(t *testing.T) {
+				var polls atomic.Int32
+				upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					if r.Method == http.MethodPost {
+						var payload struct {
+							Background bool `json:"background"`
+						}
+						if err := json.NewDecoder(r.Body).Decode(&payload); err != nil || !payload.Background {
+							t.Errorf("expected background request: payload=%+v err=%v", payload, err)
+						}
+						io.WriteString(w, `{"id":"pending-call","status":"queued","output":[]}`)
+						return
+					}
+					if r.Method != http.MethodGet || !strings.HasSuffix(r.URL.Path, "/responses/pending-call") {
+						t.Errorf("unexpected provider request: %s %s", r.Method, r.URL.Path)
+					}
+					status, arguments := "in_progress", ""
+					switch polls.Add(1) {
+					case 1:
+						status = "queued"
+					case 2:
+					case 3:
+						arguments = `{"path":`
+					default:
+						status, arguments = "completed", terminal.arguments
+					}
+					if err := json.NewEncoder(w).Encode(map[string]any{
+						"id": "pending-call", "status": status,
+						"output": []any{map[string]string{"type": "function_call", "status": status, "call_id": "call_read", "name": "read", "arguments": arguments}},
+					}); err != nil {
+						t.Error(err)
+					}
+				}))
+				defer upstream.Close()
+				router, err := buildRouterWithCatalogs(t, proxy.Configuration{Endpoints: providerEndpointOverrides(map[string]string{proxy.ProviderNameOpenAI: upstream.URL}, nil)}, zap.NewNop().Sugar())
+				if err != nil {
+					t.Fatal(err)
+				}
+				server := httptest.NewServer(router)
+				defer server.Close()
+				request, err := http.NewRequest(http.MethodPost, server.URL+protocol.path, strings.NewReader(protocol.body))
+				if err != nil {
+					t.Fatal(err)
+				}
+				request.Header.Set("Authorization", "Bearer "+TestSecret)
+				request.Header.Set("Content-Type", "application/json")
+				response, err := server.Client().Do(request)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer response.Body.Close()
+				body, err := io.ReadAll(response.Body)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if response.StatusCode != terminal.status || polls.Load() != 4 {
+					t.Fatalf("status=%d want=%d polls=%d want=4 body=%s", response.StatusCode, terminal.status, polls.Load(), body)
+				}
+				if terminal.status == http.StatusOK {
+					arguments, _ := json.Marshal(terminal.arguments)
+					if !strings.Contains(string(body), string(arguments)) || !strings.Contains(string(body), `"call_read"`) {
+						t.Fatalf("completed function call missing: %s", body)
+					}
+				}
+			})
+		}
+	}
+}
 
 func TestClientProtocolsRegistryIsAtomic(t *testing.T) {
 	handler := func(c *gin.Context) { c.String(200, "registered") }

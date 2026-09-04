@@ -232,8 +232,11 @@ func newOpenAIResponseSnapshot(responseBytes []byte) (openAIResponseSnapshot, er
 			responseSnapshot.toolCalls = append(responseSnapshot.toolCalls, functionCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments})
 		}
 	}
-	if err := validateFunctionCalls(responseSnapshot.toolCalls); err != nil {
-		return responseSnapshot, err
+	// Pending snapshots can contain function arguments that are still being generated.
+	if !responseSnapshot.isPending() {
+		if err := validateFunctionCalls(responseSnapshot.toolCalls); err != nil {
+			return responseSnapshot, err
+		}
 	}
 	return responseSnapshot, nil
 }
