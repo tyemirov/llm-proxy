@@ -850,7 +850,7 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await expect(routingTree.locator("[data-route-provider]")).toHaveCount(63);
   await expect(routingTree.locator("[data-route-model]")).toHaveCount(62);
   await expect(routingTree.locator("[data-route-weight-access]")).toHaveCount(2);
-  await expect(routingTree.locator("[data-route-capability]")).toHaveCount(7);
+  await expect(routingTree.locator("[data-route-capability]")).toHaveCount(8);
   await expect(routingTree.locator('[data-route-weight-access="proprietary"]')).toHaveAttribute("aria-pressed", "true");
   await expect(routingTree.locator('[data-route-weight-access="open_weights"]')).toHaveAttribute("aria-pressed", "false");
   await expect(routingTree.locator('[data-route-capability="text"]')).toHaveAttribute("aria-pressed", "true");
@@ -1015,7 +1015,7 @@ test("visitors can filter and choose a model family, exact model, and provider o
   await expect(routingTree.locator("[data-route-model]")).toHaveCount(62);
   await expect(routingTree.locator("[data-route-provider]")).toHaveCount(63);
   await expect(routingTree.locator("[data-route-weight-access]")).toHaveCount(2);
-  await expect(routingTree.locator("[data-route-capability]")).toHaveCount(7);
+  await expect(routingTree.locator("[data-route-capability]")).toHaveCount(8);
   await expect(proprietaryFilter).toHaveAttribute("aria-pressed", "true");
   await expect(openWeightsFilter).toHaveAttribute("aria-pressed", "false");
   await expect(textFilter).toHaveAttribute("aria-pressed", "true");
@@ -1648,7 +1648,17 @@ test("site publishes the exact canonical OpenAPI artifact and its derived refere
   expect(documentationHTML).not.toContain('id="operation-deleteManagementTenantSecret"');
   expect(documentationHTML).toContain("<code>reasoning_effort</code>");
   expect(documentationHTML).toContain(`href="${openAPIPath}"`);
-  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(27);
+  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(31);
+});
+
+test("OpenCode integration opens the bearer-authenticated client API reference", async ({ page }) => {
+  await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
+  await page.goto(baseURL);
+  await page.getByRole("link", { name: /Read the client API reference/u }).click();
+  await expect(page).toHaveURL(`${baseURL}${apiDocumentationPath}#operation-createChatCompletion`);
+  const operation = page.locator("#operation-createChatCompletion");
+  await expect(operation).toContainText("Authorization: Bearer <tenant-client-key>");
+  await expect(operation).toContainText("/v1/chat/completions");
 });
 
 test("OpenAPI reference views and downloads the exact canonical YAML", async ({ page }) => {
