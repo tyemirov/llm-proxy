@@ -20,11 +20,11 @@ The management application is composed from non-overlapping responsibilities:
 | `routingDefaults.js` | Edit and autosave tenant routing defaults. |
 | `profileMutations.js` | Serialize whole-profile mutations and apply returned profiles. |
 | `clientAccess.js` | Generate, replace, reveal, and copy one-time client keys. |
-| `usageDashboard.js` | Load account or tenant usage and failed-request details. |
+| `usageDashboard.js` | Load account or tenant usage, failed-request details, and rejected-request details. |
 | `adminDashboard.js` | Load and present administrator usage. |
 | `requestExamples.js` | Build and copy current-profile proxy request examples. |
 | `notifications.js` | Publish and dismiss page or Settings notifications. |
-| `usageFailurePresentation.js` | Validate and present failed-request payloads. |
+| `usageFailurePresentation.js` | Validate and present bounded failure or rejection payloads. |
 | `usagePresentation.js` | Transform usage summaries into metrics, rows, and chart points. |
 | `dialogFocus.js` | Keep keyboard focus inside modal dialogs. |
 

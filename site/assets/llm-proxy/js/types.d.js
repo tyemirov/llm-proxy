@@ -278,14 +278,20 @@
  */
 
 /**
- * @typedef {"success" |
- *   "invalid_request" |
- *   "payload_too_large" |
- *   "rate_limited" |
+ * @typedef {"rate_limited" |
  *   "service_unavailable" |
  *   "request_timeout" |
- *   "upstream_error"
- * } UsageOutcomeCode
+ *   "upstream_error" |
+ *   "proxy_error"
+ * } UsageFailureOutcomeCode
+ */
+
+/**
+ * @typedef {"invalid_request" | "payload_too_large" | "provider_not_configured"} UsageRejectionOutcomeCode
+ */
+
+/**
+ * @typedef {"failures" | "rejections"} UsageDetailKind
  */
 
 /**
@@ -295,9 +301,15 @@
  *   provider: string,
  *   model: string,
  *   status_code: number,
- *   outcome_code: UsageOutcomeCode,
+ *   outcome_code: UsageFailureOutcomeCode,
  *   latency_ms: number
  * }} ManagementUsageFailure
+ */
+
+/**
+ * @typedef {Omit<ManagementUsageFailure, "outcome_code"> & {
+ *   outcome_code: UsageRejectionOutcomeCode
+ * }} ManagementUsageRejection
  */
 
 /**
@@ -305,6 +317,13 @@
  *   tenant_id: string,
  *   tenant_name: string
  * }} ManagementAccountUsageFailure
+ */
+
+/**
+ * @typedef {ManagementUsageRejection & {
+ *   tenant_id: string,
+ *   tenant_name: string
+ * }} ManagementAccountUsageRejection
  */
 
 /**
@@ -326,7 +345,24 @@
 /**
  * @typedef {{
  *   interval: UsageInterval,
+ *   rejections: ManagementUsageRejection[],
+ *   next_cursor?: string
+ * }} ManagementUsageRejectionPage
+ */
+
+/**
+ * @typedef {{
+ *   interval: UsageInterval,
+ *   rejections: ManagementAccountUsageRejection[],
+ *   next_cursor?: string
+ * }} ManagementAccountUsageRejectionPage
+ */
+
+/**
+ * @typedef {{
+ *   interval: UsageInterval,
  *   bucket_unit: "day" | "hour",
+ *   rejected_requests: number,
  *   totals: UsageAggregate,
  *   buckets: Array<{ start: string, data: UsageAggregate }>,
  *   providers: Array<{ provider: string, data: UsageAggregate }>,
@@ -338,6 +374,7 @@
 /**
  * @typedef {{
  *   period_days: number,
+ *   rejected_requests: number,
  *   totals: UsageAggregate,
  *   daily: Array<{ date: string, data: UsageAggregate }>,
  *   providers: Array<{ provider: string, data: UsageAggregate }>,

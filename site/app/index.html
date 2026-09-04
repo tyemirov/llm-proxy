@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Manage LLM Proxy</title>
+    <title>LLM Proxy</title>
     <meta name="description" content="Private LLM Proxy app for provider credentials, client access, routing defaults, and usage visibility.">
     <meta name="robots" content="noindex, nofollow">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/app/">
@@ -28,8 +28,8 @@
       type="application/json"
       data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
     ></script>
-    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260902c240"></script>
-    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260902c240"></script>
+    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260903f037"></script>
+    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260903f037"></script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440"></script>
   </head>
   <body x-data="llmProxyManagementApplication" x-init="init()">
@@ -132,6 +132,17 @@
                   <usage-card>
                     <span x-text="copy.usageRequests"></span>
                     <strong x-text="usageTotalRequests"></strong>
+                    <button
+                      type="button"
+                      class="usage-failure-action"
+                      x-cloak
+                      x-show="hasUsageRejections"
+                      x-ref="usageRejectionsAction"
+                      aria-haspopup="dialog"
+                      aria-controls="usage-details-dialog"
+                      x-on:click="openUsageRejections()"
+                      x-text="usageRejectionsActionCopy"
+                    ></button>
                   </usage-card>
                   <usage-card>
                     <span x-text="copy.usageTokens"></span>
@@ -147,7 +158,7 @@
                       x-show="hasUsageFailures"
                       x-ref="usageFailuresAction"
                       aria-haspopup="dialog"
-                      aria-controls="usage-failures-dialog"
+                      aria-controls="usage-details-dialog"
                       x-on:click="openUsageFailures()"
                       x-text="usageFailuresActionCopy"
                     ></button>
@@ -166,7 +177,7 @@
                         <h2 x-text="copy.usageRequests"></h2>
                       </div>
                     </header>
-                    <svg class="usage-chart-svg" x-show="hasUsage" x-bind:viewBox="usageRequestChart.viewBox" x-bind:aria-label="usageRequestChart.accessibleLabel" role="img">
+                    <svg class="usage-chart-svg" x-show="hasUsage" x-bind:view-box.camel="usageRequestChart.viewBox" x-bind:aria-label="usageRequestChart.accessibleLabel" role="img">
                       <line class="usage-axis" x-bind:x1="usageRequestChart.yAxisX" x-bind:y1="usageRequestChart.xAxisY" x-bind:x2="usageRequestChart.yAxisX" y2="14"></line>
                       <line class="usage-axis" x-bind:x1="usageRequestChart.yAxisX" x-bind:y1="usageRequestChart.xAxisY" x2="622" x-bind:y2="usageRequestChart.xAxisY"></line>
                       <g x-effect="renderUsageChartPlot($el, usageRequestChart)"></g>
@@ -189,7 +200,7 @@
                         <h2 x-text="copy.usageTokens"></h2>
                       </div>
                     </header>
-                    <svg class="usage-chart-svg" x-show="hasUsage" x-bind:viewBox="usageTokenChart.viewBox" x-bind:aria-label="usageTokenChart.accessibleLabel" role="img">
+                    <svg class="usage-chart-svg" x-show="hasUsage" x-bind:view-box.camel="usageTokenChart.viewBox" x-bind:aria-label="usageTokenChart.accessibleLabel" role="img">
                       <line class="usage-axis" x-bind:x1="usageTokenChart.yAxisX" x-bind:y1="usageTokenChart.xAxisY" x-bind:x2="usageTokenChart.yAxisX" y2="14"></line>
                       <line class="usage-axis" x-bind:x1="usageTokenChart.yAxisX" x-bind:y1="usageTokenChart.xAxisY" x2="622" x-bind:y2="usageTokenChart.xAxisY"></line>
                       <g x-effect="renderUsageChartPlot($el, usageTokenChart)"></g>
@@ -206,21 +217,26 @@
                   </usage-chart-panel>
                 </section>
 
-                <breakdown-view-control role="group" x-bind:aria-label="copy.usageBreakdownView">
-                  <span x-text="copy.usageBreakdownView"></span>
-                  <button type="button" x-bind:class="{ 'is-active': usageBreakdownIsBar }" x-bind:aria-pressed="usageBreakdownIsBar" x-on:click="selectUsageBreakdownView('bar')" x-text="copy.usageBreakdownBar"></button>
-                  <button type="button" x-bind:class="{ 'is-active': usageBreakdownIsDonut }" x-bind:aria-pressed="usageBreakdownIsDonut" x-on:click="selectUsageBreakdownView('donut')" x-text="copy.usageBreakdownDonut"></button>
-                </breakdown-view-control>
-
                 <section class="dashboard-grid">
                   <usage-breakdown class="llm-panel">
                     <header class="section-header compact">
-                      <div>
-                        <p class="eyebrow" x-text="copy.usageByProvider"></p>
-                        <h2 x-text="copy.usageProviders"></h2>
-                      </div>
+                      <h2 x-text="copy.usageByProvider"></h2>
+                      <button
+                        type="button"
+                        class="icon-only usage-breakdown-toggle"
+                        x-bind:aria-label="providerUsageBreakdownToggleLabel"
+                        x-bind:title="providerUsageBreakdownToggleLabel"
+                        x-on:click="toggleProviderUsageBreakdownView()"
+                      >
+                        <svg x-show="providerUsageBreakdownIsBar" data-chart-icon="donut" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M11 3a9 9 0 1 0 9 9h-9V3Zm2 0v7h7a9 9 0 0 0-7-7Z"></path>
+                        </svg>
+                        <svg x-cloak x-show="providerUsageBreakdownIsDonut" data-chart-icon="bar" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M4 19v-9h4v9H4Zm6 0V5h4v14h-4Zm6 0v-6h4v6h-4Z"></path>
+                        </svg>
+                      </button>
                     </header>
-                    <usage-row-list x-show="hasProviderUsageBreakdown && usageBreakdownIsBar">
+                    <usage-row-list x-show="hasProviderUsageBreakdown && providerUsageBreakdownIsBar">
                       <template x-for="row in providerUsageDistribution.rows" x-bind:key="row.label">
                         <usage-row>
                           <span x-text="row.label"></span>
@@ -229,7 +245,7 @@
                         </usage-row>
                       </template>
                     </usage-row-list>
-                    <usage-donut x-cloak x-show="hasProviderUsageBreakdown && usageBreakdownIsDonut">
+                    <usage-donut x-cloak x-show="hasProviderUsageBreakdown && providerUsageBreakdownIsDonut">
                       <svg viewBox="0 0 120 120" role="img" x-bind:aria-label="copy.usageByProvider">
                         <circle class="usage-donut-track" cx="60" cy="60" r="42" pathLength="100"></circle>
                         <g x-effect="renderUsageDonutSegments($el, providerUsageDistribution.rows)"></g>
@@ -252,12 +268,23 @@
 
                   <usage-breakdown class="llm-panel">
                     <header class="section-header compact">
-                      <div>
-                        <p class="eyebrow" x-text="copy.usageByModel"></p>
-                        <h2 x-text="copy.usageByModel"></h2>
-                      </div>
+                      <h2 x-text="copy.usageByModel"></h2>
+                      <button
+                        type="button"
+                        class="icon-only usage-breakdown-toggle"
+                        x-bind:aria-label="modelUsageBreakdownToggleLabel"
+                        x-bind:title="modelUsageBreakdownToggleLabel"
+                        x-on:click="toggleModelUsageBreakdownView()"
+                      >
+                        <svg x-show="modelUsageBreakdownIsBar" data-chart-icon="donut" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M11 3a9 9 0 1 0 9 9h-9V3Zm2 0v7h7a9 9 0 0 0-7-7Z"></path>
+                        </svg>
+                        <svg x-cloak x-show="modelUsageBreakdownIsDonut" data-chart-icon="bar" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M4 19v-9h4v9H4Zm6 0V5h4v14h-4Zm6 0v-6h4v6h-4Z"></path>
+                        </svg>
+                      </button>
                     </header>
-                    <usage-row-list x-show="hasModelUsageBreakdown && usageBreakdownIsBar">
+                    <usage-row-list x-show="hasModelUsageBreakdown && modelUsageBreakdownIsBar">
                       <template x-for="row in modelUsageDistribution.rows" x-bind:key="row.label">
                         <usage-row>
                           <span x-text="row.label"></span>
@@ -266,7 +293,7 @@
                         </usage-row>
                       </template>
                     </usage-row-list>
-                    <usage-donut x-cloak x-show="hasModelUsageBreakdown && usageBreakdownIsDonut">
+                    <usage-donut x-cloak x-show="hasModelUsageBreakdown && modelUsageBreakdownIsDonut">
                       <svg viewBox="0 0 120 120" role="img" x-bind:aria-label="copy.usageByModel">
                         <circle class="usage-donut-track" cx="60" cy="60" r="42" pathLength="100"></circle>
                         <g x-effect="renderUsageDonutSegments($el, modelUsageDistribution.rows)"></g>
@@ -310,7 +337,6 @@
                               <provider-card-controls>
                                 <provider-card-statuses>
                                   <span x-show="providerCardIsActive(provider)" x-text="copy.providerActive"></span>
-                                  <span x-show="providerCardActivity(provider).used" x-text="copy.providerUsed"></span>
                                 </provider-card-statuses>
                                 <button
                                   type="button"
@@ -513,33 +539,33 @@
 
             <usage-failures-overlay
               x-cloak
-              x-show="usageFailuresOpen"
-              x-on:click.self="closeUsageFailures()"
-              x-on:keydown.escape.window="usageFailuresOpen && closeUsageFailures()"
+              x-show="usageDetailsOpen"
+              x-on:click.self="closeUsageDetails()"
+              x-on:keydown.escape.window="usageDetailsOpen && closeUsageDetails()"
               role="presentation"
             >
               <usage-failures-dialog
-                id="usage-failures-dialog"
-                x-ref="usageFailuresDialog"
+                id="usage-details-dialog"
+                x-ref="usageDetailsDialog"
                 role="dialog"
                 aria-modal="true"
-                aria-labelledby="usage-failures-title"
-                aria-describedby="usage-failures-description"
-                x-bind:aria-busy="usageFailuresLoading ? 'true' : 'false'"
-                x-on:keydown.tab="trapUsageFailuresFocus($event)"
+                aria-labelledby="usage-details-title"
+                aria-describedby="usage-details-description"
+                x-bind:aria-busy="usageDetailsLoading ? 'true' : 'false'"
+                x-on:keydown.tab="trapUsageDetailsFocus($event)"
               >
                 <header class="usage-failures-header">
                   <div>
-                    <p class="eyebrow" x-text="usageFailuresIntervalLabel"></p>
-                    <h2 id="usage-failures-title" x-text="copy.usageFailuresTitle"></h2>
+                    <p class="eyebrow" x-text="usageDetailsIntervalLabel"></p>
+                    <h2 id="usage-details-title" x-text="usageDetailsTitle"></h2>
                   </div>
                   <button
                     type="button"
                     class="icon-only"
-                    x-ref="usageFailuresClose"
-                    x-on:click="closeUsageFailures()"
-                    x-bind:title="copy.closeUsageFailures"
-                    x-bind:aria-label="copy.closeUsageFailures"
+                    x-ref="usageDetailsClose"
+                    x-on:click="closeUsageDetails()"
+                    x-bind:title="usageDetailsCloseCopy"
+                    x-bind:aria-label="usageDetailsCloseCopy"
                   >
                     <svg class="utility-icon close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">
                       <path d="M6 6l12 12"></path>
@@ -549,9 +575,9 @@
                 </header>
 
                 <usage-failures-body>
-                  <p id="usage-failures-description" class="usage-failures-description" x-text="copy.usageFailuresDescription"></p>
+                  <p id="usage-details-description" class="usage-failures-description" x-text="usageDetailsDescription"></p>
 
-                  <section class="usage-failure-statuses" aria-labelledby="usage-failure-statuses-title">
+                  <section class="usage-failure-statuses" x-show="usageDetailsAreFailures" aria-labelledby="usage-failure-statuses-title">
                     <h3 id="usage-failure-statuses-title" x-text="copy.usageFailuresStatusBreakdown"></h3>
                     <usage-failure-status-list>
                       <template x-for="status in usageFailureStatusRows" x-bind:key="status.statusCode">
@@ -564,53 +590,53 @@
                     </usage-failure-status-list>
                   </section>
 
-                  <p class="usage-failures-loading" x-show="usageFailuresLoading" role="status" aria-live="polite" x-text="copy.usageFailuresLoading"></p>
+                  <p class="usage-failures-loading" x-show="usageDetailsLoading" role="status" aria-live="polite" x-text="usageDetailsLoadingCopy"></p>
 
-                  <div class="usage-failures-error" x-show="usageFailuresError" role="alert">
-                    <p x-text="usageFailuresError"></p>
-                    <button type="button" x-on:click="retryUsageFailures()" x-bind:disabled="usageFailuresLoading" x-text="copy.usageFailuresRetry"></button>
+                  <div class="usage-failures-error" x-show="usageDetailsError" role="alert">
+                    <p x-text="usageDetailsError"></p>
+                    <button type="button" x-on:click="retryUsageDetails()" x-bind:disabled="usageDetailsLoading" x-text="copy.usageDetailsRetry"></button>
                   </div>
 
                   <p
                     class="usage-failures-empty"
-                    x-show="!usageFailuresLoading && !usageFailuresError && !hasLoadedUsageFailures"
-                    x-text="copy.usageFailuresEmpty"
+                    x-show="!usageDetailsLoading && !usageDetailsError && !hasLoadedUsageDetails"
+                    x-text="usageDetailsEmptyCopy"
                   ></p>
 
-                  <usage-failure-list x-show="hasLoadedUsageFailures" role="list" x-bind:aria-label="copy.usageFailuresTitle">
-                    <template x-for="(row, index) in usageFailureRows" x-bind:key="index">
+                  <usage-failure-list x-show="hasLoadedUsageDetails" role="list" x-bind:aria-label="usageDetailsTitle">
+                    <template x-for="(row, index) in usageDetailRows" x-bind:key="index">
                       <usage-failure-row role="listitem">
                         <dl>
                           <div x-show="row.tenant">
-                            <dt x-text="copy.usageFailuresTenant"></dt>
+                            <dt x-text="copy.usageDetailsTenant"></dt>
                             <dd x-text="row.tenant"></dd>
                           </div>
                           <div>
-                            <dt x-text="copy.usageFailuresOccurredAt"></dt>
+                            <dt x-text="copy.usageDetailsOccurredAt"></dt>
                             <dd x-text="row.occurredAt"></dd>
                           </div>
                           <div>
-                            <dt x-text="copy.usageFailuresEndpoint"></dt>
+                            <dt x-text="copy.usageDetailsEndpoint"></dt>
                             <dd x-text="row.endpoint"></dd>
                           </div>
                           <div>
-                            <dt x-text="copy.usageFailuresProvider"></dt>
+                            <dt x-text="copy.usageDetailsProvider"></dt>
                             <dd x-text="row.provider"></dd>
                           </div>
                           <div>
-                            <dt x-text="copy.usageFailuresModel"></dt>
+                            <dt x-text="copy.usageDetailsModel"></dt>
                             <dd x-text="row.model"></dd>
                           </div>
                           <div>
-                            <dt x-text="copy.usageFailuresStatus"></dt>
+                            <dt x-text="copy.usageDetailsStatus"></dt>
                             <dd x-text="row.status"></dd>
                           </div>
                           <div>
-                            <dt x-text="copy.usageFailuresOutcome"></dt>
+                            <dt x-text="copy.usageDetailsOutcome"></dt>
                             <dd x-text="row.outcome"></dd>
                           </div>
                           <div>
-                            <dt x-text="copy.usageFailuresLatency"></dt>
+                            <dt x-text="copy.usageDetailsLatency"></dt>
                             <dd x-text="row.latency"></dd>
                           </div>
                         </dl>
@@ -618,12 +644,12 @@
                     </template>
                   </usage-failure-list>
 
-                  <footer class="usage-failures-footer" x-show="canLoadMoreUsageFailures && !usageFailuresError">
+                  <footer class="usage-failures-footer" x-show="canLoadMoreUsageDetails && !usageDetailsError">
                     <button
                       type="button"
-                      x-on:click="loadMoreUsageFailures()"
-                      x-bind:disabled="usageFailuresLoading"
-                      x-text="copy.usageFailuresLoadMore"
+                      x-on:click="loadMoreUsageDetails()"
+                      x-bind:disabled="usageDetailsLoading"
+                      x-text="copy.usageDetailsLoadMore"
                     ></button>
                   </footer>
                 </usage-failures-body>

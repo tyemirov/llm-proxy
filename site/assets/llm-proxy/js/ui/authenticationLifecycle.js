@@ -9,25 +9,25 @@ import {
   NOTICE_KINDS,
   NOTICE_SURFACES,
   PUBLIC_SITE_PATH,
-} from "../constants.js?v=20260902c240";
+} from "../constants.js?v=20260903f037";
 import {
   fetchAccount,
   fetchTenant,
   loadFrontendRuntimeConfig,
-} from "../core/backendClient.js?v=20260902c240";
+} from "../core/backendClient.js?v=20260903f037";
 import {
   assertManagementAccount,
   assertManagementTenantProfile,
   emptyDefaults,
   isAbortError,
   profileFailureMessage,
-} from "../core/managementProfile.js?v=20260902c240";
+} from "../core/managementProfile.js?v=20260903f037";
 import {
   applyUserMenuItems,
   readMprUIAuthStatus,
   waitForMprUIAutoOrchestrationReady,
-} from "../core/mprShell.js?v=20260902c240";
-import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260902c240";
+} from "../core/mprShell.js?v=20260903f037";
+import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260903f037";
 
 const EMPTY_STRING = "";
 
@@ -40,6 +40,7 @@ const EMPTY_STRING = "";
  *   clearNotice: () => void,
  *   clearUsageState: () => void,
  *   collapseSystemPromptEditors: () => void,
+ *   resetUsageBreakdownViews: () => void,
  *   dismissClientKeyReplacementConfirmation: () => void,
  *   dismissProviderKeyRemovalConfirmation: () => void,
  *   handleUserMenuItem: (event: Event) => void,
@@ -281,9 +282,9 @@ export function createAuthenticationLifecycleResponsibility() {
         this.usageRequestController.abort();
         this.usageRequestController = null;
       }
-      if (this.usageFailuresRequestController) {
-        this.usageFailuresRequestController.abort();
-        this.usageFailuresRequestController = null;
+      if (this.usageDetailsRequestController) {
+        this.usageDetailsRequestController.abort();
+        this.usageDetailsRequestController = null;
       }
       if (this.tenantLifetimeController) {
         this.tenantLifetimeController.abort();
@@ -291,7 +292,7 @@ export function createAuthenticationLifecycleResponsibility() {
       }
       this.selectedUsageInterval = DEFAULT_USAGE_INTERVAL;
       this.selectedUsageTenantID = EMPTY_STRING;
-      this.usageBreakdownView = "bar";
+      this.resetUsageBreakdownViews();
       this.clearNotice();
       this.clearSettingsTenantState();
       this.clearUsageState();

@@ -82,7 +82,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/</loc>
-    <lastmod>2026-09-01</lastmod>
+    <lastmod>2026-09-03</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/admin-usage-visibility-without-secrets/</loc>
@@ -142,7 +142,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/llm-proxy-status-code-map/</loc>
-    <lastmod>2026-07-11</lastmod>
+    <lastmod>2026-09-03</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/dictation-provider-routing/</loc>
@@ -150,7 +150,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/openai-compatible-provider-gateway/</loc>
-    <lastmod>2026-08-22</lastmod>
+    <lastmod>2026-09-03</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/</loc>
@@ -174,7 +174,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/usage-metadata-without-prompts/</loc>
-    <lastmod>2026-08-08</lastmod>
+    <lastmod>2026-09-03</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/copyable-llm-curl-examples/</loc>
@@ -202,6 +202,6 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/provider-overload-timeout-handling/</loc>
-    <lastmod>2026-07-11</lastmod>
+    <lastmod>2026-09-03</lastmod>
   </url>
 </urlset>

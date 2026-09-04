@@ -5,13 +5,13 @@ import {
   COPY,
   NOTICE_KINDS,
   NOTICE_SURFACES,
-} from "../constants.js?v=20260902c240";
+} from "../constants.js?v=20260903f037";
 import {
   BackendClientError,
   createTenant as requestCreateTenant,
   deleteTenant as requestDeleteTenant,
   renameTenant as requestRenameTenant,
-} from "../core/backendClient.js?v=20260902c240";
+} from "../core/backendClient.js?v=20260903f037";
 import {
   assertManagementTenantProfile,
   isAbortError,
@@ -19,10 +19,10 @@ import {
   profileFailureMessage,
   tenantSummaryFromProfile,
   validatedTenantName,
-} from "../core/managementProfile.js?v=20260902c240";
-import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260902c240";
-import { trapDialogFocus } from "./dialogFocus.js?v=20260902c240";
-import { emptyUsageSummary } from "./usagePresentation.js?v=20260902c240";
+} from "../core/managementProfile.js?v=20260903f037";
+import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260903f037";
+import { trapDialogFocus } from "./dialogFocus.js?v=20260903f037";
+import { emptyUsageSummary } from "./usagePresentation.js?v=20260903f037";
 
 const EMPTY_STRING = "";
 
@@ -35,7 +35,7 @@ const EMPTY_STRING = "";
  *   canApplySettingsTenant: (appVersion: number, tenantID: string) => boolean,
  *   clearGeneratedSecret: () => void,
  *   clearProviderKeyMaterial: () => void,
- *   clearUsageFailures: (restoreFocus: boolean) => void,
+ *   clearUsageDetails: (restoreFocus: boolean) => void,
  *   dismissClientKeyReplacementConfirmation: () => void,
  *   dismissProviderKeyRemovalConfirmation: () => void,
  *   enqueueProfileMutation: (appVersion: number, mutation: () => Promise<boolean>) => Promise<boolean | null>,
@@ -390,7 +390,7 @@ export function createTenantSettingsResponsibility() {
         }
         await this.switchSettingsTenant(this.tenants[0].id);
         if (usageNeedsRefresh) {
-          this.clearUsageFailures(false);
+          this.clearUsageDetails(false);
           this.usage = emptyUsageSummary(this.selectedUsageInterval);
           await this.loadUsageSummary(false);
         }
