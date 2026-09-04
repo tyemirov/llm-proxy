@@ -29,6 +29,9 @@ RETIRED_MODEL_PROFILE_PROVIDERS = frozenset({"qwencloud"})
 POST_BODY_QUERY_KEYS = frozenset(
     {
         "messages",
+        "tools",
+        "tool_choice",
+        "parallel_tool_calls",
         MODEL_PROFILE_MODEL_KEY,
         "max_output_tokens",
         "max_tokens",
@@ -39,7 +42,7 @@ POST_BODY_QUERY_KEYS = frozenset(
         "web_search",
     }
 )
-MESSAGE_ROLES = frozenset({"system", "user", "assistant"})
+MESSAGE_ROLES = frozenset({"system", "user", "assistant", "tool"})
 IMAGE_MIME_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 AUDIO_MIME_TYPES = frozenset({"audio/m4a", "audio/mpeg", "audio/wav"})
 MEDIA_MIME_TYPES = IMAGE_MIME_TYPES | AUDIO_MIME_TYPES
@@ -405,6 +408,72 @@ def _asset_attachment(
     )
 
 
+FUNCTION_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+@dataclass(frozen=True)
+class ClientFunction:
+    """A caller function declaration."""
+
+    name: str
+    parameters: dict[str, Any]
+    description: str = ""
+    strict: bool | None = None
+
+    def __post_init__(self) -> None:
+        if not FUNCTION_NAME_PATTERN.fullmatch(self.name) or self.parameters.get("type") != "object":
+            raise LLMProxyClientError("invalid function declaration")
+        json.dumps(self.parameters, allow_nan=False)
+
+    def body(self) -> dict[str, Any]:
+        """Return the native function declaration."""
+        value: dict[str, Any] = {"name": self.name, "parameters": self.parameters, "description": self.description}
+        if self.strict is not None:
+            value["strict"] = self.strict
+        return value
+
+
+@dataclass(frozen=True)
+class ClientFunctionCall:
+    """An exact function call from an assistant turn."""
+
+    id: str
+    name: str
+    arguments: str
+
+    def __post_init__(self) -> None:
+        if not self.id or not FUNCTION_NAME_PATTERN.fullmatch(self.name):
+            raise LLMProxyClientError("invalid function call")
+        try:
+            arguments = json.loads(self.arguments)
+        except ValueError as error:
+            raise LLMProxyClientError("invalid function arguments") from error
+        if not isinstance(arguments, dict):
+            raise LLMProxyClientError("function arguments must be an object")
+
+    def body(self) -> dict[str, str]:
+        """Return the exact native call fields."""
+        return {"id": self.id, "name": self.name, "arguments": self.arguments}
+
+
+@dataclass(frozen=True)
+class ClientToolChoice:
+    """A selection mode and an optional function name."""
+
+    mode: str
+    name: str = ""
+
+    def __post_init__(self) -> None:
+        if self.mode not in {"auto", "none", "required", "function"}:
+            raise LLMProxyClientError("invalid tool choice")
+        if (self.mode == "function") != bool(self.name):
+            raise LLMProxyClientError("invalid selected function name")
+
+    def body(self) -> dict[str, str]:
+        """Return the native selection fields."""
+        return {"mode": self.mode, "name": self.name} if self.name else {"mode": self.mode}
+
+
 @dataclass(frozen=True)
 class ClientMessage:
     """Validated chat message; order is optional but all-or-none within one request."""
@@ -413,11 +482,13 @@ class ClientMessage:
     content: str
     order: int | None = None
     attachments: Sequence[ClientAttachment] = ()
+    tool_calls: Sequence[ClientFunctionCall] = ()
+    tool_call_id: str = ""
 
     def __post_init__(self) -> None:
         if self.role.strip().lower() not in MESSAGE_ROLES:
             raise LLMProxyClientError("llm_proxy_client_invalid_request: unsupported message role")
-        if self.content == "":
+        if self.content == "" and not self.tool_calls and self.role != "tool":
             raise LLMProxyClientError("llm_proxy_client_invalid_request: empty message content")
         if self.order is not None and self.order < 0:
             raise LLMProxyClientError("llm_proxy_client_invalid_request: message order must be non-negative")
@@ -430,6 +501,10 @@ class ClientMessage:
         """Return this message as a JSON-ready body item."""
 
         payload: dict[str, Any] = {"role": self.role.strip().lower(), "content": self.content}
+        if self.tool_calls:
+            payload["tool_calls"] = [call.body() for call in self.tool_calls]
+        if self.tool_call_id:
+            payload["tool_call_id"] = self.tool_call_id
         if self.order is not None:
             payload["order"] = self.order
         if self.attachments:
@@ -473,11 +548,23 @@ class ClientMessagesRequest:
     reasoning_effort: str | None = None
     structured_output: ClientStructuredOutput | None = None
     request_timeout_seconds: int | None = None
+    tools: Sequence[ClientFunction] = ()
+    tool_choice: ClientToolChoice | None = None
+    parallel_tool_calls: bool | None = None
 
     def __post_init__(self) -> None:
         if len(self.messages) == 0:
             raise LLMProxyClientError("llm_proxy_client_invalid_request: missing messages")
         validate_messages(self.messages)
+        names = {tool.name for tool in self.tools}
+        if len(names) != len(self.tools):
+            raise LLMProxyClientError("duplicate function declaration")
+        if not self.tools and (self.tool_choice is not None or self.parallel_tool_calls is not None):
+            raise LLMProxyClientError("tools required")
+        if self.tool_choice is not None and self.tool_choice.mode == "function" and self.tool_choice.name not in names:
+            raise LLMProxyClientError("unknown selected function")
+        if self.parallel_tool_calls is not None and not isinstance(self.parallel_tool_calls, bool):
+            raise LLMProxyClientError("parallel_tool_calls must be a boolean")
         if not isinstance(self.web_search, bool):
             raise LLMProxyClientError("llm_proxy_client_invalid_request: web_search must be a boolean")
         if self.max_tokens is not None and self.max_tokens <= 0:
@@ -509,6 +596,12 @@ class ClientMessagesRequest:
             "messages": [message.body() for message in ordered_messages(self.messages)],
             "web_search": self.web_search,
         }
+        if self.tools:
+            payload["tools"] = [tool.body() for tool in self.tools]
+        if self.tool_choice is not None:
+            payload["tool_choice"] = self.tool_choice.body()
+        if self.parallel_tool_calls is not None:
+            payload["parallel_tool_calls"] = self.parallel_tool_calls
         if model:
             payload[MODEL_PROFILE_MODEL_KEY] = model
         if self.max_tokens is not None:
@@ -531,6 +624,26 @@ def validate_messages(messages: Sequence[ClientMessage]) -> None:
     order_values = [message.order for message in messages_with_order]
     if len(order_values) != len(set(order_values)):
         raise LLMProxyClientError("llm_proxy_client_invalid_request: duplicate message order")
+
+    pending: set[str] = set()
+    seen: set[str] = set()
+    for message in ordered_messages(messages):
+        if message.role == "tool":
+            if message.tool_call_id not in pending or message.tool_calls:
+                raise LLMProxyClientError("unmatched tool result")
+            pending.remove(message.tool_call_id)
+            continue
+        if pending or message.tool_call_id:
+            raise LLMProxyClientError("missing tool result")
+        if message.tool_calls and message.role != "assistant":
+            raise LLMProxyClientError("function calls require assistant role")
+        for call in message.tool_calls:
+            if call.id in seen:
+                raise LLMProxyClientError("duplicate function call identifier")
+            seen.add(call.id)
+            pending.add(call.id)
+    if pending:
+        raise LLMProxyClientError("missing tool result")
 
 
 def ordered_messages(messages: Sequence[ClientMessage]) -> Sequence[ClientMessage]:
