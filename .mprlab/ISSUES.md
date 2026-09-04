@@ -25,6 +25,53 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B184] (P1) Keep partial function calls pending during background polling.
+  Goal:
+  Background Responses snapshots can contain empty or partial function arguments.
+  The parser rejects these snapshots before the provider completes the response.
+  Requirements:
+  - Continue polling while the response is queued or in progress.
+  - Validate complete function calls before returning a terminal result.
+  - Cover partial snapshots and malformed completed calls through the real HTTP lifecycle.
+  Validation:
+  - Confirm the HTTP regression fails before the production change.
+  - Run `make test-client-contracts` and the final `make ci` gate.
+  Evidence:
+  - Before the fix, both public protocols returned `502` after one poll instead of four.
+  - After the fix, both protocols return completed calls and reject malformed terminal arguments.
+  - `make test-client-contracts` passed.
+  Resolution:
+  - Pending snapshots no longer require complete function arguments.
+  - Terminal calls still require valid identifiers, names, and JSON objects.
+  - All 12 CI gates passed with 100 percent Go statement coverage.
+  Changed: `internal/proxy/openai.go` and `internal/proxy/client_protocol_lifecycle_test.go`.
+  Event contracts: No change.
+
+- [x] [B185] (P2) Normalize Python roles during tool history validation.
+  Goal:
+  Python accepts and serializes normalized roles but rejects the same roles in tool history.
+  The empty tool-result exception also compares the original role.
+  Requirements:
+  - Use the same role normalization for message validation, tool history, and serialization.
+  - Cover mixed case, surrounding whitespace, and empty tool results through the real proxy.
+  - Keep invalid tool history rejection.
+  Validation:
+  - Confirm the native Python regression fails before the production change.
+  - Run `make test-client-contracts`, `make python-test`, and the final `make ci` gate.
+  Evidence:
+  - Before the fix, the native Python test rejected mixed-case and whitespace-padded roles.
+  - The errors were `function calls require assistant role`, `missing tool result`, and `empty message content`.
+  - After the fix, normalized tool history reaches the real proxy, including empty tool results.
+  - Invalid tool histories still fail before dispatch.
+  - `make test-client-contracts` and all 45 Python tests passed.
+  - The Python package installation check passed.
+  Resolution:
+  - Constructor and tool history checks now use normalized roles.
+  - Native HTTP regressions cover normalized roles, empty results, and invalid history rejection.
+  - All 12 CI gates passed with 100 percent Go statement coverage.
+  Changed: `python/llm_proxy_client/client.py` and `tests/client-protocols/native-python.py`.
+  Event contracts: No change.
+
 - [x] [B183] (P1) Wait for usage persistence before DashScope test teardown.
   The workspace routing test removes its temporary database while the usage writer is active.
   Two `make go-test` runs failed with `TempDir RemoveAll cleanup: directory not empty`.
