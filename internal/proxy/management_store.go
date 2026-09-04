@@ -218,6 +218,7 @@ func newManagedTenantName(value string) (managedTenantName, error) {
 type managedUsageEventVisitor func(managedUsageEventRecord) error
 
 type managedTenantDatabase interface {
+	checkHealth(context.Context) error
 	userByID(userID string) (managedUserRecord, error)
 	users() ([]managedUserRecord, error)
 	saveUser(record managedUserRecord) error
@@ -243,6 +244,11 @@ type managedTenantDatabase interface {
 
 type gormManagedTenantDatabase struct {
 	database *gorm.DB
+}
+
+func (database *gormManagedTenantDatabase) checkHealth(requestContext context.Context) error {
+	var count int64
+	return database.database.WithContext(requestContext).Model(&managedUserRecord{}).Count(&count).Error
 }
 
 type managedUserRecord struct {

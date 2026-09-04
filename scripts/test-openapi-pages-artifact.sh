@@ -66,6 +66,7 @@ if ! CAPABILITIES_URL="${capabilities_url}" node --input-type=module --eval \
 fi
 ./scripts/stage-openapi-publication.sh docs/openapi.yaml "${temporary_directory}/site"
 cmp -s docs/openapi.yaml "${temporary_directory}/site/openapi.yaml"
+cmp -s site/healthz "${temporary_directory}/site/healthz"
 test -f "${temporary_directory}/site/docs/index.html"
 
 printf '\n' >>"${temporary_directory}/site/openapi.yaml"

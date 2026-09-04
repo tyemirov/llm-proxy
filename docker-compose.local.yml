@@ -74,11 +74,12 @@ services:
     ports:
       - "127.0.0.1:${LLM_PROXY_LOCAL_API_HOST_PORT:-8080}:8080"
     healthcheck:
-      test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:8080/api/public/capabilities >/dev/null"]
-      interval: 1s
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8080/healthz"]
+      start_interval: 1s
+      interval: 30s
       timeout: 2s
       retries: 30
-      start_period: 1s
+      start_period: 30s
     volumes:
       - ./configs/config.yml:/app/configs/config.yml:ro
       - ./configs/providers.yml:/app/configs/providers.yml:ro
