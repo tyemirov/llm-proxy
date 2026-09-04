@@ -37,6 +37,14 @@ The application document title is always `LLM Proxy`.
 - TAuth-protected self-service UI where signed-in users automatically receive an llm-proxy client key and their provider settings plus routing defaults autosave
 - Supports plain text, JSON, XML, or CSV responses
 
+## OpenCode and OpenAI clients
+
+Use the `/v1` client protocols with a tenant bearer key and an exact `provider/model` identifier.
+Chat Completions, Responses, model discovery, and transcription share the canonical coordinator.
+Caller tools execute in the client. Event streams contain buffered results.
+See [client protocols](docs/client-protocols.md) for the supported fields, tested clients, and OpenCode examples.
+The official Go package, Python package, and CLI continue to use `/v2`.
+
 ## REST Contract
 
 llm-proxy exposes a blocking REST contract for text generation. Canonical
