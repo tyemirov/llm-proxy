@@ -25,9 +25,9 @@ This file gives backend rules for Python code. Obey root `AGENTS.md` and `.mprla
 ## Testing
 
 - Use pytest.
-- Prefer black-box integration tests through CLI, HTTP, or public package entry points.
+- Exercise public contracts through CLI, HTTP, or public package entry points.
 - Use fixtures and `tmp_path` to isolate side effects.
-- Unit tests are allowed only as narrow guardrails for pure deterministic helpers and never as replacement coverage for user-visible behavior.
+- Do not use unit tests.
 
 ## Validation
 

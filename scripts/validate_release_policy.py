@@ -4,30 +4,15 @@
 from __future__ import annotations
 
 import json
-import re
 import sys
-import tomllib
 from pathlib import Path
 from typing import Any
+
+from release_version import ReleaseVersionError, read_repository_versions
 
 
 VERSION_DECISION_CONTRACT = "mprlab.version-decision/v2"
 FIXED_MAJOR = 1
-V1_VERSION = re.compile(r"^v1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
-PYTHON_PROJECT_PATH = Path("python/pyproject.toml")
-
-
-def official_client_version() -> str:
-    with PYTHON_PROJECT_PATH.open("rb") as project_file:
-        project = tomllib.load(project_file)
-    version = project.get("project", {}).get("version")
-    if not isinstance(version, str) or re.fullmatch(
-        rf"{FIXED_MAJOR}\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version
-    ) is None:
-        raise SystemExit(
-            "llm_proxy.release_policy_invalid: official client version must use major 1"
-        )
-    return version
 
 
 def main() -> int:
@@ -47,17 +32,19 @@ def main() -> int:
             "llm_proxy.release_policy_invalid: expected SemVer decision with fixed major 1"
         )
 
-    client_version = official_client_version()
-    expected_version = f"v{client_version}"
-    version = decision.get("next_version")
-    if (
-        not isinstance(version, str)
-        or V1_VERSION.fullmatch(version) is None
-        or version != expected_version
-    ):
+    repository_root = Path(__file__).resolve().parents[1]
+    try:
+        repository_version = read_repository_versions(repository_root).require_equal()
+    except (OSError, ReleaseVersionError) as error_value:
         raise SystemExit(
-            "llm_proxy.release_version_invalid: release version must match "
-            f"official client version {expected_version}"
+            f"llm_proxy.release_policy_invalid: {error_value}"
+        ) from error_value
+    expected_version = f"v{repository_version}"
+    version = decision.get("next_version")
+    if not isinstance(version, str) or version != expected_version:
+        raise SystemExit(
+            "llm_proxy.release_version_invalid: release version must match repository "
+            f"version {expected_version}"
         )
 
     print(f"LLM_PROXY_RELEASE_POLICY_OK version={version}")

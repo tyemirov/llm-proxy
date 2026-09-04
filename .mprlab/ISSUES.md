@@ -25,6 +25,74 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B175] (P0) Use one repository release version.
+  Goal:
+  One neutral repository value must identify the application and each bundled
+  client release. The Python client currently owns the accepted application
+  version by accident. A new release decision fails until its version is
+  manually copied into the Python project and lock metadata.
+  Evidence:
+  - The last sealed release is `v1.4.0`.
+  - Gix selected `v1.4.1` for the current application commit.
+  - The release decision validator rejected `v1.4.1` because the Python client
+    still declared `1.4.0`.
+  Requirements:
+  - Add one canonical repository release version.
+  - Set the canonical version to `1.4.1`.
+  - Keep the application and each bundled client on the exact canonical
+    version.
+  - Keep each release in major version `1`.
+  - Make the Python project and lock metadata consumers of the canonical
+    version.
+  - Make the release decision validator use the canonical version.
+  - Add one repository command that updates all explicit version values.
+  - Reject a malformed version, a version above major `1`, and a version
+    decrease before any file changes.
+  - Make CI reject version drift before the test gates.
+  - Do not change `mprlab-gateway` or the selected manifest schema.
+  - Preserve all sealed and unsealed lifecycle records.
+  Deliverables:
+  - Add the canonical version file and version management program.
+  - Update the release decision validator and repository automation.
+  - Document the version authority and release preparation step.
+  - Add public command and validator coverage.
+  Validation:
+  - Prove that the canonical version, Python project, and Python lock agree.
+  - Prove that one command updates all explicit values together.
+  - Prove that invalid or decreasing values do not change any file.
+  - Prove that the validator accepts only `v1.4.1` with fixed major `1`.
+  - Run `make python-package-install-test`.
+  - Run `make ci` after the last application change.
+  - Run the STE check on each changed technical document.
+  - Run `git diff --check`.
+  Review evidence:
+  - The release tests embed version `1.4.1` instead of reading the root
+    `VERSION` file.
+  - The documented version command makes the next CI run fail after a version
+    increase.
+  - The hosted CI path filter does not include the root `VERSION` file.
+  Review requirements:
+  - Derive release-policy expectations and update candidates from the root
+    `VERSION` file.
+  - Start hosted CI when a pull request changes the root `VERSION` file.
+  - Cover both corrections through repository public-contract tests.
+  Resolution:
+  - The root `VERSION` file now owns repository release version `1.4.1`.
+  - The Python project and lock metadata now match that version.
+  - The Go clients receive the same version from the repository tag.
+  - One version command updates all explicit version values and rejects invalid
+    or decreasing values before it changes a file.
+  - CI checks version equality before all test gates.
+  - The release decision validator now requires the exact repository version
+    and fixed major `1`.
+  - Public command and validator tests read the canonical version and calculate
+    the next patch version.
+  - The update test verifies that the next release decision succeeds.
+  - The hosted CI workflow starts when the root `VERSION` file changes.
+  - The workflow contract test requires that path filter.
+  - Public command tests also cover drift and rejection without file changes.
+  - `make python-package-install-test` passed for version `1.4.1`.
+  - `make ci` passed all 12 gates with 100 percent Go statement coverage.
 - [x] [B174] (P1) Exclude unresolved routes from usage dimensions.
   Goal:
   Usage reports must not identify a raw request value as a provider or model.
@@ -2256,7 +2324,7 @@ retain satisfied historical dependencies.
   current endpoint contract. Regenerated 46 SEO resources. Their content
   already matched the current source. `PRD.md` and `ARCHITECTURE.md` remain
   absent, and M013 tracks that decision.
-- [ ] [M013] (P2) Resolve missing product-context document references.
+- [x] [M013] (P2) Resolve missing product-context document references.
   Goal:
   Keep the root governance entrypoint limited to product-context documents that exist and represent the current contract.
   Requirements:
@@ -2270,14 +2338,25 @@ retain satisfied historical dependencies.
   - Root governance references that resolve to current product-context files.
   Validation:
   - Verify every product-context path named by root `AGENTS.md` exists and contains current repository guidance.
-- [ ] [M012] (P2) {M013} Reconcile repository governance with the MPR Lab normalizer.
+  Resolution:
+  - `README.md` remains the canonical product-context document.
+  - The `docs/` directory contains current integration and API guidance.
+  - The repository does not require separate `PRD.md` or `ARCHITECTURE.md`
+    documents.
+  - Root guidance no longer references the two absent documents.
+  - The retained product-context paths exist.
+- [x] [M012] (P2) {M013} Reconcile repository governance with the MPR Lab normalizer.
   Goal:
   Make the governance normalizer check pass without deleting repository-owned binding contracts.
   Requirements:
   - Resolve M013's product-context document decision first so the normalizer
     works from the final repository-owned root guidance.
   - Inspect the normalizer differences reported for root `AGENTS.md` and every managed `.mprlab/` guide.
-  - Preserve the M011 pre-change and post-change CI requirement and all other current repository-owned rules.
+  - Replace M011's per-task pre-change CI run with the current Governor
+    completion checkpoint.
+  - Retain final CI after the last stack change.
+  - Prohibit unit tests in each stack.
+  - Preserve all other current repository-owned rules.
   - Update the appropriate managed templates, boundaries, or repository
     documents as one canonical forward-only contract.
   - Do not apply a destructive bulk rewrite.
@@ -2286,9 +2365,22 @@ retain satisfied historical dependencies.
   Validation:
   - Run the MPR Lab governor in `--dry-run` and `--check` modes and require no pending managed-file changes.
   Progress: 2026-08-20. Applied the current managed updates to
-  `.mprlab/POLICY.md` and `.mprlab/issues-md-format.md`. The Governor check is
-  clean. M013 still blocks completion because the root product-context decision
-  is open.
+  `.mprlab/POLICY.md` and `.mprlab/issues-md-format.md`. At that time, the
+  Governor check was clean, but M013 blocked completion.
+  Resolution:
+  - M013 selected `README.md` and `docs/` as the current product-context
+    sources.
+  - The Governor detected the API, Go, Python, frontend, and Docker profiles.
+  - The current validation policy supersedes M011's per-task pre-change CI run.
+  - The policy retains final CI after the last stack change.
+  - The current test policy prohibits unit tests in each stack.
+  - Root guidance now owns issue classification and resolved-issue hygiene.
+  - The issue format document now contains syntax and identifier rules only.
+  - The policy and Docker guide now contain the versionless selected-manifest
+    contract.
+  - The Governor dry-run and check report no required changes.
+  - The four fully managed documents pass the mechanical STE check.
+  - The focused root guidance and issue text pass the mechanical STE check.
 - [x] [M019] (P2) Refresh non-security direct dependency pins.
   Goal:
   Bring direct Go, frontend, and Python development dependencies to their current supported releases after the security graph is stable.

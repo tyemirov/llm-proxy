@@ -193,7 +193,8 @@ func prepareFrontendDependencyFixture(testingInstance *testing.T, repositoryRoot
 	writeOperationalFile(
 		testingInstance,
 		filepath.Join(fixtureRoot, "Makefile"),
-		string(makefileBytes)+`\ncheck-format go-lint python-lint python-test test-openapi-pages-artifact test-live-provider-harness:
+		string(makefileBytes)+`
+check-release-version check-format go-lint python-lint python-test test-openapi-pages-artifact test-live-provider-harness:
 	@:
 
 go-test:

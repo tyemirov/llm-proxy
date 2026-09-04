@@ -1,89 +1,69 @@
 # ISSUES.md Format
 
-This document describes the canonical ISSUES.md layout and section-aware identifier scheme.
+This document defines the canonical ISSUES.md syntax and identifier scheme.
 
 ## Structure
 
-- The file starts with a title line, for example `# ISSUES`.
-- Issues are grouped under level-2 headings.
-- Sections are `BugFixes`, `Improvements`, `Maintenance`, `Features`, and `Planning`.
-- Optional subheadings can organize a section, but issue IDs must still match the parent section.
-
-## Issue Classification
-
-Classify each issue by its requested outcome. Priority, urgency, affected code, and title words do not control the section.
-
-Use this ordered test:
-
-1. Use `BugFixes` only for an observed and reproducible violation of a current canonical contract.
-2. Use `Features` for a new user or operator capability, public interface, resource kind, workflow, or product behavior.
-3. Use `Improvements` for a one-time change to an existing capability, architecture, test system, or acceptance boundary.
-4. Use `Maintenance` for repeatable upkeep under an unchanged solution contract. The same activity must remain valid for a future run.
-5. Use `Planning` for analysis, a decision, or a plan that does not authorize implementation.
-
-File each reproducible defect from an acceptance or migration issue as a separate BugFix issue. Split mixed outcomes across their correct sections.
-
-Use priority and blocked state as separate attributes. Correct a misclassified unresolved issue before implementation. Preserve completed issue IDs as historical references.
-
-## Resolved Issue Hygiene
-
-Before archival, review each resolved non-recurring issue for durable product,
-architecture, operator, security, testing, and skill consequences. Update each
-affected source-of-truth document or skill before you move the issue.
-
-Preserve the complete resolved entry and its identifier in the repository
-archive. Keep unresolved, blocked, planning, and recurring issues in the active
-tracker. Validate identifiers, dependencies, and duplicate IDs across both
-files.
+- Start the file with a title line, for example `# ISSUES`.
+- Group issues under level-2 headings.
+- Use only `BugFixes`, `Improvements`, `Maintenance`, `Features`, and `Planning` as section names.
+- Use optional subheadings only to organize a section.
+- Keep each issue ID in the section that matches its first letter.
+- Do not put numeric ranges in section headings.
+- Treat entries under a `Recurring` subheading as recurring entries.
 
 ## Issue Entries
 
-Each issue entry is a single list item:
+Each issue entry is one list item:
 
 ```text
 - [ ] [B042] (P1) {I007} Short title
 ```
 
-Rules:
-
-- `[ ]` means open.
-- `[-]` means taken.
-- `[!]` means blocked and must include a `Blocked:` body line.
-- `[x]` means closed.
-- The external ID is necessary.
-- Priority `(P0)` through `(P2)` is optional.
-- Dependencies `{ID,ID}` are optional.
-- The title is necessary.
-- Write each new or changed title in ASD-STE100 Simplified Technical English.
+- Use `[ ]` for an open issue.
+- Use `[-]` for a taken issue.
+- Use `[!]` for a blocked issue.
+- Use `[x]` for a closed issue.
+- Give each issue an external ID and a title.
+- Put optional priority and dependency values immediately after the ID.
+- For each blocked issue, include one indented `Blocked:` line in its body.
 
 ## Identifiers
 
-Format: `<SectionLetter><SequenceNumber>[R]`.
+Use `<SectionLetter><SequenceNumber>[R]`.
 
-Section letters:
+- Use `B` for BugFixes.
+- Use `I` for Improvements.
+- Use `M` for Maintenance.
+- Use `F` for Features.
+- Use `P` for Planning.
+- Use three digits for each sequence number.
+- After sequence number `999`, use sequence number `001`.
+- Use a capital `R` suffix for a recurring issue, for example `[M001R]`.
+- Do not use a separate `R` token.
+- Accept a lowercase `r` suffix during parsing.
+- Render the recurring suffix as a capital `R`.
+- Do not use a repository prefix in an ID.
+- Reject legacy repository-prefixed IDs, for example `IM-###`.
 
-- `B` = BugFixes
-- `I` = Improvements
-- `M` = Maintenance
-- `F` = Features
-- `P` = Planning
+A recurring issue defines standing or repeated work. Scheduling data and job IDs are outside this syntax.
 
-Numbers increment independently per section and use three digits. A capital `R` suffix marks a recurring issue, for example `[M400R]`. A separate `R` token after the identifier is invalid.
+## Issue References
 
-Recurring entries represent standing or repeated work. Scheduling, timers, and job IDs are outside the ISSUES.md format.
+- Always reference each issue by its ID, for example `B001` or `I027`.
+- Never use an `ISSUES.md` file path, line number, or `path:line` syntax as an issue reference.
 
-Legacy repo-prefixed identifiers are invalid.
+## Priority and Dependencies
+
+- Use `(P0)` through `(P2)` for an optional priority.
+- Use `{ID,ID}` for optional comma-separated dependencies.
 
 ## Body Text
 
-Indent additional body lines by two spaces. Structured issue bodies must use plain labels:
-
-- `Goal:`
-- `Requirements:`
-- `Deliverables:`
-- `Validation:`
-- `Blocked:`
-
-`Blocked:` is necessary only for blocked issues. It must identify the dependency, input, or policy decision that prevents progress.
-
-Write each new or changed body in ASD-STE100. Use `.mprlab/AGENTS.DOCS.md` and `.mprlab/TERMINOLOGY.md`.
+- Separate an inline body from the title with a space, an em dash, and a space.
+- Indent each additional body line by two spaces.
+- Indent each fenced code block by two spaces.
+- Use plain labels for a structured issue body.
+- Use `Goal:`, `Requirements:`, `Deliverables:`, `Validation:`, and `Blocked:` as the canonical labels.
+- Use `Blocked:` only for a blocked issue.
+- In `Blocked:`, identify the dependency, input, or policy decision that prevents progress.
