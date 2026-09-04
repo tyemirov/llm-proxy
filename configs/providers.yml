@@ -694,6 +694,10 @@ providers:
             token_field: max_output_tokens
             output_fields:
                 - output[].content[].text
+                - output[].type
+                - output[].call_id
+                - output[].name
+                - output[].arguments
             finish_rules:
                 complete:
                     - completed
@@ -744,6 +748,7 @@ providers:
                 total: ""
       offerings:
         - model: gpt-4o-mini
+          created: 1787276456
           upstream_model: gpt-4o-mini
           transport: text
           operations:
@@ -785,11 +790,13 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: gpt-4o
+          created: 1787276456
           upstream_model: gpt-4o
           transport: text
           operations:
             - text
           request_profile: openai_responses_temperature_tools
+          caller_tools: true
           web_search: true
           media_inputs:
             - image
@@ -827,6 +834,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: gpt-4.1
+          created: 1787276456
           upstream_model: gpt-4.1
           transport: text
           operations:
@@ -834,6 +842,7 @@ providers:
           default_operations:
             - text
           request_profile: openai_responses_temperature_tools
+          caller_tools: true
           web_search: true
           media_inputs:
             - image
@@ -871,11 +880,13 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: gpt-5-mini
+          created: 1787276456
           upstream_model: gpt-5-mini
           transport: text
           operations:
             - text
           request_profile: openai_responses_reasoning_tools
+          caller_tools: true
           reasoning_effort:
             adapter: openai_responses
             efforts:
@@ -919,11 +930,13 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: gpt-5
+          created: 1787276456
           upstream_model: gpt-5
           transport: text
           operations:
             - text
           request_profile: openai_responses_reasoning_tools
+          caller_tools: true
           web_search: true
           reasoning_effort:
             adapter: openai_responses
@@ -968,11 +981,13 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: gpt-5.5
+          created: 1787276456
           upstream_model: gpt-5.5
           transport: text
           operations:
             - text
           request_profile: openai_responses_reasoning_tools
+          caller_tools: true
           web_search: true
           reasoning_effort:
             adapter: openai_responses
@@ -1018,11 +1033,13 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: gpt-5.5-pro
+          created: 1787276456
           upstream_model: gpt-5.5-pro
           transport: text
           operations:
             - text
           request_profile: openai_responses_reasoning_tools
+          caller_tools: true
           web_search: true
           reasoning_effort:
             adapter: openai_responses
@@ -1066,11 +1083,13 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: gpt-5.6
+          created: 1787276456
           upstream_model: gpt-5.6
           transport: text
           operations:
             - text
           request_profile: openai_responses_reasoning_tools
+          caller_tools: true
           web_search: true
           reasoning_effort:
             adapter: openai_responses
@@ -1117,11 +1136,13 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: gpt-5.6-sol
+          created: 1787276456
           upstream_model: gpt-5.6-sol
           transport: text
           operations:
             - text
           request_profile: openai_responses_reasoning_tools
+          caller_tools: true
           web_search: true
           reasoning_effort:
             adapter: openai_responses
@@ -1168,11 +1189,13 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: gpt-5.6-terra
+          created: 1787276456
           upstream_model: gpt-5.6-terra
           transport: text
           operations:
             - text
           request_profile: openai_responses_reasoning_tools
+          caller_tools: true
           web_search: true
           reasoning_effort:
             adapter: openai_responses
@@ -1219,11 +1242,13 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: gpt-5.6-luna
+          created: 1787276456
           upstream_model: gpt-5.6-luna
           transport: text
           operations:
             - text
           request_profile: openai_responses_reasoning_tools
+          caller_tools: true
           web_search: true
           reasoning_effort:
             adapter: openai_responses
@@ -1270,6 +1295,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: gpt-4o-mini-transcribe
+          created: 1787276456
           upstream_model: gpt-4o-mini-transcribe
           transport: dictation
           operations:
@@ -1283,6 +1309,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: gpt-4o-transcribe
+          created: 1787276456
           upstream_model: gpt-4o-transcribe
           transport: dictation
           operations:
@@ -1329,9 +1356,11 @@ providers:
             token_field: max_tokens
             output_fields:
                 - choices[].message.content
+                - choices[].message.tool_calls
             finish_rules:
                 complete:
                     - stop
+                    - tool_calls
                 continue:
                     - length
             continuation_rules:
@@ -1339,7 +1368,6 @@ providers:
                 - request_missing_suffix
             error_rules:
                 - content_filter
-                - tool_calls
                 - unknown_finish_reason
             usage_fields:
                 input: usage.prompt_tokens
@@ -1347,6 +1375,7 @@ providers:
                 total: usage.total_tokens
       offerings:
         - model: deepseek-v4-flash
+          created: 1787276456
           upstream_model: deepseek-v4-flash
           transport: text
           operations:
@@ -1360,6 +1389,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: deepseek-v4-pro
+          created: 1787276456
           upstream_model: deepseek-v4-pro
           transport: text
           operations:
@@ -1371,6 +1401,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: deepseek-chat
+          created: 1787276456
           upstream_model: deepseek-chat
           transport: text
           operations:
@@ -1382,6 +1413,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: deepseek-reasoner
+          created: 1787276456
           upstream_model: deepseek-reasoner
           transport: text
           operations:
@@ -1442,9 +1474,11 @@ providers:
             token_field: max_tokens
             output_fields:
                 - choices[].message.content
+                - choices[].message.tool_calls
             finish_rules:
                 complete:
                     - stop
+                    - tool_calls
                 continue:
                     - length
             continuation_rules:
@@ -1452,7 +1486,6 @@ providers:
                 - request_missing_suffix
             error_rules:
                 - content_filter
-                - tool_calls
                 - unknown_finish_reason
             usage_fields:
                 input: usage.prompt_tokens
@@ -1460,6 +1493,7 @@ providers:
                 total: usage.total_tokens
       offerings:
         - model: qwen-plus
+          created: 1787276456
           upstream_model: qwen-plus
           transport: text
           operations:
@@ -1473,6 +1507,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: qwen3.7-max
+          created: 1787276456
           upstream_model: qwen3.7-max
           transport: text
           operations:
@@ -1508,6 +1543,7 @@ providers:
               source: https://www.alibabacloud.com/help/en/model-studio/model-pricing
               last_verified: "2026-08-13"
         - model: qwen3.7-plus
+          created: 1787276456
           upstream_model: qwen3.7-plus
           transport: text
           operations:
@@ -1571,6 +1607,7 @@ providers:
               source: https://www.alibabacloud.com/help/en/model-studio/model-pricing
               last_verified: "2026-08-13"
         - model: qwen3.6-flash
+          created: 1787276456
           upstream_model: qwen3.6-flash
           transport: text
           operations:
@@ -1671,9 +1708,11 @@ providers:
             token_field: max_completion_tokens
             output_fields:
                 - choices[].message.content
+                - choices[].message.tool_calls
             finish_rules:
                 complete:
                     - stop
+                    - tool_calls
                 continue:
                     - length
             continuation_rules:
@@ -1681,7 +1720,6 @@ providers:
                 - request_missing_suffix
             error_rules:
                 - content_filter
-                - tool_calls
                 - unknown_finish_reason
             usage_fields:
                 input: usage.prompt_tokens
@@ -1689,6 +1727,7 @@ providers:
                 total: usage.total_tokens
       offerings:
         - model: kimi-k2.6
+          created: 1787276456
           upstream_model: kimi-k2.6
           transport: text
           operations:
@@ -1730,6 +1769,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: kimi-k3
+          created: 1787276456
           upstream_model: kimi-k3
           transport: text
           operations:
@@ -1775,6 +1815,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: kimi-k2.7-code
+          created: 1787276456
           upstream_model: kimi-k2.7-code
           transport: text
           operations:
@@ -1814,6 +1855,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: kimi-k2.7-code-highspeed
+          created: 1787276456
           upstream_model: kimi-k2.7-code-highspeed
           transport: text
           operations:
@@ -1888,9 +1930,11 @@ providers:
             token_field: max_completion_tokens
             output_fields:
                 - choices[].message.content
+                - choices[].message.tool_calls
             finish_rules:
                 complete:
                     - stop
+                    - tool_calls
                 continue:
                     - length
             continuation_rules:
@@ -1898,7 +1942,6 @@ providers:
                 - request_missing_suffix
             error_rules:
                 - content_filter
-                - tool_calls
                 - unknown_finish_reason
             usage_fields:
                 input: usage.prompt_tokens
@@ -1906,6 +1949,7 @@ providers:
                 total: usage.total_tokens
       offerings:
         - model: minimax-m2.7
+          created: 1787276456
           upstream_model: MiniMax-M2.7
           transport: text
           operations:
@@ -1953,6 +1997,7 @@ providers:
               source: https://platform.minimax.io/docs/guides/pricing-paygo
               last_verified: "2026-08-13"
         - model: minimax-m2.7-highspeed
+          created: 1787276456
           upstream_model: MiniMax-M2.7-highspeed
           transport: text
           operations:
@@ -1998,6 +2043,7 @@ providers:
               source: https://platform.minimax.io/docs/guides/pricing-paygo
               last_verified: "2026-08-13"
         - model: minimax-m2.5
+          created: 1787276456
           upstream_model: MiniMax-M2.5
           transport: text
           operations:
@@ -2043,6 +2089,7 @@ providers:
               source: https://platform.minimax.io/docs/guides/pricing-paygo
               last_verified: "2026-08-13"
         - model: minimax-m2.5-highspeed
+          created: 1787276456
           upstream_model: MiniMax-M2.5-highspeed
           transport: text
           operations:
@@ -2088,6 +2135,7 @@ providers:
               source: https://platform.minimax.io/docs/guides/pricing-paygo
               last_verified: "2026-08-13"
         - model: minimax-m2.1
+          created: 1787276456
           upstream_model: MiniMax-M2.1
           transport: text
           operations:
@@ -2133,6 +2181,7 @@ providers:
               source: https://platform.minimax.io/docs/guides/pricing-paygo
               last_verified: "2026-08-13"
         - model: minimax-m2.1-highspeed
+          created: 1787276456
           upstream_model: MiniMax-M2.1-highspeed
           transport: text
           operations:
@@ -2178,6 +2227,7 @@ providers:
               source: https://platform.minimax.io/docs/guides/pricing-paygo
               last_verified: "2026-08-13"
         - model: minimax-m2
+          created: 1787276456
           upstream_model: MiniMax-M2
           transport: text
           operations:
@@ -2258,9 +2308,11 @@ providers:
             token_field: max_tokens
             output_fields:
                 - choices[].message.content
+                - choices[].message.tool_calls
             finish_rules:
                 complete:
                     - stop
+                    - tool_calls
                 continue:
                     - length
             continuation_rules:
@@ -2268,7 +2320,6 @@ providers:
                 - request_missing_suffix
             error_rules:
                 - content_filter
-                - tool_calls
                 - unknown_finish_reason
             usage_fields:
                 input: usage.prompt_tokens
@@ -2307,6 +2358,7 @@ providers:
                 total: ""
       offerings:
         - model: deepseek-reasoner
+          created: 1787276456
           upstream_model: deepseek-ai/DeepSeek-R1
           transport: text
           operations:
@@ -2320,6 +2372,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: sensevoice-small
+          created: 1787276456
           upstream_model: FunAudioLLM/SenseVoiceSmall
           transport: dictation
           operations:
@@ -2368,9 +2421,11 @@ providers:
             token_field: max_tokens
             output_fields:
                 - choices[].message.content
+                - choices[].message.tool_calls
             finish_rules:
                 complete:
                     - stop
+                    - tool_calls
                 continue:
                     - length
             continuation_rules:
@@ -2378,7 +2433,6 @@ providers:
                 - request_missing_suffix
             error_rules:
                 - content_filter
-                - tool_calls
                 - unknown_finish_reason
             usage_fields:
                 input: usage.prompt_tokens
@@ -2417,6 +2471,7 @@ providers:
                 total: ""
       offerings:
         - model: glm-5.1
+          created: 1787276456
           upstream_model: glm-5.1
           transport: text
           operations:
@@ -2430,6 +2485,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: glm-5.2
+          created: 1787276456
           upstream_model: glm-5.2
           transport: text
           operations:
@@ -2442,6 +2498,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: glm-asr-2512
+          created: 1787276456
           upstream_model: glm-asr-2512
           transport: dictation
           operations:
@@ -2517,6 +2574,7 @@ providers:
                 total: usage.total_tokens
       offerings:
         - model: gemini-3.5-flash
+          created: 1787276456
           upstream_model: gemini-3.5-flash
           transport: text_pollable
           operations:
@@ -2579,6 +2637,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: gemini-3-flash-preview
+          created: 1787276456
           upstream_model: gemini-3-flash-preview
           transport: text_pollable
           operations:
@@ -2699,6 +2758,7 @@ providers:
                 total: derived_input_plus_output
       offerings:
         - model: claude-fable-5
+          created: 1787276456
           upstream_model: claude-fable-5
           transport: text
           operations:
@@ -2741,6 +2801,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: claude-sonnet-5
+          created: 1787276456
           upstream_model: claude-sonnet-5
           transport: text
           operations:
@@ -2783,6 +2844,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: claude-opus-4-8
+          created: 1787276456
           upstream_model: claude-opus-4-8
           transport: text
           operations:
@@ -2825,6 +2887,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: claude-sonnet-4-6
+          created: 1787276456
           upstream_model: claude-sonnet-4-6
           transport: text
           operations:
@@ -2869,6 +2932,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: claude-haiku-4-5-20251001
+          created: 1787276456
           upstream_model: claude-haiku-4-5-20251001
           transport: text
           operations:
@@ -2911,6 +2975,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: claude-haiku-4-5
+          created: 1787276456
           upstream_model: claude-haiku-4-5
           transport: text
           operations:
@@ -2953,6 +3018,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: claude-sonnet-4-5-20250929
+          created: 1787276456
           upstream_model: claude-sonnet-4-5-20250929
           transport: text
           operations:
@@ -2995,6 +3061,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: claude-sonnet-4-5
+          created: 1787276456
           upstream_model: claude-sonnet-4-5
           transport: text
           operations:
@@ -3037,6 +3104,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: claude-opus-4-1-20250805
+          created: 1787276456
           upstream_model: claude-opus-4-1-20250805
           transport: text
           operations:
@@ -3079,6 +3147,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: claude-opus-4-1
+          created: 1787276456
           upstream_model: claude-opus-4-1
           transport: text
           operations:
@@ -3156,9 +3225,11 @@ providers:
             token_field: max_completion_tokens
             output_fields:
                 - choices[].message.content
+                - choices[].message.tool_calls
             finish_rules:
                 complete:
                     - stop
+                    - tool_calls
                 continue:
                     - length
             continuation_rules:
@@ -3166,7 +3237,6 @@ providers:
                 - request_missing_suffix
             error_rules:
                 - content_filter
-                - tool_calls
                 - unknown_finish_reason
             usage_fields:
                 input: usage.prompt_tokens
@@ -3174,6 +3244,7 @@ providers:
                 total: usage.total_tokens
       offerings:
         - model: muse-spark-1.1
+          created: 1787276456
           upstream_model: muse-spark-1.1
           transport: text
           operations:
@@ -3187,6 +3258,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: muse-spark-1.2
+          created: 1787410990
           upstream_model: muse-spark-1.2
           transport: text
           operations:
@@ -3233,9 +3305,11 @@ providers:
             token_field: max_tokens
             output_fields:
                 - choices[].message.content
+                - choices[].message.tool_calls
             finish_rules:
                 complete:
                     - stop
+                    - tool_calls
                 continue:
                     - length
             continuation_rules:
@@ -3243,7 +3317,6 @@ providers:
                 - request_missing_suffix
             error_rules:
                 - content_filter
-                - tool_calls
                 - unknown_finish_reason
             usage_fields:
                 input: usage.prompt_tokens
@@ -3269,6 +3342,10 @@ providers:
             token_field: max_output_tokens
             output_fields:
                 - output[].content[].text
+                - output[].type
+                - output[].call_id
+                - output[].name
+                - output[].arguments
             finish_rules:
                 complete:
                     - completed
@@ -3351,6 +3428,7 @@ providers:
                 total: ""
       offerings:
         - model: grok-4.3
+          created: 1787276456
           upstream_model: grok-4.3
           transport: text_chat_completions
           operations:
@@ -3364,6 +3442,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: grok-4.3-latest
+          created: 1787276456
           upstream_model: grok-4.3-latest
           transport: text_chat_completions
           operations:
@@ -3375,6 +3454,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: grok-4.5
+          created: 1787276456
           upstream_model: grok-4.5
           transport: text_responses
           operations:
@@ -3414,6 +3494,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: grok-4.20-0309-reasoning
+          created: 1787276456
           upstream_model: grok-4.20-0309-reasoning
           transport: text_chat_completions
           operations:
@@ -3425,6 +3506,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: grok-4.20-0309-non-reasoning
+          created: 1787276456
           upstream_model: grok-4.20-0309-non-reasoning
           transport: text_chat_completions
           operations:
@@ -3436,6 +3518,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: grok-latest
+          created: 1787276456
           upstream_model: grok-latest
           transport: text_chat_completions
           operations:
@@ -3447,6 +3530,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: grok-build-0.1
+          created: 1787276456
           upstream_model: grok-build-0.1
           transport: text_chat_completions
           operations:
@@ -3458,6 +3542,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: grok-code-fast
+          created: 1787276456
           upstream_model: grok-code-fast
           transport: text_chat_completions
           operations:
@@ -3469,6 +3554,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: grok-code-fast-1
+          created: 1787276456
           upstream_model: grok-code-fast-1
           transport: text_chat_completions
           operations:
@@ -3480,6 +3566,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: grok-code-fast-1-0825
+          created: 1787276456
           upstream_model: grok-code-fast-1-0825
           transport: text_chat_completions
           operations:
@@ -3491,6 +3578,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
         - model: grok-imagine-video-1.5
+          created: 1787276456
           upstream_model: grok-imagine-video-1.5
           transport: video_generation
           operations:
@@ -3559,6 +3647,7 @@ providers:
               source: https://docs.x.ai/developers/pricing
               last_verified: "2026-08-08"
         - model: xai-stt
+          created: 1787276456
           upstream_model: xai-stt
           transport: dictation
           operations:
