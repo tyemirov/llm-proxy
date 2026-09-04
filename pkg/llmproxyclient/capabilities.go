@@ -89,7 +89,7 @@ const (
 
 var publicCapabilityValues = map[string]struct{}{
 	publicCapabilityAudioInput: {}, "dictation": {}, publicCapabilityImageInput: {}, "reasoning": {},
-	"text": {}, "video_generation": {}, "web_search": {},
+	"text": {}, "video_generation": {}, "web_search": {}, "caller_tools": {},
 }
 
 type publicOfferingRoute struct {

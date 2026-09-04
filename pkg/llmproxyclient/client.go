@@ -48,7 +48,8 @@ var (
 )
 
 var postBodyQueryKeys = map[string]struct{}{
-	"messages":          {},
+	"messages": {},
+	"tools":    {}, "tool_choice": {}, "parallel_tool_calls": {},
 	queryModel:          {},
 	"max_output_tokens": {},
 	"max_tokens":        {},
@@ -185,6 +186,8 @@ func v2EndpointPath(basePath string) string {
 
 // MessageInput is an unvalidated chat message for a v2 JSON POST request.
 type MessageInput struct {
+	ToolCalls   []FunctionCall
+	ToolCallID  string
 	Role        string
 	Content     string
 	Attachments []MessageAttachment
@@ -193,6 +196,8 @@ type MessageInput struct {
 }
 
 type message struct {
+	toolCalls   []FunctionCall
+	toolCallID  string
 	role        string
 	content     string
 	attachments []messageAttachment
@@ -201,8 +206,11 @@ type message struct {
 
 // MessagesRequestInput is the unvalidated external input for a v2 messages-only JSON POST request.
 type MessagesRequestInput struct {
-	Messages []MessageInput
-	Model    string
+	Tools             []FunctionDeclaration
+	ToolChoice        *ToolChoice
+	ParallelToolCalls *bool
+	Messages          []MessageInput
+	Model             string
 	// WebSearch is serialized as the native JSON boolean web_search field.
 	WebSearch       bool
 	MaxTokens       *int
@@ -217,6 +225,9 @@ type MessagesRequestInput struct {
 
 // MessagesRequest is a validated v2 messages-only JSON POST request.
 type MessagesRequest struct {
+	tools                 []FunctionDeclaration
+	toolChoice            *ToolChoice
+	parallelToolCalls     *bool
 	messages              []message
 	model                 string
 	webSearch             bool
@@ -261,7 +272,16 @@ func NewMessagesRequest(input MessagesRequestInput) (MessagesRequest, error) {
 	if messageError != nil {
 		return MessagesRequest{}, messageError
 	}
-	return MessagesRequest{
+	tools, choice, err := newClientTools(input.Tools, input.ToolChoice, input.ParallelToolCalls)
+	if err != nil {
+		return MessagesRequest{}, err
+	}
+	var parallel *bool
+	if input.ParallelToolCalls != nil {
+		value := *input.ParallelToolCalls
+		parallel = &value
+	}
+	return MessagesRequest{tools: tools, toolChoice: choice, parallelToolCalls: parallel,
 		messages:              messages,
 		model:                 strings.TrimSpace(input.Model),
 		webSearch:             input.WebSearch,
@@ -277,6 +297,15 @@ func (request MessagesRequest) payloadBody(model string) []byte {
 	payload := map[string]any{
 		"messages":   messagePayload(request.messages),
 		"web_search": request.webSearch,
+	}
+	if len(request.tools) > 0 {
+		payload["tools"] = request.tools
+	}
+	if request.toolChoice != nil {
+		payload["tool_choice"] = request.toolChoice
+	}
+	if request.parallelToolCalls != nil {
+		payload["parallel_tool_calls"] = *request.parallelToolCalls
 	}
 	if model != "" {
 		payload[queryModel] = model
@@ -304,11 +333,11 @@ func newMessages(inputMessages []MessageInput) ([]message, error) {
 	for messageIndex, inputMessage := range orderedInputMessages {
 		role := strings.ToLower(strings.TrimSpace(inputMessage.Role))
 		switch role {
-		case messageRoleSystem, messageRoleUser, messageRoleAssistant:
+		case messageRoleSystem, messageRoleUser, messageRoleAssistant, "tool":
 		default:
 			return nil, fmt.Errorf("%w: messages[%d].role unsupported", ErrInvalidClientRequest, messageIndex)
 		}
-		if strings.TrimSpace(inputMessage.Content) == "" {
+		if strings.TrimSpace(inputMessage.Content) == "" && len(inputMessage.ToolCalls) == 0 && role != "tool" {
 			return nil, fmt.Errorf("%w: messages[%d].content is empty", ErrInvalidClientRequest, messageIndex)
 		}
 		attachments := make([]messageAttachment, 0, len(inputMessage.Attachments))
@@ -325,6 +354,7 @@ func newMessages(inputMessages []MessageInput) ([]message, error) {
 			hasUserMessage = true
 		}
 		messages = append(messages, message{
+			toolCalls: append([]FunctionCall(nil), inputMessage.ToolCalls...), toolCallID: inputMessage.ToolCallID,
 			role:        role,
 			content:     inputMessage.Content,
 			attachments: attachments,
@@ -333,6 +363,9 @@ func newMessages(inputMessages []MessageInput) ([]message, error) {
 	}
 	if len(inputMessages) > 0 && !hasUserMessage {
 		return nil, fmt.Errorf("%w: messages must include a user message", ErrInvalidClientRequest)
+	}
+	if err := validateClientToolHistory(messages); err != nil {
+		return nil, err
 	}
 	return messages, nil
 }
@@ -377,6 +410,12 @@ func messagePayload(messages []message) []map[string]any {
 		}
 		if len(requestMessage.attachments) > 0 {
 			payloadMessage["attachments"] = messageAttachmentPayload(requestMessage.attachments)
+		}
+		if len(requestMessage.toolCalls) > 0 {
+			payloadMessage["tool_calls"] = requestMessage.toolCalls
+		}
+		if requestMessage.toolCallID != "" {
+			payloadMessage["tool_call_id"] = requestMessage.toolCallID
 		}
 		if requestMessage.order != nil {
 			payloadMessage["order"] = *requestMessage.order
