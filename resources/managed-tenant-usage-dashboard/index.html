@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Account-wide managed tenant usage dashboard for LLMs</title>
+    <meta name="description" content="See all owned tenants by default, filter one tenant when needed, and inspect safe failed-request details without exposing secrets.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/">
+    <meta property="og:title" content="Account-wide managed tenant usage dashboard for LLMs">
+    <meta property="og:description" content="See all owned tenants by default, filter one tenant when needed, and inspect safe failed-request details without exposing secrets.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@5.4.1/dist/browser/js-yaml.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"></script>
+    <script
+      id="mpr-ui-bundle"
+      type="application/json"
+      data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
+    ></script>
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Account-wide managed tenant usage dashboard for LLMs","description":"See all owned tenants by default, filter one tenant when needed, and inspect safe failed-request details without exposing secrets.","url":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/","datePublished":"2026-07-06","dateModified":"2026-09-01","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/","about":["LLM Proxy","Usage","managed tenant usage dashboard"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Account-wide managed tenant usage dashboard for LLMs","item":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Does selecting a tenant activate or deactivate it?","acceptedAnswer":{"@type":"Answer","text":"No. Every owned tenant remains independently routable through its own generated secret; the Settings and Usage selectors only choose an editor or report scope."}},{"@type":"Question","name":"What does Usage Overview show by default?","acceptedAnswer":{"@type":"Answer","text":"It selects All tenants and the 30-day interval, then aggregates the owned tenants at the server's database boundary."}},{"@type":"Question","name":"Does changing Breakdown view request new usage data?","acceptedAnswer":{"@type":"Answer","text":"No. Bar graph and Donut chart are local presentations of the same provider and model request aggregates."}},{"@type":"Question","name":"Does changing the Tenant control in Settings change Usage Overview?","acceptedAnswer":{"@type":"Answer","text":"No. The Tenant control in Settings and the Usage tenant control are independent; changing one does not change the other."}},{"@type":"Question","name":"What tenant data appears in account-wide failure rows?","acceptedAnswer":{"@type":"Answer","text":"Only the safe opaque tenant ID and current display name are added. Credentials, prompts, responses, provider bodies, and free-form errors remain excluded."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Normalized token usage metadata across providers, which covers normalized token usage metadata."}}]}</script>
+    <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440"></script>
+  </head>
+  <body class="resource-page">
+
+    <mpr-header
+      class="public-site-header"
+      data-config-url="https://llm-proxy-api.mprlab.com/config-ui.yaml"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      logout-url="/"
+      settings="false"
+      sign-in-label="Log In"
+      sign-in-redirect-url="/app/"
+      size="small"
+      sticky="true"
+      auth-transition='{"title":"Opening LLM Proxy","message":"Loading your app."}'
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"}]}'
+    >
+      <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
+        <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
+        <span>LLM Proxy</span>
+      </a>
+    </mpr-header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>Account-wide managed tenant usage dashboard for LLMs</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Usage</p>
+            <h1>Account-wide managed tenant usage dashboard for LLMs</h1>
+            <p class="resource-deck">See all owned tenants by default, filter one tenant when needed, and inspect safe failed-request details without exposing secrets.</p>
+            <p class="resource-audience">Teams giving users self-service AI access while keeping usage visible.</p>
+            <p class="resource-byline">Reviewed 2026-09-01 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <aside class="resource-verdict" aria-label="Quick verdict">
+              <strong>Quick verdict</strong>
+              <p>Every tenant remains independently routable. Usage opens on All tenants and 30 days, while client-side chart choices change no usage request or persisted setting.</p>
+            </aside>
+            <div class="resource-actions">
+              <a class="resource-button" href="/docs/">Open API reference</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>A multi-tenant key-management portal is incomplete when its default dashboard hides every tenant except one or implies that selecting a tenant activates it.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy's authenticated Usage Overview defaults to account-wide aggregates across every owned tenant, offers one local Bar graph or Donut chart view for provider and model request breakdowns, and gives Requests and Tokens distinct UTC and per-bucket quantity axes.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Create managed tenants and their generated client keys.</li>
+<li>Send proxy requests through any owned tenant's generated secret; each tenant remains operational independently.</li>
+<li>Record canonical outcome metadata for managed-tenant requests without storing request or provider-error content.</li>
+<li>Open Usage Overview on All tenants and 30 days, or use the Usage tenant selector immediately before ALL to narrow the report.</li>
+<li>Use Breakdown view to show both provider and model request distributions as ranked bars or count-and-percentage donuts.</li>
+<li>Read Requests and Tokens against their visible UTC and zero-based per-hour or per-day axes.</li>
+<li>Read account-wide totals from GET /api/management/usage or one tenant from GET /api/management/tenants/:tenant_id/usage.</li>
+<li>When failures exist, open N failed requests; account-wide rows include safe tenant context and tenant-scoped rows do not repeat it.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+
+                        <tr>
+                          <td>All-tenant default</td>
+                          <td>The default All tenants and 30 days selections populate requests, tokens, success rate, providers, models, statuses, and buckets together.</td>
+                          <td>The first dashboard snapshot represents every owned tenant rather than the oldest one.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Independent selectors</td>
+                          <td>The Tenant control in Settings chooses only the editor; Usage tenant chooses only the report.</td>
+                          <td>Changing provider settings for one tenant cannot silently narrow the usage dashboard.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Shared request breakdown</td>
+                          <td>One keyboard-operable control changes both provider and model panels between Bar graph and Donut chart.</td>
+                          <td>Both views derive from the same ordered aggregate request counts without another management request.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Explicit time-series axes</td>
+                          <td>Requests and Tokens each show UTC X ticks and a zero-based integer Y scale for the canonical hour or day bucket.</td>
+                          <td>The charts do not imply one shared numeric scale or an exact event time.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Safe failure vocabulary</td>
+                          <td>Rows distinguish validation, payload size, rate limit, unavailable, timeout, and upstream failures with canonical codes.</td>
+                          <td>A failed request is not automatically labeled a provider failure.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Scope-bound pagination</td>
+                          <td>Newest-first cursors remain bound to All tenants or one exact tenant.</td>
+                          <td>Prompts, responses, provider bodies, free-form errors, and credentials never enter the dialog.</td>
+                        </tr>
+
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+
+                    <section class="resource-card">
+                      <h3>Portfolio overview</h3>
+                      <p>A user sees the combined request and token totals for every owned tenant without making one browser request per tenant.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Tenant investigation</h3>
+                      <p>Selecting Research narrows every usage surface and failure row to that tenant while Settings can remain on Default.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Scope-safe failure review</h3>
+                      <p>Changing from All tenants to one tenant invalidates the old dialog request so stale rows and cursors cannot cross scopes.</p>
+                    </section>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>Usage is recorded for managed tenants using generated secrets.</li>
+<li>The donut is a request-share view, not a token-share or provider-performance comparison.</li>
+<li>Every provider and model category stays separate; the donut does not create an Other tail.</li>
+<li>The charts are client-side presentations of existing aggregates, not billing, provider-key, exact-event-time, or new management-API features.</li>
+<li>Failure rows are operational metadata, not reconstructed provider error messages or a billing system.</li>
+<li>Administrators receive aggregate summaries only; per-event rows remain owner-only.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>Repository evidence</h2>
+            <pre class="usage-snippet"><code>GET /api/management/usage?interval=30d
+GET /api/management/tenants/:tenant_id/usage?interval=30d</code></pre>
+            <p>Verified 2026-09-01 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+
+                    <details>
+                      <summary>Does selecting a tenant activate or deactivate it?</summary>
+                      <p>No. Every owned tenant remains independently routable through its own generated secret; the Settings and Usage selectors only choose an editor or report scope.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>What does Usage Overview show by default?</summary>
+                      <p>It selects All tenants and the 30-day interval, then aggregates the owned tenants at the server's database boundary.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Does changing Breakdown view request new usage data?</summary>
+                      <p>No. Bar graph and Donut chart are local presentations of the same provider and model request aggregates.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Does changing the Tenant control in Settings change Usage Overview?</summary>
+                      <p>No. The Tenant control in Settings and the Usage tenant control are independent; changing one does not change the other.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>What tenant data appears in account-wide failure rows?</summary>
+                      <p>Only the safe opaque tenant ID and current display name are added. Credentials, prompts, responses, provider bodies, and free-form errors remain excluded.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is Normalized token usage metadata across providers, which covers normalized token usage metadata.</p>
+                    </details>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+
+                    <a class="resource-related" href="/resources/normalized-token-usage-metadata/">
+                      <span>Usage</span>
+                      <strong>Normalized token usage metadata across providers</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/admin-usage-visibility-without-secrets/">
+                      <span>Usage</span>
+                      <strong>Admin usage visibility without exposing secrets</strong>
+                    </a>
+
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Use this pattern in LLM Proxy</h2>
+            <p>Start from the canonical API reference, then use the management surface when the workflow needs tenant or provider configuration.</p>
+            <a class="resource-button" href="/docs/">Open API reference</a>
+          </section>
+        </article>
+      </main>
+    <mpr-footer
+      class="public-site-footer"
+      size="small"
+      sticky="true"
+      wrapper-class="public-site-footer-layout"
+      privacy-link-label="Privacy"
+      privacy-link-href="/privacy/"
+      theme-switcher="square"
+      theme-config='{"attribute":"data-mpr-theme","targets":["document","body"],"initialMode":"default-dark","modes":[{"value":"default-light","attributeValue":"light","dataset":{"data-llm-proxy-palette":"default"}},{"value":"sunrise-light","attributeValue":"light","dataset":{"data-llm-proxy-palette":"sunrise"}},{"value":"default-dark","attributeValue":"dark","dataset":{"data-llm-proxy-palette":"default"}},{"value":"forest-dark","attributeValue":"dark","dataset":{"data-llm-proxy-palette":"forest"}}]}'
+      horizontal-links='{"alignment":"left","links":[{"label":"Terms","href":"/terms/"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+      links-collection='{"style":"drop-up","text":"Built by Marco Polo Research Lab","links":[{"label":"Marco Polo Research Lab","url":"https://mprlab.com"},{"label":"Gravity Notes","url":"https://gravity.mprlab.com"},{"label":"LoopAware","url":"https://loopaware.mprlab.com"},{"label":"Allergy Wheel","url":"https://allergy.mprlab.com"},{"label":"Social Threader","url":"https://threader.mprlab.com"},{"label":"RSVP","url":"https://rsvp.mprlab.com"},{"label":"Countdown Calendar","url":"https://countdown.mprlab.com"},{"label":"LLM Crossword","url":"https://llm-crossword.mprlab.com"},{"label":"Prompt Bubbles","url":"https://prompts.mprlab.com"},{"label":"Wallpapers","url":"https://wallpapers.mprlab.com"}]}'
+    >
+      <footer class="public-site-footer-fallback" role="contentinfo">
+        <nav class="public-site-footer-fallback__nav" aria-label="Footer">
+          <a href="/privacy/">Privacy</a>
+          <a href="/terms/">Terms</a>
+          <a href="/resources/">Resources</a>
+          <a href="https://github.com/tyemirov/llm-proxy">GitHub</a>
+        </nav>
+        <details class="public-site-footer-fallback__projects">
+          <summary>Built by Marco Polo Research Lab</summary>
+          <ul>
+            <li><a href="https://mprlab.com">Marco Polo Research Lab</a></li>
+            <li><a href="https://gravity.mprlab.com">Gravity Notes</a></li>
+            <li><a href="https://loopaware.mprlab.com">LoopAware</a></li>
+            <li><a href="https://allergy.mprlab.com">Allergy Wheel</a></li>
+            <li><a href="https://threader.mprlab.com">Social Threader</a></li>
+            <li><a href="https://rsvp.mprlab.com">RSVP</a></li>
+            <li><a href="https://countdown.mprlab.com">Countdown Calendar</a></li>
+            <li><a href="https://llm-crossword.mprlab.com">LLM Crossword</a></li>
+            <li><a href="https://prompts.mprlab.com">Prompt Bubbles</a></li>
+            <li><a href="https://wallpapers.mprlab.com">Wallpapers</a></li>
+          </ul>
+        </details>
+      </footer>
+    </mpr-footer>
+
+  </body>
+</html>
