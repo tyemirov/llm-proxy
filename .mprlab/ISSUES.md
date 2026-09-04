@@ -25,6 +25,150 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B182] (P1) Bound the request-disposition migration insert.
+  Goal:
+  The schema 12 upgrade must retain a large usage history. The current copy uses
+  one insert and exceeds the SQLite variable limit for realistic histories.
+  Requirements:
+  - Copy migrated usage records in fixed-size batches.
+  - Keep the schema replacement in one transaction.
+  - Preserve each record, index, constraint, and migration version.
+  Deliverables:
+  - Add bounded inserts to the schema 13 migration.
+  - Add a real-database regression with a history above the prior limit.
+  Validation:
+  - Run the focused Go integration test.
+  - Run `make ci` after the last review fix.
+  Resolution:
+  - The schema 13 copy now inserts at most 256 usage records in each batch.
+  - One SQLite startup test migrates 2,600 records and verifies the final record.
+  - `make go-test` passed with 100 percent Go statement coverage.
+- [x] [B181] (P2) Bound request-disposition startup validation.
+  Goal:
+  Schema 13 startup must validate disposition pairs without reading the full
+  usage history. The current query loads all event columns and rows.
+  Requirements:
+  - Read each distinct disposition and outcome pair once.
+  - Retain one record ID for each invalid-pair error.
+  - Reject each invalid disposition, outcome, or pair.
+  Deliverables:
+  - Replace the full-history validation query with a bounded projection.
+  - Extend real-database validation coverage.
+  Validation:
+  - Run the focused Go integration test.
+  - Run `make ci` after the last review fix.
+  Resolution:
+  - Startup now reads each distinct disposition and outcome pair once.
+  - Each projected pair retains the first record ID for exact errors.
+  - A 2,600-record SQLite regression verifies repeated valid pairs.
+  - `make go-test` passed with 100 percent Go statement coverage.
+- [x] [B180] (P2) Count asset-store errors as proxy failures.
+  Goal:
+  A valid V2 request can fail because the proxy cannot read its asset store.
+  The current recorder classifies this internal `500` response as rejected.
+  Requirements:
+  - Assign `proxy_error` to a V2 asset-store failure before persistence.
+  - Keep input and missing-asset errors as rejected requests.
+  - Keep the request out of provider dispatch.
+  Deliverables:
+  - Correct the V2 asset error outcome mapping.
+  - Add a public HTTP and management-report regression.
+  Validation:
+  - Run the focused Go integration test.
+  - Run `make ci` after the last review fix.
+  Resolution:
+  - V2 asset-store `500` responses now persist the `proxy_error` outcome.
+  - Missing assets and invalid asset input remain rejected requests.
+  - A public HTTP test verifies zero provider dispatch and failure-only reporting.
+  - `make go-test` passed with 100 percent Go statement coverage.
+- [x] [B179] (P2) Preserve legacy unconfigured-provider rejections.
+  Goal:
+  The oldest tenant migration must retain unconfigured-provider requests as
+  rejections. It currently converts a blank-route `503` event to a failure.
+  Requirements:
+  - Map a legacy blank-route `503` event to `provider_not_configured`.
+  - Assign the `rejected` disposition to the migrated event.
+  - Preserve the current mapping for an execution `503` event.
+  Deliverables:
+  - Correct the legacy tenant migration mapping.
+  - Add exact migration coverage for both `503` event types.
+  Validation:
+  - Run the focused Go integration test.
+  - Run `make ci` after the last review fix.
+  Resolution:
+  - The oldest tenant migration maps blank-route `503` events to
+    `provider_not_configured` and the `rejected` disposition.
+  - Routed execution `503` events remain `service_unavailable` failures.
+  - A real SQLite migration test verifies both event types.
+  - `make go-test` passed with 100 percent Go statement coverage.
+- [x] [B178] (P2) Record invalid timeout headers as rejections.
+  Goal:
+  Each authenticated proxy request must produce a usage record. The timeout
+  middleware currently returns `400` before it records an invalid header.
+  Requirements:
+  - Record invalid timeout headers for text, V2, and dictation requests.
+  - Assign `invalid_request` and the `rejected` disposition.
+  - Keep invalid timeout headers out of provider dispatch.
+  - Do not record unauthenticated requests or asset operations as proxy usage.
+  Deliverables:
+  - Add managed rejection recording to the proxy timeout boundary.
+  - Add public HTTP and management-report regressions.
+  Validation:
+  - Run the focused Go integration test.
+  - Run `make ci` after the last review fix.
+  Resolution:
+  - The timeout boundary now records authenticated invalid headers for text,
+    V2, and dictation requests as `invalid_request` rejections.
+  - Unauthenticated requests and asset operations remain outside proxy usage.
+  - A public HTTP test verifies all route types, reports, and zero dispatch.
+  - `make go-test` passed with 100 percent Go statement coverage.
+- [x] [B177] (P2) Remove request-disposition panic paths.
+  Goal:
+  Usage domain errors must propagate through library boundaries. Two new code
+  paths panic for an invalid outcome or execution disposition.
+  Requirements:
+  - Return a validated error for an invalid outcome mapping.
+  - Propagate an invalid execution disposition through the usage report path.
+  - Remove the direct panic test.
+  - Cover the behavior through a database or public API boundary.
+  Deliverables:
+  - Replace both new panic paths with error propagation.
+  - Add boundary regression coverage for corrupt usage data.
+  Validation:
+  - Run the focused Go integration test.
+  - Run `make ci` after the last review fix.
+  Resolution:
+  - Invalid outcome and disposition data now returns a validated store error.
+  - Usage aggregation accepts only a validated execution record and has no
+    disposition fallback or panic.
+  - A public SQLite and HTTP regression verifies tenant and admin report errors
+    for an invalid outcome, disposition, or outcome pair.
+  - `make ci` passed all 12 gates with 100 percent Go statement coverage.
+- [x] [B176] (P1) Show the Usage chart X axis.
+  Goal:
+  Each Usage time-series chart defines a UTC X axis. The browser does not show
+  this axis because the dynamic SVG view-box attribute has the wrong DOM case.
+  Requirements:
+  - Bind the SVG view box with its exact DOM attribute name.
+  - Show the UTC axis title and each selected time label.
+  - Preserve the current chart dimensions and metric-specific Y axis.
+  - Cover the actual SVG attribute and visible X axis in the browser.
+  Deliverables:
+  - Correct both Usage time-series SVG elements.
+  - Add browser regression coverage for the rendered view box and X axis.
+  Validation:
+  - Run the frontend browser tests.
+  - Run `make ci` after the last application change.
+  - Run the STE check on each changed technical document.
+  - Run `git diff --check`.
+  Resolution:
+  - Both Usage SVG elements now bind the exact `viewBox` DOM attribute.
+  - The UTC X axis and labels now remain inside each chart.
+  - Browser coverage verifies the view box and visible X-axis bounds.
+  - The frontend browser tests passed with 84 tests.
+  - `make ci` passed all 12 reported gates with 100 percent Go statement
+    coverage.
+  - The focused STE review passed for changed prose.
 - [x] [B175] (P0) Use one repository release version.
   Goal:
   One neutral repository value must identify the application and each bundled
@@ -789,6 +933,50 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [x] [I242] (P1) Keep the application title and usage controls concise.
+  Goal:
+  The management application shows unnecessary words in two user-visible
+  places. Its document title includes `Manage`, and each provider card repeats
+  a `used` label beside its request count. One shared text control also changes
+  two usage breakdowns together.
+  Requirements:
+  - Set the management application document title to exact `LLM Proxy`.
+  - Keep the document title unchanged across application states.
+  - Remove the `used` label from every provider card.
+  - Remove the derived `used` state and its copy after the label removal.
+  - Keep the `active` label for the selected tenant default route.
+  - Preserve provider request totals, token totals, and activity graphs.
+  - Put one icon-only chart toggle in each usage breakdown card.
+  - Make the provider and model chart selections independent.
+  - Use one button in each card to switch between the two chart types.
+  - Show `Provider usage` once in its card.
+  - Show `Model usage` once in its card.
+  - Update the current management UI documentation.
+  Deliverables:
+  - Update the management page, frontend state, and copy.
+  - Add browser coverage for the title, status labels, and independent toggles.
+  - Update the README, implementation document, and changelog.
+  Validation:
+  - Run the frontend browser tests.
+  - Run `make ci` after the last application change.
+  - Run the STE check on each changed technical document.
+  - Run `git diff --check`.
+  Resolution:
+  - The management document title is now exact `LLM Proxy`.
+  - Provider cards no longer show or calculate a `used` state.
+  - Provider usage and Model usage each have one title and one icon-only chart
+    toggle.
+  - Each toggle changes only its card and makes no usage request.
+  - Both choices persist through Usage changes and reset on reload or
+    authentication reset.
+  - The generated public Usage resource documents the independent controls and
+    preserves its publication brief.
+  - Browser coverage verifies titles, icons, independence, persistence, reset,
+    and compact layout.
+  - No API or event contract changed.
+  - `make ci` passed all 12 reported gates with 100 percent Go statement
+    coverage.
+  - The focused STE review passed for changed prose.
 - [ ] [I241] (P1) Show provider requests over time on each provider card.
   Goal:
   Each provider card shows request activity across the selected Usage time
@@ -2404,6 +2592,50 @@ retain satisfied historical dependencies.
 
 ## Features
 
+- [x] [F037] (P1) Report rejected requests separately from proxy failures.
+  Goal:
+  The Usage view must keep rejected requests visible without treating them as
+  proxy failures. A request for an unconfigured provider cannot execute, but
+  the current report includes it in request totals and failed requests.
+  Requirements:
+  - Define `rejected`, `succeeded`, and `failed` as the request dispositions.
+  - Reject an unconfigured provider before provider dispatch.
+  - Return HTTP `409` with the stable `provider_not_configured` outcome.
+  - Persist each rejected request without prompt, response, credential, or provider error data.
+  - Keep only succeeded and failed requests in usage totals, charts, dimensions, status groups, and success rates.
+  - Keep only failed requests in the failure report.
+  - Add a separate rejected-request count and paginated report.
+  - Include only a resolved typed route in rejected-request provider and model fields.
+  - Add account and tenant rejected-request resources to the management API.
+  - Use one bounded migration to replace the persisted success flag with the request disposition.
+  - Map historical pre-route validation and unconfigured-provider events to rejected requests.
+  - Remove the old success flag after the migration.
+  - Update the management UI, API schema, product documentation, and public Usage resource.
+  Deliverables:
+  - Add the request disposition domain type and persisted schema.
+  - Add rejected-request aggregates, resources, and management UI details.
+  - Add public API, real-store, migration, and browser regression coverage.
+  Validation:
+  - Prove that an unconfigured provider receives no provider dispatch.
+  - Prove that its request appears only in the rejected-request report.
+  - Prove that a provider or proxy execution error remains a failed request.
+  - Prove that rejected requests do not change usage totals or success rates.
+  - Upgrade persisted usage data and prove the exact disposition mapping.
+  - Run the frontend browser tests.
+  - Run `make ci` after the last application change.
+  - Run the STE check on each changed technical document.
+  - Run `git diff --check`.
+  Resolution:
+  - Added the required rejected, succeeded, and failed request dispositions.
+  - Unconfigured routes now return exact `409 provider_not_configured` before dispatch.
+  - Rejected records contain safe route metadata and have a separate paginated report.
+  - Usage totals and failure reports now include attempted executions only.
+  - Schema version 13 replaces the success flag and maps historical records.
+  - API, migration, real-store, browser, and TAuth tests verify the separation.
+  - The public Usage resource passed its independent SEO evaluation with 55/55.
+  - `make ci` passed all gates with 100 percent Go statement coverage.
+  - The final run included 45 Python tests and 85 browser tests.
+  - Focused changed-prose STE review and `git diff --check` passed.
 - [ ] [F036] (P1) Add public provider-offering price comparison.
   Goal:
   Let landing-page visitors compare published prices and workload estimates for
