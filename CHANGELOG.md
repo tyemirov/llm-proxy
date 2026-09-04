@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Added explicit rejected, succeeded, and failed request dispositions for
+  managed usage. Requests that cannot reach provider dispatch remain visible
+  in a separate rejection report and no longer affect execution or failure
+  metrics. Unconfigured provider routes now return `409
+  provider_not_configured`.
+- Hardened request-disposition storage and reporting. The schema upgrade now
+  copies large histories in fixed-size batches. Startup validates distinct
+  disposition and outcome pairs. Invalid timeout headers are recorded as
+  rejections. Asset-store errors are recorded as proxy failures. Corrupt usage
+  data now returns a store error instead of causing a panic.
+- Corrected the Usage chart view box so its UTC X axis remains visible.
+- Set the management application document title to `LLM Proxy`. Removed the
+  redundant `used` label from provider cards. Moved one icon-only chart toggle
+  into each usage breakdown card and made their selections independent.
 - Added one canonical repository release version and set it to `v1.4.1`.
   Added one command that updates the canonical version, Python project, and
   Python lock metadata. CI and the release decision validator now reject a
