@@ -18,5 +18,7 @@ a 30-second steady interval, and a 30-second startup period.
 
 The site renderer copies `site/healthz` into the publication artifact.
 The local frontend already applies the no-store header to all resources.
-GitHub Pages controls production response headers. I239 keeps the production
-cache requirement open until a hosting decision is made.
+GitHub Pages uses its production cache policy for the static health resource.
+The operator approved this exception on 2026-09-04. API and local health
+responses still require `Cache-Control: no-store`.
+A cached Pages response proves artifact availability, not current API readiness.
