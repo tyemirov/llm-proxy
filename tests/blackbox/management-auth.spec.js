@@ -319,9 +319,10 @@ test("public Log In opens the authenticated app and the TAuth session survives u
   expect(accountUsageResponse.headers()["cache-control"]).toBe("no-store");
   expect(await accountUsageResponse.json()).toMatchObject({
     interval: "30d",
+    rejected_requests: 2,
     totals: {
-      requests: 2,
-      failed_requests: 2,
+      requests: 0,
+      failed_requests: 0,
     },
   });
   const accountUsageFailuresResponse = await context.request.get(
@@ -332,16 +333,25 @@ test("public Log In opens the authenticated app and the TAuth session survives u
   expect(accountUsageFailuresResponse.headers()["cache-control"]).toBe("no-store");
   const accountUsageFailures = await accountUsageFailuresResponse.json();
   expect(accountUsageFailures.interval).toBe("30d");
-  expect(accountUsageFailures.failures).toHaveLength(2);
+  expect(accountUsageFailures.failures).toHaveLength(0);
+  const accountUsageRejectionsResponse = await context.request.get(
+    `${stack.llmProxyOrigin}/api/management/usage/rejections?interval=30d&limit=10`,
+    { headers: { Origin: stack.frontendOrigin } },
+  );
+  expect(accountUsageRejectionsResponse.status()).toBe(httpOK);
+  expect(accountUsageRejectionsResponse.headers()["cache-control"]).toBe("no-store");
+  const accountUsageRejections = await accountUsageRejectionsResponse.json();
+  expect(accountUsageRejections.interval).toBe("30d");
+  expect(accountUsageRejections.rejections).toHaveLength(2);
   expect(
-    accountUsageFailures.failures
-      .map((failure) => [failure.tenant_id, failure.tenant_name])
+    accountUsageRejections.rejections
+      .map((rejection) => [rejection.tenant_id, rejection.tenant_name])
       .sort(([leftTenantID], [rightTenantID]) => leftTenantID.localeCompare(rightTenantID)),
   ).toEqual([
     [firstTenantID, "Default"],
     [secondTenantID, "Research"],
   ].sort(([leftTenantID], [rightTenantID]) => leftTenantID.localeCompare(rightTenantID)));
-  expect(accountUsageFailures.failures).toEqual(
+  expect(accountUsageRejections.rejections).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
         outcome_code: "invalid_request",
