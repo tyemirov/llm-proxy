@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -48,6 +49,18 @@ type managementAccountUsageFailureTestItem struct {
 	TenantID   string `json:"tenant_id"`
 	TenantName string `json:"tenant_name"`
 	managementUsageFailureTestItem
+}
+
+type managementUsageRejectionsTestResponse struct {
+	Interval   string                           `json:"interval"`
+	Rejections []managementUsageFailureTestItem `json:"rejections"`
+	NextCursor string                           `json:"next_cursor"`
+}
+
+type managementAccountUsageRejectionsTestResponse struct {
+	Interval   string                                  `json:"interval"`
+	Rejections []managementAccountUsageFailureTestItem `json:"rejections"`
+	NextCursor string                                  `json:"next_cursor"`
 }
 
 func TestOpenAIResponsesCompleteTruncatedOutputAndRecordOneSuccessAtPublicV2Boundary(testingInstance *testing.T) {
@@ -131,7 +144,7 @@ func TestOpenAIResponsesCompleteTruncatedOutputAndRecordOneSuccessAtPublicV2Boun
 		Provider       string `gorm:"column:provider_id"`
 		Model          string `gorm:"column:model_id"`
 		StatusCode     int    `gorm:"column:status_code"`
-		Success        bool   `gorm:"column:success"`
+		Disposition    string `gorm:"column:disposition"`
 		OutcomeCode    string `gorm:"column:outcome_code"`
 		RequestTokens  int    `gorm:"column:request_tokens"`
 		ResponseTokens int    `gorm:"column:response_tokens"`
@@ -145,15 +158,15 @@ func TestOpenAIResponsesCompleteTruncatedOutputAndRecordOneSuccessAtPublicV2Boun
 	var usageEvents []persistedOpenAIUsageEvent
 	if queryError := database.
 		Table("managed_usage_event_records").
-		Select("endpoint", "provider_id", "model_id", "status_code", "success", "outcome_code", "request_tokens", "response_tokens", "total_tokens").
+		Select("endpoint", "provider_id", "model_id", "status_code", "disposition", "outcome_code", "request_tokens", "response_tokens", "total_tokens").
 		Order("id").
 		Find(&usageEvents).
 		Error; queryError != nil {
 		testingInstance.Fatalf("load OpenAI usage events: %v", queryError)
 	}
 	expectedUsageEvents := []persistedOpenAIUsageEvent{
-		{Endpoint: "v2", Provider: proxy.ProviderNameOpenAI, Model: proxy.ModelNameGPT41, StatusCode: http.StatusOK, Success: true, OutcomeCode: "success", RequestTokens: 1604, ResponseTokens: 2055, TotalTokens: 3659},
-		{Endpoint: "v2", Provider: proxy.ProviderNameOpenAI, Model: proxy.ModelNameGPT41, StatusCode: http.StatusOK, Success: true, OutcomeCode: "success", RequestTokens: 7, ResponseTokens: 11, TotalTokens: 18},
+		{Endpoint: "v2", Provider: proxy.ProviderNameOpenAI, Model: proxy.ModelNameGPT41, StatusCode: http.StatusOK, Disposition: "succeeded", OutcomeCode: "success", RequestTokens: 1604, ResponseTokens: 2055, TotalTokens: 3659},
+		{Endpoint: "v2", Provider: proxy.ProviderNameOpenAI, Model: proxy.ModelNameGPT41, StatusCode: http.StatusOK, Disposition: "succeeded", OutcomeCode: "success", RequestTokens: 7, ResponseTokens: 11, TotalTokens: 18},
 	}
 	if !reflect.DeepEqual(usageEvents, expectedUsageEvents) {
 		testingInstance.Fatalf("usage events=%+v want=%+v", usageEvents, expectedUsageEvents)
@@ -212,7 +225,7 @@ func TestOpenAIPolledIncompleteUsesLatestSnapshotThenCompletesAtPublicV2Boundary
 
 	type persistedUsageEvent struct {
 		StatusCode     int    `gorm:"column:status_code"`
-		Success        bool   `gorm:"column:success"`
+		Disposition    string `gorm:"column:disposition"`
 		OutcomeCode    string `gorm:"column:outcome_code"`
 		RequestTokens  int    `gorm:"column:request_tokens"`
 		ResponseTokens int    `gorm:"column:response_tokens"`
@@ -226,7 +239,7 @@ func TestOpenAIPolledIncompleteUsesLatestSnapshotThenCompletesAtPublicV2Boundary
 	var usageEvents []persistedUsageEvent
 	if queryError := database.
 		Table("managed_usage_event_records").
-		Select("status_code", "success", "outcome_code", "request_tokens", "response_tokens", "total_tokens").
+		Select("status_code", "disposition", "outcome_code", "request_tokens", "response_tokens", "total_tokens").
 		Order("id").
 		Find(&usageEvents).
 		Error; queryError != nil {
@@ -234,7 +247,7 @@ func TestOpenAIPolledIncompleteUsesLatestSnapshotThenCompletesAtPublicV2Boundary
 	}
 	expectedUsageEvents := []persistedUsageEvent{{
 		StatusCode:     http.StatusOK,
-		Success:        true,
+		Disposition:    "succeeded",
 		OutcomeCode:    "success",
 		RequestTokens:  22,
 		ResponseTokens: 26,
@@ -352,7 +365,7 @@ func TestProviderCompletionSignalsHonorTransportContinuationPolicyAtPublicV2Boun
 		Provider       string `gorm:"column:provider_id"`
 		Model          string `gorm:"column:model_id"`
 		StatusCode     int    `gorm:"column:status_code"`
-		Success        bool   `gorm:"column:success"`
+		Disposition    string `gorm:"column:disposition"`
 		OutcomeCode    string `gorm:"column:outcome_code"`
 		RequestTokens  int    `gorm:"column:request_tokens"`
 		ResponseTokens int    `gorm:"column:response_tokens"`
@@ -366,19 +379,216 @@ func TestProviderCompletionSignalsHonorTransportContinuationPolicyAtPublicV2Boun
 	var usageEvents []persistedProviderUsageEvent
 	if queryError := database.
 		Table("managed_usage_event_records").
-		Select("endpoint", "provider_id", "model_id", "status_code", "success", "outcome_code", "request_tokens", "response_tokens", "total_tokens").
+		Select("endpoint", "provider_id", "model_id", "status_code", "disposition", "outcome_code", "request_tokens", "response_tokens", "total_tokens").
 		Order("id").
 		Find(&usageEvents).
 		Error; queryError != nil {
 		testingInstance.Fatalf("load provider usage events: %v", queryError)
 	}
 	expectedUsageEvents := []persistedProviderUsageEvent{
-		{Endpoint: "v2", Provider: proxy.ProviderNameDeepSeek, Model: proxy.ModelNameDeepSeekV4Flash, StatusCode: http.StatusOK, Success: true, OutcomeCode: "success", RequestTokens: 36, ResponseTokens: 54, TotalTokens: 90},
-		{Endpoint: "v2", Provider: proxy.ProviderNameGemini, Model: proxy.ModelNameGemini35Flash, StatusCode: http.StatusBadGateway, Success: false, OutcomeCode: "upstream_error", RequestTokens: 41, ResponseTokens: 53, TotalTokens: 94},
-		{Endpoint: "v2", Provider: proxy.ProviderNameAnthropic, Model: proxy.ModelNameClaudeSonnet46, StatusCode: http.StatusOK, Success: true, OutcomeCode: "success", RequestTokens: 66, ResponseTokens: 70, TotalTokens: 136},
+		{Endpoint: "v2", Provider: proxy.ProviderNameDeepSeek, Model: proxy.ModelNameDeepSeekV4Flash, StatusCode: http.StatusOK, Disposition: "succeeded", OutcomeCode: "success", RequestTokens: 36, ResponseTokens: 54, TotalTokens: 90},
+		{Endpoint: "v2", Provider: proxy.ProviderNameGemini, Model: proxy.ModelNameGemini35Flash, StatusCode: http.StatusBadGateway, Disposition: "failed", OutcomeCode: "upstream_error", RequestTokens: 41, ResponseTokens: 53, TotalTokens: 94},
+		{Endpoint: "v2", Provider: proxy.ProviderNameAnthropic, Model: proxy.ModelNameClaudeSonnet46, StatusCode: http.StatusOK, Disposition: "succeeded", OutcomeCode: "success", RequestTokens: 66, ResponseTokens: 70, TotalTokens: 136},
 	}
 	if !reflect.DeepEqual(usageEvents, expectedUsageEvents) {
 		testingInstance.Fatalf("usage events=%+v want=%+v", usageEvents, expectedUsageEvents)
+	}
+}
+
+func TestV2AssetStoreFailureAppearsOnlyInTheFailureReport(t *testing.T) {
+	upstreamCalls := 0
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		upstreamCalls++
+		http.Error(responseWriter, "unexpected request", http.StatusInternalServerError)
+	}))
+	defer upstreamServer.Close()
+
+	assetRoot := t.TempDir()
+	databasePath := filepath.Join(t.TempDir(), "asset-store-failure.db")
+	router := newManagementRouterWithDatabasePath(t, proxy.Configuration{
+		AssetStorePath: assetRoot,
+		Endpoints:      providerEndpoints(upstreamServer.URL, proxy.ProviderNameOpenAI),
+	}, databasePath)
+	ownerCookie := managementSessionCookie(t, "asset-store-failure-owner")
+	tenantIdentifier := managementDefaultTenantTestID(t, router, ownerCookie)
+	tenantPath := managementTenantTestPath(tenantIdentifier, "")
+	saveManagementProviderKey(t, router, ownerCookie, tenantIdentifier, testManagementOpenAIKey, proxy.ModelNameGPT41, "")
+	secret := generateManagementTenantSecret(t, router, ownerCookie, tenantIdentifier)
+	asset := uploadTestAsset(t, router, secret, "image/png", []byte("valid image bytes"))
+	if truncateError := os.Truncate(filepath.Join(assetRoot, asset.AssetID+".data"), 1); truncateError != nil {
+		t.Fatalf("truncate asset data: %v", truncateError)
+	}
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/v2?key="+url.QueryEscape(secret),
+		bytes.NewReader(v2AssetReferencePayload(asset.AssetID, asset.MIMEType)),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusInternalServerError || !strings.Contains(response.Body.String(), "asset_store_error") {
+		t.Fatalf("status=%d body=%q", response.Code, response.Body.String())
+	}
+	if upstreamCalls != 0 {
+		t.Fatalf("asset-store failure reached upstream: calls=%d", upstreamCalls)
+	}
+
+	waitForManagementValue(t, func() managementUsageFailuresTestResponse {
+		return requestManagementUsageFailures(t, router, ownerCookie, tenantPath, "30d", 25, "")
+	}, func(payload managementUsageFailuresTestResponse) bool {
+		return len(payload.Failures) == 1
+	})
+	failures := requestManagementUsageFailures(t, router, ownerCookie, tenantPath, "30d", 25, "")
+	if failure := failures.Failures[0]; failure.Endpoint != "v2" || failure.Provider != proxy.ProviderNameOpenAI ||
+		failure.Model != proxy.ModelNameGPT41 || failure.StatusCode != http.StatusInternalServerError || failure.OutcomeCode != "proxy_error" {
+		t.Fatalf("asset-store failure=%+v", failure)
+	}
+	rejections := requestManagementUsageRejections(t, router, ownerCookie, tenantPath, "30d", 25, "")
+	if len(rejections.Rejections) != 0 {
+		t.Fatalf("asset-store rejections=%+v", rejections.Rejections)
+	}
+}
+
+func TestInvalidTimeoutHeadersAppearOnlyAsAuthenticatedProxyRejections(t *testing.T) {
+	upstreamCalls := 0
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		upstreamCalls++
+		http.Error(responseWriter, "unexpected request", http.StatusInternalServerError)
+	}))
+	defer upstreamServer.Close()
+
+	router := newManagementRouter(t, proxy.Configuration{
+		Endpoints: providerEndpoints(upstreamServer.URL, proxy.ProviderNameOpenAI),
+	})
+	ownerCookie := managementSessionCookie(t, "invalid-timeout-owner")
+	tenantIdentifier := managementDefaultTenantTestID(t, router, ownerCookie)
+	tenantPath := managementTenantTestPath(tenantIdentifier, "")
+	secret := generateManagementTenantSecret(t, router, ownerCookie, tenantIdentifier)
+
+	requestCases := []struct {
+		method      string
+		path        string
+		body        string
+		contentType string
+		endpoint    string
+	}{
+		{method: http.MethodGet, path: "/?key=" + url.QueryEscape(secret) + "&prompt=hello", endpoint: "text"},
+		{method: http.MethodPost, path: "/?key=" + url.QueryEscape(secret), body: `{"prompt":"hello"}`, contentType: "application/json", endpoint: "text"},
+		{method: http.MethodPost, path: "/v2?key=" + url.QueryEscape(secret), body: `{"messages":[{"role":"user","content":"hello"}]}`, contentType: "application/json", endpoint: "v2"},
+		{method: http.MethodPost, path: "/dictate?key=" + url.QueryEscape(secret), body: "audio", contentType: "audio/wav", endpoint: "dictation"},
+	}
+	for _, requestCase := range requestCases {
+		request := httptest.NewRequest(requestCase.method, requestCase.path, strings.NewReader(requestCase.body))
+		request.Header.Set(llmproxycontract.HeaderRequestTimeoutSeconds, "0")
+		if requestCase.contentType != "" {
+			request.Header.Set("Content-Type", requestCase.contentType)
+		}
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), llmproxycontract.ErrorCodeInvalidRequestTimeout) {
+			t.Fatalf("endpoint=%s status=%d body=%q", requestCase.endpoint, response.Code, response.Body.String())
+		}
+	}
+
+	unauthenticatedRequest := httptest.NewRequest(http.MethodGet, "/?prompt=hello", nil)
+	unauthenticatedRequest.Header.Set(llmproxycontract.HeaderRequestTimeoutSeconds, "0")
+	unauthenticatedResponse := httptest.NewRecorder()
+	router.ServeHTTP(unauthenticatedResponse, unauthenticatedRequest)
+	if unauthenticatedResponse.Code != http.StatusForbidden {
+		t.Fatalf("unauthenticated status=%d body=%q", unauthenticatedResponse.Code, unauthenticatedResponse.Body.String())
+	}
+
+	assetRequest := httptest.NewRequest(http.MethodPost, llmproxycontract.AssetPath+"?key="+url.QueryEscape(secret), strings.NewReader("asset"))
+	assetRequest.Header.Set("Content-Type", "image/png")
+	assetRequest.Header.Set(llmproxycontract.HeaderRequestTimeoutSeconds, "0")
+	assetResponse := httptest.NewRecorder()
+	router.ServeHTTP(assetResponse, assetRequest)
+	if assetResponse.Code != http.StatusBadRequest || !strings.Contains(assetResponse.Body.String(), llmproxycontract.ErrorCodeInvalidRequestTimeout) {
+		t.Fatalf("asset status=%d body=%q", assetResponse.Code, assetResponse.Body.String())
+	}
+
+	waitForManagementValue(t, func() managementUsageRejectionsTestResponse {
+		return requestManagementUsageRejections(t, router, ownerCookie, tenantPath, "30d", 25, "")
+	}, func(payload managementUsageRejectionsTestResponse) bool {
+		return len(payload.Rejections) == len(requestCases)
+	})
+	rejections := requestManagementUsageRejections(t, router, ownerCookie, tenantPath, "30d", 25, "")
+	endpointCounts := map[string]int{}
+	for _, rejection := range rejections.Rejections {
+		if rejection.Provider != "" || rejection.Model != "" || rejection.StatusCode != http.StatusBadRequest || rejection.OutcomeCode != "invalid_request" {
+			t.Fatalf("invalid-timeout rejection=%+v", rejection)
+		}
+		endpointCounts[rejection.Endpoint]++
+	}
+	if !reflect.DeepEqual(endpointCounts, map[string]int{"text": 2, "v2": 1, "dictation": 1}) {
+		t.Fatalf("invalid-timeout endpoints=%v", endpointCounts)
+	}
+	failures := requestManagementUsageFailures(t, router, ownerCookie, tenantPath, "30d", 25, "")
+	if len(failures.Failures) != 0 {
+		t.Fatalf("invalid-timeout failures=%+v", failures.Failures)
+	}
+	usage := requestManagementUsage(t, router, ownerCookie, "30d")
+	if usage.Totals.Requests != 0 || usage.RejectedRequests != len(requestCases) {
+		t.Fatalf("invalid-timeout usage=%+v", usage)
+	}
+	if upstreamCalls != 0 {
+		t.Fatalf("invalid timeout reached upstream: calls=%d", upstreamCalls)
+	}
+}
+
+func TestCorruptUsageRecordsReturnManagementErrorsWithoutPanics(t *testing.T) {
+	testCases := []struct {
+		name              string
+		disposition       string
+		outcomeCode       string
+		expectedErrorCode string
+	}{
+		{name: "invalid outcome", disposition: "failed", outcomeCode: "unknown", expectedErrorCode: "managed_usage_outcome_invalid"},
+		{name: "invalid execution disposition", disposition: "failed", outcomeCode: "invalid_request", expectedErrorCode: "managed_usage_disposition_invalid"},
+		{name: "invalid disposition", disposition: "unknown", outcomeCode: "proxy_error", expectedErrorCode: "managed_usage_disposition_invalid"},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			databasePath := filepath.Join(t.TempDir(), "corrupt-usage.db")
+			router := newManagementRouterWithDatabasePath(t, proxy.Configuration{}, databasePath)
+			ownerCookie := managementSessionCookie(t, "corrupt-usage-owner")
+			tenantIdentifier := managementDefaultTenantTestID(t, router, ownerCookie)
+			tenantPath := managementTenantTestPath(tenantIdentifier, "")
+
+			database, openError := gorm.Open(sqlite.Open(databasePath), &gorm.Config{})
+			if openError != nil {
+				t.Fatalf("open usage database: %v", openError)
+			}
+			if insertError := database.Exec(
+				"INSERT INTO managed_usage_event_records (tenant_id, endpoint, status_code, disposition, outcome_code, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+				tenantIdentifier,
+				"v2",
+				http.StatusBadGateway,
+				testCase.disposition,
+				testCase.outcomeCode,
+				time.Now().UTC(),
+			).Error; insertError != nil {
+				t.Fatalf("insert corrupt usage: %v", insertError)
+			}
+
+			request := httptest.NewRequest(http.MethodGet, tenantPath+"/usage?interval=30d", nil)
+			request.AddCookie(ownerCookie)
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+			if response.Code != http.StatusInternalServerError || !strings.Contains(response.Body.String(), testCase.expectedErrorCode) {
+				t.Fatalf("status=%d body=%q", response.Code, response.Body.String())
+			}
+
+			adminCookie := managementSessionCookieWithEmail(t, "corrupt-usage-admin", testManagementAdminEmail)
+			adminRequest := httptest.NewRequest(http.MethodGet, "/api/management/admin/users", nil)
+			adminRequest.AddCookie(adminCookie)
+			adminResponse := httptest.NewRecorder()
+			router.ServeHTTP(adminResponse, adminRequest)
+			if adminResponse.Code != http.StatusInternalServerError || !strings.Contains(adminResponse.Body.String(), testCase.expectedErrorCode) {
+				t.Fatalf("admin status=%d body=%q", adminResponse.Code, adminResponse.Body.String())
+			}
+		})
 	}
 }
 
@@ -436,7 +646,7 @@ func TestCompletionCoordinatorDeadlineRecordsAccumulatedUsageAsOneTimeout(testin
 
 	type persistedTimeoutUsageEvent struct {
 		StatusCode     int    `gorm:"column:status_code"`
-		Success        bool   `gorm:"column:success"`
+		Disposition    string `gorm:"column:disposition"`
 		OutcomeCode    string `gorm:"column:outcome_code"`
 		RequestTokens  int    `gorm:"column:request_tokens"`
 		ResponseTokens int    `gorm:"column:response_tokens"`
@@ -450,7 +660,7 @@ func TestCompletionCoordinatorDeadlineRecordsAccumulatedUsageAsOneTimeout(testin
 	var usageEvents []persistedTimeoutUsageEvent
 	if queryError := database.
 		Table("managed_usage_event_records").
-		Select("status_code", "success", "outcome_code", "request_tokens", "response_tokens", "total_tokens").
+		Select("status_code", "disposition", "outcome_code", "request_tokens", "response_tokens", "total_tokens").
 		Order("id").
 		Find(&usageEvents).
 		Error; queryError != nil {
@@ -458,7 +668,7 @@ func TestCompletionCoordinatorDeadlineRecordsAccumulatedUsageAsOneTimeout(testin
 	}
 	expectedUsageEvents := []persistedTimeoutUsageEvent{{
 		StatusCode:     http.StatusGatewayTimeout,
-		Success:        false,
+		Disposition:    "failed",
 		OutcomeCode:    "request_timeout",
 		RequestTokens:  3,
 		ResponseTokens: 5,
@@ -554,7 +764,7 @@ func TestManagementUsageFailuresRejectsInvalidQueriesAndEnforcesTenantOwnership(
 	}
 }
 
-func TestManagementAccountUsageFailuresAggregateOwnedTenantsAndBindCursorsToScope(t *testing.T) {
+func TestManagementAccountUsageRejectionsAggregateOwnedTenantsAndBindCursorsToScope(t *testing.T) {
 	router := newManagementRouter(t, proxy.Configuration{})
 	ownerCookie := managementSessionCookie(t, "account-failure-owner")
 	otherOwnerCookie := managementSessionCookie(t, "account-failure-other-owner")
@@ -582,46 +792,46 @@ func TestManagementAccountUsageFailuresAggregateOwnedTenantsAndBindCursorsToScop
 	recordInvalidRequest(secondSecret)
 	recordInvalidRequest(firstSecret)
 	recordInvalidRequest(otherSecret)
-	waitForManagementValue(t, func() managementAccountUsageFailuresTestResponse {
-		return requestManagementAccountUsageFailures(t, router, ownerCookie, "30d", 25, "")
-	}, func(payload managementAccountUsageFailuresTestResponse) bool {
-		return len(payload.Failures) == 3
+	waitForManagementValue(t, func() managementAccountUsageRejectionsTestResponse {
+		return requestManagementAccountUsageRejections(t, router, ownerCookie, "30d", 25, "")
+	}, func(payload managementAccountUsageRejectionsTestResponse) bool {
+		return len(payload.Rejections) == 3
 	})
 
-	firstPage := requestManagementAccountUsageFailures(t, router, ownerCookie, "30d", 1, "")
-	if firstPage.Interval != "30d" || len(firstPage.Failures) != 1 || firstPage.NextCursor == "" {
+	firstPage := requestManagementAccountUsageRejections(t, router, ownerCookie, "30d", 1, "")
+	if firstPage.Interval != "30d" || len(firstPage.Rejections) != 1 || firstPage.NextCursor == "" {
 		t.Fatalf("first account page=%+v", firstPage)
 	}
-	if failure := firstPage.Failures[0]; failure.TenantID != firstTenantID || failure.TenantName != firstTenantName || failure.OutcomeCode != "invalid_request" {
-		t.Fatalf("first account failure=%+v", failure)
+	if rejection := firstPage.Rejections[0]; rejection.TenantID != firstTenantID || rejection.TenantName != firstTenantName || rejection.OutcomeCode != "invalid_request" {
+		t.Fatalf("first account rejection=%+v", rejection)
 	}
-	secondPage := requestManagementAccountUsageFailures(t, router, ownerCookie, "30d", 1, firstPage.NextCursor)
-	if len(secondPage.Failures) != 1 || secondPage.NextCursor == "" {
+	secondPage := requestManagementAccountUsageRejections(t, router, ownerCookie, "30d", 1, firstPage.NextCursor)
+	if len(secondPage.Rejections) != 1 || secondPage.NextCursor == "" {
 		t.Fatalf("second account page=%+v", secondPage)
 	}
-	if failure := secondPage.Failures[0]; failure.TenantID != secondTenantID || failure.TenantName != "Second" || failure.OutcomeCode != "invalid_request" {
-		t.Fatalf("second account failure=%+v", failure)
+	if rejection := secondPage.Rejections[0]; rejection.TenantID != secondTenantID || rejection.TenantName != "Second" || rejection.OutcomeCode != "invalid_request" {
+		t.Fatalf("second account rejection=%+v", rejection)
 	}
-	thirdPage := requestManagementAccountUsageFailures(t, router, ownerCookie, "30d", 1, secondPage.NextCursor)
-	if len(thirdPage.Failures) != 1 || thirdPage.NextCursor != "" || thirdPage.Failures[0].TenantID != firstTenantID {
+	thirdPage := requestManagementAccountUsageRejections(t, router, ownerCookie, "30d", 1, secondPage.NextCursor)
+	if len(thirdPage.Rejections) != 1 || thirdPage.NextCursor != "" || thirdPage.Rejections[0].TenantID != firstTenantID {
 		t.Fatalf("third account page=%+v", thirdPage)
 	}
-	for _, page := range []managementAccountUsageFailuresTestResponse{firstPage, secondPage, thirdPage} {
-		for _, failure := range page.Failures {
-			if failure.TenantID == otherTenantID {
-				t.Fatalf("account failures leaked other owner's tenant: %+v", failure)
+	for _, page := range []managementAccountUsageRejectionsTestResponse{firstPage, secondPage, thirdPage} {
+		for _, rejection := range page.Rejections {
+			if rejection.TenantID == otherTenantID {
+				t.Fatalf("account rejections leaked other owner's tenant: %+v", rejection)
 			}
 		}
 	}
 
 	firstTenantPath := managementTenantTestPath(firstTenantID, "")
-	tenantPage := requestManagementUsageFailures(t, router, ownerCookie, firstTenantPath, "30d", 1, "")
-	if len(tenantPage.Failures) != 1 || tenantPage.NextCursor == "" {
+	tenantPage := requestManagementUsageRejections(t, router, ownerCookie, firstTenantPath, "30d", 1, "")
+	if len(tenantPage.Rejections) != 1 || tenantPage.NextCursor == "" {
 		t.Fatalf("tenant page=%+v", tenantPage)
 	}
 	for _, crossScopePath := range []string{
-		firstTenantPath + "/usage/failures?interval=30d&limit=1&cursor=" + url.QueryEscape(firstPage.NextCursor),
-		"/api/management/usage/failures?interval=30d&limit=1&cursor=" + url.QueryEscape(tenantPage.NextCursor),
+		firstTenantPath + "/usage/rejections?interval=30d&limit=1&cursor=" + url.QueryEscape(firstPage.NextCursor),
+		"/api/management/usage/rejections?interval=30d&limit=1&cursor=" + url.QueryEscape(tenantPage.NextCursor),
 	} {
 		request := httptest.NewRequest(http.MethodGet, crossScopePath, nil)
 		request.AddCookie(ownerCookie)
@@ -632,14 +842,14 @@ func TestManagementAccountUsageFailuresAggregateOwnedTenantsAndBindCursorsToScop
 		}
 	}
 
-	invalidQueryRequest := httptest.NewRequest(http.MethodGet, "/api/management/usage/failures?interval=30d&unknown=value", nil)
+	invalidQueryRequest := httptest.NewRequest(http.MethodGet, "/api/management/usage/rejections?interval=30d&unknown=value", nil)
 	invalidQueryRequest.AddCookie(ownerCookie)
 	invalidQueryResponse := httptest.NewRecorder()
 	router.ServeHTTP(invalidQueryResponse, invalidQueryRequest)
 	if invalidQueryResponse.Code != http.StatusBadRequest {
 		t.Fatalf("account invalid query status=%d body=%q", invalidQueryResponse.Code, invalidQueryResponse.Body.String())
 	}
-	unauthorizedRequest := httptest.NewRequest(http.MethodGet, "/api/management/usage/failures?interval=30d", nil)
+	unauthorizedRequest := httptest.NewRequest(http.MethodGet, "/api/management/usage/rejections?interval=30d", nil)
 	unauthorizedResponse := httptest.NewRecorder()
 	router.ServeHTTP(unauthorizedResponse, unauthorizedRequest)
 	if unauthorizedResponse.Code != http.StatusUnauthorized {
@@ -760,7 +970,7 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 				"/?key="+secretQuery+"&prompt=unavailable&provider="+proxy.ProviderNameMeta+"&model="+proxy.ModelNameMuseSpark11,
 				nil,
 			),
-			wantStatus: http.StatusServiceUnavailable,
+			wantStatus: http.StatusConflict,
 		},
 		{
 			request:    httptest.NewRequest(http.MethodGet, "/?key="+secretQuery+"&prompt=request-timeout", nil),
@@ -779,14 +989,23 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 	waitForManagementValue(t, func() managementUsageFailuresTestResponse {
 		return requestManagementUsageFailures(t, router, ownerCookie, tenantPath, "30d", 25, "")
 	}, func(payload managementUsageFailuresTestResponse) bool {
-		return len(payload.Failures) == 6
+		return len(payload.Failures) == 3
+	})
+	accountFailures := requestManagementAccountUsageFailures(t, router, ownerCookie, "30d", 25, "")
+	if len(accountFailures.Failures) != 3 || accountFailures.Failures[0].TenantID == "" || accountFailures.Failures[0].TenantName == "" {
+		t.Fatalf("account failures=%+v", accountFailures)
+	}
+	waitForManagementValue(t, func() managementUsageRejectionsTestResponse {
+		return requestManagementUsageRejections(t, router, ownerCookie, tenantPath, "30d", 25, "")
+	}, func(payload managementUsageRejectionsTestResponse) bool {
+		return len(payload.Rejections) == 3
 	})
 
-	firstPage := requestManagementUsageFailures(t, router, ownerCookie, tenantPath, "30d", 3, "")
-	if firstPage.NextCursor == "" || len(firstPage.Failures) != 3 {
+	firstPage := requestManagementUsageFailures(t, router, ownerCookie, tenantPath, "30d", 2, "")
+	if firstPage.NextCursor == "" || len(firstPage.Failures) != 2 {
 		t.Fatalf("first page=%+v", firstPage)
 	}
-	if got := []string{firstPage.Failures[0].OutcomeCode, firstPage.Failures[1].OutcomeCode, firstPage.Failures[2].OutcomeCode}; !reflect.DeepEqual(got, []string{"request_timeout", "service_unavailable", "upstream_error"}) {
+	if got := []string{firstPage.Failures[0].OutcomeCode, firstPage.Failures[1].OutcomeCode}; !reflect.DeepEqual(got, []string{"request_timeout", "upstream_error"}) {
 		t.Fatalf("first outcomes=%v", got)
 	}
 	if firstPage.Failures[0].Endpoint != "text" ||
@@ -807,23 +1026,23 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 		}
 	}
 
-	newFailureRequest := httptest.NewRequest(http.MethodGet, "/?key="+secretQuery+"&prompt=new&max_tokens=0", nil)
-	newFailureResponse := httptest.NewRecorder()
-	router.ServeHTTP(newFailureResponse, newFailureRequest)
-	if newFailureResponse.Code != http.StatusBadRequest {
-		t.Fatalf("new failure status=%d body=%q", newFailureResponse.Code, newFailureResponse.Body.String())
+	newRejectionRequest := httptest.NewRequest(http.MethodGet, "/?key="+secretQuery+"&prompt=new&max_tokens=0", nil)
+	newRejectionResponse := httptest.NewRecorder()
+	router.ServeHTTP(newRejectionResponse, newRejectionRequest)
+	if newRejectionResponse.Code != http.StatusBadRequest {
+		t.Fatalf("new rejection status=%d body=%q", newRejectionResponse.Code, newRejectionResponse.Body.String())
 	}
-	waitForManagementValue(t, func() managementUsageFailuresTestResponse {
-		return requestManagementUsageFailures(t, router, ownerCookie, tenantPath, "30d", 1, "")
-	}, func(payload managementUsageFailuresTestResponse) bool {
-		return len(payload.Failures) == 1 && payload.Failures[0].OutcomeCode == "invalid_request"
+	waitForManagementValue(t, func() managementUsageRejectionsTestResponse {
+		return requestManagementUsageRejections(t, router, ownerCookie, tenantPath, "30d", 1, "")
+	}, func(payload managementUsageRejectionsTestResponse) bool {
+		return len(payload.Rejections) == 1 && payload.Rejections[0].OutcomeCode == "invalid_request"
 	})
 
-	secondPage := requestManagementUsageFailures(t, router, ownerCookie, tenantPath, "30d", 3, firstPage.NextCursor)
-	if secondPage.NextCursor != "" || len(secondPage.Failures) != 3 {
+	secondPage := requestManagementUsageFailures(t, router, ownerCookie, tenantPath, "30d", 2, firstPage.NextCursor)
+	if secondPage.NextCursor != "" || len(secondPage.Failures) != 1 {
 		t.Fatalf("second page=%+v", secondPage)
 	}
-	if got := []string{secondPage.Failures[0].OutcomeCode, secondPage.Failures[1].OutcomeCode, secondPage.Failures[2].OutcomeCode}; !reflect.DeepEqual(got, []string{"rate_limited", "payload_too_large", "invalid_request"}) {
+	if got := []string{secondPage.Failures[0].OutcomeCode}; !reflect.DeepEqual(got, []string{"rate_limited"}) {
 		t.Fatalf("second outcomes=%v", got)
 	}
 	for _, page := range []managementUsageFailuresTestResponse{firstPage, secondPage} {
@@ -834,9 +1053,32 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 		}
 	}
 
-	refreshedPage := requestManagementUsageFailures(t, router, ownerCookie, tenantPath, "30d", 1, "")
-	if len(refreshedPage.Failures) != 1 || refreshedPage.Failures[0].OutcomeCode != "invalid_request" {
-		t.Fatalf("refreshed page=%+v", refreshedPage)
+	firstRejectionPage := requestManagementUsageRejections(t, router, ownerCookie, tenantPath, "30d", 2, "")
+	if len(firstRejectionPage.Rejections) != 2 || firstRejectionPage.NextCursor == "" ||
+		firstRejectionPage.Rejections[0].OutcomeCode != "invalid_request" ||
+		firstRejectionPage.Rejections[1].OutcomeCode != "provider_not_configured" {
+		t.Fatalf("first rejection page=%+v", firstRejectionPage)
+	}
+	secondRejectionPage := requestManagementUsageRejections(t, router, ownerCookie, tenantPath, "30d", 2, firstRejectionPage.NextCursor)
+	if len(secondRejectionPage.Rejections) != 2 || secondRejectionPage.NextCursor != "" ||
+		secondRejectionPage.Rejections[0].OutcomeCode != "payload_too_large" ||
+		secondRejectionPage.Rejections[1].OutcomeCode != "invalid_request" {
+		t.Fatalf("second rejection page=%+v", secondRejectionPage)
+	}
+	if rejection := firstRejectionPage.Rejections[1]; rejection.Provider != proxy.ProviderNameMeta || rejection.Model != proxy.ModelNameMuseSpark11 || rejection.StatusCode != http.StatusConflict {
+		t.Fatalf("provider-not-configured rejection=%+v", rejection)
+	}
+	for _, crossDispositionPath := range []string{
+		tenantPath + "/usage/rejections?interval=30d&limit=2&cursor=" + url.QueryEscape(firstPage.NextCursor),
+		tenantPath + "/usage/failures?interval=30d&limit=2&cursor=" + url.QueryEscape(firstRejectionPage.NextCursor),
+	} {
+		request := httptest.NewRequest(http.MethodGet, crossDispositionPath, nil)
+		request.AddCookie(ownerCookie)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("cross-disposition cursor path=%q status=%d body=%q", crossDispositionPath, response.Code, response.Body.String())
+		}
 	}
 
 	callerContext, cancelCaller := context.WithCancel(context.Background())
@@ -887,7 +1129,7 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 
 	type persistedUsageOutcome struct {
 		StatusCode  int    `gorm:"column:status_code"`
-		Success     bool   `gorm:"column:success"`
+		Disposition string `gorm:"column:disposition"`
 		OutcomeCode string `gorm:"column:outcome_code"`
 	}
 	database, openError := gorm.Open(sqlite.Open(databasePath), &gorm.Config{})
@@ -898,7 +1140,7 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 	var persistedOutcomes []persistedUsageOutcome
 	if queryError := database.
 		Table("managed_usage_event_records").
-		Select("status_code", "success", "outcome_code").
+		Select("status_code", "disposition", "outcome_code").
 		Order("id").
 		Find(&persistedOutcomes).
 		Error; queryError != nil {
@@ -907,7 +1149,7 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 	actualOutcomes := make([]string, 0, len(persistedOutcomes))
 	for _, persistedOutcome := range persistedOutcomes {
 		actualOutcomes = append(actualOutcomes, persistedOutcome.OutcomeCode)
-		if persistedOutcome.Success != (persistedOutcome.OutcomeCode == "success") {
+		if persistedOutcome.Disposition != expectedDispositionForOutcome(persistedOutcome.OutcomeCode) {
 			t.Fatalf("persisted outcome=%+v", persistedOutcome)
 		}
 	}
@@ -916,7 +1158,7 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 		"payload_too_large",
 		"rate_limited",
 		"upstream_error",
-		"service_unavailable",
+		"provider_not_configured",
 		"request_timeout",
 		"invalid_request",
 		"request_timeout",
@@ -1018,6 +1260,63 @@ func requestManagementAccountUsageFailures(t *testing.T, router http.Handler, se
 		t.Fatalf("decode account failures: %v", decodeError)
 	}
 	return payload
+}
+
+func requestManagementUsageRejections(t *testing.T, router http.Handler, sessionCookie *http.Cookie, tenantPath string, interval string, limit int, cursor string) managementUsageRejectionsTestResponse {
+	t.Helper()
+	query := url.Values{"interval": []string{interval}, "limit": []string{strconv.Itoa(limit)}}
+	if cursor != "" {
+		query.Set("cursor", cursor)
+	}
+	request := httptest.NewRequest(http.MethodGet, tenantPath+"/usage/rejections?"+query.Encode(), nil)
+	request.AddCookie(sessionCookie)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("rejections status=%d body=%q", response.Code, response.Body.String())
+	}
+	if response.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("rejections cache-control=%q want=no-store", response.Header().Get("Cache-Control"))
+	}
+	var payload managementUsageRejectionsTestResponse
+	if decodeError := json.Unmarshal(response.Body.Bytes(), &payload); decodeError != nil {
+		t.Fatalf("decode rejections: %v", decodeError)
+	}
+	return payload
+}
+
+func requestManagementAccountUsageRejections(t *testing.T, router http.Handler, sessionCookie *http.Cookie, interval string, limit int, cursor string) managementAccountUsageRejectionsTestResponse {
+	t.Helper()
+	query := url.Values{"interval": []string{interval}, "limit": []string{strconv.Itoa(limit)}}
+	if cursor != "" {
+		query.Set("cursor", cursor)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/api/management/usage/rejections?"+query.Encode(), nil)
+	request.AddCookie(sessionCookie)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("account rejections status=%d body=%q", response.Code, response.Body.String())
+	}
+	if response.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("account rejections cache-control=%q want=no-store", response.Header().Get("Cache-Control"))
+	}
+	var payload managementAccountUsageRejectionsTestResponse
+	if decodeError := json.Unmarshal(response.Body.Bytes(), &payload); decodeError != nil {
+		t.Fatalf("decode account rejections: %v", decodeError)
+	}
+	return payload
+}
+
+func expectedDispositionForOutcome(outcomeCode string) string {
+	switch outcomeCode {
+	case "success":
+		return "succeeded"
+	case "invalid_request", "payload_too_large", "provider_not_configured":
+		return "rejected"
+	default:
+		return "failed"
+	}
 }
 
 func waitForPersistedManagedUsageEventCount(t *testing.T, database *gorm.DB, expectedCount int64) {

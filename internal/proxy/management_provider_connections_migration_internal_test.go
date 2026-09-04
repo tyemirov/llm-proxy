@@ -36,6 +36,7 @@ func newManagedProviderConnectionsMigrationFixture(t *testing.T, providerIdentif
 	if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
 		t.Fatalf("create provider connections schema: %v", migrationError)
 	}
+	useManagedUsageSchemaTwelve(t, database)
 	now := time.Date(2026, 8, 20, 19, 0, 0, 0, time.UTC)
 	user := managedUserRecord{UserID: "provider-connections-owner", CreatedAt: now, UpdatedAt: now}
 	if createError := database.Create(&user).Error; createError != nil {
@@ -461,6 +462,7 @@ func TestManagedProviderConnectionsSchemaInitializationPropagatesZAIMigrationFai
 			if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
 				t.Fatalf("create Z.AI dispatch schema: %v", migrationError)
 			}
+			useManagedUsageSchemaTwelve(t, database)
 			if createError := database.Create(&managedSchemaMigrationRecord{Version: schemaVersion, AppliedAt: time.Now().UTC()}).Error; createError != nil {
 				t.Fatalf("seed schema version %d: %v", schemaVersion, createError)
 			}

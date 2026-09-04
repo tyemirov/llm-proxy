@@ -36,6 +36,7 @@ func newManagedZAIProviderMigrationFixture(t *testing.T) managedZAIProviderMigra
 	if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
 		t.Fatalf("create Z.AI provider schema: %v", migrationError)
 	}
+	useManagedUsageSchemaTwelve(t, database)
 	now := time.Date(2026, 8, 10, 23, 45, 0, 0, time.UTC)
 	user := managedUserRecord{UserID: "zai-provider-owner", CreatedAt: now, UpdatedAt: now}
 	if createError := database.Create(&user).Error; createError != nil {
@@ -71,11 +72,9 @@ func newManagedZAIProviderMigrationFixture(t *testing.T) managedZAIProviderMigra
 	usage := managedUsageEventRecord{
 		ID: 101, TenantID: tenantRecord.TenantID, Endpoint: usageEndpointText,
 		ProviderID: retiredZhipuProviderIdentifier, ModelID: ModelNameZAIGLM,
-		StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now,
+		StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now,
 	}
-	if createError := database.Create(&usage).Error; createError != nil {
-		t.Fatalf("seed Z.AI provider usage: %v", createError)
-	}
+	createManagedUsageSchemaTwelve(t, database, usage)
 	return managedZAIProviderMigrationFixture{
 		database: database, providerKeyCipher: providerKeyCipher,
 		providers: internalManagementProviderRegistry(), tenant: tenantRecord,
@@ -293,7 +292,7 @@ func TestManagedZAIProviderMigrationRejectsStageFailures(t *testing.T) {
 		if createError := fixture.database.Create(&managedSchemaMigrationRecord{Version: managedDashScopeSettingsSchemaVersion, AppliedAt: fixture.tenant.CreatedAt}).Error; createError != nil {
 			t.Fatalf("seed schema version: %v", createError)
 		}
-		if dropError := fixture.database.Migrator().DropIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex); dropError != nil {
+		if dropError := fixture.database.Migrator().DropIndex(&managedUsageEventSchemaTwelveRecord{}, managedUsageLegacyFailurePageIndex); dropError != nil {
 			t.Fatalf("drop usage failure index: %v", dropError)
 		}
 		assertMigrationError(t, initializeManagedTenantSchema(fixture.database, fixture.providerKeyCipher, fixture.providers), "operation=validate_current_schema")

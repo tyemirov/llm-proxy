@@ -193,8 +193,8 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 		`href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css"`,
 		`src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"`,
 		`data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"`,
-		`src="/assets/llm-proxy/js/startupGuard.js?v=20260902c240"`,
-		`src="/assets/llm-proxy/js/app.js?v=20260902c240"`,
+		`src="/assets/llm-proxy/js/startupGuard.js?v=20260903f037"`,
+		`src="/assets/llm-proxy/js/app.js?v=20260903f037"`,
 		`data-config-url="/config-ui.yaml"`,
 		`<mpr-user`,
 		`<mpr-footer`,
@@ -1823,12 +1823,12 @@ func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
 	usage := waitForManagementValue(t, func() managementUsageTestResponse {
 		return requestManagementUsage(t, router, userOneCookie, "30d")
 	}, func(payload managementUsageTestResponse) bool {
-		return payload.Totals.Requests == 5
+		return payload.Totals.Requests == 2 && payload.RejectedRequests == 3
 	})
-	if usage.Totals.Requests != 5 || usage.Totals.SuccessfulRequests != 1 || usage.Totals.FailedRequests != 4 {
+	if usage.Totals.Requests != 2 || usage.Totals.SuccessfulRequests != 1 || usage.Totals.FailedRequests != 1 || usage.RejectedRequests != 3 {
 		t.Fatalf("usage totals=%+v", usage.Totals)
 	}
-	if usage.Totals.TextRequests != 3 || usage.Totals.DictationRequests != 2 || usage.Totals.RequestTokens != 4 || usage.Totals.ResponseTokens != 6 || usage.Totals.TotalTokens != 10 {
+	if usage.Totals.TextRequests != 1 || usage.Totals.DictationRequests != 1 || usage.Totals.RequestTokens != 4 || usage.Totals.ResponseTokens != 6 || usage.Totals.TotalTokens != 10 {
 		t.Fatalf("usage totals=%+v", usage.Totals)
 	}
 	if len(usage.Providers) != 2 || usage.Providers[0].Provider != proxy.ProviderNameDeepSeek || usage.Providers[0].Data.Requests != 1 || usage.Providers[1].Provider != proxy.ProviderNameOpenAI || usage.Providers[1].Data.Requests != 1 {
@@ -1837,11 +1837,11 @@ func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
 	if len(usage.Models) != 2 || usage.Models[0].Provider != proxy.ProviderNameDeepSeek || usage.Models[0].Model != proxy.ModelNameDeepSeekV4Flash || usage.Models[0].Data.Requests != 1 || usage.Models[1].Provider != proxy.ProviderNameOpenAI || usage.Models[1].Model != proxy.DefaultDictationModel || usage.Models[1].Data.Requests != 1 {
 		t.Fatalf("models=%+v", usage.Models)
 	}
-	if len(usage.StatusCodes) != 3 || usage.StatusCodes[0].StatusCode != http.StatusOK || usage.StatusCodes[0].Requests != 1 || usage.StatusCodes[1].StatusCode != http.StatusBadRequest || usage.StatusCodes[1].Requests != 3 || usage.StatusCodes[2].StatusCode != http.StatusBadGateway || usage.StatusCodes[2].Requests != 1 {
+	if len(usage.StatusCodes) != 2 || usage.StatusCodes[0].StatusCode != http.StatusOK || usage.StatusCodes[0].Requests != 1 || usage.StatusCodes[1].StatusCode != http.StatusBadGateway || usage.StatusCodes[1].Requests != 1 {
 		t.Fatalf("status codes=%+v", usage.StatusCodes)
 	}
 	failures := requestManagementUsageFailures(t, router, userOneCookie, userOneTenantPath, "30d", 10, "")
-	if len(failures.Failures) != 4 {
+	if len(failures.Failures) != 1 {
 		t.Fatalf("failures=%+v", failures)
 	}
 	resolvedUpstreamFailureFound := false
@@ -1868,7 +1868,7 @@ func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
 		{interval: "1d", bucketUnit: "hour", bucketCount: 24},
 	} {
 		intervalUsage := requestManagementUsage(t, router, userOneCookie, intervalExpectation.interval)
-		if intervalUsage.Interval != intervalExpectation.interval || intervalUsage.BucketUnit != intervalExpectation.bucketUnit || len(intervalUsage.Buckets) != intervalExpectation.bucketCount || intervalUsage.Totals.Requests != usage.Totals.Requests {
+		if intervalUsage.Interval != intervalExpectation.interval || intervalUsage.BucketUnit != intervalExpectation.bucketUnit || len(intervalUsage.Buckets) != intervalExpectation.bucketCount || intervalUsage.Totals.Requests != usage.Totals.Requests || intervalUsage.RejectedRequests != usage.RejectedRequests {
 			t.Fatalf("interval=%s usage=%+v buckets=%d", intervalExpectation.interval, intervalUsage, len(intervalUsage.Buckets))
 		}
 	}
@@ -1924,9 +1924,9 @@ func TestManagementPreRouteValidationFailuresHaveNoUsageDimensions(t *testing.T)
 	usage := waitForManagementValue(t, func() managementUsageTestResponse {
 		return requestManagementUsage(t, router, sessionCookie, "30d")
 	}, func(payload managementUsageTestResponse) bool {
-		return payload.Totals.Requests == 1
+		return payload.RejectedRequests == 1
 	})
-	if usage.Totals.FailedRequests != 1 || len(usage.StatusCodes) != 1 || usage.StatusCodes[0].StatusCode != http.StatusBadRequest || usage.StatusCodes[0].Requests != 1 {
+	if usage.Totals.Requests != 0 || usage.Totals.FailedRequests != 0 || usage.RejectedRequests != 1 || len(usage.StatusCodes) != 0 {
 		t.Fatalf("usage=%+v", usage)
 	}
 	if len(usage.Providers) != 0 {
@@ -1935,18 +1935,22 @@ func TestManagementPreRouteValidationFailuresHaveNoUsageDimensions(t *testing.T)
 	if len(usage.Models) != 0 {
 		t.Fatalf("models=%+v", usage.Models)
 	}
-	failures := requestManagementUsageFailures(t, router, sessionCookie, tenantPath, "30d", 10, "")
-	if len(failures.Failures) != 1 {
-		t.Fatalf("failures=%+v", failures)
+	allUsage := requestManagementUsage(t, router, sessionCookie, "all")
+	if allUsage.Totals.Requests != 0 || allUsage.RejectedRequests != 1 || len(allUsage.Buckets) != 0 {
+		t.Fatalf("all usage=%+v", allUsage)
 	}
-	for _, failure := range failures.Failures {
-		if failure.Provider != "" || failure.Model != "" {
-			t.Fatalf("failure retained unresolved route: %+v", failure)
+	rejections := requestManagementUsageRejections(t, router, sessionCookie, tenantPath, "30d", 10, "")
+	if len(rejections.Rejections) != 1 {
+		t.Fatalf("rejections=%+v", rejections)
+	}
+	for _, rejection := range rejections.Rejections {
+		if rejection.Provider != "" || rejection.Model != "" {
+			t.Fatalf("rejection retained unresolved route: %+v", rejection)
 		}
 	}
 }
 
-func TestManagementUnconfiguredProviderUsageHasNoRouteDimensions(t *testing.T) {
+func TestManagementUnconfiguredProviderRequestsAreRejectedWithCanonicalRoutes(t *testing.T) {
 	router := newManagementRouter(t, proxy.Configuration{})
 	sessionCookie := managementSessionCookie(t, "usage-catalog-default-user")
 	tenantPath := managementDefaultTenantTestPath(t, router, sessionCookie, "")
@@ -2003,21 +2007,36 @@ func TestManagementUnconfiguredProviderUsageHasNoRouteDimensions(t *testing.T) {
 		}
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, request)
-		if response.Code != http.StatusServiceUnavailable {
+		if response.Code != http.StatusConflict {
 			t.Fatalf("method=%s path=%s status=%d body=%s", requestCase.method, requestCase.path, response.Code, response.Body.String())
+		}
+		if strings.TrimSpace(response.Body.String()) != "provider_not_configured" {
+			t.Fatalf("method=%s path=%s body=%s", requestCase.method, requestCase.path, response.Body.String())
 		}
 	}
 
 	usage := waitForManagementValue(t, func() managementUsageTestResponse {
 		return requestManagementUsage(t, router, sessionCookie, "30d")
 	}, func(payload managementUsageTestResponse) bool {
-		return payload.Totals.Requests == len(requestCases)
+		return payload.RejectedRequests == len(requestCases)
 	})
+	if usage.Totals.Requests != 0 || usage.Totals.FailedRequests != 0 || len(usage.StatusCodes) != 0 {
+		t.Fatalf("usage=%+v", usage)
+	}
 	if len(usage.Providers) != 0 {
 		t.Fatalf("providers=%+v", usage.Providers)
 	}
 	if len(usage.Models) != 0 {
 		t.Fatalf("models=%+v", usage.Models)
+	}
+	rejections := requestManagementUsageRejections(t, router, sessionCookie, tenantPath, "30d", 10, "")
+	if len(rejections.Rejections) != len(requestCases) {
+		t.Fatalf("rejections=%+v", rejections)
+	}
+	for _, rejection := range rejections.Rejections {
+		if rejection.OutcomeCode != "provider_not_configured" || rejection.Provider != proxy.ProviderNameGemini || rejection.Model != proxy.ModelNameGemini35Flash || rejection.StatusCode != http.StatusConflict {
+			t.Fatalf("rejection=%+v", rejection)
+		}
 	}
 }
 
@@ -2072,6 +2091,12 @@ func TestManagementAdminUsersDashboard(t *testing.T) {
 	if textResponse.Code != http.StatusOK {
 		t.Fatalf("text status=%d body=%s", textResponse.Code, textResponse.Body.String())
 	}
+	rejectedRequest := httptest.NewRequest(http.MethodGet, "/?key="+url.QueryEscape(secretPayload.Secret)+"&prompt=hello&provider="+proxy.ProviderNameMeta+"&model="+proxy.ModelNameMuseSpark11, nil)
+	rejectedResponse := httptest.NewRecorder()
+	router.ServeHTTP(rejectedResponse, rejectedRequest)
+	if rejectedResponse.Code != http.StatusConflict {
+		t.Fatalf("rejected status=%d body=%s", rejectedResponse.Code, rejectedResponse.Body.String())
+	}
 
 	profileRequest := authenticatedJSONRequest(http.MethodGet, "/api/management/account", "", userTwoCookie)
 	profileResponse := httptest.NewRecorder()
@@ -2089,7 +2114,7 @@ func TestManagementAdminUsersDashboard(t *testing.T) {
 	waitForManagementValue(t, func() managementUsageTestResponse {
 		return requestManagementUsage(t, router, userOneCookie, "30d")
 	}, func(payload managementUsageTestResponse) bool {
-		return payload.Totals.Requests == 1
+		return payload.Totals.Requests == 1 && payload.RejectedRequests == 1
 	})
 
 	adminRequest := authenticatedJSONRequest(http.MethodGet, "/api/management/admin/users", "", adminCookie)
@@ -2113,17 +2138,22 @@ func TestManagementAdminUsersDashboard(t *testing.T) {
 		t.Fatalf("admin users=%+v", adminUsers)
 	}
 	userUsageByID := map[string]int{}
+	userRejectionsByID := map[string]int{}
 	for _, user := range adminUsers.Users {
 		if user.TenantCount != 1 || len(user.Tenants) != 1 {
 			t.Fatalf("admin user tenant count mismatch: %+v", user)
 		}
 		userUsageByID[user.User.ID] = user.Tenants[0].Usage.Totals.Requests
+		userRejectionsByID[user.User.ID] = user.Tenants[0].Usage.RejectedRequests
 		if user.Tenants[0].ID == "" || user.User.Email == "" {
 			t.Fatalf("admin user missing tenant/email: %+v", user)
 		}
 	}
 	if userUsageByID["admin-visible-user-one"] != 1 || userUsageByID["admin-visible-user-two"] != 0 {
 		t.Fatalf("admin usage by user=%+v", userUsageByID)
+	}
+	if userRejectionsByID["admin-visible-user-one"] != 1 || userRejectionsByID["admin-visible-user-two"] != 0 {
+		t.Fatalf("admin rejections by user=%+v", userRejectionsByID)
 	}
 }
 
@@ -2560,9 +2590,10 @@ func providerKeyRevealRequestWithoutContentType(method string, path string, sess
 }
 
 type managementUsageTestResponse struct {
-	Interval   string `json:"interval"`
-	BucketUnit string `json:"bucket_unit"`
-	Totals     struct {
+	Interval         string `json:"interval"`
+	BucketUnit       string `json:"bucket_unit"`
+	RejectedRequests int    `json:"rejected_requests"`
+	Totals           struct {
 		Requests           int `json:"requests"`
 		SuccessfulRequests int `json:"successful_requests"`
 		FailedRequests     int `json:"failed_requests"`
@@ -2598,8 +2629,9 @@ type managementUsageTestResponse struct {
 }
 
 type managementAdminUsageTestResponse struct {
-	PeriodDays int `json:"period_days"`
-	Totals     struct {
+	PeriodDays       int `json:"period_days"`
+	RejectedRequests int `json:"rejected_requests"`
+	Totals           struct {
 		Requests           int `json:"requests"`
 		SuccessfulRequests int `json:"successful_requests"`
 		TotalTokens        int `json:"total_tokens"`
@@ -2663,7 +2695,7 @@ func waitForManagementRequestCount(t *testing.T, router http.Handler, sessionCoo
 	waitForManagementValue(t, func() managementUsageTestResponse {
 		return requestManagementUsage(t, router, sessionCookie, "30d")
 	}, func(payload managementUsageTestResponse) bool {
-		return payload.Totals.Requests == expectedRequests
+		return payload.Totals.Requests+payload.RejectedRequests == expectedRequests
 	})
 }
 

@@ -109,6 +109,7 @@ func submitStructuredChatRequest(
 	canonicalBody, canonicalError := canonicalJSON(bodyBytes)
 	if canonicalError != nil {
 		writeStructuredRequestError(ginContext, http.StatusBadRequest, llmproxycontract.ErrorCodeStructuredRequestInvalid, "", "", "")
+		recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, requestStart)
 		return
 	}
 	intentSHA256 := structuredRequestIntent(chatRequest.provider.identifier.string(), chatRequest.model.string(), canonicalBody)
@@ -118,21 +119,28 @@ func submitStructuredChatRequest(
 	)
 	if errors.Is(beginError, errStructuredRequestConflict) {
 		writeStructuredRequestError(ginContext, http.StatusConflict, llmproxycontract.ErrorCodeStructuredRequestIntentConflict, "", "", "")
+		recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, requestStart)
 		return
 	}
 	if beginError != nil {
 		writeStructuredRequestError(ginContext, http.StatusInternalServerError, llmproxycontract.ErrorCodeStructuredRequestStore, "", "", "")
+		markRequestOutcome(ginContext, requestOutcomeProxyFailure, managedUsageOutcomeProxyError)
+		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, http.StatusInternalServerError, nil, requestStart)
 		return
 	}
 	claimed, claimError := store.claimDispatch(requestTenant, chatRequest.idempotencyKey, intentSHA256)
 	if claimError != nil {
 		writeStructuredRequestError(ginContext, http.StatusInternalServerError, llmproxycontract.ErrorCodeStructuredRequestStore, "", "", "")
+		markRequestOutcome(ginContext, requestOutcomeProxyFailure, managedUsageOutcomeProxyError)
+		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, http.StatusInternalServerError, nil, requestStart)
 		return
 	}
 	if !claimed {
 		latest, lookupError := store.lookup(requestTenant, chatRequest.idempotencyKey)
 		if lookupError != nil {
 			writeStructuredRequestError(ginContext, http.StatusInternalServerError, llmproxycontract.ErrorCodeStructuredRequestStore, "", "", "")
+			markRequestOutcome(ginContext, requestOutcomeProxyFailure, managedUsageOutcomeProxyError)
+			recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, http.StatusInternalServerError, nil, requestStart)
 			return
 		}
 		writeStructuredRequestRecord(ginContext, latest, store.now().UTC())
@@ -150,6 +158,7 @@ func submitStructuredChatRequest(
 		statusCode := statusCodeForError(requestError)
 		if failError := store.fail(requestTenant, chatRequest.idempotencyKey, intentSHA256, statusCode, structuredRequestFailureCause(statusCode)); failError != nil {
 			writeStructuredRequestError(ginContext, http.StatusInternalServerError, llmproxycontract.ErrorCodeStructuredRequestStore, "", "", "")
+			markRequestOutcome(ginContext, requestOutcomeProxyFailure, managedUsageOutcomeProxyError)
 			recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, http.StatusInternalServerError, generation.usage, requestStart)
 			return
 		}
@@ -159,6 +168,7 @@ func submitStructuredChatRequest(
 	}
 	if persistError := store.succeed(requestTenant, chatRequest.idempotencyKey, intentSHA256, generation.text); persistError != nil {
 		writeStructuredRequestError(ginContext, http.StatusInternalServerError, llmproxycontract.ErrorCodeStructuredRequestStore, "", "", "")
+		markRequestOutcome(ginContext, requestOutcomeProxyFailure, managedUsageOutcomeProxyError)
 		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, http.StatusInternalServerError, generation.usage, requestStart)
 		return
 	}

@@ -312,7 +312,9 @@ func (database *fakeManagedTenantDatabase) streamUsageEventsByTenantIDsBetween(t
 	tenantIDSet := stringSet(tenantIDs)
 	for _, record := range database.usageEvents {
 		if tenantIDSet[record.TenantID] && !record.CreatedAt.Before(periodStart) && !record.CreatedAt.After(periodEnd) {
-			visit(record)
+			if visitError := visit(record); visitError != nil {
+				return visitError
+			}
 		}
 	}
 	return nil
@@ -327,7 +329,9 @@ func (database *fakeManagedTenantDatabase) streamUsageEventsByTenantIDsThrough(t
 	tenantIDSet := stringSet(tenantIDs)
 	for _, record := range database.usageEvents {
 		if tenantIDSet[record.TenantID] && !record.CreatedAt.After(periodEnd) {
-			visit(record)
+			if visitError := visit(record); visitError != nil {
+				return visitError
+			}
 		}
 	}
 	return nil
@@ -347,19 +351,19 @@ func (database *fakeManagedTenantDatabase) usageEventsSince(periodStart time.Tim
 	return records, nil
 }
 
-func (database *fakeManagedTenantDatabase) usageFailuresByOwnerAndTenant(ownerUserID string, tenantID string, query managedUsageFailureRecordQuery) ([]managedUsageFailureRecord, uint, error) {
+func (database *fakeManagedTenantDatabase) usageDetailsByOwnerAndTenant(ownerUserID string, tenantID string, query managedUsageDetailRecordQuery) ([]managedUsageDetailRecord, uint, error) {
 	tenantRecord, found := database.tenantsByID[tenantID]
 	if !found || tenantRecord.OwnerUserID != ownerUserID {
 		return nil, 0, gorm.ErrRecordNotFound
 	}
-	records, resolvedSnapshotID, recordsError := database.usageFailuresByTenantIDs([]string{tenantID}, query)
+	records, resolvedSnapshotID, recordsError := database.usageDetailsByTenantIDs([]string{tenantID}, query)
 	for recordIndex := range records {
-		records[recordIndex].failure.tenantName = tenantRecord.Name
+		records[recordIndex].detail.tenantName = tenantRecord.Name
 	}
 	return records, resolvedSnapshotID, recordsError
 }
 
-func (database *fakeManagedTenantDatabase) usageFailuresByTenantIDs(tenantIDs []string, query managedUsageFailureRecordQuery) ([]managedUsageFailureRecord, uint, error) {
+func (database *fakeManagedTenantDatabase) usageDetailsByTenantIDs(tenantIDs []string, query managedUsageDetailRecordQuery) ([]managedUsageDetailRecord, uint, error) {
 	if database.usageFailuresError != nil {
 		return nil, 0, database.usageFailuresError
 	}
@@ -376,7 +380,7 @@ func (database *fakeManagedTenantDatabase) usageFailuresByTenantIDs(tenantIDs []
 	}
 	usageRecords := make([]managedUsageEventRecord, 0, query.limit)
 	for _, record := range database.usageEvents {
-		if !tenantIDSet[record.TenantID] || record.Success || record.ID > resolvedSnapshotID || record.CreatedAt.After(query.snapshotAt) {
+		if !tenantIDSet[record.TenantID] || record.Disposition != query.disposition || record.ID > resolvedSnapshotID || record.CreatedAt.After(query.snapshotAt) {
 			continue
 		}
 		if query.periodStart != nil && record.CreatedAt.Before(*query.periodStart) {
@@ -397,15 +401,15 @@ func (database *fakeManagedTenantDatabase) usageFailuresByTenantIDs(tenantIDs []
 	if len(usageRecords) > query.limit {
 		usageRecords = usageRecords[:query.limit]
 	}
-	records := make([]managedUsageFailureRecord, 0, len(usageRecords))
+	records := make([]managedUsageDetailRecord, 0, len(usageRecords))
 	for _, record := range usageRecords {
 		outcomeCode, outcomeError := newManagedUsageOutcomeCode(string(record.OutcomeCode))
 		if outcomeError != nil {
 			return nil, 0, outcomeError
 		}
-		records = append(records, managedUsageFailureRecord{
+		records = append(records, managedUsageDetailRecord{
 			recordID: record.ID,
-			failure: managedUsageFailure{
+			detail: managedUsageDetail{
 				tenantIdentifier:    record.TenantID,
 				occurredAt:          record.CreatedAt.UTC(),
 				endpoint:            record.Endpoint,

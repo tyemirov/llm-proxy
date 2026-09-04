@@ -131,18 +131,18 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	rootProxyHandler := tenantAuthenticatedHandler(
 		tenantAuthenticator,
 		structuredLogger,
-		requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, chatHandler(upstreamProviders, providers, managedTenants, structuredLogger)),
+		managedRequestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, managedTenants, usageEndpointText, chatHandler(upstreamProviders, providers, managedTenants, structuredLogger)),
 	)
 	managementService := newManagementService(configuration.Management, configuration.managementSessionValidator, managedTenants, providers, keyVerifier, structuredLogger)
 	managementService.registerRoutes(router)
 	router.GET(rootPath, rootProxyHandler)
-	router.POST(rootPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, chatJSONHandler(upstreamProviders, providers, configuration.MaxPromptBytes, managedTenants, structuredLogger))))
-	router.POST(v2Path, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, chatV2JSONHandler(upstreamProviders, providers, maximumV2RequestBytes(configuration.MaxPromptBytes, configuration.ModelCatalog), assetStore, structuredRequests, managedTenants, structuredLogger))))
+	router.POST(rootPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, managedRequestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, managedTenants, usageEndpointText, chatJSONHandler(upstreamProviders, providers, configuration.MaxPromptBytes, managedTenants, structuredLogger))))
+	router.POST(v2Path, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, managedRequestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, managedTenants, usageEndpointV2, chatV2JSONHandler(upstreamProviders, providers, maximumV2RequestBytes(configuration.MaxPromptBytes, configuration.ModelCatalog), assetStore, structuredRequests, managedTenants, structuredLogger))))
 	router.GET(llmproxycontract.TenantIdentityPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, tenantIdentityHandler()))
 	router.GET(llmproxycontract.StructuredRequestPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, structuredRequestStatusHandler(structuredRequests)))
 	router.POST(llmproxycontract.AssetPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, tenantAssetUploadHandler(assetStore))))
 	router.DELETE(llmproxycontract.AssetPath+"/:asset_id", tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, tenantAssetDeleteHandler(assetStore)))
-	router.POST(dictatePath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, dictateHandler(upstreamProviders, providers, configuration.MaxInputAudioBytes, managedTenants, structuredLogger))))
+	router.POST(dictatePath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, managedRequestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, managedTenants, usageEndpointDictation, dictateHandler(upstreamProviders, providers, configuration.MaxInputAudioBytes, managedTenants, structuredLogger))))
 	return router, nil
 }
 
@@ -338,6 +338,7 @@ func chatRequestFromQuery(ginContext *gin.Context, defaults textRequestDefaults,
 		webSearchEnabled,
 	)
 	if verificationError != nil {
+		bindRejectedTextRequestRoute(ginContext, providerDefinition, modelIdentifier, verificationError)
 		ginContext.String(statusCodeForError(verificationError), responseMessageForError(verificationError))
 		return chatRequestParameters{}, false
 	}
@@ -392,6 +393,7 @@ func chatRequestFromPayload(ginContext *gin.Context, payload chatRequestPayload,
 		payload.WebSearch,
 	)
 	if verificationError != nil {
+		bindRejectedTextRequestRoute(ginContext, providerDefinition, resolvedModel, verificationError)
 		ginContext.String(statusCodeForError(verificationError), responseMessageForError(verificationError))
 		return chatRequestParameters{}, false
 	}
@@ -472,6 +474,7 @@ func chatRequestFromV2Payload(ginContext *gin.Context, payload chatV2RequestPayl
 		payload.WebSearch,
 	)
 	if verificationError != nil {
+		bindRejectedTextRequestRoute(ginContext, providerDefinition, resolvedModel, verificationError)
 		ginContext.String(statusCodeForError(verificationError), responseMessageForError(verificationError))
 		return chatRequestParameters{}, false
 	}
@@ -506,6 +509,9 @@ func chatRequestFromV2Payload(ginContext *gin.Context, payload chatV2RequestPayl
 	messages, messageError := newV2PayloadChatMessages(*payload.Messages, defaults.systemPrompt, requestTenant, assetStore)
 	if messageError != nil {
 		if isTenantAssetError(messageError) {
+			if errors.Is(messageError, errAssetStore) {
+				markManagedUsageOutcome(ginContext, managedUsageOutcomeProxyError)
+			}
 			writeTenantAssetError(ginContext, messageError)
 		} else {
 			ginContext.String(statusCodeForError(messageError), responseMessageForError(messageError))
@@ -678,6 +684,10 @@ func dictateHandler(upstreamProviders *providerRouter, providers *providerRegist
 			requestTenant.defaults.dictationModel,
 		)
 		if verificationError != nil {
+			if errors.Is(verificationError, ErrProviderNotConfigured) {
+				bindRequestTelemetryRoute(ginContext, providerDefinition, modelIdentifier)
+				markManagedUsageOutcome(ginContext, managedUsageOutcomeProviderNotConfigured)
+			}
 			ginContext.String(statusCodeForError(verificationError), responseMessageForError(verificationError))
 			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, requestStart)
 			return
@@ -735,6 +745,14 @@ func bindRequestTelemetryRoute(ginContext *gin.Context, provider providerDefinit
 	)
 }
 
+func bindRejectedTextRequestRoute(ginContext *gin.Context, provider providerDefinition, model textModelDefinition, requestError error) {
+	if !errors.Is(requestError, ErrProviderNotConfigured) {
+		return
+	}
+	bindRequestTelemetryRoute(ginContext, provider, model.identifier)
+	markManagedUsageOutcome(ginContext, managedUsageOutcomeProviderNotConfigured)
+}
+
 func recordManagedUsage(managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger, ginContext *gin.Context, requestTenant tenant, endpoint string, statusCode int, usage *tokenUsage, requestStart time.Time) {
 	formattingStartedAt := time.Now()
 	ginContext.Writer.Flush()
@@ -757,7 +775,7 @@ func recordManagedUsage(managedTenants *managedTenantStore, structuredLogger *za
 
 func recordManagedUsageValidationFailure(managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger, ginContext *gin.Context, requestTenant tenant, endpoint string, requestStart time.Time) {
 	statusCode := ginContext.Writer.Status()
-	if outcomeCode, outcomeError := historicalManagedUsageOutcome(false, statusCode); outcomeError == nil {
+	if outcomeCode, _, outcomeError := historicalManagedUsageOutcome(false, statusCode); outcomeError == nil {
 		markManagedUsageOutcome(ginContext, outcomeCode)
 	}
 	recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, endpoint, statusCode, nil, requestStart)
@@ -824,7 +842,9 @@ func statusCodeForError(requestError error) int {
 		return http.StatusGone
 	case errors.Is(requestError, errAssetTooLarge), errors.Is(requestError, ErrProviderMediaLimit):
 		return http.StatusRequestEntityTooLarge
-	case errors.Is(requestError, ErrProviderNotConfigured), errors.Is(requestError, errQueueFull):
+	case errors.Is(requestError, ErrProviderNotConfigured):
+		return http.StatusConflict
+	case errors.Is(requestError, errQueueFull):
 		return http.StatusServiceUnavailable
 	case errors.Is(requestError, ErrProviderRateLimited):
 		return http.StatusTooManyRequests
@@ -836,5 +856,8 @@ func statusCodeForError(requestError error) int {
 }
 
 func responseMessageForError(requestError error) string {
+	if errors.Is(requestError, ErrProviderNotConfigured) {
+		return string(managedUsageOutcomeProviderNotConfigured)
+	}
 	return requestError.Error()
 }

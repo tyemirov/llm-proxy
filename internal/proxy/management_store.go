@@ -42,6 +42,7 @@ const (
 	maskedSecretSuffixLength                = 4
 	managedUsageSummaryDays                 = 30
 	managedUsageReadBatchSize               = 256
+	managedUsageMigrationBatchSize          = 256
 	managedTenantOwnershipSchemaVersion     = 1
 	managedUsageOutcomeSchemaVersion        = 2
 	managedKeyedRoutingSchemaVersion        = 3
@@ -54,42 +55,46 @@ const (
 	managedGemini3OnlySchemaVersion         = 10
 	managedGeminiRouteRetirementVersion     = 11
 	managedResolvedUsageRouteSchemaVersion  = 12
-	managedTenantSchemaVersion              = managedResolvedUsageRouteSchemaVersion
+	managedUsageDispositionSchemaVersion    = 13
+	managedTenantSchemaVersion              = managedUsageDispositionSchemaVersion
 	managedSQLiteRuntimeQuery               = "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)"
 	retiredQwenCloudProviderIdentifier      = "qwencloud"
 	retiredGrokProviderIdentifier           = "grok"
 	retiredZhipuProviderIdentifier          = "zhipu"
 
-	managedUserTable                = "managed_user_records"
-	managedTenantTable              = "managed_tenant_records"
-	managedProviderKeyTable         = "managed_provider_api_key_records"
-	managedProviderConnectionTable  = "managed_provider_connection_records"
-	managedProviderProfileTable     = "managed_provider_profile_records"
-	managedUsageEventTable          = "managed_usage_event_records"
-	managedSchemaMigrationTable     = "managed_schema_migration_records"
-	legacyTenantMigrationTable      = "managed_tenant_records_f014_legacy"
-	legacyProviderKeyMigrationTable = "managed_provider_api_key_records_f014_legacy"
-	legacyUsageEventMigrationTable  = "managed_usage_event_records_f014_legacy"
-	legacyTenantSecretDigestIndex   = "idx_managed_tenant_records_secret_digest"
-	legacyUsageCreatedAtIndex       = "idx_managed_usage_created_at"
-	migrationTenantSecretIndex      = "idx_f014_legacy_tenant_secret_digest"
-	migrationUsageCreatedAtIndex    = "idx_f014_legacy_usage_created_at"
-	obsoleteStaticMigrationTable    = "managed_static_config_migration_records"
-	obsoleteRoutingMigrationTable   = "managed_routing_defaults_migration_records"
-	legacyStaticTenantUserIDPrefix  = "static-config:"
-	managedUsageIDColumn            = "id"
-	managedUsageTenantIDColumn      = "tenant_id"
-	managedUsageCreatedAtColumn     = "created_at"
-	managedUsageEndpointColumn      = "endpoint"
-	managedUsageSuccessColumn       = "success"
-	managedUsageOutcomeCodeColumn   = "outcome_code"
-	managedUsageProviderIDColumn    = "provider_id"
-	managedUsageModelIDColumn       = "model_id"
-	managedProviderBaseURLColumn    = "base_url"
-	managedSchemaVersionColumn      = "version"
-	managedUsageFailurePageIndex    = "idx_managed_usage_failure_page"
-	dashScopeWorkspaceHostSuffix    = ".ap-southeast-1.maas.aliyuncs.com"
-	dashScopeCompatibleModePath     = "/compatible-mode/v1"
+	managedUserTable                   = "managed_user_records"
+	managedTenantTable                 = "managed_tenant_records"
+	managedProviderKeyTable            = "managed_provider_api_key_records"
+	managedProviderConnectionTable     = "managed_provider_connection_records"
+	managedProviderProfileTable        = "managed_provider_profile_records"
+	managedUsageEventTable             = "managed_usage_event_records"
+	managedSchemaMigrationTable        = "managed_schema_migration_records"
+	legacyTenantMigrationTable         = "managed_tenant_records_f014_legacy"
+	legacyProviderKeyMigrationTable    = "managed_provider_api_key_records_f014_legacy"
+	legacyUsageEventMigrationTable     = "managed_usage_event_records_f014_legacy"
+	usageDispositionMigrationTable     = "managed_usage_event_records_f037_legacy"
+	legacyTenantSecretDigestIndex      = "idx_managed_tenant_records_secret_digest"
+	legacyUsageCreatedAtIndex          = "idx_managed_usage_created_at"
+	managedUsageTenantCreatedIndex     = "idx_managed_usage_tenant_created"
+	migrationTenantSecretIndex         = "idx_f014_legacy_tenant_secret_digest"
+	migrationUsageCreatedAtIndex       = "idx_f014_legacy_usage_created_at"
+	obsoleteStaticMigrationTable       = "managed_static_config_migration_records"
+	obsoleteRoutingMigrationTable      = "managed_routing_defaults_migration_records"
+	legacyStaticTenantUserIDPrefix     = "static-config:"
+	managedUsageIDColumn               = "id"
+	managedUsageTenantIDColumn         = "tenant_id"
+	managedUsageCreatedAtColumn        = "created_at"
+	managedUsageEndpointColumn         = "endpoint"
+	managedUsageDispositionColumn      = "disposition"
+	managedUsageOutcomeCodeColumn      = "outcome_code"
+	managedUsageProviderIDColumn       = "provider_id"
+	managedUsageModelIDColumn          = "model_id"
+	managedProviderBaseURLColumn       = "base_url"
+	managedSchemaVersionColumn         = "version"
+	managedUsageLegacyFailurePageIndex = "idx_managed_usage_failure_page"
+	managedUsageDispositionPageIndex   = "idx_managed_usage_disposition_page"
+	dashScopeWorkspaceHostSuffix       = ".ap-southeast-1.maas.aliyuncs.com"
+	dashScopeCompatibleModePath        = "/compatible-mode/v1"
 )
 
 var (
@@ -210,7 +215,7 @@ func newManagedTenantName(value string) (managedTenantName, error) {
 	return managedTenantName{display: displayName, key: strings.ToLower(displayName)}, nil
 }
 
-type managedUsageEventVisitor func(managedUsageEventRecord)
+type managedUsageEventVisitor func(managedUsageEventRecord) error
 
 type managedTenantDatabase interface {
 	userByID(userID string) (managedUserRecord, error)
@@ -232,8 +237,8 @@ type managedTenantDatabase interface {
 	streamUsageEventsByTenantIDsBetween(tenantIDs []string, periodStart time.Time, periodEnd time.Time, visit managedUsageEventVisitor) error
 	streamUsageEventsByTenantIDsThrough(tenantIDs []string, periodEnd time.Time, visit managedUsageEventVisitor) error
 	usageEventsSince(periodStart time.Time) ([]managedUsageEventRecord, error)
-	usageFailuresByOwnerAndTenant(ownerUserID string, tenantID string, query managedUsageFailureRecordQuery) ([]managedUsageFailureRecord, uint, error)
-	usageFailuresByTenantIDs(tenantIDs []string, query managedUsageFailureRecordQuery) ([]managedUsageFailureRecord, uint, error)
+	usageDetailsByOwnerAndTenant(ownerUserID string, tenantID string, query managedUsageDetailRecordQuery) ([]managedUsageDetailRecord, uint, error)
+	usageDetailsByTenantIDs(tenantIDs []string, query managedUsageDetailRecordQuery) ([]managedUsageDetailRecord, uint, error)
 }
 
 type gormManagedTenantDatabase struct {
@@ -334,19 +339,19 @@ func validDashScopeWorkspaceID(workspaceID string) bool {
 }
 
 type managedUsageEventRecord struct {
-	ID                  uint   `gorm:"primaryKey;index:idx_managed_usage_failure_page,priority:4,sort:desc"`
-	TenantID            string `gorm:"not null;index:idx_managed_usage_tenant_created,priority:1;index:idx_managed_usage_failure_page,priority:1"`
+	ID                  uint   `gorm:"primaryKey;index:idx_managed_usage_disposition_page,priority:4,sort:desc"`
+	TenantID            string `gorm:"not null;index:idx_managed_usage_tenant_created,priority:1;index:idx_managed_usage_disposition_page,priority:1"`
 	Endpoint            string
 	ProviderID          string
 	ModelID             string
 	StatusCode          int
-	Success             bool                    `gorm:"index:idx_managed_usage_failure_page,priority:2"`
+	Disposition         managedUsageDisposition `gorm:"not null;index:idx_managed_usage_disposition_page,priority:2"`
 	OutcomeCode         managedUsageOutcomeCode `gorm:"not null"`
 	LatencyMilliseconds int64
 	RequestTokens       int
 	ResponseTokens      int
 	TotalTokens         int
-	CreatedAt           time.Time `gorm:"index:idx_managed_usage_tenant_created,priority:2;index:idx_managed_usage_created_at;index:idx_managed_usage_failure_page,priority:3,sort:desc"`
+	CreatedAt           time.Time `gorm:"index:idx_managed_usage_tenant_created,priority:2;index:idx_managed_usage_created_at;index:idx_managed_usage_disposition_page,priority:3,sort:desc"`
 }
 
 type managedUsageEventSchemaOneRecord struct {
@@ -365,6 +370,26 @@ type managedUsageEventSchemaOneRecord struct {
 }
 
 func (managedUsageEventSchemaOneRecord) TableName() string {
+	return managedUsageEventTable
+}
+
+type managedUsageEventSchemaTwelveRecord struct {
+	ID                  uint   `gorm:"primaryKey;index:idx_managed_usage_failure_page,priority:4,sort:desc"`
+	TenantID            string `gorm:"not null;index:idx_managed_usage_tenant_created,priority:1;index:idx_managed_usage_failure_page,priority:1"`
+	Endpoint            string
+	ProviderID          string
+	ModelID             string
+	StatusCode          int
+	Success             bool                    `gorm:"index:idx_managed_usage_failure_page,priority:2"`
+	OutcomeCode         managedUsageOutcomeCode `gorm:"not null"`
+	LatencyMilliseconds int64
+	RequestTokens       int
+	ResponseTokens      int
+	TotalTokens         int
+	CreatedAt           time.Time `gorm:"index:idx_managed_usage_tenant_created,priority:2;index:idx_managed_usage_created_at;index:idx_managed_usage_failure_page,priority:3,sort:desc"`
+}
+
+func (managedUsageEventSchemaTwelveRecord) TableName() string {
 	return managedUsageEventTable
 }
 
@@ -629,7 +654,7 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 		requiresModelIdentityMigration = true
 	case managedUsageOutcomeSchemaVersion:
 		if !managedTableHasColumn(migrator, managedUsageEventTable, managedUsageOutcomeCodeColumn) ||
-			!migrator.HasIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex) {
+			!migrator.HasIndex(&managedUsageEventSchemaTwelveRecord{}, managedUsageLegacyFailurePageIndex) {
 			return fmt.Errorf("%w: operation=validate_current_schema table=%s", errManagedTenantSchemaMigration, managedUsageEventTable)
 		}
 		if migrationError := migrateManagedKeyedRoutingDefaults(database, providerKeyCipher, providers); migrationError != nil {
@@ -639,25 +664,25 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 		requiresModelIdentityMigration = true
 	case managedKeyedRoutingSchemaVersion:
 		if !managedTableHasColumn(migrator, managedUsageEventTable, managedUsageOutcomeCodeColumn) ||
-			!migrator.HasIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex) {
+			!migrator.HasIndex(&managedUsageEventSchemaTwelveRecord{}, managedUsageLegacyFailurePageIndex) {
 			return fmt.Errorf("%w: operation=validate_current_schema table=%s", errManagedTenantSchemaMigration, managedUsageEventTable)
 		}
 		requiresQwenCloudRetirement = true
 		requiresModelIdentityMigration = true
 	case managedQwenCloudRetirementVersion:
 		if !managedTableHasColumn(migrator, managedUsageEventTable, managedUsageOutcomeCodeColumn) ||
-			!migrator.HasIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex) {
+			!migrator.HasIndex(&managedUsageEventSchemaTwelveRecord{}, managedUsageLegacyFailurePageIndex) {
 			return fmt.Errorf("%w: operation=validate_current_schema table=%s", errManagedTenantSchemaMigration, managedUsageEventTable)
 		}
 		requiresModelIdentityMigration = true
 	case managedModelIdentitySchemaVersion:
 		if !managedTableHasColumn(migrator, managedUsageEventTable, managedUsageOutcomeCodeColumn) ||
-			!migrator.HasIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex) {
+			!migrator.HasIndex(&managedUsageEventSchemaTwelveRecord{}, managedUsageLegacyFailurePageIndex) {
 			return fmt.Errorf("%w: operation=validate_current_schema table=%s", errManagedTenantSchemaMigration, managedUsageEventTable)
 		}
 	case managedXAIProviderSchemaVersion:
 		if !managedTableHasColumn(migrator, managedUsageEventTable, managedUsageOutcomeCodeColumn) ||
-			!migrator.HasIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex) {
+			!migrator.HasIndex(&managedUsageEventSchemaTwelveRecord{}, managedUsageLegacyFailurePageIndex) {
 			return fmt.Errorf("%w: operation=validate_current_schema table=%s", errManagedTenantSchemaMigration, managedUsageEventTable)
 		}
 		if migrationError := migrateManagedDashScopeSettings(database, providerKeyCipher, providers); migrationError != nil {
@@ -669,7 +694,7 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 		return migrateManagedProviderConnections(database, providerKeyCipher, providers)
 	case managedDashScopeSettingsSchemaVersion:
 		if !managedTableHasColumn(migrator, managedUsageEventTable, managedUsageOutcomeCodeColumn) ||
-			!migrator.HasIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex) ||
+			!migrator.HasIndex(&managedUsageEventSchemaTwelveRecord{}, managedUsageLegacyFailurePageIndex) ||
 			!managedTableHasColumn(migrator, managedProviderKeyTable, managedProviderBaseURLColumn) {
 			return fmt.Errorf("%w: operation=validate_current_schema table=%s", errManagedTenantSchemaMigration, managedProviderKeyTable)
 		}
@@ -679,7 +704,7 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 		return migrateManagedProviderConnections(database, providerKeyCipher, providers)
 	case managedZAIProviderSchemaVersion:
 		if !managedTableHasColumn(migrator, managedUsageEventTable, managedUsageOutcomeCodeColumn) ||
-			!migrator.HasIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex) ||
+			!migrator.HasIndex(&managedUsageEventSchemaTwelveRecord{}, managedUsageLegacyFailurePageIndex) ||
 			!managedTableHasColumn(migrator, managedProviderKeyTable, managedProviderBaseURLColumn) {
 			return fmt.Errorf("%w: operation=validate_current_schema table=%s", errManagedTenantSchemaMigration, managedProviderKeyTable)
 		}
@@ -715,7 +740,18 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 		if validationError := validateManagedResolvedUsageRoutes(database, providers); validationError != nil {
 			return validationError
 		}
-		return nil
+		return migrateManagedUsageDispositionSchema(database)
+	case managedUsageDispositionSchemaVersion:
+		if migrator.HasTable(managedProviderKeyTable) || !migrator.HasTable(managedProviderConnectionTable) || !migrator.HasTable(managedProviderProfileTable) {
+			return fmt.Errorf("%w: operation=validate_current_schema table=%s", errManagedTenantSchemaMigration, managedProviderConnectionTable)
+		}
+		if validationError := validateManagedConnectionRoutingDefaults(database, providerKeyCipher, providers); validationError != nil {
+			return validationError
+		}
+		if validationError := validateManagedResolvedUsageRoutes(database, providers); validationError != nil {
+			return validationError
+		}
+		return validateManagedUsageDispositionSchema(database)
 	default:
 		return fmt.Errorf("%w: operation=validate_version version=%d expected=%d", errManagedTenantSchemaMigration, migration.Version, managedTenantSchemaVersion)
 	}
@@ -771,7 +807,7 @@ func migrateManagedModelSelectionsAfter(database *gorm.DB, providerKeyCipher man
 }
 
 func migrateManagedResolvedUsageRoutes(database *gorm.DB, providers *providerRegistry) error {
-	return database.Transaction(func(transaction *gorm.DB) error {
+	if migrationError := database.Transaction(func(transaction *gorm.DB) error {
 		if migrationError := clearInvalidManagedUsageRoutes(transaction, providers); migrationError != nil {
 			return migrationError
 		}
@@ -779,7 +815,135 @@ func migrateManagedResolvedUsageRoutes(database *gorm.DB, providers *providerReg
 			return fmt.Errorf("%w: operation=record_version table=%s version=%d: %v", errManagedTenantSchemaMigration, managedSchemaMigrationTable, managedResolvedUsageRouteSchemaVersion, createError)
 		}
 		return nil
+	}); migrationError != nil {
+		return migrationError
+	}
+	return migrateManagedUsageDispositionSchema(database)
+}
+
+func migrateManagedUsageDispositionSchema(database *gorm.DB) error {
+	var historicalRecords []managedUsageEventSchemaTwelveRecord
+	if queryError := database.Order(managedUsageIDColumn).Find(&historicalRecords).Error; queryError != nil {
+		return fmt.Errorf("%w: operation=read_dispositions table=%s: %v", errManagedTenantSchemaMigration, managedUsageEventTable, queryError)
+	}
+	migratedRecords := make([]managedUsageEventRecord, 0, len(historicalRecords))
+	for _, record := range historicalRecords {
+		disposition, outcomeCode, dispositionError := historicalManagedUsageDisposition(record)
+		if dispositionError != nil {
+			return fmt.Errorf("%w: operation=map_disposition table=%s id=%d: %v", errManagedTenantSchemaMigration, managedUsageEventTable, record.ID, dispositionError)
+		}
+		migratedRecords = append(migratedRecords, managedUsageEventRecord{
+			ID: record.ID, TenantID: record.TenantID, Endpoint: record.Endpoint,
+			ProviderID: record.ProviderID, ModelID: record.ModelID,
+			StatusCode: record.StatusCode, Disposition: disposition, OutcomeCode: outcomeCode,
+			LatencyMilliseconds: record.LatencyMilliseconds,
+			RequestTokens:       record.RequestTokens, ResponseTokens: record.ResponseTokens,
+			TotalTokens: record.TotalTokens, CreatedAt: record.CreatedAt,
+		})
+	}
+	return database.Transaction(func(transaction *gorm.DB) error {
+		migrator := transaction.Migrator()
+		if renameError := migrator.RenameTable(managedUsageEventTable, usageDispositionMigrationTable); renameError != nil {
+			return fmt.Errorf("%w: operation=rename_predecessor table=%s: %v", errManagedTenantSchemaMigration, managedUsageEventTable, renameError)
+		}
+		for _, indexName := range []string{managedUsageTenantCreatedIndex, legacyUsageCreatedAtIndex, managedUsageLegacyFailurePageIndex} {
+			if !migrator.HasIndex(usageDispositionMigrationTable, indexName) {
+				continue
+			}
+			if dropError := migrator.DropIndex(usageDispositionMigrationTable, indexName); dropError != nil {
+				return fmt.Errorf("%w: operation=drop_predecessor_index table=%s index=%s: %v", errManagedTenantSchemaMigration, usageDispositionMigrationTable, indexName, dropError)
+			}
+		}
+		if createError := migrator.CreateTable(&managedUsageEventRecord{}); createError != nil {
+			return fmt.Errorf("%w: operation=create_current table=%s: %v", errManagedTenantSchemaMigration, managedUsageEventTable, createError)
+		}
+		if constraintError := migrator.CreateConstraint(&managedTenantRecord{}, "UsageEvents"); constraintError != nil {
+			return fmt.Errorf("%w: operation=create_constraint table=%s: %v", errManagedTenantSchemaMigration, managedUsageEventTable, constraintError)
+		}
+		for _, indexName := range []string{managedUsageTenantCreatedIndex, legacyUsageCreatedAtIndex, managedUsageDispositionPageIndex} {
+			if migrator.HasIndex(&managedUsageEventRecord{}, indexName) {
+				continue
+			}
+			if createError := migrator.CreateIndex(&managedUsageEventRecord{}, indexName); createError != nil {
+				return fmt.Errorf("%w: operation=create_current_index table=%s index=%s: %v", errManagedTenantSchemaMigration, managedUsageEventTable, indexName, createError)
+			}
+		}
+		if len(migratedRecords) != 0 {
+			if createError := transaction.CreateInBatches(&migratedRecords, managedUsageMigrationBatchSize).Error; createError != nil {
+				return fmt.Errorf("%w: operation=copy_rows table=%s: %v", errManagedTenantSchemaMigration, managedUsageEventTable, createError)
+			}
+		}
+		if dropError := migrator.DropTable(usageDispositionMigrationTable); dropError != nil {
+			return fmt.Errorf("%w: operation=drop_predecessor table=%s: %v", errManagedTenantSchemaMigration, usageDispositionMigrationTable, dropError)
+		}
+		if createError := transaction.Create(&managedSchemaMigrationRecord{Version: managedUsageDispositionSchemaVersion, AppliedAt: time.Now().UTC()}).Error; createError != nil {
+			return fmt.Errorf("%w: operation=record_version table=%s version=%d: %v", errManagedTenantSchemaMigration, managedSchemaMigrationTable, managedUsageDispositionSchemaVersion, createError)
+		}
+		return nil
 	})
+}
+
+func historicalManagedUsageDisposition(record managedUsageEventSchemaTwelveRecord) (managedUsageDisposition, managedUsageOutcomeCode, error) {
+	outcomeCode, outcomeError := newManagedUsageOutcomeCode(string(record.OutcomeCode))
+	if outcomeError != nil {
+		return "", "", outcomeError
+	}
+	if record.Success {
+		if outcomeCode != managedUsageOutcomeSuccess {
+			return "", "", fmt.Errorf("%w: success=true outcome_code=%s", errManagedUsageDispositionInvalid, outcomeCode)
+		}
+		return managedUsageDispositionSucceeded, outcomeCode, nil
+	}
+	if outcomeCode == managedUsageOutcomeSuccess {
+		return "", "", fmt.Errorf("%w: success=false outcome_code=%s", errManagedUsageDispositionInvalid, outcomeCode)
+	}
+	if outcomeCode == managedUsageOutcomeInvalidRequest && record.StatusCode >= http.StatusInternalServerError {
+		return managedUsageDispositionFailed, managedUsageOutcomeProxyError, nil
+	}
+	if outcomeCode == managedUsageOutcomeServiceUnavailable && record.ProviderID == constants.EmptyString && record.ModelID == constants.EmptyString {
+		return managedUsageDispositionRejected, managedUsageOutcomeProviderNotConfigured, nil
+	}
+	disposition, dispositionError := managedUsageDispositionForOutcome(outcomeCode)
+	return disposition, outcomeCode, dispositionError
+}
+
+func validateManagedUsageDispositionSchema(database *gorm.DB) error {
+	migrator := database.Migrator()
+	if !managedTableHasColumn(migrator, managedUsageEventTable, managedUsageDispositionColumn) {
+		return fmt.Errorf("%w: operation=validate_disposition_schema table=%s missing_column=%s", errManagedTenantSchemaMigration, managedUsageEventTable, managedUsageDispositionColumn)
+	}
+	if managedTableHasColumn(migrator, managedUsageEventTable, "success") {
+		return fmt.Errorf("%w: operation=validate_disposition_schema table=%s obsolete_column=success", errManagedTenantSchemaMigration, managedUsageEventTable)
+	}
+	if !migrator.HasIndex(&managedUsageEventRecord{}, managedUsageDispositionPageIndex) {
+		return fmt.Errorf("%w: operation=validate_disposition_schema table=%s missing_index=%s", errManagedTenantSchemaMigration, managedUsageEventTable, managedUsageDispositionPageIndex)
+	}
+	if migrator.HasTable(usageDispositionMigrationTable) {
+		return fmt.Errorf("%w: operation=validate_disposition_schema table=%s predecessor_table=%s", errManagedTenantSchemaMigration, managedUsageEventTable, usageDispositionMigrationTable)
+	}
+	var records []managedUsageEventRecord
+	if queryError := database.
+		Model(&managedUsageEventRecord{}).
+		Select(
+			"MIN(" + managedUsageIDColumn + ") AS " + managedUsageIDColumn + ", " +
+				managedUsageDispositionColumn + ", " + managedUsageOutcomeCodeColumn,
+		).
+		Group(managedUsageDispositionColumn + ", " + managedUsageOutcomeCodeColumn).
+		Order(managedUsageDispositionColumn + ", " + managedUsageOutcomeCodeColumn).
+		Find(&records).
+		Error; queryError != nil {
+		return fmt.Errorf("%w: operation=validate_dispositions table=%s: %v", errManagedTenantSchemaMigration, managedUsageEventTable, queryError)
+	}
+	return validateManagedUsageDispositionRecords(records)
+}
+
+func validateManagedUsageDispositionRecords(records []managedUsageEventRecord) error {
+	for _, record := range records {
+		if _, dispositionError := managedUsageRecordDisposition(record); dispositionError != nil {
+			return fmt.Errorf("%w: operation=validate_dispositions table=%s id=%d disposition=%q outcome_code=%q: %v", errManagedTenantSchemaMigration, managedUsageEventTable, record.ID, record.Disposition, record.OutcomeCode, dispositionError)
+		}
+	}
+	return nil
 }
 
 func clearInvalidManagedUsageRoutes(database *gorm.DB, providers *providerRegistry) error {
@@ -1074,7 +1238,7 @@ func migrateManagedUsageOutcomeSchema(database *gorm.DB) error {
 	}
 	backfills := make([]managedUsageOutcomeBackfill, 0, len(schemaOneRecords))
 	for _, record := range schemaOneRecords {
-		outcomeCode, outcomeError := historicalManagedUsageOutcome(record.Success, record.StatusCode)
+		outcomeCode, _, outcomeError := historicalManagedUsageOutcome(record.Success, record.StatusCode)
 		if outcomeError != nil {
 			return fmt.Errorf("%w: operation=preflight table=%s id=%d: %v", errManagedTenantSchemaMigration, managedUsageEventTable, record.ID, outcomeError)
 		}
@@ -1103,8 +1267,8 @@ func migrateManagedUsageOutcomeSchema(database *gorm.DB) error {
 		if alterError := migrator.AlterColumn(&managedUsageEventRecord{}, "OutcomeCode"); alterError != nil {
 			return fmt.Errorf("%w: operation=require_column table=%s column=%s: %v", errManagedTenantSchemaMigration, managedUsageEventTable, managedUsageOutcomeCodeColumn, alterError)
 		}
-		if indexError := migrator.CreateIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex); indexError != nil {
-			return fmt.Errorf("%w: operation=create_index table=%s index=%s: %v", errManagedTenantSchemaMigration, managedUsageEventTable, managedUsageFailurePageIndex, indexError)
+		if indexError := migrator.CreateIndex(&managedUsageEventSchemaTwelveRecord{}, managedUsageLegacyFailurePageIndex); indexError != nil {
+			return fmt.Errorf("%w: operation=create_index table=%s index=%s: %v", errManagedTenantSchemaMigration, managedUsageEventTable, managedUsageLegacyFailurePageIndex, indexError)
 		}
 		var migratedRecords []managedUsageEventRecord
 		if queryError := transaction.
@@ -2111,26 +2275,30 @@ func managedTenantRecordsForRoutingValidation(database *gorm.DB) ([]managedTenan
 	return records, nil
 }
 
-func historicalManagedUsageOutcome(success bool, statusCode int) (managedUsageOutcomeCode, error) {
+func historicalManagedUsageOutcome(success bool, statusCode int) (managedUsageOutcomeCode, managedUsageDisposition, error) {
+	var outcomeCode managedUsageOutcomeCode
 	if success {
-		return managedUsageOutcomeSuccess, nil
+		outcomeCode = managedUsageOutcomeSuccess
+	} else {
+		switch statusCode {
+		case http.StatusBadRequest:
+			outcomeCode = managedUsageOutcomeInvalidRequest
+		case http.StatusRequestEntityTooLarge:
+			outcomeCode = managedUsageOutcomePayloadTooLarge
+		case http.StatusTooManyRequests:
+			outcomeCode = managedUsageOutcomeRateLimited
+		case http.StatusServiceUnavailable:
+			outcomeCode = managedUsageOutcomeServiceUnavailable
+		case statusClientClosedRequest, http.StatusGatewayTimeout:
+			outcomeCode = managedUsageOutcomeRequestTimeout
+		case http.StatusBadGateway:
+			outcomeCode = managedUsageOutcomeUpstreamError
+		default:
+			return "", "", fmt.Errorf("%w: success=false status_code=%d", errManagedUsageOutcomeInvalid, statusCode)
+		}
 	}
-	switch statusCode {
-	case http.StatusBadRequest:
-		return managedUsageOutcomeInvalidRequest, nil
-	case http.StatusRequestEntityTooLarge:
-		return managedUsageOutcomePayloadTooLarge, nil
-	case http.StatusTooManyRequests:
-		return managedUsageOutcomeRateLimited, nil
-	case http.StatusServiceUnavailable:
-		return managedUsageOutcomeServiceUnavailable, nil
-	case statusClientClosedRequest, http.StatusGatewayTimeout:
-		return managedUsageOutcomeRequestTimeout, nil
-	case http.StatusBadGateway:
-		return managedUsageOutcomeUpstreamError, nil
-	default:
-		return "", fmt.Errorf("%w: success=false status_code=%d", errManagedUsageOutcomeInvalid, statusCode)
-	}
+	disposition, dispositionError := managedUsageDispositionForOutcome(outcomeCode)
+	return outcomeCode, disposition, dispositionError
 }
 
 func managedTableHasColumn(migrator gorm.Migrator, tableName string, columnName string) bool {
@@ -2480,18 +2648,19 @@ func preflightLegacyManagedTenantSchema(database *gorm.DB, providerKeyCipher man
 		if !ownerExists || ownerTenant.TenantID != legacyUsageEvent.TenantID {
 			return managedTenantMigrationDataset{}, fmt.Errorf("%w: operation=preflight table=%s user=%s tenant=%s", errManagedTenantSchemaMigration, managedUsageEventTable, legacyUsageEvent.UserID, legacyUsageEvent.TenantID)
 		}
-		outcomeCode, outcomeError := historicalManagedUsageOutcome(legacyUsageEvent.Success, legacyUsageEvent.StatusCode)
+		outcomeCode, disposition, outcomeError := historicalManagedUsageOutcome(legacyUsageEvent.Success, legacyUsageEvent.StatusCode)
 		if outcomeError != nil {
 			return managedTenantMigrationDataset{}, fmt.Errorf("%w: operation=preflight table=%s id=%d: %v", errManagedTenantSchemaMigration, managedUsageEventTable, legacyUsageEvent.ID, outcomeError)
 		}
+		if outcomeCode == managedUsageOutcomeServiceUnavailable && legacyUsageEvent.ProviderID == constants.EmptyString && legacyUsageEvent.ModelID == constants.EmptyString {
+			outcomeCode = managedUsageOutcomeProviderNotConfigured
+			disposition = managedUsageDispositionRejected
+		}
 		dataset.usageEvents = append(dataset.usageEvents, managedUsageEventRecord{
-			ID:                  legacyUsageEvent.ID,
-			TenantID:            legacyUsageEvent.TenantID,
-			Endpoint:            legacyUsageEvent.Endpoint,
-			ProviderID:          legacyUsageEvent.ProviderID,
-			ModelID:             legacyUsageEvent.ModelID,
+			ID: legacyUsageEvent.ID, ProviderID: legacyUsageEvent.ProviderID, ModelID: legacyUsageEvent.ModelID,
+			TenantID: legacyUsageEvent.TenantID, Endpoint: legacyUsageEvent.Endpoint,
 			StatusCode:          legacyUsageEvent.StatusCode,
-			Success:             legacyUsageEvent.Success,
+			Disposition:         disposition,
 			OutcomeCode:         outcomeCode,
 			LatencyMilliseconds: legacyUsageEvent.LatencyMilliseconds,
 			RequestTokens:       legacyUsageEvent.RequestTokens,
@@ -2799,6 +2968,7 @@ func (database *gormManagedTenantDatabase) earliestUsageEventByTenantIDsThrough(
 	var records []managedUsageEventRecord
 	queryResult := database.database.
 		Where(clause.IN{Column: clause.Column{Name: managedUsageTenantIDColumn}, Values: stringInterfaceValues(tenantIDs)}).
+		Where(clause.Neq{Column: clause.Column{Name: managedUsageDispositionColumn}, Value: managedUsageDispositionRejected}).
 		Where(clause.Lte{Column: clause.Column{Name: managedUsageCreatedAtColumn}, Value: periodEnd}).
 		Order("created_at, id").
 		Limit(1).
@@ -2836,7 +3006,9 @@ func (database *gormManagedTenantDatabase) streamUsageEvents(query *gorm.DB, vis
 	records := make([]managedUsageEventRecord, 0, managedUsageReadBatchSize)
 	return query.FindInBatches(&records, managedUsageReadBatchSize, func(_ *gorm.DB, _ int) error {
 		for _, record := range records {
-			visit(record)
+			if visitError := visit(record); visitError != nil {
+				return visitError
+			}
 		}
 		return nil
 	}).Error
@@ -2851,8 +3023,8 @@ func (database *gormManagedTenantDatabase) usageEventsSince(periodStart time.Tim
 	return records, queryError
 }
 
-func (database *gormManagedTenantDatabase) usageFailuresByOwnerAndTenant(ownerUserID string, tenantID string, query managedUsageFailureRecordQuery) ([]managedUsageFailureRecord, uint, error) {
-	var records []managedUsageFailureRecord
+func (database *gormManagedTenantDatabase) usageDetailsByOwnerAndTenant(ownerUserID string, tenantID string, query managedUsageDetailRecordQuery) ([]managedUsageDetailRecord, uint, error) {
+	var records []managedUsageDetailRecord
 	var resolvedSnapshotID uint
 	transactionError := database.database.Transaction(func(transaction *gorm.DB) error {
 		var tenantRecord managedTenantRecord
@@ -2864,7 +3036,7 @@ func (database *gormManagedTenantDatabase) usageFailuresByOwnerAndTenant(ownerUs
 			return tenantError
 		}
 		var recordsError error
-		records, resolvedSnapshotID, recordsError = usageFailuresByTenantIDsInTransaction(
+		records, resolvedSnapshotID, recordsError = usageDetailsByTenantIDsInTransaction(
 			transaction,
 			[]string{tenantID},
 			query,
@@ -2873,25 +3045,25 @@ func (database *gormManagedTenantDatabase) usageFailuresByOwnerAndTenant(ownerUs
 			return recordsError
 		}
 		for recordIndex := range records {
-			records[recordIndex].failure.tenantName = tenantRecord.Name
+			records[recordIndex].detail.tenantName = tenantRecord.Name
 		}
 		return nil
 	})
 	return records, resolvedSnapshotID, transactionError
 }
 
-func (database *gormManagedTenantDatabase) usageFailuresByTenantIDs(tenantIDs []string, query managedUsageFailureRecordQuery) ([]managedUsageFailureRecord, uint, error) {
-	var records []managedUsageFailureRecord
+func (database *gormManagedTenantDatabase) usageDetailsByTenantIDs(tenantIDs []string, query managedUsageDetailRecordQuery) ([]managedUsageDetailRecord, uint, error) {
+	var records []managedUsageDetailRecord
 	var resolvedSnapshotID uint
 	transactionError := database.database.Transaction(func(transaction *gorm.DB) error {
 		var recordsError error
-		records, resolvedSnapshotID, recordsError = usageFailuresByTenantIDsInTransaction(transaction, tenantIDs, query)
+		records, resolvedSnapshotID, recordsError = usageDetailsByTenantIDsInTransaction(transaction, tenantIDs, query)
 		return recordsError
 	})
 	return records, resolvedSnapshotID, transactionError
 }
 
-func usageFailuresByTenantIDsInTransaction(transaction *gorm.DB, tenantIDs []string, query managedUsageFailureRecordQuery) ([]managedUsageFailureRecord, uint, error) {
+func usageDetailsByTenantIDsInTransaction(transaction *gorm.DB, tenantIDs []string, query managedUsageDetailRecordQuery) ([]managedUsageDetailRecord, uint, error) {
 	resolvedSnapshotID := uint(0)
 	if query.snapshotID != nil {
 		resolvedSnapshotID = *query.snapshotID
@@ -2915,7 +3087,7 @@ func usageFailuresByTenantIDsInTransaction(transaction *gorm.DB, tenantIDs []str
 
 	usageQuery := transaction.
 		Where(clause.IN{Column: clause.Column{Name: managedUsageTenantIDColumn}, Values: stringInterfaceValues(tenantIDs)}).
-		Where(clause.Eq{Column: clause.Column{Name: managedUsageSuccessColumn}, Value: false}).
+		Where(clause.Eq{Column: clause.Column{Name: managedUsageDispositionColumn}, Value: query.disposition}).
 		Where(clause.Lte{Column: clause.Column{Name: managedUsageCreatedAtColumn}, Value: query.snapshotAt}).
 		Where(clause.Lte{Column: clause.Column{Name: managedUsageIDColumn}, Value: resolvedSnapshotID})
 	if query.periodStart != nil {
@@ -2937,15 +3109,15 @@ func usageFailuresByTenantIDsInTransaction(transaction *gorm.DB, tenantIDs []str
 		Error; recordsError != nil {
 		return nil, 0, recordsError
 	}
-	records := make([]managedUsageFailureRecord, 0, len(usageRecords))
+	records := make([]managedUsageDetailRecord, 0, len(usageRecords))
 	for _, record := range usageRecords {
 		outcomeCode, outcomeError := newManagedUsageOutcomeCode(string(record.OutcomeCode))
 		if outcomeError != nil {
 			return nil, 0, fmt.Errorf("%w: table=%s id=%d: %v", errManagedTenantStorePersist, managedUsageEventTable, record.ID, outcomeError)
 		}
-		records = append(records, managedUsageFailureRecord{
+		records = append(records, managedUsageDetailRecord{
 			recordID: record.ID,
-			failure: managedUsageFailure{
+			detail: managedUsageDetail{
 				tenantIdentifier:    record.TenantID,
 				occurredAt:          record.CreatedAt.UTC(),
 				endpoint:            record.Endpoint,

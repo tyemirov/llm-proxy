@@ -1807,7 +1807,7 @@ func TestCoverageDictationEdges(t *testing.T) {
 				},
 				missingKey: proxy.ProviderNameSiliconFlow,
 				requestURL: "/dictate?key=" + TestSecret + "&provider=siliconflow",
-				wantStatus: http.StatusServiceUnavailable,
+				wantStatus: http.StatusConflict,
 			},
 			{
 				name: "siliconflow unknown model",
@@ -1832,7 +1832,7 @@ func TestCoverageDictationEdges(t *testing.T) {
 				},
 				missingKey: proxy.ProviderNameOpenAI,
 				requestURL: "/dictate?key=" + TestSecret + "&provider=openai",
-				wantStatus: http.StatusServiceUnavailable,
+				wantStatus: http.StatusConflict,
 			},
 			{
 				name: "zai missing credential",
@@ -1845,7 +1845,7 @@ func TestCoverageDictationEdges(t *testing.T) {
 				},
 				missingKey: proxy.ProviderNameZAI,
 				requestURL: "/dictate?key=" + TestSecret + "&provider=zai",
-				wantStatus: http.StatusServiceUnavailable,
+				wantStatus: http.StatusConflict,
 			},
 			{
 				name: "zai unknown model",
@@ -1870,7 +1870,7 @@ func TestCoverageDictationEdges(t *testing.T) {
 				},
 				missingKey: proxy.ProviderNameXAI,
 				requestURL: "/dictate?key=" + TestSecret + "&provider=xai",
-				wantStatus: http.StatusServiceUnavailable,
+				wantStatus: http.StatusConflict,
 			},
 			{
 				name: "grok unknown model",

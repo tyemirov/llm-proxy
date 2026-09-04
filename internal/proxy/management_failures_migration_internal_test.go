@@ -106,7 +106,7 @@ func TestManagedUsageOutcomeSQLiteMigrationRollsBackStageFailures(t *testing.T) 
 					subTest.Fatalf("create index-collision table: %v", createError)
 				}
 				if createError := database.Exec(
-					"CREATE INDEX " + managedUsageFailurePageIndex + " ON managed_usage_index_collision (id)",
+					"CREATE INDEX " + managedUsageLegacyFailurePageIndex + " ON managed_usage_index_collision (id)",
 				).Error; createError != nil {
 					subTest.Fatalf("create colliding index: %v", createError)
 				}
@@ -345,6 +345,7 @@ func newManagedModelIdentityMigrationFixture(t *testing.T) managedModelIdentityM
 	if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
 		t.Fatalf("create model identity schema: %v", migrationError)
 	}
+	useManagedUsageSchemaTwelve(t, database)
 	now := time.Date(2026, 8, 10, 23, 30, 0, 0, time.UTC)
 	user := managedUserRecord{UserID: "model-identity-owner", CreatedAt: now, UpdatedAt: now}
 	if createError := database.Create(&user).Error; createError != nil {
@@ -382,11 +383,9 @@ func newManagedModelIdentityMigrationFixture(t *testing.T) managedModelIdentityM
 	usage := managedUsageEventRecord{
 		ID: 91, TenantID: tenantRecord.TenantID, Endpoint: usageEndpointText,
 		ProviderID: ProviderNameMiniMax, ModelID: managedMiniMaxNativeModel,
-		StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now,
+		StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now,
 	}
-	if createError := database.Create(&usage).Error; createError != nil {
-		t.Fatalf("seed model identity usage: %v", createError)
-	}
+	createManagedUsageSchemaTwelve(t, database, usage)
 	return managedModelIdentityMigrationFixture{
 		database: database, providerKeyCipher: providerKeyCipher,
 		providers: internalManagementProviderRegistry(), tenant: tenantRecord, usage: usage,
@@ -581,6 +580,7 @@ func newManagedXAIProviderMigrationFixture(t *testing.T) managedXAIProviderMigra
 	if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
 		t.Fatalf("create xAI provider schema: %v", migrationError)
 	}
+	useManagedUsageSchemaTwelve(t, database)
 	now := time.Date(2026, 8, 10, 23, 45, 0, 0, time.UTC)
 	user := managedUserRecord{UserID: "xai-provider-owner", CreatedAt: now, UpdatedAt: now}
 	if createError := database.Create(&user).Error; createError != nil {
@@ -616,11 +616,9 @@ func newManagedXAIProviderMigrationFixture(t *testing.T) managedXAIProviderMigra
 	usage := managedUsageEventRecord{
 		ID: 101, TenantID: tenantRecord.TenantID, Endpoint: usageEndpointText,
 		ProviderID: retiredGrokProviderIdentifier, ModelID: ModelNameGrok43,
-		StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now,
+		StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now,
 	}
-	if createError := database.Create(&usage).Error; createError != nil {
-		t.Fatalf("seed xAI provider usage: %v", createError)
-	}
+	createManagedUsageSchemaTwelve(t, database, usage)
 	return managedXAIProviderMigrationFixture{
 		database: database, providerKeyCipher: providerKeyCipher,
 		providers: internalManagementProviderRegistry(), tenant: tenantRecord,
@@ -730,12 +728,10 @@ func TestManagedTenantRouteMigrationsComposeConfirmedPredecessorIdentities(t *te
 			fixture.addProvider(t, ProviderNameMiniMax, managedMiniMaxNativeModel, "")
 			fixture.addProvider(t, ProviderNameSiliconFlow, managedSiliconFlowDeepSeekNativeModel, "")
 			historicalUsage := []managedUsageEventRecord{
-				{ID: 102, TenantID: fixture.tenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameMiniMax, ModelID: managedMiniMaxNativeModel, StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: fixture.tenant.CreatedAt.Add(time.Minute)},
-				{ID: 103, TenantID: fixture.tenant.TenantID, Endpoint: usageEndpointDictation, ProviderID: ProviderNameSiliconFlow, ModelID: managedSenseVoiceNativeModel, StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: fixture.tenant.CreatedAt.Add(2 * time.Minute)},
+				{ID: 102, TenantID: fixture.tenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameMiniMax, ModelID: managedMiniMaxNativeModel, StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: fixture.tenant.CreatedAt.Add(time.Minute)},
+				{ID: 103, TenantID: fixture.tenant.TenantID, Endpoint: usageEndpointDictation, ProviderID: ProviderNameSiliconFlow, ModelID: managedSenseVoiceNativeModel, StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: fixture.tenant.CreatedAt.Add(2 * time.Minute)},
 			}
-			if createError := fixture.database.Create(&historicalUsage).Error; createError != nil {
-				t.Fatalf("seed predecessor historical usage: %v", createError)
-			}
+			createManagedUsageSchemaTwelve(t, fixture.database, historicalUsage...)
 			if createError := fixture.database.Create(&managedSchemaMigrationRecord{Version: testCase.version, AppliedAt: fixture.tenant.CreatedAt}).Error; createError != nil {
 				t.Fatalf("seed predecessor schema version: %v", createError)
 			}
@@ -877,7 +873,7 @@ func TestManagedXAIProviderMigrationRejectsStageFailures(t *testing.T) {
 		if createError := fixture.database.Create(&managedSchemaMigrationRecord{Version: managedModelIdentitySchemaVersion, AppliedAt: fixture.tenant.CreatedAt}).Error; createError != nil {
 			t.Fatalf("seed schema version: %v", createError)
 		}
-		if dropError := fixture.database.Migrator().DropIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex); dropError != nil {
+		if dropError := fixture.database.Migrator().DropIndex(&managedUsageEventSchemaTwelveRecord{}, managedUsageLegacyFailurePageIndex); dropError != nil {
 			t.Fatalf("drop usage failure index: %v", dropError)
 		}
 		assertMigrationError(t, initializeManagedTenantSchema(fixture.database, fixture.providerKeyCipher, fixture.providers), "operation=validate_current_schema")
@@ -968,6 +964,7 @@ func newManagedQwenCloudRetirementFixture(t *testing.T) managedQwenCloudRetireme
 	if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
 		t.Fatalf("create qwen retirement schema: %v", migrationError)
 	}
+	useManagedUsageSchemaTwelve(t, database)
 	now := time.Date(2026, 8, 10, 22, 0, 0, 0, time.UTC)
 	user := managedUserRecord{UserID: "qwen-retirement-owner", CreatedAt: now, UpdatedAt: now}
 	if createError := database.Create(&user).Error; createError != nil {
@@ -1000,11 +997,9 @@ func newManagedQwenCloudRetirementFixture(t *testing.T) managedQwenCloudRetireme
 	usage := managedUsageEventRecord{
 		ID: 71, TenantID: tenantRecord.TenantID, Endpoint: usageEndpointText,
 		ProviderID: retiredQwenCloudProviderIdentifier, ModelID: retiredQwenCloudModelIdentifier,
-		StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now,
+		StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now,
 	}
-	if createError := database.Create(&usage).Error; createError != nil {
-		t.Fatalf("seed qwen retirement usage: %v", createError)
-	}
+	createManagedUsageSchemaTwelve(t, database, usage)
 	return managedQwenCloudRetirementFixture{
 		database: database, providerKeyCipher: providerKeyCipher,
 		providers: internalManagementProviderRegistry(), tenant: tenantRecord, usage: usage,
@@ -1247,6 +1242,7 @@ func TestManagedTenantInitializationPropagatesPreRetirementMigrationFailures(t *
 		if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
 			t.Fatalf("create schema-two fixture: %v", migrationError)
 		}
+		useManagedUsageSchemaTwelve(t, database)
 		now := time.Date(2026, 8, 10, 23, 0, 0, 0, time.UTC)
 		user := managedUserRecord{UserID: "schema-two-owner", CreatedAt: now, UpdatedAt: now}
 		if createError := database.Create(&user).Error; createError != nil {
@@ -1268,21 +1264,342 @@ func TestManagedTenantInitializationPropagatesPreRetirementMigrationFailures(t *
 	})
 }
 
+func TestManagedUsageDispositionMigrationRejectsInvalidHistoryAndStageFailures(t *testing.T) {
+	type migrationCase struct {
+		name      string
+		stage     string
+		want      string
+		record    managedUsageEventSchemaTwelveRecord
+		configure func(*testing.T, *gorm.DB)
+	}
+	validRecord := managedUsageEventSchemaTwelveRecord{
+		ID: 1, Endpoint: usageEndpointText, ProviderID: ProviderNameOpenAI, ModelID: ModelNameGPT41,
+		StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess,
+		CreatedAt: time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC),
+	}
+	testCases := []migrationCase{
+		{
+			name: "read dispositions", want: "operation=read_dispositions", record: validRecord,
+			configure: func(t *testing.T, database *gorm.DB) {
+				registerManagedGORMError(t, database, "usage_disposition_read", "query", managedUsageEventTable, errInternalTestDatabase)
+			},
+		},
+		{name: "unknown outcome", want: "operation=map_disposition", record: managedUsageEventSchemaTwelveRecord{ID: 1, OutcomeCode: "unknown", CreatedAt: validRecord.CreatedAt}},
+		{name: "successful non-success outcome", want: "success=true", record: managedUsageEventSchemaTwelveRecord{ID: 1, Success: true, OutcomeCode: managedUsageOutcomeInvalidRequest, CreatedAt: validRecord.CreatedAt}},
+		{name: "failed success outcome", want: "success=false", record: managedUsageEventSchemaTwelveRecord{ID: 1, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: validRecord.CreatedAt}},
+		{name: "rename predecessor", stage: "rename_disposition_predecessor", want: "operation=rename_predecessor", record: validRecord},
+		{name: "drop predecessor index", stage: "drop_disposition_predecessor_index", want: "operation=drop_predecessor_index", record: validRecord},
+		{name: "create current table", stage: "create_disposition_table", want: "operation=create_current", record: validRecord},
+		{name: "create current constraint", stage: "create_disposition_constraint", want: "operation=create_constraint", record: validRecord},
+		{name: "create current index", stage: "create_disposition_index", want: "operation=create_current_index", record: validRecord},
+		{
+			name: "copy rows", want: "operation=copy_rows", record: validRecord,
+			configure: func(t *testing.T, database *gorm.DB) {
+				registerManagedGORMError(t, database, "usage_disposition_copy", "create", managedUsageEventTable, errInternalTestDatabase)
+			},
+		},
+		{name: "drop predecessor", stage: "drop_disposition_predecessor", want: "operation=drop_predecessor", record: validRecord},
+		{
+			name: "record version", want: "operation=record_version", record: validRecord,
+			configure: func(t *testing.T, database *gorm.DB) {
+				registerManagedGORMError(t, database, "usage_disposition_version", "create", managedSchemaMigrationTable, errInternalTestDatabase)
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			activeStage := ""
+			database := newManagedUsageDispositionSchemaTwelveFixture(t, &activeStage, testCase.record)
+			if testCase.configure != nil {
+				testCase.configure(t, database)
+			}
+			activeStage = testCase.stage
+			migrationError := migrateManagedUsageDispositionSchema(database)
+			if !errors.Is(migrationError, errManagedTenantSchemaMigration) || !strings.Contains(migrationError.Error(), testCase.want) {
+				t.Fatalf("migration error=%v want=%q", migrationError, testCase.want)
+			}
+			if !managedTableHasColumn(database.Migrator(), managedUsageEventTable, "success") {
+				t.Fatal("failed migration did not restore schema twelve")
+			}
+		})
+	}
+
+	t.Run("existing current index", func(t *testing.T) {
+		activeStage := ""
+		database := newManagedUsageDispositionSchemaTwelveFixture(t, &activeStage, validRecord)
+		activeStage = "existing_disposition_index"
+		if migrationError := migrateManagedUsageDispositionSchema(database); migrationError != nil {
+			t.Fatalf("migrate with existing index: %v", migrationError)
+		}
+	})
+
+	t.Run("large history", func(t *testing.T) {
+		const recordCount = 2600
+		records := make([]managedUsageEventSchemaTwelveRecord, 0, recordCount)
+		for recordIndex := 1; recordIndex <= recordCount; recordIndex++ {
+			record := validRecord
+			record.ID = uint(recordIndex)
+			record.CreatedAt = validRecord.CreatedAt.Add(time.Duration(recordIndex) * time.Second)
+			records = append(records, record)
+		}
+		database := newManagedUsageDispositionSchemaTwelveDatabase(
+			t,
+			sqlite.Open(filepath.Join(t.TempDir(), "usage-disposition-large-history.db")),
+			records...,
+		)
+		if migrationError := initializeManagedTenantSchema(database, internalManagedProviderKeyCipher(), internalManagementProviderRegistry()); migrationError != nil {
+			t.Fatalf("initialize large history: %v", migrationError)
+		}
+		var migratedCount int64
+		if countError := database.Model(&managedUsageEventRecord{}).Count(&migratedCount).Error; countError != nil || migratedCount != recordCount {
+			t.Fatalf("migrated count=%d error=%v", migratedCount, countError)
+		}
+		var lastRecord managedUsageEventRecord
+		if queryError := database.Last(&lastRecord).Error; queryError != nil {
+			t.Fatalf("read last migrated record: %v", queryError)
+		}
+		if lastRecord.ID != recordCount || lastRecord.Disposition != managedUsageDispositionSucceeded || lastRecord.OutcomeCode != managedUsageOutcomeSuccess {
+			t.Fatalf("last migrated record=%+v", lastRecord)
+		}
+	})
+
+	t.Run("invalid request server error becomes proxy failure", func(t *testing.T) {
+		activeStage := ""
+		record := validRecord
+		record.Success = false
+		record.StatusCode = http.StatusInternalServerError
+		record.OutcomeCode = managedUsageOutcomeInvalidRequest
+		database := newManagedUsageDispositionSchemaTwelveFixture(t, &activeStage, record)
+		if migrationError := migrateManagedUsageDispositionSchema(database); migrationError != nil {
+			t.Fatalf("migrate proxy failure: %v", migrationError)
+		}
+		var migrated managedUsageEventRecord
+		if queryError := database.First(&migrated, record.ID).Error; queryError != nil {
+			t.Fatalf("read migrated proxy failure: %v", queryError)
+		}
+		if migrated.Disposition != managedUsageDispositionFailed || migrated.OutcomeCode != managedUsageOutcomeProxyError {
+			t.Fatalf("migrated proxy failure=%+v", migrated)
+		}
+	})
+}
+
+func TestManagedUsageDispositionSchemaValidationRejectsInvalidStructuresAndRows(t *testing.T) {
+	now := time.Date(2026, 9, 3, 13, 0, 0, 0, time.UTC)
+	newCurrentDatabase := func(t *testing.T) *gorm.DB {
+		database, openError := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "usage-disposition-current.db")), &gorm.Config{})
+		if openError != nil {
+			t.Fatalf("open current fixture: %v", openError)
+		}
+		if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
+			t.Fatalf("create current fixture: %v", migrationError)
+		}
+		return database
+	}
+	insertInvalidRecord := func(t *testing.T, database *gorm.DB, disposition string, outcome string) {
+		if insertError := database.Exec(
+			"INSERT INTO "+managedUsageEventTable+" (tenant_id, disposition, outcome_code, created_at) VALUES (?, ?, ?, ?)",
+			"validation-tenant", disposition, outcome, now,
+		).Error; insertError != nil {
+			t.Fatalf("insert invalid usage record: %v", insertError)
+		}
+	}
+
+	t.Run("missing disposition column", func(t *testing.T) {
+		activeStage := ""
+		database := newManagedUsageDispositionSchemaTwelveFixture(t, &activeStage, managedUsageEventSchemaTwelveRecord{})
+		if validationError := validateManagedUsageDispositionSchema(database); !errors.Is(validationError, errManagedTenantSchemaMigration) || !strings.Contains(validationError.Error(), "missing_column") {
+			t.Fatalf("validation error=%v", validationError)
+		}
+	})
+	t.Run("obsolete success column", func(t *testing.T) {
+		activeStage := ""
+		database := newManagedUsageDispositionSchemaTwelveFixture(t, &activeStage, managedUsageEventSchemaTwelveRecord{})
+		if alterError := database.Exec("ALTER TABLE " + managedUsageEventTable + " ADD COLUMN disposition TEXT NOT NULL DEFAULT 'succeeded'").Error; alterError != nil {
+			t.Fatalf("add disposition column: %v", alterError)
+		}
+		if validationError := validateManagedUsageDispositionSchema(database); !errors.Is(validationError, errManagedTenantSchemaMigration) || !strings.Contains(validationError.Error(), "obsolete_column=success") {
+			t.Fatalf("validation error=%v", validationError)
+		}
+	})
+	t.Run("missing disposition index", func(t *testing.T) {
+		database := newCurrentDatabase(t)
+		if dropError := database.Migrator().DropIndex(&managedUsageEventRecord{}, managedUsageDispositionPageIndex); dropError != nil {
+			t.Fatalf("drop disposition index: %v", dropError)
+		}
+		if validationError := validateManagedUsageDispositionSchema(database); !errors.Is(validationError, errManagedTenantSchemaMigration) || !strings.Contains(validationError.Error(), "missing_index") {
+			t.Fatalf("validation error=%v", validationError)
+		}
+	})
+	t.Run("predecessor table remains", func(t *testing.T) {
+		database := newCurrentDatabase(t)
+		if createError := database.Exec("CREATE TABLE " + usageDispositionMigrationTable + " (id INTEGER PRIMARY KEY)").Error; createError != nil {
+			t.Fatalf("create predecessor table: %v", createError)
+		}
+		if validationError := validateManagedUsageDispositionSchema(database); !errors.Is(validationError, errManagedTenantSchemaMigration) || !strings.Contains(validationError.Error(), "predecessor_table") {
+			t.Fatalf("validation error=%v", validationError)
+		}
+	})
+	t.Run("record query", func(t *testing.T) {
+		database := newCurrentDatabase(t)
+		registerManagedGORMError(t, database, "usage_disposition_validate_query", "query", managedUsageEventTable, errInternalTestDatabase)
+		if validationError := validateManagedUsageDispositionSchema(database); !errors.Is(validationError, errManagedTenantSchemaMigration) || !strings.Contains(validationError.Error(), "operation=validate_dispositions") {
+			t.Fatalf("validation error=%v", validationError)
+		}
+	})
+	t.Run("invalid disposition", func(t *testing.T) {
+		database := newCurrentDatabase(t)
+		insertInvalidRecord(t, database, "unknown", string(managedUsageOutcomeSuccess))
+		if validationError := validateManagedUsageDispositionSchema(database); !errors.Is(validationError, errManagedTenantSchemaMigration) || !strings.Contains(validationError.Error(), "disposition=\"unknown\"") {
+			t.Fatalf("validation error=%v", validationError)
+		}
+	})
+	t.Run("invalid outcome", func(t *testing.T) {
+		database := newCurrentDatabase(t)
+		insertInvalidRecord(t, database, string(managedUsageDispositionFailed), "unknown")
+		if validationError := validateManagedUsageDispositionSchema(database); !errors.Is(validationError, errManagedTenantSchemaMigration) || !strings.Contains(validationError.Error(), "outcome_code=\"unknown\"") {
+			t.Fatalf("validation error=%v", validationError)
+		}
+	})
+	t.Run("mismatched outcome", func(t *testing.T) {
+		database := newCurrentDatabase(t)
+		insertInvalidRecord(t, database, string(managedUsageDispositionFailed), string(managedUsageOutcomeSuccess))
+		if validationError := validateManagedUsageDispositionSchema(database); !errors.Is(validationError, errManagedTenantSchemaMigration) || !strings.Contains(validationError.Error(), "outcome_code=\"success\"") {
+			t.Fatalf("validation error=%v", validationError)
+		}
+	})
+	t.Run("repeated valid pairs", func(t *testing.T) {
+		database := newCurrentDatabase(t)
+		records := make([]managedUsageEventRecord, 0, 2600)
+		for recordIndex := 1; recordIndex <= 2600; recordIndex++ {
+			records = append(records, managedUsageEventRecord{
+				ID:          uint(recordIndex),
+				TenantID:    "validation-tenant",
+				Disposition: managedUsageDispositionFailed,
+				OutcomeCode: managedUsageOutcomeProxyError,
+				CreatedAt:   now.Add(time.Duration(recordIndex) * time.Second),
+			})
+		}
+		if createError := database.CreateInBatches(&records, managedUsageMigrationBatchSize).Error; createError != nil {
+			t.Fatalf("insert repeated usage pairs: %v", createError)
+		}
+		if validationError := validateManagedUsageDispositionSchema(database); validationError != nil {
+			t.Fatalf("validate repeated usage pairs: %v", validationError)
+		}
+	})
+}
+
+func TestManagedUsageDispositionInitializationValidatesVersionTwelvePrerequisites(t *testing.T) {
+	newFixture := func(t *testing.T) *gorm.DB {
+		activeStage := ""
+		return newManagedUsageDispositionSchemaTwelveFixture(t, &activeStage, managedUsageEventSchemaTwelveRecord{})
+	}
+	t.Run("migrates valid schema", func(t *testing.T) {
+		database := newFixture(t)
+		if initializeError := initializeManagedTenantSchema(database, internalManagedProviderKeyCipher(), internalManagementProviderRegistry()); initializeError != nil {
+			t.Fatalf("initialize schema twelve: %v", initializeError)
+		}
+	})
+	t.Run("provider tables", func(t *testing.T) {
+		database := newFixture(t)
+		if dropError := database.Migrator().DropTable(&managedProviderProfileRecord{}); dropError != nil {
+			t.Fatalf("drop provider profiles: %v", dropError)
+		}
+		if initializeError := initializeManagedTenantSchema(database, internalManagedProviderKeyCipher(), internalManagementProviderRegistry()); !errors.Is(initializeError, errManagedTenantSchemaMigration) || !strings.Contains(initializeError.Error(), "validate_current_schema") {
+			t.Fatalf("initialize error=%v", initializeError)
+		}
+	})
+	t.Run("routing defaults", func(t *testing.T) {
+		database := newFixture(t)
+		registerManagedGORMError(t, database, "usage_disposition_connection_validation", "query", managedTenantTable, errInternalTestDatabase)
+		if initializeError := initializeManagedTenantSchema(database, internalManagedProviderKeyCipher(), internalManagementProviderRegistry()); !errors.Is(initializeError, errManagedTenantSchemaMigration) || !strings.Contains(initializeError.Error(), "operation=read") {
+			t.Fatalf("initialize error=%v", initializeError)
+		}
+	})
+	t.Run("resolved routes", func(t *testing.T) {
+		database := newFixture(t)
+		registerManagedGORMError(t, database, "usage_disposition_route_validation", "query", managedUsageEventTable, errInternalTestDatabase)
+		if initializeError := initializeManagedTenantSchema(database, internalManagedProviderKeyCipher(), internalManagementProviderRegistry()); !errors.Is(initializeError, errManagedTenantSchemaMigration) || !strings.Contains(initializeError.Error(), "operation=validate_routes") {
+			t.Fatalf("initialize error=%v", initializeError)
+		}
+	})
+}
+
+func newManagedUsageDispositionSchemaTwelveFixture(t *testing.T, activeStage *string, records ...managedUsageEventSchemaTwelveRecord) *gorm.DB {
+	t.Helper()
+	constraintCreated := false
+	dialector := failingManagedUsageMigrationDialector{
+		Dialector:         sqlite.Open(filepath.Join(t.TempDir(), "usage-disposition-schema-twelve.db")),
+		stage:             activeStage,
+		constraintCreated: &constraintCreated,
+	}
+	database := newManagedUsageDispositionSchemaTwelveDatabase(t, dialector, records...)
+	constraintCreated = false
+	return database
+}
+
+func newManagedUsageDispositionSchemaTwelveDatabase(t *testing.T, dialector gorm.Dialector, records ...managedUsageEventSchemaTwelveRecord) *gorm.DB {
+	t.Helper()
+	database, openError := gorm.Open(dialector, &gorm.Config{})
+	if openError != nil {
+		t.Fatalf("open schema-twelve fixture: %v", openError)
+	}
+	if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
+		t.Fatalf("create supporting schema: %v", migrationError)
+	}
+	if dropError := database.Migrator().DropTable(&managedProviderAPIKeyRecord{}); dropError != nil {
+		t.Fatalf("drop predecessor provider table: %v", dropError)
+	}
+	useManagedUsageSchemaTwelve(t, database)
+	now := time.Date(2026, 9, 3, 11, 0, 0, 0, time.UTC)
+	user := managedUserRecord{UserID: "usage-disposition-owner", CreatedAt: now, UpdatedAt: now}
+	tenantRecord := fakeTenantRecord(user.UserID, "usage-disposition-tenant", "Disposition", now)
+	if createError := database.Create(&user).Error; createError != nil {
+		t.Fatalf("seed user: %v", createError)
+	}
+	if createError := database.Create(&tenantRecord).Error; createError != nil {
+		t.Fatalf("seed tenant: %v", createError)
+	}
+	seedRecords := make([]managedUsageEventSchemaTwelveRecord, 0, len(records))
+	for _, record := range records {
+		if record.ID == 0 {
+			continue
+		}
+		record.TenantID = tenantRecord.TenantID
+		seedRecords = append(seedRecords, record)
+	}
+	if len(seedRecords) != 0 {
+		if createError := database.CreateInBatches(&seedRecords, managedUsageMigrationBatchSize).Error; createError != nil {
+			t.Fatalf("seed usage records: %v", createError)
+		}
+	}
+	if createError := database.Create(&managedSchemaMigrationRecord{Version: managedResolvedUsageRouteSchemaVersion, AppliedAt: now}).Error; createError != nil {
+		t.Fatalf("seed schema version: %v", createError)
+	}
+	return database
+}
+
 type failingManagedUsageMigrationDialector struct {
 	gorm.Dialector
-	stage *string
+	stage             *string
+	constraintCreated *bool
 }
 
 func (dialector failingManagedUsageMigrationDialector) Migrator(database *gorm.DB) gorm.Migrator {
+	sqliteMigrator, validMigrator := dialector.Dialector.Migrator(database).(sqlite.Migrator)
+	if !validMigrator {
+		panic("expected SQLite migrator")
+	}
 	return failingManagedUsageMigrationMigrator{
-		Migrator: dialector.Dialector.Migrator(database),
-		stage:    dialector.stage,
+		Migrator:          sqliteMigrator,
+		stage:             dialector.stage,
+		constraintCreated: dialector.constraintCreated,
 	}
 }
 
 type failingManagedUsageMigrationMigrator struct {
-	gorm.Migrator
-	stage *string
+	sqlite.Migrator
+	stage             *string
+	constraintCreated *bool
 }
 
 func (migrator failingManagedUsageMigrationMigrator) AddColumn(value interface{}, field string) error {
@@ -1303,7 +1620,60 @@ func (migrator failingManagedUsageMigrationMigrator) CreateIndex(value interface
 	if *migrator.stage == "create_index" {
 		return errInternalTestDatabase
 	}
+	if *migrator.stage == "create_disposition_index" && *migrator.constraintCreated && name == managedUsageDispositionPageIndex {
+		return errInternalTestDatabase
+	}
 	return migrator.Migrator.CreateIndex(value, name)
+}
+
+func (migrator failingManagedUsageMigrationMigrator) RenameTable(oldName interface{}, newName interface{}) error {
+	if *migrator.stage == "rename_disposition_predecessor" {
+		return errInternalTestDatabase
+	}
+	return migrator.Migrator.RenameTable(oldName, newName)
+}
+
+func (migrator failingManagedUsageMigrationMigrator) DropIndex(value interface{}, name string) error {
+	if *migrator.stage == "drop_disposition_predecessor_index" {
+		return errInternalTestDatabase
+	}
+	return migrator.Migrator.DropIndex(value, name)
+}
+
+func (migrator failingManagedUsageMigrationMigrator) CreateTable(values ...interface{}) error {
+	if *migrator.stage == "create_disposition_table" {
+		return errInternalTestDatabase
+	}
+	return migrator.Migrator.CreateTable(values...)
+}
+
+func (migrator failingManagedUsageMigrationMigrator) CreateConstraint(value interface{}, name string) error {
+	if *migrator.stage == "create_disposition_constraint" {
+		return errInternalTestDatabase
+	}
+	for _, indexName := range []string{managedUsageTenantCreatedIndex, legacyUsageCreatedAtIndex, managedUsageDispositionPageIndex} {
+		if migrator.Migrator.HasIndex(&managedUsageEventRecord{}, indexName) {
+			if dropError := migrator.Migrator.DropIndex(&managedUsageEventRecord{}, indexName); dropError != nil {
+				return dropError
+			}
+		}
+	}
+	*migrator.constraintCreated = true
+	return nil
+}
+
+func (migrator failingManagedUsageMigrationMigrator) HasIndex(value interface{}, name string) bool {
+	if *migrator.stage == "existing_disposition_index" && name == managedUsageDispositionPageIndex {
+		return true
+	}
+	return migrator.Migrator.HasIndex(value, name)
+}
+
+func (migrator failingManagedUsageMigrationMigrator) DropTable(values ...interface{}) error {
+	if *migrator.stage == "drop_disposition_predecessor" {
+		return errInternalTestDatabase
+	}
+	return migrator.Migrator.DropTable(values...)
 }
 
 func seedManagedUsageSchemaOne(t *testing.T, database *gorm.DB) {
@@ -1373,15 +1743,17 @@ func assertManagedUsageOutcomeMigration(t *testing.T, database *gorm.DB) {
 		t.Fatalf("load migrated usage: %v", queryError)
 	}
 	actualOutcomes := make([]managedUsageOutcomeCode, 0, len(records))
+	actualDispositions := make([]managedUsageDisposition, 0, len(records))
 	for _, record := range records {
 		actualOutcomes = append(actualOutcomes, record.OutcomeCode)
+		actualDispositions = append(actualDispositions, record.Disposition)
 	}
 	expectedOutcomes := []managedUsageOutcomeCode{
 		managedUsageOutcomeSuccess,
 		managedUsageOutcomeInvalidRequest,
 		managedUsageOutcomePayloadTooLarge,
 		managedUsageOutcomeRateLimited,
-		managedUsageOutcomeServiceUnavailable,
+		managedUsageOutcomeProviderNotConfigured,
 		managedUsageOutcomeRequestTimeout,
 		managedUsageOutcomeUpstreamError,
 		managedUsageOutcomeRequestTimeout,
@@ -1389,13 +1761,49 @@ func assertManagedUsageOutcomeMigration(t *testing.T, database *gorm.DB) {
 	if !reflect.DeepEqual(actualOutcomes, expectedOutcomes) {
 		t.Fatalf("outcomes=%v want=%v", actualOutcomes, expectedOutcomes)
 	}
-	if !database.Migrator().HasIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex) {
-		t.Fatalf("missing index %s", managedUsageFailurePageIndex)
+	expectedDispositions := []managedUsageDisposition{
+		managedUsageDispositionSucceeded,
+		managedUsageDispositionRejected,
+		managedUsageDispositionRejected,
+		managedUsageDispositionFailed,
+		managedUsageDispositionRejected,
+		managedUsageDispositionFailed,
+		managedUsageDispositionFailed,
+		managedUsageDispositionFailed,
+	}
+	if !reflect.DeepEqual(actualDispositions, expectedDispositions) {
+		t.Fatalf("dispositions=%v want=%v", actualDispositions, expectedDispositions)
+	}
+	for _, indexName := range []string{managedUsageTenantCreatedIndex, legacyUsageCreatedAtIndex, managedUsageDispositionPageIndex} {
+		if !database.Migrator().HasIndex(&managedUsageEventRecord{}, indexName) {
+			t.Fatalf("missing index %s", indexName)
+		}
+	}
+	if database.Migrator().HasIndex(managedUsageEventTable, managedUsageLegacyFailurePageIndex) {
+		t.Fatalf("obsolete index remains: %s", managedUsageLegacyFailurePageIndex)
+	}
+	type usageForeignKey struct {
+		Table    string
+		From     string
+		To       string
+		OnUpdate string `gorm:"column:on_update"`
+		OnDelete string `gorm:"column:on_delete"`
+	}
+	var foreignKeys []usageForeignKey
+	if queryError := database.Raw("PRAGMA foreign_key_list(" + managedUsageEventTable + ")").Scan(&foreignKeys).Error; queryError != nil {
+		t.Fatalf("read usage foreign keys: %v", queryError)
+	}
+	expectedForeignKeys := []usageForeignKey{{Table: managedTenantTable, From: "tenant_id", To: "tenant_id", OnUpdate: "CASCADE", OnDelete: "CASCADE"}}
+	if !reflect.DeepEqual(foreignKeys, expectedForeignKeys) {
+		t.Fatalf("usage foreign keys=%+v want=%+v", foreignKeys, expectedForeignKeys)
+	}
+	if managedTableHasColumn(database.Migrator(), managedUsageEventTable, "success") {
+		t.Fatal("current usage schema retained success")
 	}
 	if insertError := database.Exec(
-		"INSERT INTO "+managedUsageEventTable+" (tenant_id, success, outcome_code, created_at) VALUES (?, ?, NULL, ?)",
+		"INSERT INTO "+managedUsageEventTable+" (tenant_id, disposition, outcome_code, created_at) VALUES (?, ?, NULL, ?)",
 		"usage-migration-tenant",
-		false,
+		managedUsageDispositionFailed,
 		time.Now().UTC(),
 	).Error; insertError == nil {
 		t.Fatal("outcome_code accepted NULL")
