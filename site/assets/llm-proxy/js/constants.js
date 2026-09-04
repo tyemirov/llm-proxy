@@ -55,7 +55,12 @@ export const USAGE_INTERVALS = Object.freeze([
 ]);
 
 export const DEFAULT_USAGE_INTERVAL = "30d";
-export const USAGE_FAILURE_PAGE_LIMIT = 25;
+export const USAGE_DETAIL_PAGE_LIMIT = 25;
+
+export const USAGE_DETAIL_KINDS = Object.freeze({
+  FAILURES: "failures",
+  REJECTIONS: "rejections",
+});
 
 export const CAPABILITY_CATALOG_SORTS = Object.freeze({
   PUBLISHER: "publisher",
@@ -89,16 +94,20 @@ export const USAGE_OUTCOME_LABELS = Object.freeze({
   service_unavailable: "Service unavailable",
   request_timeout: "Request timeout",
   upstream_error: "Upstream error",
+  provider_not_configured: "Provider not configured",
+  proxy_error: "Proxy error",
 });
 
 export const USAGE_STATUS_LABELS = Object.freeze({
   400: "Bad request",
+  409: "Conflict",
   413: "Payload too large",
   429: "Rate limited",
   499: "Client closed request",
   502: "Upstream error",
   503: "Service unavailable",
   504: "Request timeout",
+  500: "Proxy error",
 });
 
 export const APP_INTEGRITY_ERROR = "app_integrity_error";
@@ -146,7 +155,7 @@ export const MPR_UI = Object.freeze({
 });
 
 export const RUNTIME_UI = Object.freeze({
-  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20260902c240",
+  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20260903f037",
   APPLICATION_MODULE_ID: "llm-proxy-application-module",
   APPLICATION_MODULE_MISSING: "llm_proxy_application_module_missing",
   APPLICATION_READY_ATTRIBUTE: "data-llm-proxy-application",
@@ -214,9 +223,8 @@ export const COPY = Object.freeze({
   usageTokenTrend: "Tokens",
   usageByProvider: "Provider usage",
   usageByModel: "Model usage",
-  usageBreakdownView: "Breakdown view",
-  usageBreakdownBar: "Bar graph",
-  usageBreakdownDonut: "Donut chart",
+  usageShowBreakdownBar: "Show bar graph",
+  usageShowBreakdownDonut: "Show donut chart",
   usageBreakdownRequests: "requests",
   usageProviderRequestShares: "Provider request shares",
   usageModelRequestShares: "Model request shares",
@@ -230,22 +238,28 @@ export const COPY = Object.freeze({
   usageEmpty: "No usage recorded",
   usageFailuresTitle: "Failed request details",
   usageFailuresDescription: "Failure metadata for the selected usage scope and interval. Prompts, responses, provider errors, and credentials are never included.",
-  usageFailuresTenant: "Tenant",
+  usageRejectionsTitle: "Rejected request details",
+  usageRejectionsDescription: "Requests that could not reach provider dispatch for the selected usage scope and interval. Prompts, responses, provider errors, and credentials are never included.",
+  usageRejectionsLoading: "Loading rejected requests",
+  usageRejectionsEmpty: "No rejected requests in this interval",
+  usageRejectionsError: "Unable to load rejected requests",
+  usageDetailsTenant: "Tenant",
   usageFailuresStatusBreakdown: "Status breakdown",
-  usageFailuresOccurredAt: "Occurred",
-  usageFailuresEndpoint: "Endpoint",
-  usageFailuresProvider: "Provider",
-  usageFailuresModel: "Model",
-  usageFailuresStatus: "Status",
-  usageFailuresOutcome: "Outcome",
-  usageFailuresLatency: "Latency",
-  usageFailuresNotResolved: "Not resolved",
+  usageDetailsOccurredAt: "Occurred",
+  usageDetailsEndpoint: "Endpoint",
+  usageDetailsProvider: "Provider",
+  usageDetailsModel: "Model",
+  usageDetailsStatus: "Status",
+  usageDetailsOutcome: "Outcome",
+  usageDetailsLatency: "Latency",
+  usageDetailsNotResolved: "Not resolved",
   usageFailuresLoading: "Loading failed requests",
   usageFailuresEmpty: "No failed requests in this interval",
   usageFailuresError: "Unable to load failed requests",
-  usageFailuresRetry: "Retry",
-  usageFailuresLoadMore: "Load more",
+  usageDetailsRetry: "Retry",
+  usageDetailsLoadMore: "Load more",
   closeUsageFailures: "Close failed request details",
+  closeUsageRejections: "Close rejected request details",
   adminEmpty: "No managed users",
   adminTenant: "Tenant",
   adminSecret: "Secret",
@@ -304,7 +318,6 @@ export const COPY = Object.freeze({
   providerRequestGraphScale: "of the highest provider request count",
   providerTokens: "Tokens",
   providerActive: "active",
-  providerUsed: "used",
   providerUnavailable: "Unavailable",
   providerTenant: "Tenant",
   providerSetKey: "Set API key",

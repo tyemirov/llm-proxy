@@ -92,7 +92,7 @@ func TestManagedTenantGORMInitializationEdges(t *testing.T) {
 	}
 	if dropError := missingUsageIndexDatabase.Migrator().DropIndex(
 		&managedUsageEventRecord{},
-		managedUsageFailurePageIndex,
+		managedUsageDispositionPageIndex,
 	); dropError != nil {
 		t.Fatalf("drop usage index: %v", dropError)
 	}
@@ -108,6 +108,7 @@ func TestManagedTenantGORMInitializationEdges(t *testing.T) {
 	if migrateError := migrateCurrentManagedSchema(schemaTwoMissingUsageIndexDatabase); migrateError != nil {
 		t.Fatalf("migrate schema-two missing-index schema: %v", migrateError)
 	}
+	useManagedUsageSchemaTwelve(t, schemaTwoMissingUsageIndexDatabase)
 	if createError := schemaTwoMissingUsageIndexDatabase.Create(&managedSchemaMigrationRecord{
 		Version: managedUsageOutcomeSchemaVersion,
 	}).Error; createError != nil {
@@ -115,7 +116,7 @@ func TestManagedTenantGORMInitializationEdges(t *testing.T) {
 	}
 	if dropError := schemaTwoMissingUsageIndexDatabase.Migrator().DropIndex(
 		&managedUsageEventRecord{},
-		managedUsageFailurePageIndex,
+		managedUsageLegacyFailurePageIndex,
 	); dropError != nil {
 		t.Fatalf("drop schema-two usage index: %v", dropError)
 	}
@@ -131,6 +132,7 @@ func TestManagedTenantGORMInitializationEdges(t *testing.T) {
 	if migrateError := migrateCurrentManagedSchema(schemaThreeMissingUsageIndexDatabase); migrateError != nil {
 		t.Fatalf("migrate schema-three missing-index schema: %v", migrateError)
 	}
+	useManagedUsageSchemaTwelve(t, schemaThreeMissingUsageIndexDatabase)
 	if createError := schemaThreeMissingUsageIndexDatabase.Create(&managedSchemaMigrationRecord{
 		Version: managedKeyedRoutingSchemaVersion,
 	}).Error; createError != nil {
@@ -138,7 +140,7 @@ func TestManagedTenantGORMInitializationEdges(t *testing.T) {
 	}
 	if dropError := schemaThreeMissingUsageIndexDatabase.Migrator().DropIndex(
 		&managedUsageEventRecord{},
-		managedUsageFailurePageIndex,
+		managedUsageLegacyFailurePageIndex,
 	); dropError != nil {
 		t.Fatalf("drop schema-three usage index: %v", dropError)
 	}
@@ -154,6 +156,7 @@ func TestManagedTenantGORMInitializationEdges(t *testing.T) {
 	if migrateError := migrateCurrentManagedSchema(schemaFourMissingUsageIndexDatabase); migrateError != nil {
 		t.Fatalf("migrate schema-four missing-index schema: %v", migrateError)
 	}
+	useManagedUsageSchemaTwelve(t, schemaFourMissingUsageIndexDatabase)
 	if createError := schemaFourMissingUsageIndexDatabase.Create(&managedSchemaMigrationRecord{
 		Version: managedQwenCloudRetirementVersion,
 	}).Error; createError != nil {
@@ -161,7 +164,7 @@ func TestManagedTenantGORMInitializationEdges(t *testing.T) {
 	}
 	if dropError := schemaFourMissingUsageIndexDatabase.Migrator().DropIndex(
 		&managedUsageEventRecord{},
-		managedUsageFailurePageIndex,
+		managedUsageLegacyFailurePageIndex,
 	); dropError != nil {
 		t.Fatalf("drop schema-four usage index: %v", dropError)
 	}
@@ -177,16 +180,17 @@ func TestManagedTenantGORMInitializationEdges(t *testing.T) {
 
 func TestManagedTenantGORMFailurePageQueryEdges(t *testing.T) {
 	now := time.Date(2026, 7, 25, 16, 30, 0, 0, time.UTC)
-	query := managedUsageFailureRecordQuery{
-		snapshotAt: now.Add(time.Hour),
-		limit:      managedUsageFailureDefaultLimit,
+	query := managedUsageDetailRecordQuery{
+		snapshotAt:  now.Add(time.Hour),
+		limit:       managedUsageDetailDefaultLimit,
+		disposition: managedUsageDispositionFailed,
 	}
 	seedFailure := func(subTest *testing.T, database *gormManagedTenantDatabase, outcomeCode managedUsageOutcomeCode) {
 		if createError := database.database.Create(&managedUsageEventRecord{
 			TenantID:    "managed-first",
 			Endpoint:    usageEndpointV2,
 			StatusCode:  http.StatusBadGateway,
-			Success:     false,
+			Disposition: managedUsageDispositionFailed,
 			OutcomeCode: outcomeCode,
 			CreatedAt:   now,
 		}).Error; createError != nil {
@@ -198,7 +202,7 @@ func TestManagedTenantGORMFailurePageQueryEdges(t *testing.T) {
 		database := newCanonicalGORMFixture(subTest, now)
 		seedFailure(subTest, database, managedUsageOutcomeUpstreamError)
 		registerManagedGORMError(subTest, database.database, "usage_failure_snapshot_query", "query", managedUsageEventTable, errInternalTestDatabase)
-		if _, _, queryError := database.usageFailuresByOwnerAndTenant("owner", "managed-first", query); !errors.Is(queryError, errInternalTestDatabase) {
+		if _, _, queryError := database.usageDetailsByOwnerAndTenant("owner", "managed-first", query); !errors.Is(queryError, errInternalTestDatabase) {
 			subTest.Fatalf("snapshot query error=%v", queryError)
 		}
 	})
@@ -220,7 +224,7 @@ func TestManagedTenantGORMFailurePageQueryEdges(t *testing.T) {
 		); callbackError != nil {
 			subTest.Fatalf("register records query callback: %v", callbackError)
 		}
-		if _, _, queryError := database.usageFailuresByOwnerAndTenant("owner", "managed-first", query); !errors.Is(queryError, errInternalTestDatabase) {
+		if _, _, queryError := database.usageDetailsByOwnerAndTenant("owner", "managed-first", query); !errors.Is(queryError, errInternalTestDatabase) {
 			subTest.Fatalf("records query error=%v", queryError)
 		}
 	})
@@ -228,7 +232,7 @@ func TestManagedTenantGORMFailurePageQueryEdges(t *testing.T) {
 	t.Run("invalid persisted outcome", func(subTest *testing.T) {
 		database := newCanonicalGORMFixture(subTest, now)
 		seedFailure(subTest, database, managedUsageOutcomeCode("provider_error"))
-		if _, _, queryError := database.usageFailuresByOwnerAndTenant("owner", "managed-first", query); !errors.Is(queryError, errManagedTenantStorePersist) {
+		if _, _, queryError := database.usageDetailsByOwnerAndTenant("owner", "managed-first", query); !errors.Is(queryError, errManagedTenantStorePersist) {
 			subTest.Fatalf("invalid outcome query error=%v", queryError)
 		}
 	})

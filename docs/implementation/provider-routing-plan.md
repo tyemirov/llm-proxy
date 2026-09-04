@@ -671,7 +671,15 @@ outputs. Deployment generates one service environment from private, TAuth,
 Caddy, Pages, and capability outputs. Release and publication do not read the
 private input.
 
-The management UI is served as a static GitHub Pages app from `site/` on `https://llm-proxy.mprlab.com`; the Go backend does not serve management HTML or assets. The backend owns the secret-free `/api/public/capabilities` REST resource and the public browser config file at `/config-ui.yaml`; credentialed config CORS remains restricted to `management.public_origin`. The declared `docker/pages/Dockerfile` starts the backend's public-capabilities-only surface during the build, then the frontend-owned Node renderer fetches that resource and validates the static Pages archive. The final Pages image contains only static files. The gateway publishes that immutable archive without changing the live site and deploy activates it on `gh-pages` after the backend rollout.
+The static GitHub Pages application serves the management UI from `site/` at `https://llm-proxy.mprlab.com`.
+The Go backend does not serve management HTML or assets. The application document title remains `LLM Proxy` in each application state.
+The backend owns the secret-free `/api/public/capabilities` REST resource and the public browser config file at `/config-ui.yaml`.
+Credentialed config CORS remains restricted to `management.public_origin`.
+
+The declared `docker/pages/Dockerfile` starts the public-capabilities backend during the build.
+The frontend-owned Node renderer fetches that resource and validates the static Pages archive.
+The final Pages image contains only static files. The gateway publishes that immutable archive without changing the live site.
+Deployment activates the archive on `gh-pages` after the backend rollout.
 
 Usage Overview renders one semantic provider card for every tenant-profile
 provider in deterministic catalog order. The front matches interval activity by
@@ -681,8 +689,8 @@ use analysis labels. The card also shows requests and tokens. A request volume
 bar scales each provider against the highest provider request count in the
 current Usage scope. It uses the existing provider aggregates. A tenant-filtered
 scope also shows that tenant's selected text model. Account-wide usage does not synthesize a model. `active`
-identifies only the tenant's default text route. `used` identifies only interval
-activity.
+identifies only the tenant's default text route. The request count identifies
+interval activity.
 
 An explicit card action opens one back face at a time. Account-wide usage
 requires an exact owned tenant before it enables key controls. The card uses the
@@ -696,14 +704,14 @@ and every routing default that remains valid. Settings retains tenant-owned
 client access, routing defaults, tenant prompt, and request examples. It does
 not contain provider fields, provider models, or provider prompts.
 
-Provider usage and Model usage share one mounted-dashboard presentation mode.
-Bar graph is the default and retains every ordered request-count row. Donut
-chart derives each segment and its count-and-percentage legend from those same
-request counts. The rounded shares total 100 percent. The donut keeps every
-category and does not create an Other tail. The browser keeps this
-mode through interval, Refresh, and Usage tenant changes. It resets the mode on
-authentication reset and page reload. Changing the mode performs no request
-and changes no tenant or interval state.
+Provider usage and Model usage each have one icon-only chart toggle. Each card
+starts with a Bar graph and retains every ordered request-count row. Its toggle
+changes only that card to a Donut chart. Each donut derives its segments and
+count-and-percentage legend from the same request counts. The rounded shares
+total 100 percent. Each donut keeps every category and does not create an Other
+tail. The browser keeps both selections through interval, Refresh, and Usage
+tenant changes. Authentication reset and page reload reset both cards to bars.
+A toggle performs no request and changes no tenant or interval state.
 
 The Requests and Tokens line charts use one typed presentation model over the
 accepted summary buckets. Their X axes show bounded, locale-independent UTC
@@ -789,6 +797,20 @@ and records version 12. Current startup rejects later dimension drift.
 Current startup validates only the distinct endpoint, provider, and model
 combinations in the usage table.
 
+Schema version 13 replaces the usage success flag with one required request
+disposition: `rejected`, `succeeded`, or `failed`. The bounded upgrade maps
+historical successful rows to `succeeded`. It maps `invalid_request` and
+`payload_too_large` rows to `rejected`. It maps attempted provider or proxy
+outcomes to `failed`. A route-less historical `service_unavailable` becomes
+`provider_not_configured`. A server-side historical `invalid_request` becomes
+`proxy_error`. The transaction replaces the usage table and preserves safe
+event metadata. It copies records in fixed batches of 256, writes the new
+disposition index, and removes the predecessor table. Current startup reads
+each distinct disposition and outcome pair with one representative record ID.
+It rejects the obsolete success column, an invalid pair, a missing disposition
+index, and a retained predecessor table. Usage aggregation returns a store
+error if stored data changes to an invalid pair after startup.
+
 Server and management settings remain in `config.yml`. Provider definitions,
 static endpoints, exact models, and offerings remain in `providers.yml`.
 Database access uses GORM model APIs without raw SQL. Generated client secrets
@@ -802,7 +824,90 @@ The LLM Proxy application startup guard covers the complete versioned first-part
 
 The backend consumes TAuth's published Go `pkg/sessionvalidator` for cookie/JWT validation and adds only llm-proxy's tenant, required-expiry, and principal invariants; no application-owned JWT parser or claims schema exists. The deployment manifest declares the tenant and route as data. The sibling gateway's Ansible transaction stages the selected service inputs and reconciles the declared TAuth capability and Caddy route before Pages activation; application runtime code contains no TAuth or Caddy deployment orchestration.
 
-The authenticated management landing view is usage-focused. The browser first loads `GET /api/management/account`; every returned tenant remains operational through its own generated secret, and the browser has no global active-tenant or URL/history selection contract. The independent `Usage tenant` control defaults to `All tenants` immediately before the ordered `ALL`, `30 days`, `7 days`, and `1 day` controls, while the interval defaults to `30 days`. The all-tenant selection calls `GET /api/management/usage?interval=all|30d|7d|1d`; an explicit tenant calls `GET /api/management/tenants/:tenant_id/usage?interval=all|30d|7d|1d`. Both operations require exactly one recognized interval, return `400` for missing, repeated, or unknown values, and carry `Cache-Control: no-store`. The response is the current `interval`, `bucket_unit`, aggregate `totals`, ordered generic `buckets`, and provider, model, and status-code usage for the selected scope; it contains no fixed-period `period_days` or `daily` fields. `1d` uses 24 hourly buckets, `7d` and `30d` use exact trailing-duration daily buckets, and `all` uses UTC daily buckets from the earliest retained event through one captured server timestamp. An empty all-time result has no buckets. Account-wide aggregation runs once at the database boundary across every owned tenant and calculates totals and average latency from the complete event set; the browser never fans out per-tenant summaries. Refresh and interval changes retain the Usage tenant selection, Settings changes do not affect it, loading disables the Usage controls, and request identity prevents a stale scope or interval response from replacing the selected snapshot. The admin API remains a distinct 30-day daily contract. Managed proxy requests always record the endpoint, status, success flag, latency, and normalized token counts. They record provider and model dimensions only after the router resolves an exact typed route. Prompts, audio, transcripts, responses, tenant secrets, and provider API keys are excluded from usage events. Tenant lifecycle, client access, generated secrets, routing defaults, copyable request examples, and provider key controls live in the Settings modal opened from the shared `<mpr-user>` avatar dropdown, where the `Settings` item is inserted before `Sign out`. One compact `Tenant access` row combines the `Tenant` selector, modal Rename, client-key state and one-time reveal/copy actions, confirmed Replace key, confirmed Delete tenant, and Create tenant. The selected tenant is only the Settings editor context. Switching that selector with an unsaved draft requires explicit discard confirmation, clears any raw one-time secret or revealed provider key from browser state, and never changes the Usage tenant. The routing-default form lists only providers with saved tenant keys; its dictation controls are disabled and show `Not configured` when none of those providers supports dictation. It keeps Text provider, Text model, and the selected model's Reasoning effort control on one desktop row, clears an incompatible effort on a model change, exposes `Not supported` when the route has no reasoning capability, and autosaves provider/model/effort selections immediately plus the tenant system prompt on field exit. Tenant-wide and provider-specific system-prompt fields start collapsed behind semantic `System prompt` disclosures with a visible `Hidden` indicator; they expand through pointer or keyboard activation and collapse again when Settings opens or their tenant/provider context changes. Settings serializes every mutation that returns a complete tenant profile and locks its controls while a close request waits for in-flight work. A client key created or replaced during that wait keeps Settings open for an explicit later close so its one-time value remains available to copy; removing the last provider key re-enforces mandatory setup; client keys can only be replaced or removed with their owning non-final tenant. Failed edits remain available for retry. Request examples include copyable default text and v2 commands only when a keyed text default exists, and a default dictation command only when a keyed dictation default exists, plus copyable selected-provider text and v2 commands; dictation-capable selected providers also show a provider-specific dictation command. Provider key controls use one selected-provider editor with API key, text model, and system prompt fields because those settings are part of the provider-owned managed routing contract.
+The authenticated management landing view is usage-focused. The browser first
+loads `GET /api/management/account`. Every returned tenant remains operational
+through its own generated secret. The browser has no global active-tenant or
+URL/history selection contract.
+
+The independent `Usage tenant` control defaults to `All tenants`. It appears
+before the ordered `ALL`, `30 days`, `7 days`, and `1 day` controls. The
+interval defaults to `30 days`. The all-tenant selection calls
+`GET /api/management/usage?interval=all|30d|7d|1d`. An explicit tenant calls
+`GET /api/management/tenants/:tenant_id/usage?interval=all|30d|7d|1d`. Both
+operations require exactly one recognized interval. They return `400` for
+missing, repeated, or unknown values and carry `Cache-Control: no-store`.
+
+The response includes the current `interval`, `bucket_unit`,
+`rejected_requests`, aggregate `totals`, and ordered generic `buckets`. It also
+includes provider, model, and status-code usage for the selected scope. It has
+no fixed-period `period_days` or `daily` fields. Execution totals, buckets,
+dimensions, statuses, latency, tokens, and success rate include only succeeded
+and failed requests. The separate rejected count includes requests that could
+not reach provider dispatch.
+
+`1d` uses 24 hourly buckets. `7d` and `30d` use exact trailing-duration daily
+buckets. `all` uses UTC daily buckets from the earliest retained execution
+event through one captured server timestamp. An empty all-time result has no
+buckets. Account-wide aggregation runs once at the database boundary across
+every owned tenant. It calculates totals and average latency from the complete
+execution event set. The browser never fans out per-tenant summaries.
+
+Refresh and interval changes retain the Usage tenant selection. Settings
+changes do not affect it. Loading disables the Usage controls. Request identity
+prevents a stale scope or interval response from replacing the selected
+snapshot. The admin API remains a distinct 30-day daily contract.
+
+Managed proxy requests always record the endpoint, status, request disposition,
+canonical outcome, latency, and normalized token counts. They record provider
+and model dimensions only after the router resolves an exact typed route.
+After tenant authentication, an invalid request-timeout header is an
+`invalid_request` rejection for text, V2, and dictation. Unauthenticated
+requests and asset operations are not proxy usage. A V2 asset-store read error
+is a `proxy_error` failure. Invalid input and a missing asset remain
+rejections.
+Usage events exclude prompts, audio, transcripts, responses, tenant secrets,
+provider API keys, provider bodies, and free-form errors.
+
+Tenant lifecycle, client access, generated secrets, and routing defaults live
+in Settings. The modal also contains copyable request examples and provider-key
+controls. Users open it from the shared `<mpr-user>` avatar dropdown. The
+`Settings` item appears before `Sign out`.
+
+One compact `Tenant access` row combines the `Tenant` selector, modal Rename,
+client-key state, and one-time reveal/copy actions. It also contains confirmed
+Replace key, confirmed Delete tenant, and Create tenant actions. The selected
+tenant is only the Settings editor context. An unsaved draft requires explicit
+discard confirmation before a tenant switch. The switch clears each raw
+one-time secret and revealed provider key from browser state. It never changes
+the Usage tenant.
+
+The routing-default form lists only providers with saved tenant keys. Its
+dictation controls are disabled and show `Not configured` when no such provider
+supports dictation. The form keeps Text provider, Text model, and the selected
+model's Reasoning effort control on one desktop row. A model change clears an
+incompatible effort. The form shows `Not supported` when the route has no
+reasoning capability. It immediately saves provider, model, and effort
+selections. It saves the tenant system prompt on field exit.
+
+Tenant-wide and provider-specific system-prompt fields start behind semantic
+`System prompt` disclosures with a visible `Hidden` indicator. A pointer or
+keyboard action expands them. Settings, tenant, or provider context changes
+collapse them again. Settings serializes each mutation that returns a complete
+tenant profile. It locks its controls while a close request waits for current
+work.
+
+A client key created or replaced during that wait keeps Settings open. Thus,
+its one-time value remains available to copy. Removal of the last provider key
+re-enforces mandatory setup. Client keys can only be replaced or removed with
+their owning non-final tenant. Failed edits remain available for retry.
+
+Request examples include copyable default text and v2 commands when a keyed
+text default exists. They include a default dictation command when a keyed
+dictation default exists. They also include copyable selected-provider text and
+v2 commands. Dictation-capable selected providers show a provider-specific
+dictation command. One selected-provider editor contains the API key, text
+model, and system prompt fields. Those settings are part of the provider-owned
+managed routing contract.
 
 Each provider card opens with the first account tenant as its Settings tenant.
 The card keeps the tenant selector available and independent from Usage tenant.
@@ -815,6 +920,8 @@ The card has no manual completion action.
 
 When the selected Usage snapshot contains failures, the success-rate card exposes an **N failed requests** action. Its semantic dialog keeps the selected interval and the summary's non-success status breakdown. `GET /api/management/usage/failures` pages newest-first failures across all owned tenants and adds each row's safe tenant id and current name; `GET /api/management/tenants/:tenant_id/usage/failures` retains the tenant-less row shape for one explicitly selected owned tenant. Both operations require one `interval`, accept one `limit` from 1 through 100 and one opaque `cursor`, return `Cache-Control: no-store`, and paginate against one opaque snapshot using stable event-time/id order. Each cursor is bound to its exact all-tenant or tenant scope and is rejected in every other scope. Apart from the account-wide tenant context, rows contain only event time, endpoint, provider, model, status, canonical outcome code, and latency. Provider and model are blank when failure occurs before route resolution. Dialog load failures stay local; Usage tenant or interval changes abort and invalidate the request; the admin surface remains aggregate-only.
 
+When a Usage snapshot contains rejections, the Requests card exposes an **N rejected requests** action. `GET /api/management/usage/rejections` pages safe rejection rows across all owned tenants. `GET /api/management/tenants/:tenant_id/usage/rejections` provides the corresponding tenant scope. These operations use the same interval, limit, cursor, snapshot, ownership, and safe-field contracts as the failure report. Their outcomes are `invalid_request`, `payload_too_large`, and `provider_not_configured`. They include provider and model only when an exact typed route was resolved. Rejected requests never enter the failure report or execution aggregates. The rejection dialog omits the failure status breakdown.
+
 ## Error Contract
 
 - `400`: unknown provider, unknown model, unsupported capability, unsupported endpoint, conflicting model parameters, or client-supplied provider API key fields on public proxy requests.
@@ -823,7 +930,10 @@ When the selected Usage snapshot contains failures, the success-rate card expose
   provider media limit exceeded. Provider media failures use the stable
   `provider_media_limit_exceeded` JSON code.
 - `429`: upstream provider rate limiting.
-- `503`: registered non-default provider credential is unavailable, so the selected provider is disabled until its API key is configured.
+- `409`: the selected provider route is recognized but its required tenant
+  credential is not configured. The request is rejected before dispatch with
+  `provider_not_configured`.
+- `503`: the shared upstream operation queue is full.
 - `504`: the overall proxy request timed out before the selected upstream provider returned a final result.
 - `502`: upstream provider failure, including non-budget OpenAI incomplete
   reasons, Chat Completions reasons other than `stop` or `length`, Gemini

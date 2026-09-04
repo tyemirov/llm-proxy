@@ -60,7 +60,6 @@ usage-metrics,
 usage-card,
 usage-chart-panel,
 usage-breakdown,
-breakdown-view-control,
 usage-donut,
 usage-row-list,
 usage-row,
@@ -708,32 +707,20 @@ usage-bar i {
   background: var(--llm-good);
 }
 
-breakdown-view-control {
-  display: flex;
+.usage-breakdown-toggle {
+  min-height: 30px;
+  flex: 0 0 auto;
+}
+
+usage-breakdown > .section-header {
   align-items: center;
-  justify-content: flex-end;
-  gap: 0.35rem;
+  flex-direction: row;
 }
 
-breakdown-view-control > span {
-  margin-right: 0.15rem;
-  color: var(--llm-muted);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-llm-proxy-management-application breakdown-view-control button {
-  min-height: 28px;
-  padding-inline: 0.55rem;
-}
-
-llm-proxy-management-application breakdown-view-control button.is-active,
-llm-proxy-management-application breakdown-view-control button.is-active:hover:not(:disabled) {
-  border-color: var(--llm-accent);
-  background: rgba(93, 147, 255, 0.14);
-  color: var(--llm-accent);
+.usage-breakdown-toggle svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
 }
 
 usage-donut {
@@ -1901,16 +1888,6 @@ settings-section,
 
   usage-donut {
     grid-template-columns: 1fr;
-  }
-
-  breakdown-view-control {
-    align-items: stretch;
-    justify-content: flex-start;
-    flex-wrap: wrap;
-  }
-
-  breakdown-view-control > span {
-    flex-basis: 100%;
   }
 
   .section-header,

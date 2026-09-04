@@ -24,6 +24,7 @@ const (
 	managementSecretsPath               = "/secrets"
 	managementUsagePath                 = "/usage"
 	managementUsageFailuresPath         = managementUsagePath + "/failures"
+	managementUsageRejectionsPath       = managementUsagePath + "/rejections"
 	managementAdminUsersPath            = "/admin/users"
 	contextKeyManagementPrincipal       = "management_principal"
 	headerAccessControlAllowCredentials = "Access-Control-Allow-Credentials"
@@ -167,28 +168,41 @@ type managementProviderFieldRevealResponse struct {
 }
 
 type managementUsageSummaryResponse struct {
-	Interval    string                            `json:"interval"`
-	BucketUnit  string                            `json:"bucket_unit"`
-	Totals      managementUsageAggregateResponse  `json:"totals"`
-	Buckets     []managementUsageBucketResponse   `json:"buckets"`
-	Providers   []managementUsageProviderResponse `json:"providers"`
-	Models      []managementUsageModelResponse    `json:"models"`
-	StatusCodes []managementUsageStatusResponse   `json:"status_codes"`
+	Interval         string                            `json:"interval"`
+	BucketUnit       string                            `json:"bucket_unit"`
+	RejectedRequests int                               `json:"rejected_requests"`
+	Totals           managementUsageAggregateResponse  `json:"totals"`
+	Buckets          []managementUsageBucketResponse   `json:"buckets"`
+	Providers        []managementUsageProviderResponse `json:"providers"`
+	Models           []managementUsageModelResponse    `json:"models"`
+	StatusCodes      []managementUsageStatusResponse   `json:"status_codes"`
 }
 
 type managementUsageFailuresResponse struct {
-	Interval   string                           `json:"interval"`
-	Failures   []managementUsageFailureResponse `json:"failures"`
-	NextCursor string                           `json:"next_cursor,omitempty"`
+	Interval   string                          `json:"interval"`
+	Failures   []managementUsageDetailResponse `json:"failures"`
+	NextCursor string                          `json:"next_cursor,omitempty"`
 }
 
 type managementAccountUsageFailuresResponse struct {
-	Interval   string                                  `json:"interval"`
-	Failures   []managementAccountUsageFailureResponse `json:"failures"`
-	NextCursor string                                  `json:"next_cursor,omitempty"`
+	Interval   string                                 `json:"interval"`
+	Failures   []managementAccountUsageDetailResponse `json:"failures"`
+	NextCursor string                                 `json:"next_cursor,omitempty"`
 }
 
-type managementUsageFailureResponse struct {
+type managementUsageRejectionsResponse struct {
+	Interval   string                          `json:"interval"`
+	Rejections []managementUsageDetailResponse `json:"rejections"`
+	NextCursor string                          `json:"next_cursor,omitempty"`
+}
+
+type managementAccountUsageRejectionsResponse struct {
+	Interval   string                                 `json:"interval"`
+	Rejections []managementAccountUsageDetailResponse `json:"rejections"`
+	NextCursor string                                 `json:"next_cursor,omitempty"`
+}
+
+type managementUsageDetailResponse struct {
 	OccurredAt          string `json:"occurred_at"`
 	Endpoint            string `json:"endpoint"`
 	Provider            string `json:"provider"`
@@ -198,19 +212,20 @@ type managementUsageFailureResponse struct {
 	LatencyMilliseconds int64  `json:"latency_ms"`
 }
 
-type managementAccountUsageFailureResponse struct {
+type managementAccountUsageDetailResponse struct {
 	TenantID   string `json:"tenant_id"`
 	TenantName string `json:"tenant_name"`
-	managementUsageFailureResponse
+	managementUsageDetailResponse
 }
 
 type managementAdminUsageSummaryResponse struct {
-	PeriodDays  int                               `json:"period_days"`
-	Totals      managementUsageAggregateResponse  `json:"totals"`
-	Daily       []managementUsageDailyResponse    `json:"daily"`
-	Providers   []managementUsageProviderResponse `json:"providers"`
-	Models      []managementUsageModelResponse    `json:"models"`
-	StatusCodes []managementUsageStatusResponse   `json:"status_codes"`
+	PeriodDays       int                               `json:"period_days"`
+	RejectedRequests int                               `json:"rejected_requests"`
+	Totals           managementUsageAggregateResponse  `json:"totals"`
+	Daily            []managementUsageDailyResponse    `json:"daily"`
+	Providers        []managementUsageProviderResponse `json:"providers"`
+	Models           []managementUsageModelResponse    `json:"models"`
+	StatusCodes      []managementUsageStatusResponse   `json:"status_codes"`
 }
 
 type managementUsageAggregateResponse struct {
@@ -312,7 +327,8 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	managementGroup.Use(service.managementMutationMiddleware())
 	managementGroup.GET(managementAccountPath, service.accountHandler())
 	managementGroup.GET(managementUsagePath, service.accountUsageHandler())
-	managementGroup.GET(managementUsageFailuresPath, service.accountUsageFailuresHandler())
+	managementGroup.GET(managementUsageFailuresPath, service.accountUsageDetailsHandler(managedUsageDispositionFailed))
+	managementGroup.GET(managementUsageRejectionsPath, service.accountUsageDetailsHandler(managedUsageDispositionRejected))
 	managementGroup.POST(managementTenantsPath, service.createTenantHandler())
 	managementGroup.GET(managementAdminUsersPath, service.adminUsersHandler())
 
@@ -321,7 +337,8 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	tenantGroup.PUT("", service.renameTenantHandler())
 	tenantGroup.DELETE("", service.deleteTenantHandler())
 	tenantGroup.GET(managementUsagePath, service.usageHandler())
-	tenantGroup.GET(managementUsageFailuresPath, service.usageFailuresHandler())
+	tenantGroup.GET(managementUsageFailuresPath, service.usageDetailsHandler(managedUsageDispositionFailed))
+	tenantGroup.GET(managementUsageRejectionsPath, service.usageDetailsHandler(managedUsageDispositionRejected))
 	tenantGroup.PUT(managementProviderConnectionsPath, service.saveProviderConnectionsHandler())
 	tenantGroup.DELETE(managementProviderConnectionsPath, service.removeProviderConnectionsHandler())
 	tenantGroup.POST(managementProviderFieldRevealPath, service.managementCredentialedActionMiddleware(), service.revealProviderFieldHandler())
@@ -551,40 +568,48 @@ func (service *managementService) accountUsageHandler() gin.HandlerFunc {
 	}
 }
 
-func (service *managementService) usageFailuresHandler() gin.HandlerFunc {
+func (service *managementService) usageDetailsHandler(disposition managedUsageDisposition) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		tenantIdentifier, identifierValid := managementTenantIdentifierFromContext(ginContext)
 		if !identifierValid {
 			return
 		}
-		query, queryError := newManagedUsageFailureQuery(ginContext.Request.URL.Query(), tenantIdentifier.string())
+		query, queryError := newManagedUsageDetailQuery(ginContext.Request.URL.Query(), tenantIdentifier.string(), disposition)
 		if queryError != nil {
 			ginContext.String(http.StatusBadRequest, queryError.Error())
 			return
 		}
-		page, pageError := service.store.usageFailures(managementPrincipalFromContext(ginContext), tenantIdentifier, query)
+		page, pageError := service.store.usageDetails(managementPrincipalFromContext(ginContext), tenantIdentifier, query)
 		if pageError != nil {
 			writeManagementStoreError(ginContext, pageError)
 			return
 		}
 		ginContext.Header(headerCacheControl, cacheControlNoStore)
+		if disposition == managedUsageDispositionRejected {
+			ginContext.JSON(http.StatusOK, managementUsageRejectionsResponseFor(page))
+			return
+		}
 		ginContext.JSON(http.StatusOK, managementUsageFailuresResponseFor(page))
 	}
 }
 
-func (service *managementService) accountUsageFailuresHandler() gin.HandlerFunc {
+func (service *managementService) accountUsageDetailsHandler(disposition managedUsageDisposition) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
-		query, queryError := newManagedUsageFailureQuery(ginContext.Request.URL.Query(), managedUsageAllTenantsScope)
+		query, queryError := newManagedUsageDetailQuery(ginContext.Request.URL.Query(), managedUsageAllTenantsScope, disposition)
 		if queryError != nil {
 			ginContext.String(http.StatusBadRequest, queryError.Error())
 			return
 		}
-		page, pageError := service.store.accountUsageFailures(managementPrincipalFromContext(ginContext), query)
+		page, pageError := service.store.accountUsageDetails(managementPrincipalFromContext(ginContext), query)
 		if pageError != nil {
 			writeManagementStoreError(ginContext, pageError)
 			return
 		}
 		ginContext.Header(headerCacheControl, cacheControlNoStore)
+		if disposition == managedUsageDispositionRejected {
+			ginContext.JSON(http.StatusOK, managementAccountUsageRejectionsResponseFor(page))
+			return
+		}
 		ginContext.JSON(http.StatusOK, managementAccountUsageFailuresResponseFor(page))
 	}
 }
@@ -1020,20 +1045,21 @@ func managementDefaultsResponse(defaults managedRoutingDefaults) managementTenan
 
 func managementUsageSummary(summary managedUsageSummary) managementUsageSummaryResponse {
 	return managementUsageSummaryResponse{
-		Interval:    string(summary.interval),
-		BucketUnit:  string(summary.bucketUnit),
-		Totals:      managementUsageAggregate(summary.totals),
-		Buckets:     managementUsageBuckets(summary.buckets),
-		Providers:   managementUsageProviders(summary.providers),
-		Models:      managementUsageModels(summary.models),
-		StatusCodes: managementUsageStatuses(summary.statusCodes),
+		Interval:         string(summary.interval),
+		BucketUnit:       string(summary.bucketUnit),
+		RejectedRequests: summary.rejectedRequests,
+		Totals:           managementUsageAggregate(summary.totals),
+		Buckets:          managementUsageBuckets(summary.buckets),
+		Providers:        managementUsageProviders(summary.providers),
+		Models:           managementUsageModels(summary.models),
+		StatusCodes:      managementUsageStatuses(summary.statusCodes),
 	}
 }
 
-func managementUsageFailuresResponseFor(page managedUsageFailurePage) managementUsageFailuresResponse {
-	failures := make([]managementUsageFailureResponse, 0, len(page.failures))
-	for _, failure := range page.failures {
-		failures = append(failures, managementUsageFailureResponseFor(failure))
+func managementUsageFailuresResponseFor(page managedUsageDetailPage) managementUsageFailuresResponse {
+	failures := make([]managementUsageDetailResponse, 0, len(page.details))
+	for _, detail := range page.details {
+		failures = append(failures, managementUsageDetailResponseFor(detail))
 	}
 	return managementUsageFailuresResponse{
 		Interval:   string(page.interval),
@@ -1042,13 +1068,13 @@ func managementUsageFailuresResponseFor(page managedUsageFailurePage) management
 	}
 }
 
-func managementAccountUsageFailuresResponseFor(page managedUsageFailurePage) managementAccountUsageFailuresResponse {
-	failures := make([]managementAccountUsageFailureResponse, 0, len(page.failures))
-	for _, failure := range page.failures {
-		failures = append(failures, managementAccountUsageFailureResponse{
-			TenantID:                       failure.tenantIdentifier,
-			TenantName:                     failure.tenantName,
-			managementUsageFailureResponse: managementUsageFailureResponseFor(failure),
+func managementAccountUsageFailuresResponseFor(page managedUsageDetailPage) managementAccountUsageFailuresResponse {
+	failures := make([]managementAccountUsageDetailResponse, 0, len(page.details))
+	for _, detail := range page.details {
+		failures = append(failures, managementAccountUsageDetailResponse{
+			TenantID:                      detail.tenantIdentifier,
+			TenantName:                    detail.tenantName,
+			managementUsageDetailResponse: managementUsageDetailResponseFor(detail),
 		})
 	}
 	return managementAccountUsageFailuresResponse{
@@ -1058,26 +1084,46 @@ func managementAccountUsageFailuresResponseFor(page managedUsageFailurePage) man
 	}
 }
 
-func managementUsageFailureResponseFor(failure managedUsageFailure) managementUsageFailureResponse {
-	return managementUsageFailureResponse{
-		OccurredAt:          failure.occurredAt.UTC().Format(time.RFC3339Nano),
-		Endpoint:            failure.endpoint,
-		Provider:            failure.providerIdentifier,
-		Model:               failure.modelIdentifier,
-		StatusCode:          failure.statusCode,
-		OutcomeCode:         string(failure.outcomeCode),
-		LatencyMilliseconds: failure.latencyMilliseconds,
+func managementUsageRejectionsResponseFor(page managedUsageDetailPage) managementUsageRejectionsResponse {
+	rejections := make([]managementUsageDetailResponse, 0, len(page.details))
+	for _, detail := range page.details {
+		rejections = append(rejections, managementUsageDetailResponseFor(detail))
+	}
+	return managementUsageRejectionsResponse{Interval: string(page.interval), Rejections: rejections, NextCursor: page.nextCursor}
+}
+
+func managementAccountUsageRejectionsResponseFor(page managedUsageDetailPage) managementAccountUsageRejectionsResponse {
+	rejections := make([]managementAccountUsageDetailResponse, 0, len(page.details))
+	for _, detail := range page.details {
+		rejections = append(rejections, managementAccountUsageDetailResponse{
+			TenantID: detail.tenantIdentifier, TenantName: detail.tenantName,
+			managementUsageDetailResponse: managementUsageDetailResponseFor(detail),
+		})
+	}
+	return managementAccountUsageRejectionsResponse{Interval: string(page.interval), Rejections: rejections, NextCursor: page.nextCursor}
+}
+
+func managementUsageDetailResponseFor(detail managedUsageDetail) managementUsageDetailResponse {
+	return managementUsageDetailResponse{
+		OccurredAt:          detail.occurredAt.UTC().Format(time.RFC3339Nano),
+		Endpoint:            detail.endpoint,
+		Provider:            detail.providerIdentifier,
+		Model:               detail.modelIdentifier,
+		StatusCode:          detail.statusCode,
+		OutcomeCode:         string(detail.outcomeCode),
+		LatencyMilliseconds: detail.latencyMilliseconds,
 	}
 }
 
 func managementAdminUsageSummary(summary managedAdminUsageSummary) managementAdminUsageSummaryResponse {
 	return managementAdminUsageSummaryResponse{
-		PeriodDays:  summary.periodDays,
-		Totals:      managementUsageAggregate(summary.totals),
-		Daily:       managementUsageDaily(summary.daily),
-		Providers:   managementUsageProviders(summary.providers),
-		Models:      managementUsageModels(summary.models),
-		StatusCodes: managementUsageStatuses(summary.statusCodes),
+		PeriodDays:       summary.periodDays,
+		RejectedRequests: summary.rejectedRequests,
+		Totals:           managementUsageAggregate(summary.totals),
+		Daily:            managementUsageDaily(summary.daily),
+		Providers:        managementUsageProviders(summary.providers),
+		Models:           managementUsageModels(summary.models),
+		StatusCodes:      managementUsageStatuses(summary.statusCodes),
 	}
 }
 

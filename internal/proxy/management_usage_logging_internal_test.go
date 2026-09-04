@@ -84,16 +84,26 @@ func TestManagedUsageFailureDomainRejectsMalformedValues(t *testing.T) {
 	if _, outcomeError := newManagedUsageOutcomeCode("provider_error"); outcomeError == nil {
 		t.Fatal("unknown outcome code accepted")
 	}
-	if _, queryError := newManagedUsageFailureQuery(url.Values{
-		usageFailureIntervalQuery: {string(usageIntervalThirtyDay)},
-	}, " "); queryError == nil {
+	if _, dispositionError := newManagedUsageDisposition("unknown"); dispositionError == nil {
+		t.Fatal("unknown disposition accepted")
+	}
+	if _, queryError := newManagedUsageDetailQuery(url.Values{
+		usageDetailIntervalQuery: {string(usageIntervalThirtyDay)},
+	}, " ", managedUsageDispositionFailed); queryError == nil {
 		t.Fatal("blank failure scope accepted")
 	}
+	for _, disposition := range []managedUsageDisposition{managedUsageDispositionSucceeded, "unknown"} {
+		if _, queryError := newManagedUsageDetailQuery(url.Values{
+			usageDetailIntervalQuery: {string(usageIntervalThirtyDay)},
+		}, managedUsageAllTenantsScope, disposition); queryError == nil {
+			t.Fatalf("detail disposition %q accepted", disposition)
+		}
+	}
 	for _, limit := range []string{"", "1x"} {
-		if _, queryError := newManagedUsageFailureQuery(url.Values{
-			usageFailureIntervalQuery: {string(usageIntervalThirtyDay)},
-			usageFailureLimitQuery:    {limit},
-		}, managedUsageAllTenantsScope); queryError == nil {
+		if _, queryError := newManagedUsageDetailQuery(url.Values{
+			usageDetailIntervalQuery: {string(usageIntervalThirtyDay)},
+			usageDetailLimitQuery:    {limit},
+		}, managedUsageAllTenantsScope, managedUsageDispositionFailed); queryError == nil {
 			t.Fatalf("limit %q accepted", limit)
 		}
 	}
@@ -101,23 +111,23 @@ func TestManagedUsageFailureDomainRejectsMalformedValues(t *testing.T) {
 	encodeCursorPayload := func(payload string) string {
 		return base64.RawURLEncoding.EncodeToString([]byte(payload))
 	}
-	if _, cursorError := newManagedUsageFailureCursor("%", usageIntervalThirtyDay, managedUsageAllTenantsScope); cursorError == nil {
+	if _, cursorError := newManagedUsageDetailCursor("%", usageIntervalThirtyDay, managedUsageAllTenantsScope, managedUsageDispositionFailed); cursorError == nil {
 		t.Fatal("invalid base64 cursor accepted")
 	}
-	invalidSnapshot := encodeCursorPayload(`{"v":2,"i":"30d","o":"all-tenants","s":"invalid","x":2,"p":"2026-07-25T12:00:00Z","n":1}`)
-	if _, cursorError := newManagedUsageFailureCursor(invalidSnapshot, usageIntervalThirtyDay, managedUsageAllTenantsScope); cursorError == nil {
+	invalidSnapshot := encodeCursorPayload(`{"v":3,"i":"30d","o":"all-tenants","d":"failed","s":"invalid","x":2,"p":"2026-07-25T12:00:00Z","n":1}`)
+	if _, cursorError := newManagedUsageDetailCursor(invalidSnapshot, usageIntervalThirtyDay, managedUsageAllTenantsScope, managedUsageDispositionFailed); cursorError == nil {
 		t.Fatal("invalid snapshot timestamp accepted")
 	}
-	positionAfterSnapshot := encodeCursorPayload(`{"v":2,"i":"30d","o":"all-tenants","s":"2026-07-25T12:00:00Z","x":2,"p":"2026-07-25T12:00:01Z","n":1}`)
-	if _, cursorError := newManagedUsageFailureCursor(positionAfterSnapshot, usageIntervalThirtyDay, managedUsageAllTenantsScope); cursorError == nil {
+	positionAfterSnapshot := encodeCursorPayload(`{"v":3,"i":"30d","o":"all-tenants","d":"failed","s":"2026-07-25T12:00:00Z","x":2,"p":"2026-07-25T12:00:01Z","n":1}`)
+	if _, cursorError := newManagedUsageDetailCursor(positionAfterSnapshot, usageIntervalThirtyDay, managedUsageAllTenantsScope, managedUsageDispositionFailed); cursorError == nil {
 		t.Fatal("position after snapshot accepted")
 	}
-	noncanonical := encodeCursorPayload(" " + `{"v":2,"i":"30d","o":"all-tenants","s":"2026-07-25T12:00:00Z","x":2,"p":"2026-07-25T11:59:59Z","n":1}`)
-	if _, cursorError := newManagedUsageFailureCursor(noncanonical, usageIntervalThirtyDay, managedUsageAllTenantsScope); cursorError == nil {
+	noncanonical := encodeCursorPayload(" " + `{"v":3,"i":"30d","o":"all-tenants","d":"failed","s":"2026-07-25T12:00:00Z","x":2,"p":"2026-07-25T11:59:59Z","n":1}`)
+	if _, cursorError := newManagedUsageDetailCursor(noncanonical, usageIntervalThirtyDay, managedUsageAllTenantsScope, managedUsageDispositionFailed); cursorError == nil {
 		t.Fatal("noncanonical cursor accepted")
 	}
-	trailing := encodeCursorPayload(`{"v":2,"i":"30d","o":"all-tenants","s":"2026-07-25T12:00:00Z","x":2,"p":"2026-07-25T11:59:59Z","n":1} true`)
-	if _, cursorError := newManagedUsageFailureCursor(trailing, usageIntervalThirtyDay, managedUsageAllTenantsScope); cursorError == nil {
+	trailing := encodeCursorPayload(`{"v":3,"i":"30d","o":"all-tenants","d":"failed","s":"2026-07-25T12:00:00Z","x":2,"p":"2026-07-25T11:59:59Z","n":1} true`)
+	if _, cursorError := newManagedUsageDetailCursor(trailing, usageIntervalThirtyDay, managedUsageAllTenantsScope, managedUsageDispositionFailed); cursorError == nil {
 		t.Fatal("cursor with trailing value accepted")
 	}
 

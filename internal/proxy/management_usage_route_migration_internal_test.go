@@ -27,6 +27,12 @@ func newManagedResolvedUsageRouteMigrationFixture(t *testing.T) (*gorm.DB, manag
 	if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
 		t.Fatalf("create resolved usage route fixture: %v", migrationError)
 	}
+	if dropError := database.Migrator().DropTable(&managedUsageEventRecord{}); dropError != nil {
+		t.Fatalf("drop current usage table: %v", dropError)
+	}
+	if migrationError := database.AutoMigrate(&managedUsageEventSchemaTwelveRecord{}); migrationError != nil {
+		t.Fatalf("create schema-twelve usage table: %v", migrationError)
+	}
 	if dropError := database.Migrator().DropTable(&managedProviderAPIKeyRecord{}); dropError != nil {
 		t.Fatalf("drop predecessor provider table: %v", dropError)
 	}
@@ -40,18 +46,22 @@ func newManagedResolvedUsageRouteMigrationFixture(t *testing.T) (*gorm.DB, manag
 		t.Fatalf("seed resolved usage route tenant: %v", createError)
 	}
 	records := []managedUsageEventRecord{
-		{ID: 1, TenantID: tenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameOpenAI, ModelID: ModelNameGPT41, StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess, LatencyMilliseconds: 11, RequestTokens: 2, ResponseTokens: 3, TotalTokens: 5, CreatedAt: now},
-		{ID: 2, TenantID: tenant.TenantID, Endpoint: usageEndpointV2, ProviderID: ProviderNameDeepSeek, ModelID: ModelNameDeepSeekV4Flash, StatusCode: http.StatusBadGateway, Success: false, OutcomeCode: managedUsageOutcomeUpstreamError, LatencyMilliseconds: 17, CreatedAt: now.Add(time.Minute)},
-		{ID: 3, TenantID: tenant.TenantID, Endpoint: usageEndpointDictation, ProviderID: ProviderNameOpenAI, ModelID: DefaultDictationModel, StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess, LatencyMilliseconds: 23, CreatedAt: now.Add(2 * time.Minute)},
-		{ID: 4, TenantID: tenant.TenantID, Endpoint: usageEndpointText, StatusCode: http.StatusBadRequest, Success: false, OutcomeCode: managedUsageOutcomeInvalidRequest, LatencyMilliseconds: 29, CreatedAt: now.Add(3 * time.Minute)},
-		{ID: 5, TenantID: tenant.TenantID, Endpoint: usageEndpointText, ProviderID: "__credential_validation__", StatusCode: http.StatusBadRequest, Success: false, OutcomeCode: managedUsageOutcomeInvalidRequest, LatencyMilliseconds: 31, CreatedAt: now.Add(4 * time.Minute)},
-		{ID: 6, TenantID: tenant.TenantID, Endpoint: usageEndpointText, ModelID: ModelNameGPT41, StatusCode: http.StatusBadRequest, Success: false, OutcomeCode: managedUsageOutcomeInvalidRequest, LatencyMilliseconds: 37, CreatedAt: now.Add(5 * time.Minute)},
-		{ID: 7, TenantID: tenant.TenantID, Endpoint: usageEndpointText, ProviderID: strings.ToUpper(ProviderNameOpenAI), ModelID: ModelNameGPT41, StatusCode: http.StatusBadRequest, Success: false, OutcomeCode: managedUsageOutcomeInvalidRequest, LatencyMilliseconds: 41, CreatedAt: now.Add(6 * time.Minute)},
-		{ID: 8, TenantID: tenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameOpenAI, ModelID: ModelNameDeepSeekV4Flash, StatusCode: http.StatusBadRequest, Success: false, OutcomeCode: managedUsageOutcomeInvalidRequest, LatencyMilliseconds: 43, CreatedAt: now.Add(7 * time.Minute)},
-		{ID: 9, TenantID: tenant.TenantID, Endpoint: "unknown", ProviderID: ProviderNameOpenAI, ModelID: ModelNameGPT41, StatusCode: http.StatusBadRequest, Success: false, OutcomeCode: managedUsageOutcomeInvalidRequest, LatencyMilliseconds: 47, CreatedAt: now.Add(8 * time.Minute)},
-		{ID: 10, TenantID: tenant.TenantID, Endpoint: usageEndpointDictation, ProviderID: ProviderNameOpenAI, ModelID: ModelNameGPT41, StatusCode: http.StatusBadRequest, Success: false, OutcomeCode: managedUsageOutcomeInvalidRequest, LatencyMilliseconds: 53, CreatedAt: now.Add(9 * time.Minute)},
+		{ID: 1, TenantID: tenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameOpenAI, ModelID: ModelNameGPT41, StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess, LatencyMilliseconds: 11, RequestTokens: 2, ResponseTokens: 3, TotalTokens: 5, CreatedAt: now},
+		{ID: 2, TenantID: tenant.TenantID, Endpoint: usageEndpointV2, ProviderID: ProviderNameDeepSeek, ModelID: ModelNameDeepSeekV4Flash, StatusCode: http.StatusBadGateway, Disposition: managedUsageDispositionFailed, OutcomeCode: managedUsageOutcomeUpstreamError, LatencyMilliseconds: 17, CreatedAt: now.Add(time.Minute)},
+		{ID: 3, TenantID: tenant.TenantID, Endpoint: usageEndpointDictation, ProviderID: ProviderNameOpenAI, ModelID: DefaultDictationModel, StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess, LatencyMilliseconds: 23, CreatedAt: now.Add(2 * time.Minute)},
+		{ID: 4, TenantID: tenant.TenantID, Endpoint: usageEndpointText, StatusCode: http.StatusBadRequest, Disposition: managedUsageDispositionRejected, OutcomeCode: managedUsageOutcomeInvalidRequest, LatencyMilliseconds: 29, CreatedAt: now.Add(3 * time.Minute)},
+		{ID: 5, TenantID: tenant.TenantID, Endpoint: usageEndpointText, ProviderID: "__credential_validation__", StatusCode: http.StatusBadRequest, Disposition: managedUsageDispositionRejected, OutcomeCode: managedUsageOutcomeInvalidRequest, LatencyMilliseconds: 31, CreatedAt: now.Add(4 * time.Minute)},
+		{ID: 6, TenantID: tenant.TenantID, Endpoint: usageEndpointText, ModelID: ModelNameGPT41, StatusCode: http.StatusBadRequest, Disposition: managedUsageDispositionRejected, OutcomeCode: managedUsageOutcomeInvalidRequest, LatencyMilliseconds: 37, CreatedAt: now.Add(5 * time.Minute)},
+		{ID: 7, TenantID: tenant.TenantID, Endpoint: usageEndpointText, ProviderID: strings.ToUpper(ProviderNameOpenAI), ModelID: ModelNameGPT41, StatusCode: http.StatusBadRequest, Disposition: managedUsageDispositionRejected, OutcomeCode: managedUsageOutcomeInvalidRequest, LatencyMilliseconds: 41, CreatedAt: now.Add(6 * time.Minute)},
+		{ID: 8, TenantID: tenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameOpenAI, ModelID: ModelNameDeepSeekV4Flash, StatusCode: http.StatusBadRequest, Disposition: managedUsageDispositionRejected, OutcomeCode: managedUsageOutcomeInvalidRequest, LatencyMilliseconds: 43, CreatedAt: now.Add(7 * time.Minute)},
+		{ID: 9, TenantID: tenant.TenantID, Endpoint: "unknown", ProviderID: ProviderNameOpenAI, ModelID: ModelNameGPT41, StatusCode: http.StatusBadRequest, Disposition: managedUsageDispositionRejected, OutcomeCode: managedUsageOutcomeInvalidRequest, LatencyMilliseconds: 47, CreatedAt: now.Add(8 * time.Minute)},
+		{ID: 10, TenantID: tenant.TenantID, Endpoint: usageEndpointDictation, ProviderID: ProviderNameOpenAI, ModelID: ModelNameGPT41, StatusCode: http.StatusBadRequest, Disposition: managedUsageDispositionRejected, OutcomeCode: managedUsageOutcomeInvalidRequest, LatencyMilliseconds: 53, CreatedAt: now.Add(9 * time.Minute)},
 	}
-	if createError := database.Create(&records).Error; createError != nil {
+	schemaTwelveRecords := make([]managedUsageEventSchemaTwelveRecord, 0, len(records))
+	for _, record := range records {
+		schemaTwelveRecords = append(schemaTwelveRecords, managedUsageSchemaTwelveRecord(record))
+	}
+	if createError := database.Create(&schemaTwelveRecords).Error; createError != nil {
 		t.Fatalf("seed resolved usage route records: %v", createError)
 	}
 	if createError := database.Create(&managedSchemaMigrationRecord{Version: managedGeminiRouteRetirementVersion, AppliedAt: now}).Error; createError != nil {
@@ -82,7 +92,7 @@ func TestManagedResolvedUsageRouteMigrationClearsOnlyInvalidDimensions(t *testin
 		}
 	}
 	var latest managedSchemaMigrationRecord
-	if queryError := database.Order("version DESC").First(&latest).Error; queryError != nil || latest.Version != managedResolvedUsageRouteSchemaVersion {
+	if queryError := database.Order("version DESC").First(&latest).Error; queryError != nil || latest.Version != managedTenantSchemaVersion {
 		t.Fatalf("latest resolved usage route version=%+v error=%v", latest, queryError)
 	}
 	if reopenError := initializeManagedTenantSchema(database, providerKeyCipher, providers); reopenError != nil {
@@ -108,8 +118,8 @@ func TestManagedResolvedUsageRouteMigrationRollsBackStageFailures(t *testing.T) 
 			if !errors.Is(migrationError, errManagedTenantSchemaMigration) || !strings.Contains(migrationError.Error(), testCase.want) {
 				t.Fatalf("migration error=%v want=%s", migrationError, testCase.want)
 			}
-			var invalid managedUsageEventRecord
-			if queryError := database.Raw("SELECT * FROM "+managedUsageEventTable+" WHERE id = ?", records[4].ID).Scan(&invalid).Error; queryError != nil || invalid != records[4] {
+			var invalid managedUsageEventSchemaTwelveRecord
+			if queryError := database.Raw("SELECT * FROM "+managedUsageEventTable+" WHERE id = ?", records[4].ID).Scan(&invalid).Error; queryError != nil || invalid != managedUsageSchemaTwelveRecord(records[4]) {
 				t.Fatalf("rolled back invalid route=%+v error=%v", invalid, queryError)
 			}
 			var versionCount int64

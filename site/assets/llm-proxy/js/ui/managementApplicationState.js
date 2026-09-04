@@ -8,10 +8,10 @@ import {
   NOTICE_KINDS,
   NOTICE_SURFACES,
   USAGE_INTERVALS,
-} from "../constants.js?v=20260902c240";
-import { emptyDefaults } from "../core/managementProfile.js?v=20260902c240";
-import { createProviderEditorSession } from "./providerEditor.js?v=20260902c240";
-import { emptyUsageSummary } from "./usagePresentation.js?v=20260902c240";
+} from "../constants.js?v=20260903f037";
+import { emptyDefaults } from "../core/managementProfile.js?v=20260903f037";
+import { createProviderEditorSession } from "./providerEditor.js?v=20260903f037";
+import { emptyUsageSummary, USAGE_BREAKDOWN_VIEWS } from "./usagePresentation.js?v=20260903f037";
 
 const EMPTY_STRING = "";
 
@@ -28,7 +28,8 @@ const EMPTY_STRING = "";
  *   usageIntervals: typeof USAGE_INTERVALS,
  *   selectedUsageInterval: import("../types.d.js").UsageInterval,
  *   selectedUsageTenantID: string,
- *   usageBreakdownView: import("../types.d.js").UsageBreakdownView,
+ *   providerUsageBreakdownView: import("../types.d.js").UsageBreakdownView,
+ *   modelUsageBreakdownView: import("../types.d.js").UsageBreakdownView,
  *   usageLoading: boolean,
  *   usageLoadVersion: number,
  *   usageLoadState: "loading" | "available" | "unavailable",
@@ -64,12 +65,12 @@ const EMPTY_STRING = "";
  *   defaults: import("../types.d.js").TenantDefaults,
  *   usage: import("../types.d.js").ManagementUsageSummary,
  *   usageProfile: import("../types.d.js").ManagementTenantProfile | null,
- *   usageFailuresOpen: boolean,
- *   usageFailuresLoading: boolean,
- *   usageFailuresError: string,
- *   usageFailuresLoadVersion: number,
- *   usageFailures: Array<import("../types.d.js").ManagementUsageFailure | import("../types.d.js").ManagementAccountUsageFailure>,
- *   usageFailuresNextCursor: string,
+ *   usageDetailsKind: import("../types.d.js").UsageDetailKind | "",
+ *   usageDetailsLoading: boolean,
+ *   usageDetailsError: string,
+ *   usageDetailsLoadVersion: number,
+ *   usageDetails: Array<import("../types.d.js").ManagementUsageFailure | import("../types.d.js").ManagementAccountUsageFailure | import("../types.d.js").ManagementUsageRejection | import("../types.d.js").ManagementAccountUsageRejection>,
+ *   usageDetailsNextCursor: string,
  *   adminUsers: import("../types.d.js").ManagementAdminUser[],
  *   appLoadPromise: Promise<void> | null,
  *   appVersion: number,
@@ -77,7 +78,7 @@ const EMPTY_STRING = "";
  *   tenantLifetimeController: AbortController | null,
  *   tenantRequestController: AbortController | null,
  *   usageRequestController: AbortController | null,
- *   usageFailuresRequestController: AbortController | null,
+ *   usageDetailsRequestController: AbortController | null,
  *   generatedSecret: string,
  *   generatedSecretVisible: boolean,
  *   generatedSecretVersion: number,
@@ -122,7 +123,8 @@ export function createManagementApplicationState() {
     usageIntervals: USAGE_INTERVALS,
     selectedUsageInterval: /** @type {import("../types.d.js").UsageInterval} */ (DEFAULT_USAGE_INTERVAL),
     selectedUsageTenantID: EMPTY_STRING,
-    usageBreakdownView: /** @type {import("../types.d.js").UsageBreakdownView} */ ("bar"),
+    providerUsageBreakdownView: /** @type {import("../types.d.js").UsageBreakdownView} */ (USAGE_BREAKDOWN_VIEWS.BAR),
+    modelUsageBreakdownView: /** @type {import("../types.d.js").UsageBreakdownView} */ (USAGE_BREAKDOWN_VIEWS.BAR),
     usageLoading: false,
     usageLoadVersion: 0,
     usageLoadState: /** @type {"loading" | "available" | "unavailable"} */ ("loading"),
@@ -158,12 +160,12 @@ export function createManagementApplicationState() {
     defaults: emptyDefaults(),
     usage: emptyUsageSummary(DEFAULT_USAGE_INTERVAL),
     usageProfile: /** @type {import("../types.d.js").ManagementTenantProfile | null} */ (null),
-    usageFailuresOpen: false,
-    usageFailuresLoading: false,
-    usageFailuresError: EMPTY_STRING,
-    usageFailuresLoadVersion: 0,
-    usageFailures: /** @type {Array<import("../types.d.js").ManagementUsageFailure | import("../types.d.js").ManagementAccountUsageFailure>} */ ([]),
-    usageFailuresNextCursor: EMPTY_STRING,
+    usageDetailsKind: /** @type {import("../types.d.js").UsageDetailKind | ""} */ (EMPTY_STRING),
+    usageDetailsLoading: false,
+    usageDetailsError: EMPTY_STRING,
+    usageDetailsLoadVersion: 0,
+    usageDetails: /** @type {Array<import("../types.d.js").ManagementUsageFailure | import("../types.d.js").ManagementAccountUsageFailure | import("../types.d.js").ManagementUsageRejection | import("../types.d.js").ManagementAccountUsageRejection>} */ ([]),
+    usageDetailsNextCursor: EMPTY_STRING,
     adminUsers: /** @type {import("../types.d.js").ManagementAdminUser[]} */ ([]),
     appLoadPromise: /** @type {Promise<void> | null} */ (null),
     appVersion: 0,
@@ -171,7 +173,7 @@ export function createManagementApplicationState() {
     tenantLifetimeController: /** @type {AbortController | null} */ (null),
     tenantRequestController: /** @type {AbortController | null} */ (null),
     usageRequestController: /** @type {AbortController | null} */ (null),
-    usageFailuresRequestController: /** @type {AbortController | null} */ (null),
+    usageDetailsRequestController: /** @type {AbortController | null} */ (null),
     generatedSecret: EMPTY_STRING,
     generatedSecretVisible: false,
     generatedSecretVersion: 0,

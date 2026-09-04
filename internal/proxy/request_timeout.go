@@ -21,6 +21,7 @@ const (
 	requestOutcomeSuccess         = "success"
 	requestOutcomeProxyTimeout    = "proxy_timeout"
 	requestOutcomeProxyOverload   = "proxy_overload"
+	requestOutcomeProxyFailure    = "proxy_failure"
 	requestOutcomeProviderFailure = "provider_failure"
 	requestOutcomeCallerCancelled = "caller_cancelled"
 	statusClientClosedRequest     = 499
@@ -89,8 +90,35 @@ func (policy requestTimeoutPolicy) resolve(headerValues []string) (requestTimeou
 	return newRequestTimeoutBudget(requestedSeconds), true
 }
 
+type invalidRequestTimeoutRecorder func(*gin.Context, time.Time)
+
 func requestTimeoutHandler(policy requestTimeoutPolicy, structuredLogger *zap.SugaredLogger, handler gin.HandlerFunc) gin.HandlerFunc {
+	return requestTimeoutHandlerWithRecorder(policy, structuredLogger, func(*gin.Context, time.Time) {}, handler)
+}
+
+func managedRequestTimeoutHandler(policy requestTimeoutPolicy, structuredLogger *zap.SugaredLogger, managedTenants *managedTenantStore, endpoint string, handler gin.HandlerFunc) gin.HandlerFunc {
+	return requestTimeoutHandlerWithRecorder(policy, structuredLogger, func(ginContext *gin.Context, requestStart time.Time) {
+		recordManagedUsage(
+			managedTenants,
+			structuredLogger,
+			ginContext,
+			authenticatedTenantFromContext(ginContext),
+			endpoint,
+			http.StatusBadRequest,
+			nil,
+			requestStart,
+		)
+	}, handler)
+}
+
+func requestTimeoutHandlerWithRecorder(policy requestTimeoutPolicy, structuredLogger *zap.SugaredLogger, invalidTimeoutRecorder invalidRequestTimeoutRecorder, handler gin.HandlerFunc) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
+		requestStart := time.Now()
+		state := &requestTimeoutState{
+			outcome:             requestOutcomeValidation,
+			managedUsageOutcome: managedUsageOutcomeInvalidRequest,
+		}
+		ginContext.Set(contextKeyRequestTimeoutState, state)
 		budget, valid := policy.resolve(ginContext.Request.Header.Values(llmproxycontract.HeaderRequestTimeoutSeconds))
 		if !valid {
 			ginContext.Data(
@@ -102,9 +130,11 @@ func requestTimeoutHandler(policy requestTimeoutPolicy, structuredLogger *zap.Su
 					policy.maximum,
 				)),
 			)
+			invalidTimeoutRecorder(ginContext, requestStart)
 			return
 		}
 
+		state.budget = budget
 		ginContext.Header(llmproxycontract.HeaderRequestTimeoutSeconds, strconv.Itoa(budget.seconds))
 		callerContext := ginContext.Request.Context()
 		requestContext, cancelRequest := context.WithTimeoutCause(
@@ -118,12 +148,6 @@ func requestTimeoutHandler(policy requestTimeoutPolicy, structuredLogger *zap.Su
 				_ = requestBody.Close()
 			}
 		})
-		state := &requestTimeoutState{
-			budget:              budget,
-			outcome:             requestOutcomeValidation,
-			managedUsageOutcome: managedUsageOutcomeInvalidRequest,
-		}
-		ginContext.Set(contextKeyRequestTimeoutState, state)
 		ginContext.Request = ginContext.Request.WithContext(requestContext)
 		if requestBody != nil {
 			ginContext.Request.Body = contextReadCloser{
@@ -173,7 +197,9 @@ func managedRequestFailureOutcome(requestError error) managedUsageOutcomeCode {
 	switch {
 	case errors.Is(requestError, ErrProviderRateLimited):
 		return managedUsageOutcomeRateLimited
-	case errors.Is(requestError, ErrProviderNotConfigured), errors.Is(requestError, errQueueFull):
+	case errors.Is(requestError, ErrProviderNotConfigured):
+		return managedUsageOutcomeProviderNotConfigured
+	case errors.Is(requestError, errQueueFull):
 		return managedUsageOutcomeServiceUnavailable
 	case errors.Is(requestError, context.DeadlineExceeded), errors.Is(requestError, context.Canceled):
 		return managedUsageOutcomeRequestTimeout

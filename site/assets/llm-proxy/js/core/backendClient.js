@@ -1,6 +1,6 @@
 // @ts-check
 
-import { MPR_UI } from "../constants.js?v=20260902c240";
+import { MPR_UI } from "../constants.js?v=20260903f037";
 
 const MANAGEMENT_BASE_PATH = "/api/management";
 const HEADER_CONTENT_TYPE = "Content-Type";
@@ -141,6 +141,39 @@ export function fetchAccountUsageFailures(interval, limit, cursor, signal) {
     query.set("cursor", cursor);
   }
   return requestJSON(`${MANAGEMENT_BASE_PATH}/usage/failures?${query}`, {
+    method: "GET",
+    signal,
+  });
+}
+
+/**
+ * @param {string} tenantID
+ * @param {import("../types.d.js").UsageInterval} interval
+ * @param {number} limit
+ * @param {string} cursor
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<import("../types.d.js").ManagementUsageRejectionPage>}
+ */
+export function fetchUsageRejections(tenantID, interval, limit, cursor, signal) {
+  const query = new URLSearchParams({ interval, limit: String(limit) });
+  if (cursor) query.set("cursor", cursor);
+  return requestJSON(`${managementTenantPath(tenantID)}/usage/rejections?${query}`, {
+    method: "GET",
+    signal,
+  });
+}
+
+/**
+ * @param {import("../types.d.js").UsageInterval} interval
+ * @param {number} limit
+ * @param {string} cursor
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<import("../types.d.js").ManagementAccountUsageRejectionPage>}
+ */
+export function fetchAccountUsageRejections(interval, limit, cursor, signal) {
+  const query = new URLSearchParams({ interval, limit: String(limit) });
+  if (cursor) query.set("cursor", cursor);
+  return requestJSON(`${MANAGEMENT_BASE_PATH}/usage/rejections?${query}`, {
     method: "GET",
     signal,
   });

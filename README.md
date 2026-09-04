@@ -19,6 +19,7 @@ validated runtime catalog. A catalog change appears on the landing page without
 a second inventory. The authenticated
 management app opens at [`/app/`](https://llm-proxy.mprlab.com/app/) only after
 the public **Log In** action authenticates the user through MPR UI and TAuth.
+The application document title is always `LLM Proxy`.
 
 ## Features
 
@@ -536,9 +537,9 @@ Provider-specific details:
 
 All client keys, provider API keys, and tenant defaults are tenant-owned
 management state. An explicit request for a provider without a saved tenant
-credential returns `503 provider not configured`. An omitted provider resolves
-through the authenticated tenant's saved default and requires a saved
-credential for that route. Static provider base URLs and paths belong to
+credential returns `409 provider_not_configured` before provider dispatch. An
+omitted provider resolves through the authenticated tenant's saved default and
+requires a saved credential for that route. Static provider base URLs and paths belong to
 `providers.yml`. DashScope instead references a tenant-owned `base_url` provider
 field. The provider catalog must contain every supported provider and route.
 The `management` configuration is mandatory. Provider blocks in `config.yml`
@@ -870,14 +871,16 @@ tenant` selector sits immediately before the ordered `ALL`, `30 days`, `7
 days`, and `1 day` controls. It defaults to `All tenants`, while the interval
 independently defaults to `30 days`. The account-wide selection aggregates
 requests, tokens, success rate, buckets, status codes, providers, and models
-across every owned tenant. Choosing one tenant narrows the same dashboard
+across every owned tenant. These execution metrics include only succeeded and
+failed requests. The separate `rejected_requests` count identifies requests
+that could not reach provider dispatch. Choosing one tenant narrows the same dashboard
 surfaces to that tenant. `Refresh` and interval changes retain the Usage tenant
 selection, and changes to the Tenant control in Settings do not affect it. Users whose
 client setup is incomplete enter the mandatory Settings modal instead.
 After setup, the modal remains available from the avatar dropdown. The
 success-rate metric renders an **N failed requests** action only when the selected
 snapshot contains failures. It opens a keyboard- and focus-managed dialog with
-the current non-success status breakdown and newest-first safe failure metadata.
+the current failed-execution status breakdown and newest-first safe failure metadata.
 The dialog retains the active interval, paginates within one opaque snapshot,
 and discards any response made stale by an interval or Usage tenant change. An
 account-wide failure row includes the owning tenant's safe ID and current
@@ -887,14 +890,20 @@ data. The
 `Settings` menu item is inserted before `Sign out` through the shared
 `<mpr-user>` menu contract.
 
-Provider usage and Model usage share one local `Breakdown view` control. Its
-default `Bar graph` view ranks exact request counts against the largest row.
-Its `Donut chart` view presents the same ordered request counts as shares of
-the complete provider or model breakdown, with a visible count-and-percentage
-legend. Rounded shares total 100 percent, and every category remains separate.
-The selection changes both panels without a request. It survives
-interval, Refresh, and Usage tenant changes and resets after authentication
-reset or page reload. Requests and Tokens remain separate line charts. Their
+The Requests card renders an **N rejected requests** action when the selected
+snapshot contains rejections. It opens the same safe, scope-bound detail
+surface without a failure status breakdown. Rejected rows remain visible for
+diagnosis but do not enter totals, buckets, provider or model breakdowns,
+status groups, token counts, latency, or success rate.
+
+Provider usage and Model usage each have one icon-only chart toggle. Each card
+starts with a `Bar graph` that ranks exact request counts against the largest
+row. Its toggle changes only that card to a `Donut chart`. The donut presents
+the same ordered request counts as shares with a count-and-percentage legend.
+Rounded shares total 100 percent, and every category remains separate. Each
+selection survives interval, Refresh, and Usage tenant changes. Authentication
+reset or page reload resets both cards to bars. A toggle makes no request.
+Requests and Tokens remain separate line charts. Their
 visible X axes use the summary's UTC hour or date buckets. Their zero-based,
 integer Y axes identify requests or tokens per hour or day. Exact bucket starts
 and values remain available to assistive technology.
@@ -908,8 +917,7 @@ capabilities. Each provider card shows its exact
 selected-scope request and token totals. A tenant-filtered view also shows the
 tenant's selected provider model and marks only its default text route as
 `active`. Account-wide usage does not synthesize one model across tenants. A
-card's `used` state means that its canonical provider ID has requests in the
-selected interval.
+provider request count shows its activity in the selected interval.
 
 Each card includes a request volume bar. The highest provider request count in
 the current Usage scope sets the full scale. Other cards use the same scale, and
@@ -997,6 +1005,16 @@ user ids; prompts; responses; audio; transcripts; client secrets; provider
 keys; raw upstream bodies; or free-form errors. The administrator surface
 remains aggregate-only and cannot fetch another owner's rows.
 
+`GET /api/management/usage/rejections?interval=all|30d|7d|1d`
+and
+`GET /api/management/tenants/:tenant_id/usage/rejections?interval=all|30d|7d|1d`
+provide the corresponding account-wide and tenant-scoped rejection reports.
+They use the same interval, limit, cursor, ordering, scope-binding, ownership,
+cache, and safe-field contracts as the failure operations. Their outcome codes
+are exactly `invalid_request`, `payload_too_large`, and
+`provider_not_configured`. Provider and model are present only when the proxy
+resolved an exact typed route before rejection.
+
 Usage events are recorded only for managed tenants when they call the public
 proxy endpoints with a generated secret. Account-wide usage queries apply the
 authenticated owner and all owned tenant ids at the database boundary;
@@ -1004,13 +1022,21 @@ tenant-scoped queries additionally require the explicit tenant id. Every query
 uses one captured time boundary. Because proxy responses enqueue usage
 asynchronously, a summary or failure query can temporarily omit accepted work
 that has not committed yet. Stored usage
-metadata includes endpoint, provider, model, status code, success flag, one
-canonical outcome code, latency, and normalized request/response/total token
-counts. Outcome codes are exactly `success`, `invalid_request`,
-`payload_too_large`, `rate_limited`, `service_unavailable`, `request_timeout`,
-or `upstream_error`. They are selected at the request/error boundary; prompts,
+metadata includes endpoint, provider, model, status code, request disposition,
+one canonical outcome code, latency, and normalized request/response/total
+token counts. Each event has exactly one `rejected`, `succeeded`, or `failed`
+disposition. Rejected outcomes are `invalid_request`, `payload_too_large`, and
+`provider_not_configured`. The succeeded outcome is `success`. Failed outcomes
+are `rate_limited`, `service_unavailable`, `request_timeout`, `upstream_error`,
+and `proxy_error`. They are selected at the request/error boundary; prompts,
 audio, transcripts, responses, tenant secrets, provider API keys, raw upstream
 bodies, and free-form error text are not stored in usage events.
+
+After tenant authentication, an invalid request-timeout header produces an
+`invalid_request` rejection for text, V2, and dictation. Unauthenticated
+requests and asset operations do not create proxy usage events. A V2
+asset-store read error produces a `proxy_error` failure. Invalid asset input
+and a missing asset remain rejections.
 
 The runtime never imports config tenants or global provider keys.
 TAuth subjects own personal tenants directly. The contract has no shared
@@ -1112,6 +1138,19 @@ The bounded schema-version-11 migration replaces stored
 `gemini-3.5-flash`. It updates the provider profile and same-provider tenant
 default in one transaction. It preserves provider connections, system prompts,
 timestamps, and historical usage model identifiers.
+
+The bounded schema-version-13 migration replaces the historical success flag
+with the required request disposition. It maps successful events to
+`succeeded`. It maps input and payload-size outcomes to `rejected`. It maps
+attempted provider or proxy outcomes to `failed`. A historical `service_unavailable`
+event without a resolved route becomes `provider_not_configured`. A historical
+server-side `invalid_request` becomes `proxy_error`. The transaction preserves
+safe event metadata, copies records in fixed batches of 256, validates each
+mapped row, records version 13, and removes the predecessor table. Current
+startup validates each distinct disposition and outcome pair. It rejects the
+obsolete success column, an invalid pair, a missing disposition index, or a
+retained predecessor table. A report returns a store error if usage data
+changes to an invalid pair after startup.
 
 Server settings and browser-facing MPR UI/TAuth bootstrap settings remain in
 `config.yml`. Provider definitions and static endpoints remain in
@@ -2510,7 +2549,9 @@ were verified on 2026-08-13 against MiniMax's official references above.
   transport limit. Provider media failures use
   `provider_media_limit_exceeded`.
 * `429 Too Many Requests` - upstream provider rate limit; returns the sanitized `provider_rate_limited` JSON contract
-* `503 Service Unavailable` - selected provider credential is unavailable because that non-default provider is disabled or missing its API key
+* `409 Conflict` - selected provider credential is not configured. The proxy
+  returns `provider_not_configured` before provider dispatch.
+* `503 Service Unavailable` - the shared upstream operation queue is full
 * `504 Gateway Timeout` - the accepted proxy work budget expired; the response is `{"error":{"code":"request_timeout","request_timeout_seconds":N}}`
 * `502 Bad Gateway` - upstream provider API or response-protocol failure; returns the sanitized `provider_error` JSON contract
 

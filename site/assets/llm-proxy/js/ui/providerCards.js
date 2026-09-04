@@ -1,14 +1,14 @@
 // @ts-check
 
-import { AUTH_STATES, COPY, DASHBOARD_VIEWS, NOTICE_KINDS, PROVIDER_CAPABILITY_LABELS } from "../constants.js?v=20260902c240";
-import { fetchTenant } from "../core/backendClient.js?v=20260902c240";
+import { AUTH_STATES, COPY, DASHBOARD_VIEWS, NOTICE_KINDS, PROVIDER_CAPABILITY_LABELS } from "../constants.js?v=20260903f037";
+import { fetchTenant } from "../core/backendClient.js?v=20260903f037";
 import {
   assertManagementTenantProfile,
   isAbortError,
   profileFailureMessage,
   profileProvider,
-} from "../core/managementProfile.js?v=20260902c240";
-import { formatNumber } from "./usageFailurePresentation.js?v=20260902c240";
+} from "../core/managementProfile.js?v=20260903f037";
+import { formatNumber } from "./usageFailurePresentation.js?v=20260903f037";
 
 const EMPTY_STRING = "";
 
@@ -50,15 +50,15 @@ export function createProviderCardsResponsibility() {
     /** @param {import("../types.d.js").ProviderProfile} provider */
     providerCardActivity(provider) {
       if (this.usageLoadState === "loading") {
-        return { available: false, requests: "Loading", tokens: "Loading", used: false };
+        return { available: false, requests: "Loading", tokens: "Loading" };
       }
       if (this.usageLoadState !== "available") {
-        return { available: false, requests: "Unavailable", tokens: "Unavailable", used: false };
+        return { available: false, requests: "Unavailable", tokens: "Unavailable" };
       }
       const activity = providerUsageAggregate(this.usage, provider.id);
       const requests = activity ? activity.data.requests : 0;
       const tokens = activity ? activity.data.total_tokens : 0;
-      return { available: true, requests: formatNumber(requests), tokens: formatNumber(tokens), used: requests > 0 };
+      return { available: true, requests: formatNumber(requests), tokens: formatNumber(tokens) };
     },
 
     /** @param {import("../types.d.js").ProviderProfile} provider */

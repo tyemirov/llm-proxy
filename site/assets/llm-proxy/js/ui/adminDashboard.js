@@ -4,14 +4,14 @@ import {
   COPY,
   DASHBOARD_VIEWS,
   NOTICE_KINDS,
-} from "../constants.js?v=20260902c240";
-import { fetchAdminUsers } from "../core/backendClient.js?v=20260902c240";
-import { formatNumber } from "./usageFailurePresentation.js?v=20260902c240";
-import { successRateLabel } from "./usagePresentation.js?v=20260902c240";
+} from "../constants.js?v=20260903f037";
+import { fetchAdminUsers } from "../core/backendClient.js?v=20260903f037";
+import { formatNumber } from "./usageFailurePresentation.js?v=20260903f037";
+import { successRateLabel } from "./usagePresentation.js?v=20260903f037";
 
 /** @typedef {ReturnType<typeof import("./managementApplicationState.js").createManagementApplicationState>} ManagementApplicationState */
 /** @typedef {ManagementApplicationState & {
- *   clearUsageFailures: (restoreFocus: boolean) => void,
+ *   clearUsageDetails: (restoreFocus: boolean) => void,
  *   resetProviderCard: () => void,
  *   setPageNotice: (kind: string, message: string) => void
  * }} AdminDashboardHost */
@@ -74,7 +74,7 @@ export function createAdminDashboardResponsibility() {
         return;
       }
       this.resetProviderCard();
-      this.clearUsageFailures(false);
+      this.clearUsageDetails(false);
       this.dashboardView = DASHBOARD_VIEWS.ADMIN;
       await this.refreshAdminUsers();
     },

@@ -46,7 +46,7 @@ const apiDocumentationPath = "/docs/";
 const openAPIPath = "/openapi.yaml";
 const openAPISchemaViewerPath = `${apiDocumentationPath}#openapi-schema`;
 const openAPIDownloadFilename = "llm-proxy-openapi.yaml";
-const applicationModuleRevision = "20260902c240";
+const applicationModuleRevision = "20260903f037";
 const applicationModuleFiles = Object.freeze([
   "alpineRuntime.js",
   "app.js",
@@ -254,7 +254,8 @@ const generatedResourcePageCount = 46;
 const landingModifiedDate = "2026-08-08";
 const seoContentModifiedDate = "2026-07-11";
 const seoCurrentContentModifiedDate = "2026-07-22";
-const seoUsageContentModifiedDate = "2026-09-01";
+const seoResourceIndexModifiedDate = "2026-09-01";
+const seoUsageContentModifiedDate = "2026-09-03";
 const seoProviderCatalogModifiedDate = "2026-08-22";
 const seoClientDocumentationPublishedDate = landingModifiedDate;
 const seoClientDocumentationModifiedDate = seoProviderCatalogModifiedDate;
@@ -524,6 +525,8 @@ test("public landing explains the product and exposes the generated capability c
   const page = await request.get(`${baseURL}${applicationPath}`);
   expect(page.status()).toBe(httpOK);
   const managementHTML = await page.text();
+  expect(managementHTML).toContain("<title>LLM Proxy</title>");
+  expect(managementHTML).not.toContain("<title>Manage LLM Proxy</title>");
   expect(managementHTML).toContain('<meta name="robots" content="noindex, nofollow">');
   expect(managementHTML).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/app/">');
   expect(managementHTML).toContain(`data-config-url="${configPath}"`);
@@ -567,6 +570,7 @@ test("public landing explains the product and exposes the generated capability c
   expect(managementHTML).toContain('<body x-data="llmProxyManagementApplication" x-init="init()">');
   expect(managementHTML).toContain("<llm-proxy-management-application");
   expect(managementHTML).not.toContain("llm-proxy-key-management");
+  expect(managementHTML).not.toContain("providerUsed");
   expect(managementHTML).not.toContain('x-init="bindNotificationRegion($el)"');
   expect(managementHTML).toContain('<a slot="brand" class="llm-proxy-header-brand" href="/" aria-label="LLM Proxy home">');
   expect(managementHTML).toContain(`<img class="llm-proxy-header-brand__logo" src="${appIconPath}" alt="" aria-hidden="true">`);
@@ -1644,7 +1648,7 @@ test("site publishes the exact canonical OpenAPI artifact and its derived refere
   expect(documentationHTML).not.toContain('id="operation-deleteManagementTenantSecret"');
   expect(documentationHTML).toContain("<code>reasoning_effort</code>");
   expect(documentationHTML).toContain(`href="${openAPIPath}"`);
-  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(25);
+  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(27);
 });
 
 test("OpenAPI reference views and downloads the exact canonical YAML", async ({ page }) => {
@@ -1799,14 +1803,25 @@ test("SEO usage resource documents account-wide and tenant-filtered intervals", 
   expect(response.status()).toBe(httpOK);
   const pageHTML = await response.text();
   expect(pageHTML).toContain(`"dateModified":"${seoUsageContentModifiedDate}"`);
-  expect(pageHTML).toContain("Usage opens on All tenants and 30 days");
-  expect(pageHTML).toContain("Usage tenant selector immediately before ALL");
-  expect(pageHTML).toContain("Bar graph or Donut chart");
+  expect(pageHTML).toContain("Usage keeps impossible requests visible as rejections");
+  expect(pageHTML).toContain("rejected_requests");
+  expect(pageHTML).toContain("provider_not_configured");
+  expect(pageHTML).toContain("Independent chart toggles");
+  expect(pageHTML).toContain("icon button to switch that card");
   expect(pageHTML).toContain("UTC and zero-based per-hour or per-day axes");
-  expect(pageHTML).toContain("not billing, provider-key, exact-event-time, or new management-API features");
+  expect(pageHTML).toContain("without counting them as executions or proxy failures");
   expect(pageHTML).toContain("GET /api/management/usage?interval=30d");
+  expect(pageHTML).toContain("GET /api/management/usage/failures?interval=30d");
+  expect(pageHTML).toContain("GET /api/management/usage/rejections?interval=30d");
   expect(pageHTML).toContain(
     "GET /api/management/tenants/:tenant_id/usage?interval=30d",
+  );
+  const seoReport = await readFile(
+    path.join(repoRoot, "docs/marketing/seo-resource-cluster-report.md"),
+    "utf8",
+  );
+  expect(seoReport).toContain(
+    "| Account-wide managed tenant usage dashboard for LLMs | Account-wide and tenant-scoped execution aggregates, separate safe failure and rejection reports, independent local provider and model chart toggles",
   );
 });
 
@@ -1870,6 +1885,9 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
   expect(sitemapLocations).toHaveLength(generatedResourcePageCount + 5);
   expect(sitemapXML).toContain("<loc>https://llm-proxy.mprlab.com/</loc>");
   expect(sitemapXML).toContain("<loc>https://llm-proxy.mprlab.com/resources/</loc>");
+  expect(sitemapXML).toContain(
+    `<loc>https://llm-proxy.mprlab.com/resources/</loc>\n    <lastmod>${seoResourceIndexModifiedDate}</lastmod>`,
+  );
   expect(sitemapXML).toContain(`<loc>https://llm-proxy.mprlab.com${apiDocumentationPath}</loc>`);
   expect(sitemapXML).toContain(`<loc>https://llm-proxy.mprlab.com${privacyPath}</loc>`);
   expect(sitemapXML).toContain(`<loc>https://llm-proxy.mprlab.com${termsPath}</loc>`);
@@ -1885,6 +1903,7 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
     new Set([
       `<lastmod>${seoContentModifiedDate}</lastmod>`,
       `<lastmod>${seoCurrentContentModifiedDate}</lastmod>`,
+      `<lastmod>${seoResourceIndexModifiedDate}</lastmod>`,
       `<lastmod>${seoUsageContentModifiedDate}</lastmod>`,
       `<lastmod>${seoSecretRotationModifiedDate}</lastmod>`,
       `<lastmod>${seoProviderCatalogModifiedDate}</lastmod>`,
@@ -2249,6 +2268,7 @@ test("dashboard shows usage and Settings excludes provider controls", async ({ p
   await installManagementRoutes(page);
   await page.goto(baseURL + applicationPath);
 
+  await expect(page).toHaveTitle("LLM Proxy");
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
   await expect(page.locator("usage-card").filter({ hasText: "Tokens" }).locator("strong")).toHaveText("12,345");
@@ -2373,7 +2393,7 @@ test("usage intervals load every dashboard surface, remain active on refresh, an
   }
 });
 
-test("one local Breakdown view controls both request distributions without fetching", async ({ page }) => {
+test("provider and model cards switch presentation independently without fetching", async ({ page }) => {
   let usageRequestCount = 0;
   page.on("request", (request) => {
     if (new URL(request.url()).pathname.match(/^\/api\/management\/(?:usage|tenants\/[^/]+\/usage)$/u)) {
@@ -2384,18 +2404,40 @@ test("one local Breakdown view controls both request distributions without fetch
   await installMultiTenantRoutes(page);
   await page.goto(`${baseURL}${applicationPath}`);
 
-  const viewControl = page.getByRole("group", { name: "Breakdown view" });
-  const barButton = viewControl.getByRole("button", { name: "Bar graph" });
-  const donutButton = viewControl.getByRole("button", { name: "Donut chart" });
-  await expect(barButton).toHaveAttribute("aria-pressed", "true");
+  const providerBreakdown = page.locator("usage-breakdown").first();
+  const modelBreakdown = page.locator("usage-breakdown").nth(1);
+  await expect(providerBreakdown.getByRole("heading", { name: "Provider usage", exact: true })).toHaveCount(1);
+  await expect(modelBreakdown.getByRole("heading", { name: "Model usage", exact: true })).toHaveCount(1);
+  await expect(providerBreakdown.locator("header .eyebrow")).toHaveCount(0);
+  await expect(modelBreakdown.locator("header .eyebrow")).toHaveCount(0);
+  const providerToggle = providerBreakdown.getByRole("button");
+  const modelToggle = modelBreakdown.getByRole("button");
+  await expect(providerToggle).toHaveAccessibleName("Show donut chart");
+  await expect(modelToggle).toHaveAccessibleName("Show donut chart");
+  await expect(providerToggle).toHaveAttribute("title", "Show donut chart");
+  await expect(modelToggle).toHaveAttribute("title", "Show donut chart");
+  await expect(providerToggle).toHaveText("");
+  await expect(modelToggle).toHaveText("");
+  await expect(providerToggle.locator('[data-chart-icon="donut"]')).toBeVisible();
+  await expect(modelToggle.locator('[data-chart-icon="donut"]')).toBeVisible();
   await expect(page.locator("usage-breakdown usage-row-list:visible")).toHaveCount(2);
   await expect(page.locator("usage-breakdown usage-donut:visible")).toHaveCount(0);
   const requestsBeforeModeChange = usageRequestCount;
 
-  await donutButton.focus();
-  await donutButton.press("Enter");
-  await expect(donutButton).toBeFocused();
-  await expect(donutButton).toHaveAttribute("aria-pressed", "true");
+  await providerToggle.focus();
+  await providerToggle.press("Enter");
+  await expect(providerToggle).toBeFocused();
+  await expect(providerToggle).toHaveAccessibleName("Show bar graph");
+  await expect(providerToggle.locator('[data-chart-icon="bar"]')).toBeVisible();
+  await expect(modelToggle).toHaveAccessibleName("Show donut chart");
+  await expect(providerBreakdown.locator("usage-row-list")).toBeHidden();
+  await expect(providerBreakdown.locator("usage-donut")).toBeVisible();
+  await expect(modelBreakdown.locator("usage-row-list")).toBeVisible();
+  await expect(modelBreakdown.locator("usage-donut")).toBeHidden();
+  expect(usageRequestCount).toBe(requestsBeforeModeChange);
+
+  await modelToggle.click();
+  await expect(modelToggle).toHaveAccessibleName("Show bar graph");
   await expect(page.locator("usage-breakdown usage-row-list:visible")).toHaveCount(0);
   await expect(page.locator("usage-breakdown usage-donut:visible")).toHaveCount(2);
   expect(usageRequestCount).toBe(requestsBeforeModeChange);
@@ -2418,12 +2460,15 @@ test("one local Breakdown view controls both request distributions without fetch
   await expect(page.getByText("Other", { exact: true })).toHaveCount(0);
 
   await page.getByRole("group", { name: "Usage interval" }).getByRole("button", { name: "7 days" }).click();
-  await expect(donutButton).toHaveAttribute("aria-pressed", "true");
+  await expect(providerToggle).toHaveAccessibleName("Show bar graph");
+  await expect(modelToggle).toHaveAccessibleName("Show bar graph");
   expect((await providerLegend.getByRole("listitem").innerText()).replace(/\s/gu, "")).toBe("provider-7d7requests·100%");
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
-  await expect(donutButton).toHaveAttribute("aria-pressed", "true");
+  await expect(providerToggle).toHaveAccessibleName("Show bar graph");
+  await expect(modelToggle).toHaveAccessibleName("Show bar graph");
   await page.getByRole("combobox", { name: "Usage tenant" }).selectOption("tenant_2");
-  await expect(donutButton).toHaveAttribute("aria-pressed", "true");
+  await expect(providerToggle).toHaveAccessibleName("Show bar graph");
+  await expect(modelToggle).toHaveAccessibleName("Show bar graph");
 
   await page.setViewportSize({ width: 390, height: 800 });
   const application = page.locator("llm-proxy-management-application");
@@ -2432,23 +2477,26 @@ test("one local Breakdown view controls both request distributions without fetch
     clientWidth: element.clientWidth,
   }));
   expect(viewportGeometry.scrollWidth).toBeLessThanOrEqual(viewportGeometry.clientWidth);
-  await expect(viewControl).toBeVisible();
+  await expect(providerToggle).toBeVisible();
+  await expect(modelToggle).toBeVisible();
 
   await page.reload();
-  await expect(barButton).toHaveAttribute("aria-pressed", "true");
-  await donutButton.click();
-  await expect(donutButton).toHaveAttribute("aria-pressed", "true");
+  await expect(providerToggle).toHaveAccessibleName("Show donut chart");
+  await expect(modelToggle).toHaveAccessibleName("Show donut chart");
+  await modelToggle.click();
+  await expect(providerToggle).toHaveAccessibleName("Show donut chart");
+  await expect(modelToggle).toHaveAccessibleName("Show bar graph");
 
-  const resetView = await application.evaluate((applicationElement) => {
+  const resetViews = await application.evaluate((applicationElement) => {
     const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
     const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
     if (!applicationState) {
       throw new Error("usage_breakdown_state_missing");
     }
     applicationState.clearAuthenticatedState();
-    return applicationState.usageBreakdownView;
+    return [applicationState.providerUsageBreakdownView, applicationState.modelUsageBreakdownView];
   });
-  expect(resetView).toBe("bar");
+  expect(resetViews).toEqual(["bar", "bar"]);
 });
 
 test("Usage time series expose UTC and metric-specific integer axes", async ({ page }) => {
@@ -2458,10 +2506,16 @@ test("Usage time series expose UTC and metric-specific integer axes", async ({ p
 
   const requestChart = page.locator("usage-chart-panel").first();
   const tokenChart = page.locator("usage-chart-panel").nth(1);
+  await expect(requestChart.locator("svg")).toHaveAttribute("viewBox", "0 0 640 240");
+  await expect(tokenChart.locator("svg")).toHaveAttribute("viewBox", "0 0 640 240");
   await expect(requestChart.locator(".usage-axis-title-y")).toHaveText("Requests per day");
   await expect(tokenChart.locator(".usage-axis-title-y")).toHaveText("Tokens per day");
   await expect(requestChart.locator(".usage-axis-title-x")).toHaveText("Time (UTC)");
   await expect(tokenChart.locator(".usage-axis-title-x")).toHaveText("Time (UTC)");
+  const tokenChartBounds = await tokenChart.locator("svg").boundingBox();
+  const tokenXAxisBounds = await tokenChart.locator(".usage-axis-title-x").boundingBox();
+  if (!tokenChartBounds || !tokenXAxisBounds) throw new Error("usage_token_x_axis_bounds_missing");
+  expect(tokenXAxisBounds.y + tokenXAxisBounds.height).toBeLessThanOrEqual(tokenChartBounds.y + tokenChartBounds.height);
   await expect(requestChart.locator(".usage-x-tick text")).toHaveText([
     "2026-06-01", "2026-06-08", "2026-06-16", "2026-06-23", "2026-06-30",
   ]);
@@ -2524,8 +2578,8 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
 
   const intervalGroup = page.getByRole("group", { name: "Usage interval" });
   const sevenDayButton = intervalGroup.getByRole("button", { name: "7 days" });
-  const donutButton = page.getByRole("group", { name: "Breakdown view" }).getByRole("button", { name: "Donut chart" });
-  await donutButton.click();
+  const modelBreakdownToggle = page.locator("usage-breakdown").nth(1).getByRole("button");
+  await modelBreakdownToggle.click();
   try {
     await sevenDayButton.click();
     for (const intervalButton of await intervalGroup.getByRole("button").all()) {
@@ -2535,7 +2589,7 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
     await expect(sevenDayButton).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
     await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
-    await expect(donutButton).toHaveAttribute("aria-pressed", "true");
+    await expect(modelBreakdownToggle).toHaveAccessibleName("Show bar graph");
     await page.locator("llm-proxy-management-application").evaluate((applicationElement) => {
       const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
       const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
@@ -2546,7 +2600,7 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
     });
     await expect(intervalGroup.getByRole("button", { name: "1 day" })).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("1");
-    await expect(donutButton).toHaveAttribute("aria-pressed", "true");
+    await expect(modelBreakdownToggle).toHaveAccessibleName("Show bar graph");
   } finally {
     releaseSevenDayResponse();
   }
@@ -2564,7 +2618,7 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
   await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
   await expect(page.locator("usage-breakdown").first()).toContainText("No usage recorded");
   await expect(page.locator("usage-breakdown").nth(1)).toContainText("No usage recorded");
-  await expect(donutButton).toHaveAttribute("aria-pressed", "true");
+  await expect(modelBreakdownToggle).toHaveAccessibleName("Show bar graph");
 });
 
 test("failed-request details expose 10 of 22 requests as safe, focus-managed metadata on desktop and mobile", async ({ page }) => {
@@ -2577,10 +2631,9 @@ test("failed-request details expose 10 of 22 requests as safe, focus-managed met
   });
   usage.status_codes = [
     { status_code: 200, requests: 12 },
-    { status_code: 400, requests: 3 },
     { status_code: 429, requests: 2 },
     { status_code: 499, requests: 1 },
-    { status_code: 502, requests: 4 },
+    { status_code: 502, requests: 7 },
   ];
   await installAssetRoutes(page);
   await installManagementRoutes(page);
@@ -2602,10 +2655,10 @@ test("failed-request details expose 10 of 22 requests as safe, focus-managed met
   await expect(dialog).toHaveAttribute("aria-busy", "false");
   await expect(closeButton).toBeFocused();
   await expect(dialog.getByRole("heading", { name: "Status breakdown" })).toBeVisible();
-  await expect(dialog.locator("usage-failure-status")).toHaveCount(4);
-  await expect(dialog.locator("usage-failure-status").nth(0)).toContainText("400");
-  await expect(dialog.locator("usage-failure-status").nth(0)).toContainText("Bad request");
-  await expect(dialog.locator("usage-failure-status").nth(0)).toContainText("3");
+  await expect(dialog.locator("usage-failure-status")).toHaveCount(3);
+  await expect(dialog.locator("usage-failure-status").nth(0)).toContainText("429");
+  await expect(dialog.locator("usage-failure-status").nth(0)).toContainText("Rate limited");
+  await expect(dialog.locator("usage-failure-status").nth(0)).toContainText("2");
   await expect(dialog.locator("usage-failure-row")).toHaveCount(10);
   await expect(dialog.locator("usage-failure-row").first()).toContainText("Default · tenant_1");
   await expect(dialog.locator("usage-failure-row").first()).toContainText("V2");
@@ -2647,6 +2700,45 @@ test("failed-request details expose 10 of 22 requests as safe, focus-managed met
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(failureAction).toBeFocused();
+});
+
+test("rejected requests stay visible without entering execution or failure metrics", async ({ page }) => {
+  const usage = managementUsage("30d", {
+    requests: 2,
+    successful_requests: 1,
+    failed_requests: 1,
+    text_requests: 2,
+  });
+  usage.rejected_requests = 3;
+  usage.status_codes = [
+    { status_code: 200, requests: 1 },
+    { status_code: 502, requests: 1 },
+  ];
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+  await installUsageResponse(page, httpOK, usage);
+  await installUsageRejectionsResponse(page, managementUsageRejections("30d"));
+
+  await page.goto(`${baseURL}${applicationPath}`);
+
+  const requestsCard = page.locator("usage-card").filter({ hasText: "Requests" });
+  await expect(requestsCard.locator("strong")).toHaveText("2");
+  const rejectionAction = requestsCard.getByRole("button", { name: "3 rejected requests" });
+  await rejectionAction.click();
+
+  const dialog = page.getByRole("dialog", { name: "Rejected request details" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Status breakdown" })).toBeHidden();
+  await expect(dialog.locator("usage-failure-row")).toHaveCount(3);
+  await expect(dialog.locator("usage-failure-row").first()).toContainText("deepseek");
+  await expect(dialog.locator("usage-failure-row").first()).toContainText("deepseek-v4-flash");
+  await expect(dialog.locator("usage-failure-row").first()).toContainText("409 Conflict");
+  await expect(dialog.locator("usage-failure-row").first()).toContainText("Provider not configured");
+  await expect(dialog.locator("usage-failure-row").nth(1)).toContainText("Not resolved");
+
+  await dialog.getByRole("button", { name: "Close rejected request details" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(rejectionAction).toBeFocused();
 });
 
 test("failed-request pagination preserves metrics across loading and retryable errors", async ({ page }) => {
@@ -2786,6 +2878,7 @@ test("provider cards follow catalog order and keep all-tenant activity provider-
   await expect(dashScopeCard.locator(".provider-card-taxonomy dd").nth(1).locator("span")).toHaveText(["Text", "Image analysis"]);
   await expect(dashScopeCard.locator(".provider-card-front")).not.toContainText("Image generation");
   expect(await cards.locator("provider-card-statuses span:visible").allTextContents()).not.toContain("active");
+  await expect(cards.getByText("used", { exact: true })).toHaveCount(0);
   expect(await cards.locator(".provider-card-front dt:visible").allTextContents()).not.toContain("Provider default model");
   const providerSettingsAction = cards.first().getByRole("button", { name: "Set API key" });
   await expect(providerSettingsAction).toBeVisible();
@@ -2832,7 +2925,7 @@ test("an explicit Usage tenant opens one safe compact provider card editor", asy
 
   const card = page.locator('[data-provider-card="openai"]');
   await expect(card.getByText("active", { exact: true })).toBeVisible();
-  await expect(card.getByText("used", { exact: true })).toBeVisible();
+  await expect(card.locator("provider-card-statuses span:visible")).toHaveText(["active"]);
   await expect(card.getByText("gpt-4.1", { exact: true })).toBeVisible();
   const providerSettingsAction = card.getByRole("button", { name: "API key settings" });
   await expect(providerSettingsAction).toHaveAttribute("title", "API key settings");
@@ -3064,7 +3157,6 @@ test("deleting a provider key preserves its model, prompt, setting, and usage ca
   await page.getByRole("combobox", { name: "Usage tenant" }).selectOption("tenant_1");
 
   const card = page.locator('[data-provider-card="dashscope"]');
-  await expect(card.getByText("used", { exact: true })).toBeVisible();
   await expect(card.locator(".provider-card-usage dd:visible")).toHaveText(["5", "321", "qwen3.7-max"]);
   await card.getByRole("button", { name: "API key settings" }).click();
   const keyInputRow = card.getByRole("textbox", { name: "DashScope API key" }).locator("..");
@@ -3079,7 +3171,6 @@ test("deleting a provider key preserves its model, prompt, setting, and usage ca
   await card.locator("details.provider-system-prompt summary").click();
   await expect(card.getByRole("textbox", { name: "System prompt" })).toHaveValue("Preserve this prompt.");
   await expect(card).toBeVisible();
-  await expect(card.getByText("used", { exact: true })).toBeVisible();
   await expect(card.locator(".provider-card-usage dd:visible")).toHaveText(["5", "321", "qwen3.7-max"]);
 });
 
@@ -4440,7 +4531,7 @@ test("admin menu opens all users dashboard", async ({ page }) => {
   await expect(page.locator("admin-dashboard")).not.toContainText("masked_key");
   await expect(page.getByRole("button", { name: /failed request/ })).toHaveCount(0);
   await expect(page.getByRole("dialog", { name: "Failed request details" })).toHaveCount(0);
-  await expect(page.getByRole("group", { name: "Breakdown view" })).toHaveCount(0);
+  await expect(page.locator(".usage-breakdown-toggle")).toHaveCount(0);
 });
 
 /**
@@ -4946,6 +5037,13 @@ function usageFailuresRequestPattern() {
 }
 
 /**
+ * @returns {string}
+ */
+function usageRejectionsRequestPattern() {
+  return `${baseURL}/api/management/usage/rejections?*`;
+}
+
+/**
  * @param {import("@playwright/test").Page} page
  * @param {object} response
  * @returns {Promise<void>}
@@ -4957,6 +5055,20 @@ async function installUsageFailuresResponse(page, response) {
     expect(requestURL.searchParams.get("limit")).toBe("25");
     expect(requestURL.searchParams.getAll("interval")).toHaveLength(1);
     expect(requestURL.searchParams.getAll("limit")).toHaveLength(1);
+    await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: response });
+  });
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {object} response
+ * @returns {Promise<void>}
+ */
+async function installUsageRejectionsResponse(page, response) {
+  await page.route(usageRejectionsRequestPattern(), async (route) => {
+    const requestURL = new URL(route.request().url());
+    expect(requestURL.searchParams.get("interval")).toBe(response.interval);
+    expect(requestURL.searchParams.get("limit")).toBe("25");
     await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: response });
   });
 }
@@ -6081,6 +6193,7 @@ function managementUsage(interval = "30d", totalOverrides = {}) {
   return {
     interval,
     bucket_unit: bucketUnit,
+    rejected_requests: 0,
     totals: usageAggregate({
       requests: intervalFixture.requests,
       successful_requests: isDefaultInterval ? 35 : intervalFixture.requests,
@@ -6121,14 +6234,6 @@ function managementUsageFailures(interval, count, nextCursor = "", offset = 0) {
       latency_ms: 245,
     },
     {
-      endpoint: "text",
-      provider: "",
-      model: "",
-      status_code: 400,
-      outcome_code: "invalid_request",
-      latency_ms: 3,
-    },
-    {
       endpoint: "dictation",
       provider: "openai",
       model: "gpt-4o-mini-transcribe",
@@ -6153,20 +6258,20 @@ function managementUsageFailures(interval, count, nextCursor = "", offset = 0) {
       latency_ms: 1_000,
     },
     {
-      endpoint: "v2",
-      provider: "openai",
-      model: "gpt-4.1",
-      status_code: 413,
-      outcome_code: "payload_too_large",
-      latency_ms: 2,
-    },
-    {
       endpoint: "text",
       provider: "deepseek",
       model: "deepseek-chat",
       status_code: 499,
       outcome_code: "request_timeout",
       latency_ms: 17,
+    },
+    {
+      endpoint: "v2",
+      provider: "openai",
+      model: "gpt-4.1",
+      status_code: 500,
+      outcome_code: "proxy_error",
+      latency_ms: 2,
     },
   ];
   const failures = Array.from({ length: count }, (_, index) => {
@@ -6193,12 +6298,58 @@ function managementUsageFailures(interval, count, nextCursor = "", offset = 0) {
 }
 
 /**
+ * @param {string} interval
+ * @returns {object}
+ */
+function managementUsageRejections(interval) {
+  return {
+    interval,
+    rejections: [
+      {
+        tenant_id: "tenant_1",
+        tenant_name: "Default",
+        occurred_at: "2026-07-25T12:00:00Z",
+        endpoint: "v2",
+        provider: "deepseek",
+        model: "deepseek-v4-flash",
+        status_code: 409,
+        outcome_code: "provider_not_configured",
+        latency_ms: 2,
+      },
+      {
+        tenant_id: "tenant_1",
+        tenant_name: "Default",
+        occurred_at: "2026-07-25T11:59:59Z",
+        endpoint: "text",
+        provider: "",
+        model: "",
+        status_code: 400,
+        outcome_code: "invalid_request",
+        latency_ms: 1,
+      },
+      {
+        tenant_id: "tenant_2",
+        tenant_name: "Research",
+        occurred_at: "2026-07-25T11:59:58Z",
+        endpoint: "v2",
+        provider: "",
+        model: "",
+        status_code: 413,
+        outcome_code: "payload_too_large",
+        latency_ms: 3,
+      },
+    ],
+  };
+}
+
+/**
  * @returns {object}
  */
 function managementAdminUsage() {
   const summary = managementUsage("30d");
   return {
     period_days: 30,
+    rejected_requests: summary.rejected_requests,
     totals: summary.totals,
     daily: summary.buckets.map((bucket) => ({
       date: bucket.start.slice(0, 10),

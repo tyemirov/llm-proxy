@@ -35,6 +35,7 @@ func newManagedDashScopeSettingsMigrationFixtureWithDialector(t *testing.T, dial
 	if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
 		t.Fatalf("create DashScope settings schema: %v", migrationError)
 	}
+	useManagedUsageSchemaTwelve(t, database)
 	now := time.Date(2026, 8, 11, 8, 0, 0, 0, time.UTC)
 	user := managedUserRecord{UserID: "dashscope-settings-owner", CreatedAt: now, UpdatedAt: now}
 	if createError := database.Create(&user).Error; createError != nil {
@@ -81,12 +82,10 @@ func newManagedDashScopeSettingsMigrationFixtureWithDialector(t *testing.T, dial
 	usage := managedUsageEventRecord{
 		ID: 111, TenantID: tenantRecord.TenantID, Endpoint: usageEndpointText,
 		ProviderID: ProviderNameDashScope, ModelID: ModelNameDashScopeQwenPlus,
-		StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess,
+		StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess,
 		TotalTokens: 13, CreatedAt: now.Add(time.Minute),
 	}
-	if createError := database.Create(&usage).Error; createError != nil {
-		t.Fatalf("seed DashScope settings usage: %v", createError)
-	}
+	createManagedUsageSchemaTwelve(t, database, usage)
 	return managedDashScopeSettingsMigrationFixture{
 		database: database, providerKeyCipher: providerKeyCipher,
 		providers: internalManagementProviderRegistry(), tenant: tenantRecord, usage: usage,
@@ -314,7 +313,7 @@ func TestManagedDashScopeSettingsSchemaValidationRejectsIncompleteCurrentState(t
 		if createError := fixture.database.Create(&managedSchemaMigrationRecord{Version: managedXAIProviderSchemaVersion, AppliedAt: fixture.tenant.CreatedAt}).Error; createError != nil {
 			t.Fatalf("seed schema version: %v", createError)
 		}
-		if dropError := fixture.database.Migrator().DropIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex); dropError != nil {
+		if dropError := fixture.database.Migrator().DropIndex(&managedUsageEventSchemaTwelveRecord{}, managedUsageLegacyFailurePageIndex); dropError != nil {
 			t.Fatalf("drop usage index: %v", dropError)
 		}
 		assertManagedDashScopeMigrationError(t, initializeManagedTenantSchema(fixture.database, fixture.providerKeyCipher, fixture.providers), "operation=validate_current_schema")

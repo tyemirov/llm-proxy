@@ -6,32 +6,38 @@ import {
   USAGE_ENDPOINT_LABELS,
   USAGE_OUTCOME_LABELS,
   USAGE_STATUS_LABELS,
-} from "../constants.js?v=20260902c240";
+} from "../constants.js?v=20260903f037";
 
 const EMPTY_STRING = "";
+const FAILURE_OUTCOMES = new Set(["rate_limited", "service_unavailable", "request_timeout", "upstream_error", "proxy_error"]);
+const REJECTION_OUTCOMES = new Set(["invalid_request", "payload_too_large", "provider_not_configured"]);
 
 /**
- * @param {import("../types.d.js").ManagementUsageFailurePage | import("../types.d.js").ManagementAccountUsageFailurePage} response
+ * @param {import("../types.d.js").ManagementUsageFailurePage | import("../types.d.js").ManagementAccountUsageFailurePage | import("../types.d.js").ManagementUsageRejectionPage | import("../types.d.js").ManagementAccountUsageRejectionPage} response
  * @param {import("../types.d.js").UsageInterval} interval
  * @param {boolean} accountScope
- * @returns {import("../types.d.js").ManagementUsageFailurePage | import("../types.d.js").ManagementAccountUsageFailurePage}
+ * @param {import("../types.d.js").UsageDetailKind} kind
+ * @returns {{ items: Array<import("../types.d.js").ManagementUsageFailure | import("../types.d.js").ManagementAccountUsageFailure | import("../types.d.js").ManagementUsageRejection | import("../types.d.js").ManagementAccountUsageRejection>, next_cursor?: string }}
  */
-export function normalizedUsageFailurePage(response, interval, accountScope) {
-  if (!response || response.interval !== interval || !Array.isArray(response.failures)) {
+export function normalizedUsageDetailPage(response, interval, accountScope, kind) {
+  /** @type {Array<import("../types.d.js").ManagementUsageFailure | import("../types.d.js").ManagementAccountUsageFailure | import("../types.d.js").ManagementUsageRejection | import("../types.d.js").ManagementAccountUsageRejection> | null} */
+  let items = null;
+  if (response && kind === "failures" && "failures" in response) items = response.failures;
+  if (response && kind === "rejections" && "rejections" in response) items = response.rejections;
+  if (!response || response.interval !== interval || !Array.isArray(items)) {
     throw new Error(APP_INTEGRITY_ERROR);
   }
   if (response.next_cursor !== undefined && (typeof response.next_cursor !== "string" || !response.next_cursor)) {
     throw new Error(APP_INTEGRITY_ERROR);
   }
   return {
-    interval,
-    failures: response.failures.map((failure) => normalizedUsageFailure(failure, accountScope)),
+    items: items.map((detail) => normalizedUsageDetail(detail, accountScope, kind)),
     ...(response.next_cursor ? { next_cursor: response.next_cursor } : {}),
   };
 }
 
 /**
- * @param {import("../types.d.js").ManagementUsageFailure | import("../types.d.js").ManagementAccountUsageFailure} failure
+ * @param {import("../types.d.js").ManagementUsageFailure | import("../types.d.js").ManagementAccountUsageFailure | import("../types.d.js").ManagementUsageRejection | import("../types.d.js").ManagementAccountUsageRejection} detail
  * @returns {{
  *   tenant: string,
  *   occurredAt: string,
@@ -43,20 +49,20 @@ export function normalizedUsageFailurePage(response, interval, accountScope) {
  *   latency: string
  * }}
  */
-export function usageFailurePresentation(failure) {
+export function usageDetailPresentation(detail) {
   return {
-    tenant: "tenant_name" in failure ? `${failure.tenant_name} · ${failure.tenant_id}` : EMPTY_STRING,
+    tenant: "tenant_name" in detail ? `${detail.tenant_name} · ${detail.tenant_id}` : EMPTY_STRING,
     occurredAt: new Intl.DateTimeFormat("en-US", {
       dateStyle: "medium",
       timeStyle: "medium",
       timeZone: "UTC",
-    }).format(new Date(failure.occurred_at)),
-    endpoint: usageLabel(USAGE_ENDPOINT_LABELS, failure.endpoint),
-    provider: failure.provider || COPY.usageFailuresNotResolved,
-    model: failure.model || COPY.usageFailuresNotResolved,
-    status: `${failure.status_code} ${usageStatusLabel(failure.status_code)}`,
-    outcome: usageLabel(USAGE_OUTCOME_LABELS, failure.outcome_code),
-    latency: `${formatNumber(failure.latency_ms)} ms`,
+    }).format(new Date(detail.occurred_at)),
+    endpoint: usageLabel(USAGE_ENDPOINT_LABELS, detail.endpoint),
+    provider: detail.provider || COPY.usageDetailsNotResolved,
+    model: detail.model || COPY.usageDetailsNotResolved,
+    status: `${detail.status_code} ${usageStatusLabel(detail.status_code)}`,
+    outcome: usageLabel(USAGE_OUTCOME_LABELS, detail.outcome_code),
+    latency: `${formatNumber(detail.latency_ms)} ms`,
   };
 }
 
@@ -77,61 +83,64 @@ export function formatNumber(value) {
 }
 
 /**
- * @param {import("../types.d.js").ManagementUsageFailure | import("../types.d.js").ManagementAccountUsageFailure} failure
+ * @param {import("../types.d.js").ManagementUsageFailure | import("../types.d.js").ManagementAccountUsageFailure | import("../types.d.js").ManagementUsageRejection | import("../types.d.js").ManagementAccountUsageRejection} detail
  * @param {boolean} accountScope
- * @returns {import("../types.d.js").ManagementUsageFailure | import("../types.d.js").ManagementAccountUsageFailure}
+ * @param {import("../types.d.js").UsageDetailKind} kind
+ * @returns {import("../types.d.js").ManagementUsageFailure | import("../types.d.js").ManagementAccountUsageFailure | import("../types.d.js").ManagementUsageRejection | import("../types.d.js").ManagementAccountUsageRejection}
  */
-function normalizedUsageFailure(failure, accountScope) {
-  const occurredAt = new Date(failure ? failure.occurred_at : EMPTY_STRING);
+function normalizedUsageDetail(detail, accountScope, kind) {
+  const occurredAt = new Date(detail ? detail.occurred_at : EMPTY_STRING);
+  const allowedOutcomes = kind === "failures" ? FAILURE_OUTCOMES : kind === "rejections" ? REJECTION_OUTCOMES : null;
   if (
-    !failure ||
-    typeof failure.occurred_at !== "string" ||
+    !detail ||
+    !allowedOutcomes ||
+    typeof detail.occurred_at !== "string" ||
     Number.isNaN(occurredAt.valueOf()) ||
-    typeof failure.endpoint !== "string" ||
-    !hasLabel(USAGE_ENDPOINT_LABELS, failure.endpoint) ||
-    typeof failure.provider !== "string" ||
-    typeof failure.model !== "string" ||
-    !Number.isInteger(failure.status_code) ||
-    !hasLabel(USAGE_STATUS_LABELS, String(failure.status_code)) ||
-    typeof failure.outcome_code !== "string" ||
-    failure.outcome_code === "success" ||
-    !hasLabel(USAGE_OUTCOME_LABELS, failure.outcome_code) ||
-    !Number.isInteger(failure.latency_ms) ||
-    failure.latency_ms < 0
+    typeof detail.endpoint !== "string" ||
+    !hasLabel(USAGE_ENDPOINT_LABELS, detail.endpoint) ||
+    typeof detail.provider !== "string" ||
+    typeof detail.model !== "string" ||
+    !Number.isInteger(detail.status_code) ||
+    !hasLabel(USAGE_STATUS_LABELS, String(detail.status_code)) ||
+    typeof detail.outcome_code !== "string" ||
+    !allowedOutcomes.has(detail.outcome_code) ||
+    !hasLabel(USAGE_OUTCOME_LABELS, detail.outcome_code) ||
+    !Number.isInteger(detail.latency_ms) ||
+    detail.latency_ms < 0
   ) {
     throw new Error(APP_INTEGRITY_ERROR);
   }
-  const commonFailure = {
-    occurred_at: failure.occurred_at,
-    endpoint: failure.endpoint,
-    provider: failure.provider,
-    model: failure.model,
-    status_code: failure.status_code,
-    outcome_code: failure.outcome_code,
-    latency_ms: failure.latency_ms,
+  const commonDetail = {
+    occurred_at: detail.occurred_at,
+    endpoint: detail.endpoint,
+    provider: detail.provider,
+    model: detail.model,
+    status_code: detail.status_code,
+    outcome_code: detail.outcome_code,
+    latency_ms: detail.latency_ms,
   };
   if (accountScope) {
-    if (!("tenant_id" in failure) || !("tenant_name" in failure)) {
+    if (!("tenant_id" in detail) || !("tenant_name" in detail)) {
       throw new Error(APP_INTEGRITY_ERROR);
     }
     if (
-      typeof failure.tenant_id !== "string" ||
-      !failure.tenant_id ||
-      typeof failure.tenant_name !== "string" ||
-      !failure.tenant_name
+      typeof detail.tenant_id !== "string" ||
+      !detail.tenant_id ||
+      typeof detail.tenant_name !== "string" ||
+      !detail.tenant_name
     ) {
       throw new Error(APP_INTEGRITY_ERROR);
     }
     return {
-      tenant_id: failure.tenant_id,
-      tenant_name: failure.tenant_name,
-      ...commonFailure,
+      tenant_id: detail.tenant_id,
+      tenant_name: detail.tenant_name,
+      ...commonDetail,
     };
   }
-  if (Object.hasOwn(failure, "tenant_id") || Object.hasOwn(failure, "tenant_name")) {
+  if (Object.hasOwn(detail, "tenant_id") || Object.hasOwn(detail, "tenant_name")) {
     throw new Error(APP_INTEGRITY_ERROR);
   }
-  return commonFailure;
+  return /** @type {import("../types.d.js").ManagementUsageFailure | import("../types.d.js").ManagementUsageRejection} */ (commonDetail);
 }
 
 /**

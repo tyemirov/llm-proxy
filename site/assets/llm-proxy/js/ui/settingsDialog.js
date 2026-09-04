@@ -4,7 +4,7 @@ import {
   AUTH_STATES,
   MENU_ACTIONS,
   NOTICE_KINDS,
-} from "../constants.js?v=20260902c240";
+} from "../constants.js?v=20260903f037";
 
 /** @typedef {ReturnType<typeof import("./managementApplicationState.js").createManagementApplicationState>} ManagementApplicationState */
 /** @typedef {ManagementApplicationState & import("../types.d.js").AlpineMagic & {
@@ -22,7 +22,7 @@ import {
  *   cancelTenantSwitch: () => void,
  *   clearGeneratedSecret: () => void,
  *   clearProviderKeyMaterial: () => void,
- *   clearUsageFailures: (restoreFocus: boolean) => void,
+ *   clearUsageDetails: (restoreFocus: boolean) => void,
  *   closeCreateTenantDialog: () => void,
  *   dismissClientKeyReplacementConfirmation: () => void,
  *   dismissProviderKeyRemovalConfirmation: () => void,
@@ -64,7 +64,7 @@ export function createSettingsDialogResponsibility() {
     },
 
     openSettings() {
-      this.clearUsageFailures(false);
+      this.clearUsageDetails(false);
       this.usageExamplesOpen = false;
       this.collapseSystemPromptEditors();
       this.dismissProviderKeyRemovalConfirmation();

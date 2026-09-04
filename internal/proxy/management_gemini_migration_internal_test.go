@@ -33,6 +33,7 @@ func newManagedGeminiModelSelectionMigrationFixture(t *testing.T, schemaVersion 
 	if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
 		t.Fatalf("create Gemini 3-only schema: %v", migrationError)
 	}
+	useManagedUsageSchemaTwelve(t, database)
 	if dropError := database.Migrator().DropTable(&managedProviderAPIKeyRecord{}); dropError != nil {
 		t.Fatalf("drop predecessor provider table: %v", dropError)
 	}
@@ -93,7 +94,7 @@ func newManagedGeminiModelSelectionMigrationFixture(t *testing.T, schemaVersion 
 		usage := managedUsageEventRecord{
 			ID: uint(index + 1), TenantID: tenant.TenantID, Endpoint: usageEndpointText,
 			ProviderID: ProviderNameGemini, ModelID: retiredModel,
-			StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess,
+			StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess,
 			TotalTokens: index + 1, CreatedAt: timestamp,
 		}
 		if createError := database.Create(&connection).Error; createError != nil {
@@ -102,9 +103,7 @@ func newManagedGeminiModelSelectionMigrationFixture(t *testing.T, schemaVersion 
 		if createError := database.Create(&profile).Error; createError != nil {
 			t.Fatalf("seed Gemini profile model=%s: %v", retiredModel, createError)
 		}
-		if createError := database.Create(&usage).Error; createError != nil {
-			t.Fatalf("seed Gemini usage model=%s: %v", retiredModel, createError)
-		}
+		createManagedUsageSchemaTwelve(t, database, usage)
 		fixture.tenants = append(fixture.tenants, tenant)
 		fixture.profiles = append(fixture.profiles, profile)
 		fixture.usage = append(fixture.usage, usage)
@@ -212,12 +211,10 @@ func TestManagedGeminiModelSelectionMigrationsStartFromSchemaEight(t *testing.T)
 			historicalUsage := managedUsageEventRecord{
 				ID: 1, TenantID: fixture.predecessor.TenantID, Endpoint: usageEndpointText,
 				ProviderID: ProviderNameGemini, ModelID: migration.source,
-				StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess,
+				StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess,
 				RequestTokens: 1, ResponseTokens: 2, TotalTokens: 3, CreatedAt: fixture.predecessor.CreatedAt,
 			}
-			if createError := fixture.database.Create(&historicalUsage).Error; createError != nil {
-				t.Fatalf("seed schema-eight Gemini usage: %v", createError)
-			}
+			createManagedUsageSchemaTwelve(t, fixture.database, historicalUsage)
 			if createError := fixture.database.Create(&managedSchemaMigrationRecord{Version: managedZAIProviderSchemaVersion, AppliedAt: fixture.predecessor.CreatedAt}).Error; createError != nil {
 				t.Fatalf("seed schema-eight Gemini version: %v", createError)
 			}

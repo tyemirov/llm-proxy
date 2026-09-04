@@ -492,7 +492,7 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 	invalidTimeoutResponse := httptest.NewRecorder()
 	router.ServeHTTP(invalidTimeoutResponse, invalidTimeoutRequest)
 	assertOpenAPIResponse(t, contract, "/v2", http.MethodPost, invalidTimeoutResponse)
-	waitForManagementRequestCount(t, router, sessionCookie, 2)
+	waitForManagementRequestCount(t, router, sessionCookie, 3)
 
 	failuresRequest := httptest.NewRequest(http.MethodGet, tenantPath+"/usage/failures?interval=30d&limit=25", nil)
 	failuresRequest.AddCookie(sessionCookie)
@@ -500,6 +500,22 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 	failuresResponse := httptest.NewRecorder()
 	router.ServeHTTP(failuresResponse, failuresRequest)
 	assertOpenAPIResponse(t, contract, "/api/management/tenants/{tenant_id}/usage/failures", http.MethodGet, failuresResponse)
+
+	for _, detailPath := range []struct {
+		requestPath  string
+		contractPath string
+	}{
+		{requestPath: tenantPath + "/usage/rejections?interval=30d&limit=25", contractPath: "/api/management/tenants/{tenant_id}/usage/rejections"},
+		{requestPath: "/api/management/usage/failures?interval=30d&limit=25", contractPath: "/api/management/usage/failures"},
+		{requestPath: "/api/management/usage/rejections?interval=30d&limit=25", contractPath: "/api/management/usage/rejections"},
+	} {
+		request := httptest.NewRequest(http.MethodGet, detailPath.requestPath, nil)
+		request.AddCookie(sessionCookie)
+		assertOpenAPIRequest(t, contract, detailPath.contractPath, request, nil)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		assertOpenAPIResponse(t, contract, detailPath.contractPath, http.MethodGet, response)
+	}
 
 	overLimitFailuresRequest := httptest.NewRequest(http.MethodGet, tenantPath+"/usage/failures?interval=30d&limit=101", nil)
 	overLimitFailuresRequest.AddCookie(sessionCookie)

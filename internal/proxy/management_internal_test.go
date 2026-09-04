@@ -15,6 +15,22 @@ import (
 	"go.uber.org/zap"
 )
 
+func summarizeManagedUsage(records []managedUsageEventRecord, interval usageInterval, now time.Time) (managedUsageSummary, error) {
+	periodEnd := now.UTC()
+	var earliestUsageEvent time.Time
+	_, _, _, finite := interval.finiteWindow()
+	if !finite {
+		earliestUsageEvent = earliestManagedUsageEvent(records, periodEnd)
+	}
+	accumulator := newManagedUsageSummaryAccumulator(interval, now, earliestUsageEvent)
+	for _, record := range records {
+		if applyError := accumulator.apply(record); applyError != nil {
+			return managedUsageSummary{}, applyError
+		}
+	}
+	return accumulator.summary(), nil
+}
+
 var errInternalTestDatabase = errors.New("database failed")
 var errInternalTestRead = errors.New("read failed")
 
@@ -102,7 +118,7 @@ func TestRequestFailureOutcomeClassifiesProxyOverload(t *testing.T) {
 		expected     managedUsageOutcomeCode
 	}{
 		{requestError: ErrProviderRateLimited, expected: managedUsageOutcomeRateLimited},
-		{requestError: ErrProviderNotConfigured, expected: managedUsageOutcomeServiceUnavailable},
+		{requestError: ErrProviderNotConfigured, expected: managedUsageOutcomeProviderNotConfigured},
 		{requestError: errQueueFull, expected: managedUsageOutcomeServiceUnavailable},
 		{requestError: context.DeadlineExceeded, expected: managedUsageOutcomeRequestTimeout},
 		{requestError: context.Canceled, expected: managedUsageOutcomeRequestTimeout},
@@ -144,12 +160,15 @@ func TestManagedUsageSummaryBucketsAndOrdering(t *testing.T) {
 			t.Fatalf("interval=%s error=%v", intervalExpectation.identifier, intervalError)
 		}
 		periodStart := now.Add(-intervalExpectation.duration)
-		summary := summarizeManagedUsage([]managedUsageEventRecord{
-			{TenantID: "tenant", ProviderID: "excluded-before", ModelID: "old-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: periodStart.Add(-time.Nanosecond)},
-			{TenantID: "tenant", ProviderID: "included-start", ModelID: "start-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: periodStart},
-			{TenantID: "tenant", ProviderID: "included-end", ModelID: "end-model", Endpoint: usageEndpointText, StatusCode: http.StatusBadGateway, Success: false, CreatedAt: now},
-			{TenantID: "tenant", ProviderID: "excluded-after", ModelID: "future-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: now.Add(time.Nanosecond)},
+		summary, summaryError := summarizeManagedUsage([]managedUsageEventRecord{
+			{TenantID: "tenant", ProviderID: "excluded-before", ModelID: "old-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: periodStart.Add(-time.Nanosecond)},
+			{TenantID: "tenant", ProviderID: "included-start", ModelID: "start-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: periodStart},
+			{TenantID: "tenant", ProviderID: "included-end", ModelID: "end-model", Endpoint: usageEndpointText, StatusCode: http.StatusBadGateway, Disposition: managedUsageDispositionFailed, OutcomeCode: managedUsageOutcomeUpstreamError, CreatedAt: now},
+			{TenantID: "tenant", ProviderID: "excluded-after", ModelID: "future-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now.Add(time.Nanosecond)},
 		}, interval, now)
+		if summaryError != nil {
+			t.Fatalf("interval=%s summary error=%v", intervalExpectation.identifier, summaryError)
+		}
 		if summary.interval != interval || summary.bucketUnit != intervalExpectation.bucketUnit || len(summary.buckets) != intervalExpectation.bucketCount || summary.totals.requests != 2 || summary.totals.successfulRequests != 1 || summary.totals.failedRequests != 1 {
 			t.Fatalf("interval=%s summary=%+v buckets=%d", intervalExpectation.identifier, summary, len(summary.buckets))
 		}
@@ -162,16 +181,22 @@ func TestManagedUsageSummaryBucketsAndOrdering(t *testing.T) {
 	if allIntervalError != nil {
 		t.Fatalf("all interval error=%v", allIntervalError)
 	}
-	emptyAllSummary := summarizeManagedUsage(nil, allInterval, now)
+	emptyAllSummary, emptyAllError := summarizeManagedUsage(nil, allInterval, now)
+	if emptyAllError != nil {
+		t.Fatalf("empty all summary error=%v", emptyAllError)
+	}
 	if emptyAllSummary.interval != allInterval || emptyAllSummary.bucketUnit != usageBucketUnitDay || len(emptyAllSummary.buckets) != 0 {
 		t.Fatalf("empty all summary=%+v", emptyAllSummary)
 	}
 	earliest := time.Date(2026, 4, 20, 23, 59, 0, 0, time.FixedZone("fixture", -7*60*60))
-	allSummary := summarizeManagedUsage([]managedUsageEventRecord{
-		{TenantID: "tenant", ProviderID: "earliest", ModelID: "earliest-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: earliest},
-		{TenantID: "tenant", ProviderID: "current", ModelID: "current-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: now},
-		{TenantID: "tenant", ProviderID: "future", ModelID: "future-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: now.Add(time.Nanosecond)},
+	allSummary, allSummaryError := summarizeManagedUsage([]managedUsageEventRecord{
+		{TenantID: "tenant", ProviderID: "earliest", ModelID: "earliest-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: earliest},
+		{TenantID: "tenant", ProviderID: "current", ModelID: "current-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now},
+		{TenantID: "tenant", ProviderID: "future", ModelID: "future-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now.Add(time.Nanosecond)},
 	}, allInterval, now)
+	if allSummaryError != nil {
+		t.Fatalf("all summary error=%v", allSummaryError)
+	}
 	expectedAllStart := time.Date(2026, 4, 21, 0, 0, 0, 0, time.UTC)
 	expectedAllBucketCount := int(now.Sub(expectedAllStart).Hours()/24) + 1
 	if allSummary.totals.requests != 2 || len(allSummary.buckets) != expectedAllBucketCount || !allSummary.buckets[0].start.Equal(expectedAllStart) || allSummary.providers[0].providerIdentifier != "current" {
@@ -179,11 +204,14 @@ func TestManagedUsageSummaryBucketsAndOrdering(t *testing.T) {
 	}
 
 	adminPeriodStart := usagePeriodStart(now)
-	adminSummary := summarizeManagedAdminUsage([]managedUsageEventRecord{
-		{ProviderID: "excluded-before", ModelID: "old-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: adminPeriodStart.Add(-time.Nanosecond)},
-		{ProviderID: "included", ModelID: "current-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: now},
-		{ProviderID: "excluded-after", ModelID: "future-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: now.Add(time.Nanosecond)},
+	adminSummary, adminSummaryError := summarizeManagedAdminUsage([]managedUsageEventRecord{
+		{ProviderID: "excluded-before", ModelID: "old-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: adminPeriodStart.Add(-time.Nanosecond)},
+		{ProviderID: "included", ModelID: "current-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now},
+		{ProviderID: "excluded-after", ModelID: "future-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now.Add(time.Nanosecond)},
 	}, now)
+	if adminSummaryError != nil {
+		t.Fatalf("admin summary error=%v", adminSummaryError)
+	}
 	if adminSummary.periodDays != managedUsageSummaryDays || adminSummary.totals.requests != 1 || adminSummary.daily[len(adminSummary.daily)-1].aggregate.requests != 1 {
 		t.Fatalf("admin summary=%+v daily=%+v", adminSummary.totals, adminSummary.daily)
 	}

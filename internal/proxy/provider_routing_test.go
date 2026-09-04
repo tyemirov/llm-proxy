@@ -2499,11 +2499,11 @@ func TestProviderRoutingRejectsGeminiMissingCredential(t *testing.T) {
 
 	router.ServeHTTP(responseRecorder, request)
 
-	if responseRecorder.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusServiceUnavailable, responseRecorder.Body.String())
+	if responseRecorder.Code != http.StatusConflict {
+		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusConflict, responseRecorder.Body.String())
 	}
-	if !strings.Contains(responseRecorder.Body.String(), "provider not configured: provider=gemini endpoint=text") {
-		t.Fatalf("body=%q want provider not configured detail", responseRecorder.Body.String())
+	if strings.TrimSpace(responseRecorder.Body.String()) != "provider_not_configured" {
+		t.Fatalf("body=%q want provider_not_configured", responseRecorder.Body.String())
 	}
 }
 
@@ -2543,8 +2543,8 @@ func TestProviderRoutingRejectsAnthropicMetaAndGrokMissingCredentials(t *testing
 
 			router.ServeHTTP(responseRecorder, request)
 
-			if responseRecorder.Code != http.StatusServiceUnavailable {
-				subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusServiceUnavailable, responseRecorder.Body.String())
+			if responseRecorder.Code != http.StatusConflict {
+				subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusConflict, responseRecorder.Body.String())
 			}
 		})
 	}
@@ -2800,11 +2800,11 @@ func TestProviderRoutingRejectsMissingProviderCredential(t *testing.T) {
 
 	router.ServeHTTP(responseRecorder, request)
 
-	if responseRecorder.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusServiceUnavailable, responseRecorder.Body.String())
+	if responseRecorder.Code != http.StatusConflict {
+		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusConflict, responseRecorder.Body.String())
 	}
-	if !strings.Contains(responseRecorder.Body.String(), "provider not configured: provider=deepseek endpoint=text") {
-		t.Fatalf("body=%q want provider not configured detail", responseRecorder.Body.String())
+	if strings.TrimSpace(responseRecorder.Body.String()) != "provider_not_configured" {
+		t.Fatalf("body=%q want provider_not_configured", responseRecorder.Body.String())
 	}
 }
 

@@ -1,6 +1,6 @@
 // @ts-check
 
-import { COPY, DEFAULT_USAGE_INTERVAL, USAGE_INTERVALS } from "../constants.js?v=20260902c240";
+import { COPY, DEFAULT_USAGE_INTERVAL, USAGE_INTERVALS } from "../constants.js?v=20260903f037";
 
 const CHART_WIDTH = 640;
 const CHART_HEIGHT = 240;
@@ -50,6 +50,7 @@ export function emptyUsageSummary(interval = DEFAULT_USAGE_INTERVAL) {
   return {
     interval,
     bucket_unit: intervalDefinition.bucketUnit,
+    rejected_requests: 0,
     totals: emptyUsageAggregate(),
     buckets: [],
     providers: [],

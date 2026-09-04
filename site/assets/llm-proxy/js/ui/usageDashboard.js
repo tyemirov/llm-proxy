@@ -6,23 +6,26 @@ import {
   COPY,
   DASHBOARD_VIEWS,
   NOTICE_KINDS,
-  USAGE_FAILURE_PAGE_LIMIT,
-} from "../constants.js?v=20260902c240";
+  USAGE_DETAIL_KINDS,
+  USAGE_DETAIL_PAGE_LIMIT,
+} from "../constants.js?v=20260903f037";
 import {
   fetchAccountUsageFailures,
+  fetchAccountUsageRejections,
   fetchAccountUsageSummary,
   fetchTenant,
   fetchUsageFailures,
+  fetchUsageRejections,
   fetchUsageSummary,
-} from "../core/backendClient.js?v=20260902c240";
-import { assertManagementTenantProfile, isAbortError } from "../core/managementProfile.js?v=20260902c240";
-import { trapDialogFocus } from "./dialogFocus.js?v=20260902c240";
+} from "../core/backendClient.js?v=20260903f037";
+import { assertManagementTenantProfile, isAbortError } from "../core/managementProfile.js?v=20260903f037";
+import { trapDialogFocus } from "./dialogFocus.js?v=20260903f037";
 import {
   formatNumber,
-  normalizedUsageFailurePage,
-  usageFailurePresentation,
+  normalizedUsageDetailPage,
+  usageDetailPresentation,
   usageStatusLabel,
-} from "./usageFailurePresentation.js?v=20260902c240";
+} from "./usageFailurePresentation.js?v=20260903f037";
 import {
   emptyUsageSummary,
   modelDistribution,
@@ -33,7 +36,7 @@ import {
   usageTimeSeriesChart,
   USAGE_BREAKDOWN_VIEWS,
   USAGE_METRICS,
-} from "./usagePresentation.js?v=20260902c240";
+} from "./usagePresentation.js?v=20260903f037";
 
 const EMPTY_STRING = "";
 const HTTP_ERROR_STATUS_MINIMUM = 400;
@@ -41,7 +44,7 @@ const HTTP_ERROR_STATUS_MINIMUM = 400;
 /** @typedef {ReturnType<typeof import("./managementApplicationState.js").createManagementApplicationState>} ManagementApplicationState */
 /** @typedef {ManagementApplicationState & import("../types.d.js").AlpineMagic & {
  *   hasUsageFailures: boolean,
- *   hasLoadedUsageFailures: boolean,
+ *   hasLoadedUsageDetails: boolean,
  *   refreshAdminUsers: () => Promise<void>,
  *   resetProviderCard: () => void,
  *   setPageNotice: (kind: string, message: string) => void
@@ -101,12 +104,50 @@ export function createUsageDashboardResponsibility() {
       return `${formatNumber(failureCount)} ${noun}`;
     },
 
-    get usageFailuresIntervalLabel() {
+    get hasUsageRejections() {
+      return this.usage.rejected_requests > 0;
+    },
+
+    get usageRejectionsActionCopy() {
+      const rejectionCount = this.usage.rejected_requests;
+      const noun = rejectionCount === 1 ? "rejected request" : "rejected requests";
+      return `${formatNumber(rejectionCount)} ${noun}`;
+    },
+
+    get usageDetailsIntervalLabel() {
       const interval = this.usageIntervals.find((/** @type {{ id: import("../types.d.js").UsageInterval }} */ candidate) => candidate.id === this.selectedUsageInterval);
       if (!interval) {
         throw new Error(`usage_interval_invalid:${this.selectedUsageInterval}`);
       }
       return interval.label;
+    },
+
+    get usageDetailsOpen() {
+      return Boolean(this.usageDetailsKind);
+    },
+
+    get usageDetailsAreFailures() {
+      return this.usageDetailsKind === USAGE_DETAIL_KINDS.FAILURES;
+    },
+
+    get usageDetailsTitle() {
+      return this.usageDetailsAreFailures ? COPY.usageFailuresTitle : COPY.usageRejectionsTitle;
+    },
+
+    get usageDetailsDescription() {
+      return this.usageDetailsAreFailures ? COPY.usageFailuresDescription : COPY.usageRejectionsDescription;
+    },
+
+    get usageDetailsLoadingCopy() {
+      return this.usageDetailsAreFailures ? COPY.usageFailuresLoading : COPY.usageRejectionsLoading;
+    },
+
+    get usageDetailsEmptyCopy() {
+      return this.usageDetailsAreFailures ? COPY.usageFailuresEmpty : COPY.usageRejectionsEmpty;
+    },
+
+    get usageDetailsCloseCopy() {
+      return this.usageDetailsAreFailures ? COPY.closeUsageFailures : COPY.closeUsageRejections;
     },
 
     get usageFailureStatusRows() {
@@ -119,16 +160,16 @@ export function createUsageDashboardResponsibility() {
         }));
     },
 
-    get usageFailureRows() {
-      return this.usageFailures.map((/** @type {import("../types.d.js").ManagementUsageFailure | import("../types.d.js").ManagementAccountUsageFailure} */ failure) => usageFailurePresentation(failure));
+    get usageDetailRows() {
+      return this.usageDetails.map((/** @type {import("../types.d.js").ManagementUsageFailure | import("../types.d.js").ManagementAccountUsageFailure | import("../types.d.js").ManagementUsageRejection | import("../types.d.js").ManagementAccountUsageRejection} */ detail) => usageDetailPresentation(detail));
     },
 
-    get hasLoadedUsageFailures() {
-      return this.usageFailures.length > 0;
+    get hasLoadedUsageDetails() {
+      return this.usageDetails.length > 0;
     },
 
-    get canLoadMoreUsageFailures() {
-      return Boolean(this.usageFailuresNextCursor);
+    get canLoadMoreUsageDetails() {
+      return Boolean(this.usageDetailsNextCursor);
     },
 
     get usageRequestChart() {
@@ -155,20 +196,41 @@ export function createUsageDashboardResponsibility() {
       return this.modelUsageDistribution.totalRequests > 0;
     },
 
-    get usageBreakdownIsBar() {
-      return this.usageBreakdownView === USAGE_BREAKDOWN_VIEWS.BAR;
+    get providerUsageBreakdownIsBar() {
+      return this.providerUsageBreakdownView === USAGE_BREAKDOWN_VIEWS.BAR;
     },
 
-    get usageBreakdownIsDonut() {
-      return this.usageBreakdownView === USAGE_BREAKDOWN_VIEWS.DONUT;
+    get providerUsageBreakdownIsDonut() {
+      return this.providerUsageBreakdownView === USAGE_BREAKDOWN_VIEWS.DONUT;
     },
 
-    /** @param {import("../types.d.js").UsageBreakdownView} view */
-    selectUsageBreakdownView(view) {
-      if (!Object.values(USAGE_BREAKDOWN_VIEWS).includes(view)) {
-        throw new Error(`usage_breakdown_view_invalid:${view}`);
-      }
-      this.usageBreakdownView = view;
+    get modelUsageBreakdownIsBar() {
+      return this.modelUsageBreakdownView === USAGE_BREAKDOWN_VIEWS.BAR;
+    },
+
+    get modelUsageBreakdownIsDonut() {
+      return this.modelUsageBreakdownView === USAGE_BREAKDOWN_VIEWS.DONUT;
+    },
+
+    get providerUsageBreakdownToggleLabel() {
+      return breakdownToggleLabel(this.providerUsageBreakdownView);
+    },
+
+    get modelUsageBreakdownToggleLabel() {
+      return breakdownToggleLabel(this.modelUsageBreakdownView);
+    },
+
+    toggleProviderUsageBreakdownView() {
+      this.providerUsageBreakdownView = toggledBreakdownView(this.providerUsageBreakdownView);
+    },
+
+    toggleModelUsageBreakdownView() {
+      this.modelUsageBreakdownView = toggledBreakdownView(this.modelUsageBreakdownView);
+    },
+
+    resetUsageBreakdownViews() {
+      this.providerUsageBreakdownView = USAGE_BREAKDOWN_VIEWS.BAR;
+      this.modelUsageBreakdownView = USAGE_BREAKDOWN_VIEWS.BAR;
     },
 
     /** @param {SVGElement} target @param {import("../types.d.js").UsageTimeSeriesChart} chart */
@@ -199,7 +261,7 @@ export function createUsageDashboardResponsibility() {
         throw new Error(`usage_interval_invalid:${interval}`);
       }
       this.resetProviderCard();
-      this.clearUsageFailures(false);
+      this.clearUsageDetails(false);
       this.selectedUsageInterval = interval;
       this.usage = emptyUsageSummary(interval);
       this.usageProfile = null;
@@ -219,7 +281,7 @@ export function createUsageDashboardResponsibility() {
         return;
       }
       this.resetProviderCard();
-      this.clearUsageFailures(false);
+      this.clearUsageDetails(false);
       this.selectedUsageTenantID = tenantID;
       this.usage = emptyUsageSummary(this.selectedUsageInterval);
       this.usageProfile = null;
@@ -227,126 +289,104 @@ export function createUsageDashboardResponsibility() {
     },
 
     openUsageFailures() {
-      if (!this.hasUsageFailures || this.dashboardView !== DASHBOARD_VIEWS.USAGE) {
-        return;
-      }
-      this.clearUsageFailures(false);
-      this.usageFailuresOpen = true;
-      this.$nextTick(() => {
-        this.$refs.usageFailuresClose.focus();
-      });
-      void this.loadUsageFailuresPage(false);
+      this.openUsageDetails(USAGE_DETAIL_KINDS.FAILURES);
     },
 
-    closeUsageFailures() {
-      this.clearUsageFailures(true);
+    openUsageRejections() {
+      this.openUsageDetails(USAGE_DETAIL_KINDS.REJECTIONS);
+    },
+
+    /** @param {import("../types.d.js").UsageDetailKind} kind */
+    openUsageDetails(kind) {
+      const hasDetails = kind === USAGE_DETAIL_KINDS.FAILURES ? this.hasUsageFailures : this.hasUsageRejections;
+      if (!hasDetails || this.dashboardView !== DASHBOARD_VIEWS.USAGE) return;
+      this.clearUsageDetails(false);
+      this.usageDetailsKind = kind;
+      this.$nextTick(() => this.$refs.usageDetailsClose.focus());
+      void this.loadUsageDetailsPage(false);
+    },
+
+    closeUsageDetails() {
+      this.clearUsageDetails(true);
     },
 
     /** @param {KeyboardEvent} event */
-    trapUsageFailuresFocus(event) {
-      trapDialogFocus(event, this.$refs.usageFailuresDialog);
+    trapUsageDetailsFocus(event) {
+      trapDialogFocus(event, this.$refs.usageDetailsDialog);
     },
 
-    async retryUsageFailures() {
-      await this.loadUsageFailuresPage(this.hasLoadedUsageFailures);
+    async retryUsageDetails() {
+      await this.loadUsageDetailsPage(this.hasLoadedUsageDetails);
     },
 
-    async loadMoreUsageFailures() {
-      await this.loadUsageFailuresPage(true);
+    async loadMoreUsageDetails() {
+      await this.loadUsageDetailsPage(true);
     },
 
     /** @param {boolean} append */
-    async loadUsageFailuresPage(append) {
-      if (!this.usageFailuresOpen) {
-        return;
-      }
-      const cursor = append ? this.usageFailuresNextCursor : EMPTY_STRING;
-      if (append && !cursor) {
-        return;
-      }
+    async loadUsageDetailsPage(append) {
+      if (!this.usageDetailsOpen) return;
+      const kind = /** @type {import("../types.d.js").UsageDetailKind} */ (this.usageDetailsKind);
+      const cursor = append ? this.usageDetailsNextCursor : EMPTY_STRING;
+      if (append && !cursor) return;
       const tenantID = this.selectedUsageTenantID;
       const interval = this.selectedUsageInterval;
-      const loadVersion = this.usageFailuresLoadVersion + 1;
-      this.usageFailuresLoadVersion = loadVersion;
-      if (this.usageFailuresRequestController) {
-        this.usageFailuresRequestController.abort();
-      }
+      const loadVersion = this.usageDetailsLoadVersion + 1;
+      this.usageDetailsLoadVersion = loadVersion;
+      if (this.usageDetailsRequestController) this.usageDetailsRequestController.abort();
       const requestController = new AbortController();
-      this.usageFailuresRequestController = requestController;
-      this.usageFailuresLoading = true;
-      this.usageFailuresError = EMPTY_STRING;
+      this.usageDetailsRequestController = requestController;
+      this.usageDetailsLoading = true;
+      this.usageDetailsError = EMPTY_STRING;
       try {
-        const response = tenantID
-          ? await fetchUsageFailures(
-            tenantID,
-            interval,
-            USAGE_FAILURE_PAGE_LIMIT,
-            cursor,
-            requestController.signal,
-          )
-          : await fetchAccountUsageFailures(
-            interval,
-            USAGE_FAILURE_PAGE_LIMIT,
-            cursor,
-            requestController.signal,
-          );
-        if (!this.canApplyUsageFailures(tenantID, loadVersion, interval)) {
-          return;
-        }
-        const page = normalizedUsageFailurePage(response, interval, !tenantID);
-        this.usageFailures = append ? [...this.usageFailures, ...page.failures] : page.failures;
-        this.usageFailuresNextCursor = page.next_cursor || EMPTY_STRING;
+        const response = await fetchUsageDetails(kind, tenantID, interval, cursor, requestController.signal);
+        if (!this.canApplyUsageDetails(kind, tenantID, loadVersion, interval)) return;
+        const page = normalizedUsageDetailPage(response, interval, !tenantID, kind);
+        this.usageDetails = append ? [...this.usageDetails, ...page.items] : page.items;
+        this.usageDetailsNextCursor = page.next_cursor || EMPTY_STRING;
       } catch (requestError) {
-        if (
-          !isAbortError(requestError) &&
-          this.canApplyUsageFailures(tenantID, loadVersion, interval)
-        ) {
-          this.usageFailuresError = COPY.usageFailuresError;
+        if (!isAbortError(requestError) && this.canApplyUsageDetails(kind, tenantID, loadVersion, interval)) {
+          this.usageDetailsError = kind === USAGE_DETAIL_KINDS.FAILURES ? COPY.usageFailuresError : COPY.usageRejectionsError;
         }
       } finally {
-        if (this.usageFailuresRequestController === requestController) {
-          this.usageFailuresRequestController = null;
-        }
-        if (this.canApplyUsageFailures(tenantID, loadVersion, interval)) {
-          this.usageFailuresLoading = false;
-        }
+        if (this.usageDetailsRequestController === requestController) this.usageDetailsRequestController = null;
+        if (this.canApplyUsageDetails(kind, tenantID, loadVersion, interval)) this.usageDetailsLoading = false;
       }
     },
 
     /**
+     * @param {import("../types.d.js").UsageDetailKind} kind
      * @param {string} tenantID
      * @param {number} loadVersion
      * @param {import("../types.d.js").UsageInterval} interval
      * @returns {boolean}
      */
-    canApplyUsageFailures(tenantID, loadVersion, interval) {
-      return (
-        this.usageFailuresOpen &&
+    canApplyUsageDetails(kind, tenantID, loadVersion, interval) {
+      return this.usageDetailsKind === kind &&
         this.selectedUsageTenantID === tenantID &&
-        this.usageFailuresLoadVersion === loadVersion &&
+        this.usageDetailsLoadVersion === loadVersion &&
         this.selectedUsageInterval === interval &&
-        this.authState === AUTH_STATES.AUTHENTICATED
-      );
+        this.authState === AUTH_STATES.AUTHENTICATED;
     },
 
     /** @param {boolean} restoreFocus */
-    clearUsageFailures(restoreFocus) {
-      const restoreActionFocus = restoreFocus && this.usageFailuresOpen && this.hasUsageFailures;
-      if (this.usageFailuresRequestController) {
-        this.usageFailuresRequestController.abort();
-        this.usageFailuresRequestController = null;
+    clearUsageDetails(restoreFocus) {
+      const previousKind = this.usageDetailsKind;
+      const restoreActionFocus = restoreFocus && this.usageDetailsOpen;
+      if (this.usageDetailsRequestController) {
+        this.usageDetailsRequestController.abort();
+        this.usageDetailsRequestController = null;
       }
-      this.usageFailuresLoadVersion += 1;
-      this.usageFailuresOpen = false;
-      this.usageFailuresLoading = false;
-      this.usageFailuresError = EMPTY_STRING;
-      this.usageFailures = [];
-      this.usageFailuresNextCursor = EMPTY_STRING;
+      this.usageDetailsLoadVersion += 1;
+      this.usageDetailsKind = EMPTY_STRING;
+      this.usageDetailsLoading = false;
+      this.usageDetailsError = EMPTY_STRING;
+      this.usageDetails = [];
+      this.usageDetailsNextCursor = EMPTY_STRING;
       if (restoreActionFocus) {
         this.$nextTick(() => {
-          if (this.$refs.usageFailuresAction) {
-            this.$refs.usageFailuresAction.focus();
-          }
+          const action = previousKind === USAGE_DETAIL_KINDS.FAILURES ? this.$refs.usageFailuresAction : this.$refs.usageRejectionsAction;
+          if (action) action.focus();
         });
       }
     },
@@ -374,22 +414,25 @@ export function createUsageDashboardResponsibility() {
         if (!this.canApplyUsageSummary(tenantID, loadVersion, interval)) {
           return;
         }
-        if (usage.interval !== interval) {
+        if (usage.interval !== interval || !Number.isInteger(usage.rejected_requests) || usage.rejected_requests < 0) {
           throw new Error(APP_INTEGRITY_ERROR);
         }
         if (usageProfile) assertManagementTenantProfile(usageProfile, tenantID);
         this.usage = usage;
         this.usageProfile = usageProfile;
         this.usageLoadState = "available";
-        if (!this.hasUsageFailures) {
-          this.clearUsageFailures(false);
+        if (
+          (this.usageDetailsKind === USAGE_DETAIL_KINDS.FAILURES && !this.hasUsageFailures) ||
+          (this.usageDetailsKind === USAGE_DETAIL_KINDS.REJECTIONS && !this.hasUsageRejections)
+        ) {
+          this.clearUsageDetails(false);
         }
         if (showSuccessNotice) {
           this.setPageNotice(NOTICE_KINDS.SUCCESS, COPY.usageRefreshed);
         }
       } catch (requestError) {
         if (!isAbortError(requestError) && this.canApplyUsageSummary(tenantID, loadVersion, interval)) {
-          this.clearUsageFailures(false);
+          this.clearUsageDetails(false);
           this.usage = emptyUsageSummary(interval);
           this.usageProfile = null;
           this.usageLoadState = "unavailable";
@@ -427,9 +470,43 @@ export function createUsageDashboardResponsibility() {
       this.usageLoadVersion += 1;
       this.usageLoading = false;
       this.usageLoadState = "loading";
-      this.clearUsageFailures(false);
+      this.clearUsageDetails(false);
       this.usage = emptyUsageSummary(this.selectedUsageInterval);
       this.usageProfile = null;
     },
   });
+}
+
+/** @param {import("../types.d.js").UsageBreakdownView} view */
+function breakdownToggleLabel(view) {
+  const nextView = toggledBreakdownView(view);
+  return nextView === USAGE_BREAKDOWN_VIEWS.DONUT ? COPY.usageShowBreakdownDonut : COPY.usageShowBreakdownBar;
+}
+
+/** @param {import("../types.d.js").UsageBreakdownView} view @returns {import("../types.d.js").UsageBreakdownView} */
+function toggledBreakdownView(view) {
+  if (view === USAGE_BREAKDOWN_VIEWS.BAR) return USAGE_BREAKDOWN_VIEWS.DONUT;
+  if (view === USAGE_BREAKDOWN_VIEWS.DONUT) return USAGE_BREAKDOWN_VIEWS.BAR;
+  throw new Error(`usage_breakdown_view_invalid:${view}`);
+}
+
+/**
+ * @param {import("../types.d.js").UsageDetailKind} kind
+ * @param {string} tenantID
+ * @param {import("../types.d.js").UsageInterval} interval
+ * @param {string} cursor
+ * @param {AbortSignal} signal
+ */
+function fetchUsageDetails(kind, tenantID, interval, cursor, signal) {
+  if (kind === USAGE_DETAIL_KINDS.FAILURES) {
+    return tenantID
+      ? fetchUsageFailures(tenantID, interval, USAGE_DETAIL_PAGE_LIMIT, cursor, signal)
+      : fetchAccountUsageFailures(interval, USAGE_DETAIL_PAGE_LIMIT, cursor, signal);
+  }
+  if (kind === USAGE_DETAIL_KINDS.REJECTIONS) {
+    return tenantID
+      ? fetchUsageRejections(tenantID, interval, USAGE_DETAIL_PAGE_LIMIT, cursor, signal)
+      : fetchAccountUsageRejections(interval, USAGE_DETAIL_PAGE_LIMIT, cursor, signal);
+  }
+  throw new Error(`usage_detail_kind_invalid:${kind}`);
 }

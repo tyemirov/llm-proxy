@@ -1,9 +1,9 @@
 // @ts-check
 
-import { AUTH_STATES, COPY, NOTICE_KINDS } from "../constants.js?v=20260902c240";
-import { generateSecret as requestGeneratedSecret } from "../core/backendClient.js?v=20260902c240";
-import { profileFailureMessage } from "../core/managementProfile.js?v=20260902c240";
-import { trapDialogFocus } from "./dialogFocus.js?v=20260902c240";
+import { AUTH_STATES, COPY, NOTICE_KINDS } from "../constants.js?v=20260903f037";
+import { generateSecret as requestGeneratedSecret } from "../core/backendClient.js?v=20260903f037";
+import { profileFailureMessage } from "../core/managementProfile.js?v=20260903f037";
+import { trapDialogFocus } from "./dialogFocus.js?v=20260903f037";
 
 const EMPTY_STRING = "";
 const MASKED_CLIENT_KEY = "••••••••••••";

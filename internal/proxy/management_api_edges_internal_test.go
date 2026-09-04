@@ -252,7 +252,7 @@ func TestManagementTenantHandlersRejectInvalidAndFailedRequests(t *testing.T) {
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("usage invalid tenant status=%d", response.Code)
 	}
-	response = executeInternalManagementHandler(service.usageFailuresHandler(), http.MethodGet, "/api/management/tenants/%20/usage/failures?interval=30d", "", gin.Params{{Key: "tenant_id", Value: " "}}, principal)
+	response = executeInternalManagementHandler(service.usageDetailsHandler(managedUsageDispositionFailed), http.MethodGet, "/api/management/tenants/%20/usage/failures?interval=30d", "", gin.Params{{Key: "tenant_id", Value: " "}}, principal)
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("usage failures invalid tenant status=%d", response.Code)
 	}
@@ -278,7 +278,7 @@ func TestManagementTenantHandlersRejectInvalidAndFailedRequests(t *testing.T) {
 	}
 	service, database = newSeededService()
 	database.usageFailuresError = errInternalTestDatabase
-	response = executeInternalManagementHandler(service.accountUsageFailuresHandler(), http.MethodGet, "/api/management/usage/failures?interval=30d", "", nil, principal)
+	response = executeInternalManagementHandler(service.accountUsageDetailsHandler(managedUsageDispositionFailed), http.MethodGet, "/api/management/usage/failures?interval=30d", "", nil, principal)
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("account usage failures store status=%d", response.Code)
 	}

@@ -106,6 +106,8 @@ func TestManagedTenantSQLiteOwnershipMigrationPreservesAndRebindsData(t *testing
 		{ID: 11, UserID: firstTenant.UserID, TenantID: firstTenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameOpenAI, ModelID: ModelNameGPT41, StatusCode: http.StatusOK, Success: true, LatencyMilliseconds: 17, RequestTokens: 2, ResponseTokens: 3, TotalTokens: 5, CreatedAt: fixedTime.Add(3 * time.Hour)},
 		{ID: 29, UserID: secondTenant.UserID, TenantID: secondTenant.TenantID, Endpoint: usageEndpointText, ProviderID: retiredGrokProviderIdentifier, ModelID: ModelNameGrok43, StatusCode: http.StatusBadGateway, Success: false, LatencyMilliseconds: 31, CreatedAt: fixedTime.Add(4 * time.Hour)},
 		{ID: 41, UserID: firstTenant.UserID, TenantID: firstTenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameOpenAI, ModelID: ModelNameGPT41, StatusCode: statusClientClosedRequest, Success: false, LatencyMilliseconds: 7, CreatedAt: fixedTime.Add(5 * time.Hour)},
+		{ID: 53, UserID: firstTenant.UserID, TenantID: firstTenant.TenantID, Endpoint: usageEndpointText, StatusCode: http.StatusServiceUnavailable, Success: false, LatencyMilliseconds: 5, CreatedAt: fixedTime.Add(6 * time.Hour)},
+		{ID: 59, UserID: firstTenant.UserID, TenantID: firstTenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameOpenAI, ModelID: ModelNameGPT41, StatusCode: http.StatusServiceUnavailable, Success: false, LatencyMilliseconds: 11, CreatedAt: fixedTime.Add(7 * time.Hour)},
 	}
 	if createError := legacyDatabase.Table(managedUsageEventTable).Create(&legacyUsage).Error; createError != nil {
 		t.Fatalf("seed legacy usage: %v", createError)
@@ -162,12 +164,18 @@ func TestManagedTenantSQLiteOwnershipMigrationPreservesAndRebindsData(t *testing
 	if queryError := database.database.Order("id").Find(&usageRecords).Error; queryError != nil {
 		t.Fatalf("load migrated usage: %v", queryError)
 	}
-	if len(usageRecords) != 3 || usageRecords[0].ID != 11 || usageRecords[0].TenantID != firstTenant.TenantID ||
+	if len(usageRecords) != 5 || usageRecords[0].ID != 11 || usageRecords[0].TenantID != firstTenant.TenantID ||
 		usageRecords[0].TotalTokens != 5 || usageRecords[1].ID != 29 || usageRecords[1].TenantID != secondTenant.TenantID ||
 		usageRecords[1].ProviderID != "" || usageRecords[1].ModelID != "" ||
 		usageRecords[2].ID != 41 || usageRecords[2].TenantID != firstTenant.TenantID ||
 		usageRecords[2].StatusCode != statusClientClosedRequest ||
-		usageRecords[2].OutcomeCode != managedUsageOutcomeRequestTimeout {
+		usageRecords[2].OutcomeCode != managedUsageOutcomeRequestTimeout ||
+		usageRecords[3].ID != 53 || usageRecords[3].Disposition != managedUsageDispositionRejected ||
+		usageRecords[3].OutcomeCode != managedUsageOutcomeProviderNotConfigured ||
+		usageRecords[3].ProviderID != "" || usageRecords[3].ModelID != "" ||
+		usageRecords[4].ID != 59 || usageRecords[4].Disposition != managedUsageDispositionFailed ||
+		usageRecords[4].OutcomeCode != managedUsageOutcomeServiceUnavailable ||
+		usageRecords[4].ProviderID != ProviderNameOpenAI || usageRecords[4].ModelID != ModelNameGPT41 {
 		t.Fatalf("migrated usage=%+v", usageRecords)
 	}
 	store := newManagedTenantStoreWithDatabaseAndCipher(database, providerKeyCipher)
@@ -278,6 +286,7 @@ func TestManagedTenantKeyedRoutingDefaultsMigrationReconcilesExistingTenants(t *
 	if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
 		t.Fatalf("create schema two fixture: %v", migrationError)
 	}
+	useManagedUsageSchemaTwelve(t, database)
 	providers := internalManagementProviderRegistry()
 	providerKeyCipher := internalManagedProviderKeyCipher()
 	now := time.Date(2026, 7, 26, 18, 0, 0, 0, time.UTC)
@@ -357,6 +366,7 @@ func TestManagedTenantModelIdentityMigrationCanonicalizesCurrentRoutesAndPreserv
 	if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
 		t.Fatalf("create schema four fixture: %v", migrationError)
 	}
+	useManagedUsageSchemaTwelve(t, database)
 	providers := internalManagementProviderRegistry()
 	providerKeyCipher := internalManagedProviderKeyCipher()
 	now := time.Date(2026, 8, 10, 23, 0, 0, 0, time.UTC)
@@ -404,13 +414,11 @@ func TestManagedTenantModelIdentityMigrationCanonicalizesCurrentRoutesAndPreserv
 		t.Fatalf("seed provider keys: %v", createError)
 	}
 	historicalUsage := []managedUsageEventRecord{
-		{ID: 81, TenantID: nativeTenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameMiniMax, ModelID: managedMiniMaxNativeModel, StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now.Add(3 * time.Minute)},
-		{ID: 82, TenantID: nativeTenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameSiliconFlow, ModelID: managedSiliconFlowDeepSeekNativeModel, StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now.Add(4 * time.Minute)},
-		{ID: 83, TenantID: nativeTenant.TenantID, Endpoint: usageEndpointDictation, ProviderID: ProviderNameSiliconFlow, ModelID: managedSenseVoiceNativeModel, StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now.Add(5 * time.Minute)},
+		{ID: 81, TenantID: nativeTenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameMiniMax, ModelID: managedMiniMaxNativeModel, StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now.Add(3 * time.Minute)},
+		{ID: 82, TenantID: nativeTenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameSiliconFlow, ModelID: managedSiliconFlowDeepSeekNativeModel, StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now.Add(4 * time.Minute)},
+		{ID: 83, TenantID: nativeTenant.TenantID, Endpoint: usageEndpointDictation, ProviderID: ProviderNameSiliconFlow, ModelID: managedSenseVoiceNativeModel, StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now.Add(5 * time.Minute)},
 	}
-	if createError := database.Create(&historicalUsage).Error; createError != nil {
-		t.Fatalf("seed historical usage: %v", createError)
-	}
+	createManagedUsageSchemaTwelve(t, database, historicalUsage...)
 	if createError := database.Create(&managedSchemaMigrationRecord{Version: managedQwenCloudRetirementVersion, AppliedAt: now}).Error; createError != nil {
 		t.Fatalf("seed schema version: %v", createError)
 	}
@@ -472,6 +480,7 @@ func TestManagedTenantQwenCloudRetirementMigrationReconcilesCurrentTenants(t *te
 	if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
 		t.Fatalf("create schema three fixture: %v", migrationError)
 	}
+	useManagedUsageSchemaTwelve(t, database)
 	providers := internalManagementProviderRegistry()
 	providerKeyCipher := internalManagedProviderKeyCipher()
 	now := time.Date(2026, 8, 10, 20, 0, 0, 0, time.UTC)
@@ -545,12 +554,10 @@ func TestManagedTenantQwenCloudRetirementMigrationReconcilesCurrentTenants(t *te
 	historicalUsage := managedUsageEventRecord{
 		ID: 41, TenantID: qwenOnlyTenant.TenantID, Endpoint: usageEndpointText,
 		ProviderID: retiredQwenCloudProviderIdentifier, ModelID: retiredQwenCloudModelIdentifier,
-		StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess,
+		StatusCode: http.StatusOK, Disposition: managedUsageDispositionSucceeded, OutcomeCode: managedUsageOutcomeSuccess,
 		LatencyMilliseconds: 19, RequestTokens: 2, ResponseTokens: 3, TotalTokens: 5, CreatedAt: now.Add(4 * time.Minute),
 	}
-	if createError := database.Create(&historicalUsage).Error; createError != nil {
-		t.Fatalf("seed historical usage: %v", createError)
-	}
+	createManagedUsageSchemaTwelve(t, database, historicalUsage)
 	if createError := database.Create(&managedSchemaMigrationRecord{Version: managedKeyedRoutingSchemaVersion, AppliedAt: now}).Error; createError != nil {
 		t.Fatalf("seed schema version: %v", createError)
 	}
@@ -620,7 +627,7 @@ func TestManagedTenantQwenCloudRetirementMigrationReconcilesCurrentTenants(t *te
 	request := httptest.NewRequest(http.MethodGet, "/?key="+qwenOnlySecret+"&provider=openai&model="+ModelNameGPT41+"&prompt=hello", nil)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
-	if response.Code != http.StatusServiceUnavailable || upstreamRequestCount != 0 || !strings.Contains(response.Body.String(), ErrProviderNotConfigured.Error()) {
+	if response.Code != http.StatusConflict || upstreamRequestCount != 0 || strings.TrimSpace(response.Body.String()) != string(managedUsageOutcomeProviderNotConfigured) {
 		t.Fatalf("migrated qwen-only route status=%d body=%q upstream_requests=%d", response.Code, response.Body.String(), upstreamRequestCount)
 	}
 	usageWriteDeadline := time.Now().Add(time.Second)

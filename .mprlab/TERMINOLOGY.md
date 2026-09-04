@@ -27,6 +27,8 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `provider offering`: One exact model that one provider makes available as a route.
 - `provider profile`: Tenant settings for one provider, such as the selected text model and system prompt.
 - `provider transport`: One provider route that defines an endpoint, authentication, protocol adapter, and lifecycle.
+- `request disposition`: A closed value that identifies a request as rejected, succeeded, or failed.
+- `rejected request`: A request that cannot execute because it does not satisfy an input or tenant configuration requirement.
 - `request intent`: The tenant-bound semantic inputs that one idempotency key identifies.
 - `release decision validator`: A committed application program that validates the exact release decision that the gateway transaction uses.
 - `repository release version`: The canonical major-version-1 SemVer value in the root `VERSION` file.
