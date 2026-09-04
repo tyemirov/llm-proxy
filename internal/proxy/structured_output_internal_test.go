@@ -44,7 +44,7 @@ func TestStructuredOutputSchemaAndProviderMappings(testingInstance *testing.T) {
 		testingInstance.Fatal("nil schema must omit provider fields")
 	}
 
-	openAIPayload, _ := json.Marshal(buildRequestPayload("gpt-5.5", string(requestProfileOpenAIResponsesReasoningTools), []string{"review"}, false, nil, "high", true, true, schema))
+	openAIPayload, _ := json.Marshal(buildRequestPayload("gpt-5.5", string(requestProfileOpenAIResponsesReasoningTools), []string{"review"}, false, nil, "high", true, true, schema, nil))
 	if !jsonContainsPath(openAIPayload, "text", "format", "schema") {
 		testingInstance.Fatalf("OpenAI payload lacks text.format.schema: %s", openAIPayload)
 	}

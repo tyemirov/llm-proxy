@@ -8,6 +8,7 @@ import (
 )
 
 type textGenerationResult struct {
+	toolCalls                      []functionCall
 	text                           string
 	usage                          *tokenUsage
 	chatCompletionReasoningContent *string

@@ -19,9 +19,11 @@ type openAICompatibleChatClient struct {
 }
 
 type chatCompletionMessage struct {
-	Role             string  `json:"role"`
-	Content          any     `json:"content"`
-	ReasoningContent *string `json:"reasoning_content,omitempty"`
+	ToolCalls        []chatFunctionCall `json:"tool_calls,omitempty"`
+	ToolCallID       string             `json:"tool_call_id,omitempty"`
+	Role             string             `json:"role"`
+	Content          any                `json:"content"`
+	ReasoningContent *string            `json:"reasoning_content,omitempty"`
 }
 
 type chatCompletionContinuation struct {
@@ -29,6 +31,9 @@ type chatCompletionContinuation struct {
 }
 
 type chatCompletionRequest struct {
+	Tools               []map[string]any        `json:"tools,omitempty"`
+	ToolChoice          any                     `json:"tool_choice,omitempty"`
+	ParallelToolCalls   *bool                   `json:"parallel_tool_calls,omitempty"`
 	Model               string                  `json:"model"`
 	Messages            []chatCompletionMessage `json:"messages"`
 	MaxTokens           *int                    `json:"max_tokens,omitempty"`
@@ -47,8 +52,9 @@ type chatCompletionChoice struct {
 }
 
 type chatCompletionResponseMessage struct {
-	Content          string  `json:"content"`
-	ReasoningContent *string `json:"reasoning_content"`
+	ToolCalls        []chatFunctionCall `json:"tool_calls"`
+	Content          string             `json:"content"`
+	ReasoningContent *string            `json:"reasoning_content"`
 }
 
 func newOpenAICompatibleChatClient(httpClient HTTPDoer) *openAICompatibleChatClient {
@@ -57,7 +63,7 @@ func newOpenAICompatibleChatClient(httpClient HTTPDoer) *openAICompatibleChatCli
 	}
 }
 
-func (client *openAICompatibleChatClient) generateText(parentContext context.Context, apiKey string, endpointURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, tokenLimitParameter chatCompletionTokenLimitParameter, reasoningEffort string, continuation *chatCompletionContinuation, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *openAICompatibleChatClient) generateText(parentContext context.Context, apiKey string, endpointURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, tokenLimitParameter chatCompletionTokenLimitParameter, reasoningEffort string, continuation *chatCompletionContinuation, tools *callerTools, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	if mediaLimitError := validateInlineMessageMediaBeforeSerialization(modelIdentifier, messages); mediaLimitError != nil {
 		return textGenerationResult{}, mediaLimitError
 	}
@@ -85,6 +91,16 @@ func (client *openAICompatibleChatClient) generateText(parentContext context.Con
 		case chatCompletionTokenLimitMaxCompletionTokens:
 			payload.MaxCompletionTokens = maxTokens
 		}
+	}
+	if tools != nil && len(tools.declarations) > 0 {
+		for _, decl := range tools.declarations {
+			payload.Tools = append(payload.Tools, map[string]any{"type": "function", "function": decl})
+		}
+		payload.ToolChoice = tools.selection.Mode
+		if tools.selection.Mode == "function" {
+			payload.ToolChoice = map[string]any{"type": "function", "function": map[string]string{"name": tools.selection.Name}}
+		}
+		payload.ParallelToolCalls = tools.parallel
 	}
 	payloadBytes, _ := json.Marshal(payload)
 	if mediaLimitError := validateInlineMessageMediaRequestLimit(modelIdentifier, messages, payloadBytes); mediaLimitError != nil {
@@ -136,6 +152,17 @@ func parseChatCompletionResponse(responseBytes []byte) (textGenerationResult, er
 		}
 		visibleText := choice.Message.Content
 		choiceGeneration := textGenerationResult{text: visibleText, usage: usage, chatCompletionReasoningContent: choice.Message.ReasoningContent}
+		if finishReason == "tool_calls" {
+			calls, err := canonicalChatFunctionCalls(choice.Message.ToolCalls)
+			if err != nil || len(calls) == 0 {
+				return generation, fmt.Errorf("%w: invalid tool calls", ErrProviderAPI)
+			}
+			choiceGeneration.toolCalls = calls
+			return choiceGeneration, nil
+		}
+		if len(choice.Message.ToolCalls) > 0 {
+			return generation, fmt.Errorf("%w: tool calls without tool stop", ErrProviderAPI)
+		}
 		if finishReason == "length" {
 			return choiceGeneration, errProviderOutputLimitReached
 		}

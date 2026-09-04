@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"gopkg.in/yaml.v3"
 )
 
@@ -26,9 +27,10 @@ type OperationKey struct {
 }
 
 type SecurityScheme struct {
-	Type string
-	In   string
-	Name string
+	Scheme string
+	Type   string
+	In     string
+	Name   string
 }
 
 type Contract struct {
@@ -143,6 +145,13 @@ func (contract *Contract) SecurityScheme(name string) (SecurityScheme, error) {
 		return SecurityScheme{}, schemeError
 	}
 	schemeType, typeOK := scheme["type"].(string)
+	if schemeType == "http" {
+		bearer, ok := scheme["scheme"].(string)
+		if !ok || bearer != "bearer" {
+			return SecurityScheme{}, fmt.Errorf("%w: unsupported HTTP authentication", errInvalidContract)
+		}
+		return SecurityScheme{Type: schemeType, Scheme: bearer}, nil
+	}
 	schemeLocation, locationOK := scheme["in"].(string)
 	schemeName, nameOK := scheme["name"].(string)
 	if !typeOK || !locationOK || !nameOK {
@@ -423,6 +432,9 @@ func (contract *Contract) ValidateResponse(path string, method string, statusCod
 	if schemaError != nil {
 		return schemaError
 	}
+	if mediaType == "text/event-stream" {
+		return contract.validateEventStream(mediaContract, body)
+	}
 	if mediaType != "application/json" {
 		return contract.validateValue(schema, string(body), strings.ToUpper(method)+" "+path+" response "+status+" body")
 	}
@@ -511,155 +523,23 @@ func (contract *Contract) resolveReference(referenceObject map[string]any) (map[
 	return contractObject(current, "reference "+reference)
 }
 
-func (contract *Contract) validateValue(schema map[string]any, value any, context string) error {
-	resolvedSchema, resolveError := contract.resolveSchema(schema)
-	if resolveError != nil {
-		return resolveError
+func (contract *Contract) validateValue(schema map[string]any, value any, subject string) error {
+	document := map[string]any{"$schema": "https://json-schema.org/draft/2020-12/schema", "components": contract.document["components"]}
+	for key, definition := range schema {
+		document[key] = definition
 	}
-	if len(resolvedSchema) == 0 {
-		return nil
+	compiler := jsonschema.NewCompiler()
+	if err := compiler.AddResource("urn:llm-proxy:contract", document); err != nil {
+		return fmt.Errorf("%w: %s schema: %v", errInvalidContract, subject, err)
 	}
-	if oneOfValues, hasOneOf := resolvedSchema["oneOf"].([]any); hasOneOf {
-		matchCount := 0
-		var lastError error
-		for alternativeIndex, rawAlternative := range oneOfValues {
-			alternative, alternativeError := contractObject(rawAlternative, fmt.Sprintf("%s.oneOf[%d]", context, alternativeIndex))
-			if alternativeError != nil {
-				return alternativeError
-			}
-			if validationError := contract.validateValue(alternative, value, context); validationError == nil {
-				matchCount++
-			} else {
-				lastError = validationError
-			}
-		}
-		if matchCount != 1 {
-			return fmt.Errorf("%w: %s matched %d oneOf alternatives: %v", errInvalidContract, context, matchCount, lastError)
-		}
-		return nil
+	compiled, err := compiler.Compile("urn:llm-proxy:contract")
+	if err != nil {
+		return fmt.Errorf("%w: %s schema: %v", errInvalidContract, subject, err)
 	}
-	schemaType, _ := resolvedSchema["type"].(string)
-	switch schemaType {
-	case "object":
-		objectValue, ok := value.(map[string]any)
-		if !ok {
-			return fmt.Errorf("%w: %s must be an object", errInvalidContract, context)
-		}
-		properties, propertiesError := contractObject(resolvedSchema["properties"], context+".properties")
-		if propertiesError != nil {
-			return propertiesError
-		}
-		if rawRequired, hasRequired := resolvedSchema["required"].([]any); hasRequired {
-			for requiredIndex, rawRequiredName := range rawRequired {
-				requiredName, ok := rawRequiredName.(string)
-				if !ok {
-					return fmt.Errorf("%w: %s.required[%d] must be a string", errInvalidContract, context, requiredIndex)
-				}
-				if _, exists := objectValue[requiredName]; !exists {
-					return fmt.Errorf("%w: %s missing required property %s", errInvalidContract, context, requiredName)
-				}
-			}
-		}
-		additionalProperties, hasAdditionalProperties := resolvedSchema["additionalProperties"].(bool)
-		for propertyName, propertyValue := range objectValue {
-			rawPropertySchema, declared := properties[propertyName]
-			if !declared {
-				if hasAdditionalProperties && !additionalProperties {
-					return fmt.Errorf("%w: %s has undeclared property %s", errInvalidContract, context, propertyName)
-				}
-				continue
-			}
-			propertySchema, propertySchemaError := contractObject(rawPropertySchema, context+"."+propertyName)
-			if propertySchemaError != nil {
-				return propertySchemaError
-			}
-			if propertyError := contract.validateValue(propertySchema, propertyValue, context+"."+propertyName); propertyError != nil {
-				return propertyError
-			}
-		}
-		return nil
-	case "array":
-		arrayValue, ok := value.([]any)
-		if !ok {
-			return fmt.Errorf("%w: %s must be an array", errInvalidContract, context)
-		}
-		if rawMinimumItems, hasMinimumItems := resolvedSchema["minItems"]; hasMinimumItems {
-			minimumItems, conversionError := contractInteger(rawMinimumItems)
-			if conversionError != nil {
-				return fmt.Errorf("%w: %s minItems: %v", errInvalidContract, context, conversionError)
-			}
-			if int64(len(arrayValue)) < minimumItems {
-				return fmt.Errorf("%w: %s must contain at least %d items", errInvalidContract, context, minimumItems)
-			}
-		}
-		itemSchema, itemSchemaError := contractObject(resolvedSchema["items"], context+".items")
-		if itemSchemaError != nil {
-			return itemSchemaError
-		}
-		for itemIndex, item := range arrayValue {
-			if itemError := contract.validateValue(itemSchema, item, fmt.Sprintf("%s[%d]", context, itemIndex)); itemError != nil {
-				return itemError
-			}
-		}
-		return nil
-	case "string":
-		stringValue, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("%w: %s must be a string", errInvalidContract, context)
-		}
-		return validateStringSchema(resolvedSchema, stringValue, context)
-	case "integer":
-		integerValue, integerError := contractInteger(value)
-		if integerError != nil {
-			return fmt.Errorf("%w: %s must be an integer", errInvalidContract, context)
-		}
-		if rawMinimum, hasMinimum := resolvedSchema["minimum"]; hasMinimum {
-			minimum, minimumError := contractInteger(rawMinimum)
-			if minimumError != nil {
-				return fmt.Errorf("%w: %s minimum: %v", errInvalidContract, context, minimumError)
-			}
-			if integerValue < minimum {
-				return fmt.Errorf("%w: %s must be at least %d", errInvalidContract, context, minimum)
-			}
-		}
-		if rawMaximum, hasMaximum := resolvedSchema["maximum"]; hasMaximum {
-			maximum, maximumError := contractInteger(rawMaximum)
-			if maximumError != nil {
-				return fmt.Errorf("%w: %s maximum: %v", errInvalidContract, context, maximumError)
-			}
-			if integerValue > maximum {
-				return fmt.Errorf("%w: %s must be at most %d", errInvalidContract, context, maximum)
-			}
-		}
-		return nil
-	case "number":
-		numberValue, numberError := contractNumber(value)
-		if numberError != nil {
-			return fmt.Errorf("%w: %s must be a number", errInvalidContract, context)
-		}
-		if rawMinimum, hasMinimum := resolvedSchema["minimum"]; hasMinimum {
-			minimum, minimumError := contractNumber(rawMinimum)
-			if minimumError != nil {
-				return fmt.Errorf("%w: %s minimum: %v", errInvalidContract, context, minimumError)
-			}
-			if numberValue < minimum {
-				return fmt.Errorf("%w: %s must be at least %g", errInvalidContract, context, minimum)
-			}
-		}
-		return nil
-	case "boolean":
-		if _, ok := value.(bool); !ok {
-			return fmt.Errorf("%w: %s must be a boolean", errInvalidContract, context)
-		}
-		return nil
-	case "null":
-		if value != nil {
-			return fmt.Errorf("%w: %s must be null", errInvalidContract, context)
-		}
-		return nil
-	default:
-		return fmt.Errorf("%w: %s has unsupported schema type %q", errInvalidContract, context, schemaType)
+	if err := compiled.Validate(value); err != nil {
+		return fmt.Errorf("%w: %s: %v", errInvalidContract, subject, err)
 	}
+	return nil
 }
 
 func (contract *Contract) validateStringValue(schema map[string]any, value string, context string) error {
@@ -724,21 +604,6 @@ func contractInteger(value any) (int64, error) {
 	}
 }
 
-func contractNumber(value any) (float64, error) {
-	switch typedValue := value.(type) {
-	case int:
-		return float64(typedValue), nil
-	case int64:
-		return float64(typedValue), nil
-	case float64:
-		return typedValue, nil
-	case json.Number:
-		return typedValue.Float64()
-	default:
-		return 0, fmt.Errorf("value=%v is not a number", value)
-	}
-}
-
 func contractObject(value any, context string) (map[string]any, error) {
 	objectValue, ok := value.(map[string]any)
 	if !ok {
@@ -754,4 +619,61 @@ func isHTTPMethod(method string) bool {
 	default:
 		return false
 	}
+}
+
+func (contract *Contract) validateEventStream(media map[string]any, body []byte) error {
+	name, ok := media["x-event-contract"].(string)
+	if !ok {
+		return fmt.Errorf("missing SSE schema")
+	}
+	schema := map[string]any{"$ref": "#/components/schemas/" + name}
+	sequence := 0
+	last := ""
+	done := false
+	for _, frame := range strings.Split(strings.TrimSpace(string(body)), "\n\n") {
+		var event, data string
+		for _, line := range strings.Split(frame, "\n") {
+			if strings.HasPrefix(line, "event: ") {
+				event = strings.TrimPrefix(line, "event: ")
+			}
+			if strings.HasPrefix(line, "data: ") {
+				data = strings.TrimPrefix(line, "data: ")
+			}
+		}
+		if done {
+			return fmt.Errorf("event after terminal marker")
+		}
+		if data == "[DONE]" {
+			if name != "OpenAIChatChunk" {
+				return fmt.Errorf("unexpected done marker")
+			}
+			done = true
+			continue
+		}
+		var value map[string]any
+		if err := json.Unmarshal([]byte(data), &value); err != nil {
+			return fmt.Errorf("invalid SSE JSON: %w", err)
+		}
+		if err := contract.validateValue(schema, value, "SSE "+event); err != nil {
+			return err
+		}
+		if name == "OpenAIResponseEvent" {
+			if value["type"] != event || value["sequence_number"] != float64(sequence) {
+				return fmt.Errorf("invalid event identity or sequence")
+			}
+			if sequence == 0 && event != "response.created" {
+				return fmt.Errorf("missing response.created")
+			}
+			if sequence == 1 && event != "response.in_progress" {
+				return fmt.Errorf("missing response.in_progress")
+			}
+			done = event == "response.completed"
+		}
+		last = event
+		sequence++
+	}
+	if !done {
+		return fmt.Errorf("incomplete SSE sequence ending %s", last)
+	}
+	return nil
 }

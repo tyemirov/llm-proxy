@@ -88,6 +88,9 @@ type ExactModel struct {
 
 // ProviderOffering declares one provider route for one exact model.
 type ProviderOffering struct {
+	Created     int64 `mapstructure:"created"`
+	CallerTools bool  `mapstructure:"caller_tools"`
+
 	Provider                string                     `mapstructure:"provider"`
 	Model                   string                     `mapstructure:"model"`
 	ProviderModel           string                     `mapstructure:"provider_model"`

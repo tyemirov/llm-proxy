@@ -166,6 +166,9 @@ type ProviderCatalogUsageFields struct {
 
 // ProviderCatalogOffering defines one exact model route inside its provider.
 type ProviderCatalogOffering struct {
+	Created     int64 `yaml:"created"`
+	CallerTools bool  `yaml:"caller_tools,omitempty"`
+
 	Model             string                     `yaml:"model"`
 	UpstreamModel     string                     `yaml:"upstream_model"`
 	Transport         string                     `yaml:"transport"`
@@ -430,6 +433,16 @@ func validateProviderCatalogSchema(schema ProviderCatalogSchema) error {
 			offeringField := fmt.Sprintf("%s.offerings[%d]", fieldPrefix, offeringIndex)
 			if _, found := transports[offering.Transport]; !found {
 				return fmt.Errorf("%w: field=%s.transport transport=%s reason=dangling_reference", ErrInvalidModelCatalog, offeringField, offering.Transport)
+			}
+			if offering.Created <= 0 {
+				return fmt.Errorf("%w: field=%s.created", ErrInvalidModelCatalog, offeringField)
+			}
+			if offering.CallerTools {
+				transport := transports[offering.Transport]
+				supported := transport.RequestProtocol == CatalogProtocolOpenAIChatCompletions || (transport.RequestProtocol == CatalogProtocolOpenAIResponses && (offering.RequestProfile == string(requestProfileOpenAIResponsesReasoningTools) || offering.RequestProfile == string(requestProfileOpenAIResponsesTemperatureTools)))
+				if !supported {
+					return fmt.Errorf("%w: field=%s.caller_tools", ErrInvalidModelCatalog, offeringField)
+				}
 			}
 			if len(offering.Prices) == 0 {
 				return fmt.Errorf("%w: field=%s.prices", ErrInvalidModelCatalog, offeringField)
@@ -699,7 +712,7 @@ func validateProviderCatalogAdapterContract(transport ProviderCatalogTransport, 
 		allowedLifecycles = []string{string(textExecutionLifecyclePollableResource), string(textExecutionLifecycleSynchronousCompletion)}
 		parameters = ProviderCatalogProtocolParameters{
 			ModelField: "model", TokenField: "max_output_tokens", MediaExecutionLifecycle: transport.Lifecycle,
-			OutputFields: []string{"output[].content[].text"},
+			OutputFields: []string{"output[].content[].text", "output[].type", "output[].call_id", "output[].name", "output[].arguments"},
 			FinishRules: ProviderCatalogFinishRules{
 				Complete: []string{"completed"}, Continue: []string{"incomplete:max_output_tokens"},
 			},
@@ -717,12 +730,12 @@ func validateProviderCatalogAdapterContract(transport ProviderCatalogTransport, 
 		parameters = ProviderCatalogProtocolParameters{
 			ModelField: "model", TokenField: transport.ProtocolParameters.TokenField,
 			MediaExecutionLifecycle: string(textExecutionLifecycleSynchronousCompletion),
-			OutputFields:            []string{"choices[].message.content"},
+			OutputFields:            []string{"choices[].message.content", "choices[].message.tool_calls"},
 			FinishRules: ProviderCatalogFinishRules{
-				Complete: []string{"stop"}, Continue: []string{"length"},
+				Complete: []string{"stop", "tool_calls"}, Continue: []string{"length"},
 			},
 			ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
-			ErrorRules:        []string{"content_filter", "tool_calls", "unknown_finish_reason"},
+			ErrorRules:        []string{"content_filter", "unknown_finish_reason"},
 			UsageFields: ProviderCatalogUsageFields{
 				Input: "usage.prompt_tokens", Output: "usage.completion_tokens", Total: "usage.total_tokens",
 			},
@@ -864,13 +877,13 @@ func compileProviderCatalogSchema(schema ProviderCatalogSchema, revision string)
 				ExecutionLifecycle:      transport.Lifecycle,
 				MediaExecutionLifecycle: transport.ProtocolParameters.MediaExecutionLifecycle,
 				RequestProfile:          rawOffering.RequestProfile,
-				WebSearch:               rawOffering.WebSearch,
-				OutputTokenLimit:        rawOffering.OutputTokenLimit,
-				ReasoningEffort:         rawOffering.ReasoningEffort,
-				MediaInputs:             append([]string(nil), rawOffering.MediaInputs...),
-				MediaLimits:             cloneCatalogMediaLimits(rawOffering.MediaLimits),
-				Controls:                append([]CatalogControl(nil), rawOffering.Controls...),
-				Limits:                  append([]CatalogLimit(nil), rawOffering.Limits...),
+				WebSearch:               rawOffering.WebSearch, CallerTools: rawOffering.CallerTools, Created: rawOffering.Created,
+				OutputTokenLimit: rawOffering.OutputTokenLimit,
+				ReasoningEffort:  rawOffering.ReasoningEffort,
+				MediaInputs:      append([]string(nil), rawOffering.MediaInputs...),
+				MediaLimits:      cloneCatalogMediaLimits(rawOffering.MediaLimits),
+				Controls:         append([]CatalogControl(nil), rawOffering.Controls...),
+				Limits:           append([]CatalogLimit(nil), rawOffering.Limits...),
 			}
 			modelCatalog.Offerings = append(modelCatalog.Offerings, offering)
 			for _, rawPrice := range rawOffering.Prices {

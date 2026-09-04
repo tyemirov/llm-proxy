@@ -166,7 +166,7 @@ func submitStructuredChatRequest(
 		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, statusCode, generation.usage, requestStart)
 		return
 	}
-	if persistError := store.succeed(requestTenant, chatRequest.idempotencyKey, intentSHA256, generation.text); persistError != nil {
+	if persistError := store.succeed(requestTenant, chatRequest.idempotencyKey, intentSHA256, generation.content.text()); persistError != nil {
 		writeStructuredRequestError(ginContext, http.StatusInternalServerError, llmproxycontract.ErrorCodeStructuredRequestStore, "", "", "")
 		markRequestOutcome(ginContext, requestOutcomeProxyFailure, managedUsageOutcomeProxyError)
 		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, http.StatusInternalServerError, generation.usage, requestStart)
@@ -179,7 +179,7 @@ func submitStructuredChatRequest(
 	markRequestOutcome(ginContext, requestOutcomeSuccess, managedUsageOutcomeSuccess)
 	writeTokenUsageHeaders(ginContext.Writer.Header(), generation.usage)
 	ginContext.Header(llmproxycontract.HeaderStructuredRequestState, structuredRequestStateSucceeded)
-	ginContext.Data(http.StatusOK, structuredJSONContentType, []byte(generation.text))
+	ginContext.Data(http.StatusOK, structuredJSONContentType, []byte(generation.content.text()))
 	recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, http.StatusOK, generation.usage, requestStart)
 }
 

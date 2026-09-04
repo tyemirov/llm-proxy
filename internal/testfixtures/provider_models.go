@@ -108,6 +108,9 @@ func NewProviderCatalogFromModelCatalog(modelCatalog proxy.ModelCatalog) (*proxy
 	}
 	empty := ""
 	for _, offering := range modelCatalog.Offerings {
+		if offering.Created == 0 {
+			offering.Created = 1700000000
+		}
 		providerIndex, found := providerIndexes[offering.Provider]
 		if !found {
 			providerIndex = len(schema.Providers)
@@ -132,7 +135,7 @@ func NewProviderCatalogFromModelCatalog(modelCatalog proxy.ModelCatalog) (*proxy
 		provider.Offerings = append(provider.Offerings, proxy.ProviderCatalogOffering{
 			Model: offering.Model, UpstreamModel: offering.ProviderModel, Transport: transportID,
 			Operations: offering.Operations, DefaultOperations: offering.DefaultOperations,
-			RequestProfile: offering.RequestProfile, WebSearch: offering.WebSearch,
+			RequestProfile: offering.RequestProfile, WebSearch: offering.WebSearch, CallerTools: offering.CallerTools, Created: offering.Created,
 			OutputTokenLimit: offering.OutputTokenLimit, ReasoningEffort: offering.ReasoningEffort,
 			MediaInputs: offering.MediaInputs, MediaLimits: offering.MediaLimits,
 			Controls: offering.Controls, Limits: offering.Limits,
@@ -184,7 +187,7 @@ func testProviderProtocolParameters(offering proxy.ProviderOffering) proxy.Provi
 	case proxy.CatalogProtocolOpenAIResponses:
 		return proxy.ProviderCatalogProtocolParameters{
 			ModelField: "model", TokenField: "max_output_tokens", MediaExecutionLifecycle: offering.ExecutionLifecycle,
-			OutputFields:      []string{"output[].content[].text"},
+			OutputFields:      []string{"output[].content[].text", "output[].type", "output[].call_id", "output[].name", "output[].arguments"},
 			FinishRules:       proxy.ProviderCatalogFinishRules{Complete: []string{"completed"}, Continue: []string{"incomplete:max_output_tokens"}},
 			ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
 			ErrorRules:        []string{"cancelled", "failed", "refusal", "unknown_status"},
@@ -193,10 +196,10 @@ func testProviderProtocolParameters(offering proxy.ProviderOffering) proxy.Provi
 	case proxy.CatalogProtocolOpenAIChatCompletions:
 		return proxy.ProviderCatalogProtocolParameters{
 			ModelField: "model", TokenField: "max_tokens", MediaExecutionLifecycle: "synchronous_completion",
-			OutputFields:      []string{"choices[].message.content"},
-			FinishRules:       proxy.ProviderCatalogFinishRules{Complete: []string{"stop"}, Continue: []string{"length"}},
+			OutputFields:      []string{"choices[].message.content", "choices[].message.tool_calls"},
+			FinishRules:       proxy.ProviderCatalogFinishRules{Complete: []string{"stop", "tool_calls"}, Continue: []string{"length"}},
 			ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
-			ErrorRules:        []string{"content_filter", "tool_calls", "unknown_finish_reason"},
+			ErrorRules:        []string{"content_filter", "unknown_finish_reason"},
 			UsageFields:       proxy.ProviderCatalogUsageFields{Input: "usage.prompt_tokens", Output: "usage.completion_tokens", Total: "usage.total_tokens"},
 		}
 	case proxy.CatalogProtocolAnthropicMessages:

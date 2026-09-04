@@ -586,19 +586,19 @@ func catalogWithTestProvider(testingInstance *testing.T) *proxy.ProviderCatalog 
 			Lifecycle:        "synchronous_completion",
 			ProtocolParameters: proxy.ProviderCatalogProtocolParameters{
 				ModelField: "model", TokenField: "max_tokens", MediaExecutionLifecycle: "synchronous_completion",
-				OutputFields: []string{"choices[].message.content"},
+				OutputFields: []string{"choices[].message.content", "choices[].message.tool_calls"},
 				FinishRules: proxy.ProviderCatalogFinishRules{
-					Complete: []string{"stop"}, Continue: []string{"length"},
+					Complete: []string{"stop", "tool_calls"}, Continue: []string{"length"},
 				},
 				ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
-				ErrorRules:        []string{"content_filter", "tool_calls", "unknown_finish_reason"},
+				ErrorRules:        []string{"content_filter", "unknown_finish_reason"},
 				UsageFields: proxy.ProviderCatalogUsageFields{
 					Input: "usage.prompt_tokens", Output: "usage.completion_tokens", Total: "usage.total_tokens",
 				},
 			},
 		}},
 		Offerings: []proxy.ProviderCatalogOffering{{
-			Model: testCatalogModelID, UpstreamModel: testCatalogUpstreamModelID,
+			Created: 1700000000, Model: testCatalogModelID, UpstreamModel: testCatalogUpstreamModelID,
 			Transport:  testCatalogTransportID,
 			Operations: []string{proxy.ModelOperationText}, DefaultOperations: []string{proxy.ModelOperationText},
 			OutputTokenLimit: 4096,

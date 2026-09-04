@@ -213,6 +213,9 @@ func newPublicCapabilityCatalog(configuration Configuration) PublicCapabilityCat
 
 func publicProviderOffering(offering ProviderOffering) PublicProviderOffering {
 	capabilities := append([]string(nil), offering.Operations...)
+	if offering.CallerTools {
+		capabilities = append(capabilities, "caller_tools")
+	}
 	if offering.WebSearch {
 		capabilities = append(capabilities, PublicModelCapabilityWebSearch)
 	}

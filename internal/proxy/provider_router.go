@@ -51,7 +51,7 @@ func newProviderRouter(openAIClient *OpenAIClient, chatClient *openAICompatibleC
 	}
 }
 
-func (router *providerRouter) generateText(requestContext context.Context, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (router *providerRouter) generateText(requestContext context.Context, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (completionResult, error) {
 	originalMessages := request.messages
 	accumulatedText := strings.Builder{}
 	var accumulatedUsage *tokenUsage
@@ -61,32 +61,36 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 		accumulatedUsage = mergeTokenUsage(accumulatedUsage, generation.usage)
 		recordContinuationProgress(requestContext, structuredLogger, generation, len([]byte(accumulatedText.String())), generationError)
 		if !errors.Is(generationError, errProviderOutputLimitReached) {
-			result := textGenerationResult{
-				text:  strings.TrimSpace(accumulatedText.String()),
-				usage: accumulatedUsage,
+			if generationError != nil {
+				return completionResult{usage: accumulatedUsage}, generationError
 			}
-			if generationError == nil {
-				if validationError := request.structuredOutput.validateResponse(result.text); validationError != nil {
-					return textGenerationResult{usage: accumulatedUsage}, validationError
-				}
+			text := strings.TrimSpace(accumulatedText.String())
+			if err := request.tools.validateResult(generation.toolCalls); err != nil {
+				return completionResult{usage: accumulatedUsage}, err
 			}
-			return result, generationError
+			if len(generation.toolCalls) > 0 {
+				return completionResult{content: completedFunctionCalls{visibleText: text, calls: generation.toolCalls}, usage: accumulatedUsage}, nil
+			}
+			if err := request.structuredOutput.validateResponse(text); err != nil {
+				return completionResult{usage: accumulatedUsage}, err
+			}
+			if request.structuredOutput != nil {
+				return completionResult{content: completedStructuredData(text), usage: accumulatedUsage}, nil
+			}
+			return completionResult{content: completedText(text), usage: accumulatedUsage}, nil
 		}
 		if request.structuredOutput != nil {
-			return textGenerationResult{usage: accumulatedUsage}, fmt.Errorf("%w: structured output reached provider output limit", ErrProviderAPI)
+			return completionResult{usage: accumulatedUsage}, fmt.Errorf("%w: structured output reached provider output limit", ErrProviderAPI)
 		}
 		if len(request.provider.activeTransport.protocolParameters.ContinuationRules) == 0 {
-			return textGenerationResult{usage: accumulatedUsage}, fmt.Errorf("%w: selected provider transport does not support output-limit continuation", ErrProviderAPI)
+			return completionResult{usage: accumulatedUsage}, fmt.Errorf("%w: selected provider transport does not support output-limit continuation", ErrProviderAPI)
 		}
 
 		request.messages = completionContinuationMessages(originalMessages, accumulatedText.String())
 		request.maxTokens = continuationMaxTokens(request.maxTokens, request.model, generation.text)
 		request.chatCompletionContinuation = generation.chatCompletionContinuation
 		if waitError := waitForRequestTelemetryPhase(requestContext, completionContinuationInterval, requestTelemetryPhaseContinuationWait); waitError != nil {
-			return textGenerationResult{
-				text:  strings.TrimSpace(accumulatedText.String()),
-				usage: accumulatedUsage,
-			}, waitError
+			return completionResult{usage: accumulatedUsage}, waitError
 		}
 	}
 }
@@ -111,6 +115,7 @@ func (openAIResponsesTextRouteAdapter) generateText(requestContext context.Conte
 		request.maxTokens,
 		request.reasoningEffort,
 		request.structuredOutput,
+		request.tools,
 		structuredLogger,
 	)
 }
@@ -126,6 +131,7 @@ func (openAIResponsesSynchronousTextRouteAdapter) generateText(requestContext co
 		request.messages,
 		request.maxTokens,
 		request.structuredOutput,
+		request.tools,
 		structuredLogger,
 	)
 }
@@ -143,6 +149,7 @@ func (openAIChatCompletionsTextRouteAdapter) generateText(requestContext context
 		request.provider.chatTokenLimitParameter,
 		request.reasoningEffort,
 		request.chatCompletionContinuation,
+		request.tools,
 		structuredLogger,
 	)
 }

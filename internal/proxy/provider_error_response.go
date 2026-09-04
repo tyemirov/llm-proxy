@@ -22,8 +22,9 @@ type providerErrorDetail struct {
 }
 
 func writeProviderRequestErrorResponse(ginContext *gin.Context, providerIdentifier string, requestError error, structuredLogger *zap.SugaredLogger) {
+
 	if errors.Is(requestError, errQueueFull) {
-		ginContext.String(statusCodeForError(requestError), requestError.Error())
+		writeClientError(ginContext, statusCodeForError(requestError), "capacity_exceeded", requestError.Error())
 		return
 	}
 	writeProviderErrorResponse(ginContext, providerIdentifier, requestError, structuredLogger)
@@ -65,6 +66,11 @@ func writeProviderErrorResponse(ginContext *gin.Context, providerIdentifier stri
 			logFields = append(logFields, logFieldProviderErrorCodes, providerErrorCodes)
 		}
 		structuredLogger.Warnw(logEventProviderFailure, logFields...)
+	}
+
+	if _, ok := ginContext.Get(contextKeyClientErrorEncoder); ok {
+		writeOpenAIError(ginContext, statusCodeForError(requestError), errorCode, "The provider request failed.")
+		return
 	}
 
 	ginContext.JSON(

@@ -119,6 +119,9 @@ func internalTestProviderCatalog(modelCatalog ModelCatalog) *ProviderCatalog {
 	}
 	empty := ""
 	for _, offering := range modelCatalog.Offerings {
+		if offering.Created == 0 {
+			offering.Created = 1700000000
+		}
 		providerIndex, found := providerIndexes[offering.Provider]
 		if !found {
 			providerIndex = len(schema.Providers)
@@ -144,7 +147,7 @@ func internalTestProviderCatalog(modelCatalog ModelCatalog) *ProviderCatalog {
 		provider.Offerings = append(provider.Offerings, ProviderCatalogOffering{
 			Model: offering.Model, UpstreamModel: offering.ProviderModel, Transport: transportID,
 			Operations: offering.Operations, DefaultOperations: offering.DefaultOperations,
-			RequestProfile: offering.RequestProfile, WebSearch: offering.WebSearch,
+			RequestProfile: offering.RequestProfile, WebSearch: offering.WebSearch, CallerTools: offering.CallerTools, Created: offering.Created,
 			OutputTokenLimit: offering.OutputTokenLimit, ReasoningEffort: offering.ReasoningEffort,
 			MediaInputs: offering.MediaInputs, MediaLimits: offering.MediaLimits,
 			Controls: offering.Controls, Limits: offering.Limits,

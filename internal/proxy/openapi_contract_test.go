@@ -103,6 +103,8 @@ func TestOpenAPIContractDocumentsActualAuthenticationBoundaries(t *testing.T) {
 		switch operation.Path {
 		case "/", "/v2", llmproxycontract.TenantIdentityPath, "/v2/requests", "/dictate", "/model/v1/assets", "/model/v1/assets/{asset_id}":
 			expectedSecurity = [][]string{{"TenantClientKey"}}
+		case "/v1/chat/completions", "/v1/responses", "/v1/models", "/v1/audio/transcriptions":
+			expectedSecurity = [][]string{{"TenantBearerKey"}}
 		case proxy.ManagementConfigUIPath, proxy.PublicCapabilitiesPath:
 			expectedSecurity = [][]string{}
 		}
@@ -525,7 +527,7 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 		overLimitFailuresRequest,
 		nil,
 	)
-	if validationError == nil || !strings.Contains(validationError.Error(), "must be at most 100") {
+	if validationError == nil || !strings.Contains(validationError.Error(), "maximum: got 101, want 100") {
 		t.Fatalf("over-limit OpenAPI validation error=%v", validationError)
 	}
 	overLimitFailuresResponse := httptest.NewRecorder()

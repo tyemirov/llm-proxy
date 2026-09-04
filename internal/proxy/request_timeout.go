@@ -121,6 +121,11 @@ func requestTimeoutHandlerWithRecorder(policy requestTimeoutPolicy, structuredLo
 		ginContext.Set(contextKeyRequestTimeoutState, state)
 		budget, valid := policy.resolve(ginContext.Request.Header.Values(llmproxycontract.HeaderRequestTimeoutSeconds))
 		if !valid {
+			if _, ok := ginContext.Get(contextKeyClientErrorEncoder); ok {
+				writeOpenAIError(ginContext, http.StatusBadRequest, llmproxycontract.ErrorCodeInvalidRequestTimeout, "Invalid request timeout.")
+				invalidTimeoutRecorder(ginContext, requestStart)
+				return
+			}
 			ginContext.Data(
 				http.StatusBadRequest,
 				mimeApplicationJSON,
@@ -222,12 +227,20 @@ func requestContextEnded(ginContext *gin.Context) bool {
 		state.outcome = requestOutcomeCallerCancelled
 		state.managedUsageOutcome = managedUsageOutcomeRequestTimeout
 		formattingStartedAt := time.Now()
-		ginContext.Status(statusClientClosedRequest)
+		if _, ok := ginContext.Get(contextKeyClientErrorEncoder); ok {
+			writeOpenAIError(ginContext, statusClientClosedRequest, "request_cancelled", "The caller cancelled the request.")
+		} else {
+			ginContext.Status(statusClientClosedRequest)
+		}
 		addRequestTelemetryPhase(ginContext.Request.Context(), requestTelemetryPhaseResponseFormatting, formattingStartedAt)
 		return true
 	}
 	state.outcome = requestOutcomeProxyTimeout
 	state.managedUsageOutcome = managedUsageOutcomeRequestTimeout
+	if _, ok := ginContext.Get(contextKeyClientErrorEncoder); ok {
+		writeOpenAIError(ginContext, http.StatusGatewayTimeout, llmproxycontract.ErrorCodeRequestTimeout, "The request timed out.")
+		return true
+	}
 	formattingStartedAt := time.Now()
 	ginContext.Data(
 		http.StatusGatewayTimeout,

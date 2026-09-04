@@ -661,7 +661,7 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 		})
 		telemetryContext := requestContextWithTelemetry(context.Background(), newRequestTelemetry("output-limit", "/v2"))
 		generation, generationError := providers.generateText(telemetryContext, chatRequest, logger)
-		if !errors.Is(generationError, ErrProviderAPI) || generation.text != "" {
+		if !errors.Is(generationError, ErrProviderAPI) || generation.content != nil {
 			subtest.Fatalf("generation=%+v error=%v", generation, generationError)
 		}
 	})
