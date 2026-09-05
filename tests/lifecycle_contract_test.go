@@ -337,7 +337,7 @@ func TestOperationalProductionLifecycleKeepsPolicyInAppAndDelegatesToSiblingGate
 	}
 }
 
-func TestOperationalReleaseDecisionMustMatchRepositoryVersion(testingInstance *testing.T) {
+func TestOperationalReleaseDecisionUsesGixVersion(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	repositoryVersion := operationalRepositoryReleaseVersion(testingInstance, repositoryRoot)
 	repositoryTag := "v" + repositoryVersion
@@ -357,14 +357,31 @@ func TestOperationalReleaseDecisionMustMatchRepositoryVersion(testingInstance *t
 			wantText:   "LLM_PROXY_RELEASE_POLICY_OK version=" + repositoryTag,
 		},
 		{
-			name:     "different major one version",
-			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"` + nextTag + `"}`,
-			wantText: "llm_proxy.release_version_invalid: release version must match repository version " + repositoryTag,
+			name:       "Gix selects the next version",
+			wantStatus: true,
+			output:     `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"` + nextTag + `"}`,
+			wantText:   "LLM_PROXY_RELEASE_POLICY_OK version=" + nextTag,
+		},
+		{
+			name:       "Gix selects a minor release",
+			output:     `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"v1.5.0"}`,
+			wantStatus: true,
+			wantText:   "LLM_PROXY_RELEASE_POLICY_OK version=v1.5.0",
+		},
+		{
+			name:     "malformed version",
+			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"v1.05.0"}`,
+			wantText: "llm_proxy.release_version_invalid: expected a major version 1 SemVer release",
+		},
+		{
+			name:     "missing version",
+			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1}}`,
+			wantText: "llm_proxy.release_version_invalid: expected a major version 1 SemVer release",
 		},
 		{
 			name:     "higher major",
 			output:   `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"v2.0.0"}`,
-			wantText: "llm_proxy.release_version_invalid: release version must match repository version " + repositoryTag,
+			wantText: "llm_proxy.release_version_invalid: expected a major version 1 SemVer release",
 		},
 		{
 			name:     "missing fixed major",
@@ -395,7 +412,7 @@ func TestOperationalReleaseDecisionMustMatchRepositoryVersion(testingInstance *t
 		})
 	}
 
-	testingInstance.Run("repository version drift", func(testingInstance *testing.T) {
+	testingInstance.Run("package metadata does not override the release decision", func(testingInstance *testing.T) {
 		fixtureRoot := newOperationalReleaseVersionFixture(testingInstance, repositoryRoot)
 		projectPath := filepath.Join(fixtureRoot, "python", "pyproject.toml")
 		projectBytes, readError := os.ReadFile(projectPath)
@@ -417,8 +434,8 @@ func TestOperationalReleaseDecisionMustMatchRepositoryVersion(testingInstance *t
 		command.Dir = fixtureRoot
 		command.Stdin = strings.NewReader(`{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"` + repositoryTag + `"}`)
 		output, runError := command.CombinedOutput()
-		if runError == nil || !strings.Contains(string(output), "llm_proxy.release_policy_invalid: Python project version must match repository version "+repositoryVersion) {
-			testingInstance.Fatalf("repository version drift error=%v output=%s", runError, output)
+		if runError != nil || !strings.Contains(string(output), "LLM_PROXY_RELEASE_POLICY_OK version="+repositoryTag) {
+			testingInstance.Fatalf("package metadata overrode the Gix decision error=%v output=%s", runError, output)
 		}
 	})
 }
