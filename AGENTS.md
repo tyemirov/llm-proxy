@@ -102,7 +102,7 @@ Operational playbook for working in this repository. Use it to coordinate planni
 
 1. Read `AGENTS.md` (plus relevant stack guides) before touching code.
    Also scan `docs/` for integration runbooks and third-party library guidance relevant to the active issue.
-2. Review the backlog in `.mprlab/ISSUES.md`; work sequentially through BugFixes, Improvements, Maintenance, then Features. Planning is reserved for future work; do not implement Planning items.
+2. For backlog selection, review the backlog in `.mprlab/ISSUES.md`. Work sequentially through BugFixes, Improvements, Maintenance, then Features. Planning is reserved for future work. Do not implement Planning items.
 3. For the active issue, read `.mprlab/PLANNING.md`. Make the execution plan that this contract specifies.
 4. Implement the requested change, keeping to stack-specific standards. Limit edits to necessary files plus issue-document updates when required.
 5. Do not manually create/switch branches, run completion-gate command chains, commit/push, or open PRs as part of routine execution; the execution chain does this automatically.
@@ -152,7 +152,9 @@ If any checklist item is incomplete, do not claim completion. Complete the missi
 
 ### Action Items Reminder
 
-- Read guiding docs (`README.md`, `docs/`, `.mprlab/AGENTS*`, and `AGENTS.md`) before planning.
+- Before planning, use the task-specific reading conditions in the MPR Lab Governance section.
+- For product or integration changes, read the relevant product documents and runbooks.
+  References: `README.md`, `docs/`.
 - Keep working sequentially through the backlog—never parallelize issues.
 - Add missing issues to `.mprlab/ISSUES.md` if you discover new work while investigating; plan and resolve them in order.
 
@@ -189,22 +191,22 @@ ISSUES.md manages this repository through the current application contract.
 <!-- BEGIN MPRLAB-GOVERNANCE -->
 ## MPR Lab Governance
 
-Most workflow context files live under `.mprlab/`. The root `AGENTS.md` remains the repository entrypoint for agents.
+Root `AGENTS.md` is the agent entrypoint. Shared rules live under `.mprlab/`.
 
-Read these files before editing:
+Read `.mprlab/POLICY.md` for every task.
+Read the following files only when their condition applies.
+Read each selected guide in full before its first applicable action.
 
-- `.mprlab/POLICY.md`: binding validation and confident-programming rules.
-- `.mprlab/PLANNING.md`: durable planning contract.
-- `.mprlab/AGENTS.DOCS.md`: ASD-STE100 documentation rules.
-- `.mprlab/TERMINOLOGY.md`: approved repository technical terms.
-- `.mprlab/issues-md-format.md`: issue tracker format and recurring identifier rules.
-- `.mprlab/ISSUES.md`: active issue tracker.
-- `.mprlab/AGENTS.GIT.md`: Git and pull request workflow.
-- `.mprlab/AGENTS.API.md`: RESTful HTTP and gRPC API guidance.
-- `.mprlab/AGENTS.GO.md`: Go guidance.
-- `.mprlab/AGENTS.PY.md`: Python guidance.
-- `.mprlab/AGENTS.FRONTEND.md`: browser frontend guidance.
-- `.mprlab/AGENTS.DOCKER.md`: Docker and container guidance.
+- Before edits: `.mprlab/PLANNING.md`.
+- For technical prose: `.mprlab/AGENTS.DOCS.md` and `.mprlab/TERMINOLOGY.md`.
+- For issue work: the selected issue and its dependencies in `.mprlab/ISSUES.md`.
+- For tracker edits: `.mprlab/issues-md-format.md`.
+- For Git operations: `.mprlab/AGENTS.GIT.md`.
+- For HTTP or gRPC API changes: `.mprlab/AGENTS.API.md`.
+- For Go changes: `.mprlab/AGENTS.GO.md`.
+- For Python changes: `.mprlab/AGENTS.PY.md`.
+- For browser changes: `.mprlab/AGENTS.FRONTEND.md`.
+- For container changes: `.mprlab/AGENTS.DOCKER.md`.
 
 File permission modes are outside agent scope.
 Never examine, validate, compare, require, change, or record a file permission mode.
@@ -216,5 +218,5 @@ Always reference each issue by its ID, for example `B001` or `I027`.
 Never use an `ISSUES.md` file path, line number, or `path:line` syntax as an issue reference.
 
 Do not create `.mprlab/AGENTS.md`. Scoped guidance belongs in `.mprlab/AGENTS.*.md` files.
-If guidance conflicts, follow `.mprlab/POLICY.md` first, then root `AGENTS.md`, then the relevant scoped guide.
+If guidance conflicts, obey `.mprlab/POLICY.md` first, then root `AGENTS.md`, then the applicable scoped guide.
 <!-- END MPRLAB-GOVERNANCE -->
