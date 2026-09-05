@@ -5,6 +5,20 @@ This file contains approved technical nouns and technical verbs for repository d
 Use this file with ASD-STE100 Simplified Technical English, Issue 9.
 Give each term one meaning. Use the same term for the same concept in all documents.
 
+- `characterization test`: An integration test that records current public behavior before a refactor.
+- `file permission mode`: A number or symbol that gives filesystem access bits.
+- `GitHub Pages`: The GitHub service that hosts a static website from a repository branch.
+- `integration test`: A test of real product logic and component interactions through a public entry point, with controlled dependencies when necessary.
+- `inverted test pyramid`: The MPR Lab test strategy with integration tests as the primary layer and focused unit tests where useful.
+- `production code`: Source code that implements repository behavior outside the test suite.
+- `public entry point`: An interface through which a user or caller uses repository behavior.
+- `static website`: A browser frontend that uses generated files without a website server runtime.
+- `test-driven development`: A coding sequence that uses a failing integration test before a production code change.
+- `unit test`: A test that isolates one code unit from its collaborators.
+- `website hostname`: The hostname that identifies a public static website.
+
+- `dependency injection`: A design that supplies a component's dependencies from outside that component.
+
 ## Repository Technical Nouns
 
 - `activation issue`: An issue that changes an external runtime to use completed development work.

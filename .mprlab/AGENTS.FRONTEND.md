@@ -41,7 +41,9 @@ This file gives rules for browser frontends. Obey root `AGENTS.md` and `.mprlab/
 
 ## Testing
 
-- Start coding work with an integration test through the real page and browser entry point.
+- For a behavior change, start with an integration test through the real page and browser entry point.
+- Use dependency injection for integration scenarios that are difficult to reproduce.
+- Keep the product logic under test real.
 - Prefer Playwright or the repo-standard browser harness.
 - Cover user-visible behavior through the real page and browser entry point.
 - Assert rendered state, accessibility-relevant behavior, emitted events, requests, and downloaded artifacts.

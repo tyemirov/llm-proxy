@@ -25,6 +25,58 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B190] (P1) Correct historical request dispositions for unconfigured providers.
+  Goal:
+  Historical requests without a provider connection must appear only in the rejected-request report, as F037 requires.
+  Evidence:
+  - The live dashboard on 2026-09-05 shows three requests each for DeepSeek, DashScope, MiniMax, SiliconFlow, and Z.AI.
+  - The failure report contains these 15 requests under the Default tenant on 2026-09-02.
+  - Each record has HTTP `503`, outcome `service_unavailable`, a provider/model pair, and latency of `0 ms`.
+  - The three request groups have displayed times `01:54:00`, `01:54:43`, and `01:54:56`.
+  - The published website marker identifies `v1.5.0` and commit `2ea0bd2f45cf5a5bd791dce82f44c00f3bd3c3c2`.
+  - B145 explicitly recorded catalog defaults for unconfigured-provider `503` responses.
+  - B174 preserves historical provider/model pairs that match the catalog.
+  - F037 and B179 classify historical `service_unavailable` records as rejections only when both route fields are empty.
+  - Thus, a catalog-valid pair from an unconfigured request remains a failed execution after migration.
+  Requirements:
+  - Reproduce the B145 historical record through the real migration and management HTTP resources.
+  - Establish exact evidence for each historical request selected for correction.
+  - Use one bounded migration to assign `rejected` and `provider_not_configured` to proven unconfigured-provider requests.
+  - Include databases that already completed schema version 13.
+  - Preserve safe metadata and actual execution failures.
+  - Treat status, zero tokens, zero latency, and current credential absence as insufficient proof when used alone.
+  - Exclude corrected records from execution totals, failure reports, charts, and provider/model usage.
+  - Keep corrected records in the separate rejection count and report.
+  - Keep the provider catalog cards available for connection settings.
+  Validation:
+  - Confirm the expected failing integration test before the production code change.
+  - Verify both account and tenant reports through HTTP.
+  - Verify migration rollback and repeated startup with real SQLite storage.
+  - Verify chart exclusion and rejection details through the browser.
+  - Run `make ci` after the last application change.
+  Resolution:
+  - On 2026-09-05, the user authorized a one-off migration of the affected historical records.
+  - The migration corrected 15 exact records in the production database at schema version 13.
+  - Record IDs: `2579` through `2583`, and `2585` through `2594`.
+  - The reviewed input includes each original timestamp, tenant, route, status, disposition, outcome, latency, and token count.
+  - One GORM transaction changed only the disposition and outcome to `rejected` and `provider_not_configured`.
+  - Each record had to match its complete reviewed input before the update.
+  - The original HTTP status and all other safe metadata remain unchanged.
+  - A native SQLite backup preceded the transaction and passed the same input verification.
+  - Backup on `192.168.1.252`: `/volume1/homes/tyemirov/llm-proxy-b190-before-20260905.sqlite`.
+  - Local evidence and recovery records: `.git/b190/receipt.json` and `.git/b190/rows-before.json`.
+  - Verification found 15 corrected records and zero further updates.
+  - Live account execution requests changed from 1,955 to 1,940, and failures changed from 584 to 569.
+  - Provider usage changed from 11 providers to six. Token usage remained 64,860,374.
+  - The Default tenant rejection report shows all 15 corrected records as `Provider not configured`.
+  - The initial integration test failed with `B190 correction not implemented`.
+  - The completed test passed through the temporary CLI, real SQLite storage, and account and tenant HTTP resources.
+  - The test verified rollback after a changed second record, repeat execution, startup, and unchanged metadata.
+  - `make ci` passed all 12 gates in 179 seconds with 100 percent Go statement coverage.
+  - The browser suite passed 95 tests. Live browser checks verified both usage scopes and all corrected rejection rows.
+  - The temporary executable, command, and test were removed after validation. Their source remains in the local evidence record.
+  - The service schema and deployment remain unchanged.
+
 - [x] [B189] (P2) Use the selected release version in Python package metadata.
   The validator accepts `v1.5.0`, but Python installations still report version `1.4.1`.
   Requirements:
@@ -1048,7 +1100,7 @@ retain satisfied historical dependencies.
     case through the canonical Default tenant key.
   - The passing production matrix satisfies this issue's production acceptance
     condition.
-- [ ] [B141] (P1) Center the X icon inside the top-right square.
+- [x] [B141] (P1) Center the X icon inside the top-right square.
   Goal:
   Align the X icon so it is visually centered within the square control in the top-right corner, matching the intended UI layout shown in the attached screenshot.
   
@@ -1060,6 +1112,17 @@ retain satisfied historical dependencies.
   
   Validation:
   Open the affected screen and confirm the X appears centered within the top-right square. Verify the square remains in the same top-right position, the control still functions as before, and no surrounding UI elements are visually displaced.
+
+  Resolution:
+  - The shared `button.icon-only` rule controls icon alignment and padding.
+  - All close controls use the same SVG X.
+  - The square remains 30 pixels wide and 30 pixels high.
+  - Before the correction, browser tests measured a 6.5-pixel horizontal offset in the request dialogs.
+  - Eight browser cases passed at widths of 1280 and 390 pixels.
+  - These cases include Settings, provider cards, failed requests, and rejected requests.
+  - Keyboard focus and the close action passed in each case.
+  - `make ci` passed all 12 gates with 100.0% Go statement coverage.
+  - The change is local. Production publication remains a separate operation.
 
 
 ## Improvements

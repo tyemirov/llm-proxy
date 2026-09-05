@@ -38,7 +38,9 @@ Use `<SectionLetter><SequenceNumber>[R]`.
 - Use `F` for Features.
 - Use `P` for Planning.
 - Use three digits for each sequence number.
-- After sequence number `999`, use sequence number `001`.
+- After sequence number `999`, continue the identifier search at `001`.
+- Select an identifier absent from both the active tracker and its archive.
+- If all identifiers in the section are occupied, stop and request an identifier decision.
 - Use a capital `R` suffix for a recurring issue, for example `[M001R]`.
 - Do not use a separate `R` token.
 - Accept a lowercase `r` suffix during parsing.

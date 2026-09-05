@@ -1,137 +1,88 @@
-# AGENTS.DOCS.md
+# Technical Documentation
 
-## Scope
+Use ASD-STE100 Simplified Technical English, Issue 9, January 2025, for new or changed English technical prose.
+This contract applies to PRDs, architecture documents, trackers, plans, policies, ADRs, READMEs, runbooks, API documents, and agent guides.
 
-This guide controls English technical documentation in this repository.
+Preserve facts, requirements, interfaces, and ownership boundaries.
+Record an unspecified product decision in `Open Decisions`.
+Keep assumptions separate from confirmed requirements and acceptance criteria.
+Preserve code, commands, paths, identifiers, URLs, quotations, proper names, legal text, and third-party text as source-controlled literals.
 
-Use ASD-STE100 Simplified Technical English, Issue 9, January 2025, for all new technical prose.
+## Official Reference Gate
 
-Use the same standard for all technical prose that you change.
+Before prose edits, run the Governor `prepare-ste-reference --json` command.
+It retrieves the official [ASD-STE100 Issue 9](https://www.asd-ste100.org/assets/files/ASD-STE100_ISSUE9.pdf) PDF and verifies its pinned SHA-256.
+The cache stays outside the target repository.
 
-This rule applies to these documents:
+Use Part 1 for writing rules and Part 2 for the controlled dictionary.
+If retrieval or verification fails, stop prose edits and report the source blocker.
+Read-only analysis can continue.
+Use only the verified official reference.
+Keep the PDF and its dictionary outside generated files, commits, and redistributed artifacts.
 
-- Product requirement documents (PRDs).
-- Architecture documents.
-- Issue trackers and issue bodies.
-- Plans, policies, and architecture decision records (ADRs).
-- README files, runbooks, API documents, and agent guides.
+The producing agent owns the rule and dictionary review.
+Do not assign retrieval, review, or compliance decisions to the end user.
 
-Do not change code, commands, paths, identifiers, URLs, quoted text, proper names, legal text, or third-party text.
+## Terminology
 
-Do not change a fact, requirement, interface, or ownership boundary to make the language simpler.
+- Read the target `.mprlab/TERMINOLOGY.md` before you write prose.
+- Use dictionary words only with their approved meaning and part of speech.
+- Use technical nouns and technical verbs with one defined meaning.
+- Add necessary repository terms before their first use in prose.
+- Keep general dictionary words out of the technical glossary.
+- Use the same term for the same concept.
+- Preserve the exact spelling of names and source-controlled literals.
 
-## Official Standard
+## Writing Rules
 
-Use the official [ASD-STE100 Issue 9](https://www.asd-ste100.org/assets/files/ASD-STE100_ISSUE9.pdf) as the primary source.
+| Text type | Rules |
+| --- | --- |
+| Procedure, requirement, or acceptance criterion | Use the imperative. Give one instruction per sentence. Use at most 20 words per sentence. |
+| Description, context, or status | Give one idea per sentence. Use at most 25 words per sentence. |
+| Paragraph | Give one topic. Use at most six sentences. |
+| Conditional instruction | Give the condition first, then the action. |
+| Note | Give information only. Put instructions in the procedure. |
 
-The standard has writing rules and a controlled dictionary. Use the two parts during the language review.
-
-Run the skill `prepare-ste-reference` script before you write or revise technical prose.
-
-The script caches the official PDF outside the repository and verifies its pinned SHA-256.
-
-Use Part 1 for the writing rules. Use Part 2 as the controlled dictionary.
-
-The producing agent owns the final language review. Do not give this work to the end user.
-
-If the script fails, stop the documentation work and report the source blocker. Do not use an unverified copy.
-
-Do not commit, publish, or redistribute the cached PDF or its dictionary.
-
-## Repository Terms
-
-Read `.mprlab/TERMINOLOGY.md` before you write.
-
-Use an approved dictionary word only with its approved meaning and part of speech.
-
-Use a repository term only as an approved technical noun or technical verb.
-
-Add a necessary repository term to `.mprlab/TERMINOLOGY.md`. Give the term one meaning and one part of speech.
-
-Use the same term for the same item, action, state, or interface. Do not use a different synonym.
-
-Keep the exact spelling of names and source-controlled literals.
-
-## Procedures
-
-Use procedural writing for instructions, requirements, acceptance criteria, validation steps, and issue deliverables.
-
-- Use the imperative form.
-- Write one instruction in each sentence.
-- Use a maximum of 20 words in each sentence.
-- Put a condition before the instruction when the reader must know the condition first.
-- Use a vertical list for a complex sequence or a set of related instructions.
-- Use a note only for information. Do not put an instruction in a note.
-
-## Descriptions
-
-Use descriptive writing for product context, architecture, decisions, behavior, and status.
-
-- Use a maximum of 25 words in each sentence.
-- Give one subject or idea in each sentence.
-- Give information gradually.
-- Start each paragraph with its topic.
-- Keep related information in one paragraph.
-- Use a maximum of six sentences in each paragraph.
-
-## General Writing Rules
-
-- Use approved words, approved technical nouns, and approved technical verbs.
 - Use American English spelling.
-- Use the active voice. Use the passive voice only when the agent is not known in descriptive text.
-- Use simple present, simple past, or simple future verb forms.
-- Do not use a progressive or perfect verb form.
-- Use an `-ing` form only in an approved word or a technical noun.
-- Use a direct verb to describe an action.
-- Do not use a phrasal verb unless the dictionary approves its exact meaning.
+- Use the active voice. Descriptive text can use the passive voice when the agent is unknown.
+- Use simple present, simple past, simple future, imperative, or infinitive verb forms.
+- Use an `-ing` form only in an approved word or technical noun.
+- Use direct verbs and approved phrasal verbs.
 - Keep a multi-word noun to three words or fewer.
-- Use articles where they are necessary.
-- Do not use contractions.
-- Do not use semicolons.
-- Use `must` for a binding requirement. Do not use `shall` or `should`.
-- Use `can` for capability. Do not use `may` for capability.
-- Use consistent terminology and sentence patterns.
+- Use necessary articles.
+- Use `must` for requirements and `can` for capability.
+- Separate preferred methods from binding requirements.
+- Use vertical lists for related requirements and procedures.
+- Write instructions in execution order.
+- Keep contractions, semicolons, unapproved synonyms, and ambiguous pronouns out of new prose.
 
-## Document Use
+Use descriptive writing for product and architecture context, ADR decisions, issue goals, and status.
+Use procedural writing for requirements, issue deliverables, validation steps, and runbooks.
+Use the simple past tense for changelog entries.
 
-- Write PRD and architecture context as descriptive text.
-- Write PRD requirements and acceptance criteria as procedures.
-- Write an issue goal as descriptive text.
-- Write issue requirements, deliverables, and validation as procedures.
-- Write a runbook step as a procedure.
-- Write an ADR decision and its results as descriptive text.
-- Write a changelog entry in the simple past tense.
+## Instructions For Agents
 
-## Production Sequence
-
-1. Run the skill `prepare-ste-reference` script and get the verified PDF path.
-2. Read the source facts and the current repository contract.
-3. Identify each section as procedural or descriptive.
-4. Identify the necessary technical nouns and technical verbs.
-5. Add new approved terms to `.mprlab/TERMINOLOGY.md`.
-6. Write the document without a change to its technical meaning.
-7. Run the skill `check-ste` script on each document that you changed.
-8. Review the document against all applicable rules in Part 1.
-9. Review each general word against Part 2 for its meaning and part of speech.
-10. Correct each language error before you report completion.
+- State the condition, action, and expected result of each operational step.
+- Name the command, input, output, and failure action when they control execution.
+- Assign each shared rule one authoritative location.
+- Reference the rule owner from dependent guides.
+- Give explicit reading conditions for task-specific references.
+- Separate required context from optional background.
+- Keep examples only when they resolve a concrete ambiguity.
+- Distinguish a tool result from the broader outcome it can prove.
 
 ## Review Gate
 
-The producing agent must complete this gate before it reports ASD-STE100 compliance.
+1. Identify the changed prose and classify each section as procedural or descriptive.
+2. Verify the facts and preserve the source meaning.
+3. Apply the terminology and writing rules.
+4. Run `check-ste` on each changed document.
+5. Correct mechanical findings in the changed text.
+6. Review all changed prose against applicable Part 1 rules.
+7. Review each general word against Part 2 for its meaning and part of speech.
+8. Report the reviewed scope and remaining findings.
 
-Make sure that:
-
-- Each general word is approved for its meaning and part of speech.
-- Each project term is an approved technical noun or technical verb.
-- Each procedural sentence has 20 words or fewer.
-- Each descriptive sentence has 25 words or fewer.
-- Each instruction contains one action, unless the actions occur at the same time.
-- Each sentence uses an approved verb form.
-- Each sentence uses active voice, unless the descriptive exception applies.
-- Each paragraph has one topic and a maximum of six sentences.
-- The document has no semicolon, contraction, unapproved synonym, or ambiguous pronoun.
-- The simplified text has the same technical meaning as its source.
-
-If you did not review all applicable text, report the exact scope that you reviewed. Do not claim full-document compliance.
-
-Never ask the end user to complete a rule check, dictionary check, or compliance decision.
+The checker finds selected mechanical errors only.
+It does not certify dictionary usage, factual accuracy, or complete ASD-STE100 compliance.
+Claim full-document compliance only after you review the complete document against both parts.
+For a partial revision, distinguish reviewed changes from unchanged text.
