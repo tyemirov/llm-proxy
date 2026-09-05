@@ -35,7 +35,7 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `rejected request`: A request that cannot execute because it does not satisfy an input or tenant configuration requirement.
 - `request intent`: The tenant-bound semantic inputs that one idempotency key identifies.
 - `release decision validator`: A committed application program that validates the exact release decision that the gateway transaction uses.
-- `repository release version`: The canonical major-version-1 SemVer value in the root `VERSION` file.
+- `repository release version`: The major-version-1 SemVer value from the stored Gix release decision.
 - `resolved typed route`: An exact provider and model pair that passed route validation.
 - `structured request`: A canonical text request that requires one caller JSON Schema for its output.
 - `production acceptance`: Evidence that the production runtime satisfies the checks that an issue specifies.

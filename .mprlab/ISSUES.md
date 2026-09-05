@@ -25,6 +25,23 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B188] (P1) Accept the Gix release decision.
+  Gix selected `v1.5.0`, but the application validator required the stored value `v1.4.1`.
+  The automatic release failed before CI.
+  Requirements:
+  - Accept the version from the Gix decision without comparison to stored package metadata.
+  - Retain the application policy for major version `1`.
+  Validation:
+  - Run `make test-release-policy` and `make ci`.
+  Resolution:
+  - The validator accepts the Gix version without a comparison to stored package metadata.
+  - This correction replaces the B175 requirement for equality with `VERSION`.
+  - The exact saved `v1.5.0` decision passed the corrected validator.
+  - The regression failed before the correction and passed after it.
+  - All 12 CI gates passed in 174 seconds with 100 percent Go statement coverage.
+  Changed: Release policy validator, integration tests, Makefile, release documentation, and terminology.
+  Event contracts: No change.
+
 - [x] [B187] (P1) Repair the OpenAPI merge result.
   After the B186 correction, CI reports `bad indentation of a mapping entry (83:50)`.
   The merge joined two YAML keys and inserted a duplicate `/` path.
