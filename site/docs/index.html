@@ -6,7 +6,8 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="f78dce2fbb27279052fbe2300907da5fdffcd9d066a2c0219de4ce8ad9dfee0d">    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <meta name="openapi-source-sha256" content="ddb51706beae4c31525777f28c2dd6cbc87b621dab8d634888b31d211472fbb3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -21,7 +22,8 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="f78dce2fbb27279052fbe2300907da5fdffcd9d066a2c0219de4ce8ad9dfee0d">    <mpr-header
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="ddb51706beae4c31525777f28c2dd6cbc87b621dab8d634888b31d211472fbb3">
+    <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
       brand-label="LLM Proxy"
@@ -48,7 +50,8 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>f78dce2fbb27279052fbe2300907da5fdffcd9d066a2c0219de4ce8ad9dfee0d</code></span>        </div>
+          <span>Source SHA-256 <code>ddb51706beae4c31525777f28c2dd6cbc87b621dab8d634888b31d211472fbb3</code></span>
+        </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
           <a class="resource-button" href="/openapi.yaml" download="llm-proxy-openapi.yaml">Download YAML</a>
@@ -96,6 +99,44 @@ tags:
   - name: Management
     description: TAuth-session-authenticated tenant management operations.
 paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      summary: Read local datastore readiness without authentication or provider work.
+      security: []
+      responses:
+        &#39;200&#39;:
+          description: The local datastore is available.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                additionalProperties: false
+                properties:
+                  status:
+                    const: ok
+        &#39;503&#39;:
+          description: The local datastore is unavailable.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                additionalProperties: false
+                properties:
+                  status:
+                    const: unavailable
   /v1/chat/completions:
     post:
       operationId: createChatCompletion
@@ -712,44 +753,6 @@ paths:
             application/json:
               schema:
                 $ref: &#39;#/components/schemas/OpenAIError&#39;
-  /healthz:
-    get:
-      operationId: getHealth
-      summary: Read local datastore readiness without authentication or provider work.
-      security: []
-      responses:
-        &#39;200&#39;:
-          description: The local datastore is available.
-          headers:
-            Cache-Control:
-              schema:
-                type: string
-                const: no-store
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [status]
-                additionalProperties: false
-                properties:
-                  status:
-                    const: ok
-        &#39;503&#39;:
-          description: The local datastore is unavailable.
-          headers:
-            Cache-Control:
-              schema:
-                type: string
-                const: no-store
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [status]
-                additionalProperties: false
-                properties:
-                  status:
-                    const: unavailable
   /:
     get:
       operationId: getText
