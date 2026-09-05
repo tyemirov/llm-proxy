@@ -12,8 +12,10 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `development completion`: Completion of the specified repository changes and repository validation.
 - `exact model`: One canonical model version that a client can select.
 - `GPU lease`: An exclusive permit for one runtime to use one GPU during an operation.
+- `idempotency tombstone`: A retained identity and request record that prevents duplicate work after artifact deletion.
 - `inference node`: A host that runs local model containers and the node controller.
 - `local offering`: A provider offering that runs on an inference node.
+- `media operation`: Accepted tenant work with durable execution state and media input or output resources.
 - `model family`: A group of exact models from one model publisher.
 - `model publisher`: An organization or community that creates or releases a model.
 - `model residency`: The state in which a model uses GPU memory.
@@ -24,8 +26,10 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `provider connection`: Tenant values for the credential fields and setting fields in one provider definition.
 - `provider definition`: One provider record in the provider catalog.
 - `provider field`: One credential input or setting input in a provider definition.
+- `provider gateway`: The service that authorizes tenant requests and owns shared provider access.
 - `provider offering`: One exact model that one provider makes available as a route.
 - `provider profile`: Tenant settings for one provider, such as the selected text model and system prompt.
+- `provider staging`: Temporary storage that lets a provider read media for an accepted operation.
 - `provider transport`: One provider route that defines an endpoint, authentication, protocol adapter, and lifecycle.
 - `request disposition`: A closed value that identifies a request as rejected, succeeded, or failed.
 - `rejected request`: A request that cannot execute because it does not satisfy an input or tenant configuration requirement.
@@ -38,6 +42,8 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `route explorer`: The public interface that selects an exact model and a provider offering.
 - `runtime profile`: A validated declaration for one model runtime, container image, private endpoint, resource limit, and idle policy.
 - `usage dimension`: A canonical provider or model identity that groups managed usage events.
+- `worker claim`: A durable record that assigns an accepted operation to one worker.
+- `worker fencing`: Rejection of state changes or dispatch attempts from a worker whose claim is obsolete.
 
 - `caller tool`: A function that the client declares and executes after a model returns its call.
 - `function call`: A typed model result with an identifier, a function name, and JSON argument text.

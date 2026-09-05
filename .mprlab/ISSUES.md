@@ -2621,11 +2621,12 @@ retain satisfied historical dependencies.
   Validation:
   - Prove exact route controls, tenant isolation, staging ownership, duplicate prevention, and artifact integrity.
   - Run current repository validation and separately record explicitly authorized live acceptance.
-- [ ] [F041] (P1) {F022,F043} Add FAL image operations and queue recovery.
+- [ ] [F041] (P1) {F022} Add FAL image operations and queue recovery.
   Goal:
   Move current FAL image generation and recoverable queue state behind the shared gateway.
   Requirements:
-  - Add current FAL image routes using tenant provider connections and provider-readable staging where required.
+  - Add current FAL image routes with tenant provider connections and provider-readable staging where required.
+  - Require F043 only when the selected route needs staged inputs. Current prompt-only generation has no staging dependency.
   - Persist queue handles privately and recover the original operation without provider resubmission.
   - Reuse common operation, catalog, asset, artifact, and official-client contracts.
   - Inventory retained FAL records before adding exact tenant-bound import validators.
@@ -3156,7 +3157,7 @@ retain satisfied historical dependencies.
   Deliverables:
   - Durable operation service, worker, store changes, artifact contract, and official Go client methods.
   - Separate request, execution, polling, transfer, retention, and cancellation contracts.
-  - Capability-free worker fixtures and an independent client example against the real service.
+  - External-provider protocol fixtures and an independent client example against the real service.
   Open decisions:
   - Select transactional storage and worker fencing within the existing deployment contract before implementation.
   - Set operation deadlines, retention values, queue limits, and cancellation representations before schema finalization.
@@ -3187,7 +3188,7 @@ retain satisfied historical dependencies.
   - MediaOps I084 consumes the complete OpenAI slice after F039 preserves its current image capabilities.
   Deliverables:
   - OpenAI image adapter, catalog route, operation schema, artifact results, and official-client example.
-  - A backend-to-gateway acceptance fixture using the same tenant model as text calls.
+  - A backend-to-gateway acceptance fixture with the same tenant model as text calls.
   Validation:
   - Start with a failing real-service integration test and controlled OpenAI protocol fixture.
   - Prove exact selected controls, duplicate convergence, lost-response recovery, output order, and artifact integrity.
@@ -3681,8 +3682,7 @@ retain satisfied historical dependencies.
   Validation:
   - Prove eligible success, ineligible pre-dispatch rejection, engine-specific
     control rejection, terminal artifact download, and restart recovery.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  - Start with the required failing integration test. Complete validation under the current repository policy.
 - [ ] [F029] (P2) {F025} Add MiniMax H3 V2 video generation to model operations.
   Goal:
   Add the provider-qualified MiniMax H3 V2 route to the gateway before MediaOps
@@ -3709,8 +3709,7 @@ retain satisfied historical dependencies.
   - Prove exact payload roles, upload URI mapping, polling states, restart and
     uncertain recovery, input limits, artifact integrity, and absence of Hailuo
     V1 behavior through public black-box tests.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  - Start with the required failing integration test. Complete validation under the current repository policy.
 - [ ] [F030] (P2) {F026} Add Speechify text-to-speech and voice discovery to model operations.
   Goal:
   Add the current Speechify complete-response speech and voice-discovery
@@ -3739,8 +3738,7 @@ retain satisfied historical dependencies.
   - Prove discovery, voice pagination, exact speech payload, audio decoding,
     speech marks, rate/concurrency handling, transport uncertainty, secret
     safety, and artifact integrity through public black-box tests.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  - Start with the required failing integration test. Complete validation under the current repository policy.
 - [ ] [F020] (P2) {F016} Add route-validated sampling controls to the canonical v3 messages contract.
   Goal:
   Let a caller set low-level sampling controls only when the selected provider
