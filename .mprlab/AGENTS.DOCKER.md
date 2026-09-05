@@ -37,6 +37,8 @@ Docker and container guidance for this repository. Use this guide only when Dock
 ## Validation
 
 - Start coding work with an integration test through the real container entry point.
+- Use dependency injection for integration scenarios that are difficult to reproduce.
+- Keep the product logic under test real.
 - Use `.mprlab/POLICY.md` for validation.
 - During the change, run the smallest container target that validates the changed contract.
 - Build the image locally when Dockerfile changes affect runtime behavior.

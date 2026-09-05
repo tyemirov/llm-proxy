@@ -20,11 +20,13 @@ This policy controls all agent work in this repository.
 
 - Use test-driven development with an inverted test pyramid.
 - Integration tests are the primary test layer.
-- Unit tests do not prove public behavior and are prohibited.
-- An integration test must use a real public entry point and the real repository-owned components on that code path.
+- Use focused unit tests for complex algorithms, calculations, and isolated logic when useful.
+- Require integration coverage of public behavior for product acceptance.
+- An integration test must use a real public entry point.
 - Start coding work with the integration test that represents the required public behavior.
 - Run the new or changed integration test before you change production code.
 - Confirm that the integration test fails because the required behavior is absent or incorrect.
+- After this failure, use focused unit tests to guide complex internal implementation when useful.
 - Change the minimum production code necessary to make the integration test pass.
 - Refactor only while the applicable integration tests pass.
 - For a refactor with no behavior change, run the applicable integration tests before you change production code.
@@ -32,6 +34,17 @@ This policy controls all agent work in this repository.
 - Use deterministic local infrastructure for repository-owned databases, filesystems, queues, servers, and browsers.
 - At an external provider boundary, use a provider sandbox or a local protocol implementation for routine integration tests.
 - Keep live-provider acceptance as a separate qualification step.
+
+## Dependency Injection In Integration Tests
+
+- Use dependency injection for integration scenarios that are difficult to reproduce.
+- Inject the dependency that creates the test condition.
+- Use controlled clocks, dependency failures, or unusual responses when the scenario requires them.
+- Keep the product logic under test and its related internal interactions real.
+- Assert observable results through the public contract.
+- Keep integration coverage with real dependency implementations.
+- Injected scenarios prove behavior under the specified conditions. They do not prove actual provider connectivity.
+- Qualify actual provider connectivity separately from injected scenarios.
 
 ## Prohibited Patterns
 
@@ -42,7 +55,6 @@ This policy controls all agent work in this repository.
 - Increasing waits or timeouts as the primary fix for flakiness.
 - Boolean parameters that switch unrelated behaviors.
 - Hardcoded workflow, path, event, or message literals when a canonical constant or backend payload exists.
-- Unit tests in any stack.
 
 ## File Permission Boundary
 
@@ -139,8 +151,7 @@ This policy controls all agent work in this repository.
 - Use `@dataclass(frozen=True)` or Pydantic when already in use.
 - Validate in constructors or edge adapters.
 - Use type hints throughout.
-- Use pytest only for integration and end-to-end scenarios through public entry points.
-- Do not use unit tests.
+- Use pytest for integration, end-to-end, and focused unit tests under the shared test-driven development rules.
 
 ### JavaScript And Frontend
 

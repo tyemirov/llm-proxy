@@ -92,6 +92,8 @@ This guide applies when the repository declares or implements an API contract. A
 ## Testing And Validation
 
 - Start coding work with an integration test through the real HTTP listener or public gRPC service entry point.
+- Use dependency injection for integration scenarios that are difficult to reproduce.
+- Keep the product logic under test real.
 - Exercise REST behavior through a real HTTP listener and gRPC behavior through the real public service entrypoint.
 - Assert methods or RPCs, resource identifiers, status codes, headers or metadata, response bodies, typed errors, and externally visible state changes.
 - Cover method safety, idempotent retries, validation failures, authorization boundaries, pagination, conflicts, and cancellation where those behaviors apply.

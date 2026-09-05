@@ -29,8 +29,11 @@ Keep durable decisions and requirements in the issue tracker or a source-control
 ## Test-Driven Sequence
 
 - Start coding work with the integration test that represents the required public behavior.
+- Use dependency injection for integration scenarios that are difficult to reproduce.
+- Keep the product logic under test real.
 - Run the new or changed integration test before you change production code.
 - Confirm that the integration test fails because the required behavior is absent or incorrect.
+- After this failure, use focused unit tests to guide complex internal implementation when useful.
 - Change the minimum production code necessary to make the integration test pass.
 - Refactor only while the applicable integration tests pass.
 - For a refactor with no behavior change, run the applicable integration tests before you change production code.
@@ -44,6 +47,7 @@ Suggested shape:
 - [ ] Use the initial validation result for application changes.
 - [ ] Add or change the focused integration test.
 - [ ] Confirm the expected test failure.
+- [ ] Add focused unit tests for complex internal logic when useful.
 - [ ] Make the smallest production code change.
 - [ ] Confirm that the focused integration test passes.
 - [ ] Refactor while the integration tests pass.

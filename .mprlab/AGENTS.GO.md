@@ -26,10 +26,13 @@ This file gives backend rules for Go code. Obey root `AGENTS.md` and `.mprlab/PO
 ## Testing
 
 - Start coding work with an integration test through the real HTTP, CLI, or public package entry point.
+- Use dependency injection for integration scenarios that are difficult to reproduce.
+- Keep the product logic under test real.
 - Prefer black-box integration tests through HTTP, CLI, or public package entry points.
 - Use table-driven scenarios where they cover contract permutations.
 - Use `t.TempDir()` for temporary filesystem work.
-- Do not add unit tests as a substitute for public behavior coverage.
+- Use focused unit tests for complex algorithms, calculations, and isolated logic when useful.
+- Require integration coverage of public behavior for product acceptance.
 
 ## Validation
 
