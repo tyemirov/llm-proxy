@@ -48,12 +48,13 @@ func TestResponseConstructionHonorsRequestDeadline(t *testing.T) {
 				completeChatRequest(
 					ginContext,
 					chatRequestParameters{},
-					textGenerationResult{text: "late response"},
+					completionResult{content: completedText("late response")},
 					tenant{},
 					usageEndpointText,
 					managedTenants,
 					zap.NewNop().Sugar(),
 					time.Now(),
+					nativeCompletionEncoder,
 				)
 			},
 		},

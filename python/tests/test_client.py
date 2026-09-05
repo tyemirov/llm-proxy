@@ -785,7 +785,7 @@ def test_structured_output_validation_errors(
 @pytest.mark.parametrize(
     ("message_kwargs", "expected_error"),
     [
-        ({"role": "tool", "content": "tool result"}, "unsupported message role"),
+        ({"role": "function", "content": "tool result"}, "unsupported message role"),
         ({"role": "user", "content": ""}, "empty message content"),
         ({"role": "user", "content": "prompt", "order": -1}, "message order must be non-negative"),
     ],

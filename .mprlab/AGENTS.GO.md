@@ -25,6 +25,7 @@ This file gives backend rules for Go code. Obey root `AGENTS.md` and `.mprlab/PO
 
 ## Testing
 
+- Start coding work with an integration test through the real HTTP, CLI, or public package entry point.
 - Prefer black-box integration tests through HTTP, CLI, or public package entry points.
 - Use table-driven scenarios where they cover contract permutations.
 - Use `t.TempDir()` for temporary filesystem work.

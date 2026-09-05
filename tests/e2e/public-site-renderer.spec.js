@@ -110,6 +110,23 @@ test("public site rendering writes the normalized exact model catalog", async ()
   });
 });
 
+test("public site rendering exposes the caller tool capability", async () => {
+  const capabilities = normalizedCapabilityFixture();
+  capabilities.models[0].capabilities.push("caller_tools");
+  capabilities.offerings[0].capabilities.push("caller_tools");
+  await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+    const fixture = await siteFixture();
+    try {
+      await renderFixture(fixture, capabilitiesURL);
+      const html = await readFile(path.join(fixture.output, "index.html"), "utf8");
+      expect(html).toContain('data-route-capability="caller_tools"');
+      expect(html).toContain("Caller tools");
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+});
+
 function normalizedCapabilityFixture() {
   return {
     revision: "2026-08-10.test.1",

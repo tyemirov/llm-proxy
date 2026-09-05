@@ -1011,3 +1011,19 @@ Black-box router tests cover:
 - Invalid configured model catalog startup failures, including noncanonical,
   duplicate, and adapter-incompatible `media_inputs` or `media_limits`.
 - Existing OpenAI dictation and response-format tests.
+
+
+## Client protocol boundary
+
+The typed client route registry contains native text, native dictation, and OpenAI client protocol adapters.
+A duplicate HTTP method and path prevents registration.
+Asset, capability, identity, durable request, and management resources remain outside that registry.
+Each text adapter constructs one validated canonical request for the completion coordinator.
+Adapters never call another client adapter or a provider transport.
+The coordinator returns a closed result: text, structured data, or caller function calls.
+
+The provider catalog declares `caller_tools` for each eligible offering.
+The public capability catalog exposes that declaration.
+The OpenAI provider adapters translate function declarations, calls, and results.
+The client executes each function. Provider web search remains a separate capability.
+See [client protocols](../client-protocols.md) for the HTTP subsets and acceptance evidence.

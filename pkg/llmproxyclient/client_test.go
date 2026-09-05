@@ -815,7 +815,7 @@ func TestMessagesRequestRejectsInvalidInputs(testingInstance *testing.T) {
 		},
 		{
 			name:        "unsupported role",
-			input:       llmproxyclient.MessagesRequestInput{Messages: []llmproxyclient.MessageInput{{Role: "tool", Content: "tool result"}}},
+			input:       llmproxyclient.MessagesRequestInput{Messages: []llmproxyclient.MessageInput{{Role: "function", Content: "tool result"}}},
 			errorString: "role unsupported",
 		},
 		{

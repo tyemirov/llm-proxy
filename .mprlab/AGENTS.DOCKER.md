@@ -30,9 +30,13 @@ Docker and container guidance for this repository. Use this guide only when Dock
 - Do not use local orchestration files as production lifecycle inputs.
 - For a deployable application, use `.mprlab/deploy/resources.yml` as the only
   tracked production deployment file.
+- A container can create a GitHub Pages artifact. The container does not own the public website hostname.
+- Publish the container output through the `github_pages` resource.
+- Keep each `caddy_route` on a hostname that differs from the GitHub Pages domain.
 
 ## Validation
 
+- Start coding work with an integration test through the real container entry point.
 - Use `.mprlab/POLICY.md` for validation.
 - During the change, run the smallest container target that validates the changed contract.
 - Build the image locally when Dockerfile changes affect runtime behavior.

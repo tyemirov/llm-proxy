@@ -1,0 +1,23 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "llmproxy/openai/gpt-5.6",
+  "provider": {
+    "llmproxy": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LLM Proxy",
+      "options": {
+        "baseURL": "https://llm-proxy-api.mprlab.com/v1",
+        "apiKey": "{env:LLM_PROXY_CLIENT_KEY}"
+      },
+      "models": {
+        "openai/gpt-5.6": {
+          "name": "GPT-5.6 through LLM Proxy",
+          "tool_call": true,
+          "temperature": false,
+          "limit": { "context": 128000, "output": 4096 },
+          "options": { "store": false }
+        }
+      }
+    }
+  }
+}

@@ -26,14 +26,27 @@ Use `/.mprlab/*-PLAN.md` as the canonical execution-plan rule in `.gitignore`.
 
 Keep durable decisions and requirements in the issue tracker or a source-controlled document.
 
+## Test-Driven Sequence
+
+- Start coding work with the integration test that represents the required public behavior.
+- Run the new or changed integration test before you change production code.
+- Confirm that the integration test fails because the required behavior is absent or incorrect.
+- Change the minimum production code necessary to make the integration test pass.
+- Refactor only while the applicable integration tests pass.
+- For a refactor with no behavior change, run the applicable integration tests before you change production code.
+- If focused coverage is absent, add a characterization test before the refactor.
+
 Suggested shape:
 
 ```text
 - [ ] Read repo guidance and target issue.
 - [ ] Inspect the current implementation and tests.
 - [ ] Use the initial validation result for application changes.
-- [ ] Make the scoped change.
-- [ ] Run the smallest applicable target during the change.
+- [ ] Add or change the focused integration test.
+- [ ] Confirm the expected test failure.
+- [ ] Make the smallest production code change.
+- [ ] Confirm that the focused integration test passes.
+- [ ] Refactor while the integration tests pass.
 - [ ] Complete the applicable validation after the last change.
 - [ ] Update issue notes or docs.
 ```

@@ -21,6 +21,14 @@ management app opens at [`/app/`](https://llm-proxy.mprlab.com/app/) only after
 the public **Log In** action authenticates the user through MPR UI and TAuth.
 The application document title is always `LLM Proxy`.
 
+## Approved Media Gateway Strategy
+
+LLM Proxy will own the shared media provider gateway, including private Dictator access.
+The migration extends the existing tenant API and official clients.
+MediaOps retains production workflows and YouTube channel management.
+See the [consolidation strategy](docs/media-gateway-consolidation.md) for issue ownership, delivery order, and acceptance requirements.
+The implementation issues remain open.
+
 ## Features
 
 - Minimal HTTP server whose complete owned operation surface is defined by the
@@ -36,6 +44,14 @@ The application document title is always `LLM Proxy`.
 - Forwards requests with tenant-managed provider API keys loaded from the management database
 - TAuth-protected self-service UI where signed-in users automatically receive an llm-proxy client key and their provider settings plus routing defaults autosave
 - Supports plain text, JSON, XML, or CSV responses
+
+## OpenCode and OpenAI clients
+
+Use the `/v1` client protocols with a tenant bearer key and an exact `provider/model` identifier.
+Chat Completions, Responses, model discovery, and transcription share the canonical coordinator.
+Caller tools execute in the client. Event streams contain buffered results.
+See [client protocols](docs/client-protocols.md) for the supported fields, tested clients, and OpenCode examples.
+The official Go package, Python package, and CLI continue to use `/v2`.
 
 ## REST Contract
 

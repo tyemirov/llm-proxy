@@ -27,6 +27,8 @@ type chatMessagePayload struct {
 }
 
 type chatV2MessagePayload struct {
+	ToolCalls   []functionCall  `json:"tool_calls,omitempty"`
+	ToolCallID  string          `json:"tool_call_id,omitempty"`
 	Role        string          `json:"role"`
 	Content     string          `json:"content"`
 	Attachments json.RawMessage `json:"attachments"`
@@ -34,6 +36,8 @@ type chatV2MessagePayload struct {
 }
 
 type chatMessage struct {
+	toolCalls         []functionCall
+	toolCallID        string
 	role              chatRole
 	content           string
 	attachments       []messageMedia
@@ -44,6 +48,8 @@ type chatMessage struct {
 type chatMessages []chatMessage
 
 type chatMessageCandidate struct {
+	toolCalls   []functionCall
+	toolCallID  string
 	role        string
 	content     string
 	attachments []messageMedia
@@ -108,6 +114,8 @@ func newV2PayloadChatMessages(payloadMessages []chatV2MessagePayload, defaultSys
 			attachments = append(attachments, attachment)
 		}
 		candidates = append(candidates, chatMessageCandidate{
+			toolCalls:   payloadMessage.ToolCalls,
+			toolCallID:  payloadMessage.ToolCallID,
 			role:        payloadMessage.Role,
 			content:     payloadMessage.Content,
 			attachments: attachments,
@@ -160,7 +168,7 @@ func newCandidateChatMessages(candidates []chatMessageCandidate, defaultSystemPr
 		if roleError != nil {
 			return nil, fmt.Errorf("%w: messages[%d].role", roleError, messageIndex)
 		}
-		if utils.IsBlank(candidate.content) {
+		if utils.IsBlank(candidate.content) && len(candidate.toolCalls) == 0 && role != chatRoleTool {
 			return nil, fmt.Errorf("%w: messages[%d].content is empty", ErrInvalidChatMessages, messageIndex)
 		}
 		if len(candidate.attachments) > 0 && role != chatRoleUser {
@@ -173,12 +181,17 @@ func newCandidateChatMessages(candidates []chatMessageCandidate, defaultSystemPr
 			hasUserMessage = true
 		}
 		messages = append(messages, chatMessage{
+			toolCalls:         candidate.toolCalls,
+			toolCallID:        candidate.toolCallID,
 			role:              role,
 			content:           candidate.content,
 			attachments:       candidate.attachments,
 			order:             copyChatMessageOrder(candidate.order),
 			visibleInResponse: true,
 		})
+	}
+	if err := validateToolHistory(messages); err != nil {
+		return nil, err
 	}
 	if !hasUserMessage {
 		return nil, fmt.Errorf("%w: messages must include a user message", ErrInvalidChatMessages)
@@ -241,6 +254,8 @@ func newChatRole(rawRole string) (chatRole, error) {
 		return chatRoleSystem, nil
 	case string(chatRoleUser):
 		return chatRoleUser, nil
+	case string(chatRoleTool):
+		return chatRoleTool, nil
 	case string(chatRoleAssistant):
 		return chatRoleAssistant, nil
 	default:
@@ -268,12 +283,24 @@ func (messages chatMessages) openAIResponsesTextInput() string {
 }
 
 func (messages chatMessages) openAIResponsesInput(imageDetail string, preserveRoles bool) (any, error) {
-	if messages.mediaCount() == 0 && !preserveRoles {
+	if messages.mediaCount() == 0 && !preserveRoles && !messages.hasToolHistory() {
 		return messages.openAIResponsesTextInput(), nil
 	}
 	providerMessages := make([]map[string]any, 0, len(messages))
 	for messageIndex := range messages {
 		message := &messages[messageIndex]
+		if message.role == chatRoleTool {
+			providerMessages = append(providerMessages, map[string]any{"type": "function_call_output", "call_id": message.toolCallID, "output": message.content})
+			continue
+		}
+		if len(message.toolCalls) > 0 {
+			for _, call := range message.toolCalls {
+				providerMessages = append(providerMessages, map[string]any{"type": "function_call", "call_id": call.ID, "name": call.Name, "arguments": call.Arguments})
+			}
+			if message.content == "" {
+				continue
+			}
+		}
 		if len(message.attachments) == 0 {
 			providerMessages = append(providerMessages, map[string]any{"role": string(message.role), "content": message.content})
 			continue
@@ -302,7 +329,7 @@ func (messages chatMessages) chatCompletionMessages() ([]chatCompletionMessage, 
 	for messageIndex := range messages {
 		message := &messages[messageIndex]
 		if len(message.attachments) == 0 {
-			providerMessages = append(providerMessages, chatCompletionMessage{Role: string(message.role), Content: message.content})
+			providerMessages = append(providerMessages, chatCompletionMessage{Role: string(message.role), Content: message.content, ToolCalls: chatFunctionCalls(message.toolCalls), ToolCallID: message.toolCallID})
 			continue
 		}
 		content := make([]map[string]any, 0, len(message.attachments)+1)
@@ -336,6 +363,12 @@ func (messages chatMessages) responseRequestMessages() []map[string]any {
 		responseMessage := map[string]any{
 			"role":    string(message.role),
 			"content": message.content,
+		}
+		if len(message.toolCalls) > 0 {
+			responseMessage["tool_calls"] = message.toolCalls
+		}
+		if message.toolCallID != "" {
+			responseMessage["tool_call_id"] = message.toolCallID
 		}
 		if message.order != nil {
 			responseMessage["order"] = *message.order

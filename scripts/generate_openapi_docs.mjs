@@ -323,6 +323,7 @@ function operationSecurity(document, operation) {
     .flatMap((rawRequirement) => Object.keys(objectValue(rawRequirement, "security requirement")))
     .map((schemeName) => {
       const scheme = objectValue(schemes[schemeName], `security scheme ${schemeName}`);
+      if (scheme.type === "http") return `${schemeName} (Authorization: Bearer <tenant-client-key>)`;
       return `${schemeName} (${String(scheme.in)} ${String(scheme.name)})`;
     })
     .join(", ");

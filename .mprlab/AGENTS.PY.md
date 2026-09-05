@@ -24,6 +24,7 @@ This file gives backend rules for Python code. Obey root `AGENTS.md` and `.mprla
 
 ## Testing
 
+- Start coding work with an integration test through the real HTTP, CLI, or public package entry point.
 - Use pytest.
 - Exercise public contracts through CLI, HTTP, or public package entry points.
 - Use fixtures and `tmp_path` to isolate side effects.

@@ -902,6 +902,13 @@ func TestManagementDashScopeWorkspaceChangeVerifiesRetainedKeyAndRoutesWithStore
 			t.Fatalf("request[%d] URL=%q authorization=%q", index, requestURLs[index], authorizations[index])
 		}
 	}
+	usage := waitForManagementValue(t, func() managementTenantUsageTestResponse {
+		return requestManagementTenantUsage(t, router, sessionCookie, tenantID)
+	}, func(value managementTenantUsageTestResponse) bool { return value.Totals.Requests == 1 })
+	if usage.Totals.Requests != 1 {
+		t.Fatalf("persisted requests=%d want=1", usage.Totals.Requests)
+	}
+
 }
 
 func TestManagementProviderKeyVerificationRejectsSafeFailuresWithoutPersistence(t *testing.T) {

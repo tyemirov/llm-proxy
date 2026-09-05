@@ -112,7 +112,7 @@
           <div class="integration-copy">
             <p class="eyebrow">Integrate once</p>
             <h2 id="integrate-title">Use the API directly or start with a client.</h2>
-            <p>Every integration surface targets the same canonical <code>POST /v2</code> messages contract. Provider selection changes the route, not the shape your application owns.</p>
+            <p>Official clients use canonical <code>POST /v2</code>. OpenCode and OpenAI clients use the <code>/v1</code> client protocols. Each protocol uses the same provider coordinator.</p>
             <ol class="integration-steps">
               <li><span>1</span><div><strong>Choose an integration</strong><p>Use ordinary HTTP or an official Go, Python, or command-line client.</p></div></li>
               <li><span>2</span><div><strong>Authenticate once</strong><p>Give the application one client key while provider credentials remain behind the proxy.</p></div></li>
@@ -121,6 +121,12 @@
           </div>
 
           <div class="integration-options" aria-label="Integration options">
+            <article>
+              <span class="integration-options__label">OpenCode and OpenAI clients</span>
+              <h3>Connect with a base URL and client key.</h3>
+              <p>Use Chat Completions or Responses with an exact provider/model identifier. Caller tools execute in your client.</p>
+              <a href="/docs/#operation-createChatCompletion">Read the client API reference <span aria-hidden="true">→</span></a>
+            </article>
             <article>
               <span class="integration-options__label">HTTP API</span>
               <h3>Any language. No client dependency.</h3>

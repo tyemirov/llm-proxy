@@ -38,3 +38,8 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `route explorer`: The public interface that selects an exact model and a provider offering.
 - `runtime profile`: A validated declaration for one model runtime, container image, private endpoint, resource limit, and idle policy.
 - `usage dimension`: A canonical provider or model identity that groups managed usage events.
+
+- `caller tool`: A function that the client declares and executes after a model returns its call.
+- `function call`: A typed model result with an identifier, a function name, and JSON argument text.
+- `bearer key`: A tenant client key supplied in the HTTP Authorization header.
+- `server-sent event`: One event in the HTTP event-stream representation of a result.

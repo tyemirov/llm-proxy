@@ -206,6 +206,12 @@ Read these files before editing:
 - `.mprlab/AGENTS.FRONTEND.md`: browser frontend guidance.
 - `.mprlab/AGENTS.DOCKER.md`: Docker and container guidance.
 
+File permission modes are outside agent scope.
+Never examine, validate, compare, require, change, or record a file permission mode.
+Never use a file permission mode in acceptance, security, credential, execution, publication, deployment, or failure analysis.
+The values `0600` and `7777` have no governance meaning.
+This rule does not change service authorization or operation authority.
+
 Always reference each issue by its ID, for example `B001` or `I027`.
 Never use an `ISSUES.md` file path, line number, or `path:line` syntax as an issue reference.
 

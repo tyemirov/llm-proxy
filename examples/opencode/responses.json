@@ -1,0 +1,25 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "llmproxy/openai/gpt-4.1",
+  "provider": {
+    "llmproxy": {
+      "npm": "@ai-sdk/openai",
+      "name": "LLM Proxy",
+      "options": {
+        "baseURL": "https://llm-proxy-api.mprlab.com/v1",
+        "apiKey": "{env:LLM_PROXY_CLIENT_KEY}",
+        "setCacheKey": false
+      },
+      "models": {
+        "openai/gpt-4.1": {
+          "name": "GPT-4.1 through LLM Proxy",
+          "tool_call": true,
+          "temperature": false,
+          "reasoning": false,
+          "limit": { "context": 128000, "output": 4096 },
+          "options": { "store": false }
+        }
+      }
+    }
+  }
+}

@@ -56,7 +56,7 @@ frontend-lint: frontend-dependencies
 
 test: go-test python-test frontend-test test-openapi-pages-artifact test-management-auth-blackbox test-live-provider-harness
 
-go-test:
+go-test: frontend-dependencies
 	@GO="$(GO)" ./scripts/check_coverage.sh
 
 python-test:
@@ -131,3 +131,14 @@ release publish deploy:
 	fi; \
 	$(MAKE) --no-print-directory -C "$${gateway_root}" "app-$@" \
 		MPRLAB_APP_ROOT="$${application_root}"
+
+.PHONY: test-client-protocols
+test-client-protocols: frontend-dependencies
+	$(GO) test ./internal/proxy -run '^TestClientProtocols' -count=1
+
+.PHONY: test-client-contracts generate-api-docs
+test-client-contracts: frontend-dependencies
+	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run 'Test(ClientProtocols|OpenAPI|MessagesRequest|CoverageOpenAILifecycle|ManagementDashScopeWorkspaceChangeVerifiesRetainedKeyAndRoutesWithStoredURL)' -count=1
+
+generate-api-docs:
+	$(NPM) exec -- node scripts/generate_openapi_docs.mjs

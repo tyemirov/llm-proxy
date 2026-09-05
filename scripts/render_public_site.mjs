@@ -17,6 +17,7 @@ const capabilityDefinitions = Object.freeze([
   { identifier: "video_generation", label: "Video generation", routeLabel: "Video", className: "capability-badge--info" },
   { identifier: "image_input", label: "Image input", routeLabel: "Image", className: "capability-badge--info" },
   { identifier: "audio_input", label: "Audio message input", routeLabel: "Audio", className: "capability-badge--info" },
+  { identifier: "caller_tools", label: "Caller tools", routeLabel: "Tools", className: "capability-badge--success" },
   { identifier: "web_search", label: "Web search", routeLabel: "Web search", className: "capability-badge--success" },
   { identifier: "reasoning", label: "Reasoning", routeLabel: "Reasoning", className: "capability-badge--success" },
 ]);

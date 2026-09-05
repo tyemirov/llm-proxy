@@ -16,6 +16,23 @@ This policy controls all agent work in this repository.
 - Tests target public contracts and invariants, not defensive branches.
 - Prefer black-box integration and end-to-end tests through real entry points.
 
+## Test-Driven Development
+
+- Use test-driven development with an inverted test pyramid.
+- Integration tests are the primary test layer.
+- Unit tests do not prove public behavior and are prohibited.
+- An integration test must use a real public entry point and the real repository-owned components on that code path.
+- Start coding work with the integration test that represents the required public behavior.
+- Run the new or changed integration test before you change production code.
+- Confirm that the integration test fails because the required behavior is absent or incorrect.
+- Change the minimum production code necessary to make the integration test pass.
+- Refactor only while the applicable integration tests pass.
+- For a refactor with no behavior change, run the applicable integration tests before you change production code.
+- If focused coverage is absent, add a characterization test before the refactor.
+- Use deterministic local infrastructure for repository-owned databases, filesystems, queues, servers, and browsers.
+- At an external provider boundary, use a provider sandbox or a local protocol implementation for routine integration tests.
+- Keep live-provider acceptance as a separate qualification step.
+
 ## Prohibited Patterns
 
 - Silent fallbacks, best-effort behavior, legacy aliases, and compatibility reads unless an explicit product requirement says the behavior is current.
@@ -26,6 +43,14 @@ This policy controls all agent work in this repository.
 - Boolean parameters that switch unrelated behaviors.
 - Hardcoded workflow, path, event, or message literals when a canonical constant or backend payload exists.
 - Unit tests in any stack.
+
+## File Permission Boundary
+
+- File permission modes are outside agent scope.
+- Never examine, validate, compare, require, change, or record a file permission mode.
+- Never use a file permission mode in acceptance, security, credential, execution, publication, deployment, or failure analysis.
+- The values `0600` and `7777` have no governance meaning.
+- This rule does not change service authorization or operation authority.
 
 ## Selected Manifest Contract
 
@@ -38,6 +63,18 @@ This policy controls all agent work in this repository.
 - Normalize that default before manifest identity calculation.
 - Add a resource kind only with one closed shape.
 - Reject unknown fields and `schema_version`.
+
+## Static Website Hosting
+
+- Use GitHub Pages as the production host for each deployable browser frontend.
+- Declare the browser frontend with a `github_pages` resource in `.mprlab/deploy/resources.yml`.
+- Use `gh-pages` as the publication branch.
+- The GitHub Pages repository can differ from the application repository.
+- Keep API and service routes on hostnames that differ from the website hostname.
+- Reserve the GitHub Pages domain and its `www` hostname for GitHub Pages.
+- Treat a container as an artifact source only when its static output goes to GitHub Pages.
+- Verify publication through the public website and `/.mprlab-release.json`.
+- Run the Governor check after each selected manifest change and before each release, publish, or deploy operation.
 
 ## Credential Discovery
 
@@ -59,6 +96,7 @@ This policy controls all agent work in this repository.
 
 - Use repository-native `make` targets.
 - Do not run a pre-edit or per-issue `make ci` baseline.
+- Preserve the expected failing integration-test result as implementation evidence.
 - During the change, run the smallest public-entrypoint target that validates the changed contract.
 - After the last stack change, run `make ci` once at the documented stack completion checkpoint.
 - If this run reports an error, run the target that reports the error during the correction.

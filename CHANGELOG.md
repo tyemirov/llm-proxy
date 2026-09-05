@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Recorded the approved media gateway strategy. Implementation remains open.
+  Split durable operations, provider capabilities, private Dictator access, and staging into separate delivery issues.
+  Reclassified migration cleanup as I244 and corrected MediaOps issue dependencies.
 - Added explicit rejected, succeeded, and failed request dispositions for
   managed usage. Requests that cannot reach provider dispatch remain visible
   in a separate rejection report and no longer affect execution or failure

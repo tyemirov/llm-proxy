@@ -82,15 +82,15 @@ func hasFinalMessage(rawPayload []byte) bool {
 }
 
 // openAIRequest sends messages to the OpenAI responses API and returns the resulting text.
-func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, messages chatMessages, webSearchEnabled bool, maxTokens *int, reasoningEffort string, structuredOutput *structuredOutputSchema, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, messages chatMessages, webSearchEnabled bool, maxTokens *int, reasoningEffort string, structuredOutput *structuredOutputSchema, tools *callerTools, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	if mediaLimitError := validateInlineMessageMediaBeforeSerialization(modelIdentifier, messages); mediaLimitError != nil {
 		return textGenerationResult{}, mediaLimitError
 	}
-	input, inputError := messages.openAIResponsesInput("auto", false)
+	input, inputError := messages.openAIResponsesInput("auto", tools != nil)
 	if inputError != nil {
 		return textGenerationResult{}, inputError
 	}
-	payload := buildRequestPayload(modelIdentifier.providerString(), modelIdentifier.requestProfile.string(), input, webSearchEnabled, maxTokens, reasoningEffort, true, true, structuredOutput)
+	payload := buildRequestPayload(modelIdentifier.providerString(), modelIdentifier.requestProfile.string(), input, webSearchEnabled, maxTokens, reasoningEffort, true, true, structuredOutput, tools)
 	payloadBytes, _ := json.Marshal(payload)
 	if mediaLimitError := validateInlineMessageMediaRequestLimit(modelIdentifier, messages, payloadBytes); mediaLimitError != nil {
 		return textGenerationResult{}, mediaLimitError
@@ -126,7 +126,7 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 	return client.resolveOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
 }
 
-func (client *OpenAIClient) xAIResponsesRequest(parentContext context.Context, apiKey string, endpointURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, structuredOutput *structuredOutputSchema, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *OpenAIClient) xAIResponsesRequest(parentContext context.Context, apiKey string, endpointURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, structuredOutput *structuredOutputSchema, tools *callerTools, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	if mediaLimitError := validateInlineMessageMediaBeforeSerialization(modelIdentifier, messages); mediaLimitError != nil {
 		return textGenerationResult{}, mediaLimitError
 	}
@@ -134,19 +134,14 @@ func (client *OpenAIClient) xAIResponsesRequest(parentContext context.Context, a
 	if inputError != nil {
 		return textGenerationResult{}, inputError
 	}
-	payload := struct {
-		Model           string                `json:"model"`
-		Input           any                   `json:"input"`
-		MaxOutputTokens *int                  `json:"max_output_tokens,omitempty"`
-		Store           bool                  `json:"store"`
-		Text            *openAIStructuredText `json:"text,omitempty"`
-	}{
-		Model:           modelIdentifier.providerString(),
-		Input:           input,
-		MaxOutputTokens: maxTokens,
-		Store:           false,
-		Text:            openAIStructuredTextFor(structuredOutput),
+	payload := map[string]any{"model": modelIdentifier.providerString(), "input": input, "store": false}
+	if maxTokens != nil {
+		payload["max_output_tokens"] = *maxTokens
 	}
+	if structuredOutput != nil {
+		payload["text"] = openAIStructuredTextFor(structuredOutput)
+	}
+	tools.applyResponses(payload)
 	payloadBytes, _ := json.Marshal(payload)
 	if mediaLimitError := validateInlineMessageMediaRequestLimit(modelIdentifier, messages, payloadBytes); mediaLimitError != nil {
 		return textGenerationResult{}, mediaLimitError
@@ -171,7 +166,7 @@ func (client *OpenAIClient) xAIResponsesRequest(parentContext context.Context, a
 func resolveSynchronousResponsesSnapshot(responseSnapshot openAIResponseSnapshot) (textGenerationResult, error) {
 	switch responseSnapshot.status {
 	case statusCompleted:
-		if utils.IsBlank(responseSnapshot.text) {
+		if utils.IsBlank(responseSnapshot.text) && len(responseSnapshot.toolCalls) == 0 {
 			return textGenerationResult{usage: responseSnapshot.usage}, errors.New(errorOpenAIAPI)
 		}
 		return responseSnapshot.generation(), nil
@@ -188,6 +183,7 @@ func resolveSynchronousResponsesSnapshot(responseSnapshot openAIResponseSnapshot
 }
 
 type openAIResponseSnapshot struct {
+	toolCalls             []functionCall
 	identifier            string
 	status                string
 	incompleteReason      string
@@ -220,6 +216,28 @@ func newOpenAIResponseSnapshot(responseBytes []byte) (openAIResponseSnapshot, er
 	if usageError != nil {
 		return responseSnapshot, usageError
 	}
+	var toolEnvelope struct {
+		Output []struct {
+			Type      string `json:"type"`
+			CallID    string `json:"call_id"`
+			Name      string `json:"name"`
+			Arguments string `json:"arguments"`
+		} `json:"output"`
+	}
+	if err := json.Unmarshal(responseBytes, &toolEnvelope); err != nil {
+		return responseSnapshot, err
+	}
+	for _, item := range toolEnvelope.Output {
+		if item.Type == "function_call" {
+			responseSnapshot.toolCalls = append(responseSnapshot.toolCalls, functionCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments})
+		}
+	}
+	// Pending snapshots can contain function arguments that are still being generated.
+	if !responseSnapshot.isPending() {
+		if err := validateFunctionCalls(responseSnapshot.toolCalls); err != nil {
+			return responseSnapshot, err
+		}
+	}
 	return responseSnapshot, nil
 }
 
@@ -242,11 +260,11 @@ func (responseSnapshot openAIResponseSnapshot) isPending() bool {
 }
 
 func (responseSnapshot openAIResponseSnapshot) needsSynthesis() bool {
-	return responseSnapshot.status == statusCompleted && !responseSnapshot.hasFinalMessage && !responseSnapshot.hasTopLevelOutputText
+	return responseSnapshot.status == statusCompleted && !responseSnapshot.hasFinalMessage && !responseSnapshot.hasTopLevelOutputText && len(responseSnapshot.toolCalls) == 0
 }
 
 func (responseSnapshot openAIResponseSnapshot) generation() textGenerationResult {
-	return textGenerationResult{text: responseSnapshot.text, usage: responseSnapshot.usage}
+	return textGenerationResult{text: responseSnapshot.text, usage: responseSnapshot.usage, toolCalls: responseSnapshot.toolCalls}
 }
 
 func (client *OpenAIClient) resolveOpenAIResponse(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, reasoningEffort string, responseSnapshot openAIResponseSnapshot, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
@@ -311,7 +329,7 @@ func (client *OpenAIClient) resolveCompleteOpenAIResponse(parentContext context.
 		}
 		return finalGeneration, nil
 	}
-	if utils.IsBlank(responseSnapshot.text) {
+	if utils.IsBlank(responseSnapshot.text) && len(responseSnapshot.toolCalls) == 0 {
 		return textGenerationResult{}, errors.New(errorOpenAIAPI)
 	}
 	return responseSnapshot.generation(), nil

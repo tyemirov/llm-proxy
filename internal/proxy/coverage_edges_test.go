@@ -785,7 +785,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("completed output object still starts synthesis continuation", func(subTest *testing.T) {
+	t.Run("completed malformed output object is rejected", func(subTest *testing.T) {
 		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")
 			switch {
@@ -806,7 +806,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		})
 		queryParameters := url.Values{}
 		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
-		if statusCode != http.StatusOK || body != "object synthesized" {
+		if statusCode != http.StatusBadGateway || !strings.Contains(body, "provider_error") {
 			subTest.Fatalf("status=%d body=%q", statusCode, body)
 		}
 	})

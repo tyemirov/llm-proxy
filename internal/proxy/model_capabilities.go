@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"encoding/json"
 	"strings"
 )
 
@@ -21,20 +22,21 @@ type Reasoning struct {
 
 // requestPayloadBase contains fields common to all requests.
 type requestPayloadBase struct {
-	Model           string                `json:"model"`
-	Input           any                   `json:"input"`
-	MaxOutputTokens *int                  `json:"max_output_tokens,omitempty"`
-	Background      bool                  `json:"background"`
-	Store           bool                  `json:"store"`
-	Text            *openAIStructuredText `json:"text,omitempty"`
+	Tools             []Tool                `json:"tools,omitempty"`
+	ToolChoice        any                   `json:"tool_choice,omitempty"`
+	ParallelToolCalls *bool                 `json:"parallel_tool_calls,omitempty"`
+	Model             string                `json:"model"`
+	Input             any                   `json:"input"`
+	MaxOutputTokens   *int                  `json:"max_output_tokens,omitempty"`
+	Background        bool                  `json:"background"`
+	Store             bool                  `json:"store"`
+	Text              *openAIStructuredText `json:"text,omitempty"`
 }
 
 // requestPayloadWithTools is for models supporting tools but not temperature (e.g., gpt-5).
 type requestPayloadWithTools struct {
 	requestPayloadBase
-	Tools      []Tool     `json:"tools,omitempty"`
-	ToolChoice string     `json:"tool_choice,omitempty"`
-	Reasoning  *Reasoning `json:"reasoning,omitempty"`
+	Reasoning *Reasoning `json:"reasoning,omitempty"`
 }
 
 // requestPayloadWithTemperature is for models supporting temperature but not tools (e.g., gpt-4o-mini).
@@ -47,21 +49,23 @@ type requestPayloadWithTemperature struct {
 type requestPayloadFull struct {
 	requestPayloadBase
 	Temperature *float64 `json:"temperature,omitempty"`
-	Tools       []Tool   `json:"tools,omitempty"`
-	ToolChoice  string   `json:"tool_choice,omitempty"`
 }
 
 // Tool represents a tool available to the model.
 type Tool struct {
-	Type string `json:"type"`
+	Name        string          `json:"name,omitempty"`
+	Description string          `json:"description,omitempty"`
+	Parameters  json.RawMessage `json:"parameters,omitempty"`
+	Strict      *bool           `json:"strict,omitempty"`
+	Type        string          `json:"type"`
 }
 
 // BuildRequestPayload selects the correct OpenAI Responses payload shape for the configured request profile.
 func BuildRequestPayload(modelIdentifier string, rawRequestProfile string, combinedPrompt any, webSearchEnabled bool, maxTokens *int, reasoningEffort string) any {
-	return buildRequestPayload(modelIdentifier, rawRequestProfile, combinedPrompt, webSearchEnabled, maxTokens, reasoningEffort, true, true, nil)
+	return buildRequestPayload(modelIdentifier, rawRequestProfile, combinedPrompt, webSearchEnabled, maxTokens, reasoningEffort, true, true, nil, nil)
 }
 
-func buildRequestPayload(modelIdentifier string, rawRequestProfile string, combinedPrompt any, webSearchEnabled bool, maxTokens *int, reasoningEffort string, background bool, store bool, structuredOutput *structuredOutputSchema) any {
+func buildRequestPayload(modelIdentifier string, rawRequestProfile string, combinedPrompt any, webSearchEnabled bool, maxTokens *int, reasoningEffort string, background bool, store bool, structuredOutput *structuredOutputSchema, tools *callerTools) any {
 	base := requestPayloadBase{
 		Model:           modelIdentifier,
 		Input:           combinedPrompt,
@@ -69,6 +73,13 @@ func buildRequestPayload(modelIdentifier string, rawRequestProfile string, combi
 		Background:      background,
 		Store:           store,
 		Text:            openAIStructuredTextFor(structuredOutput),
+	}
+	if tools != nil && len(tools.declarations) > 0 {
+		for _, decl := range tools.declarations {
+			base.Tools = append(base.Tools, Tool{Type: "function", Name: decl.Name, Description: decl.Description, Parameters: decl.Parameters, Strict: decl.Strict})
+		}
+		base.ToolChoice = tools.responsesChoice()
+		base.ParallelToolCalls = tools.parallel
 	}
 	requestProfile := modelRequestProfile(strings.ToLower(strings.TrimSpace(rawRequestProfile)))
 
@@ -78,15 +89,19 @@ func buildRequestPayload(modelIdentifier string, rawRequestProfile string, combi
 		temperature := defaultTemperature
 		payload.Temperature = &temperature
 		if webSearchEnabled {
-			payload.Tools = []Tool{{Type: toolTypeWebSearch}}
-			payload.ToolChoice = keyAuto
+			payload.Tools = append(payload.Tools, Tool{Type: toolTypeWebSearch})
+			if tools == nil {
+				payload.ToolChoice = keyAuto
+			}
 		}
 		return payload
 	case requestProfileOpenAIResponsesReasoningTools:
 		payload := requestPayloadWithTools{requestPayloadBase: base}
 		if webSearchEnabled {
-			payload.Tools = []Tool{{Type: toolTypeWebSearch}}
-			payload.ToolChoice = keyAuto
+			payload.Tools = append(payload.Tools, Tool{Type: toolTypeWebSearch})
+			if tools == nil {
+				payload.ToolChoice = keyAuto
+			}
 		}
 		if strings.TrimSpace(reasoningEffort) != "" {
 			payload.Reasoning = &Reasoning{Effort: reasoningEffort}

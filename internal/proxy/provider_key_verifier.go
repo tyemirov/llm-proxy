@@ -205,6 +205,7 @@ func buildOpenAIProviderKeyVerificationRequest(requestContext context.Context, _
 		false,
 		false,
 		nil,
+		nil,
 	)
 	payloadBytes, _ := json.Marshal(payload)
 	return buildAuthorizedJSONRequest(requestContext, http.MethodPost, provider.textEndpointURL, apiKey, bytes.NewReader(payloadBytes))

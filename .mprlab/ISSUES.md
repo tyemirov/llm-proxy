@@ -25,6 +25,97 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B187] (P1) Repair the OpenAPI merge result.
+  After the B186 correction, CI reports `bad indentation of a mapping entry (83:50)`.
+  The merge joined two YAML keys and inserted a duplicate `/` path.
+  The generated API reference differs from the canonical source.
+  Requirements:
+  - Remove the duplicate path and separate the YAML keys.
+  - Preserve the health resource and client protocol operations.
+  - Generate the API reference from the corrected source.
+  Validation:
+  - Run `make test-client-contracts`, `make frontend-lint`, and `make ci`.
+  Resolution:
+  - The corrected YAML retains each current operation once.
+  - The generated API reference matches the canonical source.
+  - The existing public API tests failed before the correction and passed after it.
+  - All 12 CI gates passed with 100 percent Go statement coverage.
+  Changed: `docs/openapi.yaml` and `site/docs/index.html`.
+  Event contracts: No change.
+
+- [x] [B186] (P1) Correct Go formatting after the merge.
+  GitHub run `33925059200` failed at the Go formatting gate on commit `86baabd`.
+  `make check-format` reports `internal/proxy/openapi_contract_test.go` locally and on GitHub.
+  Requirements:
+  - Apply the repository formatter to the affected file.
+  - Preserve the test assertions and public contracts.
+  Validation:
+  - Run `make check-format` and `make ci`.
+  Resolution:
+  - The repository formatter separated the switch case and its assignment.
+  - `make check-format` passed after the correction.
+  - After the B187 correction, all 12 CI gates passed with 100 percent Go statement coverage.
+  Changed: `internal/proxy/openapi_contract_test.go`.
+  Event contracts: No change.
+
+- [x] [B184] (P1) Keep partial function calls pending during background polling.
+  Goal:
+  Background Responses snapshots can contain empty or partial function arguments.
+  The parser rejects these snapshots before the provider completes the response.
+  Requirements:
+  - Continue polling while the response is queued or in progress.
+  - Validate complete function calls before returning a terminal result.
+  - Cover partial snapshots and malformed completed calls through the real HTTP lifecycle.
+  Validation:
+  - Confirm the HTTP regression fails before the production change.
+  - Run `make test-client-contracts` and the final `make ci` gate.
+  Evidence:
+  - Before the fix, both public protocols returned `502` after one poll instead of four.
+  - After the fix, both protocols return completed calls and reject malformed terminal arguments.
+  - `make test-client-contracts` passed.
+  Resolution:
+  - Pending snapshots no longer require complete function arguments.
+  - Terminal calls still require valid identifiers, names, and JSON objects.
+  - All 12 CI gates passed with 100 percent Go statement coverage.
+  Changed: `internal/proxy/openai.go` and `internal/proxy/client_protocol_lifecycle_test.go`.
+  Event contracts: No change.
+
+- [x] [B185] (P2) Normalize Python roles during tool history validation.
+  Goal:
+  Python accepts and serializes normalized roles but rejects the same roles in tool history.
+  The empty tool-result exception also compares the original role.
+  Requirements:
+  - Use the same role normalization for message validation, tool history, and serialization.
+  - Cover mixed case, surrounding whitespace, and empty tool results through the real proxy.
+  - Keep invalid tool history rejection.
+  Validation:
+  - Confirm the native Python regression fails before the production change.
+  - Run `make test-client-contracts`, `make python-test`, and the final `make ci` gate.
+  Evidence:
+  - Before the fix, the native Python test rejected mixed-case and whitespace-padded roles.
+  - The errors were `function calls require assistant role`, `missing tool result`, and `empty message content`.
+  - After the fix, normalized tool history reaches the real proxy, including empty tool results.
+  - Invalid tool histories still fail before dispatch.
+  - `make test-client-contracts` and all 45 Python tests passed.
+  - The Python package installation check passed.
+  Resolution:
+  - Constructor and tool history checks now use normalized roles.
+  - Native HTTP regressions cover normalized roles, empty results, and invalid history rejection.
+  - All 12 CI gates passed with 100 percent Go statement coverage.
+  Changed: `python/llm_proxy_client/client.py` and `tests/client-protocols/native-python.py`.
+  Event contracts: No change.
+
+- [x] [B183] (P1) Wait for usage persistence before DashScope test teardown.
+  The workspace routing test removes its temporary database while the usage writer is active.
+  Two `make go-test` runs failed with `TempDir RemoveAll cleanup: directory not empty`.
+  Read the tenant usage resource until the routed request is present before the test exits.
+  Validate the public usage assertion and the repository test gate.
+  Resolution: The test confirms one persisted request through the tenant usage API before teardown.
+  The focused test and all 12 CI gates passed.
+  Changed: `internal/proxy/management_provider_key_verification_test.go`.
+  No event contract changed.
+
+
 - [x] [B182] (P1) Bound the request-disposition migration insert.
   Goal:
   The schema 12 upgrade must retain a large usage history. The current copy uses
@@ -933,6 +1024,56 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [ ] [I244] (P1) {F024,F025,F026,F027,F039,F040,F041,F042} Remove the completed MediaOps operation-import bridge.
+  Goal:
+  Leave only the canonical model-operation contract after migration of every
+  selected MediaOps provider record.
+  Cross-repository prerequisite:
+  - MediaOps I088 must produce the operator-held final per-tenant migration
+    receipt and prove that every eligible legacy record is migrated or
+    explicitly terminal and locally complete.
+  Requirements:
+  - Reconcile the MediaOps receipt with gateway operation IDs, source-record
+    digests, provider families, terminal classifications, and rejection counts.
+  - Remove the operator-only import command, manifest schemas, provider-family
+    import registrations, migration-only configuration, and bridge docs.
+  - Keep imported rows only in the current canonical operation schema; remove
+    legacy discriminators and source-record shapes after receipt verification.
+  - Prove the public service exposes no import endpoint and every new operation
+    enters through plan plus idempotent create.
+  Validation:
+  - Run static contract checks and public black-box tests proving no migration
+    entrypoint or legacy record shape remains and migrated operations retain
+    status, tenant isolation, recovery, and artifact behavior.
+  - Start with the required failing integration test. Complete validation under the current repository policy.
+  Classification: Reclassified from M021. Implementation remains open.
+  Inventory rule:
+  - Accept an explicit zero-count receipt for a family with no recoverable source records.
+  - Remove only import tooling actually introduced by the selected capability migrations.
+- [x] [I243] (P2) Update Governor-managed documents to the current templates.
+  Goal:
+  Eight managed documents differ from the current Governor templates.
+  Requirements:
+  - Update the five stack guides, planning contract, policy, and root managed block.
+  - Preserve repository-owned instructions outside the root managed block.
+  - Preserve all pending application changes.
+  Validation:
+  - Run the Governor dry run and check.
+  - Review the changed prose.
+  - Run `git diff --check`.
+  - Compare application file contents before and after normalization.
+  Resolution:
+  - Updated the eight documents to the current Governor templates.
+  - Added the integration-test sequence, GitHub Pages rules, and file permission boundary.
+  - The Governor check reported no required changes.
+  - The changed prose check and `git diff --check` passed.
+  - Existing prose errors remain outside the managed sections and changed issue text.
+  - Application files and repository-owned root instructions remain unchanged.
+  Changed: `AGENTS.md`, `.mprlab/POLICY.md`, and `.mprlab/PLANNING.md`.
+  Changed: `.mprlab/AGENTS.API.md`, `.mprlab/AGENTS.DOCKER.md`, and `.mprlab/AGENTS.FRONTEND.md`.
+  Changed: `.mprlab/AGENTS.GO.md`, `.mprlab/AGENTS.PY.md`, and the issue tracker.
+  Event contracts: No change.
+
 - [x] [I242] (P1) Keep the application title and usage controls concise.
   Goal:
   The management application shows unnecessary words in two user-visible
@@ -1069,153 +1210,6 @@ retain satisfied historical dependencies.
   - Validate the updated OpenAPI document against real HTTP responses.
   - Run `make ci` after the last application change.
 
-- [ ] [I240] (P0) Add first-class client protocol adapters.
-  Goal:
-  Make llm-proxy directly usable by OpenCode and standard OpenAI clients.
-  Keep `/v2` as the canonical llm-proxy contract for repository-owned clients.
-  Support multiple public protocols without duplicate provider logic or
-  inconsistent request accounting.
-
-  Requirements:
-  - Add a client protocol adapter boundary between public handlers and the
-    canonical completion coordinator.
-  - Give each adapter ownership of its paths, authentication input, request
-    validation, canonical translation, response encoding, and error encoding.
-  - Register all client protocol adapters through one typed route registry.
-  - Fail startup when two adapters register the same HTTP method and path.
-  - Do not let a client protocol adapter call a provider transport directly.
-  - Do not let one client protocol adapter call another client protocol adapter.
-  - Keep outbound provider protocol adapters separate from client protocol
-    adapters.
-  - Put the current text and dictation interfaces behind explicit client
-    protocol adapters.
-  - Keep capability, asset, management, and health resources outside this
-    adapter registry.
-  - Route each accepted request through the same tenant, catalog, timeout,
-    admission, continuation, usage, and request identifier services.
-  - Keep one canonical domain request and one closed canonical result type.
-  - Let the canonical result contain final text, structured data, or client
-    tool calls.
-  - Do not expose an upstream resource identifier or native provider payload.
-  - Treat each new endpoint as a current product interface, not a fallback or
-    deprecated compatibility path.
-  - Keep `docs/openapi.yaml` as the sole HTTP contract for every public endpoint.
-
-  - Keep `POST /v2` as the native messages endpoint.
-  - Keep the official Go package, Python package, and Go CLI on `/v2`.
-  - Keep the current root, `/v2`, `/dictate`, asset, and management wire
-    contracts unchanged.
-  - Extend `/v2` with provider-neutral function declarations and tool results.
-  - Represent a tool request as a typed result, not as failed provider text.
-  - Accept assistant tool calls and `tool` role results in later `/v2` turns.
-  - Require one exact tool call identifier for each tool result.
-  - Keep `/v2` blocking and retain its current provider lifecycle ownership.
-
-  - Add `POST /v1/chat/completions` for the supported OpenAI Chat Completions
-    subset.
-  - Add `POST /v1/responses` for the supported OpenAI Responses subset.
-  - Add `GET /v1/models` for authenticated route discovery.
-  - Add `POST /v1/audio/transcriptions` for supported dictation routes.
-  - Publish an exact supported-field matrix for each OpenAI-style endpoint.
-  - Reject each unsupported field with the documented OpenAI-style error shape.
-  - Do not claim support for an OpenAI operation that the proxy does not expose.
-
-  - Require `Authorization: Bearer <tenant-client-key>` on each `/v1` endpoint.
-  - Do not accept a tenant key in a `/v1` URL or request body.
-  - Use the bearer value only as an llm-proxy tenant client key.
-  - Never forward the bearer value as an upstream provider credential.
-  - Preserve the current server-side provider credential boundary.
-  - Keep each `/v1` request stateless.
-  - Accept `store: false` or omission and reject `store: true`.
-  - Reject `previous_response_id` until a separate durable conversation
-    contract exists.
-  - Use proxy-owned identifiers in Chat Completions and Responses objects.
-
-  - Use `provider/model` as the exact `/v1` model identifier.
-  - Resolve that identifier to one enabled provider offering before dispatch.
-  - Reject aliases, ambiguous model-only identifiers, and unknown offerings.
-  - Return only routes that the authenticated tenant can use from `/v1/models`.
-  - Derive model records from the immutable provider catalog and tenant key
-    state.
-  - Do not invent a model owner, creation date, capability, or limit.
-  - Add required catalog metadata when an OpenAI model field needs that data.
-
-  - Support text messages, system instructions, output limits, and supported
-    reasoning controls on both text endpoints.
-  - Support caller function declarations, tool selection, and parallel tool
-    calls where the exact provider offering supports them.
-  - Relay client tool calls to the caller without executing those tools.
-  - Preserve exact tool names, call identifiers, and JSON argument text.
-  - Validate each tool result against an earlier assistant tool call in the
-    submitted messages.
-  - Reject client tools before dispatch when the selected offering lacks the
-    explicit capability.
-  - Keep built-in provider web search separate from caller function tools.
-  - Add an explicit caller-tool capability to each eligible provider offering.
-  - Do not infer caller-tool support from a provider protocol or model name.
-  - Map supported JSON Schema output controls to the canonical structured
-    request contract.
-
-  - Return protocol-correct non-streaming Chat Completions and Responses objects.
-  - Support `stream: true` with the required server-sent event sequence.
-  - Emit canonical result events without exposing native provider events.
-  - For a blocking provider transport, emit the event sequence after the final
-    canonical result exists.
-  - Do not describe a buffered event sequence as provider token streaming.
-  - Propagate caller cancellation through the coordinator to active provider
-    work.
-  - Keep each streaming response within the current request timeout policy.
-  - Return normalized usage in each protocol's documented usage fields.
-  - Record one managed usage event for one accepted client request.
-  - Do not record one usage event for each streamed event or tool item.
-
-  - Map validation, authentication, rate limit, capacity, timeout, and provider
-    failures to one documented OpenAI-style error object.
-  - Include the proxy request identifier in each error response.
-  - Keep provider bodies, provider errors, credentials, prompts, tool arguments,
-    and generated content out of logs.
-  - Keep the current safe management failure records and usage summaries.
-  - Use the same response headers and request timing evidence across adapters.
-
-  - Add an OpenCode example that uses the OpenAI-compatible provider package.
-  - Add an OpenCode example that uses the Responses provider package.
-  - Require no custom OpenCode provider code for either example.
-  - Require only a base URL and tenant client key in standard OpenAI SDKs.
-  - Do not require an official llm-proxy client for a `/v1` request.
-  - Load the tenant client key from an environment variable in each example.
-  - Do not put a tenant client key in a tracked configuration file or URL.
-  - Keep provider selection visible in the configured `provider/model` value.
-  - Document the native `/v2` advantages and each compatibility boundary.
-  - Update the public integration routes and API reference from verified
-    contracts.
-
-  Deliverables:
-  - Add the typed client adapter registry and canonical tool-call domain types.
-  - Add the Chat Completions, Responses, model discovery, and transcription
-    endpoints.
-  - Update `/v2`, the official clients, the provider catalog, and OpenAPI.
-  - Add OpenCode configuration examples and an exact compatibility matrix.
-  - Add black-box tests through the real HTTP server and fake provider servers.
-  - Pin each tested OpenCode and OpenAI SDK version in test dependencies.
-
-  Validation:
-  - Prove each public adapter reaches the same route and completion coordinator.
-  - Prove no adapter calls a provider transport or another adapter directly.
-  - Prove bearer authentication selects one tenant and never reaches upstream.
-  - Prove `/v1/models` returns only exact usable `provider/model` routes.
-  - Prove Chat Completions text and tool-call rounds with the official SDK.
-  - Prove Responses text and function-call rounds with the official SDK.
-  - Prove one OpenCode task calls a safe local tool through Chat Completions.
-  - Prove one OpenCode task calls a safe local tool through Responses.
-  - Prove both OpenCode tasks use llm-proxy tenant authentication.
-  - Prove non-streaming and event-stream results have valid protocol shapes.
-  - Prove a blocking provider produces a valid buffered event sequence.
-  - Prove caller cancellation stops active provider work.
-  - Prove unsupported fields and capabilities fail before provider dispatch.
-  - Prove public errors and logs do not expose protected request data.
-  - Prove each accepted request records exactly one managed usage event.
-  - Prove current `/v2` text, media, structured output, and lifecycle behavior.
-  - Run `make ci` after the last application change.
 
 - [x] [I239] (P1) Standardize HTTP health at `/healthz`.
   Goal:
@@ -1416,6 +1410,9 @@ retain satisfied historical dependencies.
   - Prove that an explicit migration moves a disabled stored selection to an
     enabled exact model.
   - Run `make ci` after the last application change.
+  Media qualification:
+  - Qualify each provider offering and operation before advertising the migrated media capability.
+  - A model activation flag alone does not prove every provider operation is available.
 - [!] [I234] (P1) Restore Gemini 3.1 Pro Preview after live acceptance.
   Goal:
   Restore the exact upstream route only after its current Google contract
@@ -1869,6 +1866,12 @@ retain satisfied historical dependencies.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
+  Media expansion:
+  - Prove bounded interactive text progress while image or video traffic saturates the same upstream origin.
+  - Define separate capacity ownership for accepted jobs, active HTTP requests, status reads, and artifact transfers.
+  - Release active HTTP capacity between remote-job polls.
+  - Include tenant fairness and shared provider-account limits in the chosen capacity contract.
+  - Make this acceptance part of F024 before general media availability.
 - [!] [I207] (P1) Add Gemini 3.6 and 3.7 Flash with route-bound Interactions thinking levels.
   Goal:
   Add Google's current stable Flash models to the Gemini Interactions catalog
@@ -2335,29 +2338,6 @@ retain satisfied historical dependencies.
 
 ## Maintenance
 
-- [ ] [M021] (P1) {F024,F025,F026,F027} Remove the completed MediaOps operation-import bridge.
-  Goal:
-  Leave only the canonical model-operation contract after migration of every
-  selected MediaOps provider record.
-  Cross-repository prerequisite:
-  - MediaOps M227 must produce the operator-held final per-tenant migration
-    receipt and prove that every eligible legacy record is migrated or
-    explicitly terminal and locally complete.
-  Requirements:
-  - Reconcile the MediaOps receipt with gateway operation IDs, source-record
-    digests, provider families, terminal classifications, and rejection counts.
-  - Remove the operator-only import command, manifest schemas, provider-family
-    import registrations, migration-only configuration, and bridge docs.
-  - Keep imported rows only in the current canonical operation schema; remove
-    legacy discriminators and source-record shapes after receipt verification.
-  - Prove the public service exposes no import endpoint and every new operation
-    enters through plan plus idempotent create.
-  Validation:
-  - Run static contract checks and public black-box tests proving no migration
-    entrypoint or legacy record shape remains and migrated operations retain
-    status, tenant isolation, recovery, and artifact behavior.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair.
 - [ ] [M004R] (P1) Dependency and security audit.
   Goal:
   Keep third-party dependencies, runtime versions, and security-sensitive configuration within the current supported contract.
@@ -2609,6 +2589,272 @@ retain satisfied historical dependencies.
 
 
 ## Features
+
+- [ ] [F039] (P1) {F024} Complete OpenAI image editing and progressive output.
+  Goal:
+  Preserve the current MediaOps OpenAI image contract before its complete provider cutover.
+  Requirements:
+  - Add image editing, ordered multi-image inputs, masks, and the current Images and Responses controls.
+  - Preserve output counts, formats, quality, transparency, compression, and supported progressive-image behavior.
+  - Represent response chains through tenant-owned gateway resources. Keep native response identifiers private.
+  - Reuse F022 operation, cancellation, asset, artifact, and retry contracts.
+  - Audit recoverable records before adding an importer. Record a zero-count receipt when none require migration.
+  - Coordinate the released contract with MediaOps I084.
+  Deliverables:
+  - Typed controls, provider translation, official-client methods, capability data, and recovery evidence.
+  Validation:
+  - Prove current OpenAI generate/edit parity through real handlers and controlled provider fixtures.
+  - Prove tenant-isolated response chains, partial output order, cancellation, and final artifact integrity.
+  - Run current repository validation and separately record explicitly authorized live acceptance.
+- [ ] [F040] (P1) {F022,F043} Add Vertex image operations through tenant provider connections.
+  Goal:
+  Move the current Vertex image provider contract behind the shared gateway.
+  Requirements:
+  - Add the current Vertex generation and editing routes with their exact supported controls.
+  - Use the F043 Google credential and staging contract where the selected route requires it.
+  - Keep project, location, credential references, and provider-native identifiers inside validated server configuration.
+  - Reuse the common catalog, operations, assets, artifacts, and official-client types.
+  - Inventory recoverable records before implementing route-specific migration.
+  - Coordinate the released contract with MediaOps I085.
+  Deliverables:
+  - Vertex image adapters, catalog entries, client types, and bounded recovery or migration support.
+  Validation:
+  - Prove exact route controls, tenant isolation, staging ownership, duplicate prevention, and artifact integrity.
+  - Run current repository validation and separately record explicitly authorized live acceptance.
+- [ ] [F041] (P1) {F022,F043} Add FAL image operations and queue recovery.
+  Goal:
+  Move current FAL image generation and recoverable queue state behind the shared gateway.
+  Requirements:
+  - Add current FAL image routes using tenant provider connections and provider-readable staging where required.
+  - Persist queue handles privately and recover the original operation without provider resubmission.
+  - Reuse common operation, catalog, asset, artifact, and official-client contracts.
+  - Inventory retained FAL records before adding exact tenant-bound import validators.
+  - Verify destination provider-account ownership before a migration uses a native recovery handle.
+  - Coordinate the released contract with MediaOps I086.
+  Deliverables:
+  - FAL image adapter, queue recovery, catalog entries, client types, and evidence-based migration tools.
+  Validation:
+  - Prove queue recovery after restart, uncertain transport behavior, exact controls, and ordered verified artifacts.
+  - Prove staging fetch and cleanup through real files and an HTTP serving boundary.
+  - Run current repository validation and separately record explicitly authorized live acceptance.
+- [ ] [F042] (P1) {F022} Expose Dictator media capabilities through the tenant gateway.
+  Goal:
+  Make Dictator a private media provider behind LLM Proxy's public API.
+  Current boundary:
+  - MediaOps currently calls Dictator through one internal adapter.
+  - After consolidation, LLM Proxy owns that adapter and the public tenant authorization boundary.
+  Requirements:
+  - Inventory retained capabilities against the current Dictator gRPC contract and MediaOps capability matrix.
+  - Cover transcription, diarization, subtitles, alignment, synthesis, voice extraction, and discovery where currently supported.
+  - Define tenant-owned voices, history, assets, artifacts, and operation resources for retained capabilities.
+  - Keep native voice, job, history, and artifact identifiers inside private provider records.
+  - Map progress, cancellation, failures, and restart recovery through the common operation contract.
+  - Authenticate the internal LLM Proxy-to-Dictator connection through deployment-owned configuration.
+  - Keep speech engines and native workers in Dictator.
+  - Use the existing qualified runtime when it satisfies the retained capability.
+  - Treat P008 hardware or controller changes as dependencies only when measured requirements make them necessary.
+  - Extend official Go and Python clients and current public caller interfaces in the selected capability release.
+  - Inventory retained voices and jobs before migration. Require explicit tenant and provider-account ownership mapping.
+  - Coordinate MediaOps I087 and every discovered direct caller in one bounded cutover.
+  - Remove obsolete public runtime routing and direct caller credentials after the cutover acceptance.
+  Deliverables:
+  - Private Dictator adapter, tenant media resources, official clients, caller migration inventory, and activation plan.
+  Open decisions:
+  - Select the canonical provider identity and exact public operation/resource schemas before implementation.
+  - Select the current transcription route disposition without creating competing permanent contracts.
+  - Inventory runtime access and retained data before deciding exact migration and deployment changes.
+  Validation:
+  - Start with real public API and persistence tests against a controlled Dictator protocol boundary.
+  - Prove tenant isolation for voices, histories, operations, and artifacts.
+  - Prove exact speech behavior, native identifier privacy, restart recovery, and truthful cancellation.
+  - Prove Dictator unavailability does not prevent admitted cloud operations.
+  - Run repository validation and record real-runtime and consumer acceptance separately.
+- [ ] [F043] (P1) {F022} Add provider-readable media staging and Google credential profiles.
+  Goal:
+  Let gateway providers read tenant media through the exact storage and credential contracts they require.
+  Requirements:
+  - Extend the existing tenant asset store rather than create another public upload identity.
+  - Add explicit GCS staging where Vertex routes require it.
+  - Support bounded provider-readable HTTP staging for routes that accept that transport.
+  - Reuse the verified MediaOps static HTTP and GCS behavior as source evidence.
+  - Add typed Google workload-identity or service-account references with exact project and location metadata where required.
+  - Keep provider staging references private and bound to one tenant asset and operation.
+  - Retain staged inputs while accepted work references them. Clean up after the declared retention boundary.
+  - Keep arbitrary caller paths and provider credentials outside public payloads.
+  - Keep this work independent of F024's first OpenAI generation release.
+  Deliverables:
+  - Store adapters, typed credential profiles, staging lifecycle, and provider integration fixtures.
+  Open decisions:
+  - Select deployment values, provider-readable URL lifetime, and Google credential mode for each consuming route.
+  Validation:
+  - Use real files and HTTP serving to prove exact fetched bytes, digest, expiry, and cleanup.
+  - Prove tenant isolation, active reference retention, failed staging, and secret-free public output.
+  - Run repository validation and record storage acceptance separately from paid generation acceptance.
+
+- [x] [F038] (P0) Add first-class client protocol adapters.
+  Reclassified from I240 because this change adds public client interfaces.
+  Resolution: Added all four `/v1` interfaces through the shared completion coordinator.
+  Added native caller tools, tenant bearer authentication, exact model discovery, and buffered server-sent events.
+  Updated the Go and Python clients, provider catalog, OpenAPI, public site, and OpenCode examples.
+  Pinned OpenAI SDK and OpenCode tests passed through real HTTP with local provider fixtures.
+  All 12 CI gates passed with 100% Go statement coverage and no uncovered blocks.
+  The final API documentation and contract checks passed.
+  B183 corrected the discovered test teardown race.
+  Changed: `internal/proxy/client_*.go`, `caller_tools.go`, `completion_result.go`, and the shared router and provider adapters.
+  Changed: `pkg/llmproxyclient/`, `python/llm_proxy_client/`, `configs/providers.yml`, `Makefile`, and pinned test dependencies.
+  Changed: `docs/openapi.yaml`, `docs/client-protocols.md`, `README.md`, the provider routing document, and generated site files.
+  Changed: `examples/opencode/`, public contract tests, SDK scripts, and browser tests.
+  Event contracts: Chat Completions chunks and ordered Responses events describe a buffered canonical result.
+  I243 resolved the Governor-managed document drift after this feature.
+
+
+  Goal:
+  Make llm-proxy directly usable by OpenCode and standard OpenAI clients.
+  Keep `/v2` as the canonical llm-proxy contract for repository-owned clients.
+  Support multiple public protocols without duplicate provider logic or
+  inconsistent request accounting.
+
+  Requirements:
+  - Add a client protocol adapter boundary between public handlers and the
+    canonical completion coordinator.
+  - Give each adapter ownership of its paths, authentication input, request
+    validation, canonical translation, response encoding, and error encoding.
+  - Register all client protocol adapters through one typed route registry.
+  - Fail startup when two adapters register the same HTTP method and path.
+  - Do not let a client protocol adapter call a provider transport directly.
+  - Do not let one client protocol adapter call another client protocol adapter.
+  - Keep outbound provider protocol adapters separate from client protocol
+    adapters.
+  - Put the current text and dictation interfaces behind explicit client
+    protocol adapters.
+  - Keep capability, asset, management, and health resources outside this
+    adapter registry.
+  - Route each accepted request through the same tenant, catalog, timeout,
+    admission, continuation, usage, and request identifier services.
+  - Keep one canonical domain request and one closed canonical result type.
+  - Let the canonical result contain final text, structured data, or client
+    tool calls.
+  - Do not expose an upstream resource identifier or native provider payload.
+  - Treat each new endpoint as a current product interface, not a fallback or
+    deprecated compatibility path.
+  - Keep `docs/openapi.yaml` as the sole HTTP contract for every public endpoint.
+
+  - Keep `POST /v2` as the native messages endpoint.
+  - Keep the official Go package, Python package, and Go CLI on `/v2`.
+  - Keep the current root, `/v2`, `/dictate`, asset, and management wire
+    contracts unchanged.
+  - Extend `/v2` with provider-neutral function declarations and tool results.
+  - Represent a tool request as a typed result, not as failed provider text.
+  - Accept assistant tool calls and `tool` role results in later `/v2` turns.
+  - Require one exact tool call identifier for each tool result.
+  - Keep `/v2` blocking and retain its current provider lifecycle ownership.
+
+  - Add `POST /v1/chat/completions` for the supported OpenAI Chat Completions
+    subset.
+  - Add `POST /v1/responses` for the supported OpenAI Responses subset.
+  - Add `GET /v1/models` for authenticated route discovery.
+  - Add `POST /v1/audio/transcriptions` for supported dictation routes.
+  - Publish an exact supported-field matrix for each OpenAI-style endpoint.
+  - Reject each unsupported field with the documented OpenAI-style error shape.
+  - Do not claim support for an OpenAI operation that the proxy does not expose.
+
+  - Require `Authorization: Bearer <tenant-client-key>` on each `/v1` endpoint.
+  - Do not accept a tenant key in a `/v1` URL or request body.
+  - Use the bearer value only as an llm-proxy tenant client key.
+  - Never forward the bearer value as an upstream provider credential.
+  - Preserve the current server-side provider credential boundary.
+  - Keep each `/v1` request stateless.
+  - Accept `store: false` or omission and reject `store: true`.
+  - Reject `previous_response_id` until a separate durable conversation
+    contract exists.
+  - Use proxy-owned identifiers in Chat Completions and Responses objects.
+
+  - Use `provider/model` as the exact `/v1` model identifier.
+  - Resolve that identifier to one enabled provider offering before dispatch.
+  - Reject aliases, ambiguous model-only identifiers, and unknown offerings.
+  - Return only routes that the authenticated tenant can use from `/v1/models`.
+  - Derive model records from the immutable provider catalog and tenant key
+    state.
+  - Do not invent a model owner, creation date, capability, or limit.
+  - Add required catalog metadata when an OpenAI model field needs that data.
+
+  - Support text messages, system instructions, output limits, and supported
+    reasoning controls on both text endpoints.
+  - Support caller function declarations, tool selection, and parallel tool
+    calls where the exact provider offering supports them.
+  - Relay client tool calls to the caller without executing those tools.
+  - Preserve exact tool names, call identifiers, and JSON argument text.
+  - Validate each tool result against an earlier assistant tool call in the
+    submitted messages.
+  - Reject client tools before dispatch when the selected offering lacks the
+    explicit capability.
+  - Keep built-in provider web search separate from caller function tools.
+  - Add an explicit caller-tool capability to each eligible provider offering.
+  - Do not infer caller-tool support from a provider protocol or model name.
+  - Map supported JSON Schema output controls to the canonical structured
+    request contract.
+
+  - Return protocol-correct non-streaming Chat Completions and Responses objects.
+  - Support `stream: true` with the required server-sent event sequence.
+  - Emit canonical result events without exposing native provider events.
+  - For a blocking provider transport, emit the event sequence after the final
+    canonical result exists.
+  - Do not describe a buffered event sequence as provider token streaming.
+  - Propagate caller cancellation through the coordinator to active provider
+    work.
+  - Keep each streaming response within the current request timeout policy.
+  - Return normalized usage in each protocol's documented usage fields.
+  - Record one managed usage event for one accepted client request.
+  - Do not record one usage event for each streamed event or tool item.
+
+  - Map validation, authentication, rate limit, capacity, timeout, and provider
+    failures to one documented OpenAI-style error object.
+  - Include the proxy request identifier in each error response.
+  - Keep provider bodies, provider errors, credentials, prompts, tool arguments,
+    and generated content out of logs.
+  - Keep the current safe management failure records and usage summaries.
+  - Use the same response headers and request timing evidence across adapters.
+
+  - Add an OpenCode example that uses the OpenAI-compatible provider package.
+  - Add an OpenCode example that uses the Responses provider package.
+  - Require no custom OpenCode provider code for either example.
+  - Require only a base URL and tenant client key in standard OpenAI SDKs.
+  - Do not require an official llm-proxy client for a `/v1` request.
+  - Load the tenant client key from an environment variable in each example.
+  - Do not put a tenant client key in a tracked configuration file or URL.
+  - Keep provider selection visible in the configured `provider/model` value.
+  - Document the native `/v2` advantages and each compatibility boundary.
+  - Update the public integration routes and API reference from verified
+    contracts.
+
+  Deliverables:
+  - Add the typed client adapter registry and canonical tool-call domain types.
+  - Add the Chat Completions, Responses, model discovery, and transcription
+    endpoints.
+  - Update `/v2`, the official clients, the provider catalog, and OpenAPI.
+  - Add OpenCode configuration examples and an exact compatibility matrix.
+  - Add black-box tests through the real HTTP server and fake provider servers.
+  - Pin each tested OpenCode and OpenAI SDK version in test dependencies.
+
+  Validation:
+  - Prove each public adapter reaches the same route and completion coordinator.
+  - Prove no adapter calls a provider transport or another adapter directly.
+  - Prove bearer authentication selects one tenant and never reaches upstream.
+  - Prove `/v1/models` returns only exact usable `provider/model` routes.
+  - Prove Chat Completions text and tool-call rounds with the official SDK.
+  - Prove Responses text and function-call rounds with the official SDK.
+  - Prove one OpenCode task calls a safe local tool through Chat Completions.
+  - Prove one OpenCode task calls a safe local tool through Responses.
+  - Prove both OpenCode tasks use llm-proxy tenant authentication.
+  - Prove non-streaming and event-stream results have valid protocol shapes.
+  - Prove a blocking provider produces a valid buffered event sequence.
+  - Prove caller cancellation stops active provider work.
+  - Prove unsupported fields and capabilities fail before provider dispatch.
+  - Prove public errors and logs do not expose protected request data.
+  - Prove each accepted request records exactly one managed usage event.
+  - Prove current `/v2` text, media, structured output, and lifecycle behavior.
+  - Run `make ci` after the last application change.
+
 
 - [x] [F037] (P1) Report rejected requests separately from proxy failures.
   Goal:
@@ -2872,134 +3118,89 @@ retain satisfied historical dependencies.
     output. Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair. Keep deployment and
     production acceptance operator-owned.
-- [ ] [F022] (P1) Add the durable model-operation, asset, and official-client foundation.
+- [ ] [F022] (P1) Add durable tenant-owned media operations to the existing gateway.
   Goal:
-  Extend LLM Proxy from blocking text and dictation into a shared model-provider
-  data plane while keeping MediaOps and other callers responsible for their
-  product operations.
-  Progress:
-  - F033 added the tenant asset upload, store, reference, and official-client
-    foundation.
-  - The durable model-operation and worker foundation remains open.
+  Extend the existing tenant API with durable media execution and result artifacts.
+  Use `docs/media-gateway-consolidation.md` as the approved ownership and delivery contract.
+  Current foundation:
+  - I216 delivered the catalog service. F033 delivered tenant assets and official asset upload.
+  - Structured text requests already persist execution states and idempotency data.
+  - Their failed-request retry and retention behavior does not define the media operation contract.
   Requirements:
-  - Keep `/v2` as the canonical blocking messages contract and `/v3` as the
-    planned sampling contract. Add a distinct `/model/v1` namespace to the
-    canonical OpenAPI document.
-  - Define `GET /model/v1/capabilities`, `POST /model/v1/plans`,
-    `POST /model/v1/operations`, and
-    `GET /model/v1/operations/{operation_id}` with strict request and response
-    schemas and the existing tenant-client-key security boundary.
-  - Make plans provider-call-free and immutable. A plan must contain its exact
-    normalized request, resolved provider/model, catalog revision, estimated
-    price result, expiry, and `plan_id`.
-  - Accept one required `Idempotency-Key` when creating an operation. Repeating
-    the same key and intent must return the existing operation; reusing the key
-    with a different intent digest must return a canonical conflict.
-  - Persist the operation and normalized intent before provider dispatch. Use
-    exactly `not_dispatched`, `dispatched`, `succeeded`, `failed`, and
-    `uncertain` as provider-execution states.
-  - Advance to `dispatched` immediately before the provider boundary. Resume a
-    `dispatched` or `uncertain` operation only through its stored provider
-    handle; automatic provider resubmission is outside the contract.
-  - Add a durable worker lease/recovery model that safely resumes
-    `not_dispatched` work after restart and preserves terminal records.
-  - Add a temporary operator-only, non-HTTP import command for strict
-    tenant-scoped migration manifests. It must create canonical operation rows
-    without provider dispatch, require a family-specific validator, converge by
-    source-record digest, and emit a deterministic source-to-operation receipt
-    with the manifest digest. M021 removes this bridge after all MediaOps family
-    cutovers complete.
-  - Store provider-native task, request, response, interaction, history, and
-    file handles only in the encrypted server-side operation record. Return one
-    proxy operation identifier to callers.
-  - Support typed tenant provider credential profiles, including API keys and
-    Google Cloud workload-identity/service-account references with exact
-    project and location metadata. Publish availability without secret values.
-  - Keep the durable operation ledger separate from the current at-most-once
-    managed usage telemetry.
-  - Return sanitized, correlated errors with provider, model, proxy request id,
-    retryability, and exact pre-dispatch or post-dispatch classification.
-  - Add `POST /model/v1/assets` for bounded streaming upload and
-    `GET /model/v1/artifacts/{artifact_id}` for authenticated download through
-    opaque tenant-scoped identifiers.
-  - Record MIME type, byte size, ownership, creation time, retention
-    expiry, and provider-readable staging state for every asset.
-  - Add a strict object-store configuration with a filesystem fixture backend
-    and a GCS production backend for provider staging.
-  - Stream large bytes through the asset store and use asset identifiers in
-    operation payloads. Keep local filesystem paths at the caller boundary.
-  - Materialize provider outputs into gateway-owned artifacts before reporting
-    operation success unless the catalog declares a durable provider artifact
-    that the gateway can retrieve on demand.
-  - Enforce tenant isolation, bounded uploads/downloads, MIME validation,
-    expiry, and deterministic cleanup.
-  - Extend `pkg/llmproxyclient` with validated constructors and typed
-    `PlanOperation`, `CreateOperation`, `GetOperation`, `UploadAsset`, and
-    `DownloadArtifact` APIs.
-  - Release the official Go client before a downstream application begins its
-    integration foundation.
+  - Reuse the current tenant-client-key authorization and tenant provider connections.
+  - Add capabilities, immutable plans, operations, cancellation resources, and artifact reads under the existing `/model/v1` namespace.
+  - Extend the canonical OpenAPI document and existing official Go client together.
+  - Keep the current canonical text contract independent from asynchronous media operations.
+  - Make plan creation provider-call-free. Bind each plan to its tenant, normalized intent, route, catalog revision, and expiry.
+  - Return explicit unavailable price evidence when the catalog cannot produce an exact estimate.
+  - Require one tenant-bound idempotency key for operation creation.
+  - Return the existing operation for the same key and intent, including terminal states.
+  - Reject a different intent for the same key before provider dispatch.
+  - Resolve an existing operation before applying plan-expiry checks to a repeated submission.
+  - Persist the tenant, normalized request, acceptance record, and input references before provider dispatch.
+  - Use durable worker claims with fencing against stale workers and duplicate dispatch.
+  - Keep accepted-job lifetime separate from the submit request connection.
+  - Resume undispatched work after restart. Recover dispatched work only through its recorded provider evidence.
+  - Preserve `not_dispatched`, `dispatched`, `succeeded`, `failed`, and `uncertain` as provider-execution states.
+  - Record cancellation requests and results separately from provider-execution uncertainty.
+  - Report confirmed cancellation separately from unsupported cancellation and an unknown dispatch outcome.
+  - Keep native provider handles and credential material inside protected server records.
+  - Extend existing tenant assets with active references, output artifacts, bounded reads, and explicit retention.
+  - Add streaming upload and verified artifact download to the existing Go client.
+  - Keep idempotency tombstones after result expiry. Define their retention independently from media bytes.
+  - Preserve rejected-request, execution-failure, provider-usage, and status-read accounting distinctions.
+  - Record provider execution usage once per accepted execution rather than once per status read.
+  - Add bounded operation admission and transfer budgets that coordinate with I046.
+  - Keep GCS staging and new Google credential profiles in F043, where provider routes require them.
+  - Implement family import validators only after an actual recoverable-record inventory identifies their required scope.
   Deliverables:
-  - Add the OpenAPI schemas, transport-neutral operation service, durable store
-    migrations, worker, idempotency index, typed credential profiles, and
-    operation-status handlers plus the temporary import framework.
-  - Add the asset handlers, object-store abstraction, cleanup worker, official
-    Go client surface, examples, and release notes.
-  - Document the ownership boundary, state machine, plan/execute flow,
-    retention policy, and restart behavior.
+  - Durable operation service, worker, store changes, artifact contract, and official Go client methods.
+  - Separate request, execution, polling, transfer, retention, and cancellation contracts.
+  - Capability-free worker fixtures and an independent client example against the real service.
+  Open decisions:
+  - Select transactional storage and worker fencing within the existing deployment contract before implementation.
+  - Set operation deadlines, retention values, queue limits, and cancellation representations before schema finalization.
   Validation:
-  - Prove persist-before-dispatch, duplicate-key convergence, intent conflict,
-    restart recovery, worker lease expiry, tenant isolation, and each terminal
-    state through public handlers and fake providers.
-  - Prove cancellation and transport loss after dispatch become `uncertain`
-    with reusable provider evidence.
-  - Prove logs, responses, and usage records exclude credentials, raw provider
-    bodies, prompts, generated media, and provider-native handles.
-  - Use a local fake server to prove every official-client path, authentication
-    shape, idempotency header, typed error, and streaming cancellation path.
-  - Prove truncated uploads, oversized media, cross-tenant
-    reads, expired assets, interrupted downloads, and cleanup races fail with
-    durable and sanitized evidence.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair.
-- [ ] [F024] (P1) {F022} Add image generation and editing to model operations.
+  - Start with a failing integration test through the real HTTP boundary and repository-owned persistence.
+  - Prove tenant isolation, concurrent duplicate convergence, intent conflicts, and zero dispatch for invalid credentials.
+  - Prove crash recovery, stale-worker rejection, expired-plan retries, and truthful cancellation outcomes.
+  - Prove active asset retention, interrupted transfers, result expiry, and idempotency tombstone behavior.
+  - Preserve existing text reconciliation through characterization tests before shared-code extraction.
+  - Exercise the official Go client against the real service with controlled external-provider fixtures.
+  - Run validation under the current repository policy. Record hosted acceptance separately from local tests.
+- [ ] [F024] (P1) {F022,I046} Deliver the first OpenAI image-generation capability.
   Goal:
-  Make LLM Proxy the sole provider boundary for the current OpenAI, Vertex, and
-  FAL image-generation and image-editing routes.
-  Cross-repository sequence:
-  - MediaOps I069 consumes this released image slice as its first cutover.
+  Let a backend tenant generate an image and retrieve verified bytes through the official LLM Proxy client.
+  FamilyHome is the first independent consumer. It uses its existing tenant credential.
   Requirements:
-  - Add typed `image.generate` and `image.edit` schemas covering the current
-    prompts, image and mask roles, output counts, sizes, aspects, quality,
-    background, formats, compression, OpenAI Images/Responses controls, and
-    supported multi-image inputs.
-  - Add `openai`, `vertex`, and `fal` provider adapters backed by tenant-owned
-    credential profiles and the authoritative model-operation catalog.
-  - Convert uploaded image asset identifiers into each provider's exact input
-    shape and materialize all terminal output bytes as gateway artifacts.
-  - Preserve FAL queue request/response handles in the durable operation and
-    resolve recovery through the proxy operation id.
-  - Register the exact recoverable FAL image record shapes with the temporary
-    import command, classify their current state without dispatch, and return a
-    canonical gateway operation mapping to the MediaOps cutover.
-  - Record normalized usage and exact price evidence without treating either
-    as billing settlement.
+  - Add terminal `image.generate` requests through the existing OpenAI tenant provider connection.
+  - Preserve explicit model, prompt, quality, size, background, format, compression, and output-count controls for qualified routes.
+  - Qualify `gpt-image-2` with `quality=low` for the FamilyHome acceptance case.
+  - Keep FamilyHome dimensions, format, prompts, and product budgets in FamilyHome configuration.
+  - Execute through the F022 operation lifecycle and existing authoritative catalog.
+  - Materialize ordered outputs as tenant-owned artifacts with opaque identifiers, MIME types, byte counts, and lifecycle metadata.
+  - Verify stored bytes through private integrity metadata. Preserve the hashless public media contract established by B163.
+  - Keep unresolved provider outcomes explicit when the provider cannot recover a lost response.
+  - Keep OpenAI editing, response-chain controls, and progressive image output in F039.
+  - Keep Vertex and FAL image adapters in F040 and F041.
+  - Release the official Go client before the independent consumer integration.
+  - MediaOps I084 consumes the complete OpenAI slice after F039 preserves its current image capabilities.
   Deliverables:
-  - Add provider adapters, catalog entries, plan validation, recovery handlers,
-    fake upstream fixtures, official-client request types, and public docs.
+  - OpenAI image adapter, catalog route, operation schema, artifact results, and official-client example.
+  - A backend-to-gateway acceptance fixture using the same tenant model as text calls.
   Validation:
-  - Prove generate/edit parity for every current route, multi-output ordering,
-    asset integrity, provider error sanitization, restart recovery, and
-    idempotent duplicate submission through public black-box tests.
-  - Run one explicitly enabled minimal live request per provider after the fake
-    provider suite and repository CI pass.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair.
-- [ ] [F025] (P1) {F022} Add durable video generation to model operations.
+  - Start with a failing real-service integration test and controlled OpenAI protocol fixture.
+  - Prove exact selected controls, duplicate convergence, lost-response recovery, output order, and artifact integrity.
+  - Prove cross-tenant reads fail and invalid credentials cause zero provider dispatch.
+  - Prove interactive text retains bounded capacity during image saturation, including the same provider origin.
+  - Run the current repository checks after implementation.
+  - Record published-client, deployed-service, and explicitly authorized live-provider acceptance separately.
+- [ ] [F025] (P1) {F022,F043} Add durable video generation to model operations.
   Goal:
   Make LLM Proxy the sole provider boundary for Vertex Veo, Vertex Gemini Omni,
   Runway, FAL, Kling, and xAI video generation.
   Cross-repository sequence:
-  - MediaOps I071 consumes this released video slice independently of the
+  - MediaOps I010 consumes this released video slice independently of the
     image cutover.
   Requirements:
   - Add a typed `video.generate` contract for prompt, start/end frame, source
@@ -3027,15 +3228,19 @@ retain satisfied historical dependencies.
     MIME validation, and provider resource cleanup.
   - Run the existing minimal opt-in live canaries through LLM Proxy after the
     fake provider suite and repository CI pass.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  - Start with the required failing integration test. Complete validation under the current repository policy.
+  Delivery boundary:
+  - Implement and release provider slices with explicit acceptance and removal receipts.
+  - Keep each current capability available under its single owner until its verified cutover.
+  - Add import validators only for records identified by the migration inventory.
+  - Use the current repository validation policy instead of older baseline CI instructions.
 - [ ] [F026] (P1) {F022} Add ElevenLabs speech, music, and alignment operations.
   Goal:
   Make LLM Proxy the sole external-provider boundary for the current
   ElevenLabs account while MediaOps retains narration planning and local audio
   assembly.
   Cross-repository sequence:
-  - MediaOps I072 consumes this released audio slice independently of the
+  - MediaOps I011 consumes this released audio slice independently of the
     image and video cutovers.
   Requirements:
   - Add typed operations for speech generation, speech conversion, voice
@@ -3050,7 +3255,7 @@ retain satisfied historical dependencies.
     each provider request becomes one durable gateway operation.
   - Materialize provider audio and JSON outputs as typed artifacts and retain
     history or song identifiers as internal recovery evidence.
-  - Keep Dictator as a separately consumed MPR gRPC service.
+  - F042 owns Dictator as a private gateway provider. This issue owns ElevenLabs capabilities.
   - Register exact import validators for selected ElevenLabs history and
     provider-operation records and return canonical operation mappings without
     replaying generation or mutation.
@@ -3062,14 +3267,18 @@ retain satisfied historical dependencies.
     concurrency; cancellation; exact output order; and artifact integrity.
   - Run explicitly enabled minimal ElevenLabs live acceptance only after the
     fake provider suite and repository CI pass.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  - Start with the required failing integration test. Complete validation under the current repository policy.
+  Delivery boundary:
+  - Separate generation, retained-resource operations, and music into bounded implementation slices when their contracts permit it.
+  - Keep each migrated capability on one execution path and preserve current consumer behavior.
+  - Add import validators only for actual recoverable records.
+  - Use the current repository validation policy instead of older baseline CI instructions.
 - [ ] [F027] (P1) {F022} Add provider account mutations, avatars, translation, and lip-sync.
   Goal:
   Complete gateway ownership of external media-provider credentials and
   provider-native task recovery for HeyGen and Kling account operations.
   Cross-repository sequence:
-  - MediaOps I073 consumes this released account-operation slice independently
+  - MediaOps I012 consumes this released account-operation slice independently
     of the other current-provider cutovers.
   Requirements:
   - Add typed operations for HeyGen translation, existing-video lip-sync,
@@ -3095,8 +3304,12 @@ retain satisfied historical dependencies.
     and sanitized errors through public black-box tests.
   - Run explicitly enabled minimal live acceptance only after the fake provider
     suite and repository CI pass.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  - Start with the required failing integration test. Complete validation under the current repository policy.
+  Delivery boundary:
+  - Release provider and resource slices with exact mutation authority and consumer cutover evidence.
+  - Use F043 staging only for provider routes that require it.
+  - Add import validators only for actual recoverable records.
+  - Use the current repository validation policy instead of older baseline CI instructions.
 - [ ] [F017] (P1) Add shared MPR UI inactivity warning and automatic logout.
   Goal:
   Make an authenticated browser session warn and sign out explicitly after
@@ -3451,7 +3664,7 @@ retain satisfied historical dependencies.
   Add the current Avatar V engine to the gateway HeyGen avatar contract before
   MediaOps exposes it through its product surfaces.
   Cross-repository sequence:
-  - MediaOps I066 consumes this after its I073 base HeyGen/Kling cutover.
+  - MediaOps F022 consumes this after its I012 base HeyGen/Kling cutover.
   Requirements:
   - Add exact engine values `avatar_iv` and `avatar_v` to the HeyGen avatar-video
     operation and capability catalog.
@@ -3475,7 +3688,7 @@ retain satisfied historical dependencies.
   Add the provider-qualified MiniMax H3 V2 route to the gateway before MediaOps
   exposes the model through its video product contracts.
   Cross-repository sequence:
-  - MediaOps I060 consumes this after its I071 base video cutover.
+  - MediaOps F023 consumes this after its I010 base video cutover.
   Requirements:
   - Add canonical provider `minimax`, exact model `MiniMax-H3`, and only the
     documented V2 create/query and `video_generation_input` upload contracts.
@@ -3503,7 +3716,7 @@ retain satisfied historical dependencies.
   Add the current Speechify complete-response speech and voice-discovery
   contracts to the gateway before MediaOps exposes them in narration flows.
   Cross-repository sequence:
-  - MediaOps I058 consumes this after its I072 base audio cutover.
+  - MediaOps F024 consumes this after its I011 base audio cutover.
   Requirements:
   - Add canonical provider `speechify`, live `GET /v1/audio/models` and
     `GET /v1/voices` discovery, and complete-response `POST /v1/audio/speech`.
@@ -3679,26 +3892,17 @@ retain satisfied historical dependencies.
     - Use a public operation resource when queue and cold-start time can exceed
       the synchronous request budget. Define cancellation, expiry, retention,
       and asset-deletion behavior.
-  - Move Dictator capabilities through the LLM Proxy boundary:
-    - Inventory transcription, diarization, subtitle generation, alignment,
-      speech synthesis, reference-sample extraction, artifacts, and job APIs
-      against the current Dictator gRPC contract.
-    - Define resource-oriented LLM Proxy operations for the retained
-      capabilities. Do not expose Dictator gRPC names, internal artifact IDs,
-      storage paths, or job IDs in the public contract.
-    - Make LLM Proxy own tenant assets and public operation IDs. Define the
-      private mapping and transfer contract for Dictator inputs, outputs,
-      progress, cancellation, failures, and restart reconciliation.
+  - Qualify Dictator runtime profiles against the F042 public capability contract:
+    - Reuse the F042 capability inventory, public resources, private adapter, and caller migration ownership.
+    - Verify asset transfer, progress, cancellation, failures, and restart reconciliation through the selected runtime profile.
     - Keep a Dictator runtime resident while one of its accepted background
       jobs is active. Add an exact drain and activity signal before the node
       controller can stop it.
     - Decide whether one Dictator container profile can satisfy measured GPU
       limits. Split transcription, analysis, and synthesis into separate
       profiles when one process keeps incompatible models resident.
-    - Decide whether the current `/dictate` route becomes the canonical local
-      transcription resource or is removed in the same forward migration.
-      Do not create a second permanent transcription contract.
-  - Define the public LLM Proxy contract as one atomic release boundary:
+    - Use the transcription route decision owned by F042.
+  - Coordinate each selected local capability through its existing public contract:
     - Add local operations and offerings to the normalized provider catalog.
       Keep runtime placement and private endpoint data out of its public
       projection.
@@ -3714,9 +3918,7 @@ retain satisfied historical dependencies.
     - Keep provider credentials, gated-model tokens, node credentials, and
       private runtime addresses on the server. Redact prompts, media content,
       reasoning text, tokens, and private runtime errors from logs.
-    - Update F026 and its dependent speech issues before implementation. F026
-      currently requires clients to consume Dictator separately, which
-      conflicts with this target boundary.
+    - F042 owns the Dictator API and caller migration. F026 owns the separate ElevenLabs provider migration.
   - Resolve these open decisions before implementation issues are approved:
     - Select the canonical provider identity for MPR Lab local offerings and
       the exact model and operation IDs. Do not use a deployment host name as
@@ -3729,12 +3931,10 @@ retain satisfied historical dependencies.
     - Set per-profile idle limits, queue limits, admission priorities, fairness
       rules, maximum cold-start waits, and maintenance behavior from measured
       data.
-    - Select public asynchronous operation storage and restart behavior. State
-      which component is authoritative for each state transition.
+    - Reuse F022 operation storage and restart behavior. Specify the controller-owned runtime and lease state transitions.
     - Select the exact SAM prompt set, coordinate system, mask format, maximum
       image size, maximum instance count, and retention limits.
-    - Select the Dictator profile split, artifact transfer method, public
-      operation shapes, `/dictate` disposition, and bounded caller cutover.
+    - Select the Dictator runtime profile split and verify the F042 artifact transfer contract under GPU scheduling.
     - Decide whether local usage has a billable price, an internal cost only,
       or no price. Keep the decision explicit in catalog and usage contracts.
   - Use this implementation sequence after the architecture is approved:
@@ -3743,7 +3943,7 @@ retain satisfied historical dependencies.
        repeated runtime switches, and complete GPU-memory release.
     2. Approve public API ownership, catalog identities, asset ownership,
        operation state, private control, deployment, and security contracts.
-       Update the planning records for F020, F026, and F030 where required.
+       Update the planning records for F020, F022, and F042 where required.
     3. Build the node controller against fake runtime containers. Prove its
        state machine, GPU leases, bounded queue, fairness, draining, idle stop,
        failed startup, cancellation, and restart reconciliation.
@@ -3755,15 +3955,12 @@ retain satisfied historical dependencies.
        live `computercat` acceptance run.
     6. Add the SAM segmentation resource, image-asset validation, private
        adapter, mask artifacts, and asynchronous operation behavior.
-    7. Add the retained Dictator speech resources and private adapter. Migrate
-       public operation and asset ownership to LLM Proxy.
+    7. Verify F042 resources through the selected Dictator runtime profile. Reuse its public ownership contract.
     8. Deploy the private controller and runtime profiles on `computercat`.
        Remove public runtime ports and routes. Install only the credentials and
        model artifacts that each component requires.
-    9. Migrate every first-party caller to the released official LLM Proxy
-       client. Remove direct Dictator clients, configuration, public DNS and
-       route ownership, and obsolete integration contract text in the same
-       bounded cutover.
+    9. Verify the F042 caller migration receipt before activating a replacement Dictator runtime profile.
+       Remove only obsolete runtime configuration introduced or replaced by this controller migration.
     10. Run production acceptance through Qwen, SAM, Dictator, and Qwen again.
         Confirm queue behavior, no active-work preemption, no GPU-memory growth,
         cancellation, restart recovery, idle unload, logs, metrics, and cloud
@@ -3792,9 +3989,13 @@ retain satisfied historical dependencies.
     server-side secrets, bounded admission, fair scheduling, safe draining,
     complete unload, crash reconciliation, public error normalization, and no
     cloud fallback for unavailable local work.
-  - Approve one deletion receipt for the direct Dictator public route, direct
-    first-party clients, old configuration, and obsolete contract text. Do not
-    mark this planning issue complete from a partial or dual-path migration.
+  - Reference the F042 caller migration receipt. Record separate deletion evidence for runtime profiles replaced by the controller migration.
+  Scope after gateway consolidation:
+  - Keep this issue as planning for additional local models, GPU control, and runtime qualification.
+  - F042 independently owns the public Dictator capability migration through the existing qualified runtime.
+  - Qwen, SAM, and GPU residency work are not blanket prerequisites for F042 or cloud media operations.
+  - Reuse F022 operation storage and F042 speech resource contracts instead of defining competing public lifecycles.
+  - Require measured evidence before making a controller change a prerequisite for a retained Dictator capability.
 - [ ] [P001] (P1) Design a tenant-scoped provider, model, and key-acquisition onboarding flow.
   Goal:
   Let a signed-in managed user complete one clear text-routing setup: select a

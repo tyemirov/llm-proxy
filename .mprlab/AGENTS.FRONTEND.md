@@ -29,8 +29,19 @@ This file gives rules for browser frontends. Obey root `AGENTS.md` and `.mprlab/
 - Clean up timers, subscriptions, object URLs, observers, and pending async work.
 - Do not catch and ignore invariant violations.
 
+## Production Hosting
+
+- Use GitHub Pages as the production host for each deployable browser frontend.
+- Declare the browser frontend with a `github_pages` resource in `.mprlab/deploy/resources.yml`.
+- Use `gh-pages` as the publication branch.
+- The GitHub Pages repository can differ from the application repository.
+- Keep API and service routes on hostnames that differ from the website hostname.
+- Reserve the GitHub Pages domain and its `www` hostname for GitHub Pages.
+- Verify publication through the public website and `/.mprlab-release.json`.
+
 ## Testing
 
+- Start coding work with an integration test through the real page and browser entry point.
 - Prefer Playwright or the repo-standard browser harness.
 - Cover user-visible behavior through the real page and browser entry point.
 - Assert rendered state, accessibility-relevant behavior, emitted events, requests, and downloaded artifacts.

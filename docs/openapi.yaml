@@ -25,6 +25,8 @@ servers:
 x-llm-proxy-protocol-methods:
   - OPTIONS
 tags:
+  - name: Client protocols
+    description: Tenant bearer interfaces for OpenAI clients and OpenCode.
   - name: Proxy
     description: Tenant-key-authenticated text and dictation operations.
   - name: Configuration
@@ -72,6 +74,622 @@ paths:
                 properties:
                   status:
                     const: unavailable
+  /v1/chat/completions:
+    post:
+      operationId: createChatCompletion
+      tags:
+        - Client protocols
+      description: >-
+        Authenticate with a tenant bearer key. Select one exact provider/model route. Reject unsupported fields
+        before provider dispatch.
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - $ref: '#/components/parameters/RequestTimeout'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenAIChatRequest'
+      responses:
+        '200':
+          description: Completed result.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIChatCompletion'
+            text/event-stream:
+              schema:
+                type: string
+              x-event-contract: OpenAIChatChunk
+              x-event-sequence:
+                - assistant-role
+                - content-or-tool-calls
+                - finish
+                - optional-usage
+                - '[DONE]'
+        '400':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/OptionalResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '401':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '405':
+          description: The HTTP method is unsupported.
+          headers:
+            Allow:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '413':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '415':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '429':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+            Retry-After:
+              $ref: '#/components/headers/SafeRetryAfter'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '499':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '502':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '503':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '504':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+  /v1/responses:
+    post:
+      operationId: createResponse
+      tags:
+        - Client protocols
+      description: >-
+        Authenticate with a tenant bearer key. Select one exact provider/model route. Reject unsupported fields
+        before provider dispatch.
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - $ref: '#/components/parameters/RequestTimeout'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenAIResponsesRequest'
+      responses:
+        '200':
+          description: Completed result.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIResponse'
+            text/event-stream:
+              schema:
+                type: string
+              x-event-contract: OpenAIResponseEvent
+              x-event-sequence:
+                - response.created
+                - response.in_progress
+                - output-item-events
+                - response.completed
+        '400':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/OptionalResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '401':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '405':
+          description: The HTTP method is unsupported.
+          headers:
+            Allow:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '413':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '415':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '429':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+            Retry-After:
+              $ref: '#/components/headers/SafeRetryAfter'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '499':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '502':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '503':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '504':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+  /v1/audio/transcriptions:
+    post:
+      operationId: createTranscription
+      tags:
+        - Client protocols
+      description: >-
+        Authenticate with a tenant bearer key. Select one exact provider/model route. Reject unsupported fields
+        before provider dispatch.
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - $ref: '#/components/parameters/RequestTimeout'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OpenAITranscriptionRequest'
+      responses:
+        '200':
+          description: Completed result.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DictationResponse'
+        '400':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/OptionalResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '401':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '405':
+          description: The HTTP method is unsupported.
+          headers:
+            Allow:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '413':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '415':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '429':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+            Retry-After:
+              $ref: '#/components/headers/SafeRetryAfter'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '499':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '502':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '503':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '504':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-LLM-Proxy-Request-Timeout-Seconds:
+              $ref: '#/components/headers/ResolvedRequestTimeout'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+  /v1/models:
+    get:
+      operationId: listClientModels
+      tags:
+        - Client protocols
+      description: >-
+        Return only catalog routes available to the authenticated tenant. The created value records catalog
+        entry creation from repository history.
+      security:
+        - TenantBearerKey: []
+      responses:
+        '200':
+          description: Completed result.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIModels'
+        '400':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '401':
+          description: Request failure.
+          headers:
+            X-LLM-Proxy-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            X-Request-ID:
+              $ref: '#/components/headers/ProxyRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
+        '405':
+          description: The HTTP method is unsupported.
+          headers:
+            Allow:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIError'
   /:
     get:
       operationId: getText
@@ -865,6 +1483,10 @@ paths:
           $ref: '#/components/responses/ManagementInternalError'
 components:
   securitySchemes:
+    TenantBearerKey:
+      type: http
+      scheme: bearer
+      bearerFormat: tenant-client-key
     TenantClientKey:
       type: apiKey
       in: query
@@ -1177,7 +1799,7 @@ components:
           schema:
             type: string
     V2Success:
-      description: Complete generated text, or exact JSON that passed the caller schema. A structured success includes the durable request state.
+      description: Final text, caller-schema JSON, or caller function calls. Structured output includes durable request state. Function calls use NativeToolResult.
       headers:
         X-LLM-Proxy-Request-Timeout-Seconds:
           $ref: '#/components/headers/ResolvedRequestTimeout'
@@ -1194,7 +1816,10 @@ components:
           schema:
             type: string
         application/json:
-          schema: {}
+          schema:
+            anyOf:
+              - $ref: '#/components/schemas/NativeToolResult'
+              - description: Native text response or JSON that passes the caller schema.
         application/xml:
           schema:
             type: string
@@ -1652,6 +2277,794 @@ components:
           - failed
           - uncertain
   schemas:
+    ClientFunction:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - parameters
+      properties:
+        name:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,64}$
+        description:
+          type: string
+        parameters:
+          type: object
+        strict:
+          anyOf:
+            - type: boolean
+            - type: 'null'
+    ClientFunctionCall:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - arguments
+      properties:
+        id:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,64}$
+        arguments:
+          type: string
+          minLength: 2
+    ClientToolChoice:
+      type: object
+      additionalProperties: false
+      required:
+        - mode
+      properties:
+        mode:
+          enum:
+            - auto
+            - none
+            - required
+            - function
+        name:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,64}$
+    OpenAIError:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required:
+            - message
+            - type
+            - param
+            - code
+            - request_id
+          properties:
+            message:
+              type: string
+            type:
+              enum:
+                - invalid_request_error
+                - authentication_error
+                - rate_limit_error
+                - server_error
+            param:
+              type: 'null'
+            code:
+              type: string
+            request_id:
+              type: string
+              minLength: 1
+    OpenAIModel:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - object
+        - created
+        - owned_by
+      properties:
+        id:
+          type: string
+          pattern: ^[^/]+/.+$
+        object:
+          const: model
+        created:
+          type: integer
+          minimum: 0
+        owned_by:
+          type: string
+    OpenAIModels:
+      type: object
+      additionalProperties: false
+      required:
+        - object
+        - data
+      properties:
+        object:
+          const: list
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpenAIModel'
+    OpenAIChatFunctionCall:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - type
+        - function
+      properties:
+        id:
+          type: string
+          minLength: 1
+        type:
+          const: function
+        function:
+          type: object
+          additionalProperties: false
+          required:
+            - name
+            - arguments
+          properties:
+            name:
+              type: string
+              pattern: ^[A-Za-z0-9_-]{1,64}$
+            arguments:
+              type: string
+    OpenAIChatTool:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - function
+      properties:
+        type:
+          const: function
+        function:
+          $ref: '#/components/schemas/ClientFunction'
+    OpenAIResponsesTool:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - name
+        - parameters
+      properties:
+        type:
+          const: function
+        name:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,64}$
+        description:
+          type: string
+        parameters:
+          type: object
+        strict:
+          anyOf:
+            - type: boolean
+            - type: 'null'
+    OpenAIJSONSchema:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - schema
+      properties:
+        name:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,64}$
+        description:
+          type: string
+        schema:
+          type: object
+        strict:
+          anyOf:
+            - type: boolean
+            - type: 'null'
+    OpenAIChatUsage:
+      type: object
+      additionalProperties: false
+      required:
+        - prompt_tokens
+        - completion_tokens
+        - total_tokens
+      properties:
+        prompt_tokens:
+          type: integer
+          minimum: 0
+        completion_tokens:
+          type: integer
+          minimum: 0
+        total_tokens:
+          type: integer
+          minimum: 0
+    OpenAIResponsesUsage:
+      type: object
+      additionalProperties: false
+      required:
+        - input_tokens
+        - output_tokens
+        - total_tokens
+      properties:
+        input_tokens:
+          type: integer
+          minimum: 0
+        output_tokens:
+          type: integer
+          minimum: 0
+        total_tokens:
+          type: integer
+          minimum: 0
+        input_tokens_details:
+          type: object
+          additionalProperties: false
+          required:
+            - cached_tokens
+          properties:
+            cached_tokens:
+              type: integer
+              minimum: 0
+        output_tokens_details:
+          type: object
+          additionalProperties: false
+          required:
+            - reasoning_tokens
+          properties:
+            reasoning_tokens:
+              type: integer
+              minimum: 0
+    OpenAIChatContent:
+      anyOf:
+        - type: string
+        - type: 'null'
+        - type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - type
+              - text
+            properties:
+              type:
+                const: text
+              text:
+                type: string
+              annotations:
+                type: array
+                maxItems: 0
+              logprobs:
+                type: array
+                maxItems: 0
+    OpenAIChatMessage:
+      type: object
+      additionalProperties: false
+      required:
+        - role
+      properties:
+        role:
+          enum:
+            - system
+            - developer
+            - user
+            - assistant
+            - tool
+        content:
+          $ref: '#/components/schemas/OpenAIChatContent'
+        tool_calls:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpenAIChatFunctionCall'
+        tool_call_id:
+          type: string
+        refusal:
+          type: 'null'
+    OpenAIChatRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - model
+        - messages
+      properties:
+        model:
+          type: string
+          pattern: ^[^/]+/.+$
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpenAIChatMessage'
+          minItems: 1
+        max_tokens:
+          type: integer
+          minimum: 1
+        max_completion_tokens:
+          type: integer
+          minimum: 1
+        reasoning_effort:
+          type: string
+          minLength: 1
+        tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpenAIChatTool'
+        tool_choice:
+          anyOf:
+            - enum:
+                - auto
+                - none
+                - required
+            - type: object
+              additionalProperties: false
+              required:
+                - type
+                - function
+              properties:
+                type:
+                  const: function
+                function:
+                  type: object
+                  additionalProperties: false
+                  required:
+                    - name
+                  properties:
+                    name:
+                      type: string
+                      pattern: ^[A-Za-z0-9_-]{1,64}$
+        parallel_tool_calls:
+          type: boolean
+        stream:
+          type: boolean
+        stream_options:
+          type: object
+          additionalProperties: false
+          properties:
+            include_usage:
+              type: boolean
+        store:
+          const: false
+        response_format:
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required:
+                - type
+              properties:
+                type:
+                  const: text
+            - type: object
+              additionalProperties: false
+              required:
+                - type
+                - json_schema
+              properties:
+                type:
+                  const: json_schema
+                json_schema:
+                  $ref: '#/components/schemas/OpenAIJSONSchema'
+      allOf:
+        - not:
+            required:
+              - max_tokens
+              - max_completion_tokens
+        - if:
+            required:
+              - stream_options
+          then:
+            required:
+              - stream
+            properties:
+              stream:
+                const: true
+    OpenAIResponseContentPart:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - text
+      properties:
+        type:
+          enum:
+            - input_text
+            - output_text
+        text:
+          type: string
+        annotations:
+          type: array
+          maxItems: 0
+        logprobs:
+          type: array
+          maxItems: 0
+    OpenAIResponseInputItem:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - role
+            - content
+          properties:
+            type:
+              const: message
+            role:
+              enum:
+                - system
+                - developer
+                - user
+                - assistant
+            content:
+              anyOf:
+                - type: string
+                - type: array
+                  items:
+                    $ref: '#/components/schemas/OpenAIResponseContentPart'
+            id:
+              type: string
+            status:
+              enum:
+                - completed
+                - in_progress
+                - incomplete
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - call_id
+            - name
+            - arguments
+          properties:
+            type:
+              const: function_call
+            id:
+              type: string
+            status:
+              enum:
+                - completed
+                - in_progress
+                - incomplete
+            call_id:
+              type: string
+              minLength: 1
+            name:
+              type: string
+              pattern: ^[A-Za-z0-9_-]{1,64}$
+            arguments:
+              type: string
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - call_id
+            - output
+          properties:
+            type:
+              const: function_call_output
+            id:
+              type: string
+            call_id:
+              type: string
+              minLength: 1
+            output:
+              type: string
+    OpenAIResponsesRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - model
+        - input
+      properties:
+        model:
+          type: string
+          pattern: ^[^/]+/.+$
+        input:
+          anyOf:
+            - type: string
+            - type: array
+              items:
+                $ref: '#/components/schemas/OpenAIResponseInputItem'
+        instructions:
+          type: string
+        max_output_tokens:
+          type: integer
+          minimum: 1
+        reasoning:
+          type: object
+          additionalProperties: false
+          properties:
+            effort:
+              type: string
+              minLength: 1
+            summary:
+              type: 'null'
+        tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpenAIResponsesTool'
+        tool_choice:
+          anyOf:
+            - enum:
+                - auto
+                - none
+                - required
+            - type: object
+              additionalProperties: false
+              required:
+                - type
+                - name
+              properties:
+                type:
+                  const: function
+                name:
+                  type: string
+                  pattern: ^[A-Za-z0-9_-]{1,64}$
+        parallel_tool_calls:
+          type: boolean
+        stream:
+          type: boolean
+        store:
+          const: false
+        include:
+          type: array
+          maxItems: 0
+        prompt_cache_key:
+          type: 'null'
+        text:
+          type: object
+          additionalProperties: false
+          properties:
+            verbosity:
+              type: 'null'
+            format:
+              oneOf:
+                - type: object
+                  additionalProperties: false
+                  required:
+                    - type
+                  properties:
+                    type:
+                      const: text
+                    description:
+                      type: string
+                - type: object
+                  additionalProperties: false
+                  required:
+                    - type
+                    - name
+                    - schema
+                  properties:
+                    type:
+                      const: json_schema
+                    name:
+                      type: string
+                      pattern: ^[A-Za-z0-9_-]{1,64}$
+                    description:
+                      type: string
+                    schema:
+                      type: object
+                    strict:
+                      anyOf:
+                        - type: boolean
+                        - type: 'null'
+    OpenAIChatCompletion:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - object
+        - created
+        - model
+        - choices
+        - usage
+      properties:
+        id:
+          type: string
+          pattern: ^chatcmpl-
+        object:
+          const: chat.completion
+        created:
+          type: integer
+          minimum: 0
+        model:
+          type: string
+        choices:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - index
+              - message
+              - finish_reason
+              - logprobs
+            properties:
+              index:
+                type: integer
+                minimum: 0
+              message:
+                $ref: '#/components/schemas/OpenAIChatMessage'
+              finish_reason:
+                enum:
+                  - stop
+                  - tool_calls
+              logprobs:
+                type: 'null'
+        usage:
+          anyOf:
+            - $ref: '#/components/schemas/OpenAIChatUsage'
+            - type: 'null'
+    OpenAIResponseOutputItem:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - id
+            - status
+            - role
+            - content
+          properties:
+            type:
+              const: message
+            id:
+              type: string
+            status:
+              const: completed
+            role:
+              const: assistant
+            content:
+              type: array
+              items:
+                $ref: '#/components/schemas/OpenAIResponseContentPart'
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - id
+            - status
+            - call_id
+            - name
+            - arguments
+          properties:
+            type:
+              const: function_call
+            id:
+              type: string
+            status:
+              const: completed
+            call_id:
+              type: string
+            name:
+              type: string
+              pattern: ^[A-Za-z0-9_-]{1,64}$
+            arguments:
+              type: string
+    OpenAIResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - object
+        - created_at
+        - completed_at
+        - status
+        - model
+        - output
+        - error
+        - incomplete_details
+        - store
+        - usage
+      properties:
+        id:
+          type: string
+          pattern: ^resp_
+        object:
+          const: response
+        created_at:
+          type: integer
+          minimum: 0
+        completed_at:
+          type: integer
+          minimum: 0
+        status:
+          const: completed
+        model:
+          type: string
+        output:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpenAIResponseOutputItem'
+        error:
+          type: 'null'
+        incomplete_details:
+          type: 'null'
+        instructions:
+          anyOf:
+            - type: string
+            - type: 'null'
+        max_output_tokens:
+          anyOf:
+            - type: integer
+              minimum: 1
+            - type: 'null'
+        parallel_tool_calls:
+          type: boolean
+        previous_response_id:
+          type: 'null'
+        store:
+          const: false
+        tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpenAIResponsesTool'
+        tool_choice:
+          anyOf:
+            - enum:
+                - auto
+                - none
+                - required
+            - type: object
+              additionalProperties: false
+              required:
+                - type
+                - name
+              properties:
+                type:
+                  const: function
+                name:
+                  type: string
+                  pattern: ^[A-Za-z0-9_-]{1,64}$
+        truncation:
+          const: disabled
+        metadata:
+          type: object
+          additionalProperties: false
+          properties: {}
+        usage:
+          anyOf:
+            - $ref: '#/components/schemas/OpenAIResponsesUsage'
+            - type: 'null'
+        temperature:
+          type: 'null'
+        top_p:
+          type: 'null'
+    OpenAITranscriptionRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - model
+        - file
+      properties:
+        model:
+          type: string
+          pattern: ^[^/]+/.+$
+        file:
+          type: string
+          format: binary
+        response_format:
+          const: json
+    NativeToolResult:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - text
+        - tool_calls
+        - usage
+      properties:
+        type:
+          const: tool_calls
+        text:
+          type: string
+        tool_calls:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientFunctionCall'
+          minItems: 1
+        usage:
+          anyOf:
+            - $ref: '#/components/schemas/TokenUsage'
+            - type: 'null'
     PublicCapabilityCatalog:
       type: object
       additionalProperties: false
@@ -1867,6 +3280,7 @@ components:
             enum:
               - text
               - dictation
+              - caller_tools
               - web_search
               - image_input
               - audio_input
@@ -1928,6 +3342,7 @@ components:
             enum:
               - text
               - dictation
+              - caller_tools
               - web_search
               - image_input
               - audio_input
@@ -2393,10 +3808,12 @@ components:
                 - asset_too_large
                 - asset_store_error
     V2ChatMessage:
-      description: A user message that may carry attachments, or a text-only system or assistant message.
+      description: A text message, user media message, assistant function call, or matched tool result.
       oneOf:
         - $ref: '#/components/schemas/V2UserChatMessage'
         - $ref: '#/components/schemas/V2SystemOrAssistantChatMessage'
+        - $ref: '#/components/schemas/V2AssistantToolMessage'
+        - $ref: '#/components/schemas/V2ToolMessage'
     V2UserChatMessage:
       type: object
       additionalProperties: false
@@ -2405,7 +3822,6 @@ components:
         - content
       properties:
         role:
-          type: string
           const: user
         content:
           type: string
@@ -2413,7 +3829,6 @@ components:
         attachments:
           type: array
           minItems: 1
-          description: Ordered exact media inputs accepted only when the resolved model declares each media type.
           items:
             $ref: '#/components/schemas/MessageAttachment'
         order:
@@ -2427,11 +3842,48 @@ components:
         - content
       properties:
         role:
-          type: string
           enum:
             - system
             - assistant
         content:
+          type: string
+          minLength: 1
+        order:
+          type: integer
+          minimum: 0
+    V2AssistantToolMessage:
+      type: object
+      additionalProperties: false
+      required:
+        - role
+        - content
+        - tool_calls
+      properties:
+        role:
+          const: assistant
+        content:
+          type: string
+        tool_calls:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ClientFunctionCall'
+        order:
+          type: integer
+          minimum: 0
+    V2ToolMessage:
+      type: object
+      additionalProperties: false
+      required:
+        - role
+        - content
+        - tool_call_id
+      properties:
+        role:
+          const: tool
+        content:
+          type: string
+        tool_call_id:
           type: string
           minLength: 1
         order:
@@ -2476,6 +3928,14 @@ components:
       required:
         - messages
       properties:
+        tools:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClientFunction"
+        tool_choice:
+          $ref: "#/components/schemas/ClientToolChoice"
+        parallel_tool_calls:
+          type: boolean
         messages:
           type: array
           minItems: 1
@@ -3693,3 +5153,452 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AdminUser'
+
+    OpenAIChatChunk:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - object
+        - created
+        - model
+        - choices
+        - usage
+      properties:
+        id:
+          type: string
+          pattern: ^chatcmpl-
+        object:
+          const: chat.completion.chunk
+        created:
+          type: integer
+          minimum: 0
+        model:
+          type: string
+        choices:
+          type: array
+          maxItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - index
+              - delta
+              - finish_reason
+              - logprobs
+            properties:
+              index:
+                const: 0
+              delta:
+                type: object
+                additionalProperties: false
+                required: []
+                properties:
+                  role:
+                    const: assistant
+                  content:
+                    type: string
+                  tool_calls:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required:
+                        - index
+                        - id
+                        - type
+                        - function
+                      properties:
+                        index:
+                          type: integer
+                          minimum: 0
+                        id:
+                          type: string
+                        type:
+                          const: function
+                        function:
+                          type: object
+                          additionalProperties: false
+                          required:
+                            - name
+                            - arguments
+                          properties:
+                            name:
+                              type: string
+                            arguments:
+                              type: string
+              finish_reason:
+                enum:
+                  - null
+                  - stop
+                  - tool_calls
+              logprobs:
+                type: 'null'
+        usage:
+          anyOf:
+            - $ref: '#/components/schemas/OpenAIChatUsage'
+            - type: 'null'
+    OpenAIResponsePending:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - object
+        - created_at
+        - completed_at
+        - status
+        - model
+        - output
+        - error
+        - incomplete_details
+        - store
+        - usage
+      properties:
+        id:
+          type: string
+          pattern: ^resp_
+        object:
+          const: response
+        created_at:
+          type: integer
+          minimum: 0
+        completed_at:
+          type: 'null'
+        status:
+          const: in_progress
+        model:
+          type: string
+        output:
+          type: array
+          maxItems: 0
+        error:
+          type: 'null'
+        incomplete_details:
+          type: 'null'
+        instructions:
+          anyOf:
+            - type: string
+            - type: 'null'
+        max_output_tokens:
+          anyOf:
+            - type: integer
+              minimum: 1
+            - type: 'null'
+        parallel_tool_calls:
+          type: boolean
+        previous_response_id:
+          type: 'null'
+        store:
+          const: false
+        tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpenAIResponsesTool'
+        tool_choice:
+          anyOf:
+            - enum:
+                - auto
+                - none
+                - required
+            - type: object
+              additionalProperties: false
+              required:
+                - type
+                - name
+              properties:
+                type:
+                  const: function
+                name:
+                  type: string
+                  pattern: ^[A-Za-z0-9_-]{1,64}$
+        truncation:
+          const: disabled
+        metadata:
+          type: object
+          additionalProperties: false
+          properties: {}
+        usage:
+          type: 'null'
+        temperature:
+          type: 'null'
+        top_p:
+          type: 'null'
+    OpenAIResponsePendingItem:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - id
+            - status
+            - role
+            - content
+          properties:
+            type:
+              const: message
+            id:
+              type: string
+            status:
+              const: in_progress
+            role:
+              const: assistant
+            content:
+              type: array
+              items:
+                $ref: '#/components/schemas/OpenAIResponseContentPart'
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - id
+            - status
+            - call_id
+            - name
+            - arguments
+          properties:
+            type:
+              const: function_call
+            id:
+              type: string
+            status:
+              const: in_progress
+            call_id:
+              type: string
+            name:
+              type: string
+              pattern: ^[A-Za-z0-9_-]{1,64}$
+            arguments:
+              type: string
+    OpenAIResponseEvent:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - sequence_number
+            - response
+          properties:
+            type:
+              const: response.created
+            sequence_number:
+              type: integer
+              minimum: 0
+            response:
+              $ref: '#/components/schemas/OpenAIResponsePending'
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - sequence_number
+            - response
+          properties:
+            type:
+              const: response.in_progress
+            sequence_number:
+              type: integer
+              minimum: 0
+            response:
+              $ref: '#/components/schemas/OpenAIResponsePending'
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - sequence_number
+            - response
+          properties:
+            type:
+              const: response.completed
+            sequence_number:
+              type: integer
+              minimum: 0
+            response:
+              $ref: '#/components/schemas/OpenAIResponse'
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - sequence_number
+            - output_index
+            - item
+          properties:
+            type:
+              const: response.output_item.added
+            sequence_number:
+              type: integer
+              minimum: 0
+            output_index:
+              type: integer
+              minimum: 0
+            item:
+              $ref: '#/components/schemas/OpenAIResponsePendingItem'
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - sequence_number
+            - output_index
+            - item
+          properties:
+            type:
+              const: response.output_item.done
+            sequence_number:
+              type: integer
+              minimum: 0
+            output_index:
+              type: integer
+              minimum: 0
+            item:
+              $ref: '#/components/schemas/OpenAIResponseOutputItem'
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - sequence_number
+            - item_id
+            - output_index
+            - content_index
+            - part
+          properties:
+            type:
+              const: response.content_part.added
+            sequence_number:
+              type: integer
+              minimum: 0
+            item_id:
+              type: string
+            output_index:
+              type: integer
+              minimum: 0
+            content_index:
+              type: integer
+              minimum: 0
+            part:
+              $ref: '#/components/schemas/OpenAIResponseContentPart'
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - sequence_number
+            - item_id
+            - output_index
+            - content_index
+            - part
+          properties:
+            type:
+              const: response.content_part.done
+            sequence_number:
+              type: integer
+              minimum: 0
+            item_id:
+              type: string
+            output_index:
+              type: integer
+              minimum: 0
+            content_index:
+              type: integer
+              minimum: 0
+            part:
+              $ref: '#/components/schemas/OpenAIResponseContentPart'
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - sequence_number
+            - item_id
+            - output_index
+            - content_index
+            - delta
+            - logprobs
+          properties:
+            type:
+              const: response.output_text.delta
+            sequence_number:
+              type: integer
+              minimum: 0
+            item_id:
+              type: string
+            output_index:
+              type: integer
+              minimum: 0
+            content_index:
+              type: integer
+              minimum: 0
+            delta:
+              type: string
+            logprobs:
+              type: array
+              maxItems: 0
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - sequence_number
+            - item_id
+            - output_index
+            - content_index
+            - text
+            - logprobs
+          properties:
+            type:
+              const: response.output_text.done
+            sequence_number:
+              type: integer
+              minimum: 0
+            item_id:
+              type: string
+            output_index:
+              type: integer
+              minimum: 0
+            content_index:
+              type: integer
+              minimum: 0
+            text:
+              type: string
+            logprobs:
+              type: array
+              maxItems: 0
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - sequence_number
+            - item_id
+            - output_index
+            - delta
+          properties:
+            type:
+              const: response.function_call_arguments.delta
+            sequence_number:
+              type: integer
+              minimum: 0
+            item_id:
+              type: string
+            output_index:
+              type: integer
+              minimum: 0
+            delta:
+              type: string
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - sequence_number
+            - item_id
+            - output_index
+            - arguments
+            - name
+          properties:
+            type:
+              const: response.function_call_arguments.done
+            sequence_number:
+              type: integer
+              minimum: 0
+            item_id:
+              type: string
+            output_index:
+              type: integer
+              minimum: 0
+            arguments:
+              type: string
+            name:
+              type: string

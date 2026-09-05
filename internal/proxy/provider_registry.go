@@ -125,12 +125,12 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 					mediaExecutionLifecycle: textExecutionLifecycle(transport.protocolParameters.MediaExecutionLifecycle),
 					routeAdapter:            textRouteAdapters[routeCapabilities],
 					requestProfile:          modelRequestProfile(offering.RequestProfile),
-					supportsWebSearch:       offering.WebSearch,
-					outputTokenLimit:        offering.OutputTokenLimit,
-					hasOutputTokenLimit:     offering.OutputTokenLimit > 0,
-					reasoningEffort:         configuredReasoningEffortCapability(offering.ReasoningEffort),
-					mediaInputs:             configuredMediaInputSet(offering.MediaInputs),
-					mediaLimits:             cloneCatalogMediaLimits(offering.MediaLimits),
+					supportsWebSearch:       offering.WebSearch, callerTools: offering.CallerTools,
+					outputTokenLimit:    offering.OutputTokenLimit,
+					hasOutputTokenLimit: offering.OutputTokenLimit > 0,
+					reasoningEffort:     configuredReasoningEffortCapability(offering.ReasoningEffort),
+					mediaInputs:         configuredMediaInputSet(offering.MediaInputs),
+					mediaLimits:         cloneCatalogMediaLimits(offering.MediaLimits),
 				}
 				if slices.Contains(offering.DefaultOperations, ModelOperationText) {
 					definition.defaultTextModel = modelID(offering.Model)
