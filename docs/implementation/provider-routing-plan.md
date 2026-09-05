@@ -652,12 +652,12 @@ The repository owns the permanent versionless production declaration in
 `make release`, `make publish`, and `make deploy` entrypoints. These targets use
 the exact `../mprlab-gateway` sibling. The gateway runs the committed release
 decision validator against the exact decision that the transaction prepares or
-reuses. The root `VERSION` file contains the repository release version. The Go
-clients receive this version through the repository tag. The Python project and
-lock metadata contain the same version. The version update command changes all
-explicit values before the release commit. CI rejects a version difference.
-The validator requires the exact repository release version and fixed major
-`1`.
+reuses. Gix owns the release version decision. The gateway keeps this decision
+for release artifacts, tags, receipts, and exact retries. The application
+validator checks the SemVer policy and major version `1`.
+Python builds use `setuptools-scm` to read the resulting `v1.X.X` release tag.
+Wheel and source distribution metadata keep the selected version without the `v` prefix.
+Package metadata does not select or change release versions.
 The gateway owns generic schema validation, artifact sealing, publication,
 Ansible inventory, reconciliation, and production verification. The selected
 transaction reads only this application checkout and the references in its

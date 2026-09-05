@@ -15,7 +15,6 @@ on:
       - 'go.mod'
       - 'go.sum'
       - 'Makefile'
-      - 'VERSION'
       - 'package.json'
       - 'package-lock.json'
       - 'playwright.config.js'
@@ -38,6 +37,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Set up Go
         uses: actions/setup-go@v5
         with:

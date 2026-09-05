@@ -25,6 +25,46 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B189] (P2) Use the selected release version in Python package metadata.
+  The validator accepts `v1.5.0`, but Python installations still report version `1.4.1`.
+  Requirements:
+  - Read the Gix-selected release tag during Python package builds.
+  - Keep that version in wheel and source distribution metadata.
+  - Remove the obsolete manual version contract.
+  Validation:
+  - Build and install tagged packages through public package commands.
+  - Run `make test-release-policy`, `make python-package-install-test`, and `make ci`.
+  Resolution:
+  - Gix remains the authority for every `v1.X.X` release version.
+  - Python builds read the release tag through `setuptools-scm` and keep its version in package metadata.
+  - The manual version command and stored version declarations are removed.
+  - CI fetches Git history and tags. Package cache keys include commits and tags.
+  - The tagged installation regressions failed with version `1.4.1` before the correction.
+  - Five package regressions passed, including source distribution builds and a cached installation after a new release tag.
+  - All 12 CI gates passed in 172 seconds with 100 percent Go statement coverage.
+  Changed: `python/pyproject.toml`, `python/uv.lock`, `Makefile`, `scripts/run_ci.sh`, and `.github/workflows/test.yml`.
+  Changed: `tests/python_package_contract_test.py`, `tests/lifecycle_contract_test.go`, `tests/operational_contract_test.go`, and `tests/frontend_dependency_contract_test.go`.
+  Changed: `README.md` and `docs/implementation/provider-routing-plan.md`.
+  Removed: `VERSION` and `scripts/release_version.py`.
+  Event contracts: No change.
+
+- [x] [B188] (P1) Accept the Gix release decision.
+  Gix selected `v1.5.0`, but the application validator required the stored value `v1.4.1`.
+  The automatic release failed before CI.
+  Requirements:
+  - Accept the version from the Gix decision without comparison to stored package metadata.
+  - Retain the application policy for major version `1`.
+  Validation:
+  - Run `make test-release-policy` and `make ci`.
+  Resolution:
+  - The validator accepts the Gix version without a comparison to stored package metadata.
+  - This correction replaces the B175 requirement for equality with `VERSION`.
+  - The exact saved `v1.5.0` decision passed the corrected validator.
+  - The regression failed before the correction and passed after it.
+  - All 12 CI gates passed in 174 seconds with 100 percent Go statement coverage.
+  Changed: Release policy validator, integration tests, Makefile, release documentation, and terminology.
+  Event contracts: No change.
+
 - [x] [B187] (P1) Repair the OpenAPI merge result.
   After the B186 correction, CI reports `bad indentation of a mapping entry (83:50)`.
   The merge joined two YAML keys and inserted a duplicate `/` path.

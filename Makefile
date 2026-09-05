@@ -15,7 +15,7 @@ export PLAYWRIGHT_BROWSERS_PATH
 
 GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 
-.PHONY: fmt check-format check-release-version set-release-version lint go-lint python-lint frontend-dependencies frontend-lint test go-test python-test python-package-install-test frontend-test test-frontend-dependency-contract test-openapi-pages-artifact test-management-auth-blackbox test-live-provider-harness test-live-providers test-live-provider-media test-live-gemini test-live-local-providers test-live-local-gemini live-test build clean ci up down
+.PHONY: fmt check-format lint go-lint python-lint frontend-dependencies frontend-lint test go-test python-test python-package-install-test frontend-test test-frontend-dependency-contract test-openapi-pages-artifact test-management-auth-blackbox test-live-provider-harness test-live-providers test-live-provider-media test-live-gemini test-live-local-providers test-live-local-gemini live-test build clean ci up down
 
 fmt:
 	$(GOFMT) -w $(GO_SOURCES)
@@ -27,12 +27,6 @@ check-format:
 		echo "$$formatted"; \
 		exit 1; \
 	fi
-
-check-release-version:
-	@python3 scripts/release_version.py check
-
-set-release-version:
-	@python3 scripts/release_version.py set "$(RELEASE_VERSION)"
 
 lint: go-lint python-lint frontend-lint
 
@@ -64,7 +58,7 @@ python-test:
 	$(MAKE) python-package-install-test
 
 python-package-install-test:
-	@set -eu; temporary_package_directory="$$(mktemp -d)"; trap 'rm -rf "$$temporary_package_directory"' 0; cp "$(PYTHON_PROJECT_DIR)/pyproject.toml" "$$temporary_package_directory/pyproject.toml"; cp -R "$(PYTHON_PROJECT_DIR)/llm_proxy_client" "$$temporary_package_directory/llm_proxy_client"; LLM_PROXY_CLIENT_PROJECT_PATH="$$temporary_package_directory/pyproject.toml" $(UV) run --no-project --with "$$temporary_package_directory" python -c 'from importlib.metadata import version; from pathlib import Path; import os, tomllib; from llm_proxy_client import Client, ClientConfig, ClientMessage, ClientMessagesRequest, LLMProxyModelProfileError; assert version("llm-proxy-client") == tomllib.loads(Path(os.environ["LLM_PROXY_CLIENT_PROJECT_PATH"]).read_text(encoding="utf-8"))["project"]["version"]; assert Client and ClientConfig and ClientMessage and ClientMessagesRequest and LLMProxyModelProfileError'
+	UV="$(UV)" $(UV) run --no-project --with 'pytest>=8.4.0' python -m pytest tests/python_package_contract_test.py
 
 frontend-test: frontend-dependencies
 	$(NPM) run frontend:test
@@ -142,3 +136,7 @@ test-client-contracts: frontend-dependencies
 
 generate-api-docs:
 	$(NPM) exec -- node scripts/generate_openapi_docs.mjs
+
+.PHONY: test-release-policy
+test-release-policy:
+	$(GO) test ./tests -run '^TestOperationalReleaseDecisionUsesGixVersion$$' -count=1
