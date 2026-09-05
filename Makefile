@@ -61,7 +61,7 @@ python-package-install-test:
 	UV="$(UV)" $(UV) run --no-project --with 'pytest>=8.4.0' python -m pytest tests/python_package_contract_test.py
 
 frontend-test: frontend-dependencies
-	$(NPM) run frontend:test
+	$(NPM) run frontend:test $(if $(FRONTEND_TEST_ARGS),-- $(FRONTEND_TEST_ARGS))
 
 test-frontend-dependency-contract:
 	$(GO) test ./tests -run '^TestOperationalFrontendValidationPreparesPinnedDependencies$$' -count=1
