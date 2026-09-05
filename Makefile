@@ -142,3 +142,7 @@ test-client-contracts: frontend-dependencies
 
 generate-api-docs:
 	$(NPM) exec -- node scripts/generate_openapi_docs.mjs
+
+.PHONY: test-release-policy
+test-release-policy:
+	$(GO) test ./tests -run '^TestOperational(ReleaseDecisionUsesGixVersion|RepositoryReleaseVersionCommand)$$' -count=1
