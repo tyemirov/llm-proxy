@@ -2715,6 +2715,72 @@ test("failed-request details expose 10 of 22 requests as safe, focus-managed met
   await expect(failureAction).toBeFocused();
 });
 
+for (const width of [1280, 390]) {
+  for (const surface of ["failures", "rejections", "settings", "provider"]) {
+    test(`close icons stay centered in ${surface} at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      const usage = managementUsage("30d", {
+        requests: 2, successful_requests: 1, failed_requests: 1, text_requests: 2,
+      });
+      usage.rejected_requests = 3;
+      await installAssetRoutes(page);
+      await installManagementRoutes(page);
+      await installUsageResponse(page, httpOK, usage);
+      await installUsageFailuresResponse(page, managementUsageFailures("30d", 1));
+      await installUsageRejectionsResponse(page, managementUsageRejections("30d"));
+      await page.goto(`${baseURL}${applicationPath}`);
+
+      let closeButton;
+      let panel;
+      if (surface === "settings") {
+        await page.getByTestId("avatar-menu").click();
+        await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+        panel = page.getByRole("dialog", { name: "Settings", exact: true });
+        closeButton = panel.getByRole("button", { name: "Close", exact: true });
+      } else if (surface === "provider") {
+        const card = page.locator('[data-provider-card="openai"]');
+        await card.getByRole("button", { name: "Set API key" }).click();
+        panel = card.locator(".provider-card-back");
+        closeButton = panel.getByRole("button", { name: "Close provider settings" });
+      } else {
+        const areFailures = surface === "failures";
+        await page.getByRole("button", {
+          name: areFailures ? "1 failed request" : "3 rejected requests", exact: true,
+        }).click();
+        panel = page.getByRole("dialog", {
+          name: areFailures ? "Failed request details" : "Rejected request details",
+        });
+        closeButton = panel.getByRole("button", {
+          name: areFailures ? "Close failed request details" : "Close rejected request details",
+        });
+      }
+      await expect(panel).toBeVisible();
+      const icon = closeButton.locator("svg");
+      await expect(icon).toBeVisible();
+      const buttonBox = await closeButton.boundingBox();
+      const iconBox = await icon.boundingBox();
+      if (!buttonBox || !iconBox) throw new Error("close_control_geometry_missing");
+      expect(buttonBox.width).toBe(30);
+      expect(buttonBox.height).toBe(30);
+      const iconSize = await page.locator("html").evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
+      expect(iconBox.width).toBe(iconSize);
+      expect(iconBox.height).toBe(iconSize);
+      expect(Math.abs(iconBox.x + iconBox.width / 2 - buttonBox.x - buttonBox.width / 2)).toBeLessThanOrEqual(0.5);
+      expect(Math.abs(iconBox.y + iconBox.height / 2 - buttonBox.y - buttonBox.height / 2)).toBeLessThanOrEqual(0.5);
+      await closeButton.press("Tab");
+      await page.keyboard.press("Shift+Tab");
+      await closeButton.focus();
+      await expect(closeButton).toBeFocused();
+      await expect(closeButton).toHaveCSS("outline-style", "solid");
+      await mkdir(b020ScreenshotDirectory, { recursive: true });
+      await panel.screenshot({ path: path.join(b020ScreenshotDirectory, `b141-${surface}-${width}.png`) });
+      await closeButton.press("Enter");
+      await expect(closeButton).toBeHidden();
+    });
+  }
+}
+
 test("rejected requests stay visible without entering execution or failure metrics", async ({ page }) => {
   const usage = managementUsage("30d", {
     requests: 2,
