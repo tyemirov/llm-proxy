@@ -2630,22 +2630,15 @@ the selected integration profile or deployment docs, not in this README.
 Use `make release`, `make publish`, and `make deploy` from the selected clean
 checkout. These are deliberately thin entrypoints into the exact sibling
 `../mprlab-gateway`. This repository owns its permanent major version `1`
-release policy. The root `VERSION` file contains the repository release
-version. The Go clients use the repository tag for this version. The Python
-project and lock metadata must contain the same version.
+release policy. Gix selects the release version once. The gateway keeps that
+decision and uses its version for release artifacts, tags, and receipts.
+An exact release retry reuses the stored decision.
 
-Before a release commit, use the version update command with the selected next
-version. For example:
-
-```shell
-make set-release-version RELEASE_VERSION=1.4.1
-```
-
-The command updates each explicit version value. Commit these changes before
-you run `make release`. CI rejects a version difference before the test gates.
 The gateway runs the committed `scripts/validate-release-decision` program.
-The validator requires the exact repository release version and fixed major
-`1`.
+The validator checks the SemVer policy and major version `1`. It accepts the
+selected version without comparison to `VERSION`, Python project metadata, or
+lock metadata. These stored values cannot override the Gix release decision.
+A release does not require a separate version update command.
 
 The generic gateway transaction validates this app, builds the declared
 multi-platform container and frontend-rendered Pages artifact from committed source,
