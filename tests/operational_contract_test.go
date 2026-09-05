@@ -99,7 +99,7 @@ builtin printf 'total:\t(statements)\t%s\n' "${CI_COVERAGE_TOTAL:-100.0%}"
 `, 0o755)
 
 	expectedTargets := strings.Join([]string{
-		"check-release-version",
+		"test-release-policy",
 		"check-format",
 		"go-lint",
 		"python-lint",

@@ -1993,6 +1993,10 @@ uv pip install --upgrade "llm-proxy-client @ git+https://github.com/tyemirov/llm
 
 Use an exact released repository tag for each application build. The default
 branch contains development source for the next release.
+The Python package version comes from the Gix-selected `v1.X.X` release tag.
+Python builds use `setuptools-scm` to read this tag.
+Wheel and source distribution metadata keep the version without the `v` prefix.
+Use the Git checkout or a Python source distribution as the package build input.
 
 ```python
 from llm_proxy_client import (
@@ -2635,10 +2639,18 @@ decision and uses its version for release artifacts, tags, and receipts.
 An exact release retry reuses the stored decision.
 
 The gateway runs the committed `scripts/validate-release-decision` program.
-The validator checks the SemVer policy and major version `1`. It accepts the
-selected version without comparison to `VERSION`, Python project metadata, or
-lock metadata. These stored values cannot override the Gix release decision.
-A release does not require a separate version update command.
+The validator checks the SemVer policy and major version `1`.
+Gix selects each `v1.X.X` release version. Python package metadata consumes the resulting release tag.
+The package build does not select or change a release version.
+
+The [`setuptools-scm` configuration](https://setuptools-scm.readthedocs.io/en/stable/config/)
+reads major-version-1 tags from the repository root.
+Source distributions keep the selected version for later builds without Git metadata.
+Untagged development commits produce development versions, not release versions.
+
+CI fetches the complete Git history and tags before Python builds.
+uv includes Git commits and tags in package cache keys.
+A release does not require a separate version update command or a stored version declaration.
 
 The generic gateway transaction validates this app, builds the declared
 multi-platform container and frontend-rendered Pages artifact from committed source,

@@ -206,7 +206,6 @@ wheels = [
 
 [[package]]
 name = "llm-proxy-client"
-version = "1.4.1"
 source = { editable = "." }
 
 [package.dev-dependencies]

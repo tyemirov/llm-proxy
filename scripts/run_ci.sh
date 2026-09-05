@@ -87,7 +87,7 @@ STAGE_NAMES=(
   "Live-provider harness preflight"
 )
 STAGE_TARGETS=(
-  "check-release-version"
+  "test-release-policy"
   "check-format"
   "go-lint"
   "python-lint"

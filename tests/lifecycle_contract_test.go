@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -339,10 +338,8 @@ func TestOperationalProductionLifecycleKeepsPolicyInAppAndDelegatesToSiblingGate
 
 func TestOperationalReleaseDecisionUsesGixVersion(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
-	repositoryVersion := operationalRepositoryReleaseVersion(testingInstance, repositoryRoot)
-	repositoryTag := "v" + repositoryVersion
-	nextVersion := nextOperationalRepositoryReleaseVersion(testingInstance, repositoryVersion)
-	nextTag := "v" + nextVersion
+	repositoryTag := "v1.4.1"
+	nextTag := "v1.4.2"
 
 	testCases := []struct {
 		name       string
@@ -351,7 +348,7 @@ func TestOperationalReleaseDecisionUsesGixVersion(testingInstance *testing.T) {
 		wantText   string
 	}{
 		{
-			name:       "exact repository version",
+			name:       "Gix reuses a release version",
 			output:     `{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"` + repositoryTag + `"}`,
 			wantStatus: true,
 			wantText:   "LLM_PROXY_RELEASE_POLICY_OK version=" + repositoryTag,
@@ -411,179 +408,6 @@ func TestOperationalReleaseDecisionUsesGixVersion(testingInstance *testing.T) {
 			}
 		})
 	}
-
-	testingInstance.Run("package metadata does not override the release decision", func(testingInstance *testing.T) {
-		fixtureRoot := newOperationalReleaseVersionFixture(testingInstance, repositoryRoot)
-		projectPath := filepath.Join(fixtureRoot, "python", "pyproject.toml")
-		projectBytes, readError := os.ReadFile(projectPath)
-		if readError != nil {
-			testingInstance.Fatalf("read fixture Python project: %v", readError)
-		}
-		writeOperationalFile(
-			testingInstance,
-			projectPath,
-			strings.Replace(
-				string(projectBytes),
-				`version = "`+repositoryVersion+`"`,
-				`version = "`+nextVersion+`"`,
-				1,
-			),
-			0o644,
-		)
-		command := exec.Command(filepath.Join(fixtureRoot, "scripts", "validate-release-decision"))
-		command.Dir = fixtureRoot
-		command.Stdin = strings.NewReader(`{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"` + repositoryTag + `"}`)
-		output, runError := command.CombinedOutput()
-		if runError != nil || !strings.Contains(string(output), "LLM_PROXY_RELEASE_POLICY_OK version="+repositoryTag) {
-			testingInstance.Fatalf("package metadata overrode the Gix decision error=%v output=%s", runError, output)
-		}
-	})
-}
-
-func TestOperationalRepositoryReleaseVersionCommand(testingInstance *testing.T) {
-	repositoryRoot := operationalRepositoryRoot(testingInstance)
-	repositoryVersion := operationalRepositoryReleaseVersion(testingInstance, repositoryRoot)
-	nextVersion := nextOperationalRepositoryReleaseVersion(testingInstance, repositoryVersion)
-	checkCommand := exec.Command("make", "check-release-version")
-	checkCommand.Dir = repositoryRoot
-	checkOutput, checkError := checkCommand.CombinedOutput()
-	if checkError != nil || !strings.Contains(string(checkOutput), "LLM_PROXY_RELEASE_VERSION_OK version=v"+repositoryVersion) {
-		testingInstance.Fatalf("repository release version check error=%v output=%s", checkError, checkOutput)
-	}
-
-	testingInstance.Run("updates all explicit versions", func(testingInstance *testing.T) {
-		fixtureRoot := newOperationalReleaseVersionFixture(testingInstance, repositoryRoot)
-		setOutput, setError := runOperationalReleaseVersionMakeCommand(testingInstance, fixtureRoot, "set-release-version", nextVersion)
-		if setError != nil || !strings.Contains(setOutput, "LLM_PROXY_RELEASE_VERSION_UPDATED version=v"+nextVersion) {
-			testingInstance.Fatalf("set repository release version error=%v output=%s", setError, setOutput)
-		}
-		checkOutput, checkError := runOperationalReleaseVersionMakeCommand(testingInstance, fixtureRoot, "check-release-version", "")
-		if checkError != nil || !strings.Contains(checkOutput, "LLM_PROXY_RELEASE_VERSION_OK version=v"+nextVersion) {
-			testingInstance.Fatalf("check updated repository release version error=%v output=%s", checkError, checkOutput)
-		}
-		decisionCommand := exec.Command(filepath.Join(fixtureRoot, "scripts", "validate-release-decision"))
-		decisionCommand.Dir = fixtureRoot
-		decisionCommand.Stdin = strings.NewReader(`{"contract":"mprlab.version-decision/v2","policy":{"scheme":"semver","fixed_major":1},"next_version":"v` + nextVersion + `"}`)
-		decisionOutput, decisionError := decisionCommand.CombinedOutput()
-		if decisionError != nil || !strings.Contains(string(decisionOutput), "LLM_PROXY_RELEASE_POLICY_OK version=v"+nextVersion) {
-			testingInstance.Fatalf("validate updated repository release decision error=%v output=%s", decisionError, decisionOutput)
-		}
-		for relativePath, expectedText := range map[string]string{
-			"VERSION":               nextVersion + "\n",
-			"python/pyproject.toml": `version = "` + nextVersion + `"`,
-			"python/uv.lock":        `version = "` + nextVersion + `"`,
-		} {
-			fileBytes, readError := os.ReadFile(filepath.Join(fixtureRoot, filepath.FromSlash(relativePath)))
-			if readError != nil || !strings.Contains(string(fileBytes), expectedText) {
-				testingInstance.Errorf("updated %s error=%v contents=%s", relativePath, readError, fileBytes)
-			}
-		}
-	})
-
-	for _, testCase := range []struct {
-		name            string
-		version         string
-		preparedVersion string
-		want            string
-	}{
-		{name: "rejects malformed value", version: "v" + nextVersion, want: "target version must use canonical major version 1"},
-		{name: "rejects major two", version: "2.0.0", want: "target version must use canonical major version 1"},
-		{
-			name:            "rejects decrease",
-			version:         repositoryVersion,
-			preparedVersion: nextVersion,
-			want:            "repository version cannot decrease from " + nextVersion + " to " + repositoryVersion,
-		},
-	} {
-		testingInstance.Run(testCase.name, func(testingInstance *testing.T) {
-			fixtureRoot := newOperationalReleaseVersionFixture(testingInstance, repositoryRoot)
-			if testCase.preparedVersion != "" {
-				output, runError := runOperationalReleaseVersionMakeCommand(
-					testingInstance,
-					fixtureRoot,
-					"set-release-version",
-					testCase.preparedVersion,
-				)
-				if runError != nil {
-					testingInstance.Fatalf("prepare repository version error=%v output=%s", runError, output)
-				}
-			}
-			paths := []string{"VERSION", "python/pyproject.toml", "python/uv.lock"}
-			before := make(map[string]string, len(paths))
-			for _, relativePath := range paths {
-				fileBytes, readError := os.ReadFile(filepath.Join(fixtureRoot, filepath.FromSlash(relativePath)))
-				if readError != nil {
-					testingInstance.Fatalf("read %s before rejected update: %v", relativePath, readError)
-				}
-				before[relativePath] = string(fileBytes)
-			}
-			output, runError := runOperationalReleaseVersionMakeCommand(testingInstance, fixtureRoot, "set-release-version", testCase.version)
-			if runError == nil || !strings.Contains(output, testCase.want) {
-				testingInstance.Fatalf("rejected version error=%v output=%s", runError, output)
-			}
-			for _, relativePath := range paths {
-				fileBytes, readError := os.ReadFile(filepath.Join(fixtureRoot, filepath.FromSlash(relativePath)))
-				if readError != nil || string(fileBytes) != before[relativePath] {
-					testingInstance.Errorf("rejected update changed %s error=%v", relativePath, readError)
-				}
-			}
-		})
-	}
-}
-
-func newOperationalReleaseVersionFixture(testingInstance *testing.T, repositoryRoot string) string {
-	testingInstance.Helper()
-	fixtureRoot := testingInstance.TempDir()
-	for _, relativePath := range []string{
-		"Makefile",
-		"VERSION",
-		"python/pyproject.toml",
-		"python/uv.lock",
-		"scripts/release_version.py",
-		"scripts/validate-release-decision",
-		"scripts/validate_release_policy.py",
-	} {
-		copyOperationalFile(
-			testingInstance,
-			filepath.Join(repositoryRoot, filepath.FromSlash(relativePath)),
-			filepath.Join(fixtureRoot, filepath.FromSlash(relativePath)),
-		)
-	}
-	return fixtureRoot
-}
-
-func runOperationalReleaseVersionMakeCommand(testingInstance *testing.T, fixtureRoot string, target string, version string) (string, error) {
-	testingInstance.Helper()
-	commandArguments := []string{"--no-print-directory", target}
-	if version != "" {
-		commandArguments = append(commandArguments, "RELEASE_VERSION="+version)
-	}
-	command := exec.Command("make", commandArguments...)
-	command.Dir = fixtureRoot
-	output, runError := command.CombinedOutput()
-	return string(output), runError
-}
-
-func operationalRepositoryReleaseVersion(testingInstance *testing.T, repositoryRoot string) string {
-	testingInstance.Helper()
-	versionBytes, readError := os.ReadFile(filepath.Join(repositoryRoot, "VERSION"))
-	if readError != nil {
-		testingInstance.Fatalf("read repository release version: %v", readError)
-	}
-	return strings.TrimSuffix(string(versionBytes), "\n")
-}
-
-func nextOperationalRepositoryReleaseVersion(testingInstance *testing.T, version string) string {
-	testingInstance.Helper()
-	components := strings.Split(version, ".")
-	if len(components) != 3 || components[0] != "1" {
-		testingInstance.Fatalf("unexpected repository release version %q", version)
-	}
-	patchVersion, parseError := strconv.Atoi(components[2])
-	if parseError != nil {
-		testingInstance.Fatalf("parse repository release version %q: %v", version, parseError)
-	}
-	return strings.Join([]string{components[0], components[1], strconv.Itoa(patchVersion + 1)}, ".")
 }
 
 func TestOperationalPagesArtifactUsesFrontendRendererWithBackendRESTData(testingInstance *testing.T) {
@@ -633,8 +457,8 @@ func TestOperationalHostedCIUsesModuleGoToolchain(testingInstance *testing.T) {
 	if strings.Contains(workflowText, "GO_VERSION:") || strings.Contains(workflowText, "go-version:") {
 		testingInstance.Fatal("hosted CI retains a second Go version declaration")
 	}
-	if !strings.Contains(workflowText, "      - 'VERSION'\n") {
-		testingInstance.Fatal("hosted CI does not run for canonical repository version changes")
+	if !strings.Contains(workflowText, "fetch-depth: 0") {
+		testingInstance.Fatal("hosted CI does not fetch release tags for Python package metadata")
 	}
 }
 
