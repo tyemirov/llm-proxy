@@ -90,13 +90,13 @@ All identifiers below name issues in the indicated repository.
 | --- | --- | --- |
 | Durable operations and official clients | F022 | I009: common consumer foundation |
 | Shared request capacity | I046 | Validate through each consumer release |
-| First terminal OpenAI image generation | F024 | FamilyHome first; full MediaOps switch follows F039 |
+| First terminal OpenAI image generation | F024 | FamilyHome first. Full MediaOps switch requires F039. |
 | Complete OpenAI image controls | F039 | I084 |
 | Vertex images | F040, with F043 | I085 |
-| FAL images | F041, with F043 | I086 |
-| Vertex, Runway, FAL, and Kling video | F025 | I010 |
+| FAL images | F041. F043 where staged inputs are required. | I086 |
+| Vertex, Runway, FAL, Kling, and xAI video | F025 | I010 |
 | ElevenLabs speech, music, and resources | F026 | I011 |
-| HeyGen avatar capabilities | F027 | I012 |
+| HeyGen avatars and Kling account operations | F027 | I012 |
 | Dictator capabilities and retained voices | F042 | I087 |
 | Provider-readable staging and Google credentials | F043 | Adopt through the relevant provider switch |
 | Final migration cleanup | I244, formerly M021 | I088, formerly M001 |
@@ -116,7 +116,8 @@ Existing completed issues keep their identifiers and resolution history.
 5. Complete F039, then switch the full MediaOps OpenAI image capability in I084.
 6. Deliver F042 and switch MediaOps Dictator calls in I087.
 7. Deliver the remaining provider capabilities in product priority order.
-8. Complete I244 and I088 after all selected consumer switches pass acceptance.
+8. Complete MediaOps I088 and its migration receipt after all selected consumer switches pass acceptance.
+9. Complete LLM Proxy I244 after that receipt reconciles.
 
 MediaOps I009 can start after the required F022 client contract is available.
 The first FamilyHome image request explicitly selects `openai`, `gpt-image-2`, and `quality=low`.
@@ -126,6 +127,7 @@ Each additional provider issue must name its first supported operation and accep
 A provider capability has one active execution owner during its scheduled switch.
 The consumer switch removes direct execution for that capability in the same release.
 Different capabilities can migrate in separate releases.
+Remove a shared provider credential only after its final direct consumer capability switches.
 OpenAI generation, editing, and progressive output must reach full parity before the complete MediaOps OpenAI switch.
 This preserves the controls already exposed by MediaOps.
 
