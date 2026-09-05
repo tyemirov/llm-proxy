@@ -74,13 +74,10 @@ paths:
                 properties:
                   status:
                     const: unavailable
-  /:
-    get:
-      operationId: getText
-      summary: Generate text from a query prompt
   /v1/chat/completions:
     post:
-      operationId: createChatCompletion      tags:
+      operationId: createChatCompletion
+      tags:
         - Client protocols
       description: >-
         Authenticate with a tenant bearer key. Select one exact provider/model route. Reject unsupported fields
