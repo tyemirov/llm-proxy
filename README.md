@@ -21,6 +21,14 @@ management app opens at [`/app/`](https://llm-proxy.mprlab.com/app/) only after
 the public **Log In** action authenticates the user through MPR UI and TAuth.
 The application document title is always `LLM Proxy`.
 
+## Approved Media Gateway Strategy
+
+LLM Proxy will own the shared media provider gateway, including private Dictator access.
+The migration extends the existing tenant API and official clients.
+MediaOps retains production workflows and YouTube channel management.
+See the [consolidation strategy](docs/media-gateway-consolidation.md) for issue ownership, delivery order, and acceptance requirements.
+The implementation issues remain open.
+
 ## Features
 
 - Minimal HTTP server whose complete owned operation surface is defined by the
