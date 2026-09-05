@@ -1120,7 +1120,6 @@ client-key-row input {
   white-space: nowrap;
 }
 
-.settings-close,
 .client-key-replace {
   display: inline-flex;
   align-items: center;
@@ -1224,7 +1223,10 @@ llm-proxy-management-application textarea:focus-visible {
   gap: 0.35rem;
 }
 
-.icon-only {
+llm-proxy-management-application button.icon-only {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 30px;
   min-width: 30px;
   padding: 0;
