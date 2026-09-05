@@ -28,7 +28,7 @@ Keep durable decisions and requirements in the issue tracker or a source-control
 
 ## Test-Driven Sequence
 
-- Start coding work with the integration test that represents the required public behavior.
+- For a behavior change, start with the integration test that represents the required public behavior.
 - Use dependency injection for integration scenarios that are difficult to reproduce.
 - Keep the product logic under test real.
 - Run the new or changed integration test before you change production code.

@@ -25,18 +25,20 @@ Docker and container guidance for this repository. Use this guide only when Dock
 - A field added to an existing shape must be optional and have one canonical default.
 - The gateway must normalize that default before manifest identity calculation.
 - Keep app-owned local orchestration during a versionless selected-manifest cutover.
+- Keep local Compose files, configuration, scripts, `make up`, `make down`, and local tests during a production contract change.
 - A local topology can be different from the production topology.
 - Keep local orchestration files outside `.mprlab/deploy/`.
 - Do not use local orchestration files as production lifecycle inputs.
 - For a deployable application, use `.mprlab/deploy/resources.yml` as the only
   tracked production deployment file.
+- Permit the ignored `.mprlab/deploy/.env` file as the canonical private deployment input.
 - A container can create a GitHub Pages artifact. The container does not own the public website hostname.
 - Publish the container output through the `github_pages` resource.
 - Keep each `caddy_route` on a hostname that differs from the GitHub Pages domain.
 
 ## Validation
 
-- Start coding work with an integration test through the real container entry point.
+- For a behavior change, start with an integration test through the real container entry point.
 - Use dependency injection for integration scenarios that are difficult to reproduce.
 - Keep the product logic under test real.
 - Use `.mprlab/POLICY.md` for validation.

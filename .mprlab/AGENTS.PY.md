@@ -24,7 +24,7 @@ This file gives backend rules for Python code. Obey root `AGENTS.md` and `.mprla
 
 ## Testing
 
-- Start coding work with an integration test through the real HTTP, CLI, or public package entry point.
+- For a behavior change, start with an integration test through the real HTTP, CLI, or public package entry point.
 - Use dependency injection for integration scenarios that are difficult to reproduce.
 - Keep the product logic under test real.
 - Use pytest.

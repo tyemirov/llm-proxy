@@ -25,7 +25,7 @@ This file gives backend rules for Go code. Obey root `AGENTS.md` and `.mprlab/PO
 
 ## Testing
 
-- Start coding work with an integration test through the real HTTP, CLI, or public package entry point.
+- For a behavior change, start with an integration test through the real HTTP, CLI, or public package entry point.
 - Use dependency injection for integration scenarios that are difficult to reproduce.
 - Keep the product logic under test real.
 - Prefer black-box integration tests through HTTP, CLI, or public package entry points.
