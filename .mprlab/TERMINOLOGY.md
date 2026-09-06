@@ -63,3 +63,15 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `function call`: A typed model result with an identifier, a function name, and JSON argument text.
 - `bearer key`: A tenant client key supplied in the HTTP Authorization header.
 - `server-sent event`: One event in the HTTP event-stream representation of a result.
+
+- `dispatch intent`: A durable record that a worker can have started an external provider request.
+- `operation artifact`: An output asset attached to a media operation.
+- `cancellation observation`: The observed state of a cancellation request: pending, confirmed, unsupported, or unresolved.
+- `usage delivery record`: A durable record that permits one usage event to be delivered after a process restart.
+
+## Media Execution Technical Verbs
+
+- `persist`: Record operation data in durable storage. Approved forms: persist, persists, persisted, persisted.
+- `recover`: Restore an operation result from existing provider evidence. Approved forms: recover, recovers, recovered, recovered.
+- `deduplicate`: Permit one record or effect for the same identifier. Approved forms: deduplicate, deduplicates, deduplicated, deduplicated.
+- `reconcile`: Compare retained records with provider evidence and record the established outcome. Approved forms: reconcile, reconciles, reconciled, reconciled.

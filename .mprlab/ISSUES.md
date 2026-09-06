@@ -1143,7 +1143,7 @@ retain satisfied historical dependencies.
   - Keep imported rows only in the current canonical operation schema; remove
     legacy discriminators and source-record shapes after receipt verification.
   - Prove the public service exposes no import endpoint and every new operation
-    enters through plan plus idempotent create.
+    enters through idempotent operation creation.
   Validation:
   - Run static contract checks and public black-box tests proving no migration
     entrypoint or legacy record shape remains and migrated operations retain
@@ -1966,9 +1966,7 @@ retain satisfied historical dependencies.
     goroutine growth.
   - Add a repository Makefile target that runs the public concurrency coverage
     with Go's race detector and include it in `make ci`.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
-    the final run after the last code edit.
+  - Run the final `make ci` target under the current repository validation policy.
   Media expansion:
   - Prove bounded interactive text progress while image or video traffic saturates the same upstream origin.
   - Define separate capacity ownership for accepted jobs, active HTTP requests, status reads, and artifact transfers.
@@ -2764,7 +2762,7 @@ retain satisfied historical dependencies.
   Deliverables:
   - Private Dictator adapter, tenant media resources, official clients, caller migration inventory, and activation plan.
   Open decisions:
-  - Select the canonical provider identity and exact public operation/resource schemas before implementation.
+  - Use `dictator` as the canonical provider identity. Specify the public capability schemas before implementation.
   - Select the current transcription route disposition without creating competing permanent contracts.
   - Inventory runtime access and retained data before deciding exact migration and deployment changes.
   Validation:
@@ -3225,53 +3223,47 @@ retain satisfied historical dependencies.
 - [ ] [F022] (P1) Add durable tenant-owned media operations to the existing gateway.
   Goal:
   Extend the existing tenant API with durable media execution and result artifacts.
-  Use `docs/media-gateway-consolidation.md` as the approved ownership and delivery contract.
-  Current foundation:
-  - I216 delivered the catalog service. F033 delivered tenant assets and official asset upload.
-  - Structured text requests already persist execution states and idempotency data.
-  - Their failed-request retry and retention behavior does not define the media operation contract.
+  Use P011 and `docs/media-gateway-consolidation.md` as the current implementation contract.
   Requirements:
-  - Reuse the current tenant-client-key authorization and tenant provider connections.
-  - Add capabilities, immutable plans, operations, cancellation resources, and artifact reads under the existing `/model/v1` namespace.
-  - Extend the canonical OpenAPI document and existing official Go client together.
-  - Keep the current canonical text contract independent from asynchronous media operations.
-  - Make plan creation provider-call-free. Bind each plan to its tenant, normalized intent, route, catalog revision, and expiry.
-  - Return explicit unavailable price evidence when the catalog cannot produce an exact estimate.
-  - Require one tenant-bound idempotency key for operation creation.
-  - Return the existing operation for the same key and intent, including terminal states.
-  - Reject a different intent for the same key before provider dispatch.
-  - Resolve an existing operation before applying plan-expiry checks to a repeated submission.
-  - Persist the tenant, normalized request, acceptance record, and input references before provider dispatch.
-  - Use durable worker claims with fencing against stale workers and duplicate dispatch.
-  - Keep accepted-job lifetime separate from the submit request connection.
-  - Resume undispatched work after restart. Recover dispatched work only through its recorded provider evidence.
-  - Preserve `not_dispatched`, `dispatched`, `succeeded`, `failed`, and `uncertain` as provider-execution states.
-  - Record cancellation requests and results separately from provider-execution uncertainty.
-  - Report confirmed cancellation separately from unsupported cancellation and an unknown dispatch outcome.
-  - Keep native provider handles and credential material inside protected server records.
-  - Extend existing tenant assets with active references, output artifacts, bounded reads, and explicit retention.
-  - Add streaming upload and verified artifact download to the existing Go client.
-  - Keep idempotency tombstones after result expiry. Define their retention independently from media bytes.
-  - Preserve rejected-request, execution-failure, provider-usage, and status-read accounting distinctions.
-  - Record provider execution usage once per accepted execution rather than once per status read.
-  - Add bounded operation admission and transfer budgets that coordinate with I046.
-  - Keep GCS staging and new Google credential profiles in F043, where provider routes require them.
-  - Implement family import validators only after an actual recoverable-record inventory identifies their required scope.
+  - Reuse managed tenant keys and bearer authentication for media resources.
+  - Extend the existing asset contract and official Go client in the same API change.
+  - Add capabilities, operations, cancellation resources, asset metadata reads, and bounded byte downloads under `/model/v1`.
+  - Validate and accept each request in one operation creation call.
+  - Keep the accepted intent, route, and catalog revision in the operation record.
+  - Keep a separate public plan resource outside this release.
+  - Return explicit unavailable cost evidence when exact catalog pricing is absent.
+  - Require a tenant-bound idempotency key and enforce a unique database constraint.
+  - Return the same operation for the same key and intent, including terminal and uncertain states.
+  - Reject changed intent with `409` before dispatch.
+  - Resolve an accepted request before current catalog validation.
+  - Add operation, claim, asset-reference, and usage-delivery tables in the existing managed SQLite database.
+  - Use bounded in-process workers for the first deployment.
+  - Persist acceptance, input references, and dispatch intent before provider execution.
+  - Use claim generations and transactional updates to reject stale workers.
+  - Resume undispatched work after restart. Recover dispatched work through recorded provider evidence.
+  - Keep accepted work independent from the initiating HTTP connection.
+  - Keep provider execution evidence separate from public operation state and cancellation observations.
+  - Use the state schemas, deadlines, retention, and initial capacity values specified by P011.
+  - Keep native handles and byte digests private.
+  - Coordinate asset publication and deletion with durable active references.
+  - Return output assets through authenticated metadata and content reads.
+  - Keep minimal idempotency tombstones for the tenant lifetime after terminal data expiry.
+  - Keep unresolved operation evidence until reconciliation or explicit disposition.
+  - Deduplicate execution usage by operation identifier through a durable delivery record.
+  - Keep status reads and downloads separate from generation charges.
+  - Coordinate network capacity with I046. Keep provider-specific staging in F043.
+  - Add migration tools only when an actual retained-record inventory requires them.
   Deliverables:
-  - Durable operation service, worker, store changes, artifact contract, and official Go client methods.
-  - Separate request, execution, polling, transfer, retention, and cancellation contracts.
-  - External-provider protocol fixtures and an independent client example against the real service.
-  Open decisions:
-  - Select transactional storage and worker fencing within the existing deployment contract before implementation.
-  - Set operation deadlines, retention values, queue limits, and cancellation representations before schema finalization.
+  - Operation service, SQLite tables, worker, asset lifecycle, OpenAPI contract, and official Go client methods.
+  - A real-service client example with controlled provider protocols.
   Validation:
-  - Start with a failing integration test through the real HTTP boundary and repository-owned persistence.
-  - Prove tenant isolation, concurrent duplicate convergence, intent conflicts, and zero dispatch for invalid credentials.
-  - Prove crash recovery, stale-worker rejection, expired-plan retries, and truthful cancellation outcomes.
-  - Prove active asset retention, interrupted transfers, result expiry, and idempotency tombstone behavior.
-  - Preserve existing text reconciliation through characterization tests before shared-code extraction.
-  - Exercise the official Go client against the real service with controlled external-provider fixtures.
-  - Run validation under the current repository policy. Record hosted acceptance separately from local tests.
+  - Start with a failing integration test through the real HTTP listener, SQLite database, and filesystem.
+  - Prove duplicate convergence, intent conflicts, tenant isolation, and zero dispatch for rejected requests.
+  - Prove restart recovery, stale-worker rejection, explicit uncertainty, and truthful cancellation.
+  - Prove active references, interrupted downloads, output expiry, tombstones, and deduplicated usage after restart.
+  - Preserve current text behavior through integration tests before shared-code extraction.
+  - Run the current repository checks. Record provider and hosted acceptance separately.
+
 - [ ] [F024] (P1) {F022,I046} Deliver the first OpenAI image-generation capability.
   Goal:
   Let a backend tenant generate an image and retrieve verified bytes through the official LLM Proxy client.
@@ -3390,7 +3382,7 @@ retain satisfied historical dependencies.
     reads, and Kling/HeyGen lip-sync where currently supported.
   - Add typed Kling reusable-asset create/list/get/delete operations with exact
     mutation and destructive classifications.
-  - Require immutable plans and idempotency for paid and mutating work. Preserve
+  - Require immutable accepted requests and idempotency for paid and mutating work. Preserve
     provider task ids internally and expose only gateway operation or asset ids.
   - Use gateway assets for all uploaded image, audio, video, and character
     inputs and materialize terminal video outputs through the artifact contract.
@@ -4254,3 +4246,19 @@ retain satisfied historical dependencies.
     integrity before publication.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
+
+- [x] [P011] (P1) Specify the MediaOps gateway migration.
+  Goal:
+  Define one shared gateway product and a complete first consumer delivery.
+  Deliverables:
+  - Record API, storage, worker, authentication, capacity, and resource ownership decisions.
+  - Specify the provider sequence, paired consumer changes, data receipts, and release evidence.
+  - Align F022 and related migration issues with one idempotent operation creation contract.
+  - Preserve unrelated provider-audit work.
+  Validation:
+  - Verify source paths, issue references, API consistency, and changed documentation language.
+  - Verify that staged changes exclude unrelated provider work.
+  Resolution:
+  - Recorded the concrete contract in `docs/media-gateway-consolidation.md`.
+  - Paired the consumer delivery with MediaOps P006.
+  - Kept implementation issues open and identified the required FamilyHome P003 revision.
