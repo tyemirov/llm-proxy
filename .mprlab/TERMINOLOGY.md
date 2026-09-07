@@ -21,6 +21,7 @@ Give each term one meaning. Use the same term for the same concept in all docume
 
 ## Repository Technical Nouns
 
+- `codec`: Code that serializes requests and parses responses for one provider protocol.
 - `activation issue`: An issue that changes an external runtime to use completed development work.
 - `client protocol adapter`: Code that translates one public client protocol to and from canonical request and result types.
 - `development completion`: Completion of the specified repository changes and repository validation.
@@ -63,6 +64,11 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `function call`: A typed model result with an identifier, a function name, and JSON argument text.
 - `bearer key`: A tenant client key supplied in the HTTP Authorization header.
 - `server-sent event`: One event in the HTTP event-stream representation of a result.
+
+- `model activation`: An explicit catalog state that controls whether an exact model is available through runtime routing and discovery.
+
+- **DashScope Responses codec**: The Alibaba-specific request and response
+  adapter for synchronous Qwen generation.
 
 - `dispatch intent`: A durable record that a worker can have started an external provider request.
 - `operation artifact`: An output asset attached to a media operation.
