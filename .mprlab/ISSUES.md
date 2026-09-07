@@ -25,6 +25,254 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B199] (P2) Remove models without active provider offerings from runtime discovery.
+  Evidence: A disabled Vertex provider leaves public models with no capabilities or provider offerings.
+  Requirements:
+  - Remove models when their last active provider offering is disabled.
+  - Remove families without runtime models.
+  - Keep models available through another active provider offering.
+  - Keep the private catalog metadata.
+  Validation: Use public HTTP tests and final CI after B200.
+  Implementation: Runtime models now require an active provider offering. Runtime families use these models.
+  The private catalog retains all metadata. Shared models remain available through active providers.
+  The initial HTTP test found four Vertex models with empty capabilities and provider offerings.
+  Resolution (2026-09-07): `make test-provider-catalog` and final `make ci` passed.
+  CI passed all 12 gates with 100.0% Go statement coverage.
+  Changed files: `internal/proxy/provider_catalog_schema.go`, `internal/proxy/model_activation_test.go`, and `docs/provider-catalog.md`.
+  No event contract changed.
+
+- [x] [B200] (P2) Keep reported Qianfan token usage when response policy rejects content.
+  Evidence: A blocked response with valid token usage produces a failed request with zero recorded tokens.
+  Requirements:
+  - Parse valid token usage before response policy checks.
+  - Keep reported usage on failed requests without exposing rejected text.
+  Validation: Use public HTTP tests and final CI.
+  Implementation: The parser now keeps valid usage before the Qianfan policy checks.
+  Failed requests retain reported tokens without exposing rejected text.
+  The initial accounting test recorded zero tokens instead of two input tokens and three output tokens.
+  Resolution (2026-09-07): `make test-baidu` and final `make ci` passed.
+  CI passed all 12 gates with 100.0% Go statement coverage in 254 seconds.
+  Changed files: `internal/proxy/openai_compatible_chat.go`, `internal/proxy/baidu_usage_test.go`, and `docs/baidu-qianfan.md`.
+  No event contract changed.
+
+- [x] [B198] (P1) Permit a disabled candidate for a new provider operation.
+  Evidence:
+  F054 adds Meta dictation as a disabled candidate.
+  Catalog loading fails with `provider=meta operation=dictation default_count=0`.
+  A default on that disabled model fails with `reason=disabled_default`.
+  Requirements:
+  - Validate all retained candidate metadata.
+  - Require one default for each enabled provider operation.
+  - Reject defaults on disabled models.
+  - Prove candidate discovery exclusion and explicit activation through HTTP tests.
+  Validation:
+  `make test-meta-transcription` reproduces the catalog failure before this correction.
+  Resolution (2026-09-06):
+  Candidate metadata validation and enabled-operation default validation are separate.
+  Public HTTP and constructor tests pass. Final CI passed all 12 gates with 100% Go coverage.
+
+- [x] [B197] (P1) Use synchronous Gemini interactions for Flash-Lite.
+  Goal:
+  Correct the Flash-Lite candidate transport to match the provider contract.
+  Evidence:
+  Google returned HTTP 400 with `Model 'gemini-3.5-flash-lite' does not support background interactions.`
+  Requirements:
+  - Use the existing synchronous Gemini execution path with `background: false` and `store: false`.
+  - Preserve reasoning controls, media, structured output, continuation, and candidate activation gates.
+  - Qualify the declared synchronous lifecycle instead of unsupported background operations.
+  Validation:
+  - Start with a failing public HTTP test for exact request and lifecycle behavior.
+  - Verify public capability decoding, the candidate harness, live acceptance, and final CI.
+  Implementation:
+  - Flash-Lite now uses `text_synchronous` with the existing Gemini adapter.
+  - Text requests and key verification use `background: false` and `store: false`.
+  - Shared media admission and public capability decoding accept the synchronous Gemini route.
+  - Public HTTP tests cover reasoning, incomplete results, provider errors, media, and key verification without stored resources.
+  - The direct live matrix passed all five effort cases. Proxy key verification, omitted-effort text, and image input passed.
+  - Full proxy reasoning stopped after a later timeout. Live audio remains a separate F047 acceptance requirement.
+  Validation:
+  - Initial public HTTP and CLI tests reproduced unsupported background requests.
+  - Focused HTTP and CLI tests pass.
+  - CI exposed an uncovered catalog default-validation branch in concurrent work.
+  - A public catalog test now verifies that Gemini candidates require one text default.
+  - The focused default test passes. Final CI passed all 12 gates with 100.0% Go coverage in 245 seconds.
+  - Evidence: `/tmp/llm-proxy-b197-http-final.log`, `/tmp/llm-proxy-i251-contract-final.log`, and `/tmp/llm-proxy-b197-lite-live.log`.
+  - The correction introduces no event contract. F047 controls model activation.
+  Changed files:
+  - `configs/providers.yml`, `internal/proxy/provider_types.go`, and `internal/proxy/provider_router.go`.
+  - `internal/proxy/message_media.go`, `internal/proxy/provider_key_verifier.go`, and `pkg/llmproxyclient/capabilities.go`.
+  - `internal/proxy/gemini_current_models_test.go`, `scripts/test_live_gemini_candidates.sh`, and `tests/operational_contract_test.go`.
+  - `Makefile`, `docs/gemini-current-models.md`, and `docs/provider-catalog.md`.
+  Resolution (2026-09-07): Source changes and required validation passed.
+  Evidence: `/tmp/llm-proxy-b197-ci-verified.log`.
+
+- [x] [B196] (P1) Use catalog field defaults in live-provider qualification.
+  Goal:
+  Permit a live provider connection with one API key and a catalog URL default.
+  Evidence:
+  F032 adds a valid required setting with a default URL and no environment binding.
+  `make test-live-providers` exits before dispatch because environment discovery rejects this field.
+  Requirements:
+  - Include each field default in the CLI provider-discovery contract.
+  - Use catalog defaults when a field has no supplied environment value.
+  - Inspect and clear only declared environment bindings.
+  - Keep required credentials mandatory and keep their values out of command output.
+  Validation:
+  - Prove verification and text dispatch through the real harness with a local connection fixture.
+  - Verify final CI at the F032 stack checkpoint.
+  Resolution (2026-09-05):
+  CLI provider discovery now includes `fields[].default` from the validated catalog.
+  The live harness uses a supplied environment value or the canonical field default.
+  It clears only declared environment bindings before it imports a selected environment file.
+  Required credential fields retain empty defaults.
+  The initial command test failed with `catalog_field_binding_invalid`.
+  The corrected test verifies the connection and text route with one key and the catalog URL default.
+  It also proves that the selected file replaces a stale process key.
+  Baidu live verification and text generation both returned HTTP 200.
+  Final CI passed all 12 gates with 100.0% Go statement coverage.
+  Evidence: `/tmp/llm-proxy-b196-red.log`, `/tmp/llm-proxy-b196-focused.log`, and `/tmp/llm-proxy-f032-ci-final.log`.
+  Changed files:
+  `cmd/cli/provider_catalog_discovery.go`, `cmd/cli/root_test.go`, `scripts/test_live_providers.sh`,
+  `tests/operational_contract_test.go`, `Makefile`, and `docs/provider-catalog.md`.
+  The CLI discovery contract adds `default`. Public event schemas did not change.
+
+
+- [x] [B195] (P1) Correct DashScope Base64 image admission.
+  Goal:
+  Apply the documented image count and complete Data URI limit to the existing DashScope routes.
+  Evidence:
+  The catalog uses URL image counts of 2,048 and 256 for a route that sends Base64 Data URIs.
+  Alibaba limits Base64 requests to 250 images and each complete image Data URI to 20 MB.
+  Requirements:
+  - Set the image count to 250 for both existing DashScope image offerings.
+  - Count the complete Data URI against a 20,000,000-byte per-image limit.
+  - Keep the unknown total request bound explicit.
+  - Preserve raw-byte and Base64-byte limits for other provider contracts.
+  Validation:
+  - Prove count rejection through public HTTP requests before provider dispatch.
+  - Prove exact URI boundaries for PNG and JPEG images.
+  - Verify current catalog values, units, scopes, sources, and dates.
+  - Run final CI after the last implementation change.
+  Source:
+  - https://www.alibabacloud.com/help/en/model-studio/vision
+  Resolution (2026-09-05):
+  Both existing DashScope image routes enforce 250 images and 20,000,000 bytes per complete Data URI.
+  The new `attachment_data_uri_bytes` scope includes the prefix, MIME type, and Base64 content.
+  The public Go client, site renderer, OpenAPI schema, and generated API page accept that scope.
+  Public HTTP tests prove exact count and URI boundaries for both models.
+  The initial CI run found stale generated API documentation.
+  `make generate-api-docs` corrected the page, and `make frontend-lint` passed.
+  Final CI passed all 12 gates and 95 browser tests with 100.0% Go statement coverage in 196 seconds.
+  Evidence: `/tmp/llm-proxy-b195-red.log`, `/tmp/llm-proxy-b195-focused.log`, and `/tmp/llm-proxy-b195-ci-final.log`.
+  Changed files:
+  `configs/providers.yml`, `internal/proxy/media_limits.go`, `internal/proxy/message_media.go`,
+  `internal/proxy/dashscope_media_limits_test.go`, `pkg/llmproxyclient/capabilities.go`, `tests/capabilities_test.go`,
+  `scripts/render_public_site.mjs`, `Makefile`, `docs/openapi.yaml`, `site/docs/index.html`,
+  `docs/provider-catalog.md`, and `docs/dashscope-responses.md`.
+  The public media-limit contract adds one scope value. Public event schemas did not change.
+
+- [x] [B194] (P1) Correct Gemini candidate image request limits.
+  Goal:
+  Apply the documented 20 MB media request bound to all Gemini offerings.
+  Evidence:
+  F047 declares a 100 MB general bound and a separate 20 MB audio bound.
+  Google's image guide also states a 20 MB total inline request limit.
+  The general file guide states that limits can vary by media type and model.
+  Requirements:
+  - Set the common inline request bound to 20,000,000 encoded bytes.
+  - Remove the unused audio-specific descriptor and adapter branch.
+  - Verify current source evidence for all four Gemini offerings.
+  - Preserve exact Files API uploads and cleanup above the bound.
+  - Correct the F047 documentation and the I249 audit premise.
+  Validation:
+  - Start with a failing public HTTP image request above 20 MB encoded size.
+  - Verify image and audio uploads for each exact model.
+  - Verify inline boundaries and catalog metadata through public entry points.
+  - Run final CI after the last implementation change.
+  Sources:
+  - https://ai.google.dev/gemini-api/docs/image-understanding
+  - https://ai.google.dev/gemini-api/docs/audio
+  - https://ai.google.dev/gemini-api/docs/file-input-methods
+  Resolution (2026-09-05):
+  All four Gemini offerings use the media-specific 20,000,000-byte request bound.
+  The unused audio override is removed. Source references and verification dates are current.
+  Public HTTP tests upload 16,000,000-byte image and audio assets for each model.
+  Each request exceeds the encoded inline bound and verifies exact Files API bytes, URI dispatch, and deletion.
+  Inline boundary tests and public metadata tests pass. Current documentation explains the source distinction.
+  Final CI passes all 12 gates and 95 browser tests with 100.0% Go statement coverage in 181 seconds.
+
+- [x] [B193] (P1) Exclude inactive families from runtime discovery.
+  Goal:
+  Preserve the route explorer when a model family has no enabled models.
+  Evidence:
+  The disabled M3 model leaves an empty family in public capabilities.
+  The browser stops route initialization with `routing_tree_buttons_missing: selector=[data-route-model]`.
+  The connector test repeatedly detects missing downstream lines.
+  Requirements:
+  - Compile runtime families from enabled model references.
+  - Retain all family metadata in the private catalog.
+  - Restore the family when one of its models becomes enabled.
+  - Preserve the current model and offering counts.
+  Validation:
+  - Prove family activation through the public capability resource.
+  - Verify the route explorer and model search through browser tests.
+  - Run focused catalog tests and final CI.
+  Resolution (2026-09-05):
+  Runtime catalog compilation now retains only families referenced by enabled models.
+  The private catalog retains complete family metadata.
+  Public HTTP tests prove family removal and restoration through model activation.
+  Focused browser tests prove model selection, connector output, and candidate exclusion from search.
+  Final CI passed all 12 gates with 100% Go statement coverage and 95 browser tests.
+  Evidence: `/tmp/llm-proxy-f045-b193-i247-ci.log`.
+  Public event schemas did not change.
+
+- [x] [B192] (P1) Separate MiniMax reasoning from visible answers.
+  Goal:
+  Return only the visible answer from existing MiniMax text routes.
+  Evidence:
+  - The current MiniMax contract puts reasoning in content by default.
+    Its documented `reasoning_split: true` request separates that reasoning:
+    https://platform.minimax.io/docs/api-reference/text-openai-api
+  - Public HTTP tests on 2026-09-05 returned HTTP 200 with private test reasoning
+    in the answer and visible continuation history for all seven M2 routes.
+  Requirements:
+  - Select a MiniMax Chat Completions request profile through catalog metadata.
+  - Send `reasoning_split: true` for generation and credential verification.
+  - Apply the profile to all seven current MiniMax offerings.
+  - Preserve visible continuation, native usage totals, and existing defaults.
+  - Keep reasoning out of public answers and logs.
+  - Keep other providers on their declared request contracts.
+  Validation:
+  - Prove separation through public HTTP requests and continuation.
+  - Prove key verification uses the selected model profile.
+  - Prove the catalog rejects the profile on another wire contract.
+  - Run focused tests and final CI.
+  Resolution:
+  All seven MiniMax offerings select `minimax_chat_completions`. Generation and
+  key verification send `reasoning_split: true`. Public continuation tests
+  preserve visible text and usage without exposing test reasoning.
+  Final CI passed all 12 gates in 185 seconds with 100% Go statement coverage
+  and 95 browser tests. Evidence: `/tmp/llm-proxy-b192-ci.log`.
+
+
+- [x] [B191] (P1) Reject invalid xAI Responses success payloads.
+  Goal:
+  Return success only for a valid xAI result with no provider error.
+  Evidence:
+  - Public tests returned HTTP 200 for a response with only top-level `output_text`.
+  - Public tests returned HTTP 200 for a response with a non-null `error` object.
+  Requirements:
+  - Parse the documented xAI output items through an xAI-owned codec.
+  - Return only visible assistant text and valid function calls.
+  - Reject error envelopes, refusals, and invalid synchronous response states.
+  - Keep provider reasoning and error text out of public responses.
+  Validation:
+  - Prove rejection through the public HTTP interface.
+  - Run focused tests and final CI with I041.
+  Resolution:
+  The xAI codec now parses typed output and rejects error envelopes before returning success.
+  Public rejection tests passed. Final CI passed all 12 gates with 100% Go statement coverage on 2026-09-05.
+
 - [x] [B190] (P1) Correct historical request dispositions for unconfigured providers.
   Goal:
   Historical requests without a provider connection must appear only in the rejected-request report, as F037 requires.
@@ -1127,6 +1375,260 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [x] [I252] (P1) Qualify the current Gemini candidates on Vertex AI.
+  Goal:
+  Establish whether Vertex resolves the current Google quota and request failures before the provider migration.
+  Requirements:
+  - Verify the existing LLM Proxy Cloud project, billing state, enabled APIs, and available credentials.
+  - Use the global Vertex endpoint with exact model IDs and the standard Google Cloud credential flow.
+  - Verify Gemini 3.1 Pro Preview, Gemini 3.8 Flash, and Gemini 3.5 Flash-Lite.
+  - Run bounded reasoning, structured output, image, and audio requests when model access permits them.
+  - Record exact provider errors and successful responses without credentials or private input.
+  - Specify the transport and runtime credential changes that the evidence supports.
+  Validation:
+  - Separate direct Vertex qualification from proxy integration and production acceptance.
+  - Run the applicable document and repository checks after the evidence update.
+  Resolution:
+  - Enabled the Vertex API on the existing billed `llm-proxy-499919` project.
+  - Passed 22 direct requests with exact expected output and HTTP 200 on September 7, 2026.
+  - Pro and Flash each passed seven cases. Flash-Lite passed eight cases.
+  - The cases covered all declared reasoning levels, structured output, image input, and audio input.
+  - The requests used local Google Cloud user credentials and the global `v1 generateContent` endpoint.
+  - Recorded credential-free results in `docs/evidence/vertex-gemini-2026-09-07.json`.
+  - Recorded the interpretation and F060 migration requirements in `docs/vertex-gemini-qualification.md`.
+  - The Governor check and `git diff --check` passed. The language check found no errors in the changed prose.
+  - Proxy routing, runtime identity, and production acceptance remain separate from this direct qualification.
+  Changed:
+  - `docs/vertex-gemini-qualification.md`, its JSON evidence, and `docs/gemini-current-models.md`.
+  - I252 and F060. No public API or event contract changed.
+
+- [x] [I251] (P1) Diagnose Gemini candidate acceptance failures with safe provider details.
+  Goal:
+  Identify the causes of I234 and F047 failures through the current acceptance command.
+  Requirements:
+  - Report provider error details without credentials, request content, or generated output.
+  - Preserve failure exit status and required acceptance checks.
+  - Reproduce the failures and record the provider evidence.
+  - Correct confirmed repository defects through separate BugFix issues.
+  Validation:
+  - Start with a failing CLI test for diagnostics and private data exclusion.
+  - Run focused checks, live diagnosis, and final CI.
+  Implementation:
+  - Failed candidate requests report bounded provider error fields, quota violations, and retry metadata.
+  - Diagnostics exclude credentials, request input, generated output, quota dimensions, and unrelated headers.
+  - The original failure exit status remains intact.
+  - I234 has zero free-tier quota. F047 has a request-quota failure and the separate B197 transport defect.
+  Validation:
+  - The initial CLI test failed because `RESOURCE_EXHAUSTED` was absent.
+  - Focused diagnostics, privacy, malformed-response, and shell-contract checks pass.
+  - CI first rejected Go formatting, then rejected a heredoc in the diagnostics invocation.
+  - Both corrections passed focused checks. Final CI passed all 12 gates with 100.0% Go coverage in 245 seconds.
+  - Evidence: `/tmp/llm-proxy-i251-red.log` and `/tmp/llm-proxy-i251-contract-final.log`.
+  Changed files:
+  - `scripts/test_live_gemini_candidates.sh`, `tests/operational_contract_test.go`, and `Makefile`.
+  - `docs/gemini-current-models.md` and the I234, F047, I251, and B197 records.
+  Event contracts: None.
+  Resolution (2026-09-07): Source changes and required validation passed.
+  Evidence: `/tmp/llm-proxy-b197-ci-verified.log`.
+
+- [x] [I250] (P1) Wait for committed catalog usage before database restart.
+  Goal:
+  Make the public catalog integration test wait for its asynchronous usage writes.
+  Evidence:
+  B194 CI failed in `TestCatalogDefinedProviderFlowsThroughEveryGenericConsumer` with `database is locked (5) (SQLITE_BUSY)`.
+  The test reopened the database immediately after a generation response.
+  Requirements:
+  - Wait for the first committed usage event before the second router starts.
+  - Wait for both committed usage events before temporary database cleanup.
+  - Reuse the existing persistence helper.
+  Validation:
+  - Run the failed Go target and final CI.
+  Resolution (2026-09-05):
+  The test waits for one committed usage event before database restart and two events before cleanup.
+  The fixture connection stays open until both checks finish.
+  Focused catalog tests and the Go suite pass.
+  Final CI passes all 12 gates with 100.0% Go statement coverage.
+
+- [x] [I249] (P1) Refresh Gemini inline request evidence.
+  Goal:
+  Verify current image and audio request limits for the two enabled Gemini offerings.
+  Evidence:
+  The general file guide lists 100 MB, but both media-specific guides state a 20 MB total request limit.
+  The existing 20,000,000-byte bounds are correct for the supported media inputs.
+  B194 corrects the two candidate records that used the general guide alone.
+  Requirements:
+  - Retain the documented media-specific bound for `gemini-3.5-flash` and `gemini-3-flash-preview`.
+  - Refresh source references and verification dates.
+  - Explain the source distinction in the operator documentation.
+  Validation:
+  - Verify public metadata for all four Gemini offerings.
+  - Verify exact Files API uploads above the common inline bound.
+  Sources:
+  - https://ai.google.dev/gemini-api/docs/file-input-methods
+  - https://ai.google.dev/gemini-api/docs/image-understanding
+  - https://ai.google.dev/gemini-api/docs/audio
+  Resolution (2026-09-05):
+  Both enabled offerings retain the correct 20,000,000-byte media request bound.
+  Their source now names the image guide, with verification dated September 5, 2026.
+  The operator documents explain why the media-specific bound applies.
+  B194 verifies public metadata and exact Files API behavior for all four Gemini offerings.
+  Final CI passes all 12 gates and 95 browser tests with 100.0% Go statement coverage.
+
+- [x] [I248] (P1) Retire direct Anthropic Opus 4.1 routes.
+  Goal:
+  Replace retired Opus 4.1 selections with a qualified current Anthropic model.
+  Evidence:
+  The audit found `claude-opus-4-1` and `claude-opus-4-1-20250805` in the direct Claude API catalog.
+  Anthropic marks Opus 4.1 as retired from that API. Both IDs are absent from the current authenticated Models API response.
+  Source: https://platform.claude.com/docs/en/about-claude/pricing
+  Requirements:
+  - Qualify the replacement through F046 before the cutover.
+  - Inventory affected model selections, defaults, clients, and examples.
+  - Add a bounded migration into the current model contract.
+  - Preserve credentials, unrelated settings, and historical usage identities.
+  - Remove both retired routes and reject new selections before provider dispatch.
+  - Document operator activation and verify migration rollback and repeated startup.
+  Validation:
+  - Start with failing public HTTP and SQLite migration tests.
+  - Verify current discovery and final CI after the cutover.
+  Resolution (2026-09-05):
+  Schema version 15 replaces both source selections with `claude-opus-5` at effort `high`.
+  The transaction preserves credentials, prompts, timestamps, unrelated settings, and historical usage identities.
+  An inherited profile effort conflict prevents startup and rolls back the migration.
+  Both retired offerings and their exported constants are removed. Public requests and management selections reject both source IDs before provider dispatch.
+  SQLite and HTTP tests verify repeated startup, older database upgrades, current dispatch, and complete rollback after write failures.
+  The first fixture failed with `reason=provider_key_ineligible`. The corrected fixture confirmed the expected retirement failures before production changes.
+  Initial CI found an uncovered final schema-write failure. The added fault scenario passed with the Go coverage gate.
+  Final `make ci` passed all 12 gates, with 100.0% Go statement coverage and 95 browser tests.
+  Evidence: `/tmp/llm-proxy-i248-red-final.log` and `/tmp/llm-proxy-i248-ci-final.log`.
+  The public catalog now contains 61 enabled models. Event schemas remain unchanged.
+  The operator procedure is in `docs/claude-retirement.md`. Production migration and deployment remain operator-owned.
+
+- [x] [I247] (P1) Complete usage persistence checks in the retirement test.
+  Goal:
+  Complete the retirement integration test only after its HTTP usage records reach SQLite.
+  Evidence:
+  Final CI reported `TempDir RemoveAll cleanup: directory not empty` in `TestDeepSeekRetirementStartup/success`.
+  The test issues two HTTP requests but ends before their asynchronous usage writes finish.
+  Requirements:
+  - Wait for both committed usage records before temporary database cleanup.
+  - Verify the current provider and model identities on these records.
+  - Preserve the existing historical usage assertions.
+  Validation:
+  - Run the focused retirement target and final CI.
+  Resolution (2026-09-05):
+  The success scenario waits for both committed request records before database cleanup.
+  It verifies current DeepSeek identities and preserves the historical record checks.
+  `make test-deepseek-retirement` passed. Final CI passed all 12 gates in 181 seconds with 100% Go statement coverage.
+  Evidence: `/tmp/llm-proxy-f045-b193-i247-ci.log`.
+
+- [x] [I245] (P1) Decommission retired direct DeepSeek model names.
+  Development evidence (2026-09-05):
+  - Removed both retired direct offerings and the unused chat model and V3 family records.
+  - Added exact `none`, `low`, `high`, and `max` controls to both current V4 routes.
+  - Added schema version 14 for matching profiles and tenant defaults. Historical usage identities and SiliconFlow R1 remain unchanged.
+  - Startup rejects conflicting inherited profile reasoning with `provider_reasoning_decision_required` and rolls back the transaction.
+  - HTTP and SQLite tests cover explicit controls, default dispatch, retired-route rejection, repeated startup, and failures during each migration stage.
+  - Browser tests cover model discovery and reasoning selection. `make ci` passed all 12 gates with 100.0% Go statement coverage.
+  - Updated `configs/providers.yml`, the catalog and transport code, managed storage, client fixtures, browser fixtures, and public capability tests.
+  - Added `docs/deepseek-retirement.md` and updated `docs/provider-catalog.md` and `README.md`.
+  - Added private migration fields `target_reasoning_effort` and `preserve_source_usage`. Public event contracts did not change.
+  Resolution (2026-09-07):
+  - Used the authorized `DEEPSEEK_API_KEY` from `configs/.env` through the standard live-test loader.
+  - Both V4 models passed key verification and text requests with omitted, `none`, `low`, `high`, and `max` reasoning.
+  - All twelve live checks returned HTTP 200, and `make test-live-providers` exited successfully.
+  - Evidence: `/tmp/llm-proxy-i245-live-20260907.log`. Source changes, production selection inventory, and live provider qualification are completed.
+  - Backup verification and production activation remain operator steps. This result does not establish production migration acceptance.
+  Production inventory (2026-09-06):
+  - Inspected the live database on `tutosh` through its declared retained volume with read-only SQLite queries.
+  - At `2026-09-07T06:30:22Z`, the database had schema version 13, two tenants, and nine provider profiles.
+  - DeepSeek profiles, DeepSeek defaults, and stored DeepSeek keys each numbered zero.
+  - No current production selection requires a reasoning decision before the schema-14 migration.
+  - Repeat the inventory before activation if tenant settings change.
+  - Historical usage contained three direct V4 Flash events and three SiliconFlow R1 events. SQLite `quick_check` returned `ok`.
+  - Recorded source commits, runtime identity, counts, and remaining acceptance steps in `docs/deepseek-retirement.md`.
+  - At inventory time, live qualification required a DeepSeek key. The 2026-09-07 resolution records its completed acceptance.
+  Goal:
+  Remove retired direct DeepSeek routes and migrate current tenant selections to qualified canonical models.
+  Evidence:
+  - The 2026-09-05 catalog registers direct `deepseek-chat` and `deepseek-reasoner` offerings.
+  - DeepSeek announced their retirement for 2026-07-24:
+    https://api-docs.deepseek.com/updates/
+  - The notice maps these names to non-thinking and thinking modes of `deepseek-v4-flash`, respectively.
+  - The catalog also uses `deepseek-reasoner` for SiliconFlow's separate `deepseek-ai/DeepSeek-R1` offering.
+  - The provider notice establishes the retirement date. Current account behavior still requires verification.
+  Requirements:
+  - Verify the current direct API contract and record the exact replacement model and reasoning controls for each retired route.
+  - Qualify the replacement behavior before the migration. Record any unsupported reasoning requirement as a blocker.
+  - Inventory affected tenant profiles, defaults, static configuration, client examples, and public discovery resources.
+  - Add one bounded database migration for the exact direct-provider selections and their associated controls.
+  - Preserve tenant credentials, unrelated settings, historical request identities, and usage records.
+  - Remove the two direct provider offerings from routing, key verification, defaults, and public and management discovery.
+  - Reject new requests for the retired direct routes before provider dispatch. Remove aliases and compatibility paths.
+  - Keep the SiliconFlow R1 offering, its model record, saved selections, and historical migration records unchanged.
+  - Remove root model records only when no retained provider offering references them.
+  - Update the catalog, constants, documentation, clients, examples, generated resources, and affected fixtures together.
+  Deliverables:
+  - Canonical direct routes, a bounded selection migration, updated discovery resources, and an operator migration procedure.
+  Validation:
+  - Start with a failing public integration test for retired-route rejection and replacement behavior.
+  - Do a test of migration rollback and repeated startup with real SQLite storage.
+  - Prove historical usage and SiliconFlow routing remain unchanged.
+  - Prove explicit and default requests use the qualified replacement model and required reasoning controls.
+  - Verify model selection through public HTTP resources and the management browser interface.
+  - Run `make ci` after the last application change.
+  - Record authorized live-provider acceptance separately from local validation. Keep production activation operator-owned.
+
+- [x] [I246] (P2) Decommission deprecated OpenAI transcription models before provider shutdown.
+  Goal:
+  Replace `gpt-4o-mini-transcribe` and `gpt-4o-transcribe` in the current transcription contract before 2027-02-26.
+  Authorization (2026-09-06):
+  The user approved reuse of the existing OpenAI key for implementation and provider acceptance.
+  The existing process key returned HTTP 200 for `GET /v1/models/gpt-transcribe`.
+  The model record reports `created=1785168027`.
+  Both public transcription interfaces passed live acceptance before and after catalog replacement on 2026-09-07.
+  Evidence:
+  - Both models remain in the 2026-09-05 provider catalog.
+  - OpenAI announced their API removal for February 26, 2027, on August 26, 2026:
+    https://developers.openai.com/api/docs/deprecations
+  - OpenAI lists `gpt-transcribe` and `gpt-live-transcribe` as replacements.
+  - OpenAI released both replacements on July 28, 2026:
+    https://developers.openai.com/api/docs/changelog
+  Requirements:
+  - Qualify `gpt-transcribe` for the current complete-response transcription contract before removing the old offerings.
+  - Verify exact request fields, accepted audio formats, limits, response formats, usage, prices, and error behavior against official documentation.
+  - Record the source and verification date for each replacement capability, limit, and price.
+  - Preserve the existing public transcription interfaces and supported outputs through the replacement provider transport.
+  - Keep new streaming transcription capabilities in a separate Feature issue when required.
+  - Inventory affected tenant dictation selections, defaults, static configuration, client examples, and discovery resources.
+  - Add one bounded migration from both deprecated OpenAI selections to the qualified replacement.
+  - Preserve credentials, unrelated tenant settings, historical model identities, and usage records.
+  - Remove deprecated offerings from routing, key verification, defaults, public discovery, and management selection.
+  - Reject new requests for deprecated models before dispatch after the cutover. Remove compatibility aliases and fallback paths.
+  - Update the catalog, adapters, clients, documentation, generated resources, examples, and affected fixtures together.
+  - Document an operator activation schedule that completes the production migration before 2027-02-26.
+  Deliverables:
+  - A qualified replacement route, bounded selection migration, updated discovery resources, and a dated operator migration procedure.
+  Validation:
+  - Start with failing public integration tests for replacement transcription and deprecated-model rejection.
+  - Do a test of each supported public transcription interface and official client against a controlled provider boundary.
+  - Prove explicit and default requests use the replacement model with the expected output and usage metadata.
+  - Do a test of migration rollback, repeated startup, and historical usage preservation with real SQLite storage.
+  - Verify model discovery and management selection through HTTP and browser tests.
+  - Run `make ci` after the last application change.
+  - Record authorized live-provider acceptance separately from local validation. Keep production activation operator-owned.
+
+  Resolution (2026-09-07):
+  - Replaced both retired OpenAI offerings and the dictation default with `gpt-transcribe`.
+  - Added schema version 16 and the bounded replacement for earlier ownership schemas.
+  - Preserved credentials, unrelated settings, timestamps, and historical usage. Repeated startup and rollback tests passed.
+  - Updated client fixtures, browser selection, examples, discovery, and the documented duration price.
+  - Both public endpoints passed paid provider acceptance with the existing OpenAI key before and after catalog replacement.
+  - Final `make ci` passed all 12 gates in 244 seconds, with 100 percent Go statement coverage.
+  - The local read-only inventory found one tenant with the old mini transcription selection in the earlier ownership schema.
+  - `docs/openai-transcription-retirement.md` records the migration procedure and the 2027-02-26 deadline.
+  - Production inventory, deployment, and production acceptance remain operator-owned.
+
 - [ ] [I244] (P1) {F024,F025,F026,F027,F039,F040,F041,F042} Remove the completed MediaOps operation-import bridge.
   Goal:
   Leave only the canonical model-operation contract after migration of every
@@ -1143,7 +1645,7 @@ retain satisfied historical dependencies.
   - Keep imported rows only in the current canonical operation schema; remove
     legacy discriminators and source-record shapes after receipt verification.
   - Prove the public service exposes no import endpoint and every new operation
-    enters through plan plus idempotent create.
+    enters through idempotent operation creation.
   Validation:
   - Run static contract checks and public black-box tests proving no migration
     entrypoint or legacy record shape remains and migrated operations retain
@@ -1486,36 +1988,6 @@ retain satisfied historical dependencies.
   verified Qwen image input, icon-only provider settings controls, and request
   volume bars that use existing provider aggregates. Browser coverage confirms
   accessible graphs and equal card-face dimensions.
-- [ ] [I235] (P1) Add explicit model activation to the provider catalog.
-  Goal:
-  Keep exact model data in the provider catalog without exposing an unaccepted
-  model route.
-  Requirements:
-  - Add a required `enabled` Boolean field to each exact model in
-    `configs/providers.yml`.
-  - Do not use an implicit default for the field.
-  - Include only enabled exact models and their provider offerings in the
-    immutable runtime registry.
-  - Exclude disabled exact models from route resolution, defaults, management
-    projections, public capabilities, and standard live-test discovery.
-  - Permit a disabled exact model to retain its provider offerings, limits,
-    controls, and prices in the provider catalog.
-  - Reject a provider default that references a disabled exact model.
-  - Require an explicit model migration for each stored selection that
-    references a disabled exact model.
-  - Update the provider catalog documentation and all current catalog records.
-  Validation:
-  - Prove that startup rejects a missing or invalid `enabled` value.
-  - Prove that startup rejects a disabled provider default.
-  - Prove that public discovery omits a disabled exact model and its offerings.
-  - Prove that route resolution rejects a disabled exact model before provider
-    dispatch.
-  - Prove that an explicit migration moves a disabled stored selection to an
-    enabled exact model.
-  - Run `make ci` after the last application change.
-  Media qualification:
-  - Qualify each provider offering and operation before advertising the migrated media capability.
-  - A model activation flag alone does not prove every provider operation is available.
 - [!] [I234] (P1) Restore Gemini 3.1 Pro Preview after live acceptance.
   Goal:
   Restore the exact upstream route only after its current Google contract
@@ -1540,12 +2012,30 @@ retain satisfied historical dependencies.
   Blocked: The omitted-thinking acceptance request returned HTTP 429. The test
   stopped before the other thinking levels and background lifecycle. The
   provider catalog remains unchanged.
-- [!] [I233] (P1) Add Gemini candidate models to the live test.
+  Progress (2026-09-05):
+  The standard candidate harness now accepts `gemini-3.1-pro-preview` as an explicit model selection.
+  A new CLI case first failed with `unsupported Gemini candidate model: gemini-3.1-pro-preview`.
+  The corrected harness passed the local omitted, `low`, `medium`, `high`, completion, active retrieval, cancellation, and deletion matrix.
+  The paid check used `configs/.env` through the standard credential loader.
+  The first omitted-effort request again returned HTTP 429. The remaining live checks did not run.
+  The route remains absent, and the default and schema-version-11 migration remain unchanged.
+  Evidence: `/tmp/llm-proxy-i234-candidate-green.log` and `/tmp/llm-proxy-i234-live-current.log`.
+  Final CI passed all 12 gates, 97 browser tests, and 100.0% Go statement coverage in 235 seconds.
+  Evidence: `/tmp/llm-proxy-i234-ci.log`. The harness and documentation changes introduce no event contract.
+
+  Root cause diagnosis (2026-09-06, I251):
+  The provider reports zero free-tier input-token quota and zero free-tier request quota for the `gemini-3.1-pro` quota group.
+  The requested exact API model remains `gemini-3.1-pro-preview`.
+  The process has no Gemini key. The repository's two populated environment inputs contain one distinct key.
+  The operator must supply a project with nonzero quota before the full candidate acceptance can run.
+  Evidence: `/tmp/llm-proxy-i234-diagnosis.log`.
+
+- [x] [I233] (P1) Add Gemini candidate models to the live test.
   Goal:
   Make the Gemini live test validate two stable candidates before public route
   registration.
-  Evidence:
-  - I207 remains blocked because active retrieval and cancellation did not
+  Initial evidence:
+  - I207 was blocked because active retrieval and cancellation did not
     pass for `gemini-3.6-flash` or `gemini-3.7-flash`.
   - The current harness discovers only registered provider offerings. It
     cannot validate an unregistered candidate route.
@@ -1572,11 +2062,21 @@ retain satisfied historical dependencies.
   - Paid reasoning passed for the omitted, `minimal`, `low`, `medium`, and
     `high` Gemini 3.6 Flash requests. Its stored completion reached
     `completed` and deletion succeeded.
-  Blocked: The long Gemini 3.6 Flash cancellation resource was not readable
-  during any of seven bounded active retrieval attempts. Google returned HTTP
-  400 on the final attempt. The harness stopped before cancellation and before
-  the Gemini 3.7 Flash matrix. I207 remains blocked, and neither candidate is
-  registered in the public provider catalog.
+  - On 2026-09-05, `make test-live-gemini LIVE_ENV_FILE=configs/.env`
+    passed the Gemini 3.6 Flash omitted, `minimal`, and `low` requests.
+    The `medium` request then failed with curl error 28 after 45,003 milliseconds.
+    The provider returned no response bytes before the configured timeout.
+    The command stopped before `high`, background checks, and Gemini 3.7 Flash.
+  Resolution (2026-09-05):
+  Independent exact-model runs passed for Gemini 3.6 Flash and Gemini 3.7 Flash with the existing repository key.
+  Both runs passed every declared reasoning level and one omitted level.
+  Both runs proved background completion, active retrieval, cancellation, and deletion.
+  The earlier timeout and visibility failures did not recur.
+  The current harness passed the full CI checkpoint for F032 with 100.0% Go statement coverage.
+  No harness code changed during this acceptance run.
+  Evidence: `/tmp/llm-proxy-i233-gemini36-independent.log` and `/tmp/llm-proxy-i233-gemini37-independent.log`.
+  I207 now owns registration of the two qualified routes.
+
 - [!] [I228] (P1) Add current MiniMax text model offerings.
   Goal:
   Give managed tenants access to the current MiniMax M2 text models through
@@ -1769,7 +2269,7 @@ retain satisfied historical dependencies.
   - Run `make ci` after the last application change.
   Blocked: A Z.AI credential is not available in this workspace. The operator
   must supply `ZAI_API_KEY` and authorize the two paid live calls.
-- [ ] [I041] (P1) Migrate xAI text routes to Responses without OpenAI background assumptions.
+- [!] [I041] (P1) Migrate xAI text routes to Responses without OpenAI background assumptions.
   Goal:
   Move Grok models off xAI's deprecated Chat Completions surface while
   preserving xAI's actual synchronous Responses behavior.
@@ -1801,6 +2301,18 @@ retain satisfied historical dependencies.
   - Public fixtures prove xAI Responses request/response mapping, synchronous
     continuation, storage policy, usage, safe errors, and absence of
     `background` polling. Existing xAI speech routing remains independent.
+  Progress:
+  - All ten configured text offerings now use the xAI-owned `xai_responses` codec.
+  - Requests use `store:false`, ordered messages, and the native output limit field.
+    They omit background execution and stored response identifiers.
+  - The codec preserves visible output, image inputs, and usage across synchronous continuation requests.
+    B191 rejects invalid success responses and provider-private content.
+  - Key verification, Go client validation, public discovery, and browser fixtures use the current protocol.
+  - `docs/xai-responses.md` records provider sources and the exact live acceptance command.
+  - On 2026-09-05, `make ci` passed all 12 gates in 203 seconds.
+    Go statement coverage was 100%. All 95 frontend browser tests passed.
+  Blocked: `XAI_API_KEY` is absent from the process environment and all six repository private environment files.
+  Live key verification and text requests remain required for all ten routes before production activation.
 - [ ] [I218] (P1) Expand the product node into integration routes.
   Goal:
   Make the product-to-proxy side of the public routing tree as actionable as
@@ -1894,11 +2406,8 @@ retain satisfied historical dependencies.
     baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair; deployment
     and production acceptance remain operator-owned.
   Blocked: Repository work is complete. Both required `make ci` runs pass.
-  Live acceptance cannot start because `MODEL_API_KEY` is absent from the
-  process and each authorized repository environment file. The selected
-  harness stops before provider dispatch. The operator must supply
-  `MODEL_API_KEY` and authorize authenticated `GET /v1/models`, one key
-  verification, and one text request.
+  The existing key is available as `MUSE_API_KEY` in `configs/.env`.
+  Complete exact Muse Spark 1.2 discovery, key verification, and live text acceptance with that file.
 - [ ] [I046] (P1) Make upstream admission fair across provider origins.
   Goal:
   Keep upstream work globally bounded while preventing one slow or throttled
@@ -1966,16 +2475,14 @@ retain satisfied historical dependencies.
     goroutine growth.
   - Add a repository Makefile target that runs the public concurrency coverage
     with Go's race detector and include it in `make ci`.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
-    the final run after the last code edit.
+  - Run the final `make ci` target under the current repository validation policy.
   Media expansion:
   - Prove bounded interactive text progress while image or video traffic saturates the same upstream origin.
   - Define separate capacity ownership for accepted jobs, active HTTP requests, status reads, and artifact transfers.
   - Release active HTTP capacity between remote-job polls.
   - Include tenant fairness and shared provider-account limits in the chosen capacity contract.
   - Make this acceptance part of F024 before general media availability.
-- [!] [I207] (P1) Add Gemini 3.6 and 3.7 Flash with route-bound Interactions thinking levels.
+- [x] [I207] (P1) Add Gemini 3.6 and 3.7 Flash with route-bound Interactions thinking levels.
   Goal:
   Add Google's current stable Flash models to the Gemini Interactions catalog
   and carry the provider-neutral `reasoning_effort` contract onto their
@@ -2044,13 +2551,32 @@ retain satisfied historical dependencies.
     background create/poll/delete flow and one cancellation flow for each exact
     model. The final `make ci` passes after the last implementation edit.
     Deployment and production acceptance remain operator-owned.
-  Blocked: The new credential passed each declared reasoning request for both
+  Prior acceptance: The new credential passed each declared reasoning request for both
   exact models. Both paid lifecycle probes created an `in_progress` resource.
   Google returned `403` and then `400` for every active retrieval attempt.
   Gemini 3.6 became readable only after completion. Gemini 3.7 stayed
   unreadable through the bounded probe. Both cleanup delete requests returned
   HTTP 200. Neither model supplied the required active retrieve and cancel
-  proof. The provider catalog does not register these two routes.
+  proof. The provider catalog did not register these two routes.
+  Current acceptance (2026-09-05):
+  I233 passed each reasoning matrix and both complete stored interaction lifecycles.
+  Resolution (2026-09-05):
+  Registered both exact models as enabled Gemini Interactions routes after I233 passed live acceptance.
+  Gemini 3.6 accepts `minimal`, `low`, `medium`, and `high`.
+  Gemini 3.7 accepts `low`, `medium`, and `high`.
+  Both routes retain the 65,536 output limit and current image and audio inputs.
+  The Gemini provider default and existing tenant selections remain unchanged.
+  HTTP tests cover explicit and omitted effort, invalid values, media, structured output, assistant rejection, and incomplete-result cleanup.
+  Management tests cover saved model selections and every declared effort.
+  Browser tests cover exact effort options, Settings autosave, and public model discovery.
+  Updated the catalog, model constants, README, OpenAPI reference, routing document, and model table.
+  Added `docs/gemini-qualified-models.md` as the current route and acceptance reference.
+  The initial public HTTP tests returned `400 unknown model` for both routes.
+  Final `make ci` passed all 12 gates, 97 browser tests, and 100.0% Go statement coverage in 234 seconds.
+  The first CI run found an obsolete two-model Gemini profile expectation. The corrected fixture passed before final CI.
+  Evidence: `/tmp/llm-proxy-i207-ci-final.log` and the I233 live acceptance receipts.
+  No event contract changed. Deployment and production acceptance remain operator-owned.
+
 - [x] [I027] (P1) Put provider usage and key settings on provider cards.
   Goal:
   The authenticated dashboard has one catalog-owned card for each supported
@@ -2181,7 +2707,7 @@ retain satisfied historical dependencies.
   Resolution: Added catalog-owned Usage Overview provider cards, tenant-bound
   key controls, safe catalog links, and credential-only deletion. Removed the
   duplicate Settings editor.
-- [ ] [I038] (P2) Adopt DashScope's synchronous Responses API without background mode.
+- [!] [I038] (P2) Adopt DashScope's synchronous Responses API without background mode.
   Goal:
   Move eligible DashScope Qwen models from Chat Completions to Alibaba's newer
   Responses wire format while retaining its explicitly synchronous lifecycle.
@@ -2209,6 +2735,22 @@ retain satisfied historical dependencies.
   - Public black-box tests prove the eligible-model request shape, typed text
     extraction, synchronous incomplete continuation, usage, safe errors, and
     rejection of accidental `background` or unsupported OpenAI-only fields.
+  Development:
+  - All four Qwen text routes use the dedicated `dashscope_responses` codec.
+    Requests use the saved Singapore workspace URL and explicit `store: false`.
+  - Public output limits below 16 are rejected before provider work. Typed
+    visible text and native usage feed the existing stateless continuation.
+  - Workspace verification, image serialization, discovery, and catalog search
+    use the new protocol. Model identities and the default remain unchanged.
+  - Focused public HTTP tests pass. Final CI passed all 12 gates in 181 seconds,
+    with 100% Go statement coverage and 95 browser tests. Evidence:
+    `/tmp/llm-proxy-i038-ci.log`.
+  - Current contract and live command: `docs/dashscope-responses.md`.
+  Blocked:
+  - On 2026-09-05, `DASHSCOPE_API_KEY` and `DASHSCOPE_BASE_URL` were absent from
+    the process and all six authorized repository input files. All four models
+    require live workspace acceptance. I226 retains that acceptance gate.
+
 - [ ] [I035] (P2) Persist each user's selected Usage interval across sessions.
   Goal:
   Make the Usage Overview reopen with the last interval the authenticated user
@@ -2693,6 +3235,719 @@ retain satisfied historical dependencies.
 
 ## Features
 
+- [!] [F061] (P1) Add GPT-6 Astra through the existing OpenAI provider.
+  Goal:
+  Add the requested exact `gpt-6-astra` model to current public text interfaces.
+  Requirements:
+  - Use the existing Responses transport and retain the current provider default.
+  - Support the five documented reasoning levels from `low` through `max`.
+  - Preserve image input, structured output, caller tools, web search, and current usage accounting.
+  - Record verified context, input, output, media limits, and standard prices for both context tiers.
+  - Reject unsupported effort and excessive requested output before provider dispatch.
+  - Qualify the candidate with the existing authorized OpenAI key before activation.
+  - Update management, discovery, clients, documentation, and browser acceptance together.
+  Validation:
+  - Start with failing public HTTP tests and cover the current Responses lifecycle.
+  - Run live text, reasoning, image, structured-output, and caller-tool checks.
+  - Run final CI after the last application change.
+  Evidence:
+  On 2026-09-07, the existing key returned HTTP 200 for exact model discovery, with `created=1787853604`.
+  The catalog now enables Astra with five reasoning levels, image input, tools, web search, limits, and both standard price tiers.
+  Public HTTP tests and both focused browser tests pass.
+  Live checks passed for omitted effort, all five explicit efforts, image input, structured output, caller functions, and web search.
+  Blocked:
+  Final CI stopped at `Go files require formatting` for files in the active F060 Vertex change.
+  Complete F060 formatting and rerun `make ci` before resolving F061.
+  Production deployment belongs to the operator.
+  Sources:
+  - https://developers.openai.com/api/docs/models/gpt-6-astra
+  - https://developers.openai.com/api/docs/pricing
+
+
+- [!] [F060] (P1) {I252,P012} Migrate Gemini completion routes to Vertex AI.
+  Goal:
+  Use the Vertex route that passed I252 for Gemini completion through the public proxy APIs.
+  Requirements:
+  - Use the global Vertex `v1 generateContent` endpoint and exact qualified model IDs.
+  - Implement the typed Google credential profile contract from F043 for this route.
+  - Keep inline requests independent of the separate F043 media staging work.
+  - Use the Google authentication library for scoped OAuth tokens and token refresh.
+  - Bind each credential profile to its tenant, project, location, and approved runtime identity.
+  - Map text, structured output, reasoning, media, finish reasons, and usage through the native Vertex contract.
+  - Preserve public deadlines, output-limit errors, media order, and tenant isolation.
+  - Qualify every existing Gemini offering affected by the migration, including dictation routes where applicable.
+  - Migrate tenant credentials and route selection through one explicit transition into the Vertex contract.
+  Deliverables:
+  Vertex transport, credential profiles, catalog mappings, migration procedure, public integration tests, and operator documentation.
+  Validation:
+  - Start with failing public HTTP tests for the new transport and credential contract.
+  - Prove OAuth refresh, project isolation, provider errors, cancellation, structured output, media, and exact usage.
+  - Run proxy acceptance with the intended runtime identity and complete final CI.
+  - Record production acceptance after the operator cutover.
+  Source:
+  `docs/vertex-gemini-qualification.md` records 22 successful direct Vertex requests on September 7, 2026.
+
+  Implementation (2026-09-07):
+  - Added the native Vertex transport and tenant-bound Google OAuth profiles.
+  - Added an explicit provider and offering activation contract.
+  - Enabled four qualified Vertex text models and `gemini-3.5-transcribe-preview` for dictation.
+  - Kept the unqualified Developer API offerings for Flash 3.8 and Flash-Lite disabled.
+  - Created the dedicated service account in `llm-proxy-499919` and granted `roles/aiplatform.user`.
+  - All 28 live proxy requests passed with that service account.
+  - Public HTTP tests verify token refresh, cancellation, management verification, tenant isolation, media, structured output, usage, and provider failures.
+  - Browser rendering accepts the Google credential profile contract.
+  - Added `docs/vertex-gemini.md` with the explicit tenant cutover procedure.
+  - Evidence: `docs/evidence/vertex-proxy-2026-09-07.json`.
+  Validation:
+  The first CI run stopped because the generated OpenAPI page was stale.
+  The page was regenerated. The next CI run passed Go coverage at 100% and found five stale browser assertions.
+  The corrected browser cases and candidate-harness test pass.
+  Final `make ci` passed all 12 gates in 252 seconds with 100.0% Go statement coverage and 99 frontend browser tests.
+  Evidence: `/tmp/llm-proxy-f060-ci-complete.log`.
+  Blocked:
+  P012 requires independent customer setup through the accepted API-key flow.
+  The implemented operator credential profiles do not satisfy that requirement.
+  Complete the P012 comparison and approve the revised connection contract before further authentication changes or customer cutover.
+  The earlier operator deployment procedure is not the next customer step.
+  Exact Vertex prices remain unavailable until their import.
+  Reconciliation (2026-09-07):
+  `docs/gemini-customer-connections.md` records the proposed F060 revision and customer acceptance gates.
+  Retain the 28 successful requests as transport evidence only.
+  Changed contracts:
+  The public credential kind adds `google_credential_profile`.
+  The provider catalog adds `vertex_generate_content`, `google_credentials`, and provider/offerings `enabled` flags.
+  Existing public request paths and event schemas are unchanged.
+
+  Changed files:
+  - `configs/providers.yml`, `cmd/cli/config_file.go`, `go.mod`, and `go.sum`.
+  - The Vertex codec, Google profiles, routing, catalog, management verification, media, and schema files in `internal/proxy/`.
+  - `pkg/llmproxyclient/capabilities.go`, `scripts/render_public_site.mjs`, and `scripts/test_live_providers.sh`.
+  - The related Go fixtures, public HTTP tests, CLI tests, operational tests, and browser tests.
+  - `docs/vertex-gemini.md`, Vertex evidence, the provider guide, Gemini guides, OpenAPI, generated API page, README, and terminology.
+
+- [!] [F054] (P1) Add Meta file dictation through the current public endpoints.
+  Goal:
+  Implement the file dictation part of P009, approved on 2026-09-06.
+  Requirements:
+  - Add `muse-voice-transcribe-1.0` with a native Meta ASR codec and synchronous dictation transport.
+  - Send JSON settings in the multipart `request` part and WAV bytes in the `audio` part.
+  - Use `PUSH_TO_TALK`, bearer authentication, and buffered JSON output.
+  - Validate RIFF/WAVE structure, mono 16-bit PCM, 16 kHz or 24 kHz, and the ten-minute duration bound.
+  - Bound the complete multipart request and preserve the smaller configured public upload limit.
+  - Return the complete transcript through both current dictation endpoints.
+  - Keep provider identifiers and error bodies private.
+  - Preserve tenant defaults, management selection, client discovery, and usage classification.
+  - Register a disabled candidate until provider access, retention evidence, and paid acceptance pass.
+  - Record the published audio price and the exact request-bound evidence.
+  Deliverables:
+  Native codec, candidate catalog, public integration tests, and operator documentation.
+  Validation:
+  - Start with failing HTTP tests for both public dictation endpoints.
+  - Prove valid audio, malformed audio, duration bounds, provider errors, cancellation, and tenant selection.
+  - Run final CI and paid acceptance at both sample rates.
+  - Resolve the file content-retention policy and exact 32 MB interpretation before activation.
+  Source:
+  `docs/meta-media-assessment.md`.
+  Development (2026-09-06):
+  The native `meta_transcription` codec and disabled candidate are implemented.
+  Both public endpoints pass at 16 kHz and 24 kHz with complete transcript output.
+  Public tests cover WAV validation, duration, request bounds, provider errors, cancellation, tenant defaults, usage, and client discovery.
+  `make test-meta-transcription` and `make test-provider-catalog` pass.
+  Final CI passed all 12 gates in 249 seconds with 100% Go coverage.
+  Blocked:
+  The existing key is available as `MUSE_API_KEY` in `configs/.env`.
+  File retention evidence, the exact provider request bound, and paid acceptance at both sample rates remain required before activation.
+
+- [ ] [F055] (P1) {F022,F054} Add Meta file transcription controls and speaker results.
+  Goal:
+  Complete the structured file transcription scope approved under P009 on 2026-09-06.
+  Requirements:
+  - Expose `PUSH_TO_TALK`, `ENDPOINTING`, and `DIARIZATION` through typed media operation inputs.
+  - Support keyword and language bias with provider-verified limits.
+  - Preserve complete transcripts, turn identifiers, timestamps, and session-local speaker labels in typed results.
+  - Keep text-only dictation as the existing F054 projection.
+  - Support the documented file event stream through canonical operation events and final results.
+  - Define partial replacement, delta assembly, terminal failure, and disconnect behavior explicitly.
+  - Reuse tenant assets, retained results, capacity, cancellation observations, and usage from F022 and I046.
+  - Update OpenAPI and the official client with the server contract.
+  Validation:
+  - Prove every mode and control through public HTTP and official client integration tests.
+  - Prove ordered turns, overlap, speaker changes, partial revisions, tenant isolation, and restart behavior.
+  - Qualify real speech for all declared modes before activation.
+  Source:
+  `docs/meta-media-assessment.md`.
+
+- [ ] [F056] (P1) {I046} Add tenant-owned Meta realtime transcription sessions.
+  Goal:
+  Implement the full realtime transcription scope approved under P009 on 2026-09-06.
+  Requirements:
+  - Define authenticated session resources and a typed audio and event transport under the current gateway namespace.
+  - Keep the provider key in the backend handshake and the native session identifier private.
+  - Support the three transcription modes, keyword bias, language bias, partial modes, and audio progress.
+  - Validate mono 16-bit PCM at 16 kHz or 24 kHz and enforce documented pacing and session limits.
+  - Map final transcripts, turn boundaries, speaker labels, errors, and close codes to one canonical event schema.
+  - Define explicit end-of-input, cancellation, disconnect, and session-expiry behavior.
+  - Keep new connections distinct because Meta provides no resume token.
+  - Enforce tenant fairness and shared provider-account concurrency and session-start limits.
+  - Define content retention, metadata-only provider logging, and processed-audio usage before activation.
+  - Update the server, OpenAPI, official client, and session example together.
+  Validation:
+  - Start with public session tests against a controlled WebSocket provider.
+  - Prove handshake timeout, pacing errors, partial revisions, overlapping turns, cancellation, and resource cleanup.
+  - Qualify both sample rates, all modes, terminal events, and provider usage with real audio.
+  Source:
+  `docs/meta-media-assessment.md`.
+
+- [ ] [F057] (P1) {F022,I046} Add Meta image generation and edit operations.
+  Goal:
+  Implement the full image endpoint scope approved under P009 on 2026-09-06.
+  Requirements:
+  - Add `muse-image-1.0` generation and edits through durable tenant-owned media operations.
+  - Preserve ordered input assets and implement native JSON and required multipart request forms.
+  - Expose verified output count, aspect ratio, file format, reasoning, moderation, and internal tool controls.
+  - Support completed image events with truthful completion and cancellation observations.
+  - Transfer provider output into authenticated tenant assets before operation success.
+  - Keep provider URLs and file identifiers private and implement required staging cleanup.
+  - Reconcile uncertain submissions through F022 evidence without automatic duplicate generation.
+  - Verify endpoint-specific input bounds, output URL lifetime, retention, and safety error behavior.
+  - Record per-image cost and shared account limits separately from informational token counts.
+  - Update the server, OpenAPI, official client, discovery, and examples together.
+  Validation:
+  - Prove generation, edits, controls, ordered inputs, output integrity, isolation, and uncertain dispatch through public integration tests.
+  - Qualify each declared operation and format, required cleanup, and usage with the Meta account before activation.
+  Source:
+  `docs/meta-media-assessment.md`, with P011 as the current shared operation contract.
+
+- [ ] [F058] (P1) {F057} Add Meta conversational image operations.
+  Goal:
+  Complete the Responses image conversation scope approved under P009 on 2026-09-06.
+  Requirements:
+  - Model image conversation state as tenant-owned resources linked to durable operations and assets.
+  - Support successive generation and edit turns with ordered references and all verified image controls.
+  - Keep signed image identifiers, provider response identifiers, and native replay items private.
+  - Define one canonical retention and replay policy from verified Meta contracts.
+  - Validate input ownership, replay order, expiry, deletion, and provider history failures at their boundaries.
+  - Preserve immutable accepted intent, idempotency, dispatch evidence, and usage for each turn.
+  - Update OpenAPI, official client methods, and a complete conversation example.
+  Validation:
+  - Prove successive edits, cross-tenant rejection, expired references, interrupted turns, cleanup, and duplicate convergence.
+  - Verify real provider replay and deletion behavior before activation.
+  Source:
+  `docs/meta-media-assessment.md`.
+
+- [ ] [F059] (P1) Add all six approved SiliconFlow provider offerings.
+  Goal:
+  Implement the full P010 expansion approved on 2026-09-06.
+  Requirements:
+  - Add GLM-5.3, dated DeepSeek V4 Pro and Flash, Kimi K3, Hy3, and LongCat 2.0.
+  - Use the exact upstream selectors recorded in `docs/siliconflow-expansion.md`.
+  - Verify each provider-specific reasoning control, context, output limit, media capability, and price.
+  - Resolve the conflicting Kimi K3 and LongCat output limits before canonical registration.
+  - Include Kimi image input after its provider-specific formats and limits are verified.
+  - Keep existing provider defaults and tenant selections unchanged.
+  - Add missing model publishers and families with verified weight-access metadata.
+  - Qualify complete candidate catalogs independently of shared exact-model activation.
+  - Keep unqualified offerings outside the canonical catalog when their shared model is already enabled.
+  - Update management, public discovery, clients, examples, and generated artifacts with qualified offerings.
+  Validation:
+  - Add failing public integration tests before each implementation change.
+  - Prove exact dispatch, reasoning, usage, continuation, invalid inputs, media, and saved defaults.
+  - Verify authenticated model discovery and each declared capability through the disposable proxy.
+  - Run final CI and preserve provider acceptance separately from production activation.
+  Source:
+  `docs/siliconflow-expansion.md`.
+
+- [x] [F053] (P1) Add Gemini 3.5 file transcription.
+  Goal:
+  Add `gemini-3.5-transcribe` to the current tenant-owned file-dictation interface.
+  Requirements:
+  - Qualify exact audio bytes and a known transcript through synchronous Interactions before route activation.
+  - Use the existing Gemini provider credential and preserve current tenant defaults.
+  - Reuse the public file-dictation request and text response contracts.
+  - Send audio input with `background: false` and `store: false`.
+  - Preserve the provider's default verbatim transcription and automatic language detection.
+  - Validate supported audio inputs at the route boundary and preserve existing upload limits.
+  - Reuse provider file upload and cleanup when the selected transport requires it.
+  - Keep native provider identifiers and uploaded media out of public responses and logs.
+  - Update catalog metadata, management selection, public discovery, clients, and current documentation together.
+  - Treat live transcription, diarization, timestamps, and smart formatting as separate interface requests.
+  Validation:
+  - Start with failing public-entrypoint tests for candidate acceptance and native dictation behavior.
+  - Verify an exact known speech fixture through the paid provider boundary.
+  - Reject incomplete, empty, or incorrect acceptance output without registering the route.
+  - Prove local HTTP routing, malformed responses, usage, cancellation, and file cleanup.
+  - Run final CI after the last application change.
+  Work completed:
+  - Paid acceptance returned the expected words from a generated English PCM WAV on September 5, 2026.
+  - Both public transcription endpoints use the native synchronous route. Large uploads use Files API cleanup.
+  - The catalog contains one enabled Gemini dictation model with current token prices.
+  - Management selection, tenant usage, client discovery, and browser Settings checks pass.
+  - Empty saved dictation selections remain valid after catalog capability changes. Explicit selections still require an eligible provider credential.
+  - The initial native HTTP test returned 400 with unsupported provider endpoint.
+  - The restart test reproduced provider_key_ineligible for a tenant with an empty dictation selection. The corrected test preserves that selection.
+  - The accounting test initially recorded an unsupported format as accepted work. The corrected test records invalid_request.
+  Resolution:
+  - The native file-dictation route and current documents satisfy the acceptance checks.
+  - Final CI passed all 12 gates in 241 seconds, with 100 percent Go coverage and 98 browser tests.
+  - Paid acceptance passed the known speech fixture. Deployment and production acceptance remain operator-owned.
+  Sources:
+  - https://ai.google.dev/gemini-api/docs/transcribe
+  - https://ai.google.dev/gemini-api/docs/models/gemini-3.5-transcribe
+  - https://ai.google.dev/api/interactions-api
+
+- [!] [F051] (P1) Add GLM 5.3 and GLM 5.3 Flash text routes.
+  Goal:
+  Add both current Z.AI models through the international general API.
+  Requirements:
+  - Register exact models `glm-5.3` and `glm-5.3-flash` as disabled text candidates.
+  - Use synchronous Chat Completions with `max_tokens` and enabled thinking.
+  - Accept only `low`, `high`, and `max` reasoning effort.
+  - Preserve provider-default effort when the caller omits the field.
+  - Record the 1M-token context, 131,072-token output maximum, and current prices.
+  - Identify the Flash promotion expiration separately from its list prices.
+  - Use the existing `glm-5` family with verified open weights.
+  - Keep the current Z.AI default and existing model identities.
+  - Keep both candidates disabled until live provider qualification passes.
+  Validation:
+  - Start with failing public HTTP tests for both models.
+  - Verify all public text endpoints, each effort, continuation, private reasoning, and usage.
+  - Verify rejection of unsupported effort, media, structured output, and excessive output budgets.
+  - Verify catalog metadata and candidate exclusion from public discovery.
+  - Run final CI and both disposable live candidate commands.
+  Sources:
+  - https://docs.z.ai/guides/llm/glm-5.3
+  - https://docs.z.ai/guides/vlm/glm-5.3-flash
+  - https://docs.z.ai/api-reference/llm/chat-completion
+  - https://docs.z.ai/guides/overview/pricing
+  - https://huggingface.co/zai-org/GLM-5.3
+  - https://huggingface.co/zai-org/GLM-5.3-Flash
+  Implementation (2026-09-05):
+  The private catalog contains both disabled text candidates with exact upstream identifiers, reasoning levels, output limits, and prices.
+  The existing thinking adapter sends `thinking.type: enabled` and each explicit effort.
+  The Flash record separates list prices from its promotion, which ends at 2026-09-09 16:00 UTC.
+  The initial HTTP tests failed with `unknown model` for both identifiers.
+  The focused target now passes 24 text requests and 24 continuations across both models.
+  It verifies visible output, private reasoning, usage totals, unsupported inputs, and output budget rejection.
+  Public catalog and browser tests verify candidate exclusion from discovery.
+  Final CI passes all 12 gates and 95 browser tests with 100.0% Go statement coverage in 222 seconds.
+  Evidence: `/tmp/llm-proxy-f051-red.log`, `/tmp/llm-proxy-f051-focused.log`, and `/tmp/llm-proxy-f051-ci.log`.
+  Changed files:
+  `configs/providers.yml`, `internal/proxy/zai_current_models_test.go`, `tests/e2e/management-ui.spec.js`, `Makefile`,
+  `README.md`, `docs/provider-catalog.md`, and `docs/zai-current-models.md`.
+  Public event schemas did not change.
+  Blocked:
+  `ZAI_API_KEY` is absent from the process and all six private repository environment files.
+  Both disposable live commands stopped before dispatch with `required catalog environment is not set: ZAI_API_KEY`.
+  No live GLM 5.3 or Flash request ran.
+  The operator must configure the key and complete both candidate qualifications before activation.
+  Evidence: `/tmp/llm-proxy-f051-glm-5.3-live.log` and `/tmp/llm-proxy-f051-glm-5.3-flash-live.log`.
+
+- [!] [F052] (P2) Add image input for GLM 5.3 Flash.
+  Goal:
+  Expose the current Flash image contract after F051 text registration.
+  Requirements:
+  - Verify the exact image byte unit, strict size boundary, dimensions, and image count limit.
+  - Add JPEG and PNG input through `image_url` content blocks on the existing Chat Completions route.
+  - Enforce the documented image dimensions through an explicit media admission contract.
+  - Expose current limits and their sources in the public catalog.
+  - Keep the candidate disabled until live image qualification passes.
+  Validation:
+  - Start with failing public HTTP tests for ordered images and every published admission limit.
+  - Verify private reasoning and text continuation with image input.
+  - Run final CI and the disposable live candidate media command.
+  Evidence (2026-09-05):
+  The Flash model guide documents image URLs and Base64 Data URLs.
+  The current OpenAPI image schema specifies JPEG and PNG, images under 5M, and dimensions at most 6000 by 6000.
+  Its 150-image limit names older models and does not explicitly name GLM 5.3 Flash.
+  Before F052, the proxy media schema supported byte and count limits but had no image dimension limit.
+  Sources:
+  - https://docs.z.ai/guides/vlm/glm-5.3-flash
+  - https://docs.z.ai/openapi.json
+  Implementation (2026-09-05):
+  The disabled Flash candidate accepts ordered JPEG and PNG attachments through the existing Chat Completions adapter.
+  The catalog and public offering expose explicit `image_mime_types`.
+  Image dimensions use `image_width_pixels` and `image_height_pixels`, with 6000-pixel bounds for each attachment.
+  Header checks apply to inline images and tenant assets before dispatch.
+  Oversized dimensions return HTTP 413. Malformed images, MIME mismatches, and unsupported formats return HTTP 400.
+  Tests verify image order, private reasoning, continuation, usage, asset reader integrity, catalog validation, and Go client discovery.
+  The renderer accepts valid format and dimension metadata and rejects invalid combinations.
+  The initial HTTP test failed with HTTP 400 `unsupported provider capability` for Flash image input.
+  Focused image and text tests pass.
+  Final CI passes all 12 gates and 96 browser tests with 100.0% Go statement coverage in 225 seconds.
+  Evidence: `/tmp/llm-proxy-f052-red.log`, `/tmp/llm-proxy-f052-focused.log`, and `/tmp/llm-proxy-f052-ci.log`.
+  Changed files:
+  `configs/providers.yml`, `internal/proxy/provider_catalog_schema.go`, `internal/proxy/model_catalog.go`,
+  `internal/proxy/provider_types.go`, `internal/proxy/provider_registry.go`, `internal/proxy/catalog_service.go`,
+  `internal/proxy/public_capabilities.go`, `internal/proxy/message_media.go`, `internal/proxy/media_limits.go`,
+  `internal/proxy/image_dimensions.go`, `internal/proxy/image_dimensions_internal_test.go`,
+  `internal/proxy/zai_image_test.go`, `internal/proxy/zai_current_models_test.go`, `pkg/llmproxyclient/capabilities.go`,
+  `scripts/render_public_site.mjs`, `tests/e2e/public-site-renderer.spec.js`, `Makefile`, `docs/openapi.yaml`,
+  `site/docs/index.html`, `README.md`, `docs/provider-catalog.md`, and `docs/zai-current-models.md`.
+  Public catalog changes: optional offering field `image_mime_types` and media-limit unit `pixels`.
+  Public event schemas did not change.
+  Blocked:
+  The provider's image-size rule says under 5M but does not define the byte unit.
+  Its image-count rule names older models and does not explicitly include Flash.
+  The catalog records the exact image-byte, image-count, and total request bounds as unknown.
+  Provider clarification or equivalent authoritative evidence must establish these bounds before activation.
+  `ZAI_API_KEY` is absent from the process and all six private repository environment files.
+  The disposable media command stopped before dispatch with `required catalog environment is not set: ZAI_API_KEY`.
+  No live Flash image request ran. Live image qualification requires the key.
+  Evidence: `/tmp/llm-proxy-f052-live.log`.
+
+- [!] [F050] (P1) Add current hosted Qwen 3.8 models.
+  Goal:
+  Add the current Qwen 3.8 models through the Singapore DashScope workspace connection.
+  Requirements:
+  - Register `qwen3.8-max`, `qwen3.8-max-0902`, `qwen3.8-flash`, `qwen3.8-2.4t-a95b`, and `qwen3.8-27b`.
+  - Verify each model's hosted limits and image contract before registration.
+  - Use synchronous Responses requests with `store: false`.
+  - Expose the distinct `none`, `low`, `medium`, and `xhigh` reasoning levels.
+  - Send explicit effort in `reasoning.effort` and preserve omission.
+  - Record current Singapore prices and exact verified limits.
+  - Keep candidates disabled until live text, reasoning, and declared media checks pass.
+  - Preserve the current default and existing model identities.
+  Validation:
+  - Start with failing public HTTP integration tests.
+  - Verify exact dispatch, effort, continuation, visible output, usage, and declared image input.
+  - Verify catalog metadata and candidate exclusion from public discovery.
+  - Run final CI and each disposable live candidate command.
+  Sources:
+  - https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-responses
+  - https://www.alibabacloud.com/help/en/model-studio/text-generation-model
+  - https://www.alibabacloud.com/help/en/model-studio/vision-model
+  - https://www.alibabacloud.com/help/en/model-studio/model-pricing
+  Evidence (2026-09-05):
+  The Responses reference lists all five identifiers.
+  The pricing reference lists all five for Singapore.
+  `DASHSCOPE_API_KEY` and `DASHSCOPE_BASE_URL` are absent from the process and six private repository environment files.
+  The hosted model pages confirm a 1,000,000-token context and 131,072-token output maximum for all five identifiers.
+  The hosted `qwen3.8-2.4t-a95b` route accepts text only. The other four accept image input.
+  Additional sources:
+  - https://help.aliyun.com/en/model-studio/qwen3-8-max
+  - https://help.aliyun.com/en/model-studio/qwen3-8-flash
+  - https://help.aliyun.com/en/model-studio/qwen3-8-2-4t-a95b
+  - https://help.aliyun.com/en/model-studio/qwen3-8-27b
+  Implementation (2026-09-05):
+  The private catalog contains all five disabled candidates with current Singapore prices and verified limits.
+  Four candidates accept image input. The hosted 2.4T offering accepts text only.
+  The two open models use the `qwen3-8` family with `open_weights` metadata.
+  The DashScope codec sends each explicit effort in `reasoning.effort` and preserves omission.
+  Public tests cover all five models, 25 text requests, 25 continuations, usage, output limits, and declared image behavior.
+  Public metadata and browser tests verify candidate exclusion from discovery.
+  Final CI passes all 12 gates and 95 browser tests with 100.0% Go statement coverage in 211 seconds.
+  Evidence: `/tmp/llm-proxy-f050-focused.log` and `/tmp/llm-proxy-f050-ci.log`.
+  Changed files:
+  `configs/providers.yml`, `internal/proxy/provider_types.go`, `internal/proxy/model_catalog.go`,
+  `internal/proxy/provider_router.go`, `internal/proxy/dashscope_responses.go`, `internal/proxy/provider_media_edges_internal_test.go`,
+  `internal/proxy/qwen_current_models_test.go`, `tests/e2e/management-ui.spec.js`, `Makefile`, `README.md`,
+  `docs/provider-catalog.md`, `docs/dashscope-responses.md`, and `docs/qwen-current-models.md`.
+  Public event schemas did not change.
+  Blocked:
+  `DASHSCOPE_API_KEY` and `DASHSCOPE_BASE_URL` are absent from the process and all six private repository environment files.
+  All five text commands and four media commands stopped before provider dispatch because both inputs are missing.
+  No live Qwen 3.8 request ran.
+  The operator must configure the Singapore workspace connection and complete each candidate's qualification before activation.
+  Evidence: `/tmp/llm-proxy-f050-qwen3.8-*-live.log`.
+
+- [!] [F049] (P1) Add Muse Spark 1.3.
+  Goal:
+  Add the current Standard-tier Meta text model with explicit reasoning controls.
+  Requirements:
+  - Register exact model `muse-spark-1.3` as disabled until live qualification passes.
+  - Use the existing synchronous Chat Completions transport and `max_completion_tokens`.
+  - Support `minimal`, `low`, `medium`, `high`, `xhigh`, and `max` reasoning effort.
+  - Preserve provider-default reasoning when the caller omits the effort.
+  - Record the 1,048,576-token context window and current Standard prices.
+  - Preserve the current Meta default and existing offerings.
+  Validation:
+  - Start with failing public HTTP integration tests.
+  - Verify exact dispatch, reasoning, visible continuation, usage, and rejection of unsupported structured output.
+  - Verify catalog metadata and candidate exclusion from public discovery.
+  - Run final CI and the disposable live candidate command.
+  Sources:
+  - https://research.meta.ai/blog/introducing-muse-spark-1-3
+  - https://dev.meta.ai/docs/models
+  - https://dev.meta.ai/docs/reasoning
+  - https://dev.meta.ai/docs/protocols/chat-completions
+  - https://dev.meta.ai/docs/pricing-rate-limits
+  Scope:
+  This addition uses Standard-tier text through the current Meta adapter.
+  Media, structured output, caller tools, and a Meta Responses transport require separate contracts.
+  The current model and reasoning guides confirm `max` for Standard-tier Muse Spark 1.3.
+  The protocol parameter table has not added `max` to its general list.
+  Live qualification must verify each explicit effort before activation.
+  Implementation (2026-09-05):
+  The private catalog contains the disabled Standard-tier model, context window, and three price components.
+  The shared Chat Completions effort vocabulary now includes the six declared Meta values.
+  Each offering still restricts its own accepted effort values.
+  Tests verify all three public text endpoints, omission, six efforts, continuation, usage, and catalog metadata.
+  Tests also verify rejection of unsupported structured output and candidate exclusion from public discovery.
+  Final CI passes all 12 gates with 100.0% Go statement coverage in 197 seconds.
+  Evidence: `/tmp/llm-proxy-f049-ci.log` and `/tmp/llm-proxy-f049-focused-final.log`.
+  Changed files:
+  `configs/providers.yml`, `internal/proxy/provider_types.go`, `internal/proxy/meta_current_models_test.go`,
+  `Makefile`, `tests/e2e/management-ui.spec.js`, `README.md`, `docs/provider-catalog.md`,
+  `docs/implementation/provider-routing-plan.md`, and `docs/meta-current-model.md`.
+  Public event schemas did not change.
+  Blocked:
+  Final CI stopped with `Go files require formatting: ./internal/proxy/vertex_test.go` during the active F060 change.
+  Browser setup stopped with `public_capabilities_invalid: catalog.providers[10].credential_kinds`.
+  Complete the shared validation after F060 resolves these failures.
+  Acceptance (2026-09-07):
+  The existing Meta key passed verification, omitted effort, and all six explicit efforts with HTTP 200.
+  All live Meta tests use `MUSE_API_KEY`, as required by the user.
+  After the final name change, live key verification and a Muse Spark 1.3 text request passed with HTTP 200.
+  The catalog environment binding and the entry in `configs/.env` use that exact name.
+  The key value is unchanged.
+  A CLI regression assertion requires this exact binding in live discovery.
+  Live verification and all seven reasoning cases passed again through this binding.
+  Evidence: `/tmp/llm-proxy-muse11-live.log`.
+  The catalog now enables Muse Spark 1.3.
+  Focused public HTTP tests pass, and discovery and browser expectations include the enabled model.
+  Production deployment belongs to the operator.
+  Evidence: `/tmp/llm-proxy-f049-qualified-live.log`, `/tmp/llm-proxy-f049-activation-green.log`, `/tmp/llm-proxy-f049-browser.log`, and `/tmp/llm-proxy-f049-activation-ci.log`.
+
+- [!] [F048] (P1) Add Grok 4.6.
+  Goal:
+  Expose the exact current xAI model after live qualification.
+  Requirements:
+  - Add `grok-4.6` as a disabled candidate in the existing Grok family.
+  - Declare its 500,000-token context, JPEG/PNG inputs, structured output, and function calls.
+  - Support `low`, `medium`, `high`, and `xhigh` through `reasoning.effort`.
+  - Preserve the provider default when effort is omitted.
+  - Record standard prices below 200,000 input tokens and at or above that threshold.
+  - Preserve synchronous Responses requests with `store:false` and private reasoning output.
+  - Keep `grok-4.3` as the provider default.
+  - Qualify the exact model through the provider account before activation.
+  Validation:
+  - Start with failing public HTTP tests.
+  - Verify all efforts, images, structured output, function calls, and disabled discovery.
+  - Run final CI after the last implementation change.
+  Sources:
+  - https://docs.x.ai/developers/models/grok-4.6
+  - https://docs.x.ai/developers/model-capabilities/text/reasoning
+  - https://docs.x.ai/developers/model-capabilities/images/understanding
+  - https://docs.x.ai/developers/pricing
+  Implementation:
+  The disabled offering includes the current context, image limits, reasoning controls, caller functions, and both standard price tiers.
+  The `xai_responses` reasoning adapter sends `reasoning.effort` and preserves omission.
+  Public HTTP tests verify every effort, private reasoning, usage, image bytes, structured output, and a complete function-call round trip.
+  Browser discovery excludes the candidate. The xAI default remains `grok-4.3`.
+  Validation:
+  Focused HTTP tests pass. Final CI passes all 12 gates and 95 browser tests with 100.0% Go statement coverage in 185 seconds.
+  The Governor check passes. Changed technical prose has no STE findings.
+  Blocked:
+  `XAI_API_KEY` is absent from the process and all six private repository environment files.
+  The candidate harness stops with `required catalog environment is not set: XAI_API_KEY` before provider dispatch.
+  Live key, reasoning, image, structured-output, and function-call qualification remain incomplete.
+  Keep the model disabled until these checks pass.
+
+- [!] [F047] (P1) Add Gemini 3.8 Flash and 3.5 Flash-Lite.
+  Goal:
+  Expose both current Gemini models through the existing text and media contract after live qualification.
+  Requirements:
+  - Add exact IDs `gemini-3.8-flash` and `gemini-3.5-flash-lite` as disabled candidates.
+  - Declare their 1,048,576-token input context and 65,536-token output limit.
+  - Support text, image, audio, and the existing structured output contract.
+  - Declare `low`, `medium`, and `high` for Gemini 3.8 Flash.
+  - Also declare `minimal` for Gemini 3.5 Flash-Lite.
+  - Preserve provider defaults when the caller omits effort.
+  - Record current standard prices and Gemini 3.8 Flash's introductory price period.
+  - Reuse the current Gemini Interactions transport and provider default.
+  - Qualify reasoning, media, and each model's declared completion lifecycle before activation.
+  - For Gemini 3.8 Flash, also qualify active retrieval, cancellation, and deletion.
+  - For Flash-Lite, qualify synchronous key verification and completion without storage.
+  - Keep candidates disabled when any required provider check fails.
+  Validation:
+  - Start with failing public HTTP and candidate CLI tests.
+  - Verify exact metadata, request payloads, errors, and public discovery.
+  - Run each exact model through the disposable provider harness.
+  - Run final CI after the last implementation change.
+  Implementation:
+  - Both exact offerings are disabled. They declare current efforts, context, output, standard prices, and the common 20 MB inline media bound.
+  - Public HTTP tests cover reasoning, structured output, media order, Files API routing, cleanup, and catalog metadata.
+  - The candidate CLI selects each exact model and rejects unknown selections before dispatch.
+  - Browser discovery excludes both candidates. The default remains `gemini-3.5-flash`.
+  Blocked:
+  - Both Models API requests passed and confirmed the declared token limits.
+  - Gemini 3.8 Flash returned HTTP 429 with a free-tier request limit of 5.
+  - A later lifecycle probe timed out before its first response. Its stored lifecycle remains unqualified.
+  - After B197, Flash-Lite passed the direct reasoning matrix, proxy key verification, omitted-effort text, and image input.
+  - Flash-Lite's full proxy reasoning matrix timed out on its next request.
+  - Live audio remains unqualified for both models. Both candidates remain disabled until all applicable checks pass.
+  Local validation:
+  - Focused HTTP, candidate CLI, and browser checks pass.
+  - Initial CI rejected a migration-test target that selected a disabled candidate: `reason=dangling_reference`.
+  - The fixture now selects from enabled offerings. The Go suite passes with 100.0% statement coverage.
+  - Final CI passes all 12 gates, including 95 browser tests, in 185 seconds.
+  Sources:
+  - https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash
+  - https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite
+  - https://ai.google.dev/gemini-api/docs/thinking
+  - https://ai.google.dev/gemini-api/docs/pricing
+
+  Acceptance refresh (2026-09-05):
+  Independent runs with the repository credential reproduced both provider blockers.
+  Gemini 3.8 Flash timed out after 45,005 milliseconds with no response bytes at the first omitted-effort request.
+  Flash-Lite passed omitted effort and all four explicit efforts. Its background completion creation returned HTTP 400.
+  Neither run reached the required full stored lifecycle. Both candidates remain disabled.
+  Evidence: `/tmp/llm-proxy-f047-gemini38-recheck.log` and `/tmp/llm-proxy-f047-lite-recheck.log`.
+  The unchanged candidate harness passed all 12 CI gates for I234 before these paid runs.
+
+  Latest acceptance refresh (2026-09-05):
+  Gemini 3.8 Flash passed omitted, `low`, and `medium` effort with HTTP 200.
+  Its `high` effort request returned HTTP 429. The run stopped before the stored lifecycle checks.
+  The candidate remains disabled until all required acceptance checks pass.
+  Evidence: `/tmp/llm-proxy-f047-gemini38-goal-refresh.log`.
+
+  Root cause diagnosis (2026-09-06, I251 and B197):
+  Gemini 3.8 Flash's HTTP 429 reports `generate_content_free_tier_requests, limit: 5` and a retry delay of approximately 41 seconds.
+  Flash-Lite's HTTP 400 states: `Model 'gemini-3.5-flash-lite' does not support background interactions.`
+  B197 corrects its catalog lifecycle and candidate checks to synchronous completion.
+  The direct candidate matrix then passed omitted, minimal, low, medium, and high effort with HTTP 200.
+  Flash-Lite also had a transient HTTP 500 high-demand response during diagnosis.
+  Evidence: `/tmp/llm-proxy-f047-gemini38-diagnosis.log`, `/tmp/llm-proxy-f047-lite-background-diagnosis.log`, and `/tmp/llm-proxy-b197-lite-live.log`.
+  Flash-Lite's corrected proxy route passed key verification, omitted-effort text, and the image smoke test with HTTP 200.
+  Its full proxy reasoning matrix stopped on the next request after a 45,003-millisecond timeout.
+  A separate Gemini 3.8 Flash lifecycle probe also timed out before its first response.
+  Both candidates remain disabled. Full proxy reasoning, applicable stored lifecycle checks, and live audio still require acceptance.
+  Evidence: `/tmp/llm-proxy-b197-lite-proxy-live.log`, `/tmp/llm-proxy-b197-lite-media-declared-env.log`, and `/tmp/llm-proxy-f047-flash-lifecycle-diagnosis.log`.
+
+  Vertex alternative (2026-09-07):
+  F060 qualified both exact models through the public Vertex proxy with the dedicated service account.
+  These Vertex offerings are enabled. The Developer API offerings remain disabled.
+  See `docs/vertex-gemini.md` for the tenant cutover.
+
+- [x] [F046] (P1) Add Claude Fable 5.1 and Opus 5.
+  Goal:
+  Expose the current Claude models through the existing Anthropic connection and public text contract.
+  Requirements:
+  - Add exact IDs `claude-fable-5-1` and `claude-opus-5` to their existing families.
+  - Preserve the current Anthropic default and tenant selections.
+  - Declare a 1,000,000-token context and 128,000-token synchronous output maximum.
+  - Support the current JPEG, PNG, and WebP inputs and existing structured output contract.
+  - Map public efforts `low`, `medium`, `high`, `xhigh`, and `max` to `output_config.effort`.
+  - Preserve the provider's adaptive thinking default when effort is omitted.
+  - Keep thinking blocks absent from public answers and logs.
+  - Record current image limits and standard input, output, and cache prices.
+  - Qualify disabled candidates through the disposable harness before activation.
+  - Record Fable 5.1's provider retention requirement in the operator documentation.
+  Sources:
+  - https://platform.claude.com/docs/en/models/fable-5-1/overview
+  - https://platform.claude.com/docs/en/models/fable-5-1/migration-guide
+  - https://platform.claude.com/docs/en/models/opus-5/overview
+  - https://platform.claude.com/docs/en/models/opus-5/whats-new-opus-5
+  - https://platform.claude.com/docs/en/build-with-claude/vision
+  - https://platform.claude.com/docs/en/about-claude/pricing
+  - https://platform.claude.com/docs/en/api/models/list
+  Validation:
+  - Prove exact routing, effort, structured output, images, usage, and continuation through public HTTP.
+  - Prove invalid efforts and limits fail before provider dispatch.
+  - Verify key selection, public capabilities, and management controls.
+  - Run live text, effort, and image qualification for each exact model.
+  - Run focused targets, browser tests, and final CI.
+  Progress (2026-09-05):
+  The authenticated Models API returned HTTP 200 with both exact IDs and their documented capabilities.
+  Evidence: `/tmp/llm-proxy-f046-anthropic-models.json`.
+  Resolution (2026-09-05):
+  Both models passed live key verification, default text, all five efforts, and image requests before catalog activation.
+  Public HTTP tests cover routing, structured output, continuation, private thinking exclusion, usage, limits, and management verification.
+  The Anthropic adapter maps effort to `output_config.effort` and retains the existing structured output format.
+  The catalog now publishes 63 enabled models. Current limits, prices, and retention requirements are in `docs/claude-current-models.md`.
+  Initial CI failed on an outdated Anthropic offering count and verification date assertion. The corrected catalog tests passed.
+  Final `make ci` passed all 12 gates with 100.0% Go statement coverage and 95 browser tests.
+  Evidence: `/tmp/llm-proxy-f046-ci-final.log`. Live qualification receipts are listed in the runbook.
+  Changes are in the repository checkout. Production deployment remains separate.
+
+- [!] [F045] (P1) Add MiniMax M3 to the current text and image routes.
+  Goal:
+  Add the current M3 model through the existing MiniMax tenant connection.
+  Requirements:
+  - Add exact model `minimax-m3` and upstream selector `MiniMax-M3`.
+  - Declare a separate open-weight MiniMax M3 family.
+  - Use the existing Chat Completions transport and MiniMax request profile.
+  - Record a 1,000,000-token context and 524,288-token output maximum.
+  - Preserve the `minimax-m2.7` default and existing tenant selections.
+  - Support the current canonical JPEG, PNG, and WebP image inputs.
+  - Record documented image and request limits with current sources.
+  - Record standard input, output, and cache-read prices for both context tiers.
+  - Keep M3 disabled until live text and image qualification passes.
+  - Add an explicit candidate mode to the disposable live harness.
+  - Enable the selected candidate only in the copied catalog for that run.
+  - Preserve standard discovery and reject invalid candidate selections.
+  Sources:
+  - https://platform.minimax.io/docs/api-reference/text-openai-api
+  - https://platform.minimax.io/docs/api-reference/text-chat-openai
+  - https://platform.minimax.io/docs/guides/pricing-paygo
+  - https://huggingface.co/MiniMaxAI/MiniMax-M3
+  Validation:
+  - Prove exact routing, usage, reasoning separation, and output-limit rejection.
+  - Prove image serialization and media rejection through public HTTP requests.
+  - Prove disabled discovery and candidate-only activation in a copied catalog.
+  - Prove candidate prices and capabilities through HTTP.
+  - Prove the browser omits the disabled candidate.
+  - Run focused tests, final CI, and live text and image qualification.
+  Progress (2026-09-05):
+  - Added the disabled M3 model, its provider offering, limits, and both standard price tiers.
+  - Public HTTP tests prove routing, image input, output limits, usage, prices, and key verification.
+  - The initial route test returned HTTP `400` because M3 was absent.
+  - Added `--candidate-model` to enable one disabled model only in the disposable catalog.
+  - CLI tests prove exact copied activation and rejection of invalid candidate selectors.
+  - The initial candidate test failed with an unknown argument error.
+  - `make test-minimax-m3` and `make test-live-candidate-contract` passed.
+  - The first CI run found duplicate activation fields in the catalog test fixture.
+  - Corrected the fixture to accept both activation states. `make test-provider-catalog` passed after the correction.
+  - Browser validation exposed B193 when the disabled candidate left an empty public model family.
+  - B193 now excludes unused runtime families. I247 completes the retirement test before database cleanup.
+  - Final CI passed all 12 gates in 181 seconds with 100% Go statement coverage and 95 browser tests.
+  - Evidence: `/tmp/llm-proxy-f045-b193-i247-ci.log`. Public event schemas did not change.
+  - Added the M3 runbook and updated current catalog and route documents.
+  Blocked:
+  `MINIMAX_API_KEY` is absent from the process and all six authorized private environment files.
+  `make test-live-minimax-m3 LIVE_ENV_FILE=configs/.env` stopped before a provider call with this error:
+  `error: minimax requested but required catalog environment is not set: MINIMAX_API_KEY`.
+  Live text and image acceptance remains open. M3 remains disabled until both checks pass.
+
+- [x] [F044] (P1) Add explicit model activation to the provider catalog.
+  Reclassified from I235 because this change adds an operator capability.
+  Resolution (2026-09-05):
+  - Added required model activation values to the private schema and all 62 model records.
+  - Startup validates retained metadata and compiles only enabled models, offerings, and prices.
+  - Disabled defaults and migration targets fail validation. Disabled routes are absent from public and management discovery.
+  - HTTP tests prove rejection before dispatch. SQLite startup tests prove selection migration and rollback when the migration is missing.
+  - `make test-provider-catalog` and `make ci` passed. All 12 CI gates passed with 100.0% Go statement coverage.
+  - Updated the catalog documentation and terminology. Public event contracts did not change.
+  Goal:
+  Keep exact model data in the provider catalog without exposing an unaccepted
+  model route.
+  Requirements:
+  - Add a required `enabled` Boolean field to each exact model in
+    `configs/providers.yml`.
+  - Do not use an implicit default for the field.
+  - Include only enabled exact models and their provider offerings in the
+    immutable runtime registry.
+  - Exclude disabled exact models from route resolution, defaults, management
+    projections, public capabilities, and standard live-test discovery.
+  - Permit a disabled exact model to retain its provider offerings, limits,
+    controls, and prices in the provider catalog.
+  - Reject a provider default that references a disabled exact model.
+  - Require an explicit model migration for each stored selection that
+    references a disabled exact model.
+  - Update the provider catalog documentation and all current catalog records.
+  Validation:
+  - Prove that startup rejects a missing or invalid `enabled` value.
+  - Prove that startup rejects a disabled provider default.
+  - Prove that public discovery omits a disabled exact model and its offerings.
+  - Prove that route resolution rejects a disabled exact model before provider
+    dispatch.
+  - Prove that an explicit migration moves a disabled stored selection to an
+    enabled exact model.
+  - Run `make ci` after the last application change.
+  Media qualification:
+  - Qualify each provider offering and operation before advertising the migrated media capability.
+  - A model activation flag alone does not prove every provider operation is available.
+
 - [ ] [F039] (P1) {F024} Complete OpenAI image editing and progressive output.
   Goal:
   Preserve the current MediaOps OpenAI image contract before its complete provider cutover.
@@ -2764,7 +4019,7 @@ retain satisfied historical dependencies.
   Deliverables:
   - Private Dictator adapter, tenant media resources, official clients, caller migration inventory, and activation plan.
   Open decisions:
-  - Select the canonical provider identity and exact public operation/resource schemas before implementation.
+  - Use `dictator` as the canonical provider identity. Specify the public capability schemas before implementation.
   - Select the current transcription route disposition without creating competing permanent contracts.
   - Inventory runtime access and retained data before deciding exact migration and deployment changes.
   Validation:
@@ -2790,6 +4045,11 @@ retain satisfied historical dependencies.
   - Store adapters, typed credential profiles, staging lifecycle, and provider integration fixtures.
   Open decisions:
   - Select deployment values, provider-readable URL lifetime, and Google credential mode for each consuming route.
+  P012 reconciliation (2026-09-07):
+  Keep media staging separate from independent customer completion connections.
+  Operator credential profiles do not satisfy P012's customer setup requirement.
+  Resolve P012 and approve a separate storage ownership contract before further Google credential implementation under F043.
+  `docs/gemini-customer-connections.md` records the proposed boundary.
   Validation:
   - Use real files and HTTP serving to prove exact fetched bytes, digest, expiry, and cleanup.
   - Prove tenant isolation, active reference retention, failed staging, and secret-free public output.
@@ -3133,7 +4393,7 @@ retain satisfied historical dependencies.
   - Prove reduced motion removes nonessential chart movement.
   - Prove the price review command classifies each freshness state.
   - Run `make ci` after the last application change.
-- [ ] [F032] (P1) Add Baidu Qianfan as a user-configurable text provider.
+- [x] [F032] (P1) Add Baidu Qianfan as a user-configurable text provider.
   Goal:
   Let a managed user paste, verify, and save a Baidu Qianfan API key through
   the existing tenant-scoped provider editor. Route blocking LLM Proxy text
@@ -3204,9 +4464,10 @@ retain satisfied historical dependencies.
     finish reasons, safe `flag` handling, sanitized errors, and timeout. Cover
     capability rejection through `GET /`, compatibility `POST /`, and
     canonical `POST /v2`.
-  - Configuration tests prove exact catalog membership and limits, a missing
-    non-default static key leaves Baidu disabled, a static Baidu default
-    requires its key, and managed mode rejects config-level provider keys.
+  - Prove exact catalog membership and limits through configuration tests.
+  - Apply the current managed-only runtime contract.
+  - Reject Baidu requests without a saved tenant key before dispatch.
+  - Reject config-level provider-key blocks.
   - Management API and Playwright scenarios prove a user can select Baidu,
     paste a key, see verification state, and save after successful Qianfan
     verification. Prove the user can choose a Qianfan model and default route.
@@ -3219,59 +4480,84 @@ retain satisfied historical dependencies.
     implementation acceptance, run one explicitly paid Baidu key verification
     and one small canonical text request with
     `LLM_PROXY_LIVE_PROVIDERS=baidu`. Keep the key and response body out of test
-    output. Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair. Keep deployment and
-    production acceptance operator-owned.
+    output. Run final `make ci` after the last stack change, as POLICY requires.
+    Keep deployment and production acceptance operator-owned.
+  Resolution (2026-09-05):
+  Baidu Qianfan now exposes the four requested text offerings through one managed provider connection.
+  `ernie-5.0` is the provider default.
+  The catalog records output limits, international prices, credential metadata, and the default API URL.
+  The DeepSeek V4 offerings reuse the direct provider's exact model records.
+  The shared Chat Completions adapter applies the catalog `qianfan` response policy.
+  It validates finish reasons and every choice flag before it exposes text.
+  Key verification uses the same parser before the connection and eligible defaults are saved.
+  The current managed-only contract supersedes the original static-key requirement.
+  Public HTTP tests cover all four models, continuation, usage, unsupported capabilities, invalid responses, sanitized errors, and timeout.
+  Managed API tests prove encrypted storage and unchanged state after rejected verification.
+  Browser tests prove model selection, key-paste verification, URL defaults, and saved routing defaults.
+  The initial HTTP test returned `400 unknown provider: baidu`.
+  The first catalog load rejected a key-acquisition URL fragment.
+  The provider now links to the official Qianfan Quick Start.
+  The first CI run stopped on a stale browser expectation of `1 of 61 model`.
+  The corrected expectation uses 63 exact models and passed its focused browser test.
+  Final CI passed all 12 gates and 97 browser tests with 100.0% Go statement coverage in 236 seconds.
+  B196 corrected the live harness for the catalog URL default.
+  Paid default-model verification and canonical text generation both returned HTTP 200 with the existing repository key.
+  The other three models have local protocol coverage. This run did not qualify them against live Qianfan.
+  Production deployment and acceptance remain operator-owned.
+  Evidence: `/tmp/llm-proxy-f032-red.log`, `/tmp/llm-proxy-f032-focused.log`, `/tmp/llm-proxy-f032-live.log`, and `/tmp/llm-proxy-f032-ci-final.log`.
+  Changed files:
+  `configs/providers.yml`, `configs/.env.sample`, `internal/proxy/provider_catalog_schema.go`,
+  `internal/proxy/provider_types.go`, `internal/proxy/provider_registry.go`, `internal/proxy/openai_compatible_chat.go`,
+  `internal/proxy/qianfan_response_policy.go`, `internal/proxy/provider_key_verifier.go`,
+  `internal/proxy/managed_router_test.go`, `internal/proxy/baidu_test.go`, `internal/proxy/baidu_management_test.go`,
+  `internal/proxy/openapi_contract_test.go`, `cmd/cli/root_test.go`, `tests/capabilities_test.go`,
+  `tests/e2e/management-ui.spec.js`, `Makefile`, `README.md`, `docs/provider-catalog.md`, and `docs/baidu-qianfan.md`.
+  Public discovery adds Baidu and four offerings. Public event schemas did not change.
+
 - [ ] [F022] (P1) Add durable tenant-owned media operations to the existing gateway.
   Goal:
   Extend the existing tenant API with durable media execution and result artifacts.
-  Use `docs/media-gateway-consolidation.md` as the approved ownership and delivery contract.
-  Current foundation:
-  - I216 delivered the catalog service. F033 delivered tenant assets and official asset upload.
-  - Structured text requests already persist execution states and idempotency data.
-  - Their failed-request retry and retention behavior does not define the media operation contract.
+  Use P011 and `docs/media-gateway-consolidation.md` as the current implementation contract.
   Requirements:
-  - Reuse the current tenant-client-key authorization and tenant provider connections.
-  - Add capabilities, immutable plans, operations, cancellation resources, and artifact reads under the existing `/model/v1` namespace.
-  - Extend the canonical OpenAPI document and existing official Go client together.
-  - Keep the current canonical text contract independent from asynchronous media operations.
-  - Make plan creation provider-call-free. Bind each plan to its tenant, normalized intent, route, catalog revision, and expiry.
-  - Return explicit unavailable price evidence when the catalog cannot produce an exact estimate.
-  - Require one tenant-bound idempotency key for operation creation.
-  - Return the existing operation for the same key and intent, including terminal states.
-  - Reject a different intent for the same key before provider dispatch.
-  - Resolve an existing operation before applying plan-expiry checks to a repeated submission.
-  - Persist the tenant, normalized request, acceptance record, and input references before provider dispatch.
-  - Use durable worker claims with fencing against stale workers and duplicate dispatch.
-  - Keep accepted-job lifetime separate from the submit request connection.
-  - Resume undispatched work after restart. Recover dispatched work only through its recorded provider evidence.
-  - Preserve `not_dispatched`, `dispatched`, `succeeded`, `failed`, and `uncertain` as provider-execution states.
-  - Record cancellation requests and results separately from provider-execution uncertainty.
-  - Report confirmed cancellation separately from unsupported cancellation and an unknown dispatch outcome.
-  - Keep native provider handles and credential material inside protected server records.
-  - Extend existing tenant assets with active references, output artifacts, bounded reads, and explicit retention.
-  - Add streaming upload and verified artifact download to the existing Go client.
-  - Keep idempotency tombstones after result expiry. Define their retention independently from media bytes.
-  - Preserve rejected-request, execution-failure, provider-usage, and status-read accounting distinctions.
-  - Record provider execution usage once per accepted execution rather than once per status read.
-  - Add bounded operation admission and transfer budgets that coordinate with I046.
-  - Keep GCS staging and new Google credential profiles in F043, where provider routes require them.
-  - Implement family import validators only after an actual recoverable-record inventory identifies their required scope.
+  - Reuse managed tenant keys and bearer authentication for media resources.
+  - Extend the existing asset contract and official Go client in the same API change.
+  - Add capabilities, operations, cancellation resources, asset metadata reads, and bounded byte downloads under `/model/v1`.
+  - Validate and accept each request in one operation creation call.
+  - Keep the accepted intent, route, and catalog revision in the operation record.
+  - Keep a separate public plan resource outside this release.
+  - Return explicit unavailable cost evidence when exact catalog pricing is absent.
+  - Require a tenant-bound idempotency key and enforce a unique database constraint.
+  - Return the same operation for the same key and intent, including terminal and uncertain states.
+  - Reject changed intent with `409` before dispatch.
+  - Resolve an accepted request before current catalog validation.
+  - Add operation, claim, asset-reference, and usage-delivery tables in the existing managed SQLite database.
+  - Use bounded in-process workers for the first deployment.
+  - Persist acceptance, input references, and dispatch intent before provider execution.
+  - Use claim generations and transactional updates to reject stale workers.
+  - Resume undispatched work after restart. Recover dispatched work through recorded provider evidence.
+  - Keep accepted work independent from the initiating HTTP connection.
+  - Keep provider execution evidence separate from public operation state and cancellation observations.
+  - Use the state schemas, deadlines, retention, and initial capacity values specified by P011.
+  - Keep native handles and byte digests private.
+  - Coordinate asset publication and deletion with durable active references.
+  - Return output assets through authenticated metadata and content reads.
+  - Keep minimal idempotency tombstones for the tenant lifetime after terminal data expiry.
+  - Keep unresolved operation evidence until reconciliation or explicit disposition.
+  - Deduplicate execution usage by operation identifier through a durable delivery record.
+  - Keep status reads and downloads separate from generation charges.
+  - Coordinate network capacity with I046. Keep provider-specific staging in F043.
+  - Add migration tools only when an actual retained-record inventory requires them.
   Deliverables:
-  - Durable operation service, worker, store changes, artifact contract, and official Go client methods.
-  - Separate request, execution, polling, transfer, retention, and cancellation contracts.
-  - External-provider protocol fixtures and an independent client example against the real service.
-  Open decisions:
-  - Select transactional storage and worker fencing within the existing deployment contract before implementation.
-  - Set operation deadlines, retention values, queue limits, and cancellation representations before schema finalization.
+  - Operation service, SQLite tables, worker, asset lifecycle, OpenAPI contract, and official Go client methods.
+  - A real-service client example with controlled provider protocols.
   Validation:
-  - Start with a failing integration test through the real HTTP boundary and repository-owned persistence.
-  - Prove tenant isolation, concurrent duplicate convergence, intent conflicts, and zero dispatch for invalid credentials.
-  - Prove crash recovery, stale-worker rejection, expired-plan retries, and truthful cancellation outcomes.
-  - Prove active asset retention, interrupted transfers, result expiry, and idempotency tombstone behavior.
-  - Preserve existing text reconciliation through characterization tests before shared-code extraction.
-  - Exercise the official Go client against the real service with controlled external-provider fixtures.
-  - Run validation under the current repository policy. Record hosted acceptance separately from local tests.
+  - Start with a failing integration test through the real HTTP listener, SQLite database, and filesystem.
+  - Prove duplicate convergence, intent conflicts, tenant isolation, and zero dispatch for rejected requests.
+  - Prove restart recovery, stale-worker rejection, explicit uncertainty, and truthful cancellation.
+  - Prove active references, interrupted downloads, output expiry, tombstones, and deduplicated usage after restart.
+  - Preserve current text behavior through integration tests before shared-code extraction.
+  - Run the current repository checks. Record provider and hosted acceptance separately.
+
 - [ ] [F024] (P1) {F022,I046} Deliver the first OpenAI image-generation capability.
   Goal:
   Let a backend tenant generate an image and retrieve verified bytes through the official LLM Proxy client.
@@ -3390,7 +4676,7 @@ retain satisfied historical dependencies.
     reads, and Kling/HeyGen lip-sync where currently supported.
   - Add typed Kling reusable-asset create/list/get/delete operations with exact
     mutation and destructive classifications.
-  - Require immutable plans and idempotency for paid and mutating work. Preserve
+  - Require immutable accepted requests and idempotency for paid and mutating work. Preserve
     provider task ids internally and expose only gateway operation or asset ids.
   - Use gateway assets for all uploaded image, audio, video, and character
     inputs and materialize terminal video outputs through the artifact contract.
@@ -3885,7 +5171,177 @@ retain satisfied historical dependencies.
 
 
 ## Planning
-*do not implement yet*
+
+- [!] [P012] (P1) Plan reliable Gemini access through independent customer connections.
+  Goal:
+  Eliminate impractical connection scenarios and select the best supported Gemini access for customers who connect and manage their providers independently.
+  The result can support the same exact model through both AI Studio and Vertex AI as separate provider offerings.
+  Requirements:
+  - Assess the Gemini Developer API through AI Studio and Vertex AI against the same customer acceptance criteria.
+  - Permit both providers when each offers reliable access through a practical customer connection flow.
+  - Represent the same exact model through separate provider offerings, with explicit provider selection and independent qualification.
+  - Use the existing API-key connection flow as the initial customer contract.
+  - Specify how customers obtain a suitable key, connect a provider, validate access, select a model, and disconnect.
+  - Require each customer to complete setup without credential-file installation or identity configuration by the proxy operator.
+  - Exclude custom connection flows that require Application Default Credentials (ADC) JSON files, service-account JSON files, or credential-file uploads.
+  - Exclude custom operator provisioning, server configuration edits, and operator-managed credential profiles from customer connection requirements.
+  - Verify the complete Google key-acquisition process, including billing and access requirements, before accepting an API-key flow as practical.
+  - Keep provider OAuth outside implementation scope unless research demonstrates a supported customer connection flow.
+  - For any OAuth proposal, verify Google consent, required scopes, application verification, token renewal, reconnection, revocation, and tenant isolation.
+  - Demonstrate the complete OAuth flow with a separate customer account before requesting implementation approval.
+  - Treat operator-managed credential profiles as insufficient evidence of a customer OAuth flow.
+  - Compare exact model IDs with equivalent inputs, reasoning levels, deadlines, and output limits.
+  - Verify text, structured output, required media inputs, and the lifecycle of each required operation.
+  - Separate quota, billing, credential restrictions, model availability, unsupported operations, and transient provider failures.
+  - Define repeated acceptance runs and report success rates, latency, capacity limits, cost, and customer setup requirements.
+  - Use current official sources and live evidence to recommend the supported provider offerings for the required Gemini capabilities.
+  - Explain the customer benefit and connection requirements of each recommended offering.
+  - Record excluded scenarios and the customer requirement that each scenario fails.
+  - Specify the bounded schema and adapter changes that the recommended offerings require.
+  - Reconcile F060 and the relevant F043 credential requirements with this decision before further authentication or migration implementation.
+  - Keep P001 responsible for the shared provider connection interface.
+  Evidence (2026-09-07):
+  - The local and deployment dotenv files contained the same Gemini key.
+  - That key returned HTTP 429 with zero free-tier quota for Gemini 3.1 Pro Preview.
+  - The existing billed project had a different key, restricted to the Gemini Developer API.
+  - That project key passed six direct high-reasoning requests across generateContent and Interactions.
+  - The models were `gemini-3.1-pro-preview`, `gemini-3.8-flash`, and `gemini-3.5-flash-lite`.
+  - Flash-Lite returned HTTP 400 for a background interaction because the model does not support that operation.
+  - Vertex Express returned HTTP 401 for the local key and HTTP 403, `API_KEY_SERVICE_BLOCKED`, for the project key.
+  - A suitable Vertex authorization key was absent during the initial probes. The later comparison below used an approved replacement key.
+  - I252 passed direct Vertex requests with local user OAuth. Those results do not qualify the customer API-key flow.
+  - These small direct probes do not establish sustained reliability, public proxy acceptance, or production acceptance.
+  Deliverables:
+  - A provider support decision that permits AI Studio, Vertex AI, or both according to customer acceptance evidence.
+  - The customer flow, exact models, capability limits, and acceptance evidence for each recommended offering.
+  - An explicit list of excluded connection scenarios and their failed customer requirements.
+  - A repeatable qualification plan with explicit success criteria and unresolved external dependencies.
+  - A proposed revision of F060 and any separate implementation issues justified by the decision.
+  Validation:
+  - Specify independent customer setup and public proxy acceptance for every recommended provider offering.
+  - Require evidence from a separate customer account without proxy-server access or operator credential provisioning.
+  - Record any missing credential or provider approval as an explicit unresolved comparison result.
+  - Keep implementation approval separate from this planning issue.
+  Assessment (2026-09-07):
+  - `docs/gemini-customer-connections.md` compares customer setup, exact routes, excluded scenarios, and retained evidence.
+  - Qualify the billed AI Studio key flow first. Assess Vertex Express independently.
+  - Current Google documentation specifies authorization keys and distinct service restrictions.
+  - The Express model table does not establish access to every required exact model.
+  - F060 passed 28 proxy requests with an operator service account. This result does not satisfy independent customer setup.
+  - The proposed F060 revision uses the accepted API-key contract and retains P001 as the shared interface owner.
+  - The plan defines repeated functional, lifecycle, capacity, latency, cost, and tenant-isolation acceptance.
+  - The initial assessment changed planning documents only. Later acceptance runs are recorded separately below.
+  - The Governor check passed without drift. Changed prose passed the language review and mechanical checks.
+  - `git diff --check` passed, and the issue ID review found no duplicates.
+  Existing account verification (2026-09-07):
+  - The user selected the primary Google account and its existing billed project for continued acceptance.
+  - AI Studio showed Tier 1 Prepay and a positive credit balance.
+  - The existing authorization key passed all three direct model suites, including the supported background lifecycle checks.
+  - Flash 3.8 and Flash-Lite 3.5 passed proxy reasoning and image acceptance.
+  - The original dotenv key passed verification, but proxy completion failed with `curl` error 28 after 45 seconds.
+  - `docs/evidence/gemini-customer-existing-account-2026-09-07.json` records the sanitized results.
+  - The Vertex API-key form uses the existing Vertex service account and restricts access to Agent Platform API.
+  API-key comparison (2026-09-07):
+  - The user approved Vertex key creation in the existing project with the existing Vertex service account.
+  - The Google CLI created the key after the browser connection failed.
+  - The initial key was revoked because the CLI included its value in diagnostic output.
+  - Replacement creation captured all raw output. The replacement restricts access to `aiplatform.googleapis.com`.
+  - Both API-key routes passed 22 direct cases across Pro 3.1 Preview, Flash 3.8, and Flash-Lite 3.5.
+  - Cases covered declared reasoning levels, structured output, one image, and one audio clip.
+  - The initial comparison passed 41 of 44 requests. Three Gemini schema requests used an incorrect array format.
+  - All three corrected Gemini requests passed. These diagnostic corrections do not indicate a provider capacity failure.
+  - `docs/evidence/gemini-vertex-api-key-comparison-2026-09-07.json` retains all 47 request results and token estimates.
+  - Both providers list the same Standard token rates for these models and inputs.
+  - Direct key access passed. Independent first-use setup and Vertex key acceptance through the proxy remain unverified.
+  - Runtime authentication and production configuration did not change during this comparison.
+  - The Governor check and changed-prose checks passed. `git diff --check` passed.
+  Saved key and capacity session (2026-09-07):
+  - The user supplied the existing billed key as `AI_STUDIO_API_KEY` in `configs/.env`.
+  - The local `GEMINI_API_KEY` assignment now selects the same verified value.
+  - Gemini 3.5 Flash passed default proxy text and image acceptance.
+  - Flash 3.8 and Flash-Lite passed proxy reasoning and image checks. All three direct model suites passed.
+  - Flash 3.8 initially returned HTTP 422 during proxy key verification. The repeat and ten concurrent direct verification requests passed.
+  - The initial verification rejection has no established upstream cause and remains in the evidence.
+  - Pro 3.1 has no Gemini provider offering in the current catalog. Its proxy candidate command stopped before a provider request.
+  - The user selected 10 concurrent requests. The steady request rate remains unspecified.
+  - Vertex passed the complete 220-request capacity matrix and 20 additional initial requests.
+  - Gemini Flash passed 70/70. Gemini Pro passed 21/30 and hit its paid-project quota of 25 requests per minute.
+  - Gemini Flash-Lite passed 29/30 before HTTP 200 with `MALFORMED_RESPONSE` stopped that offering.
+  - The evidence retains all 370 attempts and ten failures. Estimated token charges total USD 0.28469825.
+  - `docs/evidence/gemini-saved-key-acceptance-2026-09-07.json` records local configuration and functional results.
+  - `docs/evidence/gemini-vertex-capacity-2026-09-07-session-1.json` records the first capacity session.
+  - Two automated follow-up sessions run at 12-hour intervals. Gemini Pro remains excluded pending quota or request-rate resolution.
+  - The current evidence favors Vertex for repeated bursts. The support decision remains provisional.
+  Blocked:
+  Complete key acquisition and public proxy acceptance through a separate customer account without proxy-server access.
+  Complete the 24-hour capacity evidence and record actual costs. Resolve the Gemini Pro request-rate decision and the Flash-Lite output failure.
+  Obtain implementation approval for the bounded F060 API-key revision.
+  Keep the support decision provisional until this evidence is available.
+  Sources:
+  - https://docs.cloud.google.com/vertex-ai/generative-ai/docs/start/api-keys
+  - https://docs.cloud.google.com/docs/authentication/api-keys
+  - https://docs.cloud.google.com/vertex-ai/generative-ai/docs/start/express-mode/vertex-ai-express-mode-api-reference
+
+- [x] [P010] (P2) Plan current SiliconFlow model expansion.
+  Goal:
+  Define the route mappings and acceptance sequence for the six SiliconFlow gaps in the provider audit.
+  Requirements:
+  - Verify exact upstream IDs for GLM-5.3, DeepSeek V4 Pro and Flash, Kimi K3, Hy3, and LongCat 2.0.
+  - Inspect provider-specific controls, conflicting limits, and existing model identities.
+  - Define independent qualification without exposing an unaccepted offering through an enabled shared model.
+  - Examine the existing repository credential inputs before declaring a paid acceptance blocker.
+  Deliverable:
+  `docs/siliconflow-expansion.md` records the proposed identities, provider evidence, source conflicts, and ordered acceptance sequence.
+  Scope:
+  This assessment records the expansion plan. It does not register or activate provider offerings.
+  Resolution (2026-09-05):
+  Verified all six upstream model strings and recorded the proposed public identities in the assessment.
+  The DeepSeek releases use separate dated selectors. The earlier audit's undated-update interpretation was incorrect.
+  Recorded conflicting Kimi K3 and LongCat output limits as unresolved provider evidence.
+  Defined disposable-catalog acceptance before canonical registration to preserve shared model activation behavior.
+  The SiliconFlow key is absent from the process and all six repository private environment files.
+  Paid discovery and acceptance remain pending. No provider offering or event contract changed.
+  Documentation checks and the Governor check passed.
+
+  Approval (2026-09-06):
+  The user approved the full P010 implementation scope.
+  F059 owns all six offerings, provider-specific controls, Kimi image assessment, and qualification.
+
+- [x] [P009] (P2) Assess new Meta image and transcription models.
+  Goal:
+  Define the integration scope for current Meta media models before implementation.
+  Evidence (2026-09-05):
+  - Meta lists hosted `muse-image-1.0` for image generation and image edits.
+  - Its documented endpoints include `/v1/images/generations`, `/v1/images/edits`, and Responses.
+  - Meta lists hosted `muse-voice-transcribe-1.0` for file and realtime transcription.
+  - Its documented endpoints are `POST /v1/asr/transcribe` and `wss://api.meta.ai/v1/asr/realtime`.
+  - Published prices are USD 0.01 per generated image and USD 0.18 per audio hour.
+  - Muse Glimmer requires self-hosting and belongs to the local-inference scope in P008.
+  Requirements:
+  - Read the exact request, response, limit, retention, and error contracts for each hosted model.
+  - Assess image generation and edits against the media operation design in F022.
+  - Assess file transcription against the current dictation interface.
+  - Treat realtime transcription as a separate public interface decision.
+  - Split approved implementation outcomes into Features after this assessment.
+  Sources:
+  - https://dev.meta.ai/docs/models
+  - https://dev.meta.ai/docs/pricing-rate-limits
+  - https://research.meta.ai/blog/introducing-muse-voice-transcribe
+  Scope:
+  This issue records newly discovered provider capabilities.
+  It does not authorize media adapter implementation.
+  Resolution (2026-09-05):
+  Recorded the assessment in `docs/meta-media-assessment.md`.
+  Defined native file dictation requirements and image operation dependencies on F022.
+  Recorded the separate realtime interface decision, request limits, retention gaps, and acceptance requirements.
+  Implementation approval remains pending, so no Feature issues were created.
+  The Meta key is absent from the process and all six repository private environment files.
+  Paid provider acceptance remains pending. No runtime offering or event contract changed.
+  Changed documentation passed the language review and repository checks.
+  Approval (2026-09-06):
+  The user approved the full P009 implementation scope.
+  F054, F055, F056, F057, and F058 own file dictation, structured file results, realtime sessions, images, and image conversations.
+  This approval supersedes the earlier implementation hold.
 
 - [ ] [P008] (P1) Plan unified local inference and `computercat` GPU control.
   Goal:
@@ -4254,3 +5710,19 @@ retain satisfied historical dependencies.
     integrity before publication.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
+
+- [x] [P011] (P1) Specify the MediaOps gateway migration.
+  Goal:
+  Define one shared gateway product and a complete first consumer delivery.
+  Deliverables:
+  - Record API, storage, worker, authentication, capacity, and resource ownership decisions.
+  - Specify the provider sequence, paired consumer changes, data receipts, and release evidence.
+  - Align F022 and related migration issues with one idempotent operation creation contract.
+  - Preserve unrelated provider-audit work.
+  Validation:
+  - Verify source paths, issue references, API consistency, and changed documentation language.
+  - Verify that staged changes exclude unrelated provider work.
+  Resolution:
+  - Recorded the concrete contract in `docs/media-gateway-consolidation.md`.
+  - Paired the consumer delivery with MediaOps P006.
+  - Kept implementation issues open and identified the required FamilyHome P003 revision.

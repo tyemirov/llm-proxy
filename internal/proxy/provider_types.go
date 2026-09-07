@@ -9,6 +9,8 @@ import (
 const (
 	// ProviderNameOpenAI identifies the OpenAI provider.
 	ProviderNameOpenAI = "openai"
+	// ProviderNameBaidu identifies international Baidu Qianfan routing.
+	ProviderNameBaidu = "baidu"
 	// ProviderNameDeepSeek identifies the DeepSeek provider.
 	ProviderNameDeepSeek = "deepseek"
 	// ProviderNameDashScope identifies Alibaba Cloud Model Studio DashScope-compatible routing.
@@ -42,10 +44,6 @@ const (
 	ModelNameDeepSeekV4Flash = "deepseek-v4-flash"
 	// ModelNameDeepSeekV4Pro identifies the higher-capability DeepSeek V4 pro model.
 	ModelNameDeepSeekV4Pro = "deepseek-v4-pro"
-	// ModelNameDeepSeekChat identifies the legacy DeepSeek chat model name.
-	ModelNameDeepSeekChat = "deepseek-chat"
-	// ModelNameDeepSeekReasoner identifies the legacy DeepSeek reasoner model name.
-	ModelNameDeepSeekReasoner = "deepseek-reasoner"
 	// ModelNameDashScopeQwenPlus identifies DashScope Qwen Plus.
 	ModelNameDashScopeQwenPlus = "qwen-plus"
 	// ModelNameDashScopeQwen37Max identifies DashScope Qwen 3.7 Max.
@@ -62,6 +60,8 @@ const (
 	ModelNameMoonshotKimiK27Code = "kimi-k2.7-code"
 	// ModelNameMoonshotKimiK27CodeHighSpeed identifies Moonshot Kimi K2.7 Code Highspeed.
 	ModelNameMoonshotKimiK27CodeHighSpeed = "kimi-k2.7-code-highspeed"
+	// ModelNameMiniMaxM3 identifies MiniMax M3.
+	ModelNameMiniMaxM3 = "minimax-m3"
 	// ModelNameMiniMaxM27 identifies MiniMax M2.7.
 	ModelNameMiniMaxM27 = "minimax-m2.7"
 	// ModelNameMiniMaxM27HighSpeed identifies MiniMax M2.7 Highspeed.
@@ -77,9 +77,13 @@ const (
 	// ModelNameMiniMaxM2 identifies MiniMax M2.
 	ModelNameMiniMaxM2 = "minimax-m2"
 	// ModelNameSiliconFlowDeepSeek identifies SiliconFlow-hosted DeepSeek R1.
-	ModelNameSiliconFlowDeepSeek = ModelNameDeepSeekReasoner
+	ModelNameSiliconFlowDeepSeek = "deepseek-reasoner"
 	// ModelNameZAIGLM identifies the GLM 5.1 model.
 	ModelNameZAIGLM = "glm-5.1"
+	// ModelNameGemini36Flash identifies Gemini 3.6 Flash.
+	ModelNameGemini36Flash = "gemini-3.6-flash"
+	// ModelNameGemini37Flash identifies Gemini 3.7 Flash.
+	ModelNameGemini37Flash = "gemini-3.7-flash"
 	// ModelNameGemini35Flash identifies Gemini 3.5 Flash.
 	ModelNameGemini35Flash = "gemini-3.5-flash"
 	// ModelNameClaudeOpus48 identifies Claude Opus 4.8.
@@ -94,10 +98,6 @@ const (
 	ModelNameClaudeSonnet45 = "claude-sonnet-4-5-20250929"
 	// ModelNameClaudeSonnet45Alias identifies the Claude Sonnet 4.5 convenience alias.
 	ModelNameClaudeSonnet45Alias = "claude-sonnet-4-5"
-	// ModelNameClaudeOpus41 identifies Claude Opus 4.1.
-	ModelNameClaudeOpus41 = "claude-opus-4-1-20250805"
-	// ModelNameClaudeOpus41Alias identifies the Claude Opus 4.1 convenience alias.
-	ModelNameClaudeOpus41Alias = "claude-opus-4-1"
 	// ModelNameMuseSpark11 identifies Meta Muse Spark 1.1.
 	ModelNameMuseSpark11 = "muse-spark-1.1"
 	// ModelNameMuseSpark12 identifies Meta Muse Spark 1.2.
@@ -131,7 +131,10 @@ type textWireContract string
 
 const (
 	textWireContractOpenAIResponses       textWireContract = "openai_responses"
+	textWireContractDashScopeResponses    textWireContract = "dashscope_responses"
+	textWireContractXAIResponses          textWireContract = "xai_responses"
 	textWireContractOpenAIChatCompletions textWireContract = "openai_chat_completions"
+	textWireContractVertexGenerateContent textWireContract = "vertex_generate_content"
 	textWireContractGeminiInteractions    textWireContract = "gemini_interactions"
 	textWireContractAnthropicMessages     textWireContract = "anthropic_messages"
 )
@@ -149,12 +152,17 @@ type textRouteCapabilities struct {
 }
 
 var (
+	vertexGenerateContentRouteCapabilities   = textRouteCapabilities{wireContract: textWireContractVertexGenerateContent, executionLifecycle: textExecutionLifecycleSynchronousCompletion}
 	openAIResponsesPollableRouteCapabilities = textRouteCapabilities{
 		wireContract:       textWireContractOpenAIResponses,
 		executionLifecycle: textExecutionLifecyclePollableResource,
 	}
-	openAIResponsesSynchronousRouteCapabilities = textRouteCapabilities{
-		wireContract:       textWireContractOpenAIResponses,
+	dashScopeResponsesSynchronousRouteCapabilities = textRouteCapabilities{
+		wireContract:       textWireContractDashScopeResponses,
+		executionLifecycle: textExecutionLifecycleSynchronousCompletion,
+	}
+	xaiResponsesSynchronousRouteCapabilities = textRouteCapabilities{
+		wireContract:       textWireContractXAIResponses,
 		executionLifecycle: textExecutionLifecycleSynchronousCompletion,
 	}
 	openAIChatCompletionsSynchronousRouteCapabilities = textRouteCapabilities{
@@ -164,6 +172,10 @@ var (
 	geminiInteractionsPollableRouteCapabilities = textRouteCapabilities{
 		wireContract:       textWireContractGeminiInteractions,
 		executionLifecycle: textExecutionLifecyclePollableResource,
+	}
+	geminiInteractionsSynchronousRouteCapabilities = textRouteCapabilities{
+		wireContract:       textWireContractGeminiInteractions,
+		executionLifecycle: textExecutionLifecycleSynchronousCompletion,
 	}
 	anthropicMessagesSynchronousRouteCapabilities = textRouteCapabilities{
 		wireContract:       textWireContractAnthropicMessages,
@@ -203,6 +215,7 @@ func (identifier modelID) string() string {
 type modelRequestProfile string
 
 const (
+	requestProfileMiniMaxChatCompletions          modelRequestProfile = "minimax_chat_completions"
 	requestProfileOpenAIResponsesTemperature      modelRequestProfile = "openai_responses_temperature"
 	requestProfileOpenAIResponsesTemperatureTools modelRequestProfile = "openai_responses_temperature_tools"
 	requestProfileOpenAIResponsesReasoningTools   modelRequestProfile = "openai_responses_reasoning_tools"
@@ -211,10 +224,15 @@ const (
 type reasoningEffortAdapter string
 
 const (
-	reasoningEffortAdapterNone                  reasoningEffortAdapter = ""
-	reasoningEffortAdapterOpenAIResponses       reasoningEffortAdapter = "openai_responses"
-	reasoningEffortAdapterOpenAIChatCompletions reasoningEffortAdapter = "openai_chat_completions"
-	reasoningEffortAdapterGeminiInteractions    reasoningEffortAdapter = "gemini_interactions"
+	reasoningEffortAdapterVertexGenerateContent   reasoningEffortAdapter = "vertex_generate_content"
+	reasoningEffortAdapterNone                    reasoningEffortAdapter = ""
+	reasoningEffortAdapterDashScopeResponses      reasoningEffortAdapter = "dashscope_responses"
+	reasoningEffortAdapterXAIResponses            reasoningEffortAdapter = "xai_responses"
+	reasoningEffortAdapterOpenAIResponses         reasoningEffortAdapter = "openai_responses"
+	reasoningEffortAdapterOpenAIChatCompletions   reasoningEffortAdapter = "openai_chat_completions"
+	reasoningEffortAdapterChatCompletionsThinking reasoningEffortAdapter = "chat_completions_thinking"
+	reasoningEffortAdapterGeminiInteractions      reasoningEffortAdapter = "gemini_interactions"
+	reasoningEffortAdapterAnthropicMessages       reasoningEffortAdapter = "anthropic_messages"
 )
 
 type reasoningEffortCapability struct {
@@ -225,6 +243,9 @@ type reasoningEffortCapability struct {
 // reasoningEffortAdapterSupportedValues is the adapter's accepted vocabulary;
 // each configured text route owns the ordered subset it exposes.
 var reasoningEffortAdapterSupportedValues = map[reasoningEffortAdapter]map[string]struct{}{
+	reasoningEffortAdapterVertexGenerateContent: {"minimal": {}, "low": {}, "medium": {}, "high": {}},
+	reasoningEffortAdapterDashScopeResponses:    {"none": {}, "low": {}, "medium": {}, "xhigh": {}},
+	reasoningEffortAdapterXAIResponses:          {"low": {}, "medium": {}, "high": {}, "xhigh": {}},
 	reasoningEffortAdapterOpenAIResponses: {
 		"none":    {},
 		"minimal": {},
@@ -235,15 +256,24 @@ var reasoningEffortAdapterSupportedValues = map[reasoningEffortAdapter]map[strin
 		"max":     {},
 	},
 	reasoningEffortAdapterOpenAIChatCompletions: {
-		"low":  {},
-		"high": {},
-		"max":  {},
+		"minimal": {},
+		"low":     {},
+		"medium":  {},
+		"high":    {},
+		"xhigh":   {},
+		"max":     {},
+	},
+	reasoningEffortAdapterChatCompletionsThinking: {
+		"none": {}, "low": {}, "high": {}, "max": {},
 	},
 	reasoningEffortAdapterGeminiInteractions: {
 		"minimal": {},
 		"low":     {},
 		"medium":  {},
 		"high":    {},
+	},
+	reasoningEffortAdapterAnthropicMessages: {
+		"low": {}, "medium": {}, "high": {}, "xhigh": {}, "max": {},
 	},
 }
 
@@ -284,6 +314,8 @@ type textModelDefinition struct {
 	outputTokenLimit        int
 	hasOutputTokenLimit     bool
 	reasoningEffort         *reasoningEffortCapability
+	chatResponsePolicy      chatCompletionResponsePolicy
+	imageMIMETypes          []string
 	mediaInputs             map[messageMediaType]struct{}
 	mediaLimits             []CatalogMediaLimit
 }
@@ -302,6 +334,8 @@ func (definition textModelDefinition) supportsMediaInput(mediaInput messageMedia
 }
 
 type providerDefinition struct {
+	googleCredentials         map[string]googleCredentialProfile
+	tenantIdentifier          string
 	identifier                providerID
 	label                     string
 	apiServiceLabel           string

@@ -352,8 +352,8 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 	if decodeError := json.Unmarshal(capabilitiesResponse.Body.Bytes(), &capabilityCatalog); decodeError != nil {
 		t.Fatalf("decode public capability catalog: %v", decodeError)
 	}
-	if len(capabilityCatalog.Providers) != 11 {
-		t.Fatalf("public capability providers=%d want=11", len(capabilityCatalog.Providers))
+	if len(capabilityCatalog.Providers) != 13 {
+		t.Fatalf("public capability providers=%d want=13", len(capabilityCatalog.Providers))
 	}
 
 	configRequest := httptest.NewRequest(http.MethodGet, proxy.ManagementConfigUIPath, nil)

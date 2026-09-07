@@ -1,0 +1,92 @@
+{
+  "issue": "P012",
+  "date": "2026-09-07",
+  "account_context": "user-selected primary account",
+  "project": "llm-proxy-499919",
+  "credential_type": "Google authorization API key",
+  "api_restriction": "generativelanguage.googleapis.com",
+  "billing": {
+    "tier": "Tier 1",
+    "plan": "Prepay",
+    "positive_credit_balance_observed": true
+  },
+  "direct_interactions": [
+    {
+      "model": "gemini-3.1-pro-preview",
+      "suite_passed": true,
+      "reasoning_efforts": [
+        "omitted",
+        "low",
+        "medium",
+        "high"
+      ],
+      "completion_lifecycle_passed": true,
+      "cancellation_lifecycle_passed": true
+    },
+    {
+      "model": "gemini-3.8-flash",
+      "suite_passed": true,
+      "reasoning_efforts": [
+        "omitted",
+        "low",
+        "medium",
+        "high"
+      ],
+      "completion_lifecycle_passed": true,
+      "cancellation_lifecycle_passed": true
+    },
+    {
+      "model": "gemini-3.5-flash-lite",
+      "suite_passed": true,
+      "reasoning_efforts": [
+        "omitted",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "completion_lifecycle_passed": false,
+      "cancellation_lifecycle_passed": false
+    }
+  ],
+  "local_proxy": [
+    {
+      "model": "gemini-3.8-flash",
+      "verification_passed": true,
+      "reasoning_efforts": [
+        "omitted",
+        "low",
+        "medium",
+        "high"
+      ],
+      "image_passed": true
+    },
+    {
+      "model": "gemini-3.5-flash-lite",
+      "verification_passed": true,
+      "reasoning_efforts": [
+        "omitted",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "image_passed": true
+    }
+  ],
+  "original_dotenv_control": {
+    "verification_model": "gemini-3.5-flash",
+    "verification_status": 200,
+    "completion_result": "curl timeout after 45005 milliseconds with 0 bytes received",
+    "make_exit_code": 2
+  },
+  "independent_first_use_completed": false,
+  "vertex_api_key_created": false,
+  "production_acceptance": false,
+  "limitations": [
+    "No repeated 24-hour comparison",
+    "No comparable capacity or per-model cost measurement",
+    "Structured output and audio not included in these harness runs",
+    "Vertex key form awaits explicit creation confirmation"
+  ]
+}

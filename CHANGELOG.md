@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- P011 specified the media API, SQLite operation store, first consumer, provider sequence, and acceptance gates.
+  Updated F022 and related migration issues to use one idempotent operation creation contract.
+
 - Recorded the approved media gateway strategy. Implementation remains open.
   Split durable operations, provider capabilities, private Dictator access, and staging into separate delivery issues.
   Reclassified migration cleanup as I244 and corrected MediaOps issue dependencies.

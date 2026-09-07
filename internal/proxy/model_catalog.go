@@ -17,6 +17,8 @@ const (
 	ModelOperationVideoGeneration = "video_generation"
 	// CatalogCredentialAPIKey identifies one opaque provider API key.
 	CatalogCredentialAPIKey = "api_key"
+	// CatalogCredentialGoogleProfile identifies a tenant-bound operator Google credential reference.
+	CatalogCredentialGoogleProfile = "google_credential_profile"
 	// CatalogArtifactText identifies text input or output.
 	CatalogArtifactText = "text"
 	// CatalogArtifactImage identifies image input or output.
@@ -105,6 +107,7 @@ type ProviderOffering struct {
 	OutputTokenLimit        int                        `mapstructure:"output_token_limit"`
 	ReasoningEffort         *ReasoningEffortCapability `mapstructure:"reasoning_effort"`
 	MediaInputs             []string                   `mapstructure:"media_inputs"`
+	ImageMIMETypes          []string                   `mapstructure:"image_mime_types"`
 	MediaLimits             []CatalogMediaLimit        `mapstructure:"media_limits"`
 	Controls                []CatalogControl           `mapstructure:"controls"`
 	Limits                  []CatalogLimit             `mapstructure:"limits"`
@@ -129,6 +132,17 @@ type validatedModelCatalog struct {
 }
 
 func validateModelCatalog(catalog ModelCatalog) (validatedModelCatalog, error) {
+	validated, err := validateModelCatalogStructure(catalog)
+	if err != nil {
+		return validatedModelCatalog{}, err
+	}
+	if err := validateProviderOperationDefaults(catalog.Offerings); err != nil {
+		return validatedModelCatalog{}, err
+	}
+	return validated, nil
+}
+
+func validateModelCatalogStructure(catalog ModelCatalog) (validatedModelCatalog, error) {
 	validated := validatedModelCatalog{
 		revision:   catalog.Revision,
 		operations: map[string]ModelOperationKind{},
@@ -286,8 +300,6 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 	if len(offerings) == 0 {
 		return fmt.Errorf("%w: field=catalog.offerings", ErrInvalidModelCatalog)
 	}
-	providerOperationDefaults := map[string]int{}
-	providerOperations := map[string]map[string]struct{}{}
 	modelOperations := map[string]map[string]struct{}{}
 	providerNativeModels := map[string]struct{}{}
 	for index, offering := range offerings {
@@ -321,10 +333,6 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 			if _, supported := modelOperationSet[operation]; !supported {
 				return fmt.Errorf("%w: field=%s.operations operation=%s reason=unsupported_by_model", ErrInvalidModelCatalog, fieldPrefix, operation)
 			}
-			if providerOperations[offering.Provider] == nil {
-				providerOperations[offering.Provider] = map[string]struct{}{}
-			}
-			providerOperations[offering.Provider][operation] = struct{}{}
 			if modelOperations[offering.Model] == nil {
 				modelOperations[offering.Model] = map[string]struct{}{}
 			}
@@ -338,7 +346,6 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 			if _, offered := offeredOperations[operation]; !offered {
 				return fmt.Errorf("%w: field=%s.default_operations operation=%s reason=unsupported_by_offering", ErrInvalidModelCatalog, fieldPrefix, operation)
 			}
-			providerOperationDefaults[offering.Provider+"\x00"+operation]++
 		}
 		if offering.OutputTokenLimit < 0 {
 			return fmt.Errorf("%w: field=%s.output_token_limit", ErrInvalidModelCatalog, fieldPrefix)
@@ -380,14 +387,10 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 		if mediaLimitError := validateCatalogMediaLimits(offering.MediaLimits, offering.MediaInputs, routeCapabilities, fieldPrefix+".media_limits"); mediaLimitError != nil {
 			return mediaLimitError
 		}
-		catalog.offerings[offeringIdentifier] = offering
-	}
-	for provider, operations := range providerOperations {
-		for operation := range operations {
-			if providerOperationDefaults[provider+"\x00"+operation] != 1 {
-				return fmt.Errorf("%w: provider=%s operation=%s default_count=%d", ErrInvalidModelCatalog, provider, operation, providerOperationDefaults[provider+"\x00"+operation])
-			}
+		if imageError := validateCatalogImageInputs(offering, routeCapabilities, fieldPrefix); imageError != nil {
+			return imageError
 		}
+		catalog.offerings[offeringIdentifier] = offering
 	}
 	for modelIdentifier, exactModel := range catalog.models {
 		exactOperations, _ := validatedOperationSet(exactModel.Operations, "catalog.models.operations")
@@ -400,11 +403,35 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 	return nil
 }
 
+func validateProviderOperationDefaults(offerings []ProviderOffering) error {
+	providerOperationDefaults := map[string]int{}
+	providerOperations := map[string]map[string]struct{}{}
+	for _, offering := range offerings {
+		if providerOperations[offering.Provider] == nil {
+			providerOperations[offering.Provider] = map[string]struct{}{}
+		}
+		for _, operation := range offering.Operations {
+			providerOperations[offering.Provider][operation] = struct{}{}
+		}
+		for _, operation := range offering.DefaultOperations {
+			providerOperationDefaults[offering.Provider+"\x00"+operation]++
+		}
+	}
+	for provider, operations := range providerOperations {
+		for operation := range operations {
+			if providerOperationDefaults[provider+"\x00"+operation] != 1 {
+				return fmt.Errorf("%w: provider=%s operation=%s default_count=%d", ErrInvalidModelCatalog, provider, operation, providerOperationDefaults[provider+"\x00"+operation])
+			}
+		}
+	}
+	return nil
+}
+
 func validateDictationOffering(offering ProviderOffering, fieldPrefix string) error {
-	if offering.WireContract != CatalogWireContractMultipartTranscription || offering.ExecutionLifecycle != string(textExecutionLifecycleSynchronousCompletion) {
+	if (offering.WireContract != CatalogWireContractMultipartTranscription && offering.WireContract != CatalogProtocolGeminiInteractions && offering.WireContract != CatalogProtocolVertexGenerateContent && offering.WireContract != CatalogProtocolMetaTranscription) || offering.ExecutionLifecycle != string(textExecutionLifecycleSynchronousCompletion) {
 		return fmt.Errorf("%w: field=%s reason=unsupported_dictation_route", ErrInvalidModelCatalog, fieldPrefix)
 	}
-	if offering.RequestProfile != constants.EmptyString || offering.WebSearch || offering.OutputTokenLimit != 0 || offering.ReasoningEffort != nil || len(offering.MediaInputs) != 0 || len(offering.MediaLimits) != 0 || len(offering.Controls) != 0 || len(offering.Limits) != 0 {
+	if offering.RequestProfile != constants.EmptyString || offering.WebSearch || offering.OutputTokenLimit != 0 || offering.ReasoningEffort != nil || len(offering.MediaInputs) != 0 || len(offering.ImageMIMETypes) != 0 || len(offering.MediaLimits) != 0 || len(offering.Controls) != 0 || len(offering.Limits) != 0 {
 		return fmt.Errorf("%w: field=%s reason=text_capabilities_on_dictation_route", ErrInvalidModelCatalog, fieldPrefix)
 	}
 	return nil
@@ -436,16 +463,32 @@ func validateTextOffering(offering ProviderOffering, fieldPrefix string) error {
 	}
 	if reasoningEffort != nil {
 		switch reasoningEffort.adapter {
+		case reasoningEffortAdapterDashScopeResponses:
+			if capabilities.wireContract != textWireContractDashScopeResponses || offering.RequestProfile != constants.EmptyString {
+				return fmt.Errorf("%w: field=%s.reasoning_effort adapter=%s", ErrInvalidModelCatalog, fieldPrefix, reasoningEffort.adapter)
+			}
+		case reasoningEffortAdapterXAIResponses:
+			if capabilities.wireContract != textWireContractXAIResponses || offering.RequestProfile != constants.EmptyString {
+				return fmt.Errorf("%w: field=%s.reasoning_effort adapter=%s", ErrInvalidModelCatalog, fieldPrefix, reasoningEffort.adapter)
+			}
 		case reasoningEffortAdapterOpenAIResponses:
 			if capabilities.wireContract != textWireContractOpenAIResponses || modelRequestProfile(offering.RequestProfile) != requestProfileOpenAIResponsesReasoningTools {
 				return fmt.Errorf("%w: field=%s.reasoning_effort adapter=%s", ErrInvalidModelCatalog, fieldPrefix, reasoningEffort.adapter)
 			}
-		case reasoningEffortAdapterOpenAIChatCompletions:
+		case reasoningEffortAdapterOpenAIChatCompletions, reasoningEffortAdapterChatCompletionsThinking:
 			if capabilities != openAIChatCompletionsSynchronousRouteCapabilities || offering.RequestProfile != constants.EmptyString {
 				return fmt.Errorf("%w: field=%s.reasoning_effort adapter=%s", ErrInvalidModelCatalog, fieldPrefix, reasoningEffort.adapter)
 			}
+		case reasoningEffortAdapterVertexGenerateContent:
+			if capabilities.wireContract != textWireContractVertexGenerateContent || offering.RequestProfile != constants.EmptyString {
+				return fmt.Errorf("%w: incompatible Vertex reasoning adapter", ErrInvalidModelCatalog)
+			}
 		case reasoningEffortAdapterGeminiInteractions:
 			if capabilities.wireContract != textWireContractGeminiInteractions || offering.RequestProfile != constants.EmptyString {
+				return fmt.Errorf("%w: field=%s.reasoning_effort adapter=%s", ErrInvalidModelCatalog, fieldPrefix, reasoningEffort.adapter)
+			}
+		case reasoningEffortAdapterAnthropicMessages:
+			if capabilities.wireContract != textWireContractAnthropicMessages || offering.RequestProfile != constants.EmptyString {
 				return fmt.Errorf("%w: field=%s.reasoning_effort adapter=%s", ErrInvalidModelCatalog, fieldPrefix, reasoningEffort.adapter)
 			}
 		}
@@ -537,7 +580,7 @@ func validatedExactModelMediaInputs(rawMediaInputs []string, field string) (map[
 
 func knownTextWireContract(wireContract textWireContract) bool {
 	switch wireContract {
-	case textWireContractOpenAIResponses, textWireContractOpenAIChatCompletions, textWireContractGeminiInteractions, textWireContractAnthropicMessages:
+	case textWireContractDashScopeResponses, textWireContractXAIResponses, textWireContractOpenAIResponses, textWireContractOpenAIChatCompletions, textWireContractGeminiInteractions, textWireContractVertexGenerateContent, textWireContractAnthropicMessages:
 		return true
 	default:
 		return false
@@ -587,7 +630,13 @@ func validateOfferingRequestProfile(offering ProviderOffering) error {
 	if requestProfile == constants.EmptyString {
 		return nil
 	}
-	if textWireContract(offering.WireContract) != textWireContractOpenAIResponses || !knownModelRequestProfile(modelRequestProfile(requestProfile)) {
+	expectedContract := textWireContractOpenAIResponses
+	supported := knownModelRequestProfile(modelRequestProfile(requestProfile))
+	if modelRequestProfile(requestProfile) == requestProfileMiniMaxChatCompletions {
+		expectedContract = textWireContractOpenAIChatCompletions
+		supported = true
+	}
+	if textWireContract(offering.WireContract) != expectedContract || !supported {
 		return fmt.Errorf("%w: provider=%s profile=%s", ErrInvalidModelCatalog, offering.Provider, requestProfile)
 	}
 	return nil

@@ -130,7 +130,7 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 	}{
 		proxy.ProviderNameOpenAI:      {wireContract: "openai_responses", executionLifecycle: "pollable_resource"},
 		proxy.ProviderNameDeepSeek:    {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
-		proxy.ProviderNameDashScope:   {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
+		proxy.ProviderNameDashScope:   {wireContract: "dashscope_responses", executionLifecycle: "synchronous_completion"},
 		proxy.ProviderNameMoonshot:    {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
 		proxy.ProviderNameMiniMax:     {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
 		proxy.ProviderNameSiliconFlow: {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
@@ -199,7 +199,7 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 				_, _ = responseWriter.Write([]byte(`{"id":"capability-poll","status":"queued"}`))
 				return
 			}
-			_, _ = responseWriter.Write([]byte(`{"id":"capability-complete","status":"completed","output_text":"route ok"}`))
+			_, _ = responseWriter.Write([]byte(`{"id":"capability-complete","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"route ok"}]}]}`))
 		case "/chat/completions":
 			_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"route ok"},"finish_reason":"stop"}]}`))
 		case "/v1/messages":
@@ -255,8 +255,8 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 				expected.wireContract = "gemini_interactions"
 				expected.executionLifecycle = "pollable_resource"
 			}
-			if providerName == proxy.ProviderNameXAI && offering.Model == proxy.ModelNameGrok45 {
-				expected.wireContract = "openai_responses"
+			if providerName == proxy.ProviderNameXAI {
+				expected.wireContract = "xai_responses"
 				expected.executionLifecycle = "synchronous_completion"
 			}
 			if offering.WireContract != expected.wireContract || offering.ExecutionLifecycle != expected.executionLifecycle {
@@ -373,7 +373,7 @@ func TestProviderRoutingExpandsConfiguredContinuationTokenBudget(t *testing.T) {
 			var continuationPayload map[string]any
 			upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 				requestCount++
-				if request.Method != http.MethodPost || request.URL.Path != "/chat/completions" {
+				if request.Method != http.MethodPost || request.URL.Path != "/responses" {
 					subTest.Fatalf("request=%s %s", request.Method, request.URL.Path)
 				}
 				requestBytes, readError := io.ReadAll(request.Body)
@@ -382,14 +382,14 @@ func TestProviderRoutingExpandsConfiguredContinuationTokenBudget(t *testing.T) {
 				}
 				if requestCount == 1 {
 					responseWriter.Header().Set("Content-Type", "application/json")
-					_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":""},"finish_reason":"length"}]}`))
+					_, _ = responseWriter.Write([]byte(`{"status":"incomplete","output":[]}`))
 					return
 				}
 				if unmarshalError := json.Unmarshal(requestBytes, &continuationPayload); unmarshalError != nil {
 					subTest.Fatalf("unmarshal continuation body: %v", unmarshalError)
 				}
 				responseWriter.Header().Set("Content-Type", "application/json")
-				_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"continued"},"finish_reason":"stop"}]}`))
+				_, _ = responseWriter.Write([]byte(`{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"continued"}]}]}`))
 			}))
 			defer upstreamServer.Close()
 
@@ -421,8 +421,8 @@ func TestProviderRoutingExpandsConfiguredContinuationTokenBudget(t *testing.T) {
 			if requestCount != 2 {
 				subTest.Fatalf("upstream requests=%d want=2", requestCount)
 			}
-			if continuationPayload["max_tokens"] != testCase.expectedMaxTokens {
-				subTest.Fatalf("continuation max_tokens=%v want=%v", continuationPayload["max_tokens"], testCase.expectedMaxTokens)
+			if continuationPayload["max_output_tokens"] != testCase.expectedMaxTokens {
+				subTest.Fatalf("continuation max_tokens=%v want=%v", continuationPayload["max_output_tokens"], testCase.expectedMaxTokens)
 			}
 		})
 	}
@@ -438,10 +438,6 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 		expectedAPIKey      string
 		forbiddenFields     []string
 	}{
-		{name: "DashScope Qwen Plus", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwenPlus, tokenParameterField: "max_tokens"},
-		{name: "DashScope Qwen 3.7 Max", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen37Max, tokenParameterField: "max_tokens", expectedAPIKey: "sk-dashscope"},
-		{name: "DashScope Qwen 3.7 Plus", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen37Plus, tokenParameterField: "max_tokens", expectedAPIKey: "sk-dashscope"},
-		{name: "DashScope Qwen 3.6 Flash", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen36Flash, tokenParameterField: "max_tokens", expectedAPIKey: "sk-dashscope"},
 		{name: "Moonshot Kimi K2.6", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK26, tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"thinking", "reasoning_effort"}},
 		{name: "Moonshot Kimi K3", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK3, tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty", "thinking", "reasoning_effort"}},
 		{name: "Moonshot Kimi K2.7 Code", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK27Code, tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty", "thinking", "reasoning_effort"}},
@@ -455,7 +451,6 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 		{name: "MiniMax M2", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM2, providerModel: "MiniMax-M2", tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
 		{name: "SiliconFlow DeepSeek R1", provider: proxy.ProviderNameSiliconFlow, model: proxy.ModelNameSiliconFlowDeepSeek, providerModel: "deepseek-ai/DeepSeek-R1", tokenParameterField: "max_tokens", expectedAPIKey: testSiliconFlowKey},
 		{name: "ZAI GLM 5.2", provider: proxy.ProviderNameZAI, model: "glm-5.2", tokenParameterField: "max_tokens", forbiddenFields: []string{"thinking", "reasoning_effort"}},
-		{name: "Grok 4.20 reasoning", provider: proxy.ProviderNameXAI, model: "grok-4.20-0309-reasoning", tokenParameterField: "max_tokens"},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(subTest *testing.T) {
@@ -2114,7 +2109,7 @@ func TestProviderRoutingAnthropicDefaultMaxTokensByModel(t *testing.T) {
 		{name: "Fable 5", modelIdentifier: "claude-fable-5", expectedMaxTokens: 128000},
 		{name: "Sonnet 5", modelIdentifier: "claude-sonnet-5", expectedMaxTokens: 128000},
 		{name: "opus 4.8", modelIdentifier: proxy.ModelNameClaudeOpus48, expectedMaxTokens: 128000},
-		{name: "opus 4.1", modelIdentifier: proxy.ModelNameClaudeOpus41Alias, expectedMaxTokens: 32000},
+		{name: "opus 5", modelIdentifier: "claude-opus-5", expectedMaxTokens: 128000},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(subTest *testing.T) {
@@ -2204,11 +2199,11 @@ func TestProviderRoutingTranslatesMaxTokensForAnthropicMessages(t *testing.T) {
 	}
 }
 
-func TestProviderRoutingSupportsGrokChatCompletions(t *testing.T) {
+func TestProviderRoutingSupportsGrokResponses(t *testing.T) {
 	var capturedPayload map[string]any
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/chat/completions" {
-			t.Fatalf("path=%s want=%s", request.URL.Path, "/chat/completions")
+		if request.URL.Path != "/responses" {
+			t.Fatalf("path=%s want=%s", request.URL.Path, "/responses")
 		}
 		if authorizationHeader := request.Header.Get("Authorization"); authorizationHeader != "Bearer "+testXAIKey {
 			t.Fatalf("authorization=%q want=%q", authorizationHeader, "Bearer "+testXAIKey)
@@ -2221,7 +2216,7 @@ func TestProviderRoutingSupportsGrokChatCompletions(t *testing.T) {
 			t.Fatalf("unmarshal body: %v", unmarshalError)
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"grok ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":9,"completion_tokens":4,"total_tokens":13}}`))
+		_, _ = responseWriter.Write([]byte(`{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"grok ok"}]}],"usage":{"input_tokens":9,"output_tokens":4,"total_tokens":13}}`))
 	}))
 	defer upstreamServer.Close()
 
@@ -2390,7 +2385,7 @@ func TestProviderRoutingRejectsGeminiUnsupportedAndInvalidRequests(t *testing.T)
 		{name: "retired Gemini 3.1 Flash-Lite", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=gemini&model=gemini-3.1-flash-lite", expectedCode: http.StatusBadRequest},
 		{name: "retired Gemini 3.1 Pro Preview", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=gemini&model=gemini-3.1-pro-preview", expectedCode: http.StatusBadRequest},
 		{name: "unsupported web search", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=gemini&web_search=true", expectedCode: http.StatusBadRequest},
-		{name: "unsupported dictation", method: http.MethodPost, target: "/dictate?key=" + TestSecret + "&provider=gemini", expectedCode: http.StatusBadRequest},
+		{name: "unsupported dictation format", method: http.MethodPost, target: "/dictate?key=" + TestSecret + "&provider=gemini", expectedCode: http.StatusBadRequest},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(subTest *testing.T) {
@@ -2398,7 +2393,7 @@ func TestProviderRoutingRejectsGeminiUnsupportedAndInvalidRequests(t *testing.T)
 			if testCase.target == "/dictate?key="+TestSecret+"&provider=gemini" {
 				body := &bytes.Buffer{}
 				writer := multipart.NewWriter(body)
-				filePart, createError := writer.CreateFormFile("audio", "recording.webm")
+				filePart, createError := writer.CreateFormFile("audio", "recording.txt")
 				if createError != nil {
 					subTest.Fatalf("CreateFormFile error: %v", createError)
 				}

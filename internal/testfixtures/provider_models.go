@@ -104,7 +104,10 @@ func NewProviderCatalogFromModelCatalog(modelCatalog proxy.ModelCatalog) (*proxy
 	schema := proxy.ProviderCatalogSchema{
 		SchemaVersion: proxy.ProviderCatalogSchemaVersion,
 		Operations:    modelCatalog.Operations, Publishers: modelCatalog.Publishers,
-		Families: modelCatalog.Families, Models: modelCatalog.Models,
+		Families: modelCatalog.Families,
+	}
+	for _, model := range modelCatalog.Models {
+		schema.Models = append(schema.Models, proxy.ProviderCatalogModel{ExactModel: model, Enabled: proxy.ModelEnabled})
 	}
 	empty := ""
 	for _, offering := range modelCatalog.Offerings {
@@ -171,6 +174,9 @@ func testProviderTransport(identifier string, offering proxy.ProviderOffering) p
 			}
 		}
 	}
+	if offering.WireContract == proxy.CatalogProtocolVertexGenerateContent {
+		transport.Authentication.Kind = proxy.CatalogAuthenticationGoogleCredentials
+	}
 	if offering.WireContract == proxy.CatalogProtocolGeminiInteractions {
 		transport.Authentication = proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationHeader, Field: proxy.CatalogCredentialAPIKey, Header: "x-goog-api-key"}
 		transport.Headers = []proxy.ProviderCatalogHeader{{Name: "Api-Revision", Value: "2026-05-20"}}
@@ -184,7 +190,24 @@ func testProviderTransport(identifier string, offering proxy.ProviderOffering) p
 
 func testProviderProtocolParameters(offering proxy.ProviderOffering) proxy.ProviderCatalogProtocolParameters {
 	switch offering.WireContract {
-	case proxy.CatalogProtocolOpenAIResponses:
+	case proxy.CatalogProtocolVertexGenerateContent:
+		return proxy.ProviderCatalogProtocolParameters{
+			ModelField: "path.model", TokenField: "generationConfig.maxOutputTokens", MediaExecutionLifecycle: "synchronous_completion",
+			OutputFields: []string{"candidates[].content.parts[].text"}, FinishRules: proxy.ProviderCatalogFinishRules{Complete: []string{"STOP"}},
+			ContinuationRules: []string{}, ErrorRules: []string{"MAX_TOKENS", "blocked", "unknown_finish_reason"},
+			UsageFields: proxy.ProviderCatalogUsageFields{Input: "usageMetadata.promptTokenCount", Output: "usageMetadata.candidatesTokenCount+thoughtsTokenCount", Total: "usageMetadata.totalTokenCount"},
+		}
+
+	case proxy.CatalogProtocolDashScopeResponses:
+		return proxy.ProviderCatalogProtocolParameters{
+			ModelField: "model", TokenField: "max_output_tokens", MediaExecutionLifecycle: offering.ExecutionLifecycle,
+			OutputFields:      []string{"output[].content[].text"},
+			FinishRules:       proxy.ProviderCatalogFinishRules{Complete: []string{"completed"}, Continue: []string{"incomplete"}},
+			ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
+			ErrorRules:        []string{"cancelled", "failed", "unknown_status"},
+			UsageFields:       proxy.ProviderCatalogUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens"},
+		}
+	case proxy.CatalogProtocolOpenAIResponses, proxy.CatalogProtocolXAIResponses:
 		return proxy.ProviderCatalogProtocolParameters{
 			ModelField: "model", TokenField: "max_output_tokens", MediaExecutionLifecycle: offering.ExecutionLifecycle,
 			OutputFields:      []string{"output[].content[].text", "output[].type", "output[].call_id", "output[].name", "output[].arguments"},
@@ -239,7 +262,9 @@ func testProviderProtocolParameters(offering proxy.ProviderOffering) proxy.Provi
 
 func testProviderProtocolPath(protocol string) string {
 	switch protocol {
-	case proxy.CatalogProtocolOpenAIResponses:
+	case proxy.CatalogProtocolVertexGenerateContent:
+		return "/projects"
+	case proxy.CatalogProtocolOpenAIResponses, proxy.CatalogProtocolXAIResponses, proxy.CatalogProtocolDashScopeResponses:
 		return "/responses"
 	case proxy.CatalogProtocolOpenAIChatCompletions:
 		return "/chat/completions"

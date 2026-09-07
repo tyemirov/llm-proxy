@@ -115,7 +115,9 @@ func internalTestProviderCatalog(modelCatalog ModelCatalog) *ProviderCatalog {
 		Operations:    modelCatalog.Operations,
 		Publishers:    modelCatalog.Publishers,
 		Families:      modelCatalog.Families,
-		Models:        modelCatalog.Models,
+	}
+	for _, model := range modelCatalog.Models {
+		schema.Models = append(schema.Models, ProviderCatalogModel{ExactModel: model, Enabled: ModelEnabled})
 	}
 	empty := ""
 	for _, offering := range modelCatalog.Offerings {
@@ -174,6 +176,7 @@ func internalTestProviderTransport(identifier string, offering ProviderOffering)
 				continue
 			}
 			template.ID = identifier
+			template.Authentication.Field = CatalogCredentialAPIKey
 			template.Endpoint = ProviderCatalogEndpoint{
 				Method: CatalogEndpointMethodPost, DefaultBaseURL: "https://provider.example", Path: internalTestProviderProtocolPath(protocol),
 			}
@@ -191,6 +194,8 @@ func internalTestProviderProtocolPath(protocol string) string {
 		return "/chat/completions"
 	case CatalogProtocolAnthropicMessages:
 		return "/v1/messages"
+	case CatalogProtocolVertexGenerateContent:
+		return "/projects"
 	case CatalogProtocolGeminiInteractions:
 		return "/interactions"
 	case CatalogProtocolMultipartTranscription:

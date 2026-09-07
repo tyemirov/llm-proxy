@@ -848,6 +848,9 @@ func validateTextMaxTokens(providerDefinition providerDefinition, modelIdentifie
 	if maxTokens == nil {
 		return nil
 	}
+	if modelIdentifier.wireContract == textWireContractDashScopeResponses && *maxTokens < 16 {
+		return fmt.Errorf("invalid max_tokens value: provider=%s model=%s max_tokens=%d minimum=16", providerDefinition.identifier.string(), modelIdentifier.string(), *maxTokens)
+	}
 	if !modelIdentifier.hasOutputTokenLimit || *maxTokens <= modelIdentifier.outputTokenLimit {
 		return nil
 	}
@@ -862,6 +865,8 @@ func validateTextMaxTokens(providerDefinition providerDefinition, modelIdentifie
 
 func statusCodeForError(requestError error) int {
 	switch {
+	case errors.Is(requestError, ErrInvalidAudioInput):
+		return http.StatusBadRequest
 	case errors.Is(requestError, ErrUnknownProvider), errors.Is(requestError, ErrUnknownModel), errors.Is(requestError, ErrUnsupportedCapability), errors.Is(requestError, ErrUnsupportedEndpoint), errors.Is(requestError, ErrConflictingModelParameters), errors.Is(requestError, ErrInvalidChatMessages), errors.Is(requestError, errAssetInvalid), errors.Is(requestError, errAssetMIMEMismatch):
 		return http.StatusBadRequest
 	case errors.Is(requestError, errAssetNotFound):

@@ -1,8 +1,7 @@
 # LLM Proxy
 
-LLM Proxy is a lightweight HTTP service that forwards user prompts to OpenAI's
-Responses API, OpenAI-compatible chat providers, Anthropic's native Messages
-API, Google Gemini's native Interactions API, and audio transcription APIs.
+LLM Proxy is an HTTP service for text generation and audio transcription.
+It supports OpenAI, compatible chat providers, Anthropic Messages, Gemini Interactions, and Vertex AI.
 It exposes protected HTTP endpoints that require a tenant secret and simplify
 integrating provider capabilities without embedding API credentials in each
 client. Canonical `POST /v2` user messages can also carry provider-neutral,
@@ -354,17 +353,18 @@ adapters before they are available through `/dictate`.
 
 | Provider selector | Aliases | Wire contract | Execution lifecycle | Configured default text model | Credential field | Default base URL | Dictation | Web search |
 |-------------------|---------|---------------|---------------------|-------------------------------|------------------|------------------|-----------|------------|
-| `openai` | none | `openai_responses` | `pollable_resource` | `gpt-4.1` | Tenant-managed API key | `https://api.openai.com/v1` | Yes: `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | Yes, on marked OpenAI models |
+| `openai` | none | `openai_responses` | `pollable_resource` | `gpt-4.1` | Tenant-managed API key | `https://api.openai.com/v1` | Yes: `gpt-transcribe` | Yes, on marked OpenAI models |
+| `baidu` | none | `openai_chat_completions` | `synchronous_completion` | `ernie-5.0` | Tenant-managed API key | `https://api.baiduqianfan.ai/v1` | No | No |
 | `meta` | none | `openai_chat_completions` | `synchronous_completion` | `muse-spark-1.1` | Tenant-managed API key | `https://api.meta.ai/v1` | No | No |
 | `deepseek` | none | `openai_chat_completions` | `synchronous_completion` | `deepseek-v4-flash` | Tenant-managed API key | `https://api.deepseek.com` | No | No |
-| `dashscope` | `qwen` | `openai_chat_completions` | `synchronous_completion` | `qwen-plus` | Tenant-managed API key | Tenant-managed Singapore workspace URL | No | No |
+| `dashscope` | `qwen` | `dashscope_responses` | `synchronous_completion` | `qwen-plus` | Tenant-managed API key | Tenant-managed Singapore workspace URL | No | No |
 | `moonshot` | `kimi` | `openai_chat_completions` | `synchronous_completion` | `kimi-k2.6` | Tenant-managed API key | `https://api.moonshot.ai/v1` | No | No |
 | `minimax` | none | `openai_chat_completions` | `synchronous_completion` | `minimax-m2.7` | Tenant-managed API key | `https://api.minimax.io/v1` | No | No |
 | `siliconflow` | none | `openai_chat_completions` | `synchronous_completion` | `deepseek-reasoner` | Tenant-managed API key | `https://api.siliconflow.com/v1` | Yes: `sensevoice-small` | No |
 | `zai` | none | `openai_chat_completions` | `synchronous_completion` | `glm-5.1` | Tenant-managed API key | `https://api.z.ai/api/paas/v4` | Yes: `glm-asr-2512` | No |
-| `gemini` | none | `gemini_interactions` | `pollable_resource` | `gemini-3.5-flash` | Tenant-managed API key | `https://generativelanguage.googleapis.com/v1beta` | No | No |
+| `gemini` | none | `gemini_interactions` | `pollable_resource` | `gemini-3.5-flash` | Tenant-managed API key | `https://generativelanguage.googleapis.com/v1beta` | Yes: `gemini-3.5-transcribe` | No |
 | `anthropic` | `claude` | `anthropic_messages` | `synchronous_completion` | `claude-sonnet-4-6` | Tenant-managed API key | `https://api.anthropic.com` | No | No |
-| `xai` | none | Model-specific: `grok-4.5` uses `openai_responses`, and other text models use `openai_chat_completions` | `synchronous_completion` | `grok-4.3` | Tenant-managed API key | `https://api.x.ai/v1` | Yes: `xai-stt` | No |
+| `xai` | none | `xai_responses` | `synchronous_completion` | `grok-4.3` | Tenant-managed API key | `https://api.x.ai/v1` | Yes: `xai-stt` | No |
 
 All upstream provider credentials are server-side only. Client requests must
 never send OpenAI, Meta, Anthropic, xAI, Gemini, or other upstream API keys.
@@ -374,14 +374,29 @@ when the provider offering has a code-owned transport.
 | Exact model set | Provider | Standard-message media inputs |
 |-----------------|----------|-------------------------------|
 | All 11 OpenAI text models in the GPT-4 and GPT-5 families | OpenAI | `image` |
-| All 10 Claude text models in the Fable, Sonnet, Opus, and Haiku families | Anthropic | `image` |
-| Both Gemini text models | Gemini | `image`, `audio` |
+| All 12 Claude text models in the Fable, Sonnet, Opus, and Haiku families | Anthropic | `image` |
+| All four enabled Gemini text models | Gemini | `image`, `audio` |
 | `qwen3.7-plus`, `qwen3.6-flash` | DashScope/Qwen | `image` |
 | All four Kimi text models | Moonshot/Kimi | `image` |
 | `grok-4.5` | xAI | `image` |
 | Every other configured model | Its configured provider | None |
 
 ### Provider catalog
+
+Anthropic includes `claude-fable-5-1` and `claude-opus-5` with text, image input, structured output, and five reasoning effort levels.
+Both models have a 1,000,000-token context and a 128,000-token output maximum.
+`claude-sonnet-4-6` remains the Anthropic default.
+See [current Claude models](docs/claude-current-models.md) for prices, provider retention requirements, and live acceptance evidence.
+See [Opus 4.1 retirement](docs/claude-retirement.md) for the bounded Opus 5 selection migration and operator procedure.
+Gemini 3.6 and 3.7 Flash are enabled after their live reasoning and stored interaction checks passed.
+See [qualified Gemini models](docs/gemini-qualified-models.md) for the exact route controls.
+Gemini 3.8 Flash and 3.5 Flash-Lite are enabled through Vertex after service-account qualification.
+Their Developer API offerings remain disabled.
+See the [Vertex configuration and tenant cutover](docs/vertex-gemini.md).
+See [current Gemini candidates](docs/gemini-current-models.md) for their limits, prices, and acceptance checks.
+Grok 4.6 remains disabled until live qualification passes.
+See [the GLM 5.3 candidates](docs/zai-current-models.md) for text and Flash image contracts, current prices, and qualification requirements.
+See [the Grok 4.6 candidate](docs/grok-current-model.md) for its reasoning controls, image limits, and two price tiers.
 
 The versioned [provider catalog](docs/provider-catalog.md) has root records for
 operations, publishers, families, exact models, and provider definitions. Each
@@ -392,9 +407,12 @@ The loader rejects unknown fields and unsupported schema versions. It also
 rejects invalid identities, references, defaults, protocols, capabilities,
 limits, and prices.
 
-The current snapshot contains 11 providers, 62 exact models, 63 provider
-offerings, and 63 price records. The application compiles one immutable
-registry from this snapshot.
+The current snapshot contains 13 providers, 81 exact models, 86 provider offerings, and 86 price records.
+Runtime discovery contains 71 enabled exact models, 74 offerings, and 74 price records.
+The application compiles one immutable registry from this snapshot.
+
+[Baidu Qianfan](docs/baidu-qianfan.md) provides four text offerings through one API key.
+Its response policy checks finish reasons and Qianfan flags before text or key verification succeeds.
 
 Each provider offering references one exact model and one provider transport.
 The transport selects one reusable protocol adapter. Provider identifiers do
@@ -404,13 +422,14 @@ Public resources omit credential fields, setting fields, authentication data,
 environment names, and upstream model identifiers. Management resources return
 safe field definitions and masked connection state.
 
-OpenAI offerings use `request_profile` to select a stable payload shape:
+Offerings use `request_profile` to select a stable payload shape:
 
 | Request profile | Payload behavior |
 |-----------------|------------------|
 | `openai_responses_temperature` | Adds `temperature`. |
 | `openai_responses_temperature_tools` | Adds `temperature` and enabled web-search tools. |
 | `openai_responses_reasoning_tools` | Adds reasoning controls and enabled web-search tools. |
+| `minimax_chat_completions` | Sends `reasoning_split: true` for separate reasoning output. |
 
 All OpenAI Responses text requests also send `background: true` and
 `store: true`. llm-proxy polls the stored OpenAI response server-side until it
@@ -480,17 +499,23 @@ Provider-specific details:
   also includes M2.7 Highspeed, M2.5, M2.5 Highspeed, M2.1, M2.1 Highspeed,
   and M2. The shared Chat Completions adapter maps public `max_tokens` to
   upstream `max_completion_tokens`. All seven routes enforce the documented
-  204,800-token completion maximum. The proxy does not expose MiniMax-specific
-  reasoning, tool, streaming, or multimodal controls. See the official
+  204,800-token completion maximum. Generation and key verification send
+  `reasoning_split: true`. Public answers contain only visible content.
+  Reasoning remains private during output continuation.
+  The private catalog also contains the disabled [M3 candidate](docs/minimax-m3.md).
+  M3 adds JPEG, PNG, and WebP input with a 524,288-token output maximum.
+  Live text and image acceptance must pass before M3 activation. See the official
   [OpenAI SDK guide](https://platform.minimax.io/docs/api-reference/text-openai-api),
   [Chat Completions reference](https://platform.minimax.io/docs/api-reference/text-chat-openai),
   and [PAYG prices](https://platform.minimax.io/docs/guides/pricing-paygo).
 * Meta Model API requests use that shared Chat Completions adapter with the
   exact `meta` selector and `https://api.meta.ai/v1` base URL. The provider
-  offerings are `muse-spark-1.1` and `muse-spark-1.2`. Muse Spark 1.1 remains
+  offerings are `muse-spark-1.1`, `muse-spark-1.2`, and `muse-spark-1.3`. Muse Spark 1.1 remains
   the Meta default. llm-proxy exposes the public `max_tokens` input upstream as Meta's current
   `max_completion_tokens` field rather than Meta's deprecated `max_tokens` field.
-  The proxy exposes both models only as text generation through `GET /`,
+  The enabled [Muse Spark 1.3 offering](docs/meta-current-model.md) passed live qualification with the existing Meta key.
+  That Standard-tier model adds six reasoning effort levels and current prices.
+  The proxy exposes these models as text generation through `GET /`,
   `POST /`, and `POST /v2`. Meta describes Muse Spark 1.2 as coding-focused.
   This focus does not change the provider transport or add agent orchestration.
   The proxy does not expose Meta dictation, `web_search`, tools, multimodal
@@ -499,7 +524,9 @@ Provider-specific details:
   [model reference](https://dev.meta.ai/docs/models),
   [Chat Completions reference](https://dev.meta.ai/docs/protocols/chat-completions),
   and [pricing and rate-limit documentation](https://dev.meta.ai/docs/pricing-rate-limits).
-* Each dictation-capable provider has a `multipart_transcription` transport in
+* Gemini file dictation uses synchronous `gemini_interactions`. See the
+  [transcription contract](docs/gemini-transcription.md).
+* Other dictation providers use a `multipart_transcription` transport in
   `providers.yml`. That transport owns the exact endpoint and model-field rule.
 * Gemini text requests use native `POST /interactions` against the configured
   `v1beta` base URL with `x-goog-api-key` and
@@ -527,7 +554,8 @@ Provider-specific details:
   whose catalog declares `media_inputs`, ordered image and audio attachments
   become native typed interaction content after the message text. The adapter
   sends an inline request when the complete encoded request is at most the
-  offering's inline limit. It streams exact media bytes through the Gemini
+  offering's inline limit of 20,000,000 bytes for image and audio requests.
+  It streams exact media bytes through the Gemini
   Files API when the encoded request is larger, then deletes each provider
   file after the interaction ends. See Google's
   [Interactions overview](https://ai.google.dev/gemini-api/docs/interactions-overview),
@@ -545,19 +573,21 @@ Provider-specific details:
   Each catalog model with image input sends ordered base64 image blocks before the message text.
 * Z.AI dictation uses the catalog-defined GLM-ASR transport with the selected
   exact dictation model.
-* Most xAI text models use xAI's OpenAI-compatible `/chat/completions` API at
-  `https://api.x.ai/v1`. The `grok-4.5` route uses synchronous `/responses`
-  with `store: false`. Its image blocks use `detail: high`. Grok/xAI dictation
+* All xAI text models use the xAI Responses codec at
+  `https://api.x.ai/v1/responses`. Requests use `store: false` and omit `background`.
+  The `grok-4.5` image blocks use `detail: high`. Grok/xAI dictation
   uses the catalog-defined xAI STT transport. The upstream STT endpoint does
   not receive a `model` multipart field.
+
+See the [xAI Responses contract and live acceptance procedure](docs/xai-responses.md).
 
 All client keys, provider API keys, and tenant defaults are tenant-owned
 management state. An explicit request for a provider without a saved tenant
 credential returns `409 provider_not_configured` before provider dispatch. An
 omitted provider resolves through the authenticated tenant's saved default and
 requires a saved credential for that route. Static provider base URLs and paths belong to
-`providers.yml`. DashScope instead references a tenant-owned `base_url` provider
-field. The provider catalog must contain every supported provider and route.
+`providers.yml`. DashScope and Baidu reference a tenant-owned `base_url` provider field.
+Baidu supplies the international Qianfan URL as its catalog default. The provider catalog must contain every supported provider and route.
 The `management` configuration is mandatory. Provider blocks in `config.yml`
 are unknown YAML keys and fail startup.
 
@@ -713,6 +743,12 @@ Settings opens automatically and cannot be dismissed until the profile has both
 that client key and at least one configured provider connection. Only
 `tenant.has_secret` and `providers[].configured` satisfy this setup gate. A
 typed credential draft or a static environment value does not satisfy it.
+The four active DashScope text routes use synchronous Responses requests.
+The private catalog also contains five disabled [Qwen 3.8 candidates](docs/qwen-current-models.md).
+They add explicit reasoning controls and verified model limits. See the
+[DashScope Responses contract](docs/dashscope-responses.md) for request limits
+and provider acceptance requirements.
+
 DashScope also requires the tenant's exact Singapore Model Studio workspace
 URL. Pasting into a credential provider field immediately starts one server-side
 operational verification. The operation uses the exact provider, text model,
@@ -834,9 +870,10 @@ a request omits both provider and model. Settings explains both scopes through
 help tooltips. Choosing a text routing provider initializes its routing model
 from that provider's saved default, after which the routing model can be changed
 independently. The text pair is both empty only when no provider connection exists.
-The dictation pair is both empty when none of the keyed providers supports
-dictation; in that state the Settings controls are disabled and no default
-dictation example is shown. Saving provider settings preserves an
+An empty dictation pair is a valid unset selection.
+A catalog update preserves that selection when it adds a dictation capability.
+Settings disables dictation controls when no keyed provider supports dictation.
+No default dictation example appears without a selected pair. Saving provider settings preserves an
 eligible current provider, while a changed provider text model also updates the
 active same-provider text default and clears an incompatible reasoning effort.
 A different active provider remains unchanged. Removing a provider connection
@@ -1413,6 +1450,9 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make test-live-providers` | Start a disposable managed tenant, verify every available provider key through the canonical management operation, and run that provider's live text smoke only after verification succeeds; use `LIVE_ENV_FILE=/path/to/env` to load key values. |
 | `make test-live-provider-media` | Verify OpenAI, Anthropic, Gemini, Moonshot, and xAI keys, then send one paid canonical image request through each provider. |
 | `make test-live-gemini` | Run direct acceptance for the exact Gemini 3.6 Flash and Gemini 3.7 Flash candidates, then run registered Gemini routes through `make test-live-providers`. |
+| `make test-live-minimax-m3` | Qualify MiniMax M3 text and image input through a disposable catalog with M3 enabled. Requires `MINIMAX_API_KEY`. |
+| `make test-live-provider-candidate` | Qualify one disabled model through a copied catalog. Set `LIVE_CANDIDATE_MODEL=provider/model` and `LIVE_ENV_FILE`. |
+| `make test-live-provider-candidate-media` | Qualify image input for one disabled model through a copied catalog. Set `LIVE_CANDIDATE_MODEL=provider/model` and `LIVE_ENV_FILE`. |
 | `make test-live-local-providers` | Build an isolated local Compose project, verify selected provider keys, and send paid `POST /v2` requests through its Dockerized API. |
 | `make test-live-local-gemini` | Run every registered Gemini model and reasoning level through the isolated local Compose API. |
 | `make live-test` | Send paid production `POST /v2` requests through the Default tenant using only `LLM_PROXY_DEFAULT_TENANT_KEY`: echo checks for OpenAI, Anthropic, Meta, Gemini, and Moonshot, plus large completion cases for OpenAI, Anthropic, Meta, and Gemini. |
@@ -1458,20 +1498,28 @@ Compose:
 make test-live-local-gemini LIVE_ENV_FILE=/path/to/provider.env
 ```
 
-The Gemini wrapper first sends direct Interactions requests for the exact
-`gemini-3.6-flash` and `gemini-3.7-flash` candidates. It sends one request with
-the thinking level omitted and one request for every thinking level supported
-by the exact model. It then proves active retrieval, completion, cancellation,
-and deletion for stored background interactions. Google documents both exact
-models as stable Interactions models and documents the background resource
-lifecycle in its
-[Gemini 3.6 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash),
-[Gemini 3.7 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash),
-and [background execution](https://ai.google.dev/gemini-api/docs/background-execution)
-guides. These candidates remain outside the public provider catalog until the
-complete lifecycle succeeds. Set
-`LLM_PROXY_LIVE_GEMINI_CANDIDATES=false` only when a run must exercise the
-registered Gemini routes without candidate acceptance.
+The Gemini wrapper first tests `gemini-3.6-flash` and `gemini-3.7-flash` directly through Interactions.
+It sends one omitted thinking level and each explicit level that the exact model supports.
+It then proves active retrieval, completion, cancellation, and deletion for stored background interactions.
+Both models passed these checks and are registered through I207.
+See [qualified Gemini models](docs/gemini-qualified-models.md) for their route contract and acceptance evidence.
+Set `LLM_PROXY_LIVE_GEMINI_CANDIDATES=false` when a run requires only the registered proxy routes.
+
+Select one exact model for independent acceptance:
+
+```shell
+LLM_PROXY_LIVE_GEMINI_MODEL=gemini-3.1-pro-preview \
+  make test-live-gemini-candidate LIVE_ENV_FILE=configs/.env
+```
+
+The selector accepts `gemini-3.1-pro-preview`, `gemini-3.6-flash`, `gemini-3.7-flash`, `gemini-3.8-flash`, and `gemini-3.5-flash-lite`.
+The harness does not register a model in the provider catalog.
+The preview model uses omitted, `low`, `medium`, and `high` thinking levels.
+Its September 5, 2026 acceptance request returned HTTP 429 before the lifecycle tests.
+I234 retains the restoration gate.
+Google documents the [preview model](https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview),
+[thinking levels](https://ai.google.dev/gemini-api/docs/thinking), and
+[background lifecycle](https://ai.google.dev/gemini-api/docs/background-execution).
 
 `make ci` runs each declared gate sequentially through one top-level runner.
 Coverage is written to a fresh private artifact for that invocation and
@@ -1482,7 +1530,8 @@ an ignored coverage artifact from an earlier run cannot satisfy completion.
 | Provider | Key variable | Model override |
 |----------|--------------|----------------|
 | OpenAI | `OPENAI_API_KEY` | `LLM_PROXY_LIVE_OPENAI_MODEL` |
-| Meta Muse Spark | `MODEL_API_KEY` | `LLM_PROXY_LIVE_META_MODEL` |
+| Baidu Qianfan | `BAIDU_API_KEY` | `LLM_PROXY_LIVE_BAIDU_MODEL` |
+| Meta Muse Spark | `MUSE_API_KEY` | `LLM_PROXY_LIVE_META_MODEL` |
 | DeepSeek | `DEEPSEEK_API_KEY` | `LLM_PROXY_LIVE_DEEPSEEK_MODEL` |
 | DashScope/Qwen | `DASHSCOPE_API_KEY` | `LLM_PROXY_LIVE_DASHSCOPE_MODEL` |
 | Moonshot/Kimi | `MOONSHOT_API_KEY` | `LLM_PROXY_LIVE_MOONSHOT_MODEL` |
@@ -2350,7 +2399,7 @@ Optional model override:
 ```shell
 curl -X POST \
   -F "audio=@./recording.webm" \
-  "http://localhost:8080/dictate?key=mysecret&model=gpt-4o-mini-transcribe"
+  "http://localhost:8080/dictate?key=mysecret&model=gpt-transcribe"
 ```
 
 ### Response formats
@@ -2447,6 +2496,7 @@ API family and accepts the same four original GPT-5 effort values:
 | `gpt-5.5` | `none`, `low`, `medium`, `high`, `xhigh` |
 | `gpt-5.5-pro` | `medium`, `high`, `xhigh` |
 | `gpt-5.6`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna` | `none`, `low`, `medium`, `high`, `xhigh`, `max` |
+| `gpt-6-astra` | `low`, `medium`, `high`, `xhigh`, `max` |
 
 See OpenAI's [GPT-4.1 model reference](https://developers.openai.com/api/docs/models/gpt-4.1),
 [GPT-5 API launch contract](https://openai.com/index/introducing-gpt-5-for-developers/),
@@ -2455,9 +2505,18 @@ See OpenAI's [GPT-4.1 model reference](https://developers.openai.com/api/docs/mo
 [GPT-5.5 Pro model reference](https://developers.openai.com/api/docs/models/gpt-5.5-pro),
 and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-model).
 
+See the [Astra contract and acceptance](docs/astra.md) for limits, prices, and live verification.
+
 Kimi K3 accepts `low`, `high`, and `max`. Omission keeps Moonshot's provider
 default. Kimi K2.6 and the Kimi K2.7 Code routes do not expose a selectable
 effort through the proxy.
+
+### DeepSeek model retirement
+
+Direct DeepSeek routes use `deepseek-v4-flash` and `deepseek-v4-pro`.
+Both routes accept `reasoning_effort` values `none`, `low`, `high`, and `max`.
+The schema-version-14 migration replaces saved direct selections and retains historical usage identities.
+See the [operator procedure](docs/deepseek-retirement.md) for acceptance, migration checks, and conflicting profile settings.
 
 ### Model capabilities
 
@@ -2474,12 +2533,13 @@ effort through the proxy.
 | `gpt-5.6-sol` | OpenAI | No | - | Yes |
 | `gpt-5.6-terra` | OpenAI | No | - | Yes |
 | `gpt-5.6-luna` | OpenAI | No | - | Yes |
+| `gpt-6-astra` | OpenAI | No | `128000` | Yes |
 | `muse-spark-1.1` | Meta | Yes | - | No |
 | `muse-spark-1.2` | Meta | No | - | No |
+| `muse-spark-1.3` | Meta | No | - | No |
 | `deepseek-v4-flash` | DeepSeek | Yes | - | No |
 | `deepseek-v4-pro` | DeepSeek | No | - | No |
-| `deepseek-chat` | DeepSeek | No | - | No |
-| `deepseek-reasoner` | DeepSeek, SiliconFlow | SiliconFlow | - | No |
+| `deepseek-reasoner` | SiliconFlow | Yes | - | No |
 | `qwen-plus` | DashScope/Qwen | Yes | - | No |
 | `qwen3.7-max` | DashScope/Qwen | No | `65536` | No |
 | `qwen3.7-plus` | DashScope/Qwen | No | `65536` | No |
@@ -2495,11 +2555,19 @@ effort through the proxy.
 | `minimax-m2.1` | MiniMax | No | `204800` | No |
 | `minimax-m2.1-highspeed` | MiniMax | No | `204800` | No |
 | `minimax-m2` | MiniMax | No | `204800` | No |
+| `ernie-5.0` | Baidu Qianfan | Yes | `65536` | No |
+| `deepseek-v4-pro` | Baidu Qianfan | No | `131072` | No |
+| `deepseek-v4-flash` | Baidu Qianfan | No | `131072` | No |
+| `deepseek-v3.2` | Baidu Qianfan | No | `32768` | No |
 | `glm-5.1` | Z.AI | Yes | - | No |
 | `glm-5.2` | Z.AI | No | `131072` | No |
 | `gemini-3.5-flash` | Gemini | Yes | `65536` | No |
 | `gemini-3-flash-preview` | Gemini | No | `65536` | No |
+| `gemini-3.6-flash` | Gemini | No | `65536` | No |
+| `gemini-3.7-flash` | Gemini | No | `65536` | No |
 | `claude-opus-4-8` | Anthropic/Claude | No | `128000` | No |
+| `claude-fable-5-1` | Anthropic/Claude | No | `128000` | No |
+| `claude-opus-5` | Anthropic/Claude | No | `128000` | No |
 | `claude-fable-5` | Anthropic/Claude | No | `128000` | No |
 | `claude-sonnet-5` | Anthropic/Claude | No | `128000` | No |
 | `claude-sonnet-4-6` | Anthropic/Claude | Yes | `64000` | No |
@@ -2507,8 +2575,6 @@ effort through the proxy.
 | `claude-haiku-4-5` | Anthropic/Claude | No | `64000` | No |
 | `claude-sonnet-4-5-20250929` | Anthropic/Claude | No | `64000` | No |
 | `claude-sonnet-4-5` | Anthropic/Claude | No | `64000` | No |
-| `claude-opus-4-1-20250805` | Anthropic/Claude | No | `32000` | No |
-| `claude-opus-4-1` | Anthropic/Claude | No | `32000` | No |
 | `grok-4.3` | Grok/xAI | Yes | - | No |
 | `grok-4.3-latest` | Grok/xAI | No | - | No |
 | `grok-4.5` | Grok/xAI | No | - | No |
@@ -2552,10 +2618,12 @@ were verified on 2026-08-13 against MiniMax's official references above.
 
 | Provider selector | Models | Credential field | Provider transport | Notes |
 |-------------------|--------|------------------|--------------------|-------|
-| `openai` | `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | Tenant-managed API key | Catalog `dictation` transport | Default dictation provider and default model `gpt-4o-mini-transcribe`. |
+| `openai` | `gpt-transcribe` | Tenant-managed API key | Catalog `dictation` transport | Default dictation provider and default model `gpt-transcribe`. |
 | `siliconflow` | `sensevoice-small` | Tenant-managed API key | Catalog `dictation` transport | OpenAI-compatible audio transcription. |
 | `zai` | `glm-asr-2512` | Tenant-managed API key | Catalog `dictation` transport | Z.AI GLM-ASR sends `model=glm-asr-2512`. |
 | `xai` | `xai-stt` | Tenant-managed API key | Catalog `dictation` transport | The upstream request omits the multipart `model` field. |
+
+See [OpenAI transcription retirement](docs/openai-transcription-retirement.md) for the current model, saved-selection migration, and operator activation checks.
 
 ### Status codes
 

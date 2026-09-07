@@ -376,6 +376,9 @@ func (client *geminiInteractionsClient) performInteractionRequest(parentContext 
 }
 
 func geminiInteractionPayloadHasMedia(payload any) bool {
+	if _, isTranscription := payload.(geminiTranscriptionRequest); isTranscription {
+		return true
+	}
 	interaction, isInteraction := payload.(geminiInteractionRequest)
 	if !isInteraction {
 		return false

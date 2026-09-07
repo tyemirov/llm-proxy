@@ -25,12 +25,12 @@ The endpoint returns `400`, `403`, `413`, `429`, `499`, `502`, `503`, or `504` w
 
 | Provider selector | Models | Provider transport |
 |---|---|---|
-| `openai` | `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | OpenAI `dictation` transport |
+| `openai` | `gpt-transcribe` | OpenAI `dictation` transport |
 | `siliconflow` | `sensevoice-small` | SiliconFlow `dictation` transport |
 | `zai` | `glm-asr-2512` | Z.AI `dictation` transport |
 | `xai` | `xai-stt` | xAI `dictation` transport |
 
-OpenAI is the default dictation provider. Its default model is `gpt-4o-mini-transcribe`.
+OpenAI is the default dictation provider. Its default model is `gpt-transcribe`.
 The selected provider offering references one transport in
 [`configs/providers.yml`](../../configs/providers.yml). The transport supplies
 the endpoint and authentication field. The tenant provider connection supplies

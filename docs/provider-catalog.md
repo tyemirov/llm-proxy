@@ -12,21 +12,91 @@ configuration. The loader accepts only schema version 1.
 
 The current provider catalog has these records:
 
-- 11 provider definitions.
-- 11 model publishers.
-- 24 model families.
-- 62 exact models.
-- 63 provider offerings.
-- 63 price records.
-- Nine managed model migrations.
-- Six protocol adapters.
+- 13 provider definitions.
+- 12 model publishers.
+- 29 model families, with 26 runtime families.
+- 81 exact models, with 71 enabled models.
+- 86 provider offerings, with 74 runtime offerings.
+- 86 price records, with 74 runtime records.
+- 13 managed model migrations.
+- Ten configured request protocols.
 - Two lifecycle values.
+
+The two [GLM 5.3 candidates](zai-current-models.md) remain disabled during provider qualification.
+The five [Qwen 3.8 candidates](qwen-current-models.md) remain disabled during provider qualification.
+The two open models use the `qwen3-8` family with `open_weights` metadata.
+Gemini 3.5 Transcribe is enabled for file dictation. See the [transcription contract](gemini-transcription.md).
+Gemini 3.6 and 3.7 Flash are enabled. See [qualified Gemini models](gemini-qualified-models.md).
+Gemini 3.8 Flash and 3.5 Flash-Lite are enabled on Vertex after service-account qualification.
+Their Developer API offerings remain disabled.
+See the [Vertex contract and cutover procedure](vertex-gemini.md).
+Their [candidate contract](gemini-current-models.md) records current limits, prices, effort levels, and acceptance requirements.
+The disabled [Muse Spark 1.3 candidate](meta-current-model.md) adds Standard-tier text and six reasoning effort levels.
+The disabled [Grok 4.6 candidate](grok-current-model.md) adds xAI reasoning controls and current price tiers.
 
 The application calculates a SHA-256 catalog revision from the exact file
 bytes. It compiles one immutable registry from the validated snapshot.
 
 The provider catalog contains definitions only. It never contains a credential
 value, a tenant setting value, a system prompt, or a routing default.
+
+The [Baidu Qianfan integration](baidu-qianfan.md) adds four text offerings and a catalog response policy.
+The two DeepSeek V4 offerings share exact model records with the direct provider.
+
+## Image formats and dimensions
+
+An offering can declare `image_mime_types` to restrict the protocol adapter's image formats.
+Omission uses the adapter's current format set.
+The public offering includes the field when the catalog declares it.
+The loader rejects duplicates, unsupported formats, and format lists without image input.
+
+Image dimensions use `image_width_pixels` and `image_height_pixels` in `media_limits`.
+Each descriptor uses media type `image`, transport `any`, unit `pixels`, and scope `attachment`.
+Dimension checks currently require an explicit JPEG/PNG format list because these header decoders are available.
+The loader rejects other dimension formats and invalid dimension descriptors.
+The server checks inline images and tenant assets before dispatch.
+It preserves the asset reader contents for the provider request.
+
+## Provider and offering activation
+
+A provider or offering can declare `enabled: false` to stop its runtime routes.
+Omission means enabled for these two record types.
+The loader validates disabled records before it removes them from the runtime catalog.
+A disabled offering cannot be a provider default.
+An offering requires an enabled provider, model, and offering record.
+The model can remain available through another qualified provider.
+The runtime excludes a model when its last active provider offering is disabled.
+This rule keeps Vertex qualification separate from Developer API qualification.
+
+## Model activation
+
+Each exact model must declare `enabled: true` or `enabled: false`.
+The loader rejects a missing value, null, and each non-Boolean value.
+The Go schema uses `ModelEnabled` and `ModelDisabled` for these explicit states.
+
+The private catalog retains disabled models and their provider offerings, controls, limits, and prices.
+Startup validates this retained metadata.
+The runtime excludes disabled models, offerings, and prices from routing and discovery.
+Runtime families contain only families referenced by runtime models with active provider offerings.
+The private schema retains all family metadata.
+Management profiles, public capabilities, client model discovery, and standard live tests use this runtime catalog.
+
+A provider default must reference an enabled model.
+Before disabling a model with stored selections, add an explicit managed model migration to an enabled offering.
+Use a new migration version for databases that completed the previous migration.
+Startup rejects a stored disabled selection without its required migration.
+A migration target must reference an enabled offering.
+
+Model activation does not replace live acceptance for each provider offering and operation.
+MiniMax M3 remains disabled until live text and image qualification passes.
+
+The disposable live harness accepts `--candidate-model <provider/model>` for one disabled model.
+It enables that model only in its copied catalog and selects the exact provider offering.
+It rejects absent offerings, enabled models, and invalid selectors.
+Candidate mode requires a disposable proxy and excludes the all-model matrix.
+Use `--write-config <path>` to inspect the copy without provider calls.
+Use `--media` to qualify image input through the copied catalog.
+See [MiniMax M3](minimax-m3.md) for the current candidate contract and qualification command.
 
 ## Root record mapping
 
@@ -38,6 +108,8 @@ value, a tenant setting value, a system prompt, or a routing default.
 | Migrated operation | `model_migrations[].operation` | Selects the persisted route operation. |
 | Source model | `model_migrations[].source_model` | Identifies the exact persisted model value to replace or retire. |
 | Target model | `model_migrations[].target_model` | References the current provider offering that replaces the source. |
+| Migration reasoning | `model_migrations[].target_reasoning_effort` | Sets the replacement text route effort when declared. |
+| Historical source | `model_migrations[].preserve_source_usage` | Permits the exact source identity in historical usage records only. |
 | Operation identifier | `operations[].id` | Identifies `text`, `dictation`, or `video_generation`. |
 | Operation inputs | `operations[].input_artifacts` | Declares accepted artifact kinds. |
 | Operation outputs | `operations[].output_artifacts` | Declares result artifact kinds. |
@@ -47,6 +119,7 @@ value, a tenant setting value, a system prompt, or a routing default.
 | Family publisher | `families[].publisher` | References one publisher. |
 | Family label | `families[].label` | Supplies the public family label. |
 | Family weight access | `families[].weight_access` | Selects `proprietary` or `open_weights`. |
+| Model activation | `models[].enabled` | Includes enabled models in runtime routing and discovery. |
 | Exact model identity | `models[].id` | Owns the provider-independent model identifier. |
 | Exact model publisher | `models[].publisher` | References one publisher. |
 | Exact model family | `models[].family` | References one family from the same publisher. |
@@ -93,8 +166,11 @@ Each item in `providers[].fields` is one provider field.
 | Environment name | `fields[].environment` | Maps one optional environment value to this field. |
 
 All transport authentication fields must reference a required credential field.
-The generic environment loader resolves each declared environment name. A
-missing environment value does not enable that provider connection.
+The generic environment loader resolves each declared environment name.
+The live CLI discovery also publishes each field default.
+The live harness uses that default when the environment supplies no value.
+Required credentials have empty defaults and remain mandatory.
+A setting with a default can omit its environment binding.
 
 ## Provider transport mapping
 
@@ -121,6 +197,7 @@ Each item in `providers[].transports` is one provider transport.
 | Visibility retry statuses | `transports[].resource_visibility.retry_status_codes` | Declares the provider HTTP statuses that mean the created resource is not visible yet. |
 | Upstream model field | `protocol_parameters.model_field` | Declares the upstream model field. |
 | Upstream token field | `protocol_parameters.token_field` | Declares the upstream output-token field. |
+| Response policy | `protocol_parameters.response_policy` | Selects the `qianfan` response checks on the shared Chat Completions adapter. Omission uses the standard protocol policy. |
 | Output fields | `protocol_parameters.output_fields` | Declares the visible output locations. |
 | Complete rules | `protocol_parameters.finish_rules.complete` | Declares successful terminal signals. |
 | Continue rules | `protocol_parameters.finish_rules.continue` | Declares output-limit signals. |
@@ -140,10 +217,13 @@ and lifecycle behavior. Provider identifiers do not select protocol code.
 
 | Adapter identifier | Accepted lifecycle |
 |---|---|
-| `openai_responses` | `synchronous_completion` or `pollable_resource` |
+| `openai_responses` | `pollable_resource` |
+| `xai_responses` | `synchronous_completion` |
+| `dashscope_responses` | `synchronous_completion` |
 | `openai_chat_completions` | `synchronous_completion` |
 | `anthropic_messages` | `synchronous_completion` |
-| `gemini_interactions` | `pollable_resource` |
+| `vertex_generate_content` | `synchronous_completion` for text and dictation. |
+| `gemini_interactions` | `pollable_resource` or `synchronous_completion` for text. `synchronous_completion` for dictation. |
 | `multipart_transcription` | `synchronous_completion` |
 | `xai_videos_generations` | `pollable_resource` |
 
@@ -180,7 +260,7 @@ Each item in `providers[].offerings` is one provider offering.
 | Transport reference | `offerings[].transport` | Selects one transport in the provider definition. |
 | Supported operations | `offerings[].operations` | Declares the operations for this route. |
 | Provider defaults | `offerings[].default_operations` | Selects the default offering for each provider operation. |
-| Request profile | `offerings[].request_profile` | Selects one stable OpenAI Responses payload profile. |
+| Request profile | `offerings[].request_profile` | Selects one stable protocol-specific payload profile. |
 | Web search | `offerings[].web_search` | Declares route-specific web search support. |
 | Output boundary | `offerings[].output_token_limit` | Sets the public output-token boundary. |
 | Reasoning adapter | `offerings[].reasoning_effort.adapter` | Selects the reusable reasoning map. |
@@ -193,13 +273,33 @@ Each item in `providers[].offerings` is one provider offering.
 
 The accepted request profiles are
 `openai_responses_temperature`,
-`openai_responses_temperature_tools`, and
-`openai_responses_reasoning_tools`.
+`openai_responses_temperature_tools`,
+`openai_responses_reasoning_tools`, and `minimax_chat_completions`.
+The three OpenAI profiles require `openai_responses`. The MiniMax profile
+requires `openai_chat_completions` and sends `reasoning_split: true`.
+Generation and credential verification use the same profile.
 
-The accepted reasoning adapters are `openai_responses`,
-`openai_chat_completions`, and `gemini_interactions`. Startup requires each
+The accepted reasoning adapters are `xai_responses`, `openai_responses`,
+`openai_chat_completions`, `chat_completions_thinking`, `gemini_interactions`, `vertex_generate_content`, and `anthropic_messages`. Startup requires each
 adapter to match its exact wire contract. Each offering declares only the
 ordered effort values that its exact provider/model route accepts.
+
+The `xai_responses` reasoning adapter sends `reasoning.effort` on the xAI Responses route.
+It supports `low`, `medium`, `high`, and `xhigh` when the offering declares those values.
+It omits the field when the caller does not supply an effort.
+
+The `chat_completions_thinking` adapter maps `none` to `thinking.type: disabled`.
+It maps `low`, `high`, and `max` to enabled thinking and the matching `reasoning_effort`.
+An omitted effort enables thinking and uses the provider default.
+DeepSeek V4 Flash and V4 Pro use this adapter.
+
+The `anthropic_messages` reasoning adapter maps effort to `output_config.effort`.
+It preserves `output_config.format` when the request also requires structured output.
+An omitted effort preserves the provider default.
+Claude Fable 5.1 and Opus 5 declare `low`, `medium`, `high`, `xhigh`, and `max`.
+See [current Claude models](claude-current-models.md) for limits, prices, retention requirements, and qualification.
+
+See [DeepSeek retirement](deepseek-retirement.md) for the schema-version-14 migration and its operator checks.
 
 ## Capability and price mapping
 
@@ -256,7 +356,10 @@ provider card from each item. It never uses key presence or usage history to
 define provider membership.
 
 The DashScope catalog declares image input for `qwen3.7-plus` and
-`qwen3.6-flash`. These models accept image content and return text. The
+`qwen3.6-flash`. These models accept image content and return text.
+Each route accepts at most 250 images and 20,000,000 bytes per complete image Data URI.
+The `attachment_data_uri_bytes` scope includes the URI prefix, MIME type, and Base64 content.
+The
 `qwen-plus` and `qwen3.7-max` aliases accept text only. The management UI labels
 image input as `Image analysis`. It does not present image input as an image
 generation capability.
@@ -302,7 +405,7 @@ Use this procedure when an existing protocol adapter represents the complete
 provider contract:
 
 1. Add the publisher and model family records when they do not exist.
-2. Add each new exact model to the root `models` list.
+2. Add each new exact model to the root `models` list with an explicit `enabled` value.
 3. Add one provider definition to the root `providers` list.
 4. Define every credential field and setting field in `fields`.
 5. Add an environment name only when static or live-test input is necessary.
@@ -325,3 +428,37 @@ Use this safe discovery command to inspect provider environment bindings:
 ```shell
 go run ./cmd/cli --config configs/config.yml --provider-catalog-only
 ```
+
+## Gemini media request limits
+
+All six Gemini text offerings declare `inline_request_bytes` at 20,000,000 encoded bytes for image and audio requests.
+This includes the enabled `gemini-3.5-flash` and `gemini-3-flash-preview` offerings and the two disabled F047 candidates.
+Both the [image guide](https://ai.google.dev/gemini-api/docs/image-understanding) and [audio guide](https://ai.google.dev/gemini-api/docs/audio) state this total request bound.
+The [general file guide](https://ai.google.dev/gemini-api/docs/file-input-methods) lists 100 MB but states that limits can vary by file type and model.
+The catalog uses the media-specific bound for the input types that these routes support.
+The Files API handles attachments when the encoded request exceeds that bound.
+The catalog records the image guide as the common bound's source, verified on September 5, 2026.
+See [current Gemini candidates](gemini-current-models.md) for qualification state.
+
+## SiliconFlow expansion assessment
+
+P010 records six proposed SiliconFlow offerings, exact dated DeepSeek selectors, and conflicting provider limits.
+See the [SiliconFlow expansion assessment](siliconflow-expansion.md) for the acceptance sequence and current credential blocker.
+
+## Meta media assessment
+
+See [Muse Spark 1.3](meta-current-model.md) for the enabled text offering and live acceptance.
+
+P009 separates file dictation, image operations, and realtime transcription.
+See the [Meta media assessment](meta-media-assessment.md) for exact endpoints, limits, retention gaps, and proposed acceptance requirements.
+
+See [OpenAI transcription retirement](openai-transcription-retirement.md) for the schema-version-16 migration and operator acceptance.
+
+See [GPT-6 Astra](astra.md) for the enabled Responses offering, limits, price tiers, and live acceptance.
+
+## Google credential profiles
+
+The `google_credentials` authentication kind resolves a tenant-bound operator profile.
+The public credential kind is `google_credential_profile`.
+The `vertex_generate_content` protocol uses synchronous completion and the Google OAuth library.
+The [Vertex contract](vertex-gemini.md) defines the configuration, request mapping, limits, and tenant cutover.

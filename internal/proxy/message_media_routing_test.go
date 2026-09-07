@@ -170,15 +170,15 @@ func TestV2RoutesExactOrderedImagesThroughProviderAdapters(testingInstance *test
 			},
 		},
 		{
-			name: "DashScope Qwen 3.7 Plus", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen37Plus, path: "/chat/completions",
+			name: "DashScope Qwen 3.7 Plus", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen37Plus, path: "/responses",
 			assertBody: func(subTest *testing.T, payload map[string]any) {
-				assertChatCompletionImageInput(subTest, payload, firstImage, secondImage)
+				assertDashScopeImageInput(subTest, payload, firstImage, secondImage)
 			},
 		},
 		{
-			name: "DashScope Qwen 3.6 Flash", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen36Flash, path: "/chat/completions",
+			name: "DashScope Qwen 3.6 Flash", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen36Flash, path: "/responses",
 			assertBody: func(subTest *testing.T, payload map[string]any) {
-				assertChatCompletionImageInput(subTest, payload, firstImage, secondImage)
+				assertDashScopeImageInput(subTest, payload, firstImage, secondImage)
 			},
 		},
 	} {
@@ -196,11 +196,11 @@ func TestV2RoutesExactOrderedImagesThroughProviderAdapters(testingInstance *test
 					_, _ = responseWriter.Write([]byte(`{"content":[{"type":"text","text":"media accepted"}],"stop_reason":"end_turn"}`))
 					return
 				}
-				if testCase.provider == proxy.ProviderNameMoonshot || testCase.provider == proxy.ProviderNameDashScope {
+				if testCase.provider == proxy.ProviderNameMoonshot {
 					_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"media accepted"},"finish_reason":"stop"}]}`))
 					return
 				}
-				_, _ = responseWriter.Write([]byte(`{"id":"media-input","status":"completed","output_text":"media accepted"}`))
+				_, _ = responseWriter.Write([]byte(`{"id":"media-input","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"media accepted"}]}]}`))
 			}))
 			defer upstreamServer.Close()
 
@@ -292,7 +292,7 @@ func TestV2AppliesNewProviderMediaLimitsAtTheBoundary(testingInstance *testing.T
 					_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"accepted"},"finish_reason":"stop"}]}`))
 					return
 				}
-				_, _ = responseWriter.Write([]byte(`{"id":"media-limit","status":"completed","output_text":"accepted"}`))
+				_, _ = responseWriter.Write([]byte(`{"id":"media-limit","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"accepted"}]}]}`))
 			}))
 			defer upstreamServer.Close()
 
@@ -372,6 +372,28 @@ func setProviderMediaLimit(testingInstance *testing.T, catalog *proxy.ModelCatal
 		}
 	}
 	testingInstance.Fatalf("missing media limit provider=%s model=%s limit=%s", provider, model, limitID)
+}
+
+func assertDashScopeImageInput(testingInstance *testing.T, payload map[string]any, firstImage []byte, secondImage []byte) {
+	testingInstance.Helper()
+	input := payload["input"].([]any)
+	content := input[0].(map[string]any)["content"].([]any)
+	if len(content) != 3 {
+		testingInstance.Fatalf("Responses content=%v", content)
+	}
+	for index, expected := range []struct {
+		mimeType string
+		data     []byte
+	}{{"image/png", firstImage}, {"image/jpeg", secondImage}} {
+		imageBlock := content[index].(map[string]any)
+		expectedURL := "data:" + expected.mimeType + ";base64," + base64.StdEncoding.EncodeToString(expected.data)
+		if imageBlock["type"] != "input_image" || imageBlock["image_url"] != expectedURL || len(imageBlock) != 2 {
+			testingInstance.Fatalf("Responses image[%d]=%v", index, imageBlock)
+		}
+	}
+	if textBlock := content[2].(map[string]any); textBlock["type"] != "input_text" || textBlock["text"] != "Inspect in exact order." {
+		testingInstance.Fatalf("Responses text=%v", textBlock)
+	}
 }
 
 func assertOpenAIImageInput(testingInstance *testing.T, payload map[string]any, detail string, firstImage []byte, secondImage []byte) {

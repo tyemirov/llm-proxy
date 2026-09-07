@@ -26,14 +26,19 @@ const (
 	CatalogProviderFieldTypeOpaque     = "opaque"
 	CatalogProviderFieldTypeURL        = "url"
 
-	CatalogAuthenticationBearer           = "bearer"
-	CatalogAuthenticationHeader           = "header"
-	CatalogEndpointMethodPost             = "POST"
-	CatalogProtocolOpenAIResponses        = "openai_responses"
-	CatalogProtocolOpenAIChatCompletions  = "openai_chat_completions"
-	CatalogProtocolAnthropicMessages      = "anthropic_messages"
-	CatalogProtocolGeminiInteractions     = "gemini_interactions"
-	CatalogProtocolMultipartTranscription = "multipart_transcription"
+	CatalogAuthenticationGoogleCredentials = "google_credentials"
+	CatalogAuthenticationBearer            = "bearer"
+	CatalogAuthenticationHeader            = "header"
+	CatalogEndpointMethodPost              = "POST"
+	CatalogProtocolOpenAIResponses         = "openai_responses"
+	CatalogProtocolDashScopeResponses      = "dashscope_responses"
+	CatalogProtocolXAIResponses            = "xai_responses"
+	CatalogProtocolOpenAIChatCompletions   = "openai_chat_completions"
+	CatalogProtocolAnthropicMessages       = "anthropic_messages"
+	CatalogProtocolVertexGenerateContent   = "vertex_generate_content"
+	CatalogProtocolGeminiInteractions      = "gemini_interactions"
+	CatalogProtocolMultipartTranscription  = "multipart_transcription"
+	CatalogProtocolMetaTranscription       = "meta_transcription"
 
 	providerCatalogResourceVisibilityMaxRetryIntervalMilliseconds = 60000
 	providerCatalogResourceVisibilityMaxRetryLimit                = 100
@@ -51,21 +56,56 @@ type ProviderCatalogSchema struct {
 	Operations      []ModelOperationKind            `yaml:"operations"`
 	Publishers      []ModelPublisher                `yaml:"publishers"`
 	Families        []ModelFamily                   `yaml:"families"`
-	Models          []ExactModel                    `yaml:"models"`
+	Models          []ProviderCatalogModel          `yaml:"models"`
 	Providers       []ProviderCatalogProvider       `yaml:"providers"`
+}
+
+// ModelActivation is the explicit activation state of a persisted exact model.
+type ModelActivation uint8
+
+const (
+	ModelDisabled ModelActivation = iota + 1
+	ModelEnabled
+)
+
+// UnmarshalYAML accepts only a Boolean activation field.
+func (activation *ModelActivation) UnmarshalYAML(value *yaml.Node) error {
+	if value.Tag != "!!bool" {
+		return fmt.Errorf("%w: field=enabled reason=boolean_required", ErrInvalidModelCatalog)
+	}
+	*activation = ModelDisabled
+	if strings.EqualFold(value.Value, "true") {
+		*activation = ModelEnabled
+	}
+	return nil
+}
+
+// MarshalYAML writes the activation state as a Boolean.
+func (activation ModelActivation) MarshalYAML() (any, error) {
+	return activation == ModelEnabled, nil
+}
+
+// ProviderCatalogModel adds private activation state to an exact model.
+type ProviderCatalogModel struct {
+	ExactModel `yaml:",inline"`
+	Enabled    ModelActivation `yaml:"enabled"`
 }
 
 // ProviderCatalogModelMigration maps one persisted model identifier to the current catalog contract.
 type ProviderCatalogModelMigration struct {
-	ManagedSchemaVersion int    `yaml:"managed_schema_version"`
-	Provider             string `yaml:"provider"`
-	Operation            string `yaml:"operation"`
-	SourceModel          string `yaml:"source_model"`
-	TargetModel          string `yaml:"target_model"`
+	TargetReasoningEffort string `yaml:"target_reasoning_effort,omitempty"`
+	PreserveSourceUsage   bool   `yaml:"preserve_source_usage,omitempty"`
+	ManagedSchemaVersion  int    `yaml:"managed_schema_version"`
+	Provider              string `yaml:"provider"`
+	Operation             string `yaml:"operation"`
+	SourceModel           string `yaml:"source_model"`
+	TargetModel           string `yaml:"target_model"`
 }
 
 // ProviderCatalogProvider defines one provider and all provider-owned routes.
 type ProviderCatalogProvider struct {
+	// Enabled defaults to enabled when omitted. Candidate providers set false explicitly.
+	Enabled           ModelActivation            `yaml:"enabled,omitempty"`
 	ID                string                     `yaml:"id"`
 	Label             string                     `yaml:"label"`
 	APIServiceLabel   string                     `yaml:"api_service_label"`
@@ -141,6 +181,7 @@ type ProviderCatalogHeader struct {
 
 // ProviderCatalogProtocolParameters declares the adapter-owned wire fields and outcomes.
 type ProviderCatalogProtocolParameters struct {
+	ResponsePolicy          string                     `yaml:"response_policy,omitempty"`
 	ModelField              string                     `yaml:"model_field"`
 	TokenField              string                     `yaml:"token_field"`
 	MediaExecutionLifecycle string                     `yaml:"media_execution_lifecycle,omitempty"`
@@ -166,8 +207,9 @@ type ProviderCatalogUsageFields struct {
 
 // ProviderCatalogOffering defines one exact model route inside its provider.
 type ProviderCatalogOffering struct {
-	Created     int64 `yaml:"created"`
-	CallerTools bool  `yaml:"caller_tools,omitempty"`
+	Enabled     ModelActivation `yaml:"enabled,omitempty"`
+	Created     int64           `yaml:"created"`
+	CallerTools bool            `yaml:"caller_tools,omitempty"`
 
 	Model             string                     `yaml:"model"`
 	UpstreamModel     string                     `yaml:"upstream_model"`
@@ -179,6 +221,7 @@ type ProviderCatalogOffering struct {
 	OutputTokenLimit  int                        `yaml:"output_token_limit,omitempty"`
 	ReasoningEffort   *ReasoningEffortCapability `yaml:"reasoning_effort,omitempty"`
 	MediaInputs       []string                   `yaml:"media_inputs,omitempty"`
+	ImageMIMETypes    []string                   `yaml:"image_mime_types,omitempty"`
 	MediaLimits       []CatalogMediaLimit        `yaml:"media_limits,omitempty"`
 	Controls          []CatalogControl           `yaml:"controls,omitempty"`
 	Limits            []CatalogLimit             `yaml:"limits,omitempty"`
@@ -198,8 +241,9 @@ type ProviderCatalogPrice struct {
 
 // ProviderCatalog is one validated immutable catalog snapshot.
 type ProviderCatalog struct {
-	schema       ProviderCatalogSchema
-	modelCatalog ModelCatalog
+	schema        ProviderCatalogSchema
+	runtimeSchema ProviderCatalogSchema
+	modelCatalog  ModelCatalog
 }
 
 // ParseProviderCatalog decodes and validates one strict providers.yml document.
@@ -236,10 +280,57 @@ func newProviderCatalog(schema ProviderCatalogSchema, revision string) (*Provide
 	if compileError != nil {
 		return nil, compileError
 	}
+	runtimeSchema, modelCatalog := enabledProviderCatalog(schema, modelCatalog)
+	if defaultsError := validateProviderOperationDefaults(modelCatalog.Offerings); defaultsError != nil {
+		return nil, defaultsError
+	}
 	if migrationError := validateProviderCatalogModelMigrations(schema.ModelMigrations, modelCatalog); migrationError != nil {
 		return nil, migrationError
 	}
-	return &ProviderCatalog{schema: cloneProviderCatalogSchema(schema), modelCatalog: modelCatalog}, nil
+	return &ProviderCatalog{schema: cloneProviderCatalogSchema(schema), runtimeSchema: runtimeSchema, modelCatalog: modelCatalog}, nil
+}
+
+func enabledProviderCatalog(schema ProviderCatalogSchema, catalog ModelCatalog) (ProviderCatalogSchema, ModelCatalog) {
+	enabledOfferings := make(map[string]bool)
+	enabledProviders := make(map[string]bool, len(schema.Providers))
+	modelsWithEnabledOfferings := make(map[string]bool, len(schema.Models))
+	for _, provider := range schema.Providers {
+		enabledProviders[provider.ID] = provider.Enabled != ModelDisabled
+		for _, offering := range provider.Offerings {
+			enabledOfferings[provider.ID+"\x00"+offering.Model] = offering.Enabled != ModelDisabled
+			if enabledProviders[provider.ID] && offering.Enabled != ModelDisabled {
+				modelsWithEnabledOfferings[offering.Model] = true
+			}
+		}
+	}
+	enabledModels := make(map[string]bool, len(schema.Models))
+	enabledFamilies := make(map[string]bool, len(schema.Families))
+	for _, model := range schema.Models {
+		enabledModels[model.ID] = model.Enabled == ModelEnabled && modelsWithEnabledOfferings[model.ID]
+		if enabledModels[model.ID] {
+			enabledFamilies[model.Family] = true
+		}
+	}
+	runtimeSchema := cloneProviderCatalogSchema(schema)
+	runtimeSchema.Providers = slices.DeleteFunc(runtimeSchema.Providers, func(provider ProviderCatalogProvider) bool { return !enabledProviders[provider.ID] })
+	catalog.Providers = slices.DeleteFunc(catalog.Providers, func(provider CatalogProvider) bool { return !enabledProviders[provider.ID] })
+	runtimeSchema.Families = slices.DeleteFunc(runtimeSchema.Families, func(family ModelFamily) bool { return !enabledFamilies[family.ID] })
+	runtimeSchema.Models = slices.DeleteFunc(runtimeSchema.Models, func(model ProviderCatalogModel) bool { return !enabledModels[model.ID] })
+	for providerIndex := range runtimeSchema.Providers {
+		provider := &runtimeSchema.Providers[providerIndex]
+		provider.Offerings = slices.DeleteFunc(provider.Offerings, func(offering ProviderCatalogOffering) bool {
+			return !enabledModels[offering.Model] || offering.Enabled == ModelDisabled
+		})
+	}
+	catalog.Families = slices.DeleteFunc(catalog.Families, func(family ModelFamily) bool { return !enabledFamilies[family.ID] })
+	catalog.Models = slices.DeleteFunc(catalog.Models, func(model ExactModel) bool { return !enabledModels[model.ID] })
+	catalog.Offerings = slices.DeleteFunc(catalog.Offerings, func(offering ProviderOffering) bool {
+		return !enabledModels[offering.Model] || !enabledProviders[offering.Provider] || !enabledOfferings[offering.Provider+"\x00"+offering.Model]
+	})
+	catalog.Prices = slices.DeleteFunc(catalog.Prices, func(price CatalogPriceDescriptor) bool {
+		return !enabledModels[price.Model] || !enabledProviders[price.Provider] || !enabledOfferings[price.Provider+"\x00"+price.Model]
+	})
+	return runtimeSchema, catalog
 }
 
 func validateProviderCatalogModelMigrations(migrations []ProviderCatalogModelMigration, catalog ModelCatalog) error {
@@ -247,10 +338,10 @@ func validateProviderCatalogModelMigrations(migrations []ProviderCatalogModelMig
 	for _, provider := range catalog.Providers {
 		providers[provider.ID] = struct{}{}
 	}
-	offerings := make(map[string]struct{}, len(catalog.Offerings))
+	offerings := make(map[string]ProviderOffering, len(catalog.Offerings))
 	for _, offering := range catalog.Offerings {
 		for _, operation := range offering.Operations {
-			offerings[offering.Provider+"\x00"+operation+"\x00"+offering.Model] = struct{}{}
+			offerings[offering.Provider+"\x00"+operation+"\x00"+offering.Model] = offering
 		}
 	}
 	identities := make(map[string]struct{}, len(migrations))
@@ -275,6 +366,9 @@ func validateProviderCatalogModelMigrations(migrations []ProviderCatalogModelMig
 		}
 		identities[identity] = struct{}{}
 		_, currentProvider := providers[provider]
+		if migration.TargetReasoningEffort != "" && (migration.Operation != ModelOperationText || migration.TargetModel == "") {
+			return fmt.Errorf("%w: field=%s.target_reasoning_effort reason=text_target_required", ErrInvalidModelCatalog, fieldPrefix)
+		}
 		if migration.TargetModel == constants.EmptyString {
 			if currentProvider {
 				return fmt.Errorf("%w: field=%s.target_model provider=%s reason=current_provider", ErrInvalidModelCatalog, fieldPrefix, provider)
@@ -287,8 +381,12 @@ func validateProviderCatalogModelMigrations(migrations []ProviderCatalogModelMig
 		if !currentProvider {
 			return fmt.Errorf("%w: field=%s.target_model provider=%s reason=retired_provider", ErrInvalidModelCatalog, fieldPrefix, provider)
 		}
-		if _, found := offerings[provider+"\x00"+migration.Operation+"\x00"+migration.TargetModel]; !found {
+		target, found := offerings[provider+"\x00"+migration.Operation+"\x00"+migration.TargetModel]
+		if !found {
 			return fmt.Errorf("%w: field=%s.target_model provider=%s operation=%s model=%s reason=dangling_reference", ErrInvalidModelCatalog, fieldPrefix, provider, migration.Operation, migration.TargetModel)
+		}
+		if migration.TargetReasoningEffort != "" && !configuredReasoningEffortCapability(target.ReasoningEffort).supports(migration.TargetReasoningEffort) {
+			return fmt.Errorf("%w: field=%s.target_reasoning_effort reason=unsupported", ErrInvalidModelCatalog, fieldPrefix)
 		}
 	}
 	return nil
@@ -373,11 +471,21 @@ func validateProviderCatalogSchema(schema ProviderCatalogSchema) error {
 	if len(schema.Providers) == 0 {
 		return fmt.Errorf("%w: field=providers", ErrInvalidModelCatalog)
 	}
+	modelActivations := make(map[string]ModelActivation, len(schema.Models))
+	for index, model := range schema.Models {
+		if model.Enabled != ModelEnabled && model.Enabled != ModelDisabled {
+			return fmt.Errorf("%w: field=models[%d].enabled reason=boolean_required", ErrInvalidModelCatalog, index)
+		}
+		modelActivations[model.ID] = model.Enabled
+	}
 	providerIdentifiers := map[string]struct{}{}
 	providerAliases := map[string]string{}
 	environmentBindings := map[string]string{}
 	for providerIndex, provider := range schema.Providers {
 		fieldPrefix := fmt.Sprintf("providers[%d]", providerIndex)
+		if provider.Enabled != 0 && provider.Enabled != ModelEnabled && provider.Enabled != ModelDisabled {
+			return fmt.Errorf("%w: field=%s.enabled reason=boolean_required", ErrInvalidModelCatalog, fieldPrefix)
+		}
 		identifier, identifierError := canonicalCatalogIdentifier(provider.ID, fieldPrefix+".id")
 		if identifierError != nil {
 			return identifierError
@@ -431,6 +539,12 @@ func validateProviderCatalogSchema(schema ProviderCatalogSchema) error {
 		}
 		for offeringIndex, offering := range provider.Offerings {
 			offeringField := fmt.Sprintf("%s.offerings[%d]", fieldPrefix, offeringIndex)
+			if offering.Enabled != 0 && offering.Enabled != ModelEnabled && offering.Enabled != ModelDisabled {
+				return fmt.Errorf("%w: field=%s.enabled", ErrInvalidModelCatalog, offeringField)
+			}
+			if (modelActivations[offering.Model] == ModelDisabled || offering.Enabled == ModelDisabled) && len(offering.DefaultOperations) != 0 {
+				return fmt.Errorf("%w: field=%s.default_operations model=%s reason=disabled_default", ErrInvalidModelCatalog, offeringField, offering.Model)
+			}
 			if _, found := transports[offering.Transport]; !found {
 				return fmt.Errorf("%w: field=%s.transport transport=%s reason=dangling_reference", ErrInvalidModelCatalog, offeringField, offering.Transport)
 			}
@@ -439,7 +553,7 @@ func validateProviderCatalogSchema(schema ProviderCatalogSchema) error {
 			}
 			if offering.CallerTools {
 				transport := transports[offering.Transport]
-				supported := transport.RequestProtocol == CatalogProtocolOpenAIChatCompletions || (transport.RequestProtocol == CatalogProtocolOpenAIResponses && (offering.RequestProfile == string(requestProfileOpenAIResponsesReasoningTools) || offering.RequestProfile == string(requestProfileOpenAIResponsesTemperatureTools)))
+				supported := transport.RequestProtocol == CatalogProtocolXAIResponses || transport.RequestProtocol == CatalogProtocolOpenAIChatCompletions || (transport.RequestProtocol == CatalogProtocolOpenAIResponses && (offering.RequestProfile == string(requestProfileOpenAIResponsesReasoningTools) || offering.RequestProfile == string(requestProfileOpenAIResponsesTemperatureTools)))
 				if !supported {
 					return fmt.Errorf("%w: field=%s.caller_tools", ErrInvalidModelCatalog, offeringField)
 				}
@@ -650,7 +764,7 @@ func providerCatalogLoopbackHost(host string) bool {
 
 func validateProviderCatalogAuthentication(authentication ProviderCatalogAuthentication, field string) error {
 	switch authentication.Kind {
-	case CatalogAuthenticationBearer:
+	case CatalogAuthenticationBearer, CatalogAuthenticationGoogleCredentials:
 		if authentication.Header != "Authorization" || authentication.Prefix != "Bearer " {
 			return fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
 		}
@@ -708,8 +822,21 @@ func validateProviderCatalogAdapterContract(transport ProviderCatalogTransport, 
 	var allowedLifecycles []string
 
 	switch transport.RequestProtocol {
-	case CatalogProtocolOpenAIResponses:
-		allowedLifecycles = []string{string(textExecutionLifecyclePollableResource), string(textExecutionLifecycleSynchronousCompletion)}
+	case CatalogProtocolDashScopeResponses:
+		allowedLifecycles = []string{string(textExecutionLifecycleSynchronousCompletion)}
+		parameters = ProviderCatalogProtocolParameters{
+			ModelField: "model", TokenField: "max_output_tokens", MediaExecutionLifecycle: transport.Lifecycle,
+			OutputFields:      []string{"output[].content[].text"},
+			FinishRules:       ProviderCatalogFinishRules{Complete: []string{"completed"}, Continue: []string{"incomplete"}},
+			ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
+			ErrorRules:        []string{"cancelled", "failed", "unknown_status"},
+			UsageFields:       ProviderCatalogUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens"},
+		}
+	case CatalogProtocolOpenAIResponses, CatalogProtocolXAIResponses:
+		allowedLifecycles = []string{string(textExecutionLifecyclePollableResource)}
+		if transport.RequestProtocol == CatalogProtocolXAIResponses {
+			allowedLifecycles = []string{string(textExecutionLifecycleSynchronousCompletion)}
+		}
 		parameters = ProviderCatalogProtocolParameters{
 			ModelField: "model", TokenField: "max_output_tokens", MediaExecutionLifecycle: transport.Lifecycle,
 			OutputFields: []string{"output[].content[].text", "output[].type", "output[].call_id", "output[].name", "output[].arguments"},
@@ -740,6 +867,16 @@ func validateProviderCatalogAdapterContract(transport ProviderCatalogTransport, 
 				Input: "usage.prompt_tokens", Output: "usage.completion_tokens", Total: "usage.total_tokens",
 			},
 		}
+		switch chatCompletionResponsePolicy(transport.ProtocolParameters.ResponsePolicy) {
+		case chatCompletionResponsePolicyDefault:
+		case chatCompletionResponsePolicyQianfan:
+			parameters.ResponsePolicy = string(chatCompletionResponsePolicyQianfan)
+			parameters.OutputFields = []string{"choices[].message.content"}
+			parameters.FinishRules.Complete = []string{"stop"}
+			parameters.ErrorRules = []string{"content_filter", "tool_calls", "unknown_finish_reason", "blocked_flag"}
+		default:
+			return providerCatalogAdapterContractError(field, transport.RequestProtocol)
+		}
 	case CatalogProtocolAnthropicMessages:
 		allowedLifecycles = []string{string(textExecutionLifecycleSynchronousCompletion)}
 		expectedAuthentication = ProviderCatalogAuthentication{
@@ -759,6 +896,16 @@ func validateProviderCatalogAdapterContract(transport ProviderCatalogTransport, 
 				Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "derived_input_plus_output",
 			},
 		}
+	case CatalogProtocolVertexGenerateContent:
+		allowedLifecycles = []string{string(textExecutionLifecycleSynchronousCompletion)}
+		expectedAuthentication.Kind = CatalogAuthenticationGoogleCredentials
+		parameters = ProviderCatalogProtocolParameters{
+			ModelField: "path.model", TokenField: "generationConfig.maxOutputTokens", MediaExecutionLifecycle: string(textExecutionLifecycleSynchronousCompletion),
+			OutputFields: []string{"candidates[].content.parts[].text"},
+			FinishRules:  ProviderCatalogFinishRules{Complete: []string{"STOP"}},
+			ErrorRules:   []string{"MAX_TOKENS", "blocked", "unknown_finish_reason"},
+			UsageFields:  ProviderCatalogUsageFields{Input: "usageMetadata.promptTokenCount", Output: "usageMetadata.candidatesTokenCount+thoughtsTokenCount", Total: "usageMetadata.totalTokenCount"},
+		}
 	case CatalogProtocolGeminiInteractions:
 		allowedLifecycles = []string{string(textExecutionLifecyclePollableResource), string(textExecutionLifecycleSynchronousCompletion)}
 		expectedAuthentication = ProviderCatalogAuthentication{
@@ -777,6 +924,14 @@ func validateProviderCatalogAdapterContract(transport ProviderCatalogTransport, 
 			UsageFields: ProviderCatalogUsageFields{
 				Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens",
 			},
+		}
+	case CatalogProtocolMetaTranscription:
+		allowedLifecycles = []string{string(textExecutionLifecycleSynchronousCompletion)}
+		parameters = ProviderCatalogProtocolParameters{
+			ModelField:   "request.model",
+			OutputFields: []string{"transcript"},
+			FinishRules:  ProviderCatalogFinishRules{Complete: []string{"http_2xx"}},
+			ErrorRules:   []string{"malformed_response", "provider_error"},
 		}
 	case CatalogProtocolMultipartTranscription:
 		allowedLifecycles = []string{string(textExecutionLifecycleSynchronousCompletion)}
@@ -823,7 +978,7 @@ func providerCatalogHeadersEqual(actual []ProviderCatalogHeader, expected []Prov
 }
 
 func providerCatalogProtocolParametersEqual(actual ProviderCatalogProtocolParameters, expected ProviderCatalogProtocolParameters) bool {
-	return actual.ModelField == expected.ModelField &&
+	return actual.ResponsePolicy == expected.ResponsePolicy && actual.ModelField == expected.ModelField &&
 		actual.TokenField == expected.TokenField &&
 		actual.MediaExecutionLifecycle == expected.MediaExecutionLifecycle &&
 		slices.Equal(actual.OutputFields, expected.OutputFields) &&
@@ -836,11 +991,11 @@ func providerCatalogProtocolParametersEqual(actual ProviderCatalogProtocolParame
 
 func knownProviderCatalogProtocol(protocol string) bool {
 	switch protocol {
-	case CatalogProtocolOpenAIResponses,
+	case CatalogProtocolDashScopeResponses, CatalogProtocolXAIResponses, CatalogProtocolOpenAIResponses,
 		CatalogProtocolOpenAIChatCompletions,
 		CatalogProtocolAnthropicMessages,
-		CatalogProtocolGeminiInteractions,
-		CatalogProtocolMultipartTranscription,
+		CatalogProtocolGeminiInteractions, CatalogProtocolVertexGenerateContent,
+		CatalogProtocolMultipartTranscription, CatalogProtocolMetaTranscription,
 		CatalogProtocolXAIVideosGenerations:
 		return true
 	default:
@@ -854,11 +1009,19 @@ func compileProviderCatalogSchema(schema ProviderCatalogSchema, revision string)
 		Operations: append([]ModelOperationKind(nil), schema.Operations...),
 		Publishers: append([]ModelPublisher(nil), schema.Publishers...),
 		Families:   append([]ModelFamily(nil), schema.Families...),
-		Models:     append([]ExactModel(nil), schema.Models...),
+	}
+	for _, model := range schema.Models {
+		modelCatalog.Models = append(modelCatalog.Models, model.ExactModel)
 	}
 	for _, provider := range schema.Providers {
+		credentialKind := CatalogCredentialAPIKey
+		for _, transport := range provider.Transports {
+			if transport.Authentication.Kind == CatalogAuthenticationGoogleCredentials {
+				credentialKind = CatalogCredentialGoogleProfile
+			}
+		}
 		modelCatalog.Providers = append(modelCatalog.Providers, CatalogProvider{
-			ID: provider.ID, Label: provider.Label, CredentialKinds: []string{CatalogCredentialAPIKey},
+			ID: provider.ID, Label: provider.Label, CredentialKinds: []string{credentialKind},
 		})
 		transports := make(map[string]ProviderCatalogTransport, len(provider.Transports))
 		for _, transport := range provider.Transports {
@@ -881,6 +1044,7 @@ func compileProviderCatalogSchema(schema ProviderCatalogSchema, revision string)
 				OutputTokenLimit: rawOffering.OutputTokenLimit,
 				ReasoningEffort:  rawOffering.ReasoningEffort,
 				MediaInputs:      append([]string(nil), rawOffering.MediaInputs...),
+				ImageMIMETypes:   append([]string(nil), rawOffering.ImageMIMETypes...),
 				MediaLimits:      cloneCatalogMediaLimits(rawOffering.MediaLimits),
 				Controls:         append([]CatalogControl(nil), rawOffering.Controls...),
 				Limits:           append([]CatalogLimit(nil), rawOffering.Limits...),
@@ -896,7 +1060,7 @@ func compileProviderCatalogSchema(schema ProviderCatalogSchema, revision string)
 			}
 		}
 	}
-	if _, validationError := validateModelCatalog(modelCatalog); validationError != nil {
+	if _, validationError := validateModelCatalogStructure(modelCatalog); validationError != nil {
 		return ModelCatalog{}, validationError
 	}
 	return cloneModelCatalog(modelCatalog), nil

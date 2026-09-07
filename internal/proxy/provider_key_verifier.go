@@ -38,12 +38,15 @@ var (
 	}
 	providerKeyVerificationRequestBuilders = map[textRouteCapabilities]providerKeyVerificationRequestBuilder{
 		openAIResponsesPollableRouteCapabilities:          buildOpenAIProviderKeyVerificationRequest,
-		openAIResponsesSynchronousRouteCapabilities:       buildSynchronousResponsesProviderKeyVerificationRequest,
+		dashScopeResponsesSynchronousRouteCapabilities:    buildDashScopeResponsesProviderKeyVerificationRequest,
+		xaiResponsesSynchronousRouteCapabilities:          buildXAIResponsesProviderKeyVerificationRequest,
 		openAIChatCompletionsSynchronousRouteCapabilities: buildChatProviderKeyVerificationRequest,
 		anthropicMessagesSynchronousRouteCapabilities:     buildAnthropicProviderKeyVerificationRequest,
 	}
 	providerKeyVerificationResponseValidators = map[textWireContract]providerKeyVerificationResponseValidator{
 		textWireContractOpenAIResponses:       validOpenAIProviderKeyVerificationResponse,
+		textWireContractDashScopeResponses:    validDashScopeProviderKeyVerificationResponse,
+		textWireContractXAIResponses:          validXAIProviderKeyVerificationResponse,
 		textWireContractOpenAIChatCompletions: validChatProviderKeyVerificationResponse,
 		textWireContractAnthropicMessages:     validAnthropicProviderKeyVerificationResponse,
 	}
@@ -96,8 +99,22 @@ func (verifier *operationalProviderKeyVerifier) verify(parentContext context.Con
 		executionLifecycle: model.executionLifecycle,
 	}
 	trimmedAPIKey := strings.TrimSpace(apiKey)
-	if routeCapabilities == geminiInteractionsPollableRouteCapabilities {
-		return verifier.verifyPollableGeminiCredential(verificationContext, provider, model, trimmedAPIKey)
+	if routeCapabilities.wireContract == textWireContractVertexGenerateContent {
+		provider.textAPIKey = trimmedAPIKey
+		maxTokens := 4096
+		payload := vertexRequest{Contents: []vertexContent{{Role: "user", Parts: []vertexPart{{Text: providerKeyVerificationPrompt}}}}, GenerationConfig: vertexGenerationConfig{MaxOutputTokens: &maxTokens}}
+		_, err := generateVertexContent(verificationContext, verifier.httpClient, provider, model.providerString(), payload)
+		if err != nil {
+			var upstream *providerHTTPError
+			if errors.As(err, &upstream) {
+				return providerKeyVerificationStatusError(upstream.statusCode)
+			}
+			return providerKeyVerificationTransportError(verificationContext, err)
+		}
+		return nil
+	}
+	if routeCapabilities.wireContract == textWireContractGeminiInteractions {
+		return verifier.verifyGeminiCredential(verificationContext, provider, model, trimmedAPIKey)
 	}
 
 	requestBuilder := providerKeyVerificationRequestBuilders[routeCapabilities]
@@ -119,6 +136,13 @@ func (verifier *operationalProviderKeyVerifier) verify(parentContext context.Con
 	if responseError != nil {
 		return responseError
 	}
+	if model.chatResponsePolicy == chatCompletionResponsePolicyQianfan {
+		_, err := parseChatCompletionResponse(responseBytes, model.chatResponsePolicy)
+		if err != nil && !errors.Is(err, errProviderOutputLimitReached) {
+			return errProviderKeyVerificationUnavailable
+		}
+		return nil
+	}
 	responseValidator := providerKeyVerificationResponseValidators[model.wireContract]
 	if !responseValidator(responseBytes) {
 		return errProviderKeyVerificationUnavailable
@@ -126,7 +150,7 @@ func (verifier *operationalProviderKeyVerifier) verify(parentContext context.Con
 	return nil
 }
 
-func (verifier *operationalProviderKeyVerifier) verifyPollableGeminiCredential(verificationContext context.Context, provider providerDefinition, model textModelDefinition, apiKey string) (verificationError error) {
+func (verifier *operationalProviderKeyVerifier) verifyGeminiCredential(verificationContext context.Context, provider providerDefinition, model textModelDefinition, apiKey string) (verificationError error) {
 	httpClient := newProviderTransportHTTPDoer(verifier.httpClient, provider, apiKey)
 	geminiClient := newGeminiInteractionsClientWithHTTPPerformer(
 		httpClient,
@@ -135,6 +159,16 @@ func (verifier *operationalProviderKeyVerifier) verifyPollableGeminiCredential(v
 	)
 	payload := geminiProviderKeyVerificationPayload(model)
 	createdSnapshot, createError := geminiClient.createInteraction(verificationContext, "", provider.textBaseURL, payload, verifier.logger)
+	if model.executionLifecycle == textExecutionLifecycleSynchronousCompletion {
+		if createError != nil {
+			return providerKeyVerificationProviderError(verificationContext, createError)
+		}
+		_, resultError := createdSnapshot.resolve()
+		if resultError != nil && !errors.Is(resultError, errProviderOutputLimitReached) {
+			return providerKeyVerificationProviderError(verificationContext, resultError)
+		}
+		return nil
+	}
 	if strings.TrimSpace(createdSnapshot.identifier) == "" {
 		if createError != nil {
 			return providerKeyVerificationProviderError(verificationContext, createError)
@@ -211,7 +245,23 @@ func buildOpenAIProviderKeyVerificationRequest(requestContext context.Context, _
 	return buildAuthorizedJSONRequest(requestContext, http.MethodPost, provider.textEndpointURL, apiKey, bytes.NewReader(payloadBytes))
 }
 
-func buildSynchronousResponsesProviderKeyVerificationRequest(requestContext context.Context, _ *Endpoints, provider providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {
+func buildDashScopeResponsesProviderKeyVerificationRequest(requestContext context.Context, _ *Endpoints, provider providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {
+	payload := struct {
+		Model           string `json:"model"`
+		Input           string `json:"input"`
+		MaxOutputTokens int    `json:"max_output_tokens"`
+		Store           bool   `json:"store"`
+	}{
+		Model:           model.providerString(),
+		Input:           providerKeyVerificationPrompt,
+		MaxOutputTokens: providerKeyVerificationMaxTokens,
+		Store:           false,
+	}
+	payloadBytes, _ := json.Marshal(payload)
+	return buildAuthorizedJSONRequest(requestContext, http.MethodPost, provider.textEndpointURL, apiKey, bytes.NewReader(payloadBytes))
+}
+
+func buildXAIResponsesProviderKeyVerificationRequest(requestContext context.Context, _ *Endpoints, provider providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {
 	payload := struct {
 		Model           string `json:"model"`
 		Input           string `json:"input"`
@@ -230,7 +280,8 @@ func buildSynchronousResponsesProviderKeyVerificationRequest(requestContext cont
 func buildChatProviderKeyVerificationRequest(requestContext context.Context, _ *Endpoints, provider providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {
 	maxTokens := providerKeyVerificationMaxTokens
 	payload := chatCompletionRequest{
-		Model: model.providerString(),
+		ReasoningSplit: model.requestProfile == requestProfileMiniMaxChatCompletions,
+		Model:          model.providerString(),
 		Messages: []chatCompletionMessage{{
 			Role:    string(chatRoleUser),
 			Content: providerKeyVerificationPrompt,
@@ -257,8 +308,8 @@ func geminiProviderKeyVerificationPayload(model textModelDefinition) geminiInter
 			}},
 		}},
 		GenerationConfig: &geminiInteractionGeneration{MaxOutputTokens: providerKeyVerificationMaxTokens},
-		Background:       true,
-		Store:            true,
+		Background:       model.executionLifecycle == textExecutionLifecyclePollableResource,
+		Store:            model.executionLifecycle == textExecutionLifecyclePollableResource,
 	}
 }
 
@@ -348,4 +399,14 @@ func validAnthropicProviderKeyVerificationResponse(responseBytes []byte) bool {
 		strings.TrimSpace(response.ID) != "" &&
 		response.Type == anthropicVerificationResponseType &&
 		response.Role == anthropicVerificationResponseRole
+}
+
+func validXAIProviderKeyVerificationResponse(body []byte) bool {
+	_, err := parseXAIResponse(body)
+	return err == nil || errors.Is(err, errProviderOutputLimitReached)
+}
+
+func validDashScopeProviderKeyVerificationResponse(body []byte) bool {
+	_, err := parseDashScopeResponse(body)
+	return err == nil || errors.Is(err, errProviderOutputLimitReached)
 }

@@ -326,15 +326,10 @@ func TestManagedModelSelectionMigrationUsesCatalogTarget(t *testing.T) {
 	fixture := newManagedGeminiModelSelectionMigrationFixture(t, managedGemini3OnlySchemaVersion, "gemini-3-only-catalog.db")
 	schema := internalCanonicalProviderCatalog().Schema()
 	alternateTarget := ""
-	for _, provider := range schema.Providers {
-		if provider.ID != ProviderNameGemini {
-			continue
-		}
-		for _, offering := range provider.Offerings {
-			if offering.Model != fixture.targetModel && slices.Contains(offering.Operations, ModelOperationText) {
-				alternateTarget = offering.Model
-				break
-			}
+	for _, offering := range internalCanonicalProviderCatalog().ModelCatalog().Offerings {
+		if offering.Provider == ProviderNameGemini && offering.Model != fixture.targetModel && slices.Contains(offering.Operations, ModelOperationText) {
+			alternateTarget = offering.Model
+			break
 		}
 	}
 	if alternateTarget == "" {

@@ -17,10 +17,12 @@ type providerRegistry struct {
 }
 
 type managedModelMigration struct {
-	provider  string
-	operation string
-	source    string
-	target    string
+	targetReasoningEffort string
+	preserveSourceUsage   bool
+	provider              string
+	operation             string
+	source                string
+	target                string
 }
 
 type providerSummary struct {
@@ -44,20 +46,21 @@ type textModelSummary struct {
 }
 
 func newProviderRegistry(configuration Configuration) *providerRegistry {
-	families := make(map[string]ModelFamily, len(configuration.ProviderCatalog.schema.Families))
-	for _, family := range configuration.ProviderCatalog.schema.Families {
+	families := make(map[string]ModelFamily, len(configuration.ProviderCatalog.runtimeSchema.Families))
+	for _, family := range configuration.ProviderCatalog.runtimeSchema.Families {
 		families[family.ID] = family
 	}
-	models := make(map[string]ExactModel, len(configuration.ProviderCatalog.schema.Models))
-	for _, model := range configuration.ProviderCatalog.schema.Models {
-		models[model.ID] = model
+	models := make(map[string]ExactModel, len(configuration.ProviderCatalog.runtimeSchema.Models))
+	for _, model := range configuration.ProviderCatalog.runtimeSchema.Models {
+		models[model.ID] = model.ExactModel
 	}
-	definitions := make(map[providerID]providerDefinition, len(configuration.ProviderCatalog.schema.Providers))
-	order := make([]providerID, 0, len(configuration.ProviderCatalog.schema.Providers))
-	for _, provider := range configuration.ProviderCatalog.schema.Providers {
+	definitions := make(map[providerID]providerDefinition, len(configuration.ProviderCatalog.runtimeSchema.Providers))
+	order := make([]providerID, 0, len(configuration.ProviderCatalog.runtimeSchema.Providers))
+	for _, provider := range configuration.ProviderCatalog.runtimeSchema.Providers {
 		identifier := providerID(provider.ID)
 		order = append(order, identifier)
 		definition := providerDefinition{
+			googleCredentials:   configuration.googleCredentials,
 			identifier:          identifier,
 			label:               provider.Label,
 			apiServiceLabel:     provider.APIServiceLabel,
@@ -130,6 +133,8 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 					hasOutputTokenLimit: offering.OutputTokenLimit > 0,
 					reasoningEffort:     configuredReasoningEffortCapability(offering.ReasoningEffort),
 					mediaInputs:         configuredMediaInputSet(offering.MediaInputs),
+					chatResponsePolicy:  chatCompletionResponsePolicy(transport.protocolParameters.ResponsePolicy),
+					imageMIMETypes:      append([]string(nil), offering.ImageMIMETypes...),
 					mediaLimits:         cloneCatalogMediaLimits(offering.MediaLimits),
 				}
 				if slices.Contains(offering.DefaultOperations, ModelOperationText) {
@@ -150,7 +155,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 		}
 		definitions[identifier] = definition
 	}
-	applyDefaultEndpointOverrides(configuration.ProviderCatalog.schema, definitions, configuration.Endpoints)
+	applyDefaultEndpointOverrides(configuration.ProviderCatalog.runtimeSchema, definitions, configuration.Endpoints)
 
 	registry := &providerRegistry{
 		definitions:     definitions,
@@ -158,10 +163,11 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 		aliases:         map[string]providerID{},
 		modelMigrations: make(map[int][]managedModelMigration),
 	}
-	for _, migration := range configuration.ProviderCatalog.schema.ModelMigrations {
+	for _, migration := range configuration.ProviderCatalog.runtimeSchema.ModelMigrations {
 		registry.modelMigrations[migration.ManagedSchemaVersion] = append(registry.modelMigrations[migration.ManagedSchemaVersion], managedModelMigration{
 			provider: migration.Provider, operation: migration.Operation,
 			source: migration.SourceModel, target: migration.TargetModel,
+			targetReasoningEffort: migration.TargetReasoningEffort, preserveSourceUsage: migration.PreserveSourceUsage,
 		})
 	}
 	for identifier, definition := range definitions {
@@ -220,6 +226,7 @@ func applyDefaultEndpointOverrides(schema ProviderCatalogSchema, definitions map
 func (registry *providerRegistry) forTenant(requestTenant tenant) *providerRegistry {
 	definitions := make(map[providerID]providerDefinition, len(registry.definitions))
 	for identifier, definition := range registry.definitions {
+		definition.tenantIdentifier = requestTenant.identifier.string()
 		definition.connectionValues = cloneStringMap(definition.connectionValues)
 		if providerSettings, configured := requestTenant.providerSettings[identifier]; configured {
 			for fieldIdentifier, value := range providerSettings.connectionValues {

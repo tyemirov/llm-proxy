@@ -195,6 +195,7 @@ func cloneProviderOffering(offering ProviderOffering) ProviderOffering {
 	cloned.Operations = append([]string(nil), offering.Operations...)
 	cloned.DefaultOperations = append([]string(nil), offering.DefaultOperations...)
 	cloned.MediaInputs = append([]string(nil), offering.MediaInputs...)
+	cloned.ImageMIMETypes = append([]string(nil), offering.ImageMIMETypes...)
 	cloned.MediaLimits = cloneCatalogMediaLimits(offering.MediaLimits)
 	if offering.ReasoningEffort != nil {
 		cloned.ReasoningEffort = &ReasoningEffortCapability{
@@ -293,7 +294,7 @@ func validateArtifactKinds(artifacts []string, field string) error {
 }
 
 func validateCredentialKinds(credentials []string, field string) error {
-	if len(credentials) != 1 || credentials[0] != CatalogCredentialAPIKey {
+	if len(credentials) != 1 || (credentials[0] != CatalogCredentialAPIKey && credentials[0] != CatalogCredentialGoogleProfile) {
 		return fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
 	}
 	return nil
@@ -369,7 +370,7 @@ func validateVideoOffering(offering ProviderOffering, field string) error {
 	if offering.WireContract != CatalogProtocolXAIVideosGenerations || offering.ExecutionLifecycle != string(textExecutionLifecyclePollableResource) {
 		return fmt.Errorf("%w: field=%s reason=unsupported_video_route", ErrInvalidModelCatalog, field)
 	}
-	if offering.RequestProfile != constants.EmptyString || offering.WebSearch || offering.OutputTokenLimit != 0 || offering.ReasoningEffort != nil || len(offering.MediaInputs) != 0 {
+	if offering.RequestProfile != constants.EmptyString || offering.WebSearch || offering.OutputTokenLimit != 0 || offering.ReasoningEffort != nil || len(offering.MediaInputs) != 0 || len(offering.ImageMIMETypes) != 0 {
 		return fmt.Errorf("%w: field=%s reason=text_capabilities_on_video_route", ErrInvalidModelCatalog, field)
 	}
 	if len(offering.Controls) == 0 || len(offering.Limits) == 0 {

@@ -91,6 +91,7 @@ func TestProviderCatalogModelMigrationValidationRejectsEveryInvalidShape(t *test
 		}, expected: ".source_model"},
 		{name: "current provider retirement", mutate: func(schema *ProviderCatalogSchema) {
 			schema.ModelMigrations[len(schema.ModelMigrations)-1].TargetModel = ""
+			schema.ModelMigrations[len(schema.ModelMigrations)-1].TargetReasoningEffort = ""
 		}, expected: "reason=current_provider"},
 		{name: "retired provider target", mutate: func(schema *ProviderCatalogSchema) {
 			schema.ModelMigrations[0].TargetModel = schema.ModelMigrations[1].TargetModel

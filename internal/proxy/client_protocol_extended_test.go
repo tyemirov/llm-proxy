@@ -29,7 +29,7 @@ func TestClientProtocolsProviderToolContract(t *testing.T) {
 			schema := testfixtures.ProviderCatalog(t).Schema()
 			provider, model := "openai", "gpt-5.6"
 			if protocol == "chat" {
-				provider, model = "deepseek", "deepseek-chat"
+				provider, model = "deepseek", "deepseek-v4-flash"
 				for p := range schema.Providers {
 					if schema.Providers[p].ID == provider {
 						for o := range schema.Providers[p].Offerings {
@@ -121,7 +121,7 @@ func TestClientProtocolsProviderToolContract(t *testing.T) {
 			}
 			if protocol == "chat" {
 				result = `{"choices":[{"message":{"content":"invalid stop","tool_calls":[{"id":"a","type":"function","function":{"name":"read","arguments":"{}"}}]},"finish_reason":"stop"}]}`
-				req, _ := http.NewRequest("POST", server.URL+"/v1/responses", strings.NewReader(`{"model":"deepseek/deepseek-chat","input":"hi"}`))
+				req, _ := http.NewRequest("POST", server.URL+"/v1/responses", strings.NewReader(`{"model":"deepseek/deepseek-v4-flash","input":"hi"}`))
 				req.Header.Set("Content-Type", "application/json")
 				req.Header.Set("Authorization", "Bearer "+TestSecret)
 				response, err := server.Client().Do(req)
@@ -151,7 +151,7 @@ func TestClientProtocolsTranscriptionValidation(t *testing.T) {
 		model, extra, format string
 		files, size, status  int
 	}{
-		{"", "", "", 1, 3, 400}, {"gpt-4o-transcribe", "", "", 1, 3, 400}, {"openai/gpt-4.1", "", "", 1, 3, 400}, {"openai/GPT-4O-TRANSCRIBE", "", "", 1, 3, 400}, {"openai/gpt-4o-transcribe", "language", "", 1, 3, 400}, {"openai/gpt-4o-transcribe", "", "text", 1, 3, 400}, {"openai/gpt-4o-transcribe", "", "", 0, 3, 400}, {"openai/gpt-4o-transcribe", "", "", 2, 3, 400}, {"openai/gpt-4o-transcribe", "", "", 1, 0, 413}, {"openai/gpt-4o-transcribe", "", "", 1, 17, 413}, {"openai/gpt-4o-transcribe", "", "", 1, 2 << 20, 413},
+		{"", "", "", 1, 3, 400}, {"gpt-transcribe", "", "", 1, 3, 400}, {"openai/gpt-4.1", "", "", 1, 3, 400}, {"openai/GPT-TRANSCRIBE", "", "", 1, 3, 400}, {"openai/gpt-transcribe", "language", "", 1, 3, 400}, {"openai/gpt-transcribe", "", "text", 1, 3, 400}, {"openai/gpt-transcribe", "", "", 0, 3, 400}, {"openai/gpt-transcribe", "", "", 2, 3, 400}, {"openai/gpt-transcribe", "", "", 1, 0, 413}, {"openai/gpt-transcribe", "", "", 1, 17, 413}, {"openai/gpt-transcribe", "", "", 1, 2 << 20, 413},
 	} {
 		var body bytes.Buffer
 		form := multipart.NewWriter(&body)
@@ -230,10 +230,10 @@ func TestClientProtocolsSynchronousResponsesAndNativeHistory(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if request["text"] != nil {
-			io.WriteString(w, `{"status":"completed","output_text":"{\"answer\":\"yes\"}"}`)
+			io.WriteString(w, `{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"{\"answer\":\"yes\"}"}]}]}`)
 			return
 		}
-		io.WriteString(w, `{"status":"completed","output_text":"history complete"}`)
+		io.WriteString(w, `{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"history complete"}]}]}`)
 	}))
 	defer upstream.Close()
 	schema := testfixtures.ProviderCatalog(t).Schema()
@@ -242,7 +242,6 @@ func TestClientProtocolsSynchronousResponsesAndNativeHistory(t *testing.T) {
 			for o := range schema.Providers[p].Offerings {
 				if schema.Providers[p].Offerings[o].Model == "grok-4.5" {
 					schema.Providers[p].Offerings[o].CallerTools = true
-					schema.Providers[p].Offerings[o].RequestProfile = "openai_responses_temperature_tools"
 				}
 			}
 		}
@@ -284,7 +283,7 @@ func TestClientProtocolsLostMultipartFile(t *testing.T) {
 	}
 	var body bytes.Buffer
 	form := multipart.NewWriter(&body)
-	form.WriteField("model", "openai/gpt-4o-transcribe")
+	form.WriteField("model", "openai/gpt-transcribe")
 	file, _ := form.CreateFormFile("file", "audio.wav")
 	io.WriteString(file, "fixture audio")
 	form.Close()

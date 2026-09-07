@@ -6,15 +6,20 @@ usage() {
 
 Runs paid Google Interactions acceptance for the exact Gemini 3.6 Flash and
 Gemini 3.7 Flash candidate models. The test covers each supported thinking
-level, one omitted level, background completion, active retrieval,
-cancellation, and deletion.
+level and one omitted level. Pollable models also require background
+completion, active retrieval, cancellation, and deletion. Flash-Lite uses
+synchronous completion without storage.
 
 Required environment:
   GEMINI_API_KEY
 
 Optional environment:
+  LLM_PROXY_LIVE_GEMINI_MODEL      Select one exact supported candidate.
   LLM_PROXY_LIVE_REASONING_MATRIX  Exact true or false. Default: true.
-  LLM_PROXY_LIVE_TIMEOUT           Per-request curl timeout. Default: 45.'
+  LLM_PROXY_LIVE_TIMEOUT           Per-request curl timeout. Default: 45.
+  LLM_PROXY_LIVE_GEMINI_AUDIO_FILE  PCM WAV fixture for gemini-3.5-transcribe.
+  LLM_PROXY_LIVE_GEMINI_EXPECTED_TRANSCRIPT
+                                  Expected words for transcription acceptance.'
 }
 
 if [[ $# -gt 0 ]]; then
@@ -69,6 +74,7 @@ gemini_request() {
     -H "x-goog-api-key: ${GEMINI_API_KEY}"
     -H "Api-Revision: ${GEMINI_API_REVISION}"
     -o "${response_path}"
+    -D "${response_path}.headers"
     -w "%{http_code}"
   )
   if [[ -n "${request_path}" ]]; then
@@ -77,7 +83,76 @@ gemini_request() {
       --data-binary "@${request_path}"
     )
   fi
-  curl "${curl_arguments[@]}" "${request_url}"
+  local http_status
+  http_status="$(curl "${curl_arguments[@]}" "${request_url}")" || return $?
+  if [[ ! "${http_status}" =~ ^2[0-9][0-9]$ ]]; then
+    report_provider_error "${response_path}" "${request_path}"
+  fi
+  printf '%s' "${http_status}"
+}
+
+report_provider_error() {
+  python3 -c '
+import json
+import os
+import pathlib
+import re
+import sys
+
+response_path = pathlib.Path(sys.argv[1])
+private_values = [os.environ["GEMINI_API_KEY"]]
+if sys.argv[2]:
+    request = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
+    def collect_strings(value: object) -> None:
+        if isinstance(value, str) and value:
+            private_values.append(value)
+        elif isinstance(value, list):
+            for item in value:
+                collect_strings(item)
+        elif isinstance(value, dict):
+            for item in value.values():
+                collect_strings(item)
+    collect_strings(request.get("input"))
+
+try:
+    response = json.loads(response_path.read_text(encoding="utf-8"))
+except (ValueError, UnicodeError):
+    print("Gemini provider diagnostic: invalid JSON error body")
+    raise SystemExit(0)
+if not isinstance(response, dict) or not isinstance(response.get("error"), dict):
+    print("Gemini provider diagnostic: error object absent")
+    raise SystemExit(0)
+error = response["error"]
+summary = {key: error[key] for key in ("code", "status", "message") if isinstance(error.get(key), (str, int))}
+details = error.get("details", [])
+if isinstance(details, list):
+    for detail in details:
+        if not isinstance(detail, dict):
+            continue
+        if detail.get("@type") == "type.googleapis.com/google.rpc.RetryInfo" and isinstance(detail.get("retryDelay"), str):
+            summary["retryDelay"] = detail["retryDelay"]
+        if detail.get("@type") == "type.googleapis.com/google.rpc.QuotaFailure" and isinstance(detail.get("violations"), list):
+            summary["quota_violations"] = [{key: item[key] for key in ("quotaMetric", "quotaId", "quotaValue") if isinstance(item.get(key), (str, int))} for item in detail["violations"] if isinstance(item, dict)]
+for line in pathlib.Path(str(response_path) + ".headers").read_text(encoding="utf-8").splitlines():
+    name, separator, value = line.partition(":")
+    if separator and name.lower() == "retry-after" and re.fullmatch(r"[0-9]+", value.strip()):
+        summary["retry_after"] = value.strip()
+
+def redact(value: object) -> object:
+    if isinstance(value, str):
+        for private in sorted(private_values, key=len, reverse=True):
+            value = value.replace(private, "[redacted]")
+        value = re.sub(r"https?://\S+", "[url]", value)
+        value = re.sub(r"projects/[A-Za-z0-9_-]+", "projects/[redacted]", value)
+        return value[:2000]
+    if isinstance(value, dict):
+        return {key: redact(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [redact(item) for item in value[:10]]
+    return value
+
+print("Gemini provider diagnostic: " + json.dumps(redact(summary), separators=(",", ":"), ensure_ascii=True))
+' "$1" "$2" >&2
 }
 
 delete_interaction() {
@@ -344,18 +419,23 @@ cancel_background_interaction() {
   echo "live Gemini candidate cancellation lifecycle passed: model=${model} status=cancelled"
 }
 
-run_candidate_model() {
+run_reasoning_matrix() {
   local model="$1"
   shift
   local reasoning_effort
-  local completion_id
-  local cancellation_id
   run_reasoning_request "${model}" ""
   if [[ "${REASONING_MATRIX}" == "true" ]]; then
     for reasoning_effort in "$@"; do
       run_reasoning_request "${model}" "${reasoning_effort}"
     done
   fi
+}
+
+run_candidate_model() {
+  local model="$1"
+  local completion_id
+  local cancellation_id
+  run_reasoning_matrix "$@"
   create_background_interaction "${model}" completion
   completion_id="${CREATED_INTERACTION_ID}"
   complete_background_interaction "${model}" "${completion_id}"
@@ -365,6 +445,87 @@ run_candidate_model() {
   cancel_background_interaction "${model}" "${cancellation_id}"
 }
 
-run_candidate_model gemini-3.6-flash minimal low medium high
-run_candidate_model gemini-3.7-flash low medium high
-echo "live Gemini candidate acceptance passed: models=gemini-3.6-flash,gemini-3.7-flash"
+run_transcription_candidate() {
+  local model="$1"
+  local request_path="${TMP_DIR}/transcription.json"
+  local response_path="${TMP_DIR}/transcription-response.json"
+  local http_status
+  if [[ -z "${LLM_PROXY_LIVE_GEMINI_AUDIO_FILE:-}" || -z "${LLM_PROXY_LIVE_GEMINI_EXPECTED_TRANSCRIPT:-}" ]]; then
+    echo "error: Gemini transcription acceptance requires an audio file and expected transcript" >&2
+    return 1
+  fi
+  python3 -c '
+import base64
+import json
+import pathlib
+import sys
+import wave
+
+audio_path = pathlib.Path(sys.argv[1])
+if audio_path.stat().st_size > 15000000:
+    raise SystemExit("error: Gemini transcription fixture exceeds the inline request limit")
+with wave.open(str(audio_path), "rb") as audio:
+    if audio.getnframes() == 0 or audio.getcomptype() != "NONE":
+        raise SystemExit("error: Gemini transcription fixture must contain PCM WAV audio")
+payload = {
+    "model": sys.argv[2],
+    "input": [{"type": "audio", "mime_type": "audio/wav", "data": base64.b64encode(audio_path.read_bytes()).decode("ascii")}],
+    "background": False,
+    "store": False,
+}
+encoded = json.dumps(payload, separators=(",", ":"))
+if len(encoded.encode("utf-8")) > 20000000:
+    raise SystemExit("error: Gemini transcription fixture exceeds the inline request limit")
+pathlib.Path(sys.argv[3]).write_text(encoded, encoding="utf-8")
+' "${LLM_PROXY_LIVE_GEMINI_AUDIO_FILE}" "${model}" "${request_path}"
+  http_status="$(gemini_request POST "${GEMINI_INTERACTIONS_URL}" "${response_path}" "${request_path}")"
+  if [[ "${http_status}" != "200" ]]; then
+    echo "error: Gemini candidate transcription failed: model=${model} status=${http_status}" >&2
+    return 1
+  fi
+  python3 -c '
+import json
+import pathlib
+import re
+import sys
+
+response = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+text = "".join(content.get("text", "") for step in response.get("steps", []) if step.get("type") == "model_output" for content in step.get("content", []) if content.get("type") == "text")
+expected = re.findall(r"[^\W_]+", sys.argv[2].casefold())
+actual = re.findall(r"[^\W_]+", text.casefold())
+if response.get("status") != "completed" or not expected or actual != expected:
+    raise SystemExit("error: Gemini candidate transcription did not match the expected words")
+' "${response_path}" "${LLM_PROXY_LIVE_GEMINI_EXPECTED_TRANSCRIPT}"
+  echo "live Gemini candidate transcription passed: model=${model} status=200"
+}
+
+CANDIDATE_MODELS=(gemini-3.6-flash gemini-3.7-flash)
+if [[ -n "${LLM_PROXY_LIVE_GEMINI_MODEL:-}" ]]; then
+  case "${LLM_PROXY_LIVE_GEMINI_MODEL}" in
+    gemini-3.1-pro-preview|gemini-3.6-flash|gemini-3.7-flash|gemini-3.8-flash|gemini-3.5-flash-lite|gemini-3.5-transcribe)
+      CANDIDATE_MODELS=("${LLM_PROXY_LIVE_GEMINI_MODEL}")
+      ;;
+    *)
+      echo "error: unsupported Gemini candidate model: ${LLM_PROXY_LIVE_GEMINI_MODEL}" >&2
+      exit 1
+      ;;
+  esac
+fi
+for candidate_model in "${CANDIDATE_MODELS[@]}"; do
+  case "${candidate_model}" in
+    gemini-3.5-transcribe)
+      run_transcription_candidate "${candidate_model}"
+      ;;
+    gemini-3.5-flash-lite)
+      run_reasoning_matrix "${candidate_model}" minimal low medium high
+      ;;
+    gemini-3.6-flash)
+      run_candidate_model "${candidate_model}" minimal low medium high
+      ;;
+    gemini-3.1-pro-preview|gemini-3.7-flash|gemini-3.8-flash)
+      run_candidate_model "${candidate_model}" low medium high
+      ;;
+  esac
+done
+printf -v accepted_models '%s,' "${CANDIDATE_MODELS[@]}"
+echo "live Gemini candidate acceptance passed: models=${accepted_models%,}"

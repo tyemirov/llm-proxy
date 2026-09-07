@@ -318,7 +318,7 @@ func (doer managedProviderVerificationDoer) Do(request *http.Request) (*http.Res
 	case request.Header.Get("x-api-key") != "":
 		responseBody = `{"id":"verification","type":"message","role":"assistant"}`
 	case strings.HasSuffix(request.URL.Path, "/responses"):
-		responseBody = `{"id":"verification","status":"completed"}`
+		responseBody = `{"id":"verification","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"verified"}]}]}`
 	}
 	return &http.Response{
 		StatusCode: http.StatusOK,

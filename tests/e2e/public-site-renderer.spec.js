@@ -13,6 +13,21 @@ const executeFile = promisify(execFile);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const publicCapabilitiesPath = "/api/public/capabilities";
 
+test("public site renders Google credential profile offerings", async ({ page }) => {
+  const capabilities = normalizedCapabilityFixture();
+  capabilities.providers[0].credential_kinds = ["google_credential_profile"];
+  await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+    const fixture = await siteFixture();
+    try {
+      await renderFixture(fixture, capabilitiesURL);
+      await page.setContent(await readFile(path.join(fixture.output, "index.html"), "utf8"));
+      await expect(page.locator('[data-route-provider="example-provider"]')).toBeAttached();
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+});
+
 test("public site rendering rejects a missing capability REST resource", async () => {
   await withCapabilityServer(404, { error: "missing" }, async (capabilitiesURL) => {
     const fixture = await siteFixture();
@@ -77,6 +92,33 @@ test("public site rendering accepts an explicit media lifecycle", async () => {
       await renderFixture(fixture, capabilitiesURL);
       const renderedLanding = await readFile(path.join(fixture.output, "index.html"), "utf8");
       expect(renderedLanding).toContain('data-route-provider-capabilities="image_input text"');
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+});
+
+test("public site rendering validates image formats and pixel dimensions", async () => {
+  const capabilities = normalizedCapabilityFixture();
+  capabilities.models[0].media_inputs = ["image"];
+  capabilities.models[0].capabilities = ["image_input", "text"];
+  const dimension = {id: "image_width_pixels", media_type: "image", transport: "any", status: "bounded", value: 6000,
+    unit: "pixels", scope: "attachment", source: "https://docs.z.ai/openapi.json", last_verified: "2026-09-05"};
+  const offering = Object.assign(capabilities.offerings[0], {
+    capabilities: ["image_input", "text"], media_execution_lifecycle: "synchronous_completion",
+    image_mime_types: ["image/jpeg", "image/png"], media_limits: [dimension],
+  });
+  await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+    const fixture = await siteFixture();
+    try {
+      await renderFixture(fixture, capabilitiesURL);
+      await rm(fixture.output, { recursive: true, force: true });
+      dimension.unit = "bytes";
+      await expect(renderFixture(fixture, capabilitiesURL)).rejects.toThrow(/image dimension/u);
+      await rm(fixture.output, { recursive: true, force: true });
+      dimension.unit = "pixels";
+      offering.image_mime_types = ["image/gif"];
+      await expect(renderFixture(fixture, capabilitiesURL)).rejects.toThrow(/image_mime_types/u);
     } finally {
       await rm(fixture.root, { recursive: true, force: true });
     }

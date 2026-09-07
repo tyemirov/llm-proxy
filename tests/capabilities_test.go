@@ -134,7 +134,7 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 	if catalogError != nil {
 		testingInstance.Fatalf("NewPublicCapabilityCatalog error: %v", catalogError)
 	}
-	if catalog.Revision == "" || len(catalog.Operations) != 3 || len(catalog.Prices) != 63 || len(catalog.Prices) != len(catalog.Offerings) || catalog.Counts.Providers != 11 || catalog.Counts.ModelPublishers != 11 || catalog.Counts.ModelFamilies != 24 || catalog.Counts.ModelFamilies != len(catalog.Families) || catalog.Counts.ExactModels != 62 || catalog.Counts.ExactModels != len(catalog.Models) || catalog.Counts.ProviderOfferings != 63 || catalog.Counts.ProviderOfferings != len(catalog.Offerings) || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
+	if catalog.Revision == "" || len(catalog.Operations) != 3 || len(catalog.Prices) != 74 || len(catalog.Prices) != len(catalog.Offerings) || catalog.Counts.Providers != 13 || catalog.Counts.ModelPublishers != 12 || catalog.Counts.ModelFamilies != 26 || catalog.Counts.ModelFamilies != len(catalog.Families) || catalog.Counts.ExactModels != 71 || catalog.Counts.ExactModels != len(catalog.Models) || catalog.Counts.ProviderOfferings != 74 || catalog.Counts.ProviderOfferings != len(catalog.Offerings) || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
 		testingInstance.Fatalf("catalog summary=%+v", catalog)
 	}
 	weightAccessFound := map[string]bool{}
@@ -148,6 +148,8 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 		testingInstance.Fatalf("public weight access classifications=%v", weightAccessFound)
 	}
 	expectedGeminiModels := map[string][]string{
+		proxy.ModelNameGemini36Flash: {proxy.PublicModelCapabilityAudioInput, proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityReasoning, proxy.PublicModelCapabilityText},
+		proxy.ModelNameGemini37Flash: {proxy.PublicModelCapabilityAudioInput, proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityReasoning, proxy.PublicModelCapabilityText},
 		proxy.ModelNameGemini35Flash: {
 			proxy.PublicModelCapabilityAudioInput,
 			proxy.PublicModelCapabilityImageInput,
@@ -160,8 +162,7 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 		},
 	}
 	retiredGeminiModels := map[string]struct{}{
-		"gemini-3.1-flash-lite":  {},
-		"gemini-3.1-pro-preview": {},
+		"gemini-3.1-flash-lite": {},
 	}
 	openAIDictationCapabilityFound := false
 	expectedKimiModels := map[string]struct{}{
@@ -242,12 +243,19 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 				testingInstance.Fatalf("Kimi K3 reasoning efforts=%v", offering.ReasoningEfforts)
 			}
 		}
-		if offering.Provider == proxy.ProviderNameGemini {
+		if offering.Provider == proxy.ProviderNameGemini && slices.Contains(offering.Capabilities, proxy.ModelOperationText) {
 			if !strings.HasPrefix(offering.Model, "gemini-3") || offering.WireContract != "gemini_interactions" ||
 				offering.ExecutionLifecycle != "pollable_resource" || offering.MediaExecutionLifecycle != "synchronous_completion" {
 				testingInstance.Fatalf("Gemini offering is not canonical 3.x pollable route=%+v", offering)
 			}
-			if len(offering.ReasoningEfforts) != 0 || offering.OutputTokenLimit != 65536 {
+			expectedEfforts := []string{}
+			if offering.Model == proxy.ModelNameGemini36Flash {
+				expectedEfforts = []string{"minimal", "low", "medium", "high"}
+			}
+			if offering.Model == proxy.ModelNameGemini37Flash {
+				expectedEfforts = []string{"low", "medium", "high"}
+			}
+			if !reflect.DeepEqual(offering.ReasoningEfforts, expectedEfforts) || offering.OutputTokenLimit != 65536 {
 				testingInstance.Fatalf("Gemini offering=%+v", offering)
 			}
 		}
@@ -265,10 +273,10 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 		if _, expected := expectedQwenOfferings[offering.Model]; !expected || offering.Provider != proxy.ProviderNameDashScope {
 			continue
 		}
-		if offering.WireContract != "openai_chat_completions" || offering.ExecutionLifecycle != "synchronous_completion" || offering.OutputTokenLimit != 65536 {
+		if offering.WireContract != "dashscope_responses" || offering.ExecutionLifecycle != "synchronous_completion" || offering.OutputTokenLimit != 65536 {
 			testingInstance.Fatalf("Qwen offering route=%+v", offering)
 		}
-		if len(offering.Controls) != 1 || offering.Controls[0].ID != "max_tokens" || offering.Controls[0].Minimum == nil || *offering.Controls[0].Minimum != 1 || offering.Controls[0].Maximum == nil || *offering.Controls[0].Maximum != 65536 {
+		if len(offering.Controls) != 1 || offering.Controls[0].ID != "max_tokens" || offering.Controls[0].Minimum == nil || *offering.Controls[0].Minimum != 16 || offering.Controls[0].Maximum == nil || *offering.Controls[0].Maximum != 65536 {
 			testingInstance.Fatalf("Qwen offering controls=%+v", offering.Controls)
 		}
 		if len(offering.Limits) != 1 || offering.Limits[0].ID != "context_tokens" || offering.Limits[0].Value == nil || *offering.Limits[0].Value != 1000000 || offering.Limits[0].Unit != "tokens" {
@@ -362,16 +370,17 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 		testingInstance.Fatalf("NewPublicCapabilityCatalog error: %v", catalogError)
 	}
 	expectedOfferingCounts := map[string]int{
-		proxy.ProviderNameOpenAI:    11,
+		proxy.ProviderNameOpenAI:    12,
+		"vertex":                    4,
 		proxy.ProviderNameDashScope: 2,
-		proxy.ProviderNameGemini:    2,
+		proxy.ProviderNameGemini:    4,
 		proxy.ProviderNameAnthropic: 10,
 		proxy.ProviderNameMoonshot:  4,
 		proxy.ProviderNameXAI:       1,
 	}
 	expectedDashScopeImageCounts := map[string]int64{
-		proxy.ModelNameDashScopeQwen37Plus:  2048,
-		proxy.ModelNameDashScopeQwen36Flash: 256,
+		proxy.ModelNameDashScopeQwen37Plus:  250,
+		proxy.ModelNameDashScopeQwen36Flash: 250,
 	}
 	observedOfferingCounts := map[string]int{}
 	for _, offering := range catalog.Offerings {
@@ -380,7 +389,7 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 		}
 		observedOfferingCounts[offering.Provider]++
 		expectedLimitCount := 3
-		if offering.Provider == proxy.ProviderNameGemini {
+		if (offering.Provider == proxy.ProviderNameGemini || offering.Provider == "vertex") && slices.Contains(offering.Capabilities, proxy.ModelOperationText) {
 			expectedLimitCount = 5
 		}
 		if _, expectedProvider := expectedOfferingCounts[offering.Provider]; !expectedProvider || len(offering.MediaLimits) != expectedLimitCount {
@@ -389,10 +398,16 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 		observedLimitIDs := map[string]proxy.CatalogMediaLimit{}
 		for _, limit := range offering.MediaLimits {
 			expectedVerificationDate := "2026-08-11"
-			if offering.Provider == proxy.ProviderNameMoonshot {
+			if offering.Provider == "vertex" || (offering.Provider == proxy.ProviderNameOpenAI && offering.Model == "gpt-6-astra") {
+				expectedVerificationDate = "2026-09-07"
+			} else if offering.Provider == proxy.ProviderNameMoonshot {
 				expectedVerificationDate = "2026-08-13"
+			} else if offering.Provider == proxy.ProviderNameAnthropic && (offering.Model == "claude-fable-5-1" || offering.Model == "claude-opus-5") {
+				expectedVerificationDate = "2026-09-05"
+			} else if offering.Provider == proxy.ProviderNameGemini && (limit.ID == proxy.CatalogMediaLimitIDInlineRequestBytes || offering.Model == proxy.ModelNameGemini36Flash || offering.Model == proxy.ModelNameGemini37Flash) {
+				expectedVerificationDate = "2026-09-05"
 			} else if offering.Provider == proxy.ProviderNameDashScope {
-				expectedVerificationDate = "2026-09-02"
+				expectedVerificationDate = "2026-09-05"
 			}
 			if limit.LastVerified != expectedVerificationDate {
 				testingInstance.Fatalf("media limit=%+v", limit)
@@ -404,7 +419,7 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 				testingInstance.Fatalf("provider=%s model=%s missing media limit=%s", offering.Provider, offering.Model, requiredLimitID)
 			}
 		}
-		if offering.Provider == proxy.ProviderNameGemini {
+		if offering.Provider == proxy.ProviderNameGemini && slices.Contains(offering.Capabilities, proxy.ModelOperationText) {
 			for _, requiredLimitID := range []string{proxy.CatalogMediaLimitIDAudioCount, proxy.CatalogMediaLimitIDImageFileBytes, proxy.CatalogMediaLimitIDAudioFileBytes} {
 				if _, found := observedLimitIDs[requiredLimitID]; !found {
 					testingInstance.Fatalf("provider=%s model=%s missing media limit=%s", offering.Provider, offering.Model, requiredLimitID)
@@ -425,7 +440,7 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 			imageCount := observedLimitIDs[proxy.CatalogMediaLimitIDImageCount]
 			imageBytes := observedLimitIDs[proxy.CatalogMediaLimitIDImageInlineBytes]
 			expectedImageCount, expected := expectedDashScopeImageCounts[offering.Model]
-			if !expected || requestLimit.Status != proxy.CatalogMediaLimitStatusUnknown || requestLimit.Value != nil || imageCount.Status != proxy.CatalogMediaLimitStatusBounded || imageCount.Value == nil || *imageCount.Value != expectedImageCount || imageBytes.Status != proxy.CatalogMediaLimitStatusUnknown || imageBytes.Value != nil {
+			if !expected || requestLimit.Status != proxy.CatalogMediaLimitStatusUnknown || requestLimit.Value != nil || imageCount.Status != proxy.CatalogMediaLimitStatusBounded || imageCount.Value == nil || *imageCount.Value != expectedImageCount || imageBytes.Status != proxy.CatalogMediaLimitStatusBounded || imageBytes.Value == nil || *imageBytes.Value != 20000000 || imageBytes.Scope != proxy.CatalogMediaLimitScopeAttachmentDataURIBytes {
 				testingInstance.Fatalf("DashScope media limits=%+v", offering.MediaLimits)
 			}
 			delete(expectedDashScopeImageCounts, offering.Model)

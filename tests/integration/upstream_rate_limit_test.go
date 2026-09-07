@@ -675,6 +675,8 @@ func performRateLimitDictationRequest(httpClient *http.Client, applicationURL st
 func writeRateLimitUpstreamResponse(responseWriter http.ResponseWriter, requestPath string) {
 	responseWriter.Header().Set("Content-Type", contentTypeJSON)
 	switch requestPath {
+	case "/responses":
+		_, _ = io.WriteString(responseWriter, `{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"ok"}]}]}`)
 	case rateLimitChatPath:
 		_, _ = io.WriteString(responseWriter, rateLimitTextResponse)
 	case rateLimitDictationPath:
