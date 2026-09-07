@@ -54,8 +54,10 @@ const (
 	publicCapabilityImageInput = "image_input"
 
 	publicWireContractAnthropicMessages      = "anthropic_messages"
+	publicWireContractVertexGenerateContent  = "vertex_generate_content"
 	publicWireContractGeminiInteractions     = "gemini_interactions"
 	publicWireContractMultipartTranscription = "multipart_transcription"
+	publicWireContractMetaTranscription      = "meta_transcription"
 	publicWireContractOpenAIChatCompletions  = "openai_chat_completions"
 	publicWireContractOpenAIResponses        = "openai_responses"
 	publicWireContractDashScopeResponses     = "dashscope_responses"
@@ -103,9 +105,11 @@ type publicOfferingRoute struct {
 }
 
 var publicOfferingMediaTransports = map[publicOfferingRoute]string{
-	{wireContract: publicWireContractGeminiInteractions, executionLifecycle: publicExecutionLifecycleSynchronous}:     "",
+	{wireContract: publicWireContractVertexGenerateContent, executionLifecycle: publicExecutionLifecycleSynchronous}:  publicMediaTransportInline,
+	{wireContract: publicWireContractGeminiInteractions, executionLifecycle: publicExecutionLifecycleSynchronous}:     publicMediaTransportFile,
 	{wireContract: publicWireContractAnthropicMessages, executionLifecycle: publicExecutionLifecycleSynchronous}:      publicMediaTransportInline,
 	{wireContract: publicWireContractGeminiInteractions, executionLifecycle: publicExecutionLifecyclePollable}:        publicMediaTransportFile,
+	{wireContract: publicWireContractMetaTranscription, executionLifecycle: publicExecutionLifecycleSynchronous}:      "",
 	{wireContract: publicWireContractMultipartTranscription, executionLifecycle: publicExecutionLifecycleSynchronous}: "",
 	{wireContract: publicWireContractOpenAIChatCompletions, executionLifecycle: publicExecutionLifecycleSynchronous}:  publicMediaTransportInline,
 	{wireContract: publicWireContractOpenAIResponses, executionLifecycle: publicExecutionLifecyclePollable}:           publicMediaTransportInline,
