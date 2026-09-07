@@ -45,6 +45,34 @@ model_migrations:
       operation: text
       source_model: gemini-3.1-pro-preview
       target_model: gemini-3.5-flash
+    - managed_schema_version: 14
+      provider: deepseek
+      operation: text
+      source_model: deepseek-chat
+      target_model: deepseek-v4-flash
+      target_reasoning_effort: none
+      preserve_source_usage: true
+    - managed_schema_version: 14
+      provider: deepseek
+      operation: text
+      source_model: deepseek-reasoner
+      target_model: deepseek-v4-flash
+      target_reasoning_effort: high
+      preserve_source_usage: true
+    - managed_schema_version: 15
+      provider: anthropic
+      operation: text
+      source_model: claude-opus-4-1-20250805
+      target_model: claude-opus-5
+      target_reasoning_effort: high
+      preserve_source_usage: true
+    - managed_schema_version: 15
+      provider: anthropic
+      operation: text
+      source_model: claude-opus-4-1
+      target_model: claude-opus-5
+      target_reasoning_effort: high
+      preserve_source_usage: true
 operations:
     - id: text
       input_artifacts:
@@ -65,6 +93,8 @@ operations:
       output_artifacts:
         - video
 publishers:
+    - id: baidu
+      label: Baidu
     - id: openai
       label: OpenAI
     - id: deepseek
@@ -88,6 +118,14 @@ publishers:
     - id: xai
       label: xAI
 families:
+    - id: ernie-5
+      publisher: baidu
+      label: ERNIE 5
+      weight_access: proprietary
+    - id: deepseek-v3
+      publisher: deepseek
+      label: DeepSeek V3
+      weight_access: open_weights
     - id: gpt-4
       publisher: openai
       label: GPT-4
@@ -104,10 +142,6 @@ families:
       publisher: deepseek
       label: DeepSeek V4
       weight_access: open_weights
-    - id: deepseek-v3
-      publisher: deepseek
-      label: DeepSeek V3
-      weight_access: open_weights
     - id: deepseek-r1
       publisher: deepseek
       label: DeepSeek R1
@@ -116,6 +150,10 @@ families:
       publisher: alibaba
       label: Qwen
       weight_access: proprietary
+    - id: qwen3-8
+      publisher: alibaba
+      label: Qwen3.8
+      weight_access: open_weights
     - id: kimi-k2
       publisher: moonshot
       label: Kimi K2
@@ -123,6 +161,10 @@ families:
     - id: kimi-k3
       publisher: moonshot
       label: Kimi K3
+      weight_access: open_weights
+    - id: minimax-m3
+      publisher: minimax
+      label: MiniMax M3
       weight_access: open_weights
     - id: minimax-m2
       publisher: minimax
@@ -185,7 +227,22 @@ families:
       label: xAI STT
       weight_access: proprietary
 models:
+    - id: ernie-5.0
+      enabled: true
+      publisher: baidu
+      family: ernie-5
+      version: ernie-5.0
+      operations: [text]
+      media_inputs: []
+    - id: deepseek-v3.2
+      enabled: true
+      publisher: deepseek
+      family: deepseek-v3
+      version: deepseek-v3.2
+      operations: [text]
+      media_inputs: []
     - id: gpt-4o-mini
+      enabled: true
       publisher: openai
       family: gpt-4
       version: gpt-4o-mini
@@ -194,6 +251,7 @@ models:
       media_inputs:
         - image
     - id: gpt-4o
+      enabled: true
       publisher: openai
       family: gpt-4
       version: gpt-4o
@@ -202,6 +260,7 @@ models:
       media_inputs:
         - image
     - id: gpt-4.1
+      enabled: true
       publisher: openai
       family: gpt-4
       version: gpt-4.1
@@ -210,6 +269,7 @@ models:
       media_inputs:
         - image
     - id: gpt-5-mini
+      enabled: true
       publisher: openai
       family: gpt-5
       version: gpt-5-mini
@@ -218,6 +278,7 @@ models:
       media_inputs:
         - image
     - id: gpt-5
+      enabled: true
       publisher: openai
       family: gpt-5
       version: gpt-5
@@ -226,6 +287,7 @@ models:
       media_inputs:
         - image
     - id: gpt-5.5
+      enabled: true
       publisher: openai
       family: gpt-5
       version: gpt-5.5
@@ -234,6 +296,7 @@ models:
       media_inputs:
         - image
     - id: gpt-5.5-pro
+      enabled: true
       publisher: openai
       family: gpt-5
       version: gpt-5.5-pro
@@ -242,6 +305,7 @@ models:
       media_inputs:
         - image
     - id: gpt-5.6
+      enabled: true
       publisher: openai
       family: gpt-5
       version: gpt-5.6
@@ -250,6 +314,7 @@ models:
       media_inputs:
         - image
     - id: gpt-5.6-sol
+      enabled: true
       publisher: openai
       family: gpt-5
       version: gpt-5.6-sol
@@ -258,6 +323,7 @@ models:
       media_inputs:
         - image
     - id: gpt-5.6-terra
+      enabled: true
       publisher: openai
       family: gpt-5
       version: gpt-5.6-terra
@@ -266,6 +332,7 @@ models:
       media_inputs:
         - image
     - id: gpt-5.6-luna
+      enabled: true
       publisher: openai
       family: gpt-5
       version: gpt-5.6-luna
@@ -274,6 +341,7 @@ models:
       media_inputs:
         - image
     - id: gpt-4o-mini-transcribe
+      enabled: true
       publisher: openai
       family: gpt-transcribe
       version: gpt-4o-mini-transcribe
@@ -281,6 +349,7 @@ models:
         - dictation
       media_inputs: []
     - id: gpt-4o-transcribe
+      enabled: true
       publisher: openai
       family: gpt-transcribe
       version: gpt-4o-transcribe
@@ -288,6 +357,7 @@ models:
         - dictation
       media_inputs: []
     - id: deepseek-v4-flash
+      enabled: true
       publisher: deepseek
       family: deepseek-v4
       version: deepseek-v4-flash
@@ -295,20 +365,15 @@ models:
         - text
       media_inputs: []
     - id: deepseek-v4-pro
+      enabled: true
       publisher: deepseek
       family: deepseek-v4
       version: deepseek-v4-pro
       operations:
         - text
       media_inputs: []
-    - id: deepseek-chat
-      publisher: deepseek
-      family: deepseek-v3
-      version: deepseek-chat
-      operations:
-        - text
-      media_inputs: []
     - id: deepseek-reasoner
+      enabled: true
       publisher: deepseek
       family: deepseek-r1
       version: deepseek-reasoner
@@ -316,6 +381,7 @@ models:
         - text
       media_inputs: []
     - id: qwen-plus
+      enabled: true
       publisher: alibaba
       family: qwen
       version: qwen-plus
@@ -323,6 +389,7 @@ models:
         - text
       media_inputs: []
     - id: qwen3.7-max
+      enabled: true
       publisher: alibaba
       family: qwen
       version: qwen3.7-max
@@ -330,6 +397,7 @@ models:
         - text
       media_inputs: []
     - id: qwen3.7-plus
+      enabled: true
       publisher: alibaba
       family: qwen
       version: qwen3.7-plus
@@ -338,6 +406,7 @@ models:
       media_inputs:
         - image
     - id: qwen3.6-flash
+      enabled: true
       publisher: alibaba
       family: qwen
       version: qwen3.6-flash
@@ -345,7 +414,52 @@ models:
         - text
       media_inputs:
         - image
+    - id: qwen3.8-max
+      enabled: false
+      publisher: alibaba
+      family: qwen
+      version: qwen3.8-max
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: qwen3.8-max-0902
+      enabled: false
+      publisher: alibaba
+      family: qwen
+      version: qwen3.8-max-0902
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: qwen3.8-flash
+      enabled: false
+      publisher: alibaba
+      family: qwen
+      version: qwen3.8-flash
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: qwen3.8-2.4t-a95b
+      enabled: false
+      publisher: alibaba
+      family: qwen3-8
+      version: qwen3.8-2.4t-a95b
+      operations:
+        - text
+      media_inputs: []
+    - id: qwen3.8-27b
+      enabled: false
+      publisher: alibaba
+      family: qwen3-8
+      version: qwen3.8-27b
+      operations:
+        - text
+      media_inputs:
+        - image
     - id: kimi-k2.6
+      enabled: true
       publisher: moonshot
       family: kimi-k2
       version: kimi-k2.6
@@ -354,6 +468,7 @@ models:
       media_inputs:
         - image
     - id: kimi-k3
+      enabled: true
       publisher: moonshot
       family: kimi-k3
       version: kimi-k3
@@ -362,6 +477,7 @@ models:
       media_inputs:
         - image
     - id: kimi-k2.7-code
+      enabled: true
       publisher: moonshot
       family: kimi-k2
       version: kimi-k2.7-code
@@ -370,6 +486,7 @@ models:
       media_inputs:
         - image
     - id: kimi-k2.7-code-highspeed
+      enabled: true
       publisher: moonshot
       family: kimi-k2
       version: kimi-k2.7-code-highspeed
@@ -377,7 +494,17 @@ models:
         - text
       media_inputs:
         - image
+    - id: minimax-m3
+      enabled: false
+      publisher: minimax
+      family: minimax-m3
+      version: minimax-m3
+      operations:
+        - text
+      media_inputs:
+        - image
     - id: minimax-m2.7
+      enabled: true
       publisher: minimax
       family: minimax-m2
       version: minimax-m2.7
@@ -385,6 +512,7 @@ models:
         - text
       media_inputs: []
     - id: minimax-m2.7-highspeed
+      enabled: true
       publisher: minimax
       family: minimax-m2
       version: minimax-m2.7-highspeed
@@ -392,6 +520,7 @@ models:
         - text
       media_inputs: []
     - id: minimax-m2.5
+      enabled: true
       publisher: minimax
       family: minimax-m2
       version: minimax-m2.5
@@ -399,6 +528,7 @@ models:
         - text
       media_inputs: []
     - id: minimax-m2.5-highspeed
+      enabled: true
       publisher: minimax
       family: minimax-m2
       version: minimax-m2.5-highspeed
@@ -406,6 +536,7 @@ models:
         - text
       media_inputs: []
     - id: minimax-m2.1
+      enabled: true
       publisher: minimax
       family: minimax-m2
       version: minimax-m2.1
@@ -413,6 +544,7 @@ models:
         - text
       media_inputs: []
     - id: minimax-m2.1-highspeed
+      enabled: true
       publisher: minimax
       family: minimax-m2
       version: minimax-m2.1-highspeed
@@ -420,6 +552,7 @@ models:
         - text
       media_inputs: []
     - id: minimax-m2
+      enabled: true
       publisher: minimax
       family: minimax-m2
       version: minimax-m2
@@ -427,13 +560,32 @@ models:
         - text
       media_inputs: []
     - id: sensevoice-small
+      enabled: true
       publisher: funaudio
       family: sensevoice
       version: sensevoice-small
       operations:
         - dictation
       media_inputs: []
+    - id: glm-5.3
+      enabled: false
+      publisher: zai
+      family: glm-5
+      version: glm-5.3
+      operations:
+        - text
+      media_inputs: []
+    - id: glm-5.3-flash
+      enabled: false
+      publisher: zai
+      family: glm-5
+      version: glm-5.3-flash
+      operations:
+        - text
+      media_inputs:
+        - image
     - id: glm-5.1
+      enabled: true
       publisher: zai
       family: glm-5
       version: glm-5.1
@@ -441,6 +593,7 @@ models:
         - text
       media_inputs: []
     - id: glm-5.2
+      enabled: true
       publisher: zai
       family: glm-5
       version: glm-5.2
@@ -448,13 +601,63 @@ models:
         - text
       media_inputs: []
     - id: glm-asr-2512
+      enabled: true
       publisher: zai
       family: glm-asr
       version: glm-asr-2512
       operations:
         - dictation
       media_inputs: []
+    - id: gemini-3.5-transcribe
+      enabled: true
+      publisher: google
+      family: gemini
+      version: gemini-3.5-transcribe
+      operations:
+        - dictation
+      media_inputs: []
+    - id: gemini-3.6-flash
+      enabled: true
+      publisher: google
+      family: gemini
+      version: gemini-3.6-flash
+      operations:
+        - text
+      media_inputs:
+        - image
+        - audio
+    - id: gemini-3.7-flash
+      enabled: true
+      publisher: google
+      family: gemini
+      version: gemini-3.7-flash
+      operations:
+        - text
+      media_inputs:
+        - image
+        - audio
+    - id: gemini-3.8-flash
+      enabled: false
+      publisher: google
+      family: gemini
+      version: gemini-3.8-flash
+      operations:
+        - text
+      media_inputs:
+        - image
+        - audio
+    - id: gemini-3.5-flash-lite
+      enabled: false
+      publisher: google
+      family: gemini
+      version: gemini-3.5-flash-lite
+      operations:
+        - text
+      media_inputs:
+        - image
+        - audio
     - id: gemini-3.5-flash
+      enabled: true
       publisher: google
       family: gemini
       version: gemini-3.5-flash
@@ -464,6 +667,7 @@ models:
         - image
         - audio
     - id: gemini-3-flash-preview
+      enabled: true
       publisher: google
       family: gemini
       version: gemini-3-flash-preview
@@ -472,7 +676,26 @@ models:
       media_inputs:
         - image
         - audio
+    - id: claude-fable-5-1
+      enabled: true
+      publisher: anthropic
+      family: claude-fable
+      version: claude-fable-5-1
+      operations:
+        - text
+      media_inputs:
+        - image
+    - id: claude-opus-5
+      enabled: true
+      publisher: anthropic
+      family: claude-opus
+      version: claude-opus-5
+      operations:
+        - text
+      media_inputs:
+        - image
     - id: claude-fable-5
+      enabled: true
       publisher: anthropic
       family: claude-fable
       version: claude-fable-5
@@ -481,6 +704,7 @@ models:
       media_inputs:
         - image
     - id: claude-sonnet-5
+      enabled: true
       publisher: anthropic
       family: claude-sonnet
       version: claude-sonnet-5
@@ -489,6 +713,7 @@ models:
       media_inputs:
         - image
     - id: claude-opus-4-8
+      enabled: true
       publisher: anthropic
       family: claude-opus
       version: claude-opus-4-8
@@ -497,6 +722,7 @@ models:
       media_inputs:
         - image
     - id: claude-sonnet-4-6
+      enabled: true
       publisher: anthropic
       family: claude-sonnet
       version: claude-sonnet-4-6
@@ -505,6 +731,7 @@ models:
       media_inputs:
         - image
     - id: claude-haiku-4-5-20251001
+      enabled: true
       publisher: anthropic
       family: claude-haiku
       version: claude-haiku-4-5-20251001
@@ -513,6 +740,7 @@ models:
       media_inputs:
         - image
     - id: claude-haiku-4-5
+      enabled: true
       publisher: anthropic
       family: claude-haiku
       version: claude-haiku-4-5
@@ -521,6 +749,7 @@ models:
       media_inputs:
         - image
     - id: claude-sonnet-4-5-20250929
+      enabled: true
       publisher: anthropic
       family: claude-sonnet
       version: claude-sonnet-4-5-20250929
@@ -529,6 +758,7 @@ models:
       media_inputs:
         - image
     - id: claude-sonnet-4-5
+      enabled: true
       publisher: anthropic
       family: claude-sonnet
       version: claude-sonnet-4-5
@@ -536,23 +766,8 @@ models:
         - text
       media_inputs:
         - image
-    - id: claude-opus-4-1-20250805
-      publisher: anthropic
-      family: claude-opus
-      version: claude-opus-4-1-20250805
-      operations:
-        - text
-      media_inputs:
-        - image
-    - id: claude-opus-4-1
-      publisher: anthropic
-      family: claude-opus
-      version: claude-opus-4-1
-      operations:
-        - text
-      media_inputs:
-        - image
     - id: muse-spark-1.1
+      enabled: true
       publisher: meta
       family: muse-spark
       version: muse-spark-1.1
@@ -560,13 +775,23 @@ models:
         - text
       media_inputs: []
     - id: muse-spark-1.2
+      enabled: true
       publisher: meta
       family: muse-spark
       version: muse-spark-1.2
       operations:
         - text
       media_inputs: []
+    - id: muse-spark-1.3
+      enabled: false
+      publisher: meta
+      family: muse-spark
+      version: muse-spark-1.3
+      operations:
+        - text
+      media_inputs: []
     - id: grok-4.3
+      enabled: true
       publisher: xai
       family: grok
       version: grok-4.3
@@ -574,13 +799,24 @@ models:
         - text
       media_inputs: []
     - id: grok-4.3-latest
+      enabled: true
       publisher: xai
       family: grok
       version: grok-4.3-latest
       operations:
         - text
       media_inputs: []
+    - id: grok-4.6
+      enabled: false
+      publisher: xai
+      family: grok
+      version: grok-4.6
+      operations:
+        - text
+      media_inputs:
+        - image
     - id: grok-4.5
+      enabled: true
       publisher: xai
       family: grok
       version: grok-4.5
@@ -589,6 +825,7 @@ models:
       media_inputs:
         - image
     - id: grok-4.20-0309-reasoning
+      enabled: true
       publisher: xai
       family: grok
       version: grok-4.20-0309-reasoning
@@ -596,6 +833,7 @@ models:
         - text
       media_inputs: []
     - id: grok-4.20-0309-non-reasoning
+      enabled: true
       publisher: xai
       family: grok
       version: grok-4.20-0309-non-reasoning
@@ -603,6 +841,7 @@ models:
         - text
       media_inputs: []
     - id: grok-latest
+      enabled: true
       publisher: xai
       family: grok
       version: grok-latest
@@ -610,6 +849,7 @@ models:
         - text
       media_inputs: []
     - id: grok-build-0.1
+      enabled: true
       publisher: xai
       family: grok-build
       version: grok-build-0.1
@@ -617,6 +857,7 @@ models:
         - text
       media_inputs: []
     - id: grok-code-fast
+      enabled: true
       publisher: xai
       family: grok-code
       version: grok-code-fast
@@ -624,6 +865,7 @@ models:
         - text
       media_inputs: []
     - id: grok-code-fast-1
+      enabled: true
       publisher: xai
       family: grok-code
       version: grok-code-fast-1
@@ -631,6 +873,7 @@ models:
         - text
       media_inputs: []
     - id: grok-code-fast-1-0825
+      enabled: true
       publisher: xai
       family: grok-code
       version: grok-code-fast-1-0825
@@ -638,6 +881,7 @@ models:
         - text
       media_inputs: []
     - id: grok-imagine-video-1.5
+      enabled: true
       publisher: xai
       family: grok-imagine
       version: grok-imagine-video-1.5
@@ -645,6 +889,7 @@ models:
         - video_generation
       media_inputs: []
     - id: xai-stt
+      enabled: true
       publisher: xai
       family: xai-stt
       version: xai-stt
@@ -1377,6 +1622,9 @@ providers:
         - model: deepseek-v4-flash
           created: 1787276456
           upstream_model: deepseek-v4-flash
+          reasoning_effort:
+            adapter: chat_completions_thinking
+            efforts: [none, low, high, max]
           transport: text
           operations:
             - text
@@ -1391,30 +1639,9 @@ providers:
         - model: deepseek-v4-pro
           created: 1787276456
           upstream_model: deepseek-v4-pro
-          transport: text
-          operations:
-            - text
-          prices:
-            - operation: text
-              available: false
-              source: https://api-docs.deepseek.com/quick_start/pricing
-              last_verified: "2026-08-10"
-              unavailable_reason: Exact published pricing has not been imported for this provider offering.
-        - model: deepseek-chat
-          created: 1787276456
-          upstream_model: deepseek-chat
-          transport: text
-          operations:
-            - text
-          prices:
-            - operation: text
-              available: false
-              source: https://api-docs.deepseek.com/quick_start/pricing
-              last_verified: "2026-08-10"
-              unavailable_reason: Exact published pricing has not been imported for this provider offering.
-        - model: deepseek-reasoner
-          created: 1787276456
-          upstream_model: deepseek-reasoner
+          reasoning_effort:
+            adapter: chat_completions_thinking
+            efforts: [none, low, high, max]
           transport: text
           operations:
             - text
@@ -1458,38 +1685,37 @@ providers:
           endpoint:
             method: POST
             setting_field: base_url
-            path: /chat/completions
+            path: /responses
           authentication:
             kind: bearer
             field: api_key
             header: Authorization
             prefix: 'Bearer '
-          request_protocol: openai_chat_completions
-          response_protocol: openai_chat_completions
-          usage_mapping: openai_chat_completions
+          request_protocol: dashscope_responses
+          response_protocol: dashscope_responses
+          usage_mapping: dashscope_responses
           lifecycle: synchronous_completion
           protocol_parameters:
             media_execution_lifecycle: synchronous_completion
             model_field: model
-            token_field: max_tokens
+            token_field: max_output_tokens
             output_fields:
-                - choices[].message.content
-                - choices[].message.tool_calls
+                - output[].content[].text
             finish_rules:
                 complete:
-                    - stop
-                    - tool_calls
+                    - completed
                 continue:
-                    - length
+                    - incomplete
             continuation_rules:
                 - append_visible_assistant_output
                 - request_missing_suffix
             error_rules:
-                - content_filter
-                - unknown_finish_reason
+                - cancelled
+                - failed
+                - unknown_status
             usage_fields:
-                input: usage.prompt_tokens
-                output: usage.completion_tokens
+                input: usage.input_tokens
+                output: usage.output_tokens
                 total: usage.total_tokens
       offerings:
         - model: qwen-plus
@@ -1516,7 +1742,7 @@ providers:
           controls:
             - id: max_tokens
               kind: integer
-              minimum: 1
+              minimum: 16
               maximum: 65536
           limits:
             - id: context_tokens
@@ -1552,7 +1778,7 @@ providers:
           controls:
             - id: max_tokens
               kind: integer
-              minimum: 1
+              minimum: 16
               maximum: 65536
           limits:
             - id: context_tokens
@@ -1567,25 +1793,26 @@ providers:
               status: unknown
               unit: bytes
               scope: request_encoded_bytes
-              source: https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions
-              last_verified: "2026-09-02"
+              source: https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-responses
+              last_verified: "2026-09-05"
             - id: image_count
               media_type: image
               transport: any
               status: bounded
-              value: 2048
+              value: 250
               unit: files
               scope: request
-              source: https://www.alibabacloud.com/help/en/model-studio/vision-model
-              last_verified: "2026-09-02"
+              source: https://www.alibabacloud.com/help/en/model-studio/vision
+              last_verified: "2026-09-05"
             - id: image_inline_bytes
               media_type: image
               transport: inline
-              status: unknown
+              status: bounded
+              value: 20000000
               unit: bytes
-              scope: attachment
-              source: https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions
-              last_verified: "2026-09-02"
+              scope: attachment_data_uri_bytes
+              source: https://www.alibabacloud.com/help/en/model-studio/vision
+              last_verified: "2026-09-05"
           prices:
             - operation: text
               available: true
@@ -1616,7 +1843,7 @@ providers:
           controls:
             - id: max_tokens
               kind: integer
-              minimum: 1
+              minimum: 16
               maximum: 65536
           limits:
             - id: context_tokens
@@ -1631,25 +1858,26 @@ providers:
               status: unknown
               unit: bytes
               scope: request_encoded_bytes
-              source: https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions
-              last_verified: "2026-09-02"
+              source: https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-responses
+              last_verified: "2026-09-05"
             - id: image_count
               media_type: image
               transport: any
               status: bounded
-              value: 256
+              value: 250
               unit: files
               scope: request
-              source: https://www.alibabacloud.com/help/en/model-studio/vision-model
-              last_verified: "2026-09-02"
+              source: https://www.alibabacloud.com/help/en/model-studio/vision
+              last_verified: "2026-09-05"
             - id: image_inline_bytes
               media_type: image
               transport: inline
-              status: unknown
+              status: bounded
+              value: 20000000
               unit: bytes
-              scope: attachment
-              source: https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions
-              last_verified: "2026-09-02"
+              scope: attachment_data_uri_bytes
+              source: https://www.alibabacloud.com/help/en/model-studio/vision
+              last_verified: "2026-09-05"
           prices:
             - operation: text
               available: true
@@ -1670,6 +1898,337 @@ providers:
                     billing_mode: pay_as_you_go_list
               source: https://www.alibabacloud.com/help/en/model-studio/model-pricing
               last_verified: "2026-08-13"
+        - model: qwen3.8-max
+          created: 1788566400
+          upstream_model: qwen3.8-max
+          transport: text
+          operations:
+            - text
+          output_token_limit: 131072
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 16
+              maximum: 131072
+          limits:
+            - id: context_tokens
+              value: 1000000
+              unit: tokens
+          reasoning_effort:
+            adapter: dashscope_responses
+            efforts:
+                - none
+                - low
+                - medium
+                - xhigh
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-responses
+              last_verified: "2026-09-05"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 250
+              unit: files
+              scope: request
+              source: https://www.alibabacloud.com/help/en/model-studio/vision
+              last_verified: "2026-09-05"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: attachment_data_uri_bytes
+              source: https://www.alibabacloud.com/help/en/model-studio/vision
+              last_verified: "2026-09-05"
+          prices:
+            - operation: text
+              available: true
+              source: https://www.alibabacloud.com/help/en/model-studio/model-pricing
+              last_verified: "2026-09-05"
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: 2
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_list
+                    mode: singapore_international;thinking_or_non_thinking;input_tokens_0_to_1000000
+                - component: output_tokens
+                  currency: USD
+                  rate: 6
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_list
+                    mode: singapore_international;thinking_or_non_thinking;input_tokens_0_to_1000000
+        - model: qwen3.8-max-0902
+          created: 1788566400
+          upstream_model: qwen3.8-max-0902
+          transport: text
+          operations:
+            - text
+          output_token_limit: 131072
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 16
+              maximum: 131072
+          limits:
+            - id: context_tokens
+              value: 1000000
+              unit: tokens
+          reasoning_effort:
+            adapter: dashscope_responses
+            efforts:
+                - none
+                - low
+                - medium
+                - xhigh
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-responses
+              last_verified: "2026-09-05"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 250
+              unit: files
+              scope: request
+              source: https://www.alibabacloud.com/help/en/model-studio/vision
+              last_verified: "2026-09-05"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: attachment_data_uri_bytes
+              source: https://www.alibabacloud.com/help/en/model-studio/vision
+              last_verified: "2026-09-05"
+          prices:
+            - operation: text
+              available: true
+              source: https://www.alibabacloud.com/help/en/model-studio/model-pricing
+              last_verified: "2026-09-05"
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: 2
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_list
+                    mode: singapore_international;thinking_or_non_thinking;input_tokens_0_to_1000000
+                - component: output_tokens
+                  currency: USD
+                  rate: 6
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_list
+                    mode: singapore_international;thinking_or_non_thinking;input_tokens_0_to_1000000
+        - model: qwen3.8-flash
+          created: 1788566400
+          upstream_model: qwen3.8-flash
+          transport: text
+          operations:
+            - text
+          output_token_limit: 131072
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 16
+              maximum: 131072
+          limits:
+            - id: context_tokens
+              value: 1000000
+              unit: tokens
+          reasoning_effort:
+            adapter: dashscope_responses
+            efforts:
+                - none
+                - low
+                - medium
+                - xhigh
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-responses
+              last_verified: "2026-09-05"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 250
+              unit: files
+              scope: request
+              source: https://www.alibabacloud.com/help/en/model-studio/vision
+              last_verified: "2026-09-05"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: attachment_data_uri_bytes
+              source: https://www.alibabacloud.com/help/en/model-studio/vision
+              last_verified: "2026-09-05"
+          prices:
+            - operation: text
+              available: true
+              source: https://www.alibabacloud.com/help/en/model-studio/model-pricing
+              last_verified: "2026-09-05"
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: 0.15
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_list
+                    mode: singapore_international;thinking_or_non_thinking;input_tokens_0_to_1000000
+                - component: output_tokens
+                  currency: USD
+                  rate: 0.47
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_list
+                    mode: singapore_international;thinking_or_non_thinking;input_tokens_0_to_1000000
+        - model: qwen3.8-2.4t-a95b
+          created: 1788566400
+          upstream_model: qwen3.8-2.4t-a95b
+          transport: text
+          operations:
+            - text
+          output_token_limit: 131072
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 16
+              maximum: 131072
+          limits:
+            - id: context_tokens
+              value: 1000000
+              unit: tokens
+          reasoning_effort:
+            adapter: dashscope_responses
+            efforts:
+                - none
+                - low
+                - medium
+                - xhigh
+          prices:
+            - operation: text
+              available: true
+              source: https://www.alibabacloud.com/help/en/model-studio/model-pricing
+              last_verified: "2026-09-05"
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: 2
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_list
+                    mode: singapore_international;thinking_or_non_thinking;input_tokens_0_to_1000000
+                - component: output_tokens
+                  currency: USD
+                  rate: 6
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_list
+                    mode: singapore_international;thinking_or_non_thinking;input_tokens_0_to_1000000
+        - model: qwen3.8-27b
+          created: 1788566400
+          upstream_model: qwen3.8-27b
+          transport: text
+          operations:
+            - text
+          output_token_limit: 131072
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 16
+              maximum: 131072
+          limits:
+            - id: context_tokens
+              value: 1000000
+              unit: tokens
+          reasoning_effort:
+            adapter: dashscope_responses
+            efforts:
+                - none
+                - low
+                - medium
+                - xhigh
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-responses
+              last_verified: "2026-09-05"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 250
+              unit: files
+              scope: request
+              source: https://www.alibabacloud.com/help/en/model-studio/vision
+              last_verified: "2026-09-05"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: attachment_data_uri_bytes
+              source: https://www.alibabacloud.com/help/en/model-studio/vision
+              last_verified: "2026-09-05"
+          prices:
+            - operation: text
+              available: true
+              source: https://www.alibabacloud.com/help/en/model-studio/model-pricing
+              last_verified: "2026-09-05"
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: 0.5
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_list
+                    mode: singapore_international;thinking_or_non_thinking;input_tokens_0_to_1000000
+                - component: output_tokens
+                  currency: USD
+                  rate: 3
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_list
+                    mode: singapore_international;thinking_or_non_thinking;input_tokens_0_to_1000000
     - id: moonshot
       label: Moonshot
       api_service_label: Moonshot API
@@ -1948,9 +2507,104 @@ providers:
                 output: usage.completion_tokens
                 total: usage.total_tokens
       offerings:
+        - model: minimax-m3
+          created: 1788644880
+          upstream_model: MiniMax-M3
+          request_profile: minimax_chat_completions
+          transport: text
+          operations:
+            - text
+          output_token_limit: 524288
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 524288
+          limits:
+            - id: context_tokens
+              value: 1000000
+              unit: tokens
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 64000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://platform.minimax.io/docs/api-reference/text-openai-api
+              last_verified: "2026-09-05"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: unknown
+              unit: files
+              scope: request
+              source: https://platform.minimax.io/docs/api-reference/text-openai-api
+              last_verified: "2026-09-05"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 10000000
+              unit: bytes
+              scope: attachment
+              source: https://platform.minimax.io/docs/api-reference/text-openai-api
+              last_verified: "2026-09-05"
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: 0.3
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                    mode: input_tokens_up_to_512k
+                - component: output_tokens
+                  currency: USD
+                  rate: 1.2
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                    mode: input_tokens_up_to_512k
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: 0.06
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                    mode: input_tokens_up_to_512k
+                - component: input_tokens
+                  currency: USD
+                  rate: 0.6
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                    mode: input_tokens_above_512k
+                - component: output_tokens
+                  currency: USD
+                  rate: 2.4
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                    mode: input_tokens_above_512k
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: 0.12
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_standard
+                    mode: input_tokens_above_512k
+              source: https://platform.minimax.io/docs/guides/pricing-paygo
+              last_verified: "2026-09-05"
         - model: minimax-m2.7
           created: 1787276456
           upstream_model: MiniMax-M2.7
+          request_profile: minimax_chat_completions
           transport: text
           operations:
             - text
@@ -1999,6 +2653,7 @@ providers:
         - model: minimax-m2.7-highspeed
           created: 1787276456
           upstream_model: MiniMax-M2.7-highspeed
+          request_profile: minimax_chat_completions
           transport: text
           operations:
             - text
@@ -2045,6 +2700,7 @@ providers:
         - model: minimax-m2.5
           created: 1787276456
           upstream_model: MiniMax-M2.5
+          request_profile: minimax_chat_completions
           transport: text
           operations:
             - text
@@ -2091,6 +2747,7 @@ providers:
         - model: minimax-m2.5-highspeed
           created: 1787276456
           upstream_model: MiniMax-M2.5-highspeed
+          request_profile: minimax_chat_completions
           transport: text
           operations:
             - text
@@ -2137,6 +2794,7 @@ providers:
         - model: minimax-m2.1
           created: 1787276456
           upstream_model: MiniMax-M2.1
+          request_profile: minimax_chat_completions
           transport: text
           operations:
             - text
@@ -2183,6 +2841,7 @@ providers:
         - model: minimax-m2.1-highspeed
           created: 1787276456
           upstream_model: MiniMax-M2.1-highspeed
+          request_profile: minimax_chat_completions
           transport: text
           operations:
             - text
@@ -2229,6 +2888,7 @@ providers:
         - model: minimax-m2
           created: 1787276456
           upstream_model: MiniMax-M2
+          request_profile: minimax_chat_completions
           transport: text
           operations:
             - text
@@ -2470,6 +3130,154 @@ providers:
                 output: ""
                 total: ""
       offerings:
+        - model: glm-5.3
+          created: 1787011200
+          upstream_model: glm-5.3
+          transport: text
+          operations:
+            - text
+          output_token_limit: 131072
+          reasoning_effort:
+            adapter: chat_completions_thinking
+            efforts:
+                - low
+                - high
+                - max
+          limits:
+            - id: context_tokens
+              value: 1000000
+              unit: tokens
+          prices:
+            - operation: text
+              available: true
+              source: https://docs.z.ai/guides/overview/pricing
+              last_verified: "2026-09-05"
+              rates:
+                - component: input_tokens
+                  rate: 1.4
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_list
+                - component: output_tokens
+                  rate: 4.4
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_list
+                - component: cache_read
+                  rate: 0.26
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_list
+        - model: glm-5.3-flash
+          created: 1787702400
+          upstream_model: glm-5.3-flash
+          transport: text
+          operations:
+            - text
+          output_token_limit: 131072
+          reasoning_effort:
+            adapter: chat_completions_thinking
+            efforts:
+                - low
+                - high
+                - max
+          limits:
+            - id: context_tokens
+              value: 1000000
+              unit: tokens
+          media_inputs:
+            - image
+          image_mime_types:
+            - image/jpeg
+            - image/png
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://docs.z.ai/openapi.json
+              last_verified: "2026-09-05"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: unknown
+              unit: files
+              scope: request
+              source: https://docs.z.ai/openapi.json
+              last_verified: "2026-09-05"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: attachment
+              source: https://docs.z.ai/openapi.json
+              last_verified: "2026-09-05"
+            - id: image_width_pixels
+              media_type: image
+              transport: any
+              status: bounded
+              value: 6000
+              unit: pixels
+              scope: attachment
+              source: https://docs.z.ai/openapi.json
+              last_verified: "2026-09-05"
+            - id: image_height_pixels
+              media_type: image
+              transport: any
+              status: bounded
+              value: 6000
+              unit: pixels
+              scope: attachment
+              source: https://docs.z.ai/openapi.json
+              last_verified: "2026-09-05"
+          prices:
+            - operation: text
+              available: true
+              source: https://docs.z.ai/guides/overview/pricing
+              last_verified: "2026-09-05"
+              rates:
+                - component: input_tokens
+                  rate: 0.15
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_list
+                - component: output_tokens
+                  rate: 0.5
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_list
+                - component: cache_read
+                  rate: 0.03
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go_list
+                - component: input_tokens
+                  rate: 0.075
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: promotion_until_2026-09-09T16:00:00Z_exclusive
+                - component: output_tokens
+                  rate: 0.25
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: promotion_until_2026-09-09T16:00:00Z_exclusive
+                - component: cache_read
+                  rate: 0.015
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: promotion_until_2026-09-09T16:00:00Z_exclusive
         - model: glm-5.1
           created: 1787276456
           upstream_model: glm-5.1
@@ -2572,7 +3380,427 @@ providers:
                 input: usage.input_tokens
                 output: usage.output_tokens
                 total: usage.total_tokens
+        - id: dictation
+          endpoint:
+            method: POST
+            default_base_url: https://generativelanguage.googleapis.com/v1beta
+            path: /interactions
+          authentication:
+            kind: header
+            field: api_key
+            header: x-goog-api-key
+            prefix: ""
+          headers:
+            - name: Api-Revision
+              value: "2026-05-20"
+          request_protocol: gemini_interactions
+          response_protocol: gemini_interactions
+          usage_mapping: gemini_interactions
+          lifecycle: synchronous_completion
+          protocol_parameters:
+            media_execution_lifecycle: synchronous_completion
+            model_field: model
+            token_field: generation_config.max_output_tokens
+            output_fields:
+                - outputs[].text
+            finish_rules:
+                complete:
+                    - completed
+                continue:
+                    - incomplete
+            continuation_rules: []
+            error_rules:
+                - blocked
+                - cancelled
+                - failed
+                - unknown_status
+            usage_fields:
+                input: usage.input_tokens
+                output: usage.output_tokens
+                total: usage.total_tokens
       offerings:
+        - model: gemini-3.6-flash
+          created: 1788566400
+          upstream_model: gemini-3.6-flash
+          transport: text_pollable
+          operations:
+            - text
+          output_token_limit: 65536
+          reasoning_effort:
+            adapter: gemini_interactions
+            efforts:
+                - minimal
+                - low
+                - medium
+                - high
+          limits:
+            - id: context_tokens
+              value: 1048576
+              unit: tokens
+          media_inputs:
+            - image
+            - audio
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://ai.google.dev/gemini-api/docs/image-understanding
+              last_verified: "2026-09-05"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 3600
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/image-understanding
+              last_verified: "2026-09-05"
+            - id: audio_count
+              media_type: audio
+              transport: any
+              status: unknown
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/audio
+              last_verified: "2026-09-05"
+            - id: image_file_bytes
+              media_type: image
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-09-05"
+            - id: audio_file_bytes
+              media_type: audio
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-09-05"
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_text
+                  currency: USD
+                  rate: 0.75
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                - component: output_text
+                  currency: USD
+                  rate: 3.75
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                - component: cache_read
+                  currency: USD
+                  rate: 0.075
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                - component: cache_storage
+                  currency: USD
+                  rate: 0.5
+                  unit: USD/1M_token_hours
+                  conditions:
+                    billing_mode: standard
+              source: https://ai.google.dev/gemini-api/docs/pricing
+              last_verified: "2026-09-05"
+        - model: gemini-3.7-flash
+          created: 1788566400
+          upstream_model: gemini-3.7-flash
+          transport: text_pollable
+          operations:
+            - text
+          output_token_limit: 65536
+          reasoning_effort:
+            adapter: gemini_interactions
+            efforts:
+                - low
+                - medium
+                - high
+          limits:
+            - id: context_tokens
+              value: 1048576
+              unit: tokens
+          media_inputs:
+            - image
+            - audio
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://ai.google.dev/gemini-api/docs/image-understanding
+              last_verified: "2026-09-05"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 3600
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/image-understanding
+              last_verified: "2026-09-05"
+            - id: audio_count
+              media_type: audio
+              transport: any
+              status: unknown
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/audio
+              last_verified: "2026-09-05"
+            - id: image_file_bytes
+              media_type: image
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-09-05"
+            - id: audio_file_bytes
+              media_type: audio
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-09-05"
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_text
+                  currency: USD
+                  rate: 0.75
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                - component: output_text
+                  currency: USD
+                  rate: 3.75
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                - component: cache_read
+                  currency: USD
+                  rate: 0.075
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                - component: cache_storage
+                  currency: USD
+                  rate: 0.5
+                  unit: USD/1M_token_hours
+                  conditions:
+                    billing_mode: standard
+              source: https://ai.google.dev/gemini-api/docs/pricing
+              last_verified: "2026-09-05"
+        - model: gemini-3.8-flash
+          created: 1788307200
+          upstream_model: gemini-3.8-flash
+          transport: text_pollable
+          operations:
+            - text
+          output_token_limit: 65536
+          reasoning_effort:
+            adapter: gemini_interactions
+            efforts:
+                - low
+                - medium
+                - high
+          limits:
+            - id: context_tokens
+              value: 1048576
+              unit: tokens
+          media_inputs:
+            - image
+            - audio
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://ai.google.dev/gemini-api/docs/image-understanding
+              last_verified: "2026-09-05"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 3600
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/image-understanding
+              last_verified: "2026-09-05"
+            - id: audio_count
+              media_type: audio
+              transport: any
+              status: unknown
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/audio
+              last_verified: "2026-09-05"
+            - id: image_file_bytes
+              media_type: image
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-09-05"
+            - id: audio_file_bytes
+              media_type: audio
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-09-05"
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_text
+                  currency: USD
+                  rate: 0.75
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                - component: output_text
+                  currency: USD
+                  rate: 3.75
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                - component: cache_read
+                  currency: USD
+                  rate: 0.075
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                - component: cache_storage
+                  currency: USD
+                  rate: 0.5
+                  unit: USD/1M_token_hours
+                  conditions:
+                    billing_mode: standard
+              source: https://ai.google.dev/gemini-api/docs/pricing
+              last_verified: "2026-09-05"
+        - model: gemini-3.5-flash-lite
+          created: 1784592000
+          upstream_model: gemini-3.5-flash-lite
+          transport: text_pollable
+          operations:
+            - text
+          output_token_limit: 65536
+          reasoning_effort:
+            adapter: gemini_interactions
+            efforts:
+                - minimal
+                - low
+                - medium
+                - high
+          limits:
+            - id: context_tokens
+              value: 1048576
+              unit: tokens
+          media_inputs:
+            - image
+            - audio
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 20000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://ai.google.dev/gemini-api/docs/image-understanding
+              last_verified: "2026-09-05"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 3600
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/image-understanding
+              last_verified: "2026-09-05"
+            - id: audio_count
+              media_type: audio
+              transport: any
+              status: unknown
+              unit: files
+              scope: request
+              source: https://ai.google.dev/gemini-api/docs/audio
+              last_verified: "2026-09-05"
+            - id: image_file_bytes
+              media_type: image
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-09-05"
+            - id: audio_file_bytes
+              media_type: audio
+              transport: file
+              status: bounded
+              value: 2000000000
+              unit: bytes
+              scope: attachment
+              source: https://ai.google.dev/gemini-api/docs/files
+              last_verified: "2026-09-05"
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_text
+                  currency: USD
+                  rate: 0.3
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                - component: output_text
+                  currency: USD
+                  rate: 2.5
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                - component: cache_read
+                  currency: USD
+                  rate: 0.03
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                - component: cache_storage
+                  currency: USD
+                  rate: 1.0
+                  unit: USD/1M_token_hours
+                  conditions:
+                    billing_mode: standard
+              source: https://ai.google.dev/gemini-api/docs/pricing
+              last_verified: "2026-09-05"
         - model: gemini-3.5-flash
           created: 1787276456
           upstream_model: gemini-3.5-flash
@@ -2593,8 +3821,8 @@ providers:
               value: 20000000
               unit: bytes
               scope: request_encoded_bytes
-              source: https://ai.google.dev/gemini-api/docs/file-input-methods
-              last_verified: "2026-08-11"
+              source: https://ai.google.dev/gemini-api/docs/image-understanding
+              last_verified: "2026-09-05"
             - id: image_count
               media_type: image
               transport: any
@@ -2654,8 +3882,8 @@ providers:
               value: 20000000
               unit: bytes
               scope: request_encoded_bytes
-              source: https://ai.google.dev/gemini-api/docs/file-input-methods
-              last_verified: "2026-08-11"
+              source: https://ai.google.dev/gemini-api/docs/image-understanding
+              last_verified: "2026-09-05"
             - id: image_count
               media_type: image
               transport: any
@@ -2697,6 +3925,32 @@ providers:
               source: https://ai.google.dev/gemini-api/docs/pricing
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: gemini-3.5-transcribe
+          created: 1787702400
+          upstream_model: gemini-3.5-transcribe
+          transport: dictation
+          operations:
+            - dictation
+          default_operations:
+            - dictation
+          prices:
+            - operation: dictation
+              available: true
+              rates:
+                - component: input_audio
+                  currency: USD
+                  rate: 2
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                - component: output_text
+                  currency: USD
+                  rate: 12
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+              source: https://ai.google.dev/gemini-api/docs/pricing
+              last_verified: "2026-09-05"
     - id: anthropic
       label: Anthropic
       api_service_label: Anthropic API
@@ -2757,6 +4011,190 @@ providers:
                 output: usage.output_tokens
                 total: derived_input_plus_output
       offerings:
+        - model: claude-fable-5-1
+          created: 1787875200
+          upstream_model: claude-fable-5-1
+          transport: text
+          operations:
+            - text
+          output_token_limit: 128000
+          reasoning_effort:
+            adapter: anthropic_messages
+            efforts:
+                - low
+                - medium
+                - high
+                - xhigh
+                - max
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 128000
+          limits:
+            - id: context_tokens
+              value: 1000000
+              unit: tokens
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 32000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-09-05"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 600
+              unit: files
+              scope: request
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-09-05"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 10000000
+              unit: bytes
+              scope: attachment_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-09-05"
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: 10
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: standard
+                - component: output_tokens
+                  currency: USD
+                  rate: 50
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: standard
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: 0.25
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: standard
+                - component: prompt_cache_write_tokens
+                  currency: USD
+                  rate: 12.5
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: standard
+                    duration: 5m
+                - component: prompt_cache_write_tokens
+                  currency: USD
+                  rate: 20
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: standard
+                    duration: 1h
+              source: https://platform.claude.com/docs/en/about-claude/pricing
+              last_verified: "2026-09-05"
+        - model: claude-opus-5
+          created: 1784851200
+          upstream_model: claude-opus-5
+          transport: text
+          operations:
+            - text
+          output_token_limit: 128000
+          reasoning_effort:
+            adapter: anthropic_messages
+            efforts:
+                - low
+                - medium
+                - high
+                - xhigh
+                - max
+          controls:
+            - id: max_tokens
+              kind: integer
+              minimum: 1
+              maximum: 128000
+          limits:
+            - id: context_tokens
+              value: 1000000
+              unit: tokens
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: bounded
+              value: 32000000
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-09-05"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: bounded
+              value: 600
+              unit: files
+              scope: request
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-09-05"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 10000000
+              unit: bytes
+              scope: attachment_encoded_bytes
+              source: https://platform.claude.com/docs/en/build-with-claude/vision
+              last_verified: "2026-09-05"
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: 5
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: standard
+                - component: output_tokens
+                  currency: USD
+                  rate: 25
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: standard
+                - component: prompt_cache_read_tokens
+                  currency: USD
+                  rate: 0.5
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: standard
+                - component: prompt_cache_write_tokens
+                  currency: USD
+                  rate: 6.25
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: standard
+                    duration: 5m
+                - component: prompt_cache_write_tokens
+                  currency: USD
+                  rate: 10
+                  unit: USD/1M tokens
+                  conditions:
+                    billing_mode: standard
+                    duration: 1h
+              source: https://platform.claude.com/docs/en/about-claude/pricing
+              last_verified: "2026-09-05"
         - model: claude-fable-5
           created: 1787276456
           upstream_model: claude-fable-5
@@ -3103,92 +4541,6 @@ providers:
               source: https://docs.anthropic.com/en/docs/about-claude/pricing
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
-        - model: claude-opus-4-1-20250805
-          created: 1787276456
-          upstream_model: claude-opus-4-1-20250805
-          transport: text
-          operations:
-            - text
-          output_token_limit: 32000
-          media_inputs:
-            - image
-          media_limits:
-            - id: inline_request_bytes
-              media_type: all
-              transport: inline
-              status: bounded
-              value: 32000000
-              unit: bytes
-              scope: request_encoded_bytes
-              source: https://platform.claude.com/docs/en/build-with-claude/vision
-              last_verified: "2026-08-11"
-            - id: image_count
-              media_type: image
-              transport: any
-              status: bounded
-              value: 100
-              unit: files
-              scope: request
-              source: https://platform.claude.com/docs/en/build-with-claude/vision
-              last_verified: "2026-08-11"
-            - id: image_inline_bytes
-              media_type: image
-              transport: inline
-              status: bounded
-              value: 10000000
-              unit: bytes
-              scope: attachment_encoded_bytes
-              source: https://platform.claude.com/docs/en/build-with-claude/vision
-              last_verified: "2026-08-11"
-          prices:
-            - operation: text
-              available: false
-              source: https://docs.anthropic.com/en/docs/about-claude/pricing
-              last_verified: "2026-08-10"
-              unavailable_reason: Exact published pricing has not been imported for this provider offering.
-        - model: claude-opus-4-1
-          created: 1787276456
-          upstream_model: claude-opus-4-1
-          transport: text
-          operations:
-            - text
-          output_token_limit: 32000
-          media_inputs:
-            - image
-          media_limits:
-            - id: inline_request_bytes
-              media_type: all
-              transport: inline
-              status: bounded
-              value: 32000000
-              unit: bytes
-              scope: request_encoded_bytes
-              source: https://platform.claude.com/docs/en/build-with-claude/vision
-              last_verified: "2026-08-11"
-            - id: image_count
-              media_type: image
-              transport: any
-              status: bounded
-              value: 100
-              unit: files
-              scope: request
-              source: https://platform.claude.com/docs/en/build-with-claude/vision
-              last_verified: "2026-08-11"
-            - id: image_inline_bytes
-              media_type: image
-              transport: inline
-              status: bounded
-              value: 10000000
-              unit: bytes
-              scope: attachment_encoded_bytes
-              source: https://platform.claude.com/docs/en/build-with-claude/vision
-              last_verified: "2026-08-11"
-          prices:
-            - operation: text
-              available: false
-              source: https://docs.anthropic.com/en/docs/about-claude/pricing
-              last_verified: "2026-08-10"
-              unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: meta
       label: Meta
       api_service_label: Meta API
@@ -3269,6 +4621,49 @@ providers:
               source: https://dev.meta.ai/docs/pricing-rate-limits
               last_verified: "2026-08-22"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: muse-spark-1.3
+          created: 1788307200
+          upstream_model: muse-spark-1.3
+          transport: text
+          operations:
+            - text
+          reasoning_effort:
+            adapter: openai_chat_completions
+            efforts:
+                - minimal
+                - low
+                - medium
+                - high
+                - xhigh
+                - max
+          limits:
+            - id: context_tokens
+              value: 1048576
+              unit: tokens
+          prices:
+            - operation: text
+              available: true
+              source: https://dev.meta.ai/docs/pricing-rate-limits
+              last_verified: "2026-09-05"
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: 1.25
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                - component: output_tokens
+                  currency: USD
+                  rate: 4.25
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                - component: cache_read
+                  currency: USD
+                  rate: 0.15
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
     - id: xai
       label: xAI
       api_service_label: xAI API
@@ -3285,43 +4680,6 @@ providers:
             minimum_length: 1
           environment: XAI_API_KEY
       transports:
-        - id: text_chat_completions
-          endpoint:
-            method: POST
-            default_base_url: https://api.x.ai/v1
-            path: /chat/completions
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          request_protocol: openai_chat_completions
-          response_protocol: openai_chat_completions
-          usage_mapping: openai_chat_completions
-          lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: max_tokens
-            output_fields:
-                - choices[].message.content
-                - choices[].message.tool_calls
-            finish_rules:
-                complete:
-                    - stop
-                    - tool_calls
-                continue:
-                    - length
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - content_filter
-                - unknown_finish_reason
-            usage_fields:
-                input: usage.prompt_tokens
-                output: usage.completion_tokens
-                total: usage.total_tokens
         - id: text_responses
           endpoint:
             method: POST
@@ -3332,9 +4690,9 @@ providers:
             field: api_key
             header: Authorization
             prefix: 'Bearer '
-          request_protocol: openai_responses
-          response_protocol: openai_responses
-          usage_mapping: openai_responses
+          request_protocol: xai_responses
+          response_protocol: xai_responses
+          usage_mapping: xai_responses
           lifecycle: synchronous_completion
           protocol_parameters:
             media_execution_lifecycle: synchronous_completion
@@ -3430,7 +4788,7 @@ providers:
         - model: grok-4.3
           created: 1787276456
           upstream_model: grok-4.3
-          transport: text_chat_completions
+          transport: text_responses
           operations:
             - text
           default_operations:
@@ -3444,7 +4802,7 @@ providers:
         - model: grok-4.3-latest
           created: 1787276456
           upstream_model: grok-4.3-latest
-          transport: text_chat_completions
+          transport: text_responses
           operations:
             - text
           prices:
@@ -3453,6 +4811,100 @@ providers:
               source: https://docs.x.ai/developers/pricing
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
+        - model: grok-4.6
+          created: 1786492800
+          upstream_model: grok-4.6
+          transport: text_responses
+          operations:
+            - text
+          caller_tools: true
+          reasoning_effort:
+            adapter: xai_responses
+            efforts:
+                - low
+                - medium
+                - high
+                - xhigh
+          limits:
+            - id: context_tokens
+              value: 500000
+              unit: tokens
+          media_inputs:
+            - image
+          media_limits:
+            - id: inline_request_bytes
+              media_type: all
+              transport: inline
+              status: unknown
+              unit: bytes
+              scope: request_encoded_bytes
+              source: https://docs.x.ai/developers/model-capabilities/images/understanding
+              last_verified: "2026-09-05"
+            - id: image_count
+              media_type: image
+              transport: any
+              status: unbounded
+              unit: files
+              scope: request
+              source: https://docs.x.ai/developers/model-capabilities/images/understanding
+              last_verified: "2026-09-05"
+            - id: image_inline_bytes
+              media_type: image
+              transport: inline
+              status: bounded
+              value: 20971520
+              unit: bytes
+              scope: attachment
+              source: https://docs.x.ai/developers/model-capabilities/images/understanding
+              last_verified: "2026-09-05"
+          prices:
+            - operation: text
+              available: true
+              rates:
+                - component: input_tokens
+                  currency: USD
+                  rate: 2
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    mode: input_tokens_below_200000
+                - component: output_tokens
+                  currency: USD
+                  rate: 6
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    mode: input_tokens_below_200000
+                - component: cache_read
+                  currency: USD
+                  rate: 0.5
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    mode: input_tokens_below_200000
+                - component: input_tokens
+                  currency: USD
+                  rate: 4
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    mode: input_tokens_at_least_200000
+                - component: output_tokens
+                  currency: USD
+                  rate: 12
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    mode: input_tokens_at_least_200000
+                - component: cache_read
+                  currency: USD
+                  rate: 1
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: standard
+                    mode: input_tokens_at_least_200000
+              source: https://docs.x.ai/developers/pricing
+              last_verified: "2026-09-05"
         - model: grok-4.5
           created: 1787276456
           upstream_model: grok-4.5
@@ -3496,7 +4948,7 @@ providers:
         - model: grok-4.20-0309-reasoning
           created: 1787276456
           upstream_model: grok-4.20-0309-reasoning
-          transport: text_chat_completions
+          transport: text_responses
           operations:
             - text
           prices:
@@ -3508,7 +4960,7 @@ providers:
         - model: grok-4.20-0309-non-reasoning
           created: 1787276456
           upstream_model: grok-4.20-0309-non-reasoning
-          transport: text_chat_completions
+          transport: text_responses
           operations:
             - text
           prices:
@@ -3520,7 +4972,7 @@ providers:
         - model: grok-latest
           created: 1787276456
           upstream_model: grok-latest
-          transport: text_chat_completions
+          transport: text_responses
           operations:
             - text
           prices:
@@ -3532,7 +4984,7 @@ providers:
         - model: grok-build-0.1
           created: 1787276456
           upstream_model: grok-build-0.1
-          transport: text_chat_completions
+          transport: text_responses
           operations:
             - text
           prices:
@@ -3544,7 +4996,7 @@ providers:
         - model: grok-code-fast
           created: 1787276456
           upstream_model: grok-code-fast
-          transport: text_chat_completions
+          transport: text_responses
           operations:
             - text
           prices:
@@ -3556,7 +5008,7 @@ providers:
         - model: grok-code-fast-1
           created: 1787276456
           upstream_model: grok-code-fast-1
-          transport: text_chat_completions
+          transport: text_responses
           operations:
             - text
           prices:
@@ -3568,7 +5020,7 @@ providers:
         - model: grok-code-fast-1-0825
           created: 1787276456
           upstream_model: grok-code-fast-1-0825
-          transport: text_chat_completions
+          transport: text_responses
           operations:
             - text
           prices:
@@ -3660,3 +5112,180 @@ providers:
               source: https://docs.x.ai/developers/pricing
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
+    - id: baidu
+      label: Baidu Qianfan
+      api_service_label: Qianfan API
+      key_acquisition_url: https://intl.cloud.baidu.com/en/doc/qianfan/s/qm8qxemze-intl-en
+      fields:
+        - id: api_key
+          label: Baidu Qianfan API key
+          kind: credential
+          type: opaque
+          required: true
+          default: ""
+          secret: true
+          validation:
+            minimum_length: 1
+          environment: BAIDU_API_KEY
+        - id: base_url
+          label: Qianfan API URL
+          kind: setting
+          type: url
+          required: true
+          default: https://api.baiduqianfan.ai/v1
+          secret: false
+          validation:
+            allowed_schemes: [https]
+      transports:
+        - id: text
+          endpoint:
+            method: POST
+            setting_field: base_url
+            path: /chat/completions
+          authentication:
+            kind: bearer
+            field: api_key
+            header: Authorization
+            prefix: 'Bearer '
+          request_protocol: openai_chat_completions
+          response_protocol: openai_chat_completions
+          usage_mapping: openai_chat_completions
+          lifecycle: synchronous_completion
+          protocol_parameters:
+            response_policy: qianfan
+            media_execution_lifecycle: synchronous_completion
+            model_field: model
+            token_field: max_tokens
+            output_fields:
+                - choices[].message.content
+            finish_rules:
+                complete: [stop]
+                continue: [length]
+            continuation_rules:
+                - append_visible_assistant_output
+                - request_missing_suffix
+            error_rules:
+                - content_filter
+                - tool_calls
+                - unknown_finish_reason
+                - blocked_flag
+            usage_fields:
+                input: usage.prompt_tokens
+                output: usage.completion_tokens
+                total: usage.total_tokens
+      offerings:
+        - model: ernie-5.0
+          created: 1788566400
+          upstream_model: ernie-5.0
+          transport: text
+          operations: [text]
+          default_operations: [text]
+          output_token_limit: 65536
+          prices:
+            - operation: text
+              available: true
+              source: https://intl.cloud.baidu.com/en/doc/qianfan/s/Jm8r1826a-intl-en
+              last_verified: "2026-09-05"
+              rates:
+                - component: input_tokens
+                  rate: 1.4
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go
+                - component: output_tokens
+                  rate: 5.6
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go
+        - model: deepseek-v4-pro
+          created: 1788566400
+          upstream_model: deepseek-v4-pro
+          transport: text
+          operations: [text]
+          output_token_limit: 131072
+          prices:
+            - operation: text
+              available: true
+              source: https://intl.cloud.baidu.com/en/doc/qianfan/s/Jm8r1826a-intl-en
+              last_verified: "2026-09-05"
+              rates:
+                - component: input_tokens
+                  rate: 1.69
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go
+                - component: output_tokens
+                  rate: 3.38
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go
+                - component: cache_read
+                  rate: 0.14
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go
+        - model: deepseek-v4-flash
+          created: 1788566400
+          upstream_model: deepseek-v4-flash
+          transport: text
+          operations: [text]
+          output_token_limit: 131072
+          prices:
+            - operation: text
+              available: true
+              source: https://intl.cloud.baidu.com/en/doc/qianfan/s/Jm8r1826a-intl-en
+              last_verified: "2026-09-05"
+              rates:
+                - component: input_tokens
+                  rate: 0.14
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go
+                - component: output_tokens
+                  rate: 0.28
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go
+                - component: cache_read
+                  rate: 0.028
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go
+        - model: deepseek-v3.2
+          created: 1788566400
+          upstream_model: deepseek-v3.2
+          transport: text
+          operations: [text]
+          output_token_limit: 32768
+          prices:
+            - operation: text
+              available: true
+              source: https://intl.cloud.baidu.com/en/doc/qianfan/s/Jm8r1826a-intl-en
+              last_verified: "2026-09-05"
+              rates:
+                - component: input_tokens
+                  rate: 0.28
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go
+                - component: output_tokens
+                  rate: 0.42
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go
+                - component: cache_read
+                  rate: 0.028
+                  currency: USD
+                  unit: USD/1M_tokens
+                  conditions:
+                    billing_mode: pay_as_you_go
