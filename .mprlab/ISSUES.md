@@ -25,6 +25,25 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B201] (P2) Preserve Kimi logo contrast in light themes.
+  Evidence: The white Kimi symbol has no background and disappears on light surfaces.
+  Requirements:
+  - Give the Kimi artwork a contrasting surface on management and public pages.
+  - Set both theme and palette attributes in browser tests.
+  - Verify the actual page colors before icon contrast assertions.
+  Validation: Confirm failing browser regressions, then run focused checks and final `make ci`.
+  Results:
+  - Both browser regressions first failed because Kimi images had transparent backgrounds on confirmed light pages.
+  - The manifest now selects a dark surface for the unchanged Kimi SVG.
+  - Shared CSS and asset validation support the dark surface.
+  - Tests set both theme and palette attributes and confirm actual page colors.
+  - Both surfaces passed checks in the default light, sunrise light, and default dark palettes.
+  - All 13 focused icon tests passed. Screenshots confirm visible Kimi symbols on light surfaces.
+  - Final `make ci` passed all 12 gates with 100.0% Go statement coverage and 112 browser tests.
+  - Changed files: brand manifest, brand stylesheet, asset validator, management browser tests, and provider icon documentation.
+  - No API or event contract changed.
+  Resolution: Kimi artwork keeps its contrast in supported light and dark palettes. The changes remain local and uncommitted.
+
 - [x] [B199] (P2) Remove models without active provider offerings from runtime discovery.
   Evidence: A disabled Vertex provider leaves public models with no capabilities or provider offerings.
   Requirements:
