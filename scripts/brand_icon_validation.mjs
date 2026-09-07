@@ -36,7 +36,7 @@ export async function validateBrandAssets(directory, manifest = brandIconManifes
   await readFile(join(directory, "LICENSE"));
   for (const [identifier, asset] of Object.entries(manifest.assets)) {
     if (!/^[a-z0-9-]+\.svg$/u.test(asset.file) || !/^[a-f0-9]{64}$/u.test(asset.sha256) ||
-        !["light", "plain"].includes(asset.surface) ||
+        !["light", "dark", "plain"].includes(asset.surface) ||
         !/^https:\/\/raw\.githubusercontent\.com\/lobehub\/lobe-icons\/[a-f0-9]{40}\/packages\/static-svg\/icons\/[a-z0-9-]+\.svg$/u.test(asset.source)) {
       throw new Error(`brand_icon_asset_metadata_invalid: ${identifier}`);
     }
