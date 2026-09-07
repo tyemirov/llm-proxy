@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { capabilityBinaryEnvironment } from "./globalSetup.js";
 import {
   assertPublicDocumentShell,
   LOOPAWARE_PIXEL_URL,
@@ -293,6 +294,10 @@ let renderedSiteTempRoot = "";
 let renderedSiteRoot = "";
 
 test.beforeAll(async () => {
+  const capabilityBinaryPath = process.env[capabilityBinaryEnvironment];
+  if (!capabilityBinaryPath) {
+    throw new Error("browser_capability_binary_missing");
+  }
   renderedSiteTempRoot = await mkdtemp(path.join(os.tmpdir(), "llm-proxy-site-"));
   renderedSiteRoot = path.join(renderedSiteTempRoot, "rendered");
   const capabilityConfigPath = path.join(renderedSiteTempRoot, "capabilities.yml");
@@ -305,8 +310,6 @@ test.beforeAll(async () => {
   if (!Number.isInteger(capabilityPort) || capabilityPort <= 0) {
     throw new Error(`public_capability_test_port_invalid: ${capabilityConfigResult.stdout.trim()}`);
   }
-  const capabilityBinaryPath = path.join(renderedSiteTempRoot, "llm-proxy");
-  await executeFile("go", ["build", "-o", capabilityBinaryPath, "./cmd/cli"], { cwd: repoRoot });
   const capabilityServer = spawn(
     capabilityBinaryPath,
     ["--config", capabilityConfigPath, "--public-capabilities-only"],
