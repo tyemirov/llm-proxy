@@ -420,6 +420,38 @@ test.afterAll(async () => {
   await rm(renderedSiteTempRoot, { recursive: true, force: true });
 });
 
+for (const surface of ["management", "public"]) {
+  test(`brand icons keep Kimi visible on ${surface} theme palettes`, async ({ page }) => {
+    await installAssetRoutes(page, { initialAuthStatus: surface === "public" ? "unauthenticated" : "authenticated" });
+    if (surface === "management") await installManagementRoutes(page);
+    await page.goto(surface === "management" ? `${baseURL}${applicationPath}` : baseURL);
+    const region = surface === "management"
+      ? page.locator('[data-provider-card="moonshot"] .provider-card-front')
+      : page.locator('[data-catalog-row]:has(img[data-brand-id="kimi-k2"])').first();
+    const icon = region.locator('img[data-brand-id="kimi-k2"]');
+    await expect(icon).toBeVisible();
+    await expect.poll(() => icon.evaluate((element) => element instanceof HTMLImageElement && element.complete && element.naturalWidth > 0)).toBe(true);
+    for (const themeMode of [
+      { theme: "light", palette: "default", canvas: "rgb(248, 250, 252)" },
+      { theme: "light", palette: "sunrise", canvas: "rgb(255, 247, 237)" },
+      { theme: "dark", palette: "default", canvas: "rgb(15, 17, 20)" },
+    ]) {
+      await page.evaluate(({ theme, palette }) => {
+        for (const element of [document.documentElement, document.body]) {
+          element.setAttribute("data-mpr-theme", theme);
+          element.setAttribute("data-llm-proxy-palette", palette);
+        }
+      }, themeMode);
+      await expect(page.locator('body')).toHaveCSS('background-color', themeMode.canvas);
+      await expect(icon).toHaveCSS('background-color', 'rgb(23, 25, 31)');
+      await expect(icon).toHaveAttribute('alt', '');
+      await expect(icon).toHaveAttribute('aria-hidden', 'true');
+      await expect(icon).toHaveCSS('width', '16px');
+      await region.screenshot({ path: test.info().outputPath(`kimi-${surface}-${themeMode.theme}-${themeMode.palette}.png`) });
+    }
+  });
+}
+
 test("brand icons preserve public model and provider identities", async ({ page }) => {
   await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
   await page.goto(baseURL);
@@ -440,8 +472,11 @@ test("brand icons preserve public model and provider identities", async ({ page 
   }
   await page.evaluate(() => {
     document.documentElement.setAttribute("data-mpr-theme", "light");
+    document.documentElement.setAttribute("data-llm-proxy-palette", "default");
     document.body.setAttribute("data-mpr-theme", "light");
+    document.body.setAttribute("data-llm-proxy-palette", "default");
   });
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(248, 250, 252)');
   await expect(row.locator('.catalog-model img.brand-icon')).toHaveCSS('background-color', 'rgb(242, 244, 247)');
   await row.scrollIntoViewIfNeeded();
   await page.screenshot({ path: test.info().outputPath("brand-icons-public-light.png") });
