@@ -40,7 +40,7 @@ Options:
                              either candidate in the public provider catalog.
 
   --candidate-model <provider/model>
-                             Qualify one disabled model in the disposable catalog.
+                             Qualify one disabled model or offering in the disposable catalog.
                              Selects only its provider and exact model. Combine
                              with --media for image qualification or --write-config
                              to inspect the copy. The primary catalog is unchanged.
@@ -443,10 +443,18 @@ models, providers = model_and_provider_records.split("\nproviders:\n", 1)
 provider_record = re.search(r"(?ms)^    - id: " + re.escape(provider) + r"\n(?:(?!^    - id: ).)*", providers)
 if provider_record is None or re.search(r"(?m)^        - model: " + re.escape(model) + "$", provider_record.group()) is None:
     raise SystemExit("error: candidate offering is absent from the selected provider")
-needle = "    - id: " + model + "\n      enabled: false\n"
-if models.count(needle) != 1:
-    raise SystemExit("error: candidate must name exactly one disabled model")
-models = models.replace(needle, needle.replace("enabled: false", "enabled: true"), 1)
+model_flag = "    - id: " + model + "\n      enabled: false\n"
+offering_flag = "        - model: " + model + "\n          enabled: false\n"
+selected_provider = provider_record.group()
+model_disabled = models.count(model_flag) == 1
+offering_disabled = selected_provider.count(offering_flag) == 1
+if not model_disabled and not offering_disabled:
+    raise SystemExit("error: candidate must name a disabled model or offering")
+if model_disabled:
+    models = models.replace(model_flag, model_flag.replace("enabled: false", "enabled: true"), 1)
+if offering_disabled:
+    enabled_provider = selected_provider.replace(offering_flag, offering_flag.replace("enabled: false", "enabled: true"), 1)
+    providers = providers[:provider_record.start()] + enabled_provider + providers[provider_record.end():]
 catalog_path.write_text(head + "\nmodels:\n" + models + "\nproviders:\n" + providers, encoding="utf-8")
 ' "${PROVIDER_CATALOG_PATH}" "${CANDIDATE_ROUTE}"
   fi

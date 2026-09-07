@@ -6,8 +6,9 @@ usage() {
 
 Runs paid Google Interactions acceptance for the exact Gemini 3.6 Flash and
 Gemini 3.7 Flash candidate models. The test covers each supported thinking
-level, one omitted level, background completion, active retrieval,
-cancellation, and deletion.
+level and one omitted level. Pollable models also require background
+completion, active retrieval, cancellation, and deletion. Flash-Lite uses
+synchronous completion without storage.
 
 Required environment:
   GEMINI_API_KEY
@@ -73,6 +74,7 @@ gemini_request() {
     -H "x-goog-api-key: ${GEMINI_API_KEY}"
     -H "Api-Revision: ${GEMINI_API_REVISION}"
     -o "${response_path}"
+    -D "${response_path}.headers"
     -w "%{http_code}"
   )
   if [[ -n "${request_path}" ]]; then
@@ -81,7 +83,76 @@ gemini_request() {
       --data-binary "@${request_path}"
     )
   fi
-  curl "${curl_arguments[@]}" "${request_url}"
+  local http_status
+  http_status="$(curl "${curl_arguments[@]}" "${request_url}")" || return $?
+  if [[ ! "${http_status}" =~ ^2[0-9][0-9]$ ]]; then
+    report_provider_error "${response_path}" "${request_path}"
+  fi
+  printf '%s' "${http_status}"
+}
+
+report_provider_error() {
+  python3 -c '
+import json
+import os
+import pathlib
+import re
+import sys
+
+response_path = pathlib.Path(sys.argv[1])
+private_values = [os.environ["GEMINI_API_KEY"]]
+if sys.argv[2]:
+    request = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
+    def collect_strings(value: object) -> None:
+        if isinstance(value, str) and value:
+            private_values.append(value)
+        elif isinstance(value, list):
+            for item in value:
+                collect_strings(item)
+        elif isinstance(value, dict):
+            for item in value.values():
+                collect_strings(item)
+    collect_strings(request.get("input"))
+
+try:
+    response = json.loads(response_path.read_text(encoding="utf-8"))
+except (ValueError, UnicodeError):
+    print("Gemini provider diagnostic: invalid JSON error body")
+    raise SystemExit(0)
+if not isinstance(response, dict) or not isinstance(response.get("error"), dict):
+    print("Gemini provider diagnostic: error object absent")
+    raise SystemExit(0)
+error = response["error"]
+summary = {key: error[key] for key in ("code", "status", "message") if isinstance(error.get(key), (str, int))}
+details = error.get("details", [])
+if isinstance(details, list):
+    for detail in details:
+        if not isinstance(detail, dict):
+            continue
+        if detail.get("@type") == "type.googleapis.com/google.rpc.RetryInfo" and isinstance(detail.get("retryDelay"), str):
+            summary["retryDelay"] = detail["retryDelay"]
+        if detail.get("@type") == "type.googleapis.com/google.rpc.QuotaFailure" and isinstance(detail.get("violations"), list):
+            summary["quota_violations"] = [{key: item[key] for key in ("quotaMetric", "quotaId", "quotaValue") if isinstance(item.get(key), (str, int))} for item in detail["violations"] if isinstance(item, dict)]
+for line in pathlib.Path(str(response_path) + ".headers").read_text(encoding="utf-8").splitlines():
+    name, separator, value = line.partition(":")
+    if separator and name.lower() == "retry-after" and re.fullmatch(r"[0-9]+", value.strip()):
+        summary["retry_after"] = value.strip()
+
+def redact(value: object) -> object:
+    if isinstance(value, str):
+        for private in sorted(private_values, key=len, reverse=True):
+            value = value.replace(private, "[redacted]")
+        value = re.sub(r"https?://\S+", "[url]", value)
+        value = re.sub(r"projects/[A-Za-z0-9_-]+", "projects/[redacted]", value)
+        return value[:2000]
+    if isinstance(value, dict):
+        return {key: redact(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [redact(item) for item in value[:10]]
+    return value
+
+print("Gemini provider diagnostic: " + json.dumps(redact(summary), separators=(",", ":"), ensure_ascii=True))
+' "$1" "$2" >&2
 }
 
 delete_interaction() {
@@ -348,18 +419,23 @@ cancel_background_interaction() {
   echo "live Gemini candidate cancellation lifecycle passed: model=${model} status=cancelled"
 }
 
-run_candidate_model() {
+run_reasoning_matrix() {
   local model="$1"
   shift
   local reasoning_effort
-  local completion_id
-  local cancellation_id
   run_reasoning_request "${model}" ""
   if [[ "${REASONING_MATRIX}" == "true" ]]; then
     for reasoning_effort in "$@"; do
       run_reasoning_request "${model}" "${reasoning_effort}"
     done
   fi
+}
+
+run_candidate_model() {
+  local model="$1"
+  local completion_id
+  local cancellation_id
+  run_reasoning_matrix "$@"
   create_background_interaction "${model}" completion
   completion_id="${CREATED_INTERACTION_ID}"
   complete_background_interaction "${model}" "${completion_id}"
@@ -440,7 +516,10 @@ for candidate_model in "${CANDIDATE_MODELS[@]}"; do
     gemini-3.5-transcribe)
       run_transcription_candidate "${candidate_model}"
       ;;
-    gemini-3.6-flash|gemini-3.5-flash-lite)
+    gemini-3.5-flash-lite)
+      run_reasoning_matrix "${candidate_model}" minimal low medium high
+      ;;
+    gemini-3.6-flash)
       run_candidate_model "${candidate_model}" minimal low medium high
       ;;
     gemini-3.1-pro-preview|gemini-3.7-flash|gemini-3.8-flash)
