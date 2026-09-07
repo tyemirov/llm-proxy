@@ -85,6 +85,7 @@ type PublicProviderOffering struct {
 	ReasoningEfforts        []string            `json:"reasoning_efforts"`
 	Controls                []CatalogControl    `json:"controls"`
 	Limits                  []CatalogLimit      `json:"limits"`
+	ImageMIMETypes          []string            `json:"image_mime_types,omitempty"`
 	MediaLimits             []CatalogMediaLimit `json:"media_limits"`
 }
 
@@ -243,6 +244,7 @@ func publicProviderOffering(offering ProviderOffering) PublicProviderOffering {
 		ReasoningEfforts:        reasoningEfforts,
 		Controls:                publicCatalogControls(offering.Controls),
 		Limits:                  publicCatalogLimits(offering.Limits),
+		ImageMIMETypes:          append([]string(nil), offering.ImageMIMETypes...),
 		MediaLimits:             cloneCatalogMediaLimits(offering.MediaLimits),
 	}
 }

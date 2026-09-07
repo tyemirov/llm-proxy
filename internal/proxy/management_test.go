@@ -1080,7 +1080,7 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 	if incompatibleResponse.Code != http.StatusBadRequest || !strings.Contains(incompatibleResponse.Body.String(), "managed_routing_defaults_invalid") {
 		t.Fatalf("incompatible GPT-5 reasoning effort status=%d body=%s", incompatibleResponse.Code, incompatibleResponse.Body.String())
 	}
-	unsupportedResponse := saveReasoningDefault(proxy.ProviderNameDeepSeek, proxy.ModelNameDeepSeekV4Flash, "high")
+	unsupportedResponse := saveReasoningDefault(proxy.ProviderNameDeepSeek, proxy.ModelNameDeepSeekV4Flash, "medium")
 	if unsupportedResponse.Code != http.StatusBadRequest || !strings.Contains(unsupportedResponse.Body.String(), "managed_routing_defaults_invalid") {
 		t.Fatalf("unsupported-route reasoning effort status=%d body=%s", unsupportedResponse.Code, unsupportedResponse.Body.String())
 	}
@@ -1581,7 +1581,7 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 			proxy.ModelNameMiniMaxM27HighSpeed,
 		},
 		proxy.ProviderNameZAI:       {"glm-5.2"},
-		proxy.ProviderNameGemini:    {"gemini-3-flash-preview", proxy.ModelNameGemini35Flash},
+		proxy.ProviderNameGemini:    {"gemini-3-flash-preview", proxy.ModelNameGemini35Flash, proxy.ModelNameGemini36Flash, proxy.ModelNameGemini37Flash},
 		proxy.ProviderNameAnthropic: {"claude-fable-5", "claude-sonnet-5"},
 		proxy.ProviderNameXAI:       {"grok-4.5", "grok-4.20-0309-reasoning", "grok-4.20-0309-non-reasoning"},
 	}

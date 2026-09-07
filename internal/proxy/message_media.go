@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/tyemirov/llm-proxy/internal/constants"
@@ -60,12 +61,22 @@ var textRouteMessageMediaContracts = map[textRouteCapabilities]textRouteMessageM
 			},
 		},
 	},
-	openAIResponsesSynchronousRouteCapabilities: {
+	xaiResponsesSynchronousRouteCapabilities: {
 		attachmentLimitTransport: CatalogMediaTransportInline,
 		mimeTypes: map[messageMediaType]map[string]struct{}{
 			messageMediaTypeImage: {
 				messageImageMIMEJPEG: {},
 				messageImageMIMEPNG:  {},
+			},
+		},
+	},
+	dashScopeResponsesSynchronousRouteCapabilities: {
+		attachmentLimitTransport: CatalogMediaTransportInline,
+		mimeTypes: map[messageMediaType]map[string]struct{}{
+			messageMediaTypeImage: {
+				messageImageMIMEJPEG: {},
+				messageImageMIMEPNG:  {},
+				messageImageMIMEWebP: {},
 			},
 		},
 	},
@@ -220,7 +231,7 @@ func validateMessageMediaForResolvedTextRoute(provider providerDefinition, model
 	routeCapabilities := textRouteCapabilities{wireContract: model.wireContract, executionLifecycle: model.executionLifecycle}
 	for _, message := range messages {
 		for _, attachment := range message.attachments {
-			if !model.supportsMediaInput(attachment.mediaType) || !textRouteSupportsMessageMediaMIME(routeCapabilities, attachment.mediaType, attachment.mimeType) {
+			if !model.supportsMediaInput(attachment.mediaType) || !textRouteSupportsMessageMediaMIME(routeCapabilities, attachment.mediaType, attachment.mimeType) || (attachment.mediaType == messageMediaTypeImage && len(model.imageMIMETypes) > 0 && !slices.Contains(model.imageMIMETypes, attachment.mimeType)) {
 				return fmt.Errorf(
 					"%w: provider=%s model=%s capability=media_input type=%s mime_type=%s",
 					ErrUnsupportedCapability,
@@ -229,6 +240,9 @@ func validateMessageMediaForResolvedTextRoute(provider providerDefinition, model
 					attachment.mediaType,
 					attachment.mimeType,
 				)
+			}
+			if err := validateImageDimensions(model, attachment); err != nil {
+				return err
 			}
 		}
 	}
@@ -259,8 +273,13 @@ func validateInlineMessageMediaBeforeSerialization(model textModelDefinition, me
 		for _, message := range messages {
 			for _, attachment := range message.attachments {
 				attachmentBytes := attachment.sizeBytes
-				if configuredLimit, found := catalogMediaLimit(model.mediaLimits, inlineLimitID, mediaType); found && configuredLimit.Scope == CatalogMediaLimitScopeAttachmentEncodedBytes {
-					attachmentBytes = ((attachment.sizeBytes + 2) / 3) * 4
+				if configuredLimit, found := catalogMediaLimit(model.mediaLimits, inlineLimitID, mediaType); found {
+					switch configuredLimit.Scope {
+					case CatalogMediaLimitScopeAttachmentEncodedBytes:
+						attachmentBytes = ((attachment.sizeBytes + 2) / 3) * 4
+					case CatalogMediaLimitScopeAttachmentDataURIBytes:
+						attachmentBytes = ((attachment.sizeBytes+2)/3)*4 + int64(len("data:"+attachment.mimeType+";base64,"))
+					}
 				}
 				if attachment.mediaType == mediaType && attachmentBytes > inlineLimit {
 					return ErrProviderMediaLimit

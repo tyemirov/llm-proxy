@@ -90,7 +90,13 @@ func validatePersistedManagedRoutingDefaults(providers *providerRegistry, provid
 	if reconciliationError != nil {
 		return managedRoutingDefaults{}, reconciliationError
 	}
-	if defaults.value() != reconciled.value() {
+	currentValue, reconciledValue := defaults.value(), reconciled.value()
+	// An unset dictation pair stays valid when the catalog adds a new capability.
+	if currentValue.DictationProvider == constants.EmptyString {
+		reconciledValue.DictationProvider = constants.EmptyString
+		reconciledValue.DictationModel = constants.EmptyString
+	}
+	if currentValue != reconciledValue {
 		return managedRoutingDefaults{}, fmt.Errorf("%w: reason=provider_key_ineligible", errManagedRoutingDefaultsInvalid)
 	}
 	return defaults, nil

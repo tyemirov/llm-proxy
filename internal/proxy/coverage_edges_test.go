@@ -1502,7 +1502,7 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 			requestBytes, _ := io.ReadAll(httpRequest.Body)
 			_ = json.Unmarshal(requestBytes, &capturedPayload)
 			responseWriter.Header().Set("Content-Type", "application/json")
-			_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"visible answer","reasoning_content":"private reasoning"},"finish_reason":"stop"}]}`))
+			_, _ = responseWriter.Write([]byte(`{"status":"completed","output":[{"type":"reasoning","summary":[{"type":"summary_text","text":"private reasoning"}]},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"visible answer"}]}]}`))
 		}))
 		subTest.Cleanup(upstreamServer.Close)
 		router := coverageRouter(subTest, proxy.Configuration{
@@ -1519,9 +1519,9 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		if statusCode != http.StatusOK || body != "visible answer" || strings.Contains(body, "private reasoning") {
 			subTest.Fatalf("status=%d body=%q", statusCode, body)
 		}
-		messages, ok := capturedPayload["messages"].([]any)
+		messages, ok := capturedPayload["input"].([]any)
 		if !ok || len(messages) != 2 {
-			subTest.Fatalf("messages=%v", capturedPayload["messages"])
+			subTest.Fatalf("messages=%v", capturedPayload["input"])
 		}
 	})
 

@@ -51,10 +51,13 @@ func TestProviderImageSerializationAndLimitFailureContracts(t *testing.T) {
 	if _, requestError := openAIClient.openAIRequest(context.Background(), "key", model, closedMessages, false, nil, "", nil, nil, logger); !errors.Is(requestError, errAssetStore) {
 		t.Fatalf("OpenAI serialization error=%v", requestError)
 	}
-	if _, requestError := openAIClient.xAIResponsesRequest(context.Background(), "key", "https://provider.test", model, closedMessages, nil, nil, nil, logger); !errors.Is(requestError, errAssetStore) {
+	if _, requestError := (xaiResponsesClient{httpClient: openAIClient.httpClient}).generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, "", nil, nil, logger); !errors.Is(requestError, errAssetStore) {
 		t.Fatalf("xAI serialization error=%v", requestError)
 	}
-	if _, requestError := anthropicClient.generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, nil, logger); !errors.Is(requestError, errAssetStore) {
+	if _, requestError := (dashScopeResponsesClient{httpClient: openAIClient.httpClient}).generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, "", logger); !errors.Is(requestError, errAssetStore) {
+		t.Fatalf("DashScope serialization error=%v", requestError)
+	}
+	if _, requestError := anthropicClient.generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, "", nil, logger); !errors.Is(requestError, errAssetStore) {
 		t.Fatalf("Anthropic serialization error=%v", requestError)
 	}
 	if _, requestError := chatClient.generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, chatCompletionTokenLimitMaxTokens, "", nil, nil, logger); !errors.Is(requestError, errAssetStore) {
@@ -72,10 +75,13 @@ func TestProviderImageSerializationAndLimitFailureContracts(t *testing.T) {
 	if _, requestError := openAIClient.openAIRequest(context.Background(), "key", model, closedMessages, false, nil, "", nil, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
 		t.Fatalf("OpenAI pre-serialization media limit error=%v", requestError)
 	}
-	if _, requestError := openAIClient.xAIResponsesRequest(context.Background(), "key", "https://provider.test", model, closedMessages, nil, nil, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
+	if _, requestError := (xaiResponsesClient{httpClient: openAIClient.httpClient}).generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, "", nil, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
 		t.Fatalf("xAI pre-serialization media limit error=%v", requestError)
 	}
-	if _, requestError := anthropicClient.generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
+	if _, requestError := (dashScopeResponsesClient{httpClient: openAIClient.httpClient}).generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, "", logger); !errors.Is(requestError, ErrProviderMediaLimit) {
+		t.Fatalf("DashScope pre-serialization media limit error=%v", requestError)
+	}
+	if _, requestError := anthropicClient.generateText(context.Background(), "key", "https://provider.test", model, closedMessages, nil, "", nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
 		t.Fatalf("Anthropic pre-serialization media limit error=%v", requestError)
 	}
 
@@ -98,10 +104,13 @@ func TestProviderImageSerializationAndLimitFailureContracts(t *testing.T) {
 	if _, requestError := openAIClient.openAIRequest(context.Background(), "key", model, inlineMessages, false, nil, "", nil, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
 		t.Fatalf("OpenAI media limit error=%v", requestError)
 	}
-	if _, requestError := openAIClient.xAIResponsesRequest(context.Background(), "key", "https://provider.test", model, inlineMessages, nil, nil, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
+	if _, requestError := (xaiResponsesClient{httpClient: openAIClient.httpClient}).generateText(context.Background(), "key", "https://provider.test", model, inlineMessages, nil, "", nil, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
 		t.Fatalf("xAI media limit error=%v", requestError)
 	}
-	if _, requestError := anthropicClient.generateText(context.Background(), "key", "https://provider.test", model, inlineMessages, nil, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
+	if _, requestError := (dashScopeResponsesClient{httpClient: openAIClient.httpClient}).generateText(context.Background(), "key", "https://provider.test", model, inlineMessages, nil, "", logger); !errors.Is(requestError, ErrProviderMediaLimit) {
+		t.Fatalf("DashScope media limit error=%v", requestError)
+	}
+	if _, requestError := anthropicClient.generateText(context.Background(), "key", "https://provider.test", model, inlineMessages, nil, "", nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
 		t.Fatalf("Anthropic media limit error=%v", requestError)
 	}
 	if _, requestError := chatClient.generateText(context.Background(), "key", "https://provider.test", model, inlineMessages, nil, chatCompletionTokenLimitMaxTokens, "", nil, nil, logger); !errors.Is(requestError, ErrProviderMediaLimit) {
@@ -117,11 +126,17 @@ func TestSynchronousResponsesFailureContracts(t *testing.T) {
 	client := NewOpenAIClient(geminiEdgeDoer(func(*http.Request) (*http.Response, error) {
 		return nil, context.Canceled
 	}), NewEndpoints())
-	if _, requestError := client.xAIResponsesRequest(context.Background(), "key", "http://[::1", model, messages, nil, nil, nil, logger); requestError == nil {
+	if _, requestError := (xaiResponsesClient{httpClient: client.httpClient}).generateText(context.Background(), "key", "http://[::1", model, messages, nil, "", nil, nil, logger); requestError == nil {
 		t.Fatal("xAI accepted invalid Responses URL")
 	}
-	if _, requestError := client.xAIResponsesRequest(context.Background(), "key", "https://provider.test", model, messages, nil, nil, nil, logger); requestError == nil {
+	if _, requestError := (dashScopeResponsesClient{httpClient: client.httpClient}).generateText(context.Background(), "key", "http://[::1", model, messages, nil, "", logger); requestError == nil {
+		t.Fatal("DashScope accepted invalid Responses URL")
+	}
+	if _, requestError := (xaiResponsesClient{httpClient: client.httpClient}).generateText(context.Background(), "key", "https://provider.test", model, messages, nil, "", nil, nil, logger); requestError == nil {
 		t.Fatal("xAI transport error was accepted")
+	}
+	if _, requestError := (dashScopeResponsesClient{httpClient: client.httpClient}).generateText(context.Background(), "key", "https://provider.test", model, messages, nil, "", logger); requestError == nil {
+		t.Fatal("DashScope transport error was accepted")
 	}
 
 	client = NewOpenAIClient(geminiEdgeDoer(func(*http.Request) (*http.Response, error) {
@@ -131,34 +146,13 @@ func TestSynchronousResponsesFailureContracts(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader("{")),
 		}, nil
 	}), NewEndpoints())
-	if _, requestError := client.xAIResponsesRequest(context.Background(), "key", "https://provider.test", model, messages, nil, nil, nil, logger); requestError == nil {
+	if _, requestError := (xaiResponsesClient{httpClient: client.httpClient}).generateText(context.Background(), "key", "https://provider.test", model, messages, nil, "", nil, nil, logger); requestError == nil {
 		t.Fatal("xAI malformed response was accepted")
 	}
-
-	for _, testCase := range []struct {
-		name     string
-		snapshot openAIResponseSnapshot
-		want     error
-	}{
-		{name: "blank completed", snapshot: openAIResponseSnapshot{status: statusCompleted}, want: errors.New(errorOpenAIAPI)},
-		{name: "output limit", snapshot: openAIResponseSnapshot{status: statusIncomplete, incompleteReason: "max_output_tokens", text: "partial"}, want: errProviderOutputLimitReached},
-		{name: "other incomplete", snapshot: openAIResponseSnapshot{status: statusIncomplete, incompleteReason: "content_filter"}, want: ErrProviderAPI},
-		{name: "failed", snapshot: openAIResponseSnapshot{status: statusFailed}, want: errors.New(errorOpenAIFailedStatus)},
-		{name: "unknown", snapshot: openAIResponseSnapshot{status: statusInProgress}, want: errors.New(errorOpenAIAPI)},
-	} {
-		t.Run(testCase.name, func(subTest *testing.T) {
-			_, resolveError := resolveSynchronousResponsesSnapshot(testCase.snapshot)
-			if resolveError == nil {
-				subTest.Fatal("snapshot resolved without error")
-			}
-			if errors.Is(testCase.want, ErrProviderAPI) && !errors.Is(resolveError, ErrProviderAPI) {
-				subTest.Fatalf("resolve error=%v want=%v", resolveError, testCase.want)
-			}
-			if testCase.want == errProviderOutputLimitReached && !errors.Is(resolveError, errProviderOutputLimitReached) {
-				subTest.Fatalf("resolve error=%v want=%v", resolveError, testCase.want)
-			}
-		})
+	if _, requestError := (dashScopeResponsesClient{httpClient: client.httpClient}).generateText(context.Background(), "key", "https://provider.test", model, messages, nil, "", logger); requestError == nil {
+		t.Fatal("DashScope malformed response was accepted")
 	}
+
 }
 
 func TestInlineProviderMediaLimitEdges(t *testing.T) {

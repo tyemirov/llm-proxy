@@ -36,11 +36,11 @@ func TestStructuredOutputSchemaAndProviderMappings(testingInstance *testing.T) {
 	if string(geminiBytes) != `[{"type":"text","mime_type":"application/json","schema":{"additionalProperties":false,"properties":{"decision":{"enum":["pass","return"],"type":"string"}},"required":["decision"],"type":"object"}}]` {
 		testingInstance.Fatalf("Gemini mapping=%s", geminiBytes)
 	}
-	anthropicBytes, _ := json.Marshal(anthropicStructuredOutputFor(schema))
+	anthropicBytes, _ := json.Marshal(anthropicOutputConfigFor(schema, ""))
 	if string(anthropicBytes) != `{"format":{"type":"json_schema","schema":{"additionalProperties":false,"properties":{"decision":{"enum":["pass","return"],"type":"string"}},"required":["decision"],"type":"object"}}}` {
 		testingInstance.Fatalf("Anthropic mapping=%s", anthropicBytes)
 	}
-	if openAIStructuredTextFor(nil) != nil || geminiStructuredResponseFormats(nil) != nil || anthropicStructuredOutputFor(nil) != nil {
+	if openAIStructuredTextFor(nil) != nil || geminiStructuredResponseFormats(nil) != nil || anthropicOutputConfigFor(nil, "") != nil {
 		testingInstance.Fatal("nil schema must omit provider fields")
 	}
 
@@ -59,7 +59,7 @@ func TestStructuredOutputSchemaAndProviderMappings(testingInstance *testing.T) {
 	if geminiError != nil || len(geminiPayload.ResponseFormat) != 1 || geminiPayload.ResponseFormat[0].MIMEType != "application/json" {
 		testingInstance.Fatalf("Gemini payload=%+v error=%v", geminiPayload, geminiError)
 	}
-	anthropicPayload := anthropicMessagesRequest{OutputConfig: anthropicStructuredOutputFor(schema)}
+	anthropicPayload := anthropicMessagesRequest{OutputConfig: anthropicOutputConfigFor(schema, "")}
 	encodedAnthropic, _ := json.Marshal(anthropicPayload)
 	if !jsonContainsPath(encodedAnthropic, "output_config", "format", "schema") {
 		testingInstance.Fatalf("Anthropic payload lacks output_config.format.schema: %s", encodedAnthropic)

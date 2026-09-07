@@ -122,7 +122,7 @@ func validateStructuredOutputRoute(model textModelDefinition, schema *structured
 		return nil
 	}
 	switch model.wireContract {
-	case textWireContractOpenAIResponses:
+	case textWireContractOpenAIResponses, textWireContractXAIResponses:
 		return validateStructuredOutputSchemaSubset(schema.document.(map[string]any), openAIStructuredOutputRules, true)
 	case textWireContractGeminiInteractions:
 		return validateStructuredOutputSchemaSubset(schema.document.(map[string]any), geminiStructuredOutputRules, true)
@@ -334,8 +334,9 @@ func geminiStructuredResponseFormats(schema *structuredOutputSchema) []geminiStr
 	return []geminiStructuredResponseFormat{{Type: "text", MIMEType: "application/json", Schema: schema.document}}
 }
 
-type anthropicStructuredOutputConfig struct {
-	Format anthropicStructuredOutputFormat `json:"format"`
+type anthropicOutputConfig struct {
+	Format *anthropicStructuredOutputFormat `json:"format,omitempty"`
+	Effort string                           `json:"effort,omitempty"`
 }
 
 type anthropicStructuredOutputFormat struct {
@@ -343,11 +344,13 @@ type anthropicStructuredOutputFormat struct {
 	Schema any    `json:"schema"`
 }
 
-func anthropicStructuredOutputFor(schema *structuredOutputSchema) *anthropicStructuredOutputConfig {
-	if schema == nil {
+func anthropicOutputConfigFor(schema *structuredOutputSchema, reasoningEffort string) *anthropicOutputConfig {
+	if schema == nil && reasoningEffort == "" {
 		return nil
 	}
-	return &anthropicStructuredOutputConfig{Format: anthropicStructuredOutputFormat{
-		Type: "json_schema", Schema: schema.document,
-	}}
+	config := &anthropicOutputConfig{Effort: reasoningEffort}
+	if schema != nil {
+		config.Format = &anthropicStructuredOutputFormat{Type: "json_schema", Schema: schema.document}
+	}
+	return config
 }

@@ -207,7 +207,7 @@ func TestClientProtocolsProviderErrors(t *testing.T) {
 			}
 			server := httptest.NewServer(router)
 			defer server.Close()
-			request, _ := http.NewRequest("POST", server.URL+"/v1/chat/completions", strings.NewReader(`{"model":"deepseek/deepseek-chat","messages":[{"role":"user","content":"private prompt"}]}`))
+			request, _ := http.NewRequest("POST", server.URL+"/v1/chat/completions", strings.NewReader(`{"model":"deepseek/deepseek-v4-flash","messages":[{"role":"user","content":"private prompt"}]}`))
 			request.Header.Set("Authorization", "Bearer "+TestSecret)
 			request.Header.Set("Content-Type", "application/json")
 			response, err := server.Client().Do(request)

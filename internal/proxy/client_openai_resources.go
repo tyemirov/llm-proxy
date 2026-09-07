@@ -19,7 +19,7 @@ type openAIModelRecord struct {
 
 func openAIModelsHandler(catalog *ProviderCatalog, providers *providerRegistry) gin.HandlerFunc {
 	owners := map[string]string{}
-	for _, model := range catalog.schema.Models {
+	for _, model := range catalog.runtimeSchema.Models {
 		owners[model.ID] = model.Publisher
 	}
 	return func(c *gin.Context) {
@@ -33,7 +33,7 @@ func openAIModelsHandler(catalog *ProviderCatalog, providers *providerRegistry) 
 		}
 		registry := providers.forTenant(authenticatedTenantFromContext(c))
 		records := []openAIModelRecord{}
-		for _, provider := range catalog.schema.Providers {
+		for _, provider := range catalog.runtimeSchema.Providers {
 			for _, offering := range provider.Offerings {
 				supported := false
 				for _, operation := range offering.Operations {

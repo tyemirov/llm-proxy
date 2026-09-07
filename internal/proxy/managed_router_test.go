@@ -32,6 +32,7 @@ func StandardManagedTenantTestConfiguration(secret string) ManagedTenantTestConf
 		Secret:   secret,
 		Defaults: DefaultTenantDefaults(),
 		ProviderKeys: map[string]string{
+			ProviderNameBaidu:       "sk-baidu",
 			ProviderNameOpenAI:      "sk-test",
 			ProviderNameDeepSeek:    "sk-deepseek",
 			ProviderNameDashScope:   "sk-dashscope",

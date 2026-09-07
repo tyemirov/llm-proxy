@@ -192,6 +192,9 @@ func markManagedUsageOutcome(ginContext *gin.Context, managedOutcome managedUsag
 }
 
 func requestFailureOutcome(requestError error) string {
+	if errors.Is(requestError, ErrInvalidAudioInput) {
+		return requestOutcomeValidation
+	}
 	if errors.Is(requestError, errQueueFull) {
 		return requestOutcomeProxyOverload
 	}
@@ -200,6 +203,8 @@ func requestFailureOutcome(requestError error) string {
 
 func managedRequestFailureOutcome(requestError error) managedUsageOutcomeCode {
 	switch {
+	case errors.Is(requestError, ErrInvalidAudioInput):
+		return managedUsageOutcomeInvalidRequest
 	case errors.Is(requestError, ErrProviderRateLimited):
 		return managedUsageOutcomeRateLimited
 	case errors.Is(requestError, ErrProviderNotConfigured):

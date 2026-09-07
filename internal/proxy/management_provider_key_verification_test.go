@@ -75,10 +75,10 @@ func TestManagementProviderKeyVerificationUsesEveryCanonicalTransportBeforePersi
 	transportCases := []providerKeyVerificationTransportCase{
 		{provider: proxy.ProviderNameOpenAI, model: proxy.ModelNameGPT41, transport: verificationTransportOpenAI},
 		{provider: proxy.ProviderNameDeepSeek, model: proxy.ModelNameDeepSeekV4Flash, transport: verificationTransportChat, tokenLimitField: "max_tokens"},
-		{provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwenPlus, transport: verificationTransportChat, tokenLimitField: "max_tokens"},
-		{provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen37Max, transport: verificationTransportChat, tokenLimitField: "max_tokens"},
-		{provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen37Plus, transport: verificationTransportChat, tokenLimitField: "max_tokens"},
-		{provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen36Flash, transport: verificationTransportChat, tokenLimitField: "max_tokens"},
+		{provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwenPlus, transport: verificationTransportResponses},
+		{provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen37Max, transport: verificationTransportResponses},
+		{provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen37Plus, transport: verificationTransportResponses},
+		{provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwen36Flash, transport: verificationTransportResponses},
 		{provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK26, transport: verificationTransportChat, tokenLimitField: "max_completion_tokens"},
 		{provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM27, providerModel: "MiniMax-M2.7", transport: verificationTransportChat, tokenLimitField: "max_completion_tokens"},
 		{provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM27HighSpeed, providerModel: "MiniMax-M2.7-highspeed", transport: verificationTransportChat, tokenLimitField: "max_completion_tokens"},
@@ -91,7 +91,7 @@ func TestManagementProviderKeyVerificationUsesEveryCanonicalTransportBeforePersi
 		{provider: proxy.ProviderNameZAI, model: proxy.ModelNameZAIGLM, transport: verificationTransportChat, tokenLimitField: "max_tokens"},
 		{provider: proxy.ProviderNameAnthropic, model: proxy.ModelNameClaudeSonnet46, transport: verificationTransportAnthropic},
 		{provider: proxy.ProviderNameMeta, model: proxy.ModelNameMuseSpark12, transport: verificationTransportChat, tokenLimitField: "max_completion_tokens"},
-		{provider: proxy.ProviderNameXAI, model: proxy.ModelNameGrok43, transport: verificationTransportChat, tokenLimitField: "max_tokens"},
+		{provider: proxy.ProviderNameXAI, model: proxy.ModelNameGrok43, transport: verificationTransportResponses},
 		{provider: proxy.ProviderNameXAI, model: proxy.ModelNameGrok45, transport: verificationTransportResponses},
 	}
 
@@ -164,7 +164,7 @@ func TestManagementProviderKeyVerificationUsesEveryCanonicalTransportBeforePersi
 			if upstreamRequests.Load() != 1 {
 				subTest.Fatalf("verification requests=%d want=1", upstreamRequests.Load())
 			}
-			if transportCase.provider == proxy.ProviderNameDashScope && observedWorkspaceRequestURL != testDashScopeWorkspaceURL+"/chat/completions" {
+			if transportCase.provider == proxy.ProviderNameDashScope && observedWorkspaceRequestURL != testDashScopeWorkspaceURL+"/responses" {
 				subTest.Fatalf("DashScope verification URL=%q", observedWorkspaceRequestURL)
 			}
 			if usage := requestManagementUsage(subTest, router, sessionCookie, "all"); usage.Totals.Requests != 0 {
@@ -799,7 +799,7 @@ func TestManagementXAIResponsesVerificationUsesTheXAIEndpoint(t *testing.T) {
 			model:     proxy.ModelNameGrok45,
 			transport: verificationTransportResponses,
 		}, "candidate-xai-responses")
-		writeProviderKeyVerificationSuccess(responseWriter, verificationTransportResponses)
+		io.WriteString(responseWriter, `{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"OK"}]}]}`)
 	}))
 	t.Cleanup(xAIServer.Close)
 
@@ -841,10 +841,10 @@ func TestManagementDashScopeWorkspaceChangeVerifiesRetainedKeyAndRoutesWithStore
 		authorizations = append(authorizations, request.Header.Get("Authorization"))
 		responseWriter.Header().Set("Content-Type", "application/json")
 		if len(authorizations) < 3 {
-			_, _ = responseWriter.Write([]byte(`{"choices":[{}]}`))
+			_, _ = responseWriter.Write([]byte(`{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"verified"}]}]}`))
 			return
 		}
-		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"tenant workspace ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}`))
+		_, _ = responseWriter.Write([]byte(`{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"tenant workspace ok"}]}],"usage":{"input_tokens":1,"output_tokens":2,"total_tokens":3}}`))
 	}))
 	defer upstreamServer.Close()
 
@@ -890,9 +890,9 @@ func TestManagementDashScopeWorkspaceChangeVerifiesRetainedKeyAndRoutesWithStore
 		t.Fatalf("proxy status=%d body=%q", proxyResponse.Code, proxyResponse.Body.String())
 	}
 	expectedURLs := []string{
-		testDashScopeWorkspaceURL + "/chat/completions",
-		updatedURL + "/chat/completions",
-		updatedURL + "/chat/completions",
+		testDashScopeWorkspaceURL + "/responses",
+		updatedURL + "/responses",
+		updatedURL + "/responses",
 	}
 	if len(requestURLs) != len(expectedURLs) {
 		t.Fatalf("workspace requests=%v", requestURLs)
@@ -1417,6 +1417,13 @@ func assertProviderKeyVerificationRequest(t *testing.T, request *http.Request, t
 		t.Errorf("decode verification request: %v", decodeError)
 		return
 	}
+	if transportCase.provider == proxy.ProviderNameMiniMax {
+		if payload["reasoning_split"] != true {
+			t.Errorf("MiniMax verification must separate reasoning")
+		}
+	} else if _, present := payload["reasoning_split"]; present {
+		t.Errorf("unexpected reasoning_split for provider=%s", transportCase.provider)
+	}
 	expectedProviderModel := transportCase.providerModel
 	if expectedProviderModel == "" {
 		expectedProviderModel = transportCase.model
@@ -1432,7 +1439,11 @@ func assertProviderKeyVerificationRequest(t *testing.T, request *http.Request, t
 			t.Errorf("OpenAI verification path=%q headers=%v payload=%v", request.URL.Path, request.Header, payload)
 		}
 	case verificationTransportResponses:
-		if request.URL.Path != "/responses" ||
+		expectedPath := "/responses"
+		if transportCase.provider == proxy.ProviderNameDashScope {
+			expectedPath = "/compatible-mode/v1/responses"
+		}
+		if request.URL.Path != expectedPath ||
 			request.Header.Get("Authorization") != "Bearer "+candidateKey ||
 			payload["model"] != expectedProviderModel ||
 			payload["store"] != false ||
@@ -1444,9 +1455,6 @@ func assertProviderKeyVerificationRequest(t *testing.T, request *http.Request, t
 		}
 	case verificationTransportChat:
 		expectedPath := "/chat/completions"
-		if transportCase.provider == proxy.ProviderNameDashScope {
-			expectedPath = "/compatible-mode/v1/chat/completions"
-		}
 		if request.URL.Path != expectedPath ||
 			request.Header.Get("Authorization") != "Bearer "+candidateKey ||
 			payload["model"] != expectedProviderModel ||
@@ -1468,7 +1476,9 @@ func writeProviderKeyVerificationSuccess(responseWriter http.ResponseWriter, tra
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseBody := `{"choices":[{}]}`
 	switch transport {
-	case verificationTransportOpenAI, verificationTransportResponses:
+	case verificationTransportResponses:
+		responseBody = `{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"verified"}]}]}`
+	case verificationTransportOpenAI:
 		responseBody = `{"id":"verification-response","status":"queued"}`
 	case verificationTransportAnthropic:
 		responseBody = `{"id":"verification-message","type":"message","role":"assistant"}`

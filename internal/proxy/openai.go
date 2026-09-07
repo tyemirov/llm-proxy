@@ -126,62 +126,6 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 	return client.resolveOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
 }
 
-func (client *OpenAIClient) xAIResponsesRequest(parentContext context.Context, apiKey string, endpointURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, structuredOutput *structuredOutputSchema, tools *callerTools, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	if mediaLimitError := validateInlineMessageMediaBeforeSerialization(modelIdentifier, messages); mediaLimitError != nil {
-		return textGenerationResult{}, mediaLimitError
-	}
-	input, inputError := messages.openAIResponsesInput("high", true)
-	if inputError != nil {
-		return textGenerationResult{}, inputError
-	}
-	payload := map[string]any{"model": modelIdentifier.providerString(), "input": input, "store": false}
-	if maxTokens != nil {
-		payload["max_output_tokens"] = *maxTokens
-	}
-	if structuredOutput != nil {
-		payload["text"] = openAIStructuredTextFor(structuredOutput)
-	}
-	tools.applyResponses(payload)
-	payloadBytes, _ := json.Marshal(payload)
-	if mediaLimitError := validateInlineMessageMediaRequestLimit(modelIdentifier, messages, payloadBytes); mediaLimitError != nil {
-		return textGenerationResult{}, mediaLimitError
-	}
-	httpRequest, buildError := buildAuthorizedJSONRequest(parentContext, http.MethodPost, endpointURL, apiKey, bytes.NewReader(payloadBytes))
-	if buildError != nil {
-		structuredLogger.Errorw(logEventBuildHTTPRequest, constants.LogFieldError, buildError)
-		return textGenerationResult{}, buildError
-	}
-	statusCode, responseBytes, _, latencyMillis, requestError := client.performResponsesRequest(httpRequest, structuredLogger, logEventProviderRequestError)
-	if requestError != nil {
-		return textGenerationResult{}, requestError
-	}
-	responseSnapshot, snapshotError := newOpenAIResponseSnapshot(responseBytes)
-	structuredLogger.Infow(logEventOpenAIResponse, logFieldHTTPStatus, statusCode, logFieldAPIStatus, responseSnapshot.status, constants.LogFieldLatencyMilliseconds, latencyMillis)
-	if snapshotError != nil {
-		return textGenerationResult{}, errors.New(errorOpenAIAPI)
-	}
-	return resolveSynchronousResponsesSnapshot(responseSnapshot)
-}
-
-func resolveSynchronousResponsesSnapshot(responseSnapshot openAIResponseSnapshot) (textGenerationResult, error) {
-	switch responseSnapshot.status {
-	case statusCompleted:
-		if utils.IsBlank(responseSnapshot.text) && len(responseSnapshot.toolCalls) == 0 {
-			return textGenerationResult{usage: responseSnapshot.usage}, errors.New(errorOpenAIAPI)
-		}
-		return responseSnapshot.generation(), nil
-	case statusIncomplete:
-		if responseSnapshot.incompleteReason == "max_output_tokens" {
-			return responseSnapshot.generation(), errProviderOutputLimitReached
-		}
-		return textGenerationResult{usage: responseSnapshot.usage}, fmt.Errorf("%w: Responses incomplete reason=%s", ErrProviderAPI, responseSnapshot.incompleteReason)
-	case statusCancelled, statusFailed:
-		return textGenerationResult{usage: responseSnapshot.usage}, errors.New(errorOpenAIFailedStatus)
-	default:
-		return textGenerationResult{usage: responseSnapshot.usage}, errors.New(errorOpenAIAPI)
-	}
-}
-
 type openAIResponseSnapshot struct {
 	toolCalls             []functionCall
 	identifier            string

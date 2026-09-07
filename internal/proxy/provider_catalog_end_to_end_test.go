@@ -119,7 +119,7 @@ func TestProviderCatalogProjectsProviderCardTaxonomy(testingInstance *testing.T)
 	}{
 		proxy.ProviderNameOpenAI:      {apiServiceLabel: "OpenAI API", families: []string{"GPT-4", "GPT-5", "GPT Transcribe"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.ModelOperationDictation}},
 		proxy.ProviderNameDashScope:   {apiServiceLabel: "DashScope API", families: []string{"Qwen"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput}},
-		proxy.ProviderNameGemini:      {apiServiceLabel: "Gemini API", families: []string{"Gemini"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityAudioInput}},
+		proxy.ProviderNameGemini:      {apiServiceLabel: "Gemini API", families: []string{"Gemini"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityAudioInput, proxy.ModelOperationDictation}},
 		proxy.ProviderNameMeta:        {apiServiceLabel: "Meta API", families: []string{"Muse Spark"}, capabilities: []string{proxy.ModelOperationText}},
 		proxy.ProviderNameSiliconFlow: {apiServiceLabel: "SiliconFlow API", families: []string{"DeepSeek R1", "SenseVoice"}, capabilities: []string{proxy.ModelOperationText, proxy.ModelOperationDictation}},
 	}
@@ -254,13 +254,6 @@ func TestCatalogDefinedProviderFlowsThroughEveryGenericConsumer(testingInstance 
 	if settingRecord.Value != upstreamServer.URL {
 		testingInstance.Fatalf("catalog setting value=%q want=%q", settingRecord.Value, upstreamServer.URL)
 	}
-	fixtureSQLDatabase, fixtureDatabaseError := fixtureDatabase.DB()
-	if fixtureDatabaseError != nil {
-		testingInstance.Fatalf("resolve catalog fixture database: %v", fixtureDatabaseError)
-	}
-	if closeError := fixtureSQLDatabase.Close(); closeError != nil {
-		testingInstance.Fatalf("close catalog fixture database: %v", closeError)
-	}
 
 	revealRequest := authenticatedProviderKeyRevealRequest(
 		http.MethodPost,
@@ -295,8 +288,17 @@ func TestCatalogDefinedProviderFlowsThroughEveryGenericConsumer(testingInstance 
 	}
 
 	assertTestCatalogRoute(testingInstance, router, secretPayload.Secret)
+	waitForPersistedManagedUsageEventCount(testingInstance, fixtureDatabase, 1)
 	reloadedRouter := newManagementRouterWithDatabasePath(testingInstance, configuration, databasePath)
 	assertTestCatalogRoute(testingInstance, reloadedRouter, secretPayload.Secret)
+	waitForPersistedManagedUsageEventCount(testingInstance, fixtureDatabase, 2)
+	fixtureSQLDatabase, fixtureDatabaseError := fixtureDatabase.DB()
+	if fixtureDatabaseError != nil {
+		testingInstance.Fatalf("resolve catalog fixture database: %v", fixtureDatabaseError)
+	}
+	if closeError := fixtureSQLDatabase.Close(); closeError != nil {
+		testingInstance.Fatalf("close catalog fixture database: %v", closeError)
+	}
 	requestMutex.Lock()
 	observedModels := append([]string(nil), routedModels...)
 	requestMutex.Unlock()
@@ -548,11 +550,11 @@ func catalogWithTestProvider(testingInstance *testing.T) *proxy.ProviderCatalog 
 		ID: testCatalogProviderFamilyID, Publisher: testCatalogProviderPublisherID,
 		Label: "Catalog Test Family", WeightAccess: proxy.ModelWeightAccessProprietary,
 	})
-	schema.Models = append(schema.Models, proxy.ExactModel{
+	schema.Models = append(schema.Models, proxy.ProviderCatalogModel{Enabled: proxy.ModelEnabled, ExactModel: proxy.ExactModel{
 		ID: testCatalogModelID, Publisher: testCatalogProviderPublisherID,
 		Family: testCatalogProviderFamilyID, Version: "catalog-test-v1",
 		Operations: []string{proxy.ModelOperationText}, MediaInputs: []string{},
-	})
+	}})
 	schema.Providers = append(schema.Providers, proxy.ProviderCatalogProvider{
 		ID: testCatalogProviderID, Label: "Catalog Test", APIServiceLabel: "Catalog Test API", KeyAcquisitionURL: "https://provider.example/keys", Aliases: []string{testCatalogProviderAlias},
 		Fields: []proxy.ProviderCatalogField{

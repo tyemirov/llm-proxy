@@ -30,7 +30,19 @@ type chatCompletionContinuation struct {
 	messages []chatCompletionMessage
 }
 
+type chatCompletionThinking struct {
+	Type string `json:"type"`
+}
+
+const (
+	chatCompletionThinkingEnabled  = "enabled"
+	chatCompletionThinkingDisabled = "disabled"
+	reasoningEffortNone            = "none"
+)
+
 type chatCompletionRequest struct {
+	ReasoningSplit      bool                    `json:"reasoning_split,omitempty"`
+	Thinking            *chatCompletionThinking `json:"thinking,omitempty"`
 	Tools               []map[string]any        `json:"tools,omitempty"`
 	ToolChoice          any                     `json:"tool_choice,omitempty"`
 	ParallelToolCalls   *bool                   `json:"parallel_tool_calls,omitempty"`
@@ -47,6 +59,7 @@ type chatCompletionResponse struct {
 }
 
 type chatCompletionChoice struct {
+	Flag         json.RawMessage               `json:"flag"`
 	Message      chatCompletionResponseMessage `json:"message"`
 	FinishReason string                        `json:"finish_reason"`
 }
@@ -78,11 +91,20 @@ func (client *openAICompatibleChatClient) generateText(parentContext context.Con
 		providerMessages = continuation.messages
 	}
 	payload := chatCompletionRequest{
-		Model:    modelIdentifier.providerString(),
-		Messages: providerMessages,
+		ReasoningSplit: modelIdentifier.requestProfile == requestProfileMiniMaxChatCompletions,
+		Model:          modelIdentifier.providerString(),
+		Messages:       providerMessages,
 	}
 	if modelIdentifier.reasoningEffort != nil && modelIdentifier.reasoningEffort.adapter == reasoningEffortAdapterOpenAIChatCompletions {
 		payload.ReasoningEffort = reasoningEffort
+	}
+	if modelIdentifier.reasoningEffort != nil && modelIdentifier.reasoningEffort.adapter == reasoningEffortAdapterChatCompletionsThinking {
+		payload.Thinking = &chatCompletionThinking{Type: chatCompletionThinkingEnabled}
+		if reasoningEffort == reasoningEffortNone {
+			payload.Thinking.Type = chatCompletionThinkingDisabled
+		} else {
+			payload.ReasoningEffort = reasoningEffort
+		}
 	}
 	if maxTokens != nil {
 		switch tokenLimitParameter {
@@ -116,7 +138,7 @@ func (client *openAICompatibleChatClient) generateText(parentContext context.Con
 	if responseError := providerResponseError(statusCode, responseHeader, requestError); responseError != nil {
 		return textGenerationResult{}, responseError
 	}
-	generation, parseError := parseChatCompletionResponse(responseBytes)
+	generation, parseError := parseChatCompletionResponse(responseBytes, modelIdentifier.chatResponsePolicy)
 	if errors.Is(parseError, errProviderOutputLimitReached) && generation.chatCompletionReasoningContent != nil {
 		generation.chatCompletionContinuation = newChatCompletionContinuation(providerMessages, generation.text, generation.chatCompletionReasoningContent)
 	}
@@ -135,10 +157,15 @@ func newChatCompletionContinuation(providerMessages []chatCompletionMessage, vis
 	return &chatCompletionContinuation{messages: continuationMessages}
 }
 
-func parseChatCompletionResponse(responseBytes []byte) (textGenerationResult, error) {
+func parseChatCompletionResponse(responseBytes []byte, policy chatCompletionResponsePolicy) (textGenerationResult, error) {
 	var response chatCompletionResponse
 	if decodeError := json.Unmarshal(responseBytes, &response); decodeError != nil {
 		return textGenerationResult{}, decodeError
+	}
+	if policy == chatCompletionResponsePolicyQianfan {
+		if err := validateQianfanChatChoices(response.Choices); err != nil {
+			return textGenerationResult{}, err
+		}
 	}
 	usage, usageError := parseChatCompletionTokenUsage(response.Usage)
 	if usageError != nil {

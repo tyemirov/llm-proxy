@@ -8,6 +8,8 @@ import (
 )
 
 var (
+	// ErrInvalidAudioInput is returned for an unsupported or empty audio file.
+	ErrInvalidAudioInput = errors.New("invalid_audio_input")
 	// ErrUnknownProvider is returned when a request names a provider that is not registered.
 	ErrUnknownProvider = errors.New(errorUnknownProvider)
 	// ErrProviderNotConfigured is returned when a registered provider lacks a required server-side credential.

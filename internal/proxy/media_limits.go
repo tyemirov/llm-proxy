@@ -17,11 +17,15 @@ const (
 	CatalogMediaTransportFile   = "file"
 	CatalogMediaTransportInline = "inline"
 
-	CatalogMediaLimitUnitBytes = "bytes"
-	CatalogMediaLimitUnitFiles = "files"
+	CatalogMediaLimitUnitBytes           = "bytes"
+	CatalogMediaLimitUnitFiles           = "files"
+	CatalogMediaLimitUnitPixels          = "pixels"
+	CatalogMediaLimitIDImageWidthPixels  = "image_width_pixels"
+	CatalogMediaLimitIDImageHeightPixels = "image_height_pixels"
 
 	CatalogMediaLimitScopeAttachment             = "attachment"
 	CatalogMediaLimitScopeAttachmentEncodedBytes = "attachment_encoded_bytes"
+	CatalogMediaLimitScopeAttachmentDataURIBytes = "attachment_data_uri_bytes"
 	CatalogMediaLimitScopeRequest                = "request"
 	CatalogMediaLimitScopeRequestEncodedBytes    = "request_encoded_bytes"
 
@@ -93,10 +97,10 @@ func validateCatalogMediaLimits(limits []CatalogMediaLimit, mediaInputs []string
 		if limit.Transport != CatalogMediaTransportAny && limit.Transport != CatalogMediaTransportInline && limit.Transport != CatalogMediaTransportFile {
 			return fmt.Errorf("%w: field=%s.transport transport=%s", ErrInvalidModelCatalog, limitField, limit.Transport)
 		}
-		if limit.Unit != CatalogMediaLimitUnitBytes && limit.Unit != CatalogMediaLimitUnitFiles {
+		if limit.Unit != CatalogMediaLimitUnitBytes && limit.Unit != CatalogMediaLimitUnitFiles && limit.Unit != CatalogMediaLimitUnitPixels {
 			return fmt.Errorf("%w: field=%s.unit unit=%s", ErrInvalidModelCatalog, limitField, limit.Unit)
 		}
-		if limit.Scope != CatalogMediaLimitScopeAttachment && limit.Scope != CatalogMediaLimitScopeAttachmentEncodedBytes && limit.Scope != CatalogMediaLimitScopeRequest && limit.Scope != CatalogMediaLimitScopeRequestEncodedBytes {
+		if limit.Scope != CatalogMediaLimitScopeAttachment && limit.Scope != CatalogMediaLimitScopeAttachmentEncodedBytes && limit.Scope != CatalogMediaLimitScopeAttachmentDataURIBytes && limit.Scope != CatalogMediaLimitScopeRequest && limit.Scope != CatalogMediaLimitScopeRequestEncodedBytes {
 			return fmt.Errorf("%w: field=%s.scope scope=%s", ErrInvalidModelCatalog, limitField, limit.Scope)
 		}
 		switch limit.Status {
@@ -164,7 +168,7 @@ func matchesCatalogMediaLimit(configured CatalogMediaLimit, required CatalogMedi
 }
 
 func matchesCatalogInlineAttachmentLimit(configured CatalogMediaLimit, required CatalogMediaLimit) bool {
-	return matchesCatalogMediaLimit(configured, required) && (configured.Scope == CatalogMediaLimitScopeAttachment || configured.Scope == CatalogMediaLimitScopeAttachmentEncodedBytes)
+	return matchesCatalogMediaLimit(configured, required) && (configured.Scope == CatalogMediaLimitScopeAttachment || configured.Scope == CatalogMediaLimitScopeAttachmentEncodedBytes || configured.Scope == CatalogMediaLimitScopeAttachmentDataURIBytes)
 }
 
 func boundedCatalogMediaLimit(limits []CatalogMediaLimit, identifier string, mediaType messageMediaType) (int64, bool) {

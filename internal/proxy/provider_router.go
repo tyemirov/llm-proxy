@@ -29,14 +29,16 @@ type textRouteAdapter interface {
 }
 
 type openAIResponsesTextRouteAdapter struct{}
-type openAIResponsesSynchronousTextRouteAdapter struct{}
+type dashScopeResponsesTextRouteAdapter struct{}
+type xaiResponsesTextRouteAdapter struct{}
 type openAIChatCompletionsTextRouteAdapter struct{}
 type geminiInteractionsTextRouteAdapter struct{}
 type anthropicMessagesTextRouteAdapter struct{}
 
 var textRouteAdapters = map[textRouteCapabilities]textRouteAdapter{
 	openAIResponsesPollableRouteCapabilities:          openAIResponsesTextRouteAdapter{},
-	openAIResponsesSynchronousRouteCapabilities:       openAIResponsesSynchronousTextRouteAdapter{},
+	dashScopeResponsesSynchronousRouteCapabilities:    dashScopeResponsesTextRouteAdapter{},
+	xaiResponsesSynchronousRouteCapabilities:          xaiResponsesTextRouteAdapter{},
 	openAIChatCompletionsSynchronousRouteCapabilities: openAIChatCompletionsTextRouteAdapter{},
 	geminiInteractionsPollableRouteCapabilities:       geminiInteractionsTextRouteAdapter{},
 	anthropicMessagesSynchronousRouteCapabilities:     anthropicMessagesTextRouteAdapter{},
@@ -120,16 +122,32 @@ func (openAIResponsesTextRouteAdapter) generateText(requestContext context.Conte
 	)
 }
 
-func (openAIResponsesSynchronousTextRouteAdapter) generateText(requestContext context.Context, router *providerRouter, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (dashScopeResponsesTextRouteAdapter) generateText(requestContext context.Context, router *providerRouter, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	httpClient := newProviderTransportHTTPDoer(router.openAIClient.httpClient, request.provider, request.provider.credentialFor(endpointKindText))
-	client := NewOpenAIClient(httpClient, router.openAIClient.endpoints)
-	return client.xAIResponsesRequest(
+	client := dashScopeResponsesClient{httpClient: httpClient}
+	return client.generateText(
 		requestContext,
 		"",
 		request.provider.textEndpointURL,
 		request.model,
 		request.messages,
 		request.maxTokens,
+		request.reasoningEffort,
+		structuredLogger,
+	)
+}
+
+func (xaiResponsesTextRouteAdapter) generateText(requestContext context.Context, router *providerRouter, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+	httpClient := newProviderTransportHTTPDoer(router.openAIClient.httpClient, request.provider, request.provider.credentialFor(endpointKindText))
+	client := xaiResponsesClient{httpClient: httpClient}
+	return client.generateText(
+		requestContext,
+		"",
+		request.provider.textEndpointURL,
+		request.model,
+		request.messages,
+		request.maxTokens,
+		request.reasoningEffort,
 		request.structuredOutput,
 		request.tools,
 		structuredLogger,
@@ -184,6 +202,7 @@ func (anthropicMessagesTextRouteAdapter) generateText(requestContext context.Con
 		request.model,
 		request.messages,
 		request.maxTokens,
+		request.reasoningEffort,
 		request.structuredOutput,
 		structuredLogger,
 	)
@@ -227,6 +246,9 @@ func continuationMaxTokens(currentMaxTokens *int, model textModelDefinition, lat
 func (router *providerRouter) transcribeAudio(requestContext context.Context, request dictationRequestParameters, structuredLogger *zap.SugaredLogger) (string, error) {
 	providerModel := request.provider.transcriptionModels[strings.ToLower(request.model.string())].providerIdentifier
 	httpClient := newProviderTransportHTTPDoer(router.openAIClient.httpClient, request.provider, request.provider.credentialFor(endpointKindDictation))
+	if request.provider.activeTransport.requestProtocol == CatalogProtocolGeminiInteractions {
+		return newGeminiInteractionsClient(httpClient).transcribeAudio(requestContext, "", request.provider.textBaseURL, providerModel.string(), request.fileName, request.audioReader, structuredLogger)
+	}
 	client := NewOpenAIClient(httpClient, router.openAIClient.endpoints)
 	return client.transcribeAudioWithURL(
 		requestContext,

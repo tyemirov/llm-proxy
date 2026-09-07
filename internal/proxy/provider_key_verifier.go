@@ -38,12 +38,15 @@ var (
 	}
 	providerKeyVerificationRequestBuilders = map[textRouteCapabilities]providerKeyVerificationRequestBuilder{
 		openAIResponsesPollableRouteCapabilities:          buildOpenAIProviderKeyVerificationRequest,
-		openAIResponsesSynchronousRouteCapabilities:       buildSynchronousResponsesProviderKeyVerificationRequest,
+		dashScopeResponsesSynchronousRouteCapabilities:    buildDashScopeResponsesProviderKeyVerificationRequest,
+		xaiResponsesSynchronousRouteCapabilities:          buildXAIResponsesProviderKeyVerificationRequest,
 		openAIChatCompletionsSynchronousRouteCapabilities: buildChatProviderKeyVerificationRequest,
 		anthropicMessagesSynchronousRouteCapabilities:     buildAnthropicProviderKeyVerificationRequest,
 	}
 	providerKeyVerificationResponseValidators = map[textWireContract]providerKeyVerificationResponseValidator{
 		textWireContractOpenAIResponses:       validOpenAIProviderKeyVerificationResponse,
+		textWireContractDashScopeResponses:    validDashScopeProviderKeyVerificationResponse,
+		textWireContractXAIResponses:          validXAIProviderKeyVerificationResponse,
 		textWireContractOpenAIChatCompletions: validChatProviderKeyVerificationResponse,
 		textWireContractAnthropicMessages:     validAnthropicProviderKeyVerificationResponse,
 	}
@@ -118,6 +121,13 @@ func (verifier *operationalProviderKeyVerifier) verify(parentContext context.Con
 	responseBytes, responseError := readProviderKeyVerificationResponse(httpResponse.Body)
 	if responseError != nil {
 		return responseError
+	}
+	if model.chatResponsePolicy == chatCompletionResponsePolicyQianfan {
+		_, err := parseChatCompletionResponse(responseBytes, model.chatResponsePolicy)
+		if err != nil && !errors.Is(err, errProviderOutputLimitReached) {
+			return errProviderKeyVerificationUnavailable
+		}
+		return nil
 	}
 	responseValidator := providerKeyVerificationResponseValidators[model.wireContract]
 	if !responseValidator(responseBytes) {
@@ -211,7 +221,23 @@ func buildOpenAIProviderKeyVerificationRequest(requestContext context.Context, _
 	return buildAuthorizedJSONRequest(requestContext, http.MethodPost, provider.textEndpointURL, apiKey, bytes.NewReader(payloadBytes))
 }
 
-func buildSynchronousResponsesProviderKeyVerificationRequest(requestContext context.Context, _ *Endpoints, provider providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {
+func buildDashScopeResponsesProviderKeyVerificationRequest(requestContext context.Context, _ *Endpoints, provider providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {
+	payload := struct {
+		Model           string `json:"model"`
+		Input           string `json:"input"`
+		MaxOutputTokens int    `json:"max_output_tokens"`
+		Store           bool   `json:"store"`
+	}{
+		Model:           model.providerString(),
+		Input:           providerKeyVerificationPrompt,
+		MaxOutputTokens: providerKeyVerificationMaxTokens,
+		Store:           false,
+	}
+	payloadBytes, _ := json.Marshal(payload)
+	return buildAuthorizedJSONRequest(requestContext, http.MethodPost, provider.textEndpointURL, apiKey, bytes.NewReader(payloadBytes))
+}
+
+func buildXAIResponsesProviderKeyVerificationRequest(requestContext context.Context, _ *Endpoints, provider providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {
 	payload := struct {
 		Model           string `json:"model"`
 		Input           string `json:"input"`
@@ -230,7 +256,8 @@ func buildSynchronousResponsesProviderKeyVerificationRequest(requestContext cont
 func buildChatProviderKeyVerificationRequest(requestContext context.Context, _ *Endpoints, provider providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {
 	maxTokens := providerKeyVerificationMaxTokens
 	payload := chatCompletionRequest{
-		Model: model.providerString(),
+		ReasoningSplit: model.requestProfile == requestProfileMiniMaxChatCompletions,
+		Model:          model.providerString(),
 		Messages: []chatCompletionMessage{{
 			Role:    string(chatRoleUser),
 			Content: providerKeyVerificationPrompt,
@@ -348,4 +375,14 @@ func validAnthropicProviderKeyVerificationResponse(responseBytes []byte) bool {
 		strings.TrimSpace(response.ID) != "" &&
 		response.Type == anthropicVerificationResponseType &&
 		response.Role == anthropicVerificationResponseRole
+}
+
+func validXAIProviderKeyVerificationResponse(body []byte) bool {
+	_, err := parseXAIResponse(body)
+	return err == nil || errors.Is(err, errProviderOutputLimitReached)
+}
+
+func validDashScopeProviderKeyVerificationResponse(body []byte) bool {
+	_, err := parseDashScopeResponse(body)
+	return err == nil || errors.Is(err, errProviderOutputLimitReached)
 }

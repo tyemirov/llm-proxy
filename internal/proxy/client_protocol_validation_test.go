@@ -153,7 +153,7 @@ func TestClientProtocolsHistoryAndSchemaRejections(t *testing.T) {
 		{"/v1/responses", `{"model":"openai/gpt-5.6","input":"hi","text":{"format":{"type":"json_schema","name":"answer","schema":{"type":"invalid"}}}}`},
 		{"/v1/responses", `{"model":"openai/gpt-5.6","input":"hi","text":{"format":{"type":"json_schema","name":"answer","schema":{"type":"object"}}}}`},
 		{"/v1/chat/completions", `{"model":"openai/gpt-5.6","messages":[{"role":"user","content":"hi"}],"response_format":{"type":"json_schema","json_schema":{"name":"answer"}}}`},
-		{"/v1/responses", `{"model":"deepseek/deepseek-chat","input":"hi","tools":[{"type":"function","name":"read","parameters":{"type":"object"}}]}`},
+		{"/v1/responses", `{"model":"deepseek/deepseek-v4-flash","input":"hi","tools":[{"type":"function","name":"read","parameters":{"type":"object"}}]}`},
 		{"/v1/responses", `{"model":"openai/gpt-5.6","input":"hi","tools":[{"type":"function","name":"read","parameters":{"type":"object"},"strict":true}]}`},
 		{"/v1/responses", `{"model":"openai/gpt-5.6","input":"hi","tools":[{"type":"function","name":"read","parameters":{"type":"object"}}],"text":{"format":{"type":"json_schema","name":"answer","schema":{"type":"object"}}}}`},
 		{"/v2?key=" + TestSecret, `{"model":"gpt-5.6","messages":[{"role":"unknown","content":"hi"}]}`},

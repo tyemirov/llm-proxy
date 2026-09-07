@@ -22,6 +22,10 @@ type providerErrorDetail struct {
 }
 
 func writeProviderRequestErrorResponse(ginContext *gin.Context, providerIdentifier string, requestError error, structuredLogger *zap.SugaredLogger) {
+	if errors.Is(requestError, ErrInvalidAudioInput) {
+		writeClientError(ginContext, statusCodeForError(requestError), "invalid_audio_input", requestError.Error())
+		return
+	}
 
 	if errors.Is(requestError, errQueueFull) {
 		writeClientError(ginContext, statusCodeForError(requestError), "capacity_exceeded", requestError.Error())
