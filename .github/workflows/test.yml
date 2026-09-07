@@ -32,7 +32,7 @@ env:
   PYTHON_VERSION: '3.11'
 
 jobs:
-  test:
+  backend:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -54,9 +54,38 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install uv
         run: python -m pip install uv
-      - name: Install Go lint tools
+      - name: Run backend qualification
+        run: make ci-backend PLAYWRIGHT_INSTALL_FLAGS=
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Run frontend qualification
+        run: make ci-frontend PLAYWRIGHT_INSTALL_FLAGS=
+
+  test:
+    needs: [backend, frontend]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Require both qualification jobs
+        env:
+          BACKEND_RESULT: ${{ needs.backend.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
         run: |
-          go install honnef.co/go/tools/cmd/staticcheck@latest
-          go install github.com/gordonklaus/ineffassign@latest
-      - name: Run CI
-        run: make ci PLAYWRIGHT_INSTALL_FLAGS=
+          test "$BACKEND_RESULT" = success
+          test "$FRONTEND_RESULT" = success
