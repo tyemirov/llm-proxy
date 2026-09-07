@@ -13,8 +13,12 @@ Required environment:
   GEMINI_API_KEY
 
 Optional environment:
+  LLM_PROXY_LIVE_GEMINI_MODEL      Select one exact supported candidate.
   LLM_PROXY_LIVE_REASONING_MATRIX  Exact true or false. Default: true.
-  LLM_PROXY_LIVE_TIMEOUT           Per-request curl timeout. Default: 45.'
+  LLM_PROXY_LIVE_TIMEOUT           Per-request curl timeout. Default: 45.
+  LLM_PROXY_LIVE_GEMINI_AUDIO_FILE  PCM WAV fixture for gemini-3.5-transcribe.
+  LLM_PROXY_LIVE_GEMINI_EXPECTED_TRANSCRIPT
+                                  Expected words for transcription acceptance.'
 }
 
 if [[ $# -gt 0 ]]; then
@@ -365,6 +369,84 @@ run_candidate_model() {
   cancel_background_interaction "${model}" "${cancellation_id}"
 }
 
-run_candidate_model gemini-3.6-flash minimal low medium high
-run_candidate_model gemini-3.7-flash low medium high
-echo "live Gemini candidate acceptance passed: models=gemini-3.6-flash,gemini-3.7-flash"
+run_transcription_candidate() {
+  local model="$1"
+  local request_path="${TMP_DIR}/transcription.json"
+  local response_path="${TMP_DIR}/transcription-response.json"
+  local http_status
+  if [[ -z "${LLM_PROXY_LIVE_GEMINI_AUDIO_FILE:-}" || -z "${LLM_PROXY_LIVE_GEMINI_EXPECTED_TRANSCRIPT:-}" ]]; then
+    echo "error: Gemini transcription acceptance requires an audio file and expected transcript" >&2
+    return 1
+  fi
+  python3 -c '
+import base64
+import json
+import pathlib
+import sys
+import wave
+
+audio_path = pathlib.Path(sys.argv[1])
+if audio_path.stat().st_size > 15000000:
+    raise SystemExit("error: Gemini transcription fixture exceeds the inline request limit")
+with wave.open(str(audio_path), "rb") as audio:
+    if audio.getnframes() == 0 or audio.getcomptype() != "NONE":
+        raise SystemExit("error: Gemini transcription fixture must contain PCM WAV audio")
+payload = {
+    "model": sys.argv[2],
+    "input": [{"type": "audio", "mime_type": "audio/wav", "data": base64.b64encode(audio_path.read_bytes()).decode("ascii")}],
+    "background": False,
+    "store": False,
+}
+encoded = json.dumps(payload, separators=(",", ":"))
+if len(encoded.encode("utf-8")) > 20000000:
+    raise SystemExit("error: Gemini transcription fixture exceeds the inline request limit")
+pathlib.Path(sys.argv[3]).write_text(encoded, encoding="utf-8")
+' "${LLM_PROXY_LIVE_GEMINI_AUDIO_FILE}" "${model}" "${request_path}"
+  http_status="$(gemini_request POST "${GEMINI_INTERACTIONS_URL}" "${response_path}" "${request_path}")"
+  if [[ "${http_status}" != "200" ]]; then
+    echo "error: Gemini candidate transcription failed: model=${model} status=${http_status}" >&2
+    return 1
+  fi
+  python3 -c '
+import json
+import pathlib
+import re
+import sys
+
+response = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+text = "".join(content.get("text", "") for step in response.get("steps", []) if step.get("type") == "model_output" for content in step.get("content", []) if content.get("type") == "text")
+expected = re.findall(r"[^\W_]+", sys.argv[2].casefold())
+actual = re.findall(r"[^\W_]+", text.casefold())
+if response.get("status") != "completed" or not expected or actual != expected:
+    raise SystemExit("error: Gemini candidate transcription did not match the expected words")
+' "${response_path}" "${LLM_PROXY_LIVE_GEMINI_EXPECTED_TRANSCRIPT}"
+  echo "live Gemini candidate transcription passed: model=${model} status=200"
+}
+
+CANDIDATE_MODELS=(gemini-3.6-flash gemini-3.7-flash)
+if [[ -n "${LLM_PROXY_LIVE_GEMINI_MODEL:-}" ]]; then
+  case "${LLM_PROXY_LIVE_GEMINI_MODEL}" in
+    gemini-3.1-pro-preview|gemini-3.6-flash|gemini-3.7-flash|gemini-3.8-flash|gemini-3.5-flash-lite|gemini-3.5-transcribe)
+      CANDIDATE_MODELS=("${LLM_PROXY_LIVE_GEMINI_MODEL}")
+      ;;
+    *)
+      echo "error: unsupported Gemini candidate model: ${LLM_PROXY_LIVE_GEMINI_MODEL}" >&2
+      exit 1
+      ;;
+  esac
+fi
+for candidate_model in "${CANDIDATE_MODELS[@]}"; do
+  case "${candidate_model}" in
+    gemini-3.5-transcribe)
+      run_transcription_candidate "${candidate_model}"
+      ;;
+    gemini-3.6-flash|gemini-3.5-flash-lite)
+      run_candidate_model "${candidate_model}" minimal low medium high
+      ;;
+    gemini-3.1-pro-preview|gemini-3.7-flash|gemini-3.8-flash)
+      run_candidate_model "${candidate_model}" low medium high
+      ;;
+  esac
+done
+printf -v accepted_models '%s,' "${CANDIDATE_MODELS[@]}"
+echo "live Gemini candidate acceptance passed: models=${accepted_models%,}"

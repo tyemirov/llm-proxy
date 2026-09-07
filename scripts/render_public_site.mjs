@@ -74,6 +74,7 @@ await renderPublicSite(options);
  *   controls: PublicCatalogControl[],
  *   limits: PublicCatalogLimit[],
  *   media_limits: PublicCatalogMediaLimit[],
+ *   image_mime_types?: string[],
  * }} PublicProviderOffering
  */
 /** @typedef {{id: string, kind: string, values: string[], minimum: number | null, maximum: number | null, account_dependent: boolean}} PublicCatalogControl */
@@ -310,12 +311,22 @@ function parseCapabilityCatalog(rawCatalog) {
     if (hasMedia) {
       offeringKeys.push("media_execution_lifecycle");
     }
+    if (Object.hasOwn(offering, "image_mime_types")) { offeringKeys.push("image_mime_types"); }
     requireExactKeys(offering, offeringKeys, field);
+    if (Object.hasOwn(offering, "image_mime_types")) {
+      const formats = requiredStringArray(offering.image_mime_types, `${field}.image_mime_types`);
+      if (!capabilities.includes("image_input") || formats.length === 0 || new Set(formats).size !== formats.length
+          || formats.some((format) => !["image/jpeg", "image/png", "image/webp"].includes(format))) {
+        throw new Error(`public_capabilities_invalid: ${field}.image_mime_types`);
+      }
+    }
+
     return {
       identifier: requiredString(offering.identifier, `${field}.identifier`),
       provider: requiredString(offering.provider, `${field}.provider`),
       model: requiredString(offering.model, `${field}.model`),
       capabilities,
+      ...(Object.hasOwn(offering, "image_mime_types") ? {image_mime_types: requiredStringArray(offering.image_mime_types, `${field}.image_mime_types`)} : {}),
       wire_contract: requiredString(offering.wire_contract, `${field}.wire_contract`, true),
       execution_lifecycle: requiredExecutionLifecycle(offering.execution_lifecycle, `${field}.execution_lifecycle`),
       media_execution_lifecycle: hasMedia ? requiredExecutionLifecycle(offering.media_execution_lifecycle, `${field}.media_execution_lifecycle`) : "",
@@ -518,10 +529,14 @@ function parseCatalogMediaLimit(rawLimit, field) {
   if (!new Set(["all", "image", "audio"]).has(mediaType)
       || !new Set(["any", "inline", "file"]).has(transport)
       || !new Set(["bounded", "unbounded", "unknown"]).has(status)
-      || !new Set(["bytes", "files"]).has(unit)
-      || !new Set(["attachment", "attachment_encoded_bytes", "request", "request_encoded_bytes"]).has(scope)
+      || !new Set(["bytes", "files", "pixels"]).has(unit)
+      || !new Set(["attachment", "attachment_encoded_bytes", "attachment_data_uri_bytes", "request", "request_encoded_bytes"]).has(scope)
       || (status === "bounded" ? value === null || value === 0 : value !== null)) {
     throw new Error(`public_capabilities_invalid: ${field} media limit`);
+  }
+  const dimension = limit.id === "image_width_pixels" || limit.id === "image_height_pixels";
+  if ((dimension || unit === "pixels") && (!dimension || mediaType !== "image" || transport !== "any" || unit !== "pixels" || scope !== "attachment")) {
+    throw new Error(`public_capabilities_invalid: ${field} image dimension`);
   }
   const source = requiredString(limit.source, `${field}.source`);
   try {

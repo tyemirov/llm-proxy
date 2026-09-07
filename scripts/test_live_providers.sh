@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   builtin printf '%s\n' 'Usage:
-  scripts/test_live_providers.sh [--gemini-candidates | --media | --preflight | --write-config <path>] [--existing-local-origin <origin>]
+  scripts/test_live_providers.sh [--gemini-candidates | --media | --preflight | --write-config <path>] [--existing-local-origin <origin>] [--candidate-model <provider/model>]
 
 Builds the current llm-proxy binary, verifies each available provider key
 through the authenticated management operation, and only then runs its live
@@ -38,6 +38,12 @@ Options:
   --gemini-candidates        Run paid direct acceptance for Gemini 3.6 Flash
                              and Gemini 3.7 Flash. This mode does not register
                              either candidate in the public provider catalog.
+
+  --candidate-model <provider/model>
+                             Qualify one disabled model in the disposable catalog.
+                             Selects only its provider and exact model. Combine
+                             with --media for image qualification or --write-config
+                             to inspect the copy. The primary catalog is unchanged.
 
   --media                    Run paid image routes from the public catalog.
                              LLM_PROXY_LIVE_PROVIDERS can select a subset.
@@ -136,6 +142,10 @@ for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlin
 }
 
 provider_model_override() {
+  if [[ -n "${CANDIDATE_ROUTE}" && "$1" == "${CANDIDATE_PROVIDER}" ]]; then
+    printf '%s\n' "${CANDIDATE_MODEL}"
+    return
+  fi
   local provider_name
   local override_name
   provider_name="$(printf '%s' "$1" | tr '[:lower:]-' '[:upper:]_')"
@@ -307,10 +317,11 @@ for field in fields:
         continue
     identifier = field.get("id")
     environment = field.get("environment")
-    if not isinstance(identifier, str) or not identifier or not isinstance(environment, str) or not environment:
+    default = field["default"]
+    if not isinstance(identifier, str) or not identifier or not isinstance(environment, str) or not isinstance(default, str):
         print("catalog_field_binding_invalid")
-    elif not os.environ.get(environment):
-        print(environment)
+    elif not (os.environ.get(environment) or default):
+        print(environment or identifier)
 ' "${PROVIDER_DISCOVERY_PATH}" "${provider}"
 }
 
@@ -353,9 +364,10 @@ for provider in providers:
         raise SystemExit(1)
     for field in fields:
         environment = field.get("environment") if isinstance(field, dict) else None
-        if not isinstance(environment, str) or not environment:
-            raise SystemExit(1)
-        environment_names.add(environment)
+        if not isinstance(environment, str):
+            raise SystemExit("invalid catalog environment binding")
+        if environment:
+            environment_names.add(environment)
 print("\n".join(sorted(environment_names)))
 ' "${PROVIDER_DISCOVERY_PATH}"
 }
@@ -414,6 +426,30 @@ write_managed_live_config() {
     { print }
   ' "${ROOT_DIR}/configs/config.yml" >"${CONFIG_PATH}"
   cp "${ROOT_DIR}/configs/providers.yml" "${PROVIDER_CATALOG_PATH}"
+  if [[ -n "${CANDIDATE_ROUTE}" ]]; then
+    python3 -c '
+import pathlib
+import re
+import sys
+
+catalog_path = pathlib.Path(sys.argv[1])
+route = sys.argv[2]
+if re.fullmatch(r"[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*", route) is None:
+    raise SystemExit("error: candidate must be an exact provider/model selector")
+provider, model = route.split("/")
+document = catalog_path.read_text(encoding="utf-8")
+head, model_and_provider_records = document.split("\nmodels:\n", 1)
+models, providers = model_and_provider_records.split("\nproviders:\n", 1)
+provider_record = re.search(r"(?ms)^    - id: " + re.escape(provider) + r"\n(?:(?!^    - id: ).)*", providers)
+if provider_record is None or re.search(r"(?m)^        - model: " + re.escape(model) + "$", provider_record.group()) is None:
+    raise SystemExit("error: candidate offering is absent from the selected provider")
+needle = "    - id: " + model + "\n      enabled: false\n"
+if models.count(needle) != 1:
+    raise SystemExit("error: candidate must name exactly one disabled model")
+models = models.replace(needle, needle.replace("enabled: false", "enabled: true"), 1)
+catalog_path.write_text(head + "\nmodels:\n" + models + "\nproviders:\n" + providers, encoding="utf-8")
+' "${PROVIDER_CATALOG_PATH}" "${CANDIDATE_ROUTE}"
+  fi
   if [[ -n "${PREFLIGHT_PROVIDER_URL:-}" ]]; then
     python3 -c '
 import pathlib
@@ -780,7 +816,7 @@ if len(matches) != 1:
 fields = {}
 for field in matches[0].get("fields", []):
     environment = field.get("environment")
-    value = os.environ.get(environment, "") if isinstance(environment, str) and environment else ""
+    value = os.environ.get(environment) or field["default"]
     if field.get("required") is True and not value:
         raise SystemExit(1)
     if value:
@@ -1019,9 +1055,19 @@ PREFLIGHT_ONLY=false
 MEDIA_ONLY=false
 GEMINI_CANDIDATES_ONLY=false
 WRITE_CONFIG_PATH=""
+CANDIDATE_ROUTE=""
+CANDIDATE_PROVIDER=""
+CANDIDATE_MODEL=""
 EXISTING_LOCAL_ORIGIN=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --candidate-model)
+      [[ $# -ge 2 && -z "${CANDIDATE_ROUTE}" ]] || { echo "error: --candidate-model requires one provider/model" >&2; exit 1; }
+      CANDIDATE_ROUTE="$2"
+      CANDIDATE_PROVIDER="${CANDIDATE_ROUTE%%/*}"
+      CANDIDATE_MODEL="${CANDIDATE_ROUTE#*/}"
+      shift 2
+      ;;
     --gemini-candidates)
       GEMINI_CANDIDATES_ONLY=true
       shift
@@ -1060,6 +1106,11 @@ if [[ "${MEDIA_ONLY}" == "true" && ( "${PREFLIGHT_ONLY}" == "true" || "${GEMINI_
   [[ "${GEMINI_CANDIDATES_ONLY}" == "true" && -n "${WRITE_CONFIG_PATH}" ]] ||
   [[ -n "${EXISTING_LOCAL_ORIGIN}" && ( "${PREFLIGHT_ONLY}" == "true" || "${GEMINI_CANDIDATES_ONLY}" == "true" || -n "${WRITE_CONFIG_PATH}" ) ]]; then
   echo "error: --gemini-candidates, --media, --preflight, and --write-config are mutually exclusive" >&2
+  exit 1
+fi
+
+if [[ -n "${CANDIDATE_ROUTE}" && ( "${PREFLIGHT_ONLY}" == "true" || "${GEMINI_CANDIDATES_ONLY}" == "true" || -n "${EXISTING_LOCAL_ORIGIN}" ) ]]; then
+  echo "error: candidate qualification requires a disposable catalog and local proxy" >&2
   exit 1
 fi
 
@@ -1104,6 +1155,13 @@ LIVE_ALL_MODELS="$(env_or_default LLM_PROXY_LIVE_ALL_MODELS false)"
 if [[ "${LIVE_ALL_MODELS}" != "true" && "${LIVE_ALL_MODELS}" != "false" ]]; then
   echo "error: LLM_PROXY_LIVE_ALL_MODELS must be true or false" >&2
   exit 1
+fi
+if [[ -n "${CANDIDATE_ROUTE}" ]]; then
+  if [[ "${LIVE_ALL_MODELS}" == "true" ]]; then
+    echo "error: candidate qualification selects one model and cannot use all-models mode" >&2
+    exit 1
+  fi
+  LLM_PROXY_LIVE_PROVIDERS="${CANDIDATE_PROVIDER}"
 fi
 LIVE_REASONING_MATRIX_DEFAULT=false
 if [[ "${GEMINI_CANDIDATES_ONLY}" == "true" ]]; then
