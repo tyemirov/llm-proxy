@@ -1,6 +1,6 @@
 // @ts-check
 
-/** @typedef {{file: string, sha256: string, surface: "light" | "plain", source: string}} BrandAsset */
+/** @typedef {{file: string, sha256: string, surface: "light" | "dark" | "plain", source: string}} BrandAsset */
 /** @typedef {{assets: Record<string, BrandAsset>, providers: Record<string, string>, families: Record<string, string | null>}} BrandIconManifest */
 
 /** @type {BrandIconManifest} */
@@ -57,7 +57,7 @@ export const brandIconManifest = {
     "kimi-color": {
       "file": "kimi-color.svg",
       "sha256": "74a7292aeb0220445d14c5d397d75760e2e8c6ed6a9e5fe4f3023471bf62a9ff",
-      "surface": "plain",
+      "surface": "dark",
       "source": "https://raw.githubusercontent.com/lobehub/lobe-icons/a94750e3f5f8fc33757b839d85030e742284e43a/packages/static-svg/icons/kimi-color.svg"
     },
     "meta-color": {

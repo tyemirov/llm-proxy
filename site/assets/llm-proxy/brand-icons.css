@@ -18,10 +18,18 @@ brand-icon[hidden] {
   vertical-align: middle;
 }
 
-.brand-icon--light {
+.brand-icon--light,
+.brand-icon--dark {
   padding: 2px;
   border-radius: 3px;
+}
+
+.brand-icon--light {
   background: #f2f4f7;
+}
+
+.brand-icon--dark {
+  background: #17191f;
 }
 
 .brand-label {
