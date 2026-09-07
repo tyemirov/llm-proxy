@@ -367,7 +367,7 @@ provider-card-grid {
 
 provider-api-heading {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
   gap: 0.35rem;
 }

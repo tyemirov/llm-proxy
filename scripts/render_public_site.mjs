@@ -2,6 +2,8 @@
 
 import { cp, lstat, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { renderBrandIcon } from "../site/assets/llm-proxy/js/brandIcons.js";
+import { validateBrandAssets } from "./brand_icon_validation.mjs";
 
 const publicCapabilitiesPath = "/api/public/capabilities";
 const managementConfigPath = "/config-ui.yaml";
@@ -169,6 +171,7 @@ async function renderPublicSite(renderOptions) {
   }
 
   const capabilityCatalog = await fetchCapabilityCatalog(renderOptions.capabilitiesURL);
+  await validateBrandAssets(join(sourceDirectory, "assets/llm-proxy/img/brands"));
   await cp(sourceDirectory, outputDirectory, { recursive: true, errorOnExist: true, force: false });
   await rm(join(outputDirectory, managementConfigPath.slice(1)), { force: true });
   await rm(join(outputDirectory, legacyRuntimeConfigFile), { force: true });
@@ -717,7 +720,7 @@ function renderRoutingTree(catalog) {
     const matchingModels = familyModels.filter((model) => (defaultOfferingsByModel.get(model.identifier)?.length ?? 0) > 0);
     const visible = family.weight_access === defaultWeightAccess && matchingModels.length > 0;
     return `        <button type="button" class="routing-tree__branch routing-tree__family" data-route-family="${escapeAttribute(family.identifier)}" data-route-family-weight-access="${escapeAttribute(family.weight_access)}" aria-controls="routing-tree-models-${escapeAttribute(family.identifier)}" aria-pressed="${family.identifier === selectedFamily.identifier ? "true" : "false"}"${visible ? "" : " hidden"} disabled>
-          <strong>${escapeHTML(family.label)}</strong><small data-route-family-model-count>${countLabel(matchingModels.length, "model")}</small>
+          <strong class="brand-label">${renderBrandIcon("family", family.identifier)}${escapeHTML(family.label)}</strong><small data-route-family-model-count>${countLabel(matchingModels.length, "model")}</small>
         </button>`;
   }).join("");
   const modelGroups = catalog.families.map((family) => {
@@ -744,7 +747,7 @@ function renderRoutingTree(catalog) {
     const providerButtons = modelOfferings.map((offering) => {
       const provider = providersByIdentifier.get(offering.provider);
       const visible = offering.capabilities.includes(defaultCapability);
-      return `<button type="button" class="routing-tree__branch routing-tree__provider" data-route-provider="${escapeAttribute(offering.provider)}" data-route-offering="${escapeAttribute(offering.identifier)}" data-route-provider-capabilities="${escapeAttribute(offering.capabilities.join(" "))}" aria-pressed="${offering.identifier === selectedOffering.identifier ? "true" : "false"}"${visible ? "" : " hidden"} disabled><strong>${escapeHTML(provider?.label ?? offering.provider)}</strong><small>${escapeHTML(offering.capabilities.join(" · "))}</small></button>`;
+      return `<button type="button" class="routing-tree__branch routing-tree__provider" data-route-provider="${escapeAttribute(offering.provider)}" data-route-offering="${escapeAttribute(offering.identifier)}" data-route-provider-capabilities="${escapeAttribute(offering.capabilities.join(" "))}" aria-pressed="${offering.identifier === selectedOffering.identifier ? "true" : "false"}"${visible ? "" : " hidden"} disabled><strong class="brand-label">${renderBrandIcon("provider", offering.provider)}${escapeHTML(provider?.label ?? offering.provider)}</strong><small>${escapeHTML(offering.capabilities.join(" · "))}</small></button>`;
     }).join("");
     return `      <section class="routing-tree__provider-group" data-route-provider-group="${escapeAttribute(model.identifier)}" aria-label="Providers offering ${escapeAttribute(model.identifier)}"${model.identifier === selectedModel.identifier ? "" : " hidden"}>
         <p><strong>Provider offerings</strong><span data-route-provider-count>${matchingOfferings.length} route${matchingOfferings.length === 1 ? "" : "s"}</span></p>
@@ -927,11 +930,11 @@ function renderCapabilityRow(publisher, family, model, offerings, providersByIde
       offering.reasoning_efforts.length > 0 ? `<span>Reasoning: ${escapeHTML(offering.reasoning_efforts.join(", "))}</span>` : "",
       outputLimit ? `<span>${escapeHTML(outputLimit)}</span>` : "",
     ].join("");
-    return `<li><span class="catalog-offering__provider"><strong>${escapeHTML(provider?.label ?? offering.provider)}</strong><code>${escapeHTML(offering.provider)}</code></span><span class="catalog-technical">${technicalDetails}</span></li>`;
+    return `<li><span class="catalog-offering__provider"><strong class="brand-label brand-label--small">${renderBrandIcon("provider", offering.provider)}${escapeHTML(provider?.label ?? offering.provider)}</strong><code>${escapeHTML(offering.provider)}</code></span><span class="catalog-technical">${technicalDetails}</span></li>`;
   }).join("");
   return `<tr data-catalog-row data-publisher="${escapeAttribute(publisher.identifier)}" data-provider="${escapeAttribute(providerIdentifiers.join(" "))}" data-model="${escapeAttribute(model.identifier)}" data-capabilities="${escapeAttribute(model.capabilities.join(" "))}" data-capability-count="${definitions.length}" data-catalog-search-text="${escapeAttribute(searchText)}">
           <td class="catalog-publisher"><strong>${escapeHTML(publisher.label)}</strong><code>${escapeHTML(publisher.identifier)}</code></td>
-          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>${escapeHTML(model.identifier)}</code><small>${escapeHTML(family.label)} · ${escapeHTML(model.version)}</small></span></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code class="brand-label brand-label--small" data-catalog-model-id>${renderBrandIcon("family", model.family)}${escapeHTML(model.identifier)}</code><small>${escapeHTML(family.label)} · ${escapeHTML(model.version)}</small></span></td>
           <td><div class="catalog-capabilities">
             ${capabilityBadges}
           </div>

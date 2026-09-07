@@ -34,6 +34,26 @@ func TestOperationalFrontendValidationPreparesPinnedDependencies(testingInstance
 		expectedCommands []string
 	}{
 		{
+			name:   "brand-icons",
+			target: "check-brand-icons",
+			expectedCommands: []string{
+				"ci",
+				"playwright install --with-deps chromium",
+			},
+		},
+		{
+			name:             "hosted-backend",
+			target:           "ci-backend",
+			makeArguments:    []string{"PLAYWRIGHT_INSTALL_FLAGS="},
+			expectedCommands: []string{"ci", "playwright install chromium"},
+		},
+		{
+			name:             "hosted-frontend",
+			target:           "ci-frontend",
+			makeArguments:    []string{"PLAYWRIGHT_INSTALL_FLAGS="},
+			expectedCommands: []string{"ci", "playwright install chromium", "run frontend:lint", "run frontend:test", "run frontend:test:blackbox"},
+		},
+		{
 			name:   "frontend-lint",
 			target: "frontend-lint",
 			expectedCommands: []string{
@@ -157,15 +177,7 @@ func TestOperationalFrontendValidationPreparesPinnedDependencies(testingInstance
 			testingInstance.Fatalf("hosted CI duplicates Make-owned frontend setup %q", duplicateSetup)
 		}
 	}
-	if strings.Count(workflow, "timeout-minutes:") != 1 || !strings.Contains(workflow, "    timeout-minutes: 10\n") {
-		testingInstance.Fatal("hosted CI does not bound the complete job")
-	}
-	if strings.Contains(workflow, "run: timeout ") {
-		testingInstance.Fatal("hosted CI duplicates the job execution limit in its shell command")
-	}
-	if !strings.Contains(workflow, "run: make ci PLAYWRIGHT_INSTALL_FLAGS=") {
-		testingInstance.Fatal("hosted CI does not declare its preinstalled Playwright OS packages")
-	}
+	assertHostedCIWorkflow(testingInstance, repositoryRoot, workflowBytes)
 }
 
 func frontendDependencyFixtureEnvironment() []string {
@@ -194,7 +206,7 @@ func prepareFrontendDependencyFixture(testingInstance *testing.T, repositoryRoot
 		testingInstance,
 		filepath.Join(fixtureRoot, "Makefile"),
 		string(makefileBytes)+`
-test-release-policy check-format go-lint python-lint python-test test-openapi-pages-artifact test-live-provider-harness:
+test-release-policy check-format go-lint python-lint python-test check-brand-icons test-openapi-pages-artifact test-live-provider-harness:
 	@:
 
 go-test:

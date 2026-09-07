@@ -45,8 +45,15 @@ $(FRONTEND_DEPENDENCY_STAMP): package.json package-lock.json
 	./node_modules/.bin/playwright install $(PLAYWRIGHT_INSTALL_FLAGS) chromium
 	@touch "$@"
 
-frontend-lint: frontend-dependencies
+frontend-lint: frontend-dependencies check-brand-icons
 	$(NPM) run frontend:lint
+
+.PHONY: check-brand-icons test-brand-icons
+check-brand-icons: frontend-dependencies
+	node scripts/validate_brand_icons.mjs
+
+test-brand-icons: frontend-dependencies
+	$(MAKE) frontend-test FRONTEND_TEST_ARGS='--grep "brand icons"'
 
 test: go-test python-test frontend-test test-openapi-pages-artifact test-management-auth-blackbox test-live-provider-harness
 
@@ -123,6 +130,11 @@ clean:
 ci:
 	@MAKE_BIN="$(MAKE)" GO="$(GO)" GOFMT="$(GOFMT)" NPM="$(NPM)" UV="$(UV)" \
 		PYTHON_PROJECT_DIR="$(PYTHON_PROJECT_DIR)" ./scripts/run_ci.sh
+
+.PHONY: ci-backend ci-frontend
+ci-backend: test-release-policy check-format go-lint python-lint go-test python-test test-live-provider-harness
+
+ci-frontend: frontend-lint frontend-test test-openapi-pages-artifact test-management-auth-blackbox
 
 .PHONY: release publish deploy
 

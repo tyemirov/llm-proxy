@@ -25,6 +25,72 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B203] (P2) Prepare the capability binary before browser test hooks.
+  Evidence: Run `34160268019` passed backend qualification but failed frontend setup at the 30-second hook limit.
+  The independent frontend job compiled Go code with an empty build cache inside `beforeAll`.
+  Requirements:
+  - Build the capability binary before Playwright starts test workers.
+  - Keep the browser test and hosted job limits unchanged.
+  - Remove temporary build output after success or failure.
+  Validation: Run browser tests with an empty Go build cache, then run final local CI.
+  Results:
+  - The hosted frontend setup log confirmed a Go cache miss.
+  - The local five-second probe reproduced the hook timeout with an empty Go build cache.
+  - Both selected browser tests passed the same probe after the build moved into global setup.
+  - The full frontend lane passed with an empty Go build cache in 105 seconds.
+  - All 112 browser tests, the Pages artifact check, and the authentication test passed with their normal limits.
+  - An injected compiler failure stopped qualification before browser hooks and preserved the Go error.
+  - The failure check confirmed removal of temporary build output.
+  - Final local `make ci` passed all 12 gates in 272 seconds, with 100.0% Go statement coverage.
+  - Governor and changed-prose checks passed. Existing language findings remain outside this change.
+  - Changed files: Playwright configuration, global setup, management browser tests, and README.
+  - No application API or event contract changed.
+  Resolution: Local qualification passed. Hosted confirmation requires source sync and a new PR run.
+
+- [x] [B202] (P2) Complete hosted CI within independent job budgets.
+  Evidence: Run `34158361621` reached the ten-minute job deadline during authentication test startup.
+  Go integration tests passed in 345 seconds. All 112 browser tests passed in 119 seconds.
+  Requirements:
+  - Run backend and frontend qualification in independent jobs with ten-minute limits.
+  - Keep every canonical CI gate and the 100% Go coverage requirement.
+  - Require both jobs to succeed before the existing `test` check passes.
+  - Reject failed, cancelled, skipped, or missing job results.
+  - Keep `make ci` as the complete local qualification command.
+  Validation: Add failing public Make and workflow command tests. Run focused checks and final local CI.
+  Results:
+  - Initial regressions found missing `ci-backend` and `ci-frontend` targets and the absent aggregate check.
+  - The hosted jobs now run the backend and frontend gate groups independently.
+  - Both groups retain ten-minute limits. The aggregate check retains the `test` name.
+  - Removed duplicate Go lint tool installation from the workflow. Make continues to own Go analysis.
+  - The dependency contract target passed with both new public Make entry points.
+  - The workflow command passed all 25 combinations of successful, failed, cancelled, skipped, and missing dependency results.
+  - The contract test requires the hosted groups to cover every local CI gate exactly once.
+  - Final local `make ci` passed all 12 gates in 317 seconds, with 100.0% Go statement coverage.
+  - All 112 browser tests and the management authentication test passed.
+  - Governor and changed-prose checks passed. Existing language findings remain outside this change.
+  - Changed files: workflow, Makefile, dependency tests, hosted CI tests, and README.
+  - No application API or event contract changed.
+  Resolution: Source changes passed local validation. The changes remain uncommitted. Hosted confirmation requires a new PR run after source sync.
+
+- [x] [B201] (P2) Preserve Kimi logo contrast in light themes.
+  Evidence: The white Kimi symbol has no background and disappears on light surfaces.
+  Requirements:
+  - Give the Kimi artwork a contrasting surface on management and public pages.
+  - Set both theme and palette attributes in browser tests.
+  - Verify the actual page colors before icon contrast assertions.
+  Validation: Confirm failing browser regressions, then run focused checks and final `make ci`.
+  Results:
+  - Both browser regressions first failed because Kimi images had transparent backgrounds on confirmed light pages.
+  - The manifest now selects a dark surface for the unchanged Kimi SVG.
+  - Shared CSS and asset validation support the dark surface.
+  - Tests set both theme and palette attributes and confirm actual page colors.
+  - Both surfaces passed checks in the default light, sunrise light, and default dark palettes.
+  - All 13 focused icon tests passed. Screenshots confirm visible Kimi symbols on light surfaces.
+  - Final `make ci` passed all 12 gates with 100.0% Go statement coverage and 112 browser tests.
+  - Changed files: brand manifest, brand stylesheet, asset validator, management browser tests, and provider icon documentation.
+  - No API or event contract changed.
+  Resolution: Kimi artwork keeps its contrast in supported light and dark palettes. The changes remain local and uncommitted.
+
 - [x] [B199] (P2) Remove models without active provider offerings from runtime discovery.
   Evidence: A disabled Vertex provider leaves public models with no capabilities or provider offerings.
   Requirements:
@@ -1374,6 +1440,35 @@ retain satisfied historical dependencies.
 
 
 ## Improvements
+
+- [x] [I253] (P2) Add provider and model logos to management and the public catalog.
+  Goal: Implement the logo presentation from P013 on both surfaces.
+  Requirements:
+  - Use local SVG assets and one shared provider and family manifest.
+  - Preserve API connection identities and model family identities.
+  - Keep SenseVoice text-only and retain the current Moonshot identity.
+  - Validate mappings, asset files, source digests, and disabled catalog identities during the build.
+  - Preserve visible labels, accessible controls, and narrow layouts.
+  Validation: Start with failing browser tests. Run focused browser and asset checks, then final `make ci`.
+  Results:
+  - Added 18 local SVG assets with a retained license and pinned source digests.
+  - The shared manifest covers 13 providers and 29 families, including disabled candidates.
+  - Both management card faces and family labels show the selected logos.
+  - The public renderer adds icons to route labels and model matrix labels.
+  - SenseVoice remains text-only. Existing service and model identities remain intact.
+  - Initial browser tests failed on missing icons before the application changes.
+  - The focused browser and renderer suite passed 27 tests.
+  - The final icon suite passed 11 tests, including invalid build inputs and 390px layouts.
+  - Frontend lint and the Governor check passed. Changed prose has no mechanical language findings.
+  - Initial CI found a missing validator in the dependency test fixture: `MODULE_NOT_FOUND`.
+  - Updated the fixture and added dependency coverage for `make check-brand-icons`. The dependency contract target passed.
+  - Full browser validation found a 5.3px card header offset and two obsolete HTML assertions.
+  - Centered the card header items and updated the assertions to require generated family icons.
+  - All 13 focused correction tests passed. Final `make ci` passed all 12 gates with 100.0% Go statement coverage.
+  - Full CI passed 110 browser tests, the Pages artifact check, and the management authentication test.
+  - Updated files: brand modules, SVG assets, styles, both HTML entry points, renderer, validator, browser tests, Makefile, README, and icon documentation.
+  - No API field or event contract changed.
+  Resolution: Both surfaces show the selected local logos. Repository validation passed. The changes remain local and uncommitted.
 
 - [x] [I252] (P1) Qualify the current Gemini candidates on Vertex AI.
   Goal:
@@ -5171,6 +5266,20 @@ retain satisfied historical dependencies.
 
 
 ## Planning
+
+- [x] [P013] (P2) Plan provider and model logos for management and the public catalog.
+  Goal: Define small logos that distinguish API connections from model families on both surfaces.
+  Requirements:
+  - Record exact provider and family mappings with asset sources.
+  - Preserve the API connection and model family separation from I237.
+  - Specify icon placement, dimensions, accessibility, and shared asset ownership.
+  - Record uncertain brand identities and the implementation acceptance criteria.
+  Deliverable: `docs/provider-model-icons.md`.
+  Scope: This issue defines the plan. It does not authorize application implementation.
+  Resolution (2026-09-07): Recorded 13 provider mappings and 29 family mappings with 18 candidate SVG assets.
+  The proposal gives SenseVoice an explicit text-only presentation and records the current Moonshot identity decision.
+  The visual comparison passed a theme-switch check and a 390px layout check.
+  The plan passed the prose checker and Governor check. No application or event contract changed.
 
 - [!] [P012] (P1) Plan reliable Gemini access through independent customer connections.
   Goal:

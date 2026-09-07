@@ -19,6 +19,8 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=content_copy,delete,help,key,visibility,visibility_off&amp;display=block">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/brand-icons.css">
+    <script type="module" src="/assets/llm-proxy/js/brandIconElement.js?v=20260903f037"></script>
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdn.jsdelivr.net/npm/js-yaml@5.4.1/dist/browser/js-yaml.umd.min.js"></script>
@@ -333,7 +335,7 @@
                             x-bind:inert="providerCardIsOpen(provider) ? true : null"
                           >
                             <header>
-                              <h3 x-text="provider.api_service_label"></h3>
+                              <h3 class="brand-label"><brand-icon kind="provider" x-bind:identifier="provider.id"></brand-icon><span x-text="provider.api_service_label"></span></h3>
                               <provider-card-controls>
                                 <provider-card-statuses>
                                   <span x-show="providerCardIsActive(provider)" x-text="copy.providerActive"></span>
@@ -361,7 +363,7 @@
                                 <dt x-text="copy.providerModelFamilies"></dt>
                                 <dd>
                                   <template x-for="family in provider.model_families" x-bind:key="family.id">
-                                    <span x-text="family.label"></span>
+                                    <span class="brand-label brand-label--small"><brand-icon kind="family" x-bind:identifier="family.id"></brand-icon><b x-text="family.label"></b></span>
                                   </template>
                                 </dd>
                               </div>
@@ -400,7 +402,7 @@
                             <header>
                               <div>
                                 <provider-api-heading>
-                                  <p class="eyebrow" x-text="provider.api_service_label"></p>
+                                  <p class="eyebrow brand-label"><brand-icon kind="provider" x-bind:identifier="provider.id"></brand-icon><span x-text="provider.api_service_label"></span></p>
                                   <a class="provider-key-acquisition" x-bind:href="provider.key_acquisition_url" target="_blank" rel="noopener noreferrer" x-text="copy.providerGetKey"></a>
                                 </provider-api-heading>
                               </div>

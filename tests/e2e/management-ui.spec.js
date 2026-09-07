@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { capabilityBinaryEnvironment } from "./globalSetup.js";
 import {
   assertPublicDocumentShell,
   LOOPAWARE_PIXEL_URL,
@@ -50,6 +51,9 @@ const applicationModuleRevision = "20260903f037";
 const applicationModuleFiles = Object.freeze([
   "alpineRuntime.js",
   "app.js",
+  "brandIconElement.js",
+  "brandIconManifest.js",
+  "brandIcons.js",
   "constants.js",
   "startupGuard.js",
   "core/backendClient.js",
@@ -290,6 +294,10 @@ let renderedSiteTempRoot = "";
 let renderedSiteRoot = "";
 
 test.beforeAll(async () => {
+  const capabilityBinaryPath = process.env[capabilityBinaryEnvironment];
+  if (!capabilityBinaryPath) {
+    throw new Error("browser_capability_binary_missing");
+  }
   renderedSiteTempRoot = await mkdtemp(path.join(os.tmpdir(), "llm-proxy-site-"));
   renderedSiteRoot = path.join(renderedSiteTempRoot, "rendered");
   const capabilityConfigPath = path.join(renderedSiteTempRoot, "capabilities.yml");
@@ -302,8 +310,6 @@ test.beforeAll(async () => {
   if (!Number.isInteger(capabilityPort) || capabilityPort <= 0) {
     throw new Error(`public_capability_test_port_invalid: ${capabilityConfigResult.stdout.trim()}`);
   }
-  const capabilityBinaryPath = path.join(renderedSiteTempRoot, "llm-proxy");
-  await executeFile("go", ["build", "-o", capabilityBinaryPath, "./cmd/cli"], { cwd: repoRoot });
   const capabilityServer = spawn(
     capabilityBinaryPath,
     ["--config", capabilityConfigPath, "--public-capabilities-only"],
@@ -417,6 +423,100 @@ test.afterAll(async () => {
   await rm(renderedSiteTempRoot, { recursive: true, force: true });
 });
 
+for (const surface of ["management", "public"]) {
+  test(`brand icons keep Kimi visible on ${surface} theme palettes`, async ({ page }) => {
+    await installAssetRoutes(page, { initialAuthStatus: surface === "public" ? "unauthenticated" : "authenticated" });
+    if (surface === "management") await installManagementRoutes(page);
+    await page.goto(surface === "management" ? `${baseURL}${applicationPath}` : baseURL);
+    const region = surface === "management"
+      ? page.locator('[data-provider-card="moonshot"] .provider-card-front')
+      : page.locator('[data-catalog-row]:has(img[data-brand-id="kimi-k2"])').first();
+    const icon = region.locator('img[data-brand-id="kimi-k2"]');
+    await expect(icon).toBeVisible();
+    await expect.poll(() => icon.evaluate((element) => element instanceof HTMLImageElement && element.complete && element.naturalWidth > 0)).toBe(true);
+    for (const themeMode of [
+      { theme: "light", palette: "default", canvas: "rgb(248, 250, 252)" },
+      { theme: "light", palette: "sunrise", canvas: "rgb(255, 247, 237)" },
+      { theme: "dark", palette: "default", canvas: "rgb(15, 17, 20)" },
+    ]) {
+      await page.evaluate(({ theme, palette }) => {
+        for (const element of [document.documentElement, document.body]) {
+          element.setAttribute("data-mpr-theme", theme);
+          element.setAttribute("data-llm-proxy-palette", palette);
+        }
+      }, themeMode);
+      await expect(page.locator('body')).toHaveCSS('background-color', themeMode.canvas);
+      await expect(icon).toHaveCSS('background-color', 'rgb(23, 25, 31)');
+      await expect(icon).toHaveAttribute('alt', '');
+      await expect(icon).toHaveAttribute('aria-hidden', 'true');
+      await expect(icon).toHaveCSS('width', '16px');
+      await region.screenshot({ path: test.info().outputPath(`kimi-${surface}-${themeMode.theme}-${themeMode.palette}.png`) });
+    }
+  });
+}
+
+test("brand icons preserve public model and provider identities", async ({ page }) => {
+  await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
+  await page.goto(baseURL);
+  const row = page.locator('[data-catalog-row][data-model="deepseek-v4-pro"]');
+  await expect(row.locator('.catalog-model img.brand-icon')).toHaveAttribute('src', /\/deepseek-color\.svg\?v=/u);
+  const offerings = row.locator('.catalog-offerings');
+  await expect(offerings.locator('img[data-brand-id="baidu"]')).toHaveAttribute('src', /\/baiducloud-color\.svg\?v=/u);
+  await expect(page.locator('[data-route-family="gemini"] img.brand-icon')).toHaveAttribute('src', /\/gemini-color\.svg\?v=/u);
+  await expect(page.locator('[data-route-provider="vertex"] img.brand-icon').first()).toHaveAttribute('src', /\/vertexai-color\.svg\?v=/u);
+  await expect(page.locator('[data-catalog-row][data-model="sensevoice-small"] .catalog-model img')).toHaveCount(0);
+  const icons = page.locator('img.brand-icon');
+  expect(await icons.count()).toBeGreaterThan(50);
+  await expect.poll(() => icons.evaluateAll((images) => images.every((image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0))).toBe(true);
+  for (const icon of await icons.all()) {
+    await expect(icon).toHaveAttribute('alt', '');
+    await expect(icon).toHaveAttribute('aria-hidden', 'true');
+    expect(new URL(await icon.getAttribute('src'), baseURL).origin).toBe(new URL(baseURL).origin);
+  }
+  await page.evaluate(() => {
+    document.documentElement.setAttribute("data-mpr-theme", "light");
+    document.documentElement.setAttribute("data-llm-proxy-palette", "default");
+    document.body.setAttribute("data-mpr-theme", "light");
+    document.body.setAttribute("data-llm-proxy-palette", "default");
+  });
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(248, 250, 252)');
+  await expect(row.locator('.catalog-model img.brand-icon')).toHaveCSS('background-color', 'rgb(242, 244, 247)');
+  await row.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: test.info().outputPath("brand-icons-public-light.png") });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await row.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: test.info().outputPath("brand-icons-public-mobile.png") });
+});
+
+test("brand icons identify management API cards and model families", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+  await page.goto(`${baseURL}${applicationPath}`);
+  const card = page.locator('[data-provider-card="openai"]');
+  const front = card.locator('.provider-card-front');
+  await expect(front.locator('h3 img.brand-icon')).toHaveAttribute('src', /\/openai\.svg\?v=/u);
+  await expect(front.getByRole('heading', { name: 'OpenAI API' })).toBeVisible();
+  await expect(front.locator('.provider-card-taxonomy img.brand-icon').first()).toHaveAttribute('src', /\/openai\.svg\?v=/u);
+  const siliconFlow = page.locator('[data-provider-card="siliconflow"]');
+  await expect(siliconFlow.locator('.provider-card-front h3 img')).toHaveAttribute('src', /\/siliconcloud-color\.svg\?v=/u);
+  await expect(siliconFlow.locator('brand-icon[identifier="sensevoice"]')).toBeHidden();
+  await expect(siliconFlow.locator('brand-icon[identifier="sensevoice"] img')).toHaveCount(0);
+  await expect(siliconFlow.getByText('SenseVoice', { exact: true })).toBeVisible();
+  await expect(siliconFlow.locator('brand-icon[identifier="deepseek-r1"] img')).toHaveAttribute('src', /\/deepseek-color\.svg\?v=/u);
+  await page.locator('provider-card-grid').screenshot({ path: test.info().outputPath("brand-icons-management.png") });
+  await card.locator('[data-provider-card-action="openai"]').click();
+  const back = card.locator('.provider-card-back');
+  await expect(back.locator('provider-api-heading img.brand-icon')).toBeVisible();
+  await expect(back.locator('provider-api-heading img.brand-icon')).toHaveAttribute('src', /\/openai\.svg\?v=/u);
+  await expect(back.getByRole('combobox', { name: 'Tenant' })).toBeFocused();
+  await expect.poll(() => card.locator('img.brand-icon').evaluateAll((images) => images.every((image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0))).toBe(true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(() => back.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await back.screenshot({ path: test.info().outputPath("brand-icons-card-mobile.png") });
+});
+
 test("public landing explains the product and exposes the generated capability catalog", async ({ request }) => {
   const htmlResponse = await request.get(baseURL);
   expect(htmlResponse.status()).toBe(httpOK);
@@ -479,8 +579,8 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain('data-catalog-sort-header="model"');
   expect(html).toContain('data-catalog-sort-header="capabilities"');
   expect(html).not.toContain('<th scope="col">Dictation models</th>');
-  expect(html).toContain('<code data-catalog-model-id>gpt-4.1</code>');
-  expect(html).toContain('<code data-catalog-model-id>gpt-transcribe</code>');
+  expect(html).toMatch(/<code\b[^>]*\bdata-catalog-model-id><img\b[^>]*\bdata-brand-id="gpt-4"[^>]*>gpt-4\.1<\/code>/u);
+  expect(html).toMatch(/<code\b[^>]*\bdata-catalog-model-id><img\b[^>]*\bdata-brand-id="gpt-transcribe"[^>]*>gpt-transcribe<\/code>/u);
   expect(html).toContain('data-publisher="openai" data-provider="openai" data-model="gpt-transcribe"');
   expect(html).not.toContain("catalog-model__default");
   expect(html).toContain('aria-label="Search all model characteristics"');
