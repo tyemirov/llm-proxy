@@ -81,8 +81,19 @@ test-live-providers:
 test-live-provider-media:
 	@GO="$(GO)" ./scripts/test_live_providers.sh --media
 
+.PHONY: test-live-provider-candidate test-live-provider-candidate-media
+test-live-provider-candidate:
+	@GO="$(GO)" ./scripts/test_live_providers.sh --candidate-model "$(LIVE_CANDIDATE_MODEL)"
+
+test-live-provider-candidate-media:
+	@GO="$(GO)" ./scripts/test_live_providers.sh --candidate-model "$(LIVE_CANDIDATE_MODEL)" --media
+
 test-live-gemini:
 	@GO="$(GO)" ./scripts/test_live_gemini.sh
+
+.PHONY: test-live-gemini-candidate
+test-live-gemini-candidate:
+	@GO="$(GO)" ./scripts/test_live_providers.sh --gemini-candidates
 
 test-live-local-providers:
 	@GO="$(GO)" ./scripts/test_live_local.sh
@@ -140,3 +151,94 @@ generate-api-docs:
 .PHONY: test-release-policy
 test-release-policy:
 	$(GO) test ./tests -run '^TestOperationalReleaseDecisionUsesGixVersion$$' -count=1
+
+.PHONY: test-provider-catalog
+test-provider-catalog: frontend-dependencies
+	$(GO) test ./internal/proxy ./tests -run 'Test(ProviderCatalog|CatalogDefined|ModelActivation)' -count=1
+
+.PHONY: test-deepseek-retirement
+test-deepseek-retirement: frontend-dependencies
+	$(GO) test ./internal/proxy -run 'TestDeepSeekRetirement' -count=1
+
+.PHONY: test-claude-retirement
+test-claude-retirement: frontend-dependencies
+	$(GO) test ./internal/proxy -run 'TestClaudeRetirement' -count=1
+
+.PHONY: test-xai-responses
+test-xai-responses: frontend-dependencies
+	$(GO) test ./internal/proxy -run 'Test(XAIResponses|ManagementXAIResponses|ClientProtocolsSynchronous|ProviderImageSerialization|SynchronousResponses)' -count=1
+
+.PHONY: test-dashscope-responses
+test-dashscope-responses:
+	$(GO) test ./internal/proxy -run 'Test(DashScopeResponses|ManagementDashScope|ManagementProviderKeyVerificationUsesEveryCanonical|V2.*Media|ProviderImageSerialization|SynchronousResponses)'  -count=1
+
+.PHONY: test-minimax-reasoning
+test-minimax-reasoning:
+	$(GO) test ./internal/proxy -run 'Test(MiniMaxReasoning|ManagementProviderKeyVerificationUsesEveryCanonical)' -count=1
+
+.PHONY: test-minimax-m3
+test-minimax-m3:
+	$(GO) test ./internal/proxy -run TestMiniMaxM3 -count=1
+
+.PHONY: test-claude-current
+test-claude-current:
+	$(GO) test ./internal/proxy -run TestClaudeCurrentModels -count=1
+	$(GO) test ./tests -run '^TestPublicCapabilityCatalog' -count=1
+
+.PHONY: test-gemini-current test-gemini-candidate-contract
+test-gemini-current:
+	$(GO) test ./internal/proxy -run '^TestGemini(CurrentModels|InlineRequestLimit)' -count=1
+
+test-gemini-candidate-contract:
+	$(GO) test ./tests -run '^TestOperationalGeminiCandidateHarness' -count=1
+
+.PHONY: test-gemini-transcription
+test-gemini-transcription:
+	$(GO) test ./internal/proxy -run '^TestGeminiTranscription' -count=1
+
+.PHONY: test-live-candidate-contract
+test-live-candidate-contract:
+	$(GO) test ./tests -run TestOperationalLiveCandidateCatalogIsolation -count=1
+
+.PHONY: test-live-minimax-m3
+test-live-minimax-m3:
+	LIVE_ENV_FILE="$(LIVE_ENV_FILE)" ./scripts/test_live_providers.sh --candidate-model minimax/minimax-m3
+	LIVE_ENV_FILE="$(LIVE_ENV_FILE)" ./scripts/test_live_providers.sh --candidate-model minimax/minimax-m3 --media
+
+.PHONY: test-grok-current
+test-grok-current:
+	$(GO) test ./internal/proxy -run '^TestGrokCurrent' -count=1
+
+.PHONY: test-meta-current
+test-meta-current:
+	$(GO) test ./internal/proxy -run '^TestMetaCurrent' -count=1
+
+.PHONY: test-dashscope-media-limits
+test-dashscope-media-limits:
+	$(GO) test ./internal/proxy -run '^TestDashScopeMedia' -count=1
+
+.PHONY: test-qwen-current
+test-qwen-current:
+	$(GO) test ./internal/proxy -run '^TestQwenCurrent' -count=1
+
+.PHONY: test-zai-current
+test-zai-current:
+	$(GO) test ./internal/proxy -run '^TestZAICurrent' -count=1
+
+.PHONY: test-zai-images
+test-zai-images:
+	$(GO) test ./internal/proxy -run '^TestZAIImage' -count=1
+
+.PHONY: test-baidu
+test-baidu:
+	$(GO) test ./internal/proxy -run '^TestBaidu' -count=1
+	$(GO) test ./cmd/cli -run 'TestRootCommand(PrintsCatalogDerivedLiveDiscovery|RejectsObsoleteTenantConfiguration)' -count=1
+	$(GO) test ./tests -run '^TestPublicCapabilityCatalog' -count=1
+
+.PHONY: test-live-provider-defaults
+test-live-provider-defaults:
+	$(GO) test ./tests -run '^TestOperationalLiveHarnessCatalogDefault' -count=1
+
+.PHONY: test-gemini-qualified
+test-gemini-qualified:
+	$(GO) test ./internal/proxy ./tests -run '^Test(GeminiQualified|GeminiCurrent|PublicCapabilityCatalog|ManagementProfileListsCurrentCatalogModels)' -count=1
