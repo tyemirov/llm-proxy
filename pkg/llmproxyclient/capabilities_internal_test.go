@@ -98,7 +98,7 @@ func TestPublicCapabilitiesAcceptsRequiredMediaLimitRelationships(testingInstanc
 		testingInstance.Fatal(parseError)
 	}
 	body := `{"offerings":[` +
-		`{"identifier":"provider:text","provider":"provider","model":"text","capabilities":["text"],"wire_contract":"openai_responses","execution_lifecycle":"synchronous_completion","media_limits":[]},` +
+		`{"identifier":"provider:text","provider":"provider","model":"text","capabilities":["text"],"wire_contract":"xai_responses","execution_lifecycle":"synchronous_completion","media_limits":[]},` +
 		`{"identifier":"provider:media","provider":"provider","model":"media","capabilities":["audio_input","image_input","text"],"wire_contract":"gemini_interactions","execution_lifecycle":"pollable_resource","media_execution_lifecycle":"synchronous_completion","media_limits":[` +
 		`{"id":"inline_request_bytes","media_type":"all","transport":"inline","status":"bounded","value":100,"unit":"bytes","scope":"request_encoded_bytes","source":"https://example.test/limits","last_verified":"2026-08-29"},` +
 		`{"id":"image_count","media_type":"image","transport":"any","status":"bounded","value":1,"unit":"files","scope":"request","source":"https://example.test/limits","last_verified":"2026-08-29"},` +

@@ -32,6 +32,7 @@ type PublicProviderOffering struct {
 	WireContract            string             `json:"wire_contract"`
 	ExecutionLifecycle      string             `json:"execution_lifecycle"`
 	MediaExecutionLifecycle string             `json:"media_execution_lifecycle"`
+	ImageMIMETypes          []string           `json:"image_mime_types"`
 	MediaLimits             []PublicMediaLimit `json:"media_limits"`
 }
 
@@ -57,6 +58,8 @@ const (
 	publicWireContractMultipartTranscription = "multipart_transcription"
 	publicWireContractOpenAIChatCompletions  = "openai_chat_completions"
 	publicWireContractOpenAIResponses        = "openai_responses"
+	publicWireContractDashScopeResponses     = "dashscope_responses"
+	publicWireContractXAIResponses           = "xai_responses"
 	publicWireContractXAIVideosGenerations   = "xai_videos_generations"
 
 	publicExecutionLifecyclePollable    = "pollable_resource"
@@ -78,11 +81,13 @@ const (
 	publicMediaLimitImageFileBytes     = "image_file_bytes"
 	publicMediaLimitAudioFileBytes     = "audio_file_bytes"
 
-	publicMediaLimitUnitBytes = "bytes"
-	publicMediaLimitUnitFiles = "files"
+	publicMediaLimitUnitBytes  = "bytes"
+	publicMediaLimitUnitFiles  = "files"
+	publicMediaLimitUnitPixels = "pixels"
 
 	publicMediaLimitScopeAttachment             = "attachment"
 	publicMediaLimitScopeAttachmentEncodedBytes = "attachment_encoded_bytes"
+	publicMediaLimitScopeAttachmentDataURIBytes = "attachment_data_uri_bytes"
 	publicMediaLimitScopeRequest                = "request"
 	publicMediaLimitScopeRequestEncodedBytes    = "request_encoded_bytes"
 )
@@ -98,12 +103,14 @@ type publicOfferingRoute struct {
 }
 
 var publicOfferingMediaTransports = map[publicOfferingRoute]string{
+	{wireContract: publicWireContractGeminiInteractions, executionLifecycle: publicExecutionLifecycleSynchronous}:     "",
 	{wireContract: publicWireContractAnthropicMessages, executionLifecycle: publicExecutionLifecycleSynchronous}:      publicMediaTransportInline,
 	{wireContract: publicWireContractGeminiInteractions, executionLifecycle: publicExecutionLifecyclePollable}:        publicMediaTransportFile,
 	{wireContract: publicWireContractMultipartTranscription, executionLifecycle: publicExecutionLifecycleSynchronous}: "",
 	{wireContract: publicWireContractOpenAIChatCompletions, executionLifecycle: publicExecutionLifecycleSynchronous}:  publicMediaTransportInline,
 	{wireContract: publicWireContractOpenAIResponses, executionLifecycle: publicExecutionLifecyclePollable}:           publicMediaTransportInline,
-	{wireContract: publicWireContractOpenAIResponses, executionLifecycle: publicExecutionLifecycleSynchronous}:        publicMediaTransportInline,
+	{wireContract: publicWireContractDashScopeResponses, executionLifecycle: publicExecutionLifecycleSynchronous}:     publicMediaTransportInline,
+	{wireContract: publicWireContractXAIResponses, executionLifecycle: publicExecutionLifecycleSynchronous}:           publicMediaTransportInline,
 	{wireContract: publicWireContractXAIVideosGenerations, executionLifecycle: publicExecutionLifecyclePollable}:      "",
 }
 
@@ -117,9 +124,9 @@ var publicMediaLimitValues = struct {
 	mediaTypes: map[string]struct{}{publicMediaTypeAll: {}, publicMediaTypeAudio: {}, publicMediaTypeImage: {}},
 	transports: map[string]struct{}{publicMediaTransportAny: {}, publicMediaTransportFile: {}, publicMediaTransportInline: {}},
 	statuses:   map[string]struct{}{"bounded": {}, "unbounded": {}, "unknown": {}},
-	units:      map[string]struct{}{publicMediaLimitUnitBytes: {}, publicMediaLimitUnitFiles: {}},
+	units:      map[string]struct{}{publicMediaLimitUnitBytes: {}, publicMediaLimitUnitFiles: {}, publicMediaLimitUnitPixels: {}},
 	scopes: map[string]struct{}{
-		publicMediaLimitScopeAttachment: {}, publicMediaLimitScopeAttachmentEncodedBytes: {}, publicMediaLimitScopeRequest: {}, publicMediaLimitScopeRequestEncodedBytes: {},
+		publicMediaLimitScopeAttachment: {}, publicMediaLimitScopeAttachmentEncodedBytes: {}, publicMediaLimitScopeAttachmentDataURIBytes: {}, publicMediaLimitScopeRequest: {}, publicMediaLimitScopeRequestEncodedBytes: {},
 	},
 }
 
@@ -194,6 +201,15 @@ func validPublicProviderOffering(offering PublicProviderOffering) bool {
 	}
 	_, hasImage := seenCapabilities[publicCapabilityImageInput]
 	_, hasAudio := seenCapabilities[publicCapabilityAudioInput]
+	seenMIMEs := map[string]struct{}{}
+	for _, mimeType := range offering.ImageMIMETypes {
+		_, duplicate := seenMIMEs[mimeType]
+		if !hasImage || duplicate || (mimeType != "image/jpeg" && mimeType != "image/png" && mimeType != "image/webp") {
+			return false
+		}
+		seenMIMEs[mimeType] = struct{}{}
+	}
+
 	if hasImage || hasAudio {
 		if offering.MediaExecutionLifecycle != publicExecutionLifecyclePollable && offering.MediaExecutionLifecycle != publicExecutionLifecycleSynchronous {
 			return false
@@ -267,7 +283,7 @@ func validPublicMediaTypeLimits(limits map[string]PublicMediaLimit, mediaType st
 	return matchesPublicMediaLimit(limit, PublicMediaLimit{
 		ID: inlineIdentifier, MediaType: mediaType, Transport: publicMediaTransportInline,
 		Unit: publicMediaLimitUnitBytes,
-	}) && (limit.Scope == publicMediaLimitScopeAttachment || limit.Scope == publicMediaLimitScopeAttachmentEncodedBytes)
+	}) && (limit.Scope == publicMediaLimitScopeAttachment || limit.Scope == publicMediaLimitScopeAttachmentEncodedBytes || limit.Scope == publicMediaLimitScopeAttachmentDataURIBytes)
 }
 
 func matchesPublicMediaLimit(limit PublicMediaLimit, required PublicMediaLimit) bool {
@@ -275,6 +291,10 @@ func matchesPublicMediaLimit(limit PublicMediaLimit, required PublicMediaLimit) 
 }
 
 func validPublicMediaLimit(limit PublicMediaLimit) bool {
+	dimension := limit.ID == "image_width_pixels" || limit.ID == "image_height_pixels"
+	if (dimension || limit.Unit == publicMediaLimitUnitPixels) && (!dimension || limit.Unit != publicMediaLimitUnitPixels || limit.MediaType != publicMediaTypeImage || limit.Transport != publicMediaTransportAny || limit.Scope != publicMediaLimitScopeAttachment) {
+		return false
+	}
 	_, mediaTypeValid := publicMediaLimitValues.mediaTypes[limit.MediaType]
 	_, transportValid := publicMediaLimitValues.transports[limit.Transport]
 	_, statusValid := publicMediaLimitValues.statuses[limit.Status]
