@@ -124,7 +124,7 @@ func validateStructuredOutputRoute(model textModelDefinition, schema *structured
 	switch model.wireContract {
 	case textWireContractOpenAIResponses, textWireContractXAIResponses:
 		return validateStructuredOutputSchemaSubset(schema.document.(map[string]any), openAIStructuredOutputRules, true)
-	case textWireContractGeminiInteractions:
+	case textWireContractGeminiInteractions, textWireContractVertexGenerateContent:
 		return validateStructuredOutputSchemaSubset(schema.document.(map[string]any), geminiStructuredOutputRules, true)
 	case textWireContractAnthropicMessages:
 		return validateStructuredOutputSchemaSubset(schema.document.(map[string]any), anthropicStructuredOutputRules, true)

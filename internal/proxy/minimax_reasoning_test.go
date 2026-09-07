@@ -83,6 +83,7 @@ func TestMiniMaxReasoningProfileRejectsWrongProtocol(t *testing.T) {
 	for p := range schema.Providers {
 		if schema.Providers[p].ID == "openai" {
 			schema.Providers[p].Offerings[0].RequestProfile = "minimax_chat_completions"
+			schema.Providers[p].Offerings[0].CallerTools = false
 		}
 	}
 	_, err := proxy.NewProviderCatalog(schema)

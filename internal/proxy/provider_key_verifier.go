@@ -99,8 +99,22 @@ func (verifier *operationalProviderKeyVerifier) verify(parentContext context.Con
 		executionLifecycle: model.executionLifecycle,
 	}
 	trimmedAPIKey := strings.TrimSpace(apiKey)
-	if routeCapabilities == geminiInteractionsPollableRouteCapabilities {
-		return verifier.verifyPollableGeminiCredential(verificationContext, provider, model, trimmedAPIKey)
+	if routeCapabilities.wireContract == textWireContractVertexGenerateContent {
+		provider.textAPIKey = trimmedAPIKey
+		maxTokens := 4096
+		payload := vertexRequest{Contents: []vertexContent{{Role: "user", Parts: []vertexPart{{Text: providerKeyVerificationPrompt}}}}, GenerationConfig: vertexGenerationConfig{MaxOutputTokens: &maxTokens}}
+		_, err := generateVertexContent(verificationContext, verifier.httpClient, provider, model.providerString(), payload)
+		if err != nil {
+			var upstream *providerHTTPError
+			if errors.As(err, &upstream) {
+				return providerKeyVerificationStatusError(upstream.statusCode)
+			}
+			return providerKeyVerificationTransportError(verificationContext, err)
+		}
+		return nil
+	}
+	if routeCapabilities.wireContract == textWireContractGeminiInteractions {
+		return verifier.verifyGeminiCredential(verificationContext, provider, model, trimmedAPIKey)
 	}
 
 	requestBuilder := providerKeyVerificationRequestBuilders[routeCapabilities]
@@ -136,7 +150,7 @@ func (verifier *operationalProviderKeyVerifier) verify(parentContext context.Con
 	return nil
 }
 
-func (verifier *operationalProviderKeyVerifier) verifyPollableGeminiCredential(verificationContext context.Context, provider providerDefinition, model textModelDefinition, apiKey string) (verificationError error) {
+func (verifier *operationalProviderKeyVerifier) verifyGeminiCredential(verificationContext context.Context, provider providerDefinition, model textModelDefinition, apiKey string) (verificationError error) {
 	httpClient := newProviderTransportHTTPDoer(verifier.httpClient, provider, apiKey)
 	geminiClient := newGeminiInteractionsClientWithHTTPPerformer(
 		httpClient,
@@ -145,6 +159,16 @@ func (verifier *operationalProviderKeyVerifier) verifyPollableGeminiCredential(v
 	)
 	payload := geminiProviderKeyVerificationPayload(model)
 	createdSnapshot, createError := geminiClient.createInteraction(verificationContext, "", provider.textBaseURL, payload, verifier.logger)
+	if model.executionLifecycle == textExecutionLifecycleSynchronousCompletion {
+		if createError != nil {
+			return providerKeyVerificationProviderError(verificationContext, createError)
+		}
+		_, resultError := createdSnapshot.resolve()
+		if resultError != nil && !errors.Is(resultError, errProviderOutputLimitReached) {
+			return providerKeyVerificationProviderError(verificationContext, resultError)
+		}
+		return nil
+	}
 	if strings.TrimSpace(createdSnapshot.identifier) == "" {
 		if createError != nil {
 			return providerKeyVerificationProviderError(verificationContext, createError)
@@ -284,8 +308,8 @@ func geminiProviderKeyVerificationPayload(model textModelDefinition) geminiInter
 			}},
 		}},
 		GenerationConfig: &geminiInteractionGeneration{MaxOutputTokens: providerKeyVerificationMaxTokens},
-		Background:       true,
-		Store:            true,
+		Background:       model.executionLifecycle == textExecutionLifecyclePollableResource,
+		Store:            model.executionLifecycle == textExecutionLifecyclePollableResource,
 	}
 }
 

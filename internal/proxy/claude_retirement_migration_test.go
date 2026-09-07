@@ -88,7 +88,7 @@ func TestClaudeRetirementStartup(t *testing.T) {
 				}
 			}
 			if scenario == "completion record failure" {
-				if err = database.Exec(`CREATE TRIGGER reject_retirement_completion BEFORE INSERT ON managed_schema_migration_records WHEN NEW.version = 15 AND EXISTS (SELECT 1 FROM managed_schema_migration_records WHERE version = 15) BEGIN SELECT RAISE(ABORT, 'retirement record rejected'); END`).Error; err != nil {
+				if err = database.Exec(fmt.Sprintf(`CREATE TRIGGER reject_retirement_completion BEFORE INSERT ON managed_schema_migration_records WHEN NEW.version = %d AND EXISTS (SELECT 1 FROM managed_schema_migration_records WHERE version = %d) BEGIN SELECT RAISE(ABORT, 'retirement record rejected'); END`, managedTenantSchemaVersion, managedTenantSchemaVersion)).Error; err != nil {
 					t.Fatal(err)
 				}
 			}

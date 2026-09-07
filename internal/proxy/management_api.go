@@ -673,6 +673,7 @@ func (service *managementService) saveProviderConnectionsHandler() gin.HandlerFu
 			ginContext.String(http.StatusBadRequest, providerSettingsError.Error())
 			return
 		}
+		provider.tenantIdentifier = tenantIdentifier.string()
 		verifiedVersions := map[string]managedProviderConnectionVersion{}
 		if verifyConnection {
 			credentialField := provider.activeTransport.authentication.Field

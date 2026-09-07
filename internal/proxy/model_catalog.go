@@ -17,6 +17,8 @@ const (
 	ModelOperationVideoGeneration = "video_generation"
 	// CatalogCredentialAPIKey identifies one opaque provider API key.
 	CatalogCredentialAPIKey = "api_key"
+	// CatalogCredentialGoogleProfile identifies a tenant-bound operator Google credential reference.
+	CatalogCredentialGoogleProfile = "google_credential_profile"
 	// CatalogArtifactText identifies text input or output.
 	CatalogArtifactText = "text"
 	// CatalogArtifactImage identifies image input or output.
@@ -130,6 +132,17 @@ type validatedModelCatalog struct {
 }
 
 func validateModelCatalog(catalog ModelCatalog) (validatedModelCatalog, error) {
+	validated, err := validateModelCatalogStructure(catalog)
+	if err != nil {
+		return validatedModelCatalog{}, err
+	}
+	if err := validateProviderOperationDefaults(catalog.Offerings); err != nil {
+		return validatedModelCatalog{}, err
+	}
+	return validated, nil
+}
+
+func validateModelCatalogStructure(catalog ModelCatalog) (validatedModelCatalog, error) {
 	validated := validatedModelCatalog{
 		revision:   catalog.Revision,
 		operations: map[string]ModelOperationKind{},
@@ -287,8 +300,6 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 	if len(offerings) == 0 {
 		return fmt.Errorf("%w: field=catalog.offerings", ErrInvalidModelCatalog)
 	}
-	providerOperationDefaults := map[string]int{}
-	providerOperations := map[string]map[string]struct{}{}
 	modelOperations := map[string]map[string]struct{}{}
 	providerNativeModels := map[string]struct{}{}
 	for index, offering := range offerings {
@@ -322,10 +333,6 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 			if _, supported := modelOperationSet[operation]; !supported {
 				return fmt.Errorf("%w: field=%s.operations operation=%s reason=unsupported_by_model", ErrInvalidModelCatalog, fieldPrefix, operation)
 			}
-			if providerOperations[offering.Provider] == nil {
-				providerOperations[offering.Provider] = map[string]struct{}{}
-			}
-			providerOperations[offering.Provider][operation] = struct{}{}
 			if modelOperations[offering.Model] == nil {
 				modelOperations[offering.Model] = map[string]struct{}{}
 			}
@@ -339,7 +346,6 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 			if _, offered := offeredOperations[operation]; !offered {
 				return fmt.Errorf("%w: field=%s.default_operations operation=%s reason=unsupported_by_offering", ErrInvalidModelCatalog, fieldPrefix, operation)
 			}
-			providerOperationDefaults[offering.Provider+"\x00"+operation]++
 		}
 		if offering.OutputTokenLimit < 0 {
 			return fmt.Errorf("%w: field=%s.output_token_limit", ErrInvalidModelCatalog, fieldPrefix)
@@ -386,13 +392,6 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 		}
 		catalog.offerings[offeringIdentifier] = offering
 	}
-	for provider, operations := range providerOperations {
-		for operation := range operations {
-			if providerOperationDefaults[provider+"\x00"+operation] != 1 {
-				return fmt.Errorf("%w: provider=%s operation=%s default_count=%d", ErrInvalidModelCatalog, provider, operation, providerOperationDefaults[provider+"\x00"+operation])
-			}
-		}
-	}
 	for modelIdentifier, exactModel := range catalog.models {
 		exactOperations, _ := validatedOperationSet(exactModel.Operations, "catalog.models.operations")
 		for operation := range exactOperations {
@@ -404,8 +403,32 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 	return nil
 }
 
+func validateProviderOperationDefaults(offerings []ProviderOffering) error {
+	providerOperationDefaults := map[string]int{}
+	providerOperations := map[string]map[string]struct{}{}
+	for _, offering := range offerings {
+		if providerOperations[offering.Provider] == nil {
+			providerOperations[offering.Provider] = map[string]struct{}{}
+		}
+		for _, operation := range offering.Operations {
+			providerOperations[offering.Provider][operation] = struct{}{}
+		}
+		for _, operation := range offering.DefaultOperations {
+			providerOperationDefaults[offering.Provider+"\x00"+operation]++
+		}
+	}
+	for provider, operations := range providerOperations {
+		for operation := range operations {
+			if providerOperationDefaults[provider+"\x00"+operation] != 1 {
+				return fmt.Errorf("%w: provider=%s operation=%s default_count=%d", ErrInvalidModelCatalog, provider, operation, providerOperationDefaults[provider+"\x00"+operation])
+			}
+		}
+	}
+	return nil
+}
+
 func validateDictationOffering(offering ProviderOffering, fieldPrefix string) error {
-	if (offering.WireContract != CatalogWireContractMultipartTranscription && offering.WireContract != CatalogProtocolGeminiInteractions) || offering.ExecutionLifecycle != string(textExecutionLifecycleSynchronousCompletion) {
+	if (offering.WireContract != CatalogWireContractMultipartTranscription && offering.WireContract != CatalogProtocolGeminiInteractions && offering.WireContract != CatalogProtocolVertexGenerateContent && offering.WireContract != CatalogProtocolMetaTranscription) || offering.ExecutionLifecycle != string(textExecutionLifecycleSynchronousCompletion) {
 		return fmt.Errorf("%w: field=%s reason=unsupported_dictation_route", ErrInvalidModelCatalog, fieldPrefix)
 	}
 	if offering.RequestProfile != constants.EmptyString || offering.WebSearch || offering.OutputTokenLimit != 0 || offering.ReasoningEffort != nil || len(offering.MediaInputs) != 0 || len(offering.ImageMIMETypes) != 0 || len(offering.MediaLimits) != 0 || len(offering.Controls) != 0 || len(offering.Limits) != 0 {
@@ -455,6 +478,10 @@ func validateTextOffering(offering ProviderOffering, fieldPrefix string) error {
 		case reasoningEffortAdapterOpenAIChatCompletions, reasoningEffortAdapterChatCompletionsThinking:
 			if capabilities != openAIChatCompletionsSynchronousRouteCapabilities || offering.RequestProfile != constants.EmptyString {
 				return fmt.Errorf("%w: field=%s.reasoning_effort adapter=%s", ErrInvalidModelCatalog, fieldPrefix, reasoningEffort.adapter)
+			}
+		case reasoningEffortAdapterVertexGenerateContent:
+			if capabilities.wireContract != textWireContractVertexGenerateContent || offering.RequestProfile != constants.EmptyString {
+				return fmt.Errorf("%w: incompatible Vertex reasoning adapter", ErrInvalidModelCatalog)
 			}
 		case reasoningEffortAdapterGeminiInteractions:
 			if capabilities.wireContract != textWireContractGeminiInteractions || offering.RequestProfile != constants.EmptyString {
@@ -553,7 +580,7 @@ func validatedExactModelMediaInputs(rawMediaInputs []string, field string) (map[
 
 func knownTextWireContract(wireContract textWireContract) bool {
 	switch wireContract {
-	case textWireContractDashScopeResponses, textWireContractXAIResponses, textWireContractOpenAIResponses, textWireContractOpenAIChatCompletions, textWireContractGeminiInteractions, textWireContractAnthropicMessages:
+	case textWireContractDashScopeResponses, textWireContractXAIResponses, textWireContractOpenAIResponses, textWireContractOpenAIChatCompletions, textWireContractGeminiInteractions, textWireContractVertexGenerateContent, textWireContractAnthropicMessages:
 		return true
 	default:
 		return false

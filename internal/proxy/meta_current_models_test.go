@@ -19,17 +19,7 @@ const currentMetaModel = "muse-spark-1.3"
 
 func currentMetaCatalog(t *testing.T) *proxy.ProviderCatalog {
 	t.Helper()
-	schema := testfixtures.ProviderCatalog(t).Schema()
-	for index := range schema.Models {
-		if schema.Models[index].ID == currentMetaModel {
-			schema.Models[index].Enabled = proxy.ModelEnabled
-		}
-	}
-	catalog, err := proxy.NewProviderCatalog(schema)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return catalog
+	return testfixtures.ProviderCatalog(t)
 }
 
 func TestMetaCurrentHTTP(t *testing.T) {
@@ -161,8 +151,8 @@ func TestMetaCurrentCatalog(t *testing.T) {
 	}
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest("GET", proxy.PublicCapabilitiesPath, nil))
-	if response.Code != 200 || strings.Contains(response.Body.String(), currentMetaModel) {
-		t.Fatalf("candidate discovery status=%d", response.Code)
+	if response.Code != 200 || !strings.Contains(response.Body.String(), currentMetaModel) {
+		t.Fatalf("qualified model discovery status=%d", response.Code)
 	}
 }
 

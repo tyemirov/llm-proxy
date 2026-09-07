@@ -185,7 +185,7 @@ func TestDictateHandlerRejectsOversizedAudio(t *testing.T) {
 }
 
 func TestDictateHandlerSupportsModelOverride(t *testing.T) {
-	const modelOverride = "gpt-4o-transcribe"
+	const modelOverride = "gpt-transcribe"
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		if parseError := request.ParseMultipartForm(1024 * 1024); parseError != nil {
 			t.Fatalf("ParseMultipartForm error: %v", parseError)

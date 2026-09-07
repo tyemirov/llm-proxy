@@ -18,6 +18,24 @@ import (
 
 const activationDisabledTextModel = "gpt-4o-mini"
 
+func TestModelActivationCatalogServiceRequiresRuntimeDefault(t *testing.T) {
+	for _, duplicate := range []bool{false, true} {
+		catalog := testfixtures.ProviderCatalog(t).ModelCatalog()
+		for index := range catalog.Offerings {
+			offering := &catalog.Offerings[index]
+			if offering.Provider == "openai" {
+				offering.DefaultOperations = nil
+				if duplicate {
+					offering.DefaultOperations = append([]string(nil), offering.Operations...)
+				}
+			}
+		}
+		if _, err := proxy.NewCatalogService(catalog); err == nil || !strings.Contains(err.Error(), "default_count=") {
+			t.Fatalf("duplicate=%t error=%v", duplicate, err)
+		}
+	}
+}
+
 func TestModelActivationExcludesUnusedFamiliesFromHTTP(t *testing.T) {
 	for _, activation := range []proxy.ModelActivation{proxy.ModelDisabled, proxy.ModelEnabled} {
 		schema := testfixtures.ProviderCatalog(t).Schema()
@@ -67,6 +85,7 @@ func modelActivationDocument(t *testing.T) string {
 	parts := strings.SplitN(string(document), "\nmodels:\n", 2)
 	modelParts := strings.SplitN(parts[1], "\nproviders:\n", 2)
 	modelParts[0] = strings.ReplaceAll(modelParts[0], "      enabled: false\n", "      enabled: true\n")
+	modelParts[1] = strings.Replace(modelParts[1], "          upstream_model: muse-voice-transcribe-1.0\n          transport: dictation\n", "          upstream_model: muse-voice-transcribe-1.0\n          transport: dictation\n          default_operations:\n            - dictation\n", 1)
 	return parts[0] + "\nmodels:\n" + modelParts[0] + "\nproviders:\n" + modelParts[1]
 }
 

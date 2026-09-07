@@ -36,11 +36,13 @@ type geminiInteractionsTextRouteAdapter struct{}
 type anthropicMessagesTextRouteAdapter struct{}
 
 var textRouteAdapters = map[textRouteCapabilities]textRouteAdapter{
+	vertexGenerateContentRouteCapabilities:            vertexTextRouteAdapter{},
 	openAIResponsesPollableRouteCapabilities:          openAIResponsesTextRouteAdapter{},
 	dashScopeResponsesSynchronousRouteCapabilities:    dashScopeResponsesTextRouteAdapter{},
 	xaiResponsesSynchronousRouteCapabilities:          xaiResponsesTextRouteAdapter{},
 	openAIChatCompletionsSynchronousRouteCapabilities: openAIChatCompletionsTextRouteAdapter{},
 	geminiInteractionsPollableRouteCapabilities:       geminiInteractionsTextRouteAdapter{},
+	geminiInteractionsSynchronousRouteCapabilities:    geminiInteractionsTextRouteAdapter{},
 	anthropicMessagesSynchronousRouteCapabilities:     anthropicMessagesTextRouteAdapter{},
 }
 
@@ -244,12 +246,18 @@ func continuationMaxTokens(currentMaxTokens *int, model textModelDefinition, lat
 }
 
 func (router *providerRouter) transcribeAudio(requestContext context.Context, request dictationRequestParameters, structuredLogger *zap.SugaredLogger) (string, error) {
+	if request.provider.activeTransport.requestProtocol == CatalogProtocolVertexGenerateContent {
+		return transcribeVertexAudio(requestContext, router.openAIClient.httpClient, request)
+	}
 	providerModel := request.provider.transcriptionModels[strings.ToLower(request.model.string())].providerIdentifier
 	httpClient := newProviderTransportHTTPDoer(router.openAIClient.httpClient, request.provider, request.provider.credentialFor(endpointKindDictation))
 	if request.provider.activeTransport.requestProtocol == CatalogProtocolGeminiInteractions {
 		return newGeminiInteractionsClient(httpClient).transcribeAudio(requestContext, "", request.provider.textBaseURL, providerModel.string(), request.fileName, request.audioReader, structuredLogger)
 	}
 	client := NewOpenAIClient(httpClient, router.openAIClient.endpoints)
+	if request.provider.activeTransport.requestProtocol == CatalogProtocolMetaTranscription {
+		return client.transcribeMetaAudio(requestContext, request.provider.transcriptionsURL, providerModel.string(), request.audioReader, structuredLogger)
+	}
 	return client.transcribeAudioWithURL(
 		requestContext,
 		"",

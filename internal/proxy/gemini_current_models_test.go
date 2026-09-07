@@ -2,8 +2,10 @@ package proxy_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/tyemirov/llm-proxy/internal/proxy"
 	"github.com/tyemirov/llm-proxy/internal/testfixtures"
+	"github.com/tyemirov/llm-proxy/pkg/llmproxyclient"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 	"go.uber.org/zap"
 )
@@ -36,6 +39,13 @@ func currentGeminiCandidateCatalog(t *testing.T) *proxy.ProviderCatalog {
 			schema.Models[index].Enabled = proxy.ModelEnabled
 		}
 	}
+	for p := range schema.Providers {
+		for o := range schema.Providers[p].Offerings {
+			if slices.Contains(currentGeminiModels, schema.Providers[p].Offerings[o].Model) {
+				schema.Providers[p].Offerings[o].Enabled = proxy.ModelEnabled
+			}
+		}
+	}
 	catalog, err := proxy.NewProviderCatalog(schema)
 	if err != nil {
 		t.Fatal(err)
@@ -47,12 +57,81 @@ func TestGeminiCurrentModelsHTTP(t *testing.T) {
 	testGeminiModelsHTTP(t, currentGeminiCandidateCatalog(t), currentGeminiModels)
 }
 
+func TestGeminiCurrentModelsSynchronousFailure(t *testing.T) {
+	for _, status := range []string{"incomplete", "in_progress", "failed"} {
+		t.Run(status, func(t *testing.T) {
+			var methods []string
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				methods = append(methods, r.Method)
+				writeGeminiInteractionSnapshot(t, w, "", status, "private partial answer", nil)
+			}))
+			defer upstream.Close()
+			router, err := buildRouterWithCatalogs(t, proxy.Configuration{ProviderCatalog: currentGeminiCandidateCatalog(t), Endpoints: providerEndpointOverrides(map[string]string{"gemini": upstream.URL}, nil)}, zap.NewNop().Sugar())
+			if err != nil {
+				t.Fatal(err)
+			}
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&provider=gemini&model=gemini-3.5-flash-lite&prompt=test", nil))
+			if response.Code != http.StatusBadGateway || strings.Contains(response.Body.String(), "private partial answer") || !reflect.DeepEqual(methods, []string{http.MethodPost}) {
+				t.Fatalf("status=%d methods=%v body=%s", response.Code, methods, response.Body)
+			}
+		})
+	}
+}
+
+func TestGeminiCurrentModelsSynchronousKeyVerification(t *testing.T) {
+	for _, candidate := range []struct {
+		status         string
+		upstreamStatus int
+		want           int
+	}{
+		{"completed", http.StatusOK, http.StatusOK},
+		{"incomplete", http.StatusOK, http.StatusOK},
+		{"in_progress", http.StatusOK, http.StatusServiceUnavailable},
+		{"failed", http.StatusOK, http.StatusServiceUnavailable},
+		{"rejected", http.StatusBadRequest, http.StatusUnprocessableEntity},
+		{"quota", http.StatusTooManyRequests, http.StatusTooManyRequests},
+	} {
+		t.Run(candidate.status, func(t *testing.T) {
+			var methods []string
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				methods = append(methods, r.Method)
+				body := decodeGeminiInteractionRequest(t, r)
+				if body["model"] != "gemini-3.5-flash-lite" || body["background"] != false || body["store"] != false {
+					t.Errorf("synchronous verification request=%v", body)
+				}
+				if candidate.upstreamStatus != http.StatusOK {
+					w.WriteHeader(candidate.upstreamStatus)
+					_, _ = io.WriteString(w, `{"error":{"message":"private provider rejection"}}`)
+					return
+				}
+				writeGeminiInteractionSnapshot(t, w, "", candidate.status, "verified", nil)
+			}))
+			defer upstream.Close()
+			config := providerKeyVerificationConfiguration(upstream.URL)
+			config.ProviderCatalog = currentGeminiCandidateCatalog(t)
+			router := newOperationalProviderKeyVerificationRouter(t, config, zap.NewNop().Sugar(), t.TempDir()+"/managed.db", TestTimeout)
+			cookie := managementSessionCookie(t, "gemini-lite-verification")
+			tenantID := managementDefaultTenantTestID(t, router, cookie)
+			response := putManagementProviderKey(t, router, cookie, tenantID, "gemini", "candidate-test-key", "gemini-3.5-flash-lite", "", context.Background())
+			if response.Code != candidate.want || strings.Contains(response.Body.String(), "private provider rejection") || !reflect.DeepEqual(methods, []string{http.MethodPost}) {
+				t.Fatalf("status=%d methods=%v body=%s", response.Code, methods, response.Body)
+			}
+		})
+	}
+}
+
 func testGeminiModelsHTTP(t *testing.T, catalog *proxy.ProviderCatalog, models []string) {
 	t.Helper()
 	for _, model := range models {
 		t.Run(model, func(t *testing.T) {
 			var expectedEffort string
 			var observed []string
+			pollable := model != "gemini-3.5-flash-lite"
+			expectedMethods := []string{"POST"}
+			if pollable {
+				expectedMethods = []string{"POST", "GET", "DELETE"}
+			}
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				observed = append(observed, r.Method)
 				switch r.Method {
@@ -60,13 +139,17 @@ func testGeminiModelsHTTP(t *testing.T, catalog *proxy.ProviderCatalog, models [
 					body := decodeGeminiInteractionRequest(t, r)
 					config, _ := body["generation_config"].(map[string]any)
 					effort, _ := config["thinking_level"].(string)
-					if r.URL.Path != testGeminiInteractionsPath || body["model"] != model || body["background"] != true || body["store"] != true || effort != expectedEffort || config["max_output_tokens"] != float64(65536) {
+					if r.URL.Path != testGeminiInteractionsPath || body["model"] != model || body["background"] != pollable || body["store"] != pollable || effort != expectedEffort || config["max_output_tokens"] != float64(65536) {
 						t.Errorf("Gemini request=%v", body)
 					}
 					if config["thinking_budget"] != nil {
 						t.Error("Gemini request contains an obsolete thinking budget")
 					}
-					writeGeminiInteractionSnapshot(t, w, "gemini-current", "in_progress", "", nil)
+					if pollable {
+						writeGeminiInteractionSnapshot(t, w, "gemini-current", "in_progress", "", nil)
+					} else {
+						writeGeminiInteractionSnapshot(t, w, "", "completed", "qualified result", &testGeminiInteractionUsage{Input: 2, Output: 3, Total: 5})
+					}
 				case http.MethodGet:
 					writeGeminiInteractionSnapshot(t, w, "gemini-current", "completed", "qualified result", &testGeminiInteractionUsage{Input: 2, Output: 3, Total: 5})
 				case http.MethodDelete:
@@ -89,7 +172,7 @@ func testGeminiModelsHTTP(t *testing.T, catalog *proxy.ProviderCatalog, models [
 				}
 				response := httptest.NewRecorder()
 				router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
-				if response.Code != http.StatusOK || response.Body.String() != "qualified result" || !reflect.DeepEqual(observed, []string{"POST", "GET", "DELETE"}) {
+				if response.Code != http.StatusOK || response.Body.String() != "qualified result" || !reflect.DeepEqual(observed, expectedMethods) {
 					t.Fatalf("effort=%s status=%d body=%s lifecycle=%v", effort, response.Code, response.Body.String(), observed)
 				}
 			}
@@ -179,6 +262,36 @@ func TestGeminiCurrentModelsCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	router, err := buildRouterWithCatalogs(t, proxy.Configuration{ProviderCatalog: catalog}, zap.NewNop().Sugar())
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(router)
+	defer server.Close()
+	config, err := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{BaseURL: server.URL, Secret: TestSecret})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, err := llmproxyclient.NewClient(config, server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := client.GetPublicCapabilities(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, model := range currentGeminiModels {
+		index := slices.IndexFunc(decoded.Offerings, func(offering llmproxyclient.PublicProviderOffering) bool {
+			return offering.Provider == "gemini" && offering.Model == model
+		})
+		lifecycle := "pollable_resource"
+		if model == "gemini-3.5-flash-lite" {
+			lifecycle = "synchronous_completion"
+		}
+		if index < 0 || decoded.Offerings[index].ExecutionLifecycle != lifecycle || decoded.Offerings[index].MediaExecutionLifecycle != "synchronous_completion" {
+			t.Fatalf("candidate discovery lifecycle: model=%s offerings=%+v", model, decoded.Offerings)
+		}
+	}
 	for index, model := range currentGeminiModels {
 		found := false
 		for _, offering := range public.Offerings {
@@ -236,9 +349,34 @@ func TestGeminiCurrentModelsDisabledDiscovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, model := range currentGeminiModels {
-		if strings.Contains(response.Body.String(), fmt.Sprintf(`"%s"`, model)) {
-			t.Fatalf("unqualified model is public: %s", model)
+		vertexFound := false
+		for _, offering := range public.Offerings {
+			if offering.Model != model {
+				continue
+			}
+			if offering.Provider == "gemini" {
+				t.Fatalf("unqualified Developer offering is public: %s", model)
+			}
+			if offering.Provider == "vertex" {
+				vertexFound = true
+			}
 		}
+		if !vertexFound {
+			t.Fatalf("qualified Vertex offering is absent: %s", model)
+		}
+	}
+}
+
+func TestGeminiCurrentModelsRequireProviderDefault(t *testing.T) {
+	catalog := currentGeminiCandidateCatalog(t).ModelCatalog()
+	for index := range catalog.Offerings {
+		if catalog.Offerings[index].Provider == proxy.ProviderNameGemini {
+			catalog.Offerings[index].DefaultOperations = slices.DeleteFunc(catalog.Offerings[index].DefaultOperations, func(operation string) bool { return operation == proxy.ModelOperationText })
+		}
+	}
+	_, err := proxy.NewCatalogService(catalog)
+	if !errors.Is(err, proxy.ErrInvalidModelCatalog) || !strings.Contains(err.Error(), "provider=gemini operation=text default_count=0") {
+		t.Fatalf("Gemini candidates must retain a text default: %v", err)
 	}
 }
 

@@ -31,7 +31,12 @@ func TestModelActivationMigratesStoredSelectionsAtStartup(t *testing.T) {
 			for _, profile := range fixture.profiles {
 				model := templateModel
 				model.ID, model.Version, model.Enabled = profile.TextModel, profile.TextModel, ModelDisabled
-				schema.Models = append(schema.Models, model)
+				index := slices.IndexFunc(schema.Models, func(candidate ProviderCatalogModel) bool { return candidate.ID == model.ID })
+				if index < 0 {
+					schema.Models = append(schema.Models, model)
+				} else {
+					schema.Models[index] = model
+				}
 				offering := templateOffering
 				offering.Model, offering.UpstreamModel, offering.DefaultOperations = model.ID, model.ID, nil
 				provider.Offerings = append(provider.Offerings, offering)

@@ -50,7 +50,24 @@ type textRouteMessageMediaContract struct {
 	attachmentLimitTransport string
 }
 
+var geminiInteractionsMessageMediaContract = textRouteMessageMediaContract{
+	attachmentLimitTransport: CatalogMediaTransportFile,
+	mimeTypes: map[messageMediaType]map[string]struct{}{
+		messageMediaTypeAudio: {
+			messageAudioMIMEM4A:  {},
+			messageAudioMIMEMPEG: {},
+			messageAudioMIMEWAV:  {},
+		},
+		messageMediaTypeImage: {
+			messageImageMIMEJPEG: {},
+			messageImageMIMEPNG:  {},
+			messageImageMIMEWebP: {},
+		},
+	},
+}
+
 var textRouteMessageMediaContracts = map[textRouteCapabilities]textRouteMessageMediaContract{
+	vertexGenerateContentRouteCapabilities: {attachmentLimitTransport: CatalogMediaTransportInline, mimeTypes: geminiInteractionsMessageMediaContract.mimeTypes},
 	openAIResponsesPollableRouteCapabilities: {
 		attachmentLimitTransport: CatalogMediaTransportInline,
 		mimeTypes: map[messageMediaType]map[string]struct{}{
@@ -90,21 +107,8 @@ var textRouteMessageMediaContracts = map[textRouteCapabilities]textRouteMessageM
 			},
 		},
 	},
-	geminiInteractionsPollableRouteCapabilities: {
-		attachmentLimitTransport: CatalogMediaTransportFile,
-		mimeTypes: map[messageMediaType]map[string]struct{}{
-			messageMediaTypeAudio: {
-				messageAudioMIMEM4A:  {},
-				messageAudioMIMEMPEG: {},
-				messageAudioMIMEWAV:  {},
-			},
-			messageMediaTypeImage: {
-				messageImageMIMEJPEG: {},
-				messageImageMIMEPNG:  {},
-				messageImageMIMEWebP: {},
-			},
-		},
-	},
+	geminiInteractionsPollableRouteCapabilities:    geminiInteractionsMessageMediaContract,
+	geminiInteractionsSynchronousRouteCapabilities: geminiInteractionsMessageMediaContract,
 	anthropicMessagesSynchronousRouteCapabilities: {
 		attachmentLimitTransport: CatalogMediaTransportInline,
 		mimeTypes: map[messageMediaType]map[string]struct{}{

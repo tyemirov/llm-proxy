@@ -176,6 +176,7 @@ func internalTestProviderTransport(identifier string, offering ProviderOffering)
 				continue
 			}
 			template.ID = identifier
+			template.Authentication.Field = CatalogCredentialAPIKey
 			template.Endpoint = ProviderCatalogEndpoint{
 				Method: CatalogEndpointMethodPost, DefaultBaseURL: "https://provider.example", Path: internalTestProviderProtocolPath(protocol),
 			}
@@ -193,6 +194,8 @@ func internalTestProviderProtocolPath(protocol string) string {
 		return "/chat/completions"
 	case CatalogProtocolAnthropicMessages:
 		return "/v1/messages"
+	case CatalogProtocolVertexGenerateContent:
+		return "/projects"
 	case CatalogProtocolGeminiInteractions:
 		return "/interactions"
 	case CatalogProtocolMultipartTranscription:

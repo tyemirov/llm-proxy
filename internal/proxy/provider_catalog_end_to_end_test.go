@@ -117,7 +117,7 @@ func TestProviderCatalogProjectsProviderCardTaxonomy(testingInstance *testing.T)
 		families        []string
 		capabilities    []string
 	}{
-		proxy.ProviderNameOpenAI:      {apiServiceLabel: "OpenAI API", families: []string{"GPT-4", "GPT-5", "GPT Transcribe"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.ModelOperationDictation}},
+		proxy.ProviderNameOpenAI:      {apiServiceLabel: "OpenAI API", families: []string{"GPT-6", "GPT-4", "GPT-5", "GPT Transcribe"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.ModelOperationDictation}},
 		proxy.ProviderNameDashScope:   {apiServiceLabel: "DashScope API", families: []string{"Qwen"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput}},
 		proxy.ProviderNameGemini:      {apiServiceLabel: "Gemini API", families: []string{"Gemini"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityAudioInput, proxy.ModelOperationDictation}},
 		proxy.ProviderNameMeta:        {apiServiceLabel: "Meta API", families: []string{"Muse Spark"}, capabilities: []string{proxy.ModelOperationText}},
@@ -493,6 +493,7 @@ func TestProviderCatalogRejectsStructuralAndAdapterContractViolations(testingIns
 		{
 			name: "invalid request profile",
 			mutate: func(schema *proxy.ProviderCatalogSchema) {
+				schema.Providers[0].Offerings[0].CallerTools = false
 				schema.Providers[0].Offerings[0].RequestProfile = "future-profile"
 			},
 			expectedError: ".request_profile",

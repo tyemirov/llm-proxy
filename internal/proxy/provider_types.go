@@ -134,6 +134,7 @@ const (
 	textWireContractDashScopeResponses    textWireContract = "dashscope_responses"
 	textWireContractXAIResponses          textWireContract = "xai_responses"
 	textWireContractOpenAIChatCompletions textWireContract = "openai_chat_completions"
+	textWireContractVertexGenerateContent textWireContract = "vertex_generate_content"
 	textWireContractGeminiInteractions    textWireContract = "gemini_interactions"
 	textWireContractAnthropicMessages     textWireContract = "anthropic_messages"
 )
@@ -151,6 +152,7 @@ type textRouteCapabilities struct {
 }
 
 var (
+	vertexGenerateContentRouteCapabilities   = textRouteCapabilities{wireContract: textWireContractVertexGenerateContent, executionLifecycle: textExecutionLifecycleSynchronousCompletion}
 	openAIResponsesPollableRouteCapabilities = textRouteCapabilities{
 		wireContract:       textWireContractOpenAIResponses,
 		executionLifecycle: textExecutionLifecyclePollableResource,
@@ -170,6 +172,10 @@ var (
 	geminiInteractionsPollableRouteCapabilities = textRouteCapabilities{
 		wireContract:       textWireContractGeminiInteractions,
 		executionLifecycle: textExecutionLifecyclePollableResource,
+	}
+	geminiInteractionsSynchronousRouteCapabilities = textRouteCapabilities{
+		wireContract:       textWireContractGeminiInteractions,
+		executionLifecycle: textExecutionLifecycleSynchronousCompletion,
 	}
 	anthropicMessagesSynchronousRouteCapabilities = textRouteCapabilities{
 		wireContract:       textWireContractAnthropicMessages,
@@ -218,6 +224,7 @@ const (
 type reasoningEffortAdapter string
 
 const (
+	reasoningEffortAdapterVertexGenerateContent   reasoningEffortAdapter = "vertex_generate_content"
 	reasoningEffortAdapterNone                    reasoningEffortAdapter = ""
 	reasoningEffortAdapterDashScopeResponses      reasoningEffortAdapter = "dashscope_responses"
 	reasoningEffortAdapterXAIResponses            reasoningEffortAdapter = "xai_responses"
@@ -236,8 +243,9 @@ type reasoningEffortCapability struct {
 // reasoningEffortAdapterSupportedValues is the adapter's accepted vocabulary;
 // each configured text route owns the ordered subset it exposes.
 var reasoningEffortAdapterSupportedValues = map[reasoningEffortAdapter]map[string]struct{}{
-	reasoningEffortAdapterDashScopeResponses: {"none": {}, "low": {}, "medium": {}, "xhigh": {}},
-	reasoningEffortAdapterXAIResponses:       {"low": {}, "medium": {}, "high": {}, "xhigh": {}},
+	reasoningEffortAdapterVertexGenerateContent: {"minimal": {}, "low": {}, "medium": {}, "high": {}},
+	reasoningEffortAdapterDashScopeResponses:    {"none": {}, "low": {}, "medium": {}, "xhigh": {}},
+	reasoningEffortAdapterXAIResponses:          {"low": {}, "medium": {}, "high": {}, "xhigh": {}},
 	reasoningEffortAdapterOpenAIResponses: {
 		"none":    {},
 		"minimal": {},
@@ -326,6 +334,8 @@ func (definition textModelDefinition) supportsMediaInput(mediaInput messageMedia
 }
 
 type providerDefinition struct {
+	googleCredentials         map[string]googleCredentialProfile
+	tenantIdentifier          string
 	identifier                providerID
 	label                     string
 	apiServiceLabel           string

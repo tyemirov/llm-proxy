@@ -60,6 +60,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 		identifier := providerID(provider.ID)
 		order = append(order, identifier)
 		definition := providerDefinition{
+			googleCredentials:   configuration.googleCredentials,
 			identifier:          identifier,
 			label:               provider.Label,
 			apiServiceLabel:     provider.APIServiceLabel,
@@ -225,6 +226,7 @@ func applyDefaultEndpointOverrides(schema ProviderCatalogSchema, definitions map
 func (registry *providerRegistry) forTenant(requestTenant tenant) *providerRegistry {
 	definitions := make(map[providerID]providerDefinition, len(registry.definitions))
 	for identifier, definition := range registry.definitions {
+		definition.tenantIdentifier = requestTenant.identifier.string()
 		definition.connectionValues = cloneStringMap(definition.connectionValues)
 		if providerSettings, configured := requestTenant.providerSettings[identifier]; configured {
 			for fieldIdentifier, value := range providerSettings.connectionValues {

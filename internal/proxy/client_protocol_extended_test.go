@@ -151,7 +151,7 @@ func TestClientProtocolsTranscriptionValidation(t *testing.T) {
 		model, extra, format string
 		files, size, status  int
 	}{
-		{"", "", "", 1, 3, 400}, {"gpt-4o-transcribe", "", "", 1, 3, 400}, {"openai/gpt-4.1", "", "", 1, 3, 400}, {"openai/GPT-4O-TRANSCRIBE", "", "", 1, 3, 400}, {"openai/gpt-4o-transcribe", "language", "", 1, 3, 400}, {"openai/gpt-4o-transcribe", "", "text", 1, 3, 400}, {"openai/gpt-4o-transcribe", "", "", 0, 3, 400}, {"openai/gpt-4o-transcribe", "", "", 2, 3, 400}, {"openai/gpt-4o-transcribe", "", "", 1, 0, 413}, {"openai/gpt-4o-transcribe", "", "", 1, 17, 413}, {"openai/gpt-4o-transcribe", "", "", 1, 2 << 20, 413},
+		{"", "", "", 1, 3, 400}, {"gpt-transcribe", "", "", 1, 3, 400}, {"openai/gpt-4.1", "", "", 1, 3, 400}, {"openai/GPT-TRANSCRIBE", "", "", 1, 3, 400}, {"openai/gpt-transcribe", "language", "", 1, 3, 400}, {"openai/gpt-transcribe", "", "text", 1, 3, 400}, {"openai/gpt-transcribe", "", "", 0, 3, 400}, {"openai/gpt-transcribe", "", "", 2, 3, 400}, {"openai/gpt-transcribe", "", "", 1, 0, 413}, {"openai/gpt-transcribe", "", "", 1, 17, 413}, {"openai/gpt-transcribe", "", "", 1, 2 << 20, 413},
 	} {
 		var body bytes.Buffer
 		form := multipart.NewWriter(&body)
@@ -283,7 +283,7 @@ func TestClientProtocolsLostMultipartFile(t *testing.T) {
 	}
 	var body bytes.Buffer
 	form := multipart.NewWriter(&body)
-	form.WriteField("model", "openai/gpt-4o-transcribe")
+	form.WriteField("model", "openai/gpt-transcribe")
 	file, _ := form.CreateFormFile("file", "audio.wav")
 	io.WriteString(file, "fixture audio")
 	form.Close()

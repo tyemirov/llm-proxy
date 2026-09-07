@@ -40,7 +40,7 @@ const (
 	DefaultAssetRetentionSeconds = 48 * 60 * 60
 	// DefaultAssetStorePath is the persistent filesystem location for tenant assets.
 	DefaultAssetStorePath      = "/data/assets"
-	DefaultDictationModel      = "gpt-4o-mini-transcribe"
+	DefaultDictationModel      = "gpt-transcribe"
 	DefaultMaxInputAudioBytes  = 25 * 1024 * 1024
 	DefaultManagementJWTIssuer = "tauth"
 	// DefaultManagementUsageQueueSize is the number of managed usage events retained for asynchronous persistence.
@@ -50,6 +50,8 @@ const (
 
 // Configuration holds runtime settings.
 type Configuration struct {
+	GoogleCredentialProfiles   []GoogleCredentialProfile
+	googleCredentials          map[string]googleCredentialProfile
 	Management                 ManagementConfiguration
 	Port                       int
 	LogLevel                   string
@@ -107,6 +109,11 @@ func NewConfiguration(configuration Configuration) (Configuration, error) {
 		}
 		configuration.ProviderConnectionValues = connectionValues
 	}
+	googleProfiles, googleError := newGoogleCredentialProfiles(configuration.GoogleCredentialProfiles)
+	if googleError != nil {
+		return Configuration{}, googleError
+	}
+	configuration.googleCredentials = googleProfiles
 	configuration.ApplyTunables()
 	timeoutPolicy, timeoutPolicyError := newRequestTimeoutPolicy(configuration.RequestTimeoutSeconds, configuration.MaxRequestTimeoutSeconds)
 	if timeoutPolicyError != nil {

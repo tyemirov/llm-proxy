@@ -1104,7 +1104,7 @@ func TestManagementRoutingDefaultsRequireExplicitReasoningEffort(t *testing.T) {
 	request := authenticatedJSONRequest(
 		http.MethodPut,
 		tenantPath+"/defaults",
-		`{"provider":"openai","model":"gpt-4.1","dictation_provider":"openai","dictation_model":"gpt-4o-mini-transcribe","system_prompt":""}`,
+		`{"provider":"openai","model":"gpt-4.1","dictation_provider":"openai","dictation_model":"gpt-transcribe","system_prompt":""}`,
 		sessionCookie,
 	)
 	response := httptest.NewRecorder()
@@ -1568,7 +1568,7 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 		}
 	}
 	expectedModels := map[string][]string{
-		proxy.ProviderNameOpenAI:    {"gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"},
+		proxy.ProviderNameOpenAI:    {"gpt-6-astra", "gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"},
 		proxy.ProviderNameDashScope: {proxy.ModelNameDashScopeQwenPlus, proxy.ModelNameDashScopeQwen36Flash, proxy.ModelNameDashScopeQwen37Max, proxy.ModelNameDashScopeQwen37Plus},
 		proxy.ProviderNameMoonshot:  {proxy.ModelNameMoonshotKimiK26, proxy.ModelNameMoonshotKimiK27Code, proxy.ModelNameMoonshotKimiK27CodeHighSpeed, proxy.ModelNameMoonshotKimiK3},
 		proxy.ProviderNameMiniMax: {
@@ -2209,7 +2209,7 @@ func TestManagementMetaProviderRoutesWithEncryptedTenantKey(t *testing.T) {
 		`"label":"Meta"`,
 		`"text_model":"muse-spark-1.2"`,
 		`"text_default_model":"muse-spark-1.1"`,
-		`"text_models":[{"id":"muse-spark-1.1"},{"id":"muse-spark-1.2"}]`,
+		`"text_models":[{"id":"muse-spark-1.1"},{"id":"muse-spark-1.2"},{"id":"muse-spark-1.3"`,
 		`"supports_dictation":false`,
 	} {
 		if !strings.Contains(saveKeyResponse.Body.String(), expectedFragment) {

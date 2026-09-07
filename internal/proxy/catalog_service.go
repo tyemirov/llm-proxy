@@ -294,7 +294,7 @@ func validateArtifactKinds(artifacts []string, field string) error {
 }
 
 func validateCredentialKinds(credentials []string, field string) error {
-	if len(credentials) != 1 || credentials[0] != CatalogCredentialAPIKey {
+	if len(credentials) != 1 || (credentials[0] != CatalogCredentialAPIKey && credentials[0] != CatalogCredentialGoogleProfile) {
 		return fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
 	}
 	return nil
