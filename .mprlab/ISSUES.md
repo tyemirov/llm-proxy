@@ -25,6 +25,57 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B198] (P1) Permit a disabled candidate for a new provider operation.
+  Evidence:
+  F054 adds Meta dictation as a disabled candidate.
+  Catalog loading fails with `provider=meta operation=dictation default_count=0`.
+  A default on that disabled model fails with `reason=disabled_default`.
+  Requirements:
+  - Validate all retained candidate metadata.
+  - Require one default for each enabled provider operation.
+  - Reject defaults on disabled models.
+  - Prove candidate discovery exclusion and explicit activation through HTTP tests.
+  Validation:
+  `make test-meta-transcription` reproduces the catalog failure before this correction.
+  Resolution (2026-09-06):
+  Candidate metadata validation and enabled-operation default validation are separate.
+  Public HTTP and constructor tests pass. Final CI passed all 12 gates with 100% Go coverage.
+
+- [x] [B197] (P1) Use synchronous Gemini interactions for Flash-Lite.
+  Goal:
+  Correct the Flash-Lite candidate transport to match the provider contract.
+  Evidence:
+  Google returned HTTP 400 with `Model 'gemini-3.5-flash-lite' does not support background interactions.`
+  Requirements:
+  - Use the existing synchronous Gemini execution path with `background: false` and `store: false`.
+  - Preserve reasoning controls, media, structured output, continuation, and candidate activation gates.
+  - Qualify the declared synchronous lifecycle instead of unsupported background operations.
+  Validation:
+  - Start with a failing public HTTP test for exact request and lifecycle behavior.
+  - Verify public capability decoding, the candidate harness, live acceptance, and final CI.
+  Implementation:
+  - Flash-Lite now uses `text_synchronous` with the existing Gemini adapter.
+  - Text requests and key verification use `background: false` and `store: false`.
+  - Shared media admission and public capability decoding accept the synchronous Gemini route.
+  - Public HTTP tests cover reasoning, incomplete results, provider errors, media, and key verification without stored resources.
+  - The direct live matrix passed all five effort cases. Proxy key verification, omitted-effort text, and image input passed.
+  - Full proxy reasoning stopped after a later timeout. Live audio remains a separate F047 acceptance requirement.
+  Validation:
+  - Initial public HTTP and CLI tests reproduced unsupported background requests.
+  - Focused HTTP and CLI tests pass.
+  - CI exposed an uncovered catalog default-validation branch in concurrent work.
+  - A public catalog test now verifies that Gemini candidates require one text default.
+  - The focused default test passes. Final CI passed all 12 gates with 100.0% Go coverage in 245 seconds.
+  - Evidence: `/tmp/llm-proxy-b197-http-final.log`, `/tmp/llm-proxy-i251-contract-final.log`, and `/tmp/llm-proxy-b197-lite-live.log`.
+  - The correction introduces no event contract. F047 controls model activation.
+  Changed files:
+  - `configs/providers.yml`, `internal/proxy/provider_types.go`, and `internal/proxy/provider_router.go`.
+  - `internal/proxy/message_media.go`, `internal/proxy/provider_key_verifier.go`, and `pkg/llmproxyclient/capabilities.go`.
+  - `internal/proxy/gemini_current_models_test.go`, `scripts/test_live_gemini_candidates.sh`, and `tests/operational_contract_test.go`.
+  - `Makefile`, `docs/gemini-current-models.md`, and `docs/provider-catalog.md`.
+  Resolution (2026-09-07): Source changes and required validation passed.
+  Evidence: `/tmp/llm-proxy-b197-ci-verified.log`.
+
 - [x] [B196] (P1) Use catalog field defaults in live-provider qualification.
   Goal:
   Permit a live provider connection with one API key and a catalog URL default.
@@ -1294,6 +1345,62 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [x] [I252] (P1) Qualify the current Gemini candidates on Vertex AI.
+  Goal:
+  Establish whether Vertex resolves the current Google quota and request failures before the provider migration.
+  Requirements:
+  - Verify the existing LLM Proxy Cloud project, billing state, enabled APIs, and available credentials.
+  - Use the global Vertex endpoint with exact model IDs and the standard Google Cloud credential flow.
+  - Verify Gemini 3.1 Pro Preview, Gemini 3.8 Flash, and Gemini 3.5 Flash-Lite.
+  - Run bounded reasoning, structured output, image, and audio requests when model access permits them.
+  - Record exact provider errors and successful responses without credentials or private input.
+  - Specify the transport and runtime credential changes that the evidence supports.
+  Validation:
+  - Separate direct Vertex qualification from proxy integration and production acceptance.
+  - Run the applicable document and repository checks after the evidence update.
+  Resolution:
+  - Enabled the Vertex API on the existing billed `llm-proxy-499919` project.
+  - Passed 22 direct requests with exact expected output and HTTP 200 on September 7, 2026.
+  - Pro and Flash each passed seven cases. Flash-Lite passed eight cases.
+  - The cases covered all declared reasoning levels, structured output, image input, and audio input.
+  - The requests used local Google Cloud user credentials and the global `v1 generateContent` endpoint.
+  - Recorded credential-free results in `docs/evidence/vertex-gemini-2026-09-07.json`.
+  - Recorded the interpretation and F060 migration requirements in `docs/vertex-gemini-qualification.md`.
+  - The Governor check and `git diff --check` passed. The language check found no errors in the changed prose.
+  - Proxy routing, runtime identity, and production acceptance remain separate from this direct qualification.
+  Changed:
+  - `docs/vertex-gemini-qualification.md`, its JSON evidence, and `docs/gemini-current-models.md`.
+  - I252 and F060. No public API or event contract changed.
+
+- [x] [I251] (P1) Diagnose Gemini candidate acceptance failures with safe provider details.
+  Goal:
+  Identify the causes of I234 and F047 failures through the current acceptance command.
+  Requirements:
+  - Report provider error details without credentials, request content, or generated output.
+  - Preserve failure exit status and required acceptance checks.
+  - Reproduce the failures and record the provider evidence.
+  - Correct confirmed repository defects through separate BugFix issues.
+  Validation:
+  - Start with a failing CLI test for diagnostics and private data exclusion.
+  - Run focused checks, live diagnosis, and final CI.
+  Implementation:
+  - Failed candidate requests report bounded provider error fields, quota violations, and retry metadata.
+  - Diagnostics exclude credentials, request input, generated output, quota dimensions, and unrelated headers.
+  - The original failure exit status remains intact.
+  - I234 has zero free-tier quota. F047 has a request-quota failure and the separate B197 transport defect.
+  Validation:
+  - The initial CLI test failed because `RESOURCE_EXHAUSTED` was absent.
+  - Focused diagnostics, privacy, malformed-response, and shell-contract checks pass.
+  - CI first rejected Go formatting, then rejected a heredoc in the diagnostics invocation.
+  - Both corrections passed focused checks. Final CI passed all 12 gates with 100.0% Go coverage in 245 seconds.
+  - Evidence: `/tmp/llm-proxy-i251-red.log` and `/tmp/llm-proxy-i251-contract-final.log`.
+  Changed files:
+  - `scripts/test_live_gemini_candidates.sh`, `tests/operational_contract_test.go`, and `Makefile`.
+  - `docs/gemini-current-models.md` and the I234, F047, I251, and B197 records.
+  Event contracts: None.
+  Resolution (2026-09-07): Source changes and required validation passed.
+  Evidence: `/tmp/llm-proxy-b197-ci-verified.log`.
+
 - [x] [I250] (P1) Wait for committed catalog usage before database restart.
   Goal:
   Make the public catalog integration test wait for its asynchronous usage writes.
@@ -1385,7 +1492,7 @@ retain satisfied historical dependencies.
   `make test-deepseek-retirement` passed. Final CI passed all 12 gates in 181 seconds with 100% Go statement coverage.
   Evidence: `/tmp/llm-proxy-f045-b193-i247-ci.log`.
 
-- [!] [I245] (P1) Decommission retired direct DeepSeek model names.
+- [x] [I245] (P1) Decommission retired direct DeepSeek model names.
   Development evidence (2026-09-05):
   - Removed both retired direct offerings and the unused chat model and V3 family records.
   - Added exact `none`, `low`, `high`, and `max` controls to both current V4 routes.
@@ -1396,9 +1503,21 @@ retain satisfied historical dependencies.
   - Updated `configs/providers.yml`, the catalog and transport code, managed storage, client fixtures, browser fixtures, and public capability tests.
   - Added `docs/deepseek-retirement.md` and updated `docs/provider-catalog.md` and `README.md`.
   - Added private migration fields `target_reasoning_effort` and `preserve_source_usage`. Public event contracts did not change.
-  Blocked:
-  - Live acceptance requires `DEEPSEEK_API_KEY`. It is absent from the process and all authorized repository private environment files.
-  - The operator must inventory production selections and resolve any reported profile reasoning conflict before activation.
+  Resolution (2026-09-07):
+  - Used the authorized `DEEPSEEK_API_KEY` from `configs/.env` through the standard live-test loader.
+  - Both V4 models passed key verification and text requests with omitted, `none`, `low`, `high`, and `max` reasoning.
+  - All twelve live checks returned HTTP 200, and `make test-live-providers` exited successfully.
+  - Evidence: `/tmp/llm-proxy-i245-live-20260907.log`. Source changes, production selection inventory, and live provider qualification are completed.
+  - Backup verification and production activation remain operator steps. This result does not establish production migration acceptance.
+  Production inventory (2026-09-06):
+  - Inspected the live database on `tutosh` through its declared retained volume with read-only SQLite queries.
+  - At `2026-09-07T06:30:22Z`, the database had schema version 13, two tenants, and nine provider profiles.
+  - DeepSeek profiles, DeepSeek defaults, and stored DeepSeek keys each numbered zero.
+  - No current production selection requires a reasoning decision before the schema-14 migration.
+  - Repeat the inventory before activation if tenant settings change.
+  - Historical usage contained three direct V4 Flash events and three SiliconFlow R1 events. SQLite `quick_check` returned `ok`.
+  - Recorded source commits, runtime identity, counts, and remaining acceptance steps in `docs/deepseek-retirement.md`.
+  - At inventory time, live qualification required a DeepSeek key. The 2026-09-07 resolution records its completed acceptance.
   Goal:
   Remove retired direct DeepSeek routes and migrate current tenant selections to qualified canonical models.
   Evidence:
@@ -1430,9 +1549,14 @@ retain satisfied historical dependencies.
   - Run `make ci` after the last application change.
   - Record authorized live-provider acceptance separately from local validation. Keep production activation operator-owned.
 
-- [ ] [I246] (P2) Decommission deprecated OpenAI transcription models before provider shutdown.
+- [x] [I246] (P2) Decommission deprecated OpenAI transcription models before provider shutdown.
   Goal:
   Replace `gpt-4o-mini-transcribe` and `gpt-4o-transcribe` in the current transcription contract before 2027-02-26.
+  Authorization (2026-09-06):
+  The user approved reuse of the existing OpenAI key for implementation and provider acceptance.
+  The existing process key returned HTTP 200 for `GET /v1/models/gpt-transcribe`.
+  The model record reports `created=1785168027`.
+  Both public transcription interfaces passed live acceptance before and after catalog replacement on 2026-09-07.
   Evidence:
   - Both models remain in the 2026-09-05 provider catalog.
   - OpenAI announced their API removal for February 26, 2027, on August 26, 2026:
@@ -1463,6 +1587,17 @@ retain satisfied historical dependencies.
   - Verify model discovery and management selection through HTTP and browser tests.
   - Run `make ci` after the last application change.
   - Record authorized live-provider acceptance separately from local validation. Keep production activation operator-owned.
+
+  Resolution (2026-09-07):
+  - Replaced both retired OpenAI offerings and the dictation default with `gpt-transcribe`.
+  - Added schema version 16 and the bounded replacement for earlier ownership schemas.
+  - Preserved credentials, unrelated settings, timestamps, and historical usage. Repeated startup and rollback tests passed.
+  - Updated client fixtures, browser selection, examples, discovery, and the documented duration price.
+  - Both public endpoints passed paid provider acceptance with the existing OpenAI key before and after catalog replacement.
+  - Final `make ci` passed all 12 gates in 244 seconds, with 100 percent Go statement coverage.
+  - The local read-only inventory found one tenant with the old mini transcription selection in the earlier ownership schema.
+  - `docs/openai-transcription-retirement.md` records the migration procedure and the 2027-02-26 deadline.
+  - Production inventory, deployment, and production acceptance remain operator-owned.
 
 - [ ] [I244] (P1) {F024,F025,F026,F027,F039,F040,F041,F042} Remove the completed MediaOps operation-import bridge.
   Goal:
@@ -1858,6 +1993,13 @@ retain satisfied historical dependencies.
   Final CI passed all 12 gates, 97 browser tests, and 100.0% Go statement coverage in 235 seconds.
   Evidence: `/tmp/llm-proxy-i234-ci.log`. The harness and documentation changes introduce no event contract.
 
+  Root cause diagnosis (2026-09-06, I251):
+  The provider reports zero free-tier input-token quota and zero free-tier request quota for the `gemini-3.1-pro` quota group.
+  The requested exact API model remains `gemini-3.1-pro-preview`.
+  The process has no Gemini key. The repository's two populated environment inputs contain one distinct key.
+  The operator must supply a project with nonzero quota before the full candidate acceptance can run.
+  Evidence: `/tmp/llm-proxy-i234-diagnosis.log`.
+
 - [x] [I233] (P1) Add Gemini candidate models to the live test.
   Goal:
   Make the Gemini live test validate two stable candidates before public route
@@ -2234,11 +2376,8 @@ retain satisfied historical dependencies.
     baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair; deployment
     and production acceptance remain operator-owned.
   Blocked: Repository work is complete. Both required `make ci` runs pass.
-  Live acceptance cannot start because `MODEL_API_KEY` is absent from the
-  process and each authorized repository environment file. The selected
-  harness stops before provider dispatch. The operator must supply
-  `MODEL_API_KEY` and authorize authenticated `GET /v1/models`, one key
-  verification, and one text request.
+  The existing key is available as `MUSE_API_KEY` in `configs/.env`.
+  Complete exact Muse Spark 1.2 discovery, key verification, and live text acceptance with that file.
 - [ ] [I046] (P1) Make upstream admission fair across provider origins.
   Goal:
   Keep upstream work globally bounded while preventing one slow or throttled
@@ -3066,6 +3205,228 @@ retain satisfied historical dependencies.
 
 ## Features
 
+- [!] [F061] (P1) Add GPT-6 Astra through the existing OpenAI provider.
+  Goal:
+  Add the requested exact `gpt-6-astra` model to current public text interfaces.
+  Requirements:
+  - Use the existing Responses transport and retain the current provider default.
+  - Support the five documented reasoning levels from `low` through `max`.
+  - Preserve image input, structured output, caller tools, web search, and current usage accounting.
+  - Record verified context, input, output, media limits, and standard prices for both context tiers.
+  - Reject unsupported effort and excessive requested output before provider dispatch.
+  - Qualify the candidate with the existing authorized OpenAI key before activation.
+  - Update management, discovery, clients, documentation, and browser acceptance together.
+  Validation:
+  - Start with failing public HTTP tests and cover the current Responses lifecycle.
+  - Run live text, reasoning, image, structured-output, and caller-tool checks.
+  - Run final CI after the last application change.
+  Evidence:
+  On 2026-09-07, the existing key returned HTTP 200 for exact model discovery, with `created=1787853604`.
+  The catalog now enables Astra with five reasoning levels, image input, tools, web search, limits, and both standard price tiers.
+  Public HTTP tests and both focused browser tests pass.
+  Live checks passed for omitted effort, all five explicit efforts, image input, structured output, caller functions, and web search.
+  Blocked:
+  Final CI stopped at `Go files require formatting` for files in the active F060 Vertex change.
+  Complete F060 formatting and rerun `make ci` before resolving F061.
+  Production deployment belongs to the operator.
+  Sources:
+  - https://developers.openai.com/api/docs/models/gpt-6-astra
+  - https://developers.openai.com/api/docs/pricing
+
+
+- [!] [F060] (P1) {I252,P012} Migrate Gemini completion routes to Vertex AI.
+  Goal:
+  Use the Vertex route that passed I252 for Gemini completion through the public proxy APIs.
+  Requirements:
+  - Use the global Vertex `v1 generateContent` endpoint and exact qualified model IDs.
+  - Implement the typed Google credential profile contract from F043 for this route.
+  - Keep inline requests independent of the separate F043 media staging work.
+  - Use the Google authentication library for scoped OAuth tokens and token refresh.
+  - Bind each credential profile to its tenant, project, location, and approved runtime identity.
+  - Map text, structured output, reasoning, media, finish reasons, and usage through the native Vertex contract.
+  - Preserve public deadlines, output-limit errors, media order, and tenant isolation.
+  - Qualify every existing Gemini offering affected by the migration, including dictation routes where applicable.
+  - Migrate tenant credentials and route selection through one explicit transition into the Vertex contract.
+  Deliverables:
+  Vertex transport, credential profiles, catalog mappings, migration procedure, public integration tests, and operator documentation.
+  Validation:
+  - Start with failing public HTTP tests for the new transport and credential contract.
+  - Prove OAuth refresh, project isolation, provider errors, cancellation, structured output, media, and exact usage.
+  - Run proxy acceptance with the intended runtime identity and complete final CI.
+  - Record production acceptance after the operator cutover.
+  Source:
+  `docs/vertex-gemini-qualification.md` records 22 successful direct Vertex requests on September 7, 2026.
+
+  Implementation (2026-09-07):
+  - Added the native Vertex transport and tenant-bound Google OAuth profiles.
+  - Added an explicit provider and offering activation contract.
+  - Enabled four qualified Vertex text models and `gemini-3.5-transcribe-preview` for dictation.
+  - Kept the unqualified Developer API offerings for Flash 3.8 and Flash-Lite disabled.
+  - Created the dedicated service account in `llm-proxy-499919` and granted `roles/aiplatform.user`.
+  - All 28 live proxy requests passed with that service account.
+  - Public HTTP tests verify token refresh, cancellation, management verification, tenant isolation, media, structured output, usage, and provider failures.
+  - Browser rendering accepts the Google credential profile contract.
+  - Added `docs/vertex-gemini.md` with the explicit tenant cutover procedure.
+  - Evidence: `docs/evidence/vertex-proxy-2026-09-07.json`.
+  Validation:
+  The first CI run stopped because the generated OpenAPI page was stale.
+  The page was regenerated. The next CI run passed Go coverage at 100% and found five stale browser assertions.
+  The corrected browser cases and candidate-harness test pass.
+  Final `make ci` passed all 12 gates in 252 seconds with 100.0% Go statement coverage and 99 frontend browser tests.
+  Evidence: `/tmp/llm-proxy-f060-ci-complete.log`.
+  Blocked:
+  P012 requires independent customer setup through the accepted API-key flow.
+  The implemented operator credential profiles do not satisfy that requirement.
+  Complete the P012 comparison and approve the revised connection contract before further authentication changes or customer cutover.
+  The earlier operator deployment procedure is not the next customer step.
+  Exact Vertex prices remain unavailable until their import.
+  Reconciliation (2026-09-07):
+  `docs/gemini-customer-connections.md` records the proposed F060 revision and customer acceptance gates.
+  Retain the 28 successful requests as transport evidence only.
+  Changed contracts:
+  The public credential kind adds `google_credential_profile`.
+  The provider catalog adds `vertex_generate_content`, `google_credentials`, and provider/offerings `enabled` flags.
+  Existing public request paths and event schemas are unchanged.
+
+  Changed files:
+  - `configs/providers.yml`, `cmd/cli/config_file.go`, `go.mod`, and `go.sum`.
+  - The Vertex codec, Google profiles, routing, catalog, management verification, media, and schema files in `internal/proxy/`.
+  - `pkg/llmproxyclient/capabilities.go`, `scripts/render_public_site.mjs`, and `scripts/test_live_providers.sh`.
+  - The related Go fixtures, public HTTP tests, CLI tests, operational tests, and browser tests.
+  - `docs/vertex-gemini.md`, Vertex evidence, the provider guide, Gemini guides, OpenAPI, generated API page, README, and terminology.
+
+- [!] [F054] (P1) Add Meta file dictation through the current public endpoints.
+  Goal:
+  Implement the file dictation part of P009, approved on 2026-09-06.
+  Requirements:
+  - Add `muse-voice-transcribe-1.0` with a native Meta ASR codec and synchronous dictation transport.
+  - Send JSON settings in the multipart `request` part and WAV bytes in the `audio` part.
+  - Use `PUSH_TO_TALK`, bearer authentication, and buffered JSON output.
+  - Validate RIFF/WAVE structure, mono 16-bit PCM, 16 kHz or 24 kHz, and the ten-minute duration bound.
+  - Bound the complete multipart request and preserve the smaller configured public upload limit.
+  - Return the complete transcript through both current dictation endpoints.
+  - Keep provider identifiers and error bodies private.
+  - Preserve tenant defaults, management selection, client discovery, and usage classification.
+  - Register a disabled candidate until provider access, retention evidence, and paid acceptance pass.
+  - Record the published audio price and the exact request-bound evidence.
+  Deliverables:
+  Native codec, candidate catalog, public integration tests, and operator documentation.
+  Validation:
+  - Start with failing HTTP tests for both public dictation endpoints.
+  - Prove valid audio, malformed audio, duration bounds, provider errors, cancellation, and tenant selection.
+  - Run final CI and paid acceptance at both sample rates.
+  - Resolve the file content-retention policy and exact 32 MB interpretation before activation.
+  Source:
+  `docs/meta-media-assessment.md`.
+  Development (2026-09-06):
+  The native `meta_transcription` codec and disabled candidate are implemented.
+  Both public endpoints pass at 16 kHz and 24 kHz with complete transcript output.
+  Public tests cover WAV validation, duration, request bounds, provider errors, cancellation, tenant defaults, usage, and client discovery.
+  `make test-meta-transcription` and `make test-provider-catalog` pass.
+  Final CI passed all 12 gates in 249 seconds with 100% Go coverage.
+  Blocked:
+  The existing key is available as `MUSE_API_KEY` in `configs/.env`.
+  File retention evidence, the exact provider request bound, and paid acceptance at both sample rates remain required before activation.
+
+- [ ] [F055] (P1) {F022,F054} Add Meta file transcription controls and speaker results.
+  Goal:
+  Complete the structured file transcription scope approved under P009 on 2026-09-06.
+  Requirements:
+  - Expose `PUSH_TO_TALK`, `ENDPOINTING`, and `DIARIZATION` through typed media operation inputs.
+  - Support keyword and language bias with provider-verified limits.
+  - Preserve complete transcripts, turn identifiers, timestamps, and session-local speaker labels in typed results.
+  - Keep text-only dictation as the existing F054 projection.
+  - Support the documented file event stream through canonical operation events and final results.
+  - Define partial replacement, delta assembly, terminal failure, and disconnect behavior explicitly.
+  - Reuse tenant assets, retained results, capacity, cancellation observations, and usage from F022 and I046.
+  - Update OpenAPI and the official client with the server contract.
+  Validation:
+  - Prove every mode and control through public HTTP and official client integration tests.
+  - Prove ordered turns, overlap, speaker changes, partial revisions, tenant isolation, and restart behavior.
+  - Qualify real speech for all declared modes before activation.
+  Source:
+  `docs/meta-media-assessment.md`.
+
+- [ ] [F056] (P1) {I046} Add tenant-owned Meta realtime transcription sessions.
+  Goal:
+  Implement the full realtime transcription scope approved under P009 on 2026-09-06.
+  Requirements:
+  - Define authenticated session resources and a typed audio and event transport under the current gateway namespace.
+  - Keep the provider key in the backend handshake and the native session identifier private.
+  - Support the three transcription modes, keyword bias, language bias, partial modes, and audio progress.
+  - Validate mono 16-bit PCM at 16 kHz or 24 kHz and enforce documented pacing and session limits.
+  - Map final transcripts, turn boundaries, speaker labels, errors, and close codes to one canonical event schema.
+  - Define explicit end-of-input, cancellation, disconnect, and session-expiry behavior.
+  - Keep new connections distinct because Meta provides no resume token.
+  - Enforce tenant fairness and shared provider-account concurrency and session-start limits.
+  - Define content retention, metadata-only provider logging, and processed-audio usage before activation.
+  - Update the server, OpenAPI, official client, and session example together.
+  Validation:
+  - Start with public session tests against a controlled WebSocket provider.
+  - Prove handshake timeout, pacing errors, partial revisions, overlapping turns, cancellation, and resource cleanup.
+  - Qualify both sample rates, all modes, terminal events, and provider usage with real audio.
+  Source:
+  `docs/meta-media-assessment.md`.
+
+- [ ] [F057] (P1) {F022,I046} Add Meta image generation and edit operations.
+  Goal:
+  Implement the full image endpoint scope approved under P009 on 2026-09-06.
+  Requirements:
+  - Add `muse-image-1.0` generation and edits through durable tenant-owned media operations.
+  - Preserve ordered input assets and implement native JSON and required multipart request forms.
+  - Expose verified output count, aspect ratio, file format, reasoning, moderation, and internal tool controls.
+  - Support completed image events with truthful completion and cancellation observations.
+  - Transfer provider output into authenticated tenant assets before operation success.
+  - Keep provider URLs and file identifiers private and implement required staging cleanup.
+  - Reconcile uncertain submissions through F022 evidence without automatic duplicate generation.
+  - Verify endpoint-specific input bounds, output URL lifetime, retention, and safety error behavior.
+  - Record per-image cost and shared account limits separately from informational token counts.
+  - Update the server, OpenAPI, official client, discovery, and examples together.
+  Validation:
+  - Prove generation, edits, controls, ordered inputs, output integrity, isolation, and uncertain dispatch through public integration tests.
+  - Qualify each declared operation and format, required cleanup, and usage with the Meta account before activation.
+  Source:
+  `docs/meta-media-assessment.md`, with P011 as the current shared operation contract.
+
+- [ ] [F058] (P1) {F057} Add Meta conversational image operations.
+  Goal:
+  Complete the Responses image conversation scope approved under P009 on 2026-09-06.
+  Requirements:
+  - Model image conversation state as tenant-owned resources linked to durable operations and assets.
+  - Support successive generation and edit turns with ordered references and all verified image controls.
+  - Keep signed image identifiers, provider response identifiers, and native replay items private.
+  - Define one canonical retention and replay policy from verified Meta contracts.
+  - Validate input ownership, replay order, expiry, deletion, and provider history failures at their boundaries.
+  - Preserve immutable accepted intent, idempotency, dispatch evidence, and usage for each turn.
+  - Update OpenAPI, official client methods, and a complete conversation example.
+  Validation:
+  - Prove successive edits, cross-tenant rejection, expired references, interrupted turns, cleanup, and duplicate convergence.
+  - Verify real provider replay and deletion behavior before activation.
+  Source:
+  `docs/meta-media-assessment.md`.
+
+- [ ] [F059] (P1) Add all six approved SiliconFlow provider offerings.
+  Goal:
+  Implement the full P010 expansion approved on 2026-09-06.
+  Requirements:
+  - Add GLM-5.3, dated DeepSeek V4 Pro and Flash, Kimi K3, Hy3, and LongCat 2.0.
+  - Use the exact upstream selectors recorded in `docs/siliconflow-expansion.md`.
+  - Verify each provider-specific reasoning control, context, output limit, media capability, and price.
+  - Resolve the conflicting Kimi K3 and LongCat output limits before canonical registration.
+  - Include Kimi image input after its provider-specific formats and limits are verified.
+  - Keep existing provider defaults and tenant selections unchanged.
+  - Add missing model publishers and families with verified weight-access metadata.
+  - Qualify complete candidate catalogs independently of shared exact-model activation.
+  - Keep unqualified offerings outside the canonical catalog when their shared model is already enabled.
+  - Update management, public discovery, clients, examples, and generated artifacts with qualified offerings.
+  Validation:
+  - Add failing public integration tests before each implementation change.
+  - Prove exact dispatch, reasoning, usage, continuation, invalid inputs, media, and saved defaults.
+  - Verify authenticated model discovery and each declared capability through the disposable proxy.
+  - Run final CI and preserve provider acceptance separately from production activation.
+  Source:
+  `docs/siliconflow-expansion.md`.
+
 - [x] [F053] (P1) Add Gemini 3.5 file transcription.
   Goal:
   Add `gemini-3.5-transcribe` to the current tenant-owned file-dictation interface.
@@ -3300,11 +3661,22 @@ retain satisfied historical dependencies.
   `docs/implementation/provider-routing-plan.md`, and `docs/meta-current-model.md`.
   Public event schemas did not change.
   Blocked:
-  `MODEL_API_KEY` is absent from the process and six private repository environment files.
-  The disposable candidate command stops with `required catalog environment is not set: MODEL_API_KEY`.
-  No live Muse Spark 1.3 request ran.
-  The operator must configure the key and complete key verification plus the full reasoning matrix before activation.
-  Evidence: `/tmp/llm-proxy-f049-live.log`.
+  Final CI stopped with `Go files require formatting: ./internal/proxy/vertex_test.go` during the active F060 change.
+  Browser setup stopped with `public_capabilities_invalid: catalog.providers[10].credential_kinds`.
+  Complete the shared validation after F060 resolves these failures.
+  Acceptance (2026-09-07):
+  The existing Meta key passed verification, omitted effort, and all six explicit efforts with HTTP 200.
+  All live Meta tests use `MUSE_API_KEY`, as required by the user.
+  After the final name change, live key verification and a Muse Spark 1.3 text request passed with HTTP 200.
+  The catalog environment binding and the entry in `configs/.env` use that exact name.
+  The key value is unchanged.
+  A CLI regression assertion requires this exact binding in live discovery.
+  Live verification and all seven reasoning cases passed again through this binding.
+  Evidence: `/tmp/llm-proxy-muse11-live.log`.
+  The catalog now enables Muse Spark 1.3.
+  Focused public HTTP tests pass, and discovery and browser expectations include the enabled model.
+  Production deployment belongs to the operator.
+  Evidence: `/tmp/llm-proxy-f049-qualified-live.log`, `/tmp/llm-proxy-f049-activation-green.log`, `/tmp/llm-proxy-f049-browser.log`, and `/tmp/llm-proxy-f049-activation-ci.log`.
 
 - [!] [F048] (P1) Add Grok 4.6.
   Goal:
@@ -3353,7 +3725,9 @@ retain satisfied historical dependencies.
   - Preserve provider defaults when the caller omits effort.
   - Record current standard prices and Gemini 3.8 Flash's introductory price period.
   - Reuse the current Gemini Interactions transport and provider default.
-  - Qualify reasoning, completion, active retrieval, cancellation, deletion, and media before activation.
+  - Qualify reasoning, media, and each model's declared completion lifecycle before activation.
+  - For Gemini 3.8 Flash, also qualify active retrieval, cancellation, and deletion.
+  - For Flash-Lite, qualify synchronous key verification and completion without storage.
   - Keep candidates disabled when any required provider check fails.
   Validation:
   - Start with failing public HTTP and candidate CLI tests.
@@ -3366,12 +3740,12 @@ retain satisfied historical dependencies.
   - The candidate CLI selects each exact model and rejects unknown selections before dispatch.
   - Browser discovery excludes both candidates. The default remains `gemini-3.5-flash`.
   Blocked:
-  - Both Models API requests passed with the repository key and confirmed the declared token limits.
-  - The latest Gemini 3.8 Flash run passed omitted, low, and medium effort, then returned HTTP 429 at high effort.
-  - Its stored lifecycle remains unqualified. Earlier key verification and the image smoke test passed.
-  - Flash-Lite passed omitted effort and all four explicit efforts, then returned HTTP 400 at background creation.
-  - Flash-Lite's disposable key verification returned HTTP 422 `provider_key_rejected` before its image test.
-  - Live audio and the full stored interaction lifecycle remain unqualified. Activation requires all listed provider checks.
+  - Both Models API requests passed and confirmed the declared token limits.
+  - Gemini 3.8 Flash returned HTTP 429 with a free-tier request limit of 5.
+  - A later lifecycle probe timed out before its first response. Its stored lifecycle remains unqualified.
+  - After B197, Flash-Lite passed the direct reasoning matrix, proxy key verification, omitted-effort text, and image input.
+  - Flash-Lite's full proxy reasoning matrix timed out on its next request.
+  - Live audio remains unqualified for both models. Both candidates remain disabled until all applicable checks pass.
   Local validation:
   - Focused HTTP, candidate CLI, and browser checks pass.
   - Initial CI rejected a migration-test target that selected a disabled candidate: `reason=dangling_reference`.
@@ -3396,6 +3770,24 @@ retain satisfied historical dependencies.
   Its `high` effort request returned HTTP 429. The run stopped before the stored lifecycle checks.
   The candidate remains disabled until all required acceptance checks pass.
   Evidence: `/tmp/llm-proxy-f047-gemini38-goal-refresh.log`.
+
+  Root cause diagnosis (2026-09-06, I251 and B197):
+  Gemini 3.8 Flash's HTTP 429 reports `generate_content_free_tier_requests, limit: 5` and a retry delay of approximately 41 seconds.
+  Flash-Lite's HTTP 400 states: `Model 'gemini-3.5-flash-lite' does not support background interactions.`
+  B197 corrects its catalog lifecycle and candidate checks to synchronous completion.
+  The direct candidate matrix then passed omitted, minimal, low, medium, and high effort with HTTP 200.
+  Flash-Lite also had a transient HTTP 500 high-demand response during diagnosis.
+  Evidence: `/tmp/llm-proxy-f047-gemini38-diagnosis.log`, `/tmp/llm-proxy-f047-lite-background-diagnosis.log`, and `/tmp/llm-proxy-b197-lite-live.log`.
+  Flash-Lite's corrected proxy route passed key verification, omitted-effort text, and the image smoke test with HTTP 200.
+  Its full proxy reasoning matrix stopped on the next request after a 45,003-millisecond timeout.
+  A separate Gemini 3.8 Flash lifecycle probe also timed out before its first response.
+  Both candidates remain disabled. Full proxy reasoning, applicable stored lifecycle checks, and live audio still require acceptance.
+  Evidence: `/tmp/llm-proxy-b197-lite-proxy-live.log`, `/tmp/llm-proxy-b197-lite-media-declared-env.log`, and `/tmp/llm-proxy-f047-flash-lifecycle-diagnosis.log`.
+
+  Vertex alternative (2026-09-07):
+  F060 qualified both exact models through the public Vertex proxy with the dedicated service account.
+  These Vertex offerings are enabled. The Developer API offerings remain disabled.
+  See `docs/vertex-gemini.md` for the tenant cutover.
 
 - [x] [F046] (P1) Add Claude Fable 5.1 and Opus 5.
   Goal:
@@ -3623,6 +4015,11 @@ retain satisfied historical dependencies.
   - Store adapters, typed credential profiles, staging lifecycle, and provider integration fixtures.
   Open decisions:
   - Select deployment values, provider-readable URL lifetime, and Google credential mode for each consuming route.
+  P012 reconciliation (2026-09-07):
+  Keep media staging separate from independent customer completion connections.
+  Operator credential profiles do not satisfy P012's customer setup requirement.
+  Resolve P012 and approve a separate storage ownership contract before further Google credential implementation under F043.
+  `docs/gemini-customer-connections.md` records the proposed boundary.
   Validation:
   - Use real files and HTTP serving to prove exact fetched bytes, digest, expiry, and cleanup.
   - Prove tenant isolation, active reference retention, failed staging, and secret-free public output.
@@ -4745,6 +5142,116 @@ retain satisfied historical dependencies.
 
 ## Planning
 
+- [!] [P012] (P1) Plan reliable Gemini access through independent customer connections.
+  Goal:
+  Eliminate impractical connection scenarios and select the best supported Gemini access for customers who connect and manage their providers independently.
+  The result can support the same exact model through both AI Studio and Vertex AI as separate provider offerings.
+  Requirements:
+  - Assess the Gemini Developer API through AI Studio and Vertex AI against the same customer acceptance criteria.
+  - Permit both providers when each offers reliable access through a practical customer connection flow.
+  - Represent the same exact model through separate provider offerings, with explicit provider selection and independent qualification.
+  - Use the existing API-key connection flow as the initial customer contract.
+  - Specify how customers obtain a suitable key, connect a provider, validate access, select a model, and disconnect.
+  - Require each customer to complete setup without credential-file installation or identity configuration by the proxy operator.
+  - Exclude custom connection flows that require Application Default Credentials (ADC) JSON files, service-account JSON files, or credential-file uploads.
+  - Exclude custom operator provisioning, server configuration edits, and operator-managed credential profiles from customer connection requirements.
+  - Verify the complete Google key-acquisition process, including billing and access requirements, before accepting an API-key flow as practical.
+  - Keep provider OAuth outside implementation scope unless research demonstrates a supported customer connection flow.
+  - For any OAuth proposal, verify Google consent, required scopes, application verification, token renewal, reconnection, revocation, and tenant isolation.
+  - Demonstrate the complete OAuth flow with a separate customer account before requesting implementation approval.
+  - Treat operator-managed credential profiles as insufficient evidence of a customer OAuth flow.
+  - Compare exact model IDs with equivalent inputs, reasoning levels, deadlines, and output limits.
+  - Verify text, structured output, required media inputs, and the lifecycle of each required operation.
+  - Separate quota, billing, credential restrictions, model availability, unsupported operations, and transient provider failures.
+  - Define repeated acceptance runs and report success rates, latency, capacity limits, cost, and customer setup requirements.
+  - Use current official sources and live evidence to recommend the supported provider offerings for the required Gemini capabilities.
+  - Explain the customer benefit and connection requirements of each recommended offering.
+  - Record excluded scenarios and the customer requirement that each scenario fails.
+  - Specify the bounded schema and adapter changes that the recommended offerings require.
+  - Reconcile F060 and the relevant F043 credential requirements with this decision before further authentication or migration implementation.
+  - Keep P001 responsible for the shared provider connection interface.
+  Evidence (2026-09-07):
+  - The local and deployment dotenv files contained the same Gemini key.
+  - That key returned HTTP 429 with zero free-tier quota for Gemini 3.1 Pro Preview.
+  - The existing billed project had a different key, restricted to the Gemini Developer API.
+  - That project key passed six direct high-reasoning requests across generateContent and Interactions.
+  - The models were `gemini-3.1-pro-preview`, `gemini-3.8-flash`, and `gemini-3.5-flash-lite`.
+  - Flash-Lite returned HTTP 400 for a background interaction because the model does not support that operation.
+  - Vertex Express returned HTTP 401 for the local key and HTTP 403, `API_KEY_SERVICE_BLOCKED`, for the project key.
+  - A suitable Vertex authorization key was absent during the initial probes. The later comparison below used an approved replacement key.
+  - I252 passed direct Vertex requests with local user OAuth. Those results do not qualify the customer API-key flow.
+  - These small direct probes do not establish sustained reliability, public proxy acceptance, or production acceptance.
+  Deliverables:
+  - A provider support decision that permits AI Studio, Vertex AI, or both according to customer acceptance evidence.
+  - The customer flow, exact models, capability limits, and acceptance evidence for each recommended offering.
+  - An explicit list of excluded connection scenarios and their failed customer requirements.
+  - A repeatable qualification plan with explicit success criteria and unresolved external dependencies.
+  - A proposed revision of F060 and any separate implementation issues justified by the decision.
+  Validation:
+  - Specify independent customer setup and public proxy acceptance for every recommended provider offering.
+  - Require evidence from a separate customer account without proxy-server access or operator credential provisioning.
+  - Record any missing credential or provider approval as an explicit unresolved comparison result.
+  - Keep implementation approval separate from this planning issue.
+  Assessment (2026-09-07):
+  - `docs/gemini-customer-connections.md` compares customer setup, exact routes, excluded scenarios, and retained evidence.
+  - Qualify the billed AI Studio key flow first. Assess Vertex Express independently.
+  - Current Google documentation specifies authorization keys and distinct service restrictions.
+  - The Express model table does not establish access to every required exact model.
+  - F060 passed 28 proxy requests with an operator service account. This result does not satisfy independent customer setup.
+  - The proposed F060 revision uses the accepted API-key contract and retains P001 as the shared interface owner.
+  - The plan defines repeated functional, lifecycle, capacity, latency, cost, and tenant-isolation acceptance.
+  - The initial assessment changed planning documents only. Later acceptance runs are recorded separately below.
+  - The Governor check passed without drift. Changed prose passed the language review and mechanical checks.
+  - `git diff --check` passed, and the issue ID review found no duplicates.
+  Existing account verification (2026-09-07):
+  - The user selected the primary Google account and its existing billed project for continued acceptance.
+  - AI Studio showed Tier 1 Prepay and a positive credit balance.
+  - The existing authorization key passed all three direct model suites, including the supported background lifecycle checks.
+  - Flash 3.8 and Flash-Lite 3.5 passed proxy reasoning and image acceptance.
+  - The original dotenv key passed verification, but proxy completion failed with `curl` error 28 after 45 seconds.
+  - `docs/evidence/gemini-customer-existing-account-2026-09-07.json` records the sanitized results.
+  - The Vertex API-key form uses the existing Vertex service account and restricts access to Agent Platform API.
+  API-key comparison (2026-09-07):
+  - The user approved Vertex key creation in the existing project with the existing Vertex service account.
+  - The Google CLI created the key after the browser connection failed.
+  - The initial key was revoked because the CLI included its value in diagnostic output.
+  - Replacement creation captured all raw output. The replacement restricts access to `aiplatform.googleapis.com`.
+  - Both API-key routes passed 22 direct cases across Pro 3.1 Preview, Flash 3.8, and Flash-Lite 3.5.
+  - Cases covered declared reasoning levels, structured output, one image, and one audio clip.
+  - The initial comparison passed 41 of 44 requests. Three Gemini schema requests used an incorrect array format.
+  - All three corrected Gemini requests passed. These diagnostic corrections do not indicate a provider capacity failure.
+  - `docs/evidence/gemini-vertex-api-key-comparison-2026-09-07.json` retains all 47 request results and token estimates.
+  - Both providers list the same Standard token rates for these models and inputs.
+  - Direct key access passed. Independent first-use setup and Vertex key acceptance through the proxy remain unverified.
+  - Runtime authentication and production configuration did not change during this comparison.
+  - The Governor check and changed-prose checks passed. `git diff --check` passed.
+  Saved key and capacity session (2026-09-07):
+  - The user supplied the existing billed key as `AI_STUDIO_API_KEY` in `configs/.env`.
+  - The local `GEMINI_API_KEY` assignment now selects the same verified value.
+  - Gemini 3.5 Flash passed default proxy text and image acceptance.
+  - Flash 3.8 and Flash-Lite passed proxy reasoning and image checks. All three direct model suites passed.
+  - Flash 3.8 initially returned HTTP 422 during proxy key verification. The repeat and ten concurrent direct verification requests passed.
+  - The initial verification rejection has no established upstream cause and remains in the evidence.
+  - Pro 3.1 has no Gemini provider offering in the current catalog. Its proxy candidate command stopped before a provider request.
+  - The user selected 10 concurrent requests. The steady request rate remains unspecified.
+  - Vertex passed the complete 220-request capacity matrix and 20 additional initial requests.
+  - Gemini Flash passed 70/70. Gemini Pro passed 21/30 and hit its paid-project quota of 25 requests per minute.
+  - Gemini Flash-Lite passed 29/30 before HTTP 200 with `MALFORMED_RESPONSE` stopped that offering.
+  - The evidence retains all 370 attempts and ten failures. Estimated token charges total USD 0.28469825.
+  - `docs/evidence/gemini-saved-key-acceptance-2026-09-07.json` records local configuration and functional results.
+  - `docs/evidence/gemini-vertex-capacity-2026-09-07-session-1.json` records the first capacity session.
+  - Two automated follow-up sessions run at 12-hour intervals. Gemini Pro remains excluded pending quota or request-rate resolution.
+  - The current evidence favors Vertex for repeated bursts. The support decision remains provisional.
+  Blocked:
+  Complete key acquisition and public proxy acceptance through a separate customer account without proxy-server access.
+  Complete the 24-hour capacity evidence and record actual costs. Resolve the Gemini Pro request-rate decision and the Flash-Lite output failure.
+  Obtain implementation approval for the bounded F060 API-key revision.
+  Keep the support decision provisional until this evidence is available.
+  Sources:
+  - https://docs.cloud.google.com/vertex-ai/generative-ai/docs/start/api-keys
+  - https://docs.cloud.google.com/docs/authentication/api-keys
+  - https://docs.cloud.google.com/vertex-ai/generative-ai/docs/start/express-mode/vertex-ai-express-mode-api-reference
+
 - [x] [P010] (P2) Plan current SiliconFlow model expansion.
   Goal:
   Define the route mappings and acceptance sequence for the six SiliconFlow gaps in the provider audit.
@@ -4765,6 +5272,10 @@ retain satisfied historical dependencies.
   The SiliconFlow key is absent from the process and all six repository private environment files.
   Paid discovery and acceptance remain pending. No provider offering or event contract changed.
   Documentation checks and the Governor check passed.
+
+  Approval (2026-09-06):
+  The user approved the full P010 implementation scope.
+  F059 owns all six offerings, provider-specific controls, Kimi image assessment, and qualification.
 
 - [x] [P009] (P2) Assess new Meta image and transcription models.
   Goal:
@@ -4797,7 +5308,10 @@ retain satisfied historical dependencies.
   The Meta key is absent from the process and all six repository private environment files.
   Paid provider acceptance remains pending. No runtime offering or event contract changed.
   Changed documentation passed the language review and repository checks.
-*do not implement yet*
+  Approval (2026-09-06):
+  The user approved the full P009 implementation scope.
+  F054, F055, F056, F057, and F058 own file dictation, structured file results, realtime sessions, images, and image conversations.
+  This approval supersedes the earlier implementation hold.
 
 - [ ] [P008] (P1) Plan unified local inference and `computercat` GPU control.
   Goal:
