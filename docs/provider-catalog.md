@@ -65,6 +65,7 @@ The loader validates disabled records before it removes them from the runtime ca
 A disabled offering cannot be a provider default.
 An offering requires an enabled provider, model, and offering record.
 The model can remain available through another qualified provider.
+The runtime excludes a model when its last active provider offering is disabled.
 This rule keeps Vertex qualification separate from Developer API qualification.
 
 ## Model activation
@@ -76,7 +77,7 @@ The Go schema uses `ModelEnabled` and `ModelDisabled` for these explicit states.
 The private catalog retains disabled models and their provider offerings, controls, limits, and prices.
 Startup validates this retained metadata.
 The runtime excludes disabled models, offerings, and prices from routing and discovery.
-Runtime families contain only families referenced by enabled models.
+Runtime families contain only families referenced by runtime models with active provider offerings.
 The private schema retains all family metadata.
 Management profiles, public capabilities, client model discovery, and standard live tests use this runtime catalog.
 

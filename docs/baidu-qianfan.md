@@ -39,6 +39,8 @@ An absent `flag` is valid.
 A present flag must be the JSON integer `0` or `1`.
 Blocked flags, unknown values, null values, and malformed flags fail the request.
 A failure cannot expose partial text from the response.
+The adapter keeps valid reported token usage when response policy rejects the content.
+Managed usage records these tokens on the failed request.
 Managed key verification uses the same response parser and policy.
 
 ## Managed connection
