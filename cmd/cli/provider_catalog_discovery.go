@@ -20,6 +20,7 @@ type providerCatalogDiscoveryField struct {
 	Kind        string `json:"kind"`
 	Required    bool   `json:"required"`
 	Environment string `json:"environment"`
+	Default     string `json:"default"`
 }
 
 func loadProviderCatalogDiscovery(rawConfigPath string) (providerCatalogDiscovery, error) {
@@ -32,7 +33,7 @@ func loadProviderCatalogDiscovery(rawConfigPath string) (providerCatalogDiscover
 		providerDiscovery := providerCatalogDiscoveryProvider{ID: provider.ID}
 		for _, field := range provider.Fields {
 			providerDiscovery.Fields = append(providerDiscovery.Fields, providerCatalogDiscoveryField{
-				ID: field.ID, Kind: field.Kind, Required: field.Required, Environment: field.Environment,
+				ID: field.ID, Kind: field.Kind, Required: field.Required, Environment: field.Environment, Default: *field.Default,
 			})
 		}
 		discovery.Providers = append(discovery.Providers, providerDiscovery)

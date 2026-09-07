@@ -455,8 +455,8 @@ management:
 	if capturedConfiguration.Port != 9191 || capturedConfiguration.LogLevel != proxy.LogLevelDebug {
 		t.Fatalf("public API server=%+v", capturedConfiguration)
 	}
-	if len(capturedConfiguration.Catalog.Providers) != 11 {
-		t.Fatalf("provider count=%d want=11", len(capturedConfiguration.Catalog.Providers))
+	if len(capturedConfiguration.Catalog.Providers) != 12 {
+		t.Fatalf("provider count=%d want=12", len(capturedConfiguration.Catalog.Providers))
 	}
 	if capturedConfiguration.Catalog.MaxPromptBytes != 3 || capturedConfiguration.Catalog.MaxInputAudioBytes != 25*1024*1024 {
 		t.Fatalf("public limits=%+v", capturedConfiguration.Catalog)
@@ -519,17 +519,21 @@ func TestRootCommandPrintsCatalogDerivedLiveDiscovery(t *testing.T) {
 	if decodeError := json.Unmarshal(output.Bytes(), &discovery); decodeError != nil {
 		t.Fatalf("decode provider discovery: %v", decodeError)
 	}
-	if discovery.SchemaVersion != proxy.ProviderCatalogSchemaVersion || len(discovery.Providers) != 11 {
+	if discovery.SchemaVersion != proxy.ProviderCatalogSchemaVersion || len(discovery.Providers) != 12 {
 		t.Fatalf("provider discovery=%+v", discovery)
 	}
+	baiduFound := false
 	dashScopeFound := false
 	for _, provider := range discovery.Providers {
+		if provider.ID == proxy.ProviderNameBaidu {
+			baiduFound = len(provider.Fields) == 2 && provider.Fields[0].Environment == "BAIDU_API_KEY" && provider.Fields[0].Default == "" && provider.Fields[1].Environment == "" && provider.Fields[1].Default == "https://api.baiduqianfan.ai/v1"
+		}
 		if provider.ID != proxy.ProviderNameDashScope {
 			continue
 		}
 		dashScopeFound = len(provider.Fields) == 2 && provider.Fields[0].Environment == "DASHSCOPE_API_KEY" && provider.Fields[1].Environment == "DASHSCOPE_BASE_URL"
 	}
-	if !dashScopeFound {
+	if !dashScopeFound || !baiduFound {
 		t.Fatalf("DashScope discovery=%+v", discovery.Providers)
 	}
 	for _, privateCatalogFragment := range []string{"default_base_url", "authentication", "upstream_model"} {
@@ -739,6 +743,7 @@ func TestRootCommandRejectsObsoleteTenantConfiguration(t *testing.T) {
 		"management:\n  enabled: true\n",
 		"tenants:\n  - id: default\n    secret: client-secret\n",
 		"providers:\n  openai:\n    api_key: provider-secret\n",
+		"providers:\n  baidu:\n    api_key: provider-secret\n",
 	} {
 		t.Run(strings.SplitN(obsoleteYAML, ":", 2)[0], func(subTest *testing.T) {
 			configPath := writeTestConfig(subTest, subTest.TempDir(), obsoleteYAML)
