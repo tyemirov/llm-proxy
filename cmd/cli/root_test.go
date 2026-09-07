@@ -155,7 +155,7 @@ DASHSCOPE_BASE_URL=https://workspace.ap-southeast-1.maas.aliyuncs.com/compatible
 		}
 	}
 	openAIOfferings := configuredProviderOfferings(capturedConfiguration.ModelCatalog, proxy.ProviderNameOpenAI)
-	if len(openAIOfferings) < 3 || openAIOfferings[2].Model != "gpt-4.1" || openAIOfferings[2].RequestProfile != "openai_responses_temperature_tools" || !openAIOfferings[2].WebSearch {
+	if len(openAIOfferings) < 4 || openAIOfferings[3].Model != "gpt-4.1" || openAIOfferings[3].RequestProfile != "openai_responses_temperature_tools" || !openAIOfferings[3].WebSearch {
 		t.Fatalf("openai offerings=%+v", openAIOfferings)
 	}
 	for _, offering := range capturedConfiguration.ModelCatalog.Offerings {
@@ -424,7 +424,7 @@ DASHSCOPE_BASE_URL=https://workspace.ap-southeast-1.maas.aliyuncs.com/compatible
 	}
 	metaOfferings := configuredProviderOfferings(capturedConfiguration.ModelCatalog, proxy.ProviderNameMeta)
 	metaDefault, metaDefaultFound := configuredDefaultOffering(capturedConfiguration.ModelCatalog, proxy.ProviderNameMeta, proxy.ModelOperationText)
-	if !metaDefaultFound || metaDefault.Model != proxy.ModelNameMuseSpark11 || len(metaOfferings) != 2 ||
+	if !metaDefaultFound || metaDefault.Model != proxy.ModelNameMuseSpark11 || len(metaOfferings) != 3 ||
 		metaOfferings[0].Model != proxy.ModelNameMuseSpark11 || metaOfferings[1].Model != proxy.ModelNameMuseSpark12 {
 		t.Fatalf("meta offerings=%+v default=%+v", metaOfferings, metaDefault)
 	}
@@ -455,8 +455,8 @@ management:
 	if capturedConfiguration.Port != 9191 || capturedConfiguration.LogLevel != proxy.LogLevelDebug {
 		t.Fatalf("public API server=%+v", capturedConfiguration)
 	}
-	if len(capturedConfiguration.Catalog.Providers) != 12 {
-		t.Fatalf("provider count=%d want=12", len(capturedConfiguration.Catalog.Providers))
+	if len(capturedConfiguration.Catalog.Providers) != 13 {
+		t.Fatalf("provider count=%d want=13", len(capturedConfiguration.Catalog.Providers))
 	}
 	if capturedConfiguration.Catalog.MaxPromptBytes != 3 || capturedConfiguration.Catalog.MaxInputAudioBytes != 25*1024*1024 {
 		t.Fatalf("public limits=%+v", capturedConfiguration.Catalog)
@@ -519,12 +519,13 @@ func TestRootCommandPrintsCatalogDerivedLiveDiscovery(t *testing.T) {
 	if decodeError := json.Unmarshal(output.Bytes(), &discovery); decodeError != nil {
 		t.Fatalf("decode provider discovery: %v", decodeError)
 	}
-	if discovery.SchemaVersion != proxy.ProviderCatalogSchemaVersion || len(discovery.Providers) != 12 {
-		t.Fatalf("provider discovery=%+v", discovery)
-	}
 	baiduFound := false
 	dashScopeFound := false
+	metaFound := false
 	for _, provider := range discovery.Providers {
+		if provider.ID == proxy.ProviderNameMeta {
+			metaFound = len(provider.Fields) == 1 && provider.Fields[0].Environment == "MUSE_API_KEY"
+		}
 		if provider.ID == proxy.ProviderNameBaidu {
 			baiduFound = len(provider.Fields) == 2 && provider.Fields[0].Environment == "BAIDU_API_KEY" && provider.Fields[0].Default == "" && provider.Fields[1].Environment == "" && provider.Fields[1].Default == "https://api.baiduqianfan.ai/v1"
 		}
@@ -532,6 +533,12 @@ func TestRootCommandPrintsCatalogDerivedLiveDiscovery(t *testing.T) {
 			continue
 		}
 		dashScopeFound = len(provider.Fields) == 2 && provider.Fields[0].Environment == "DASHSCOPE_API_KEY" && provider.Fields[1].Environment == "DASHSCOPE_BASE_URL"
+	}
+	if !metaFound {
+		t.Fatal("Meta live discovery must require MUSE_API_KEY")
+	}
+	if discovery.SchemaVersion != proxy.ProviderCatalogSchemaVersion || len(discovery.Providers) != 13 {
+		t.Fatalf("provider discovery=%+v", discovery)
 	}
 	if !dashScopeFound || !baiduFound {
 		t.Fatalf("DashScope discovery=%+v", discovery.Providers)
