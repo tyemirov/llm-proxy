@@ -1375,6 +1375,35 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [x] [I253] (P2) Add provider and model logos to management and the public catalog.
+  Goal: Implement the logo presentation from P013 on both surfaces.
+  Requirements:
+  - Use local SVG assets and one shared provider and family manifest.
+  - Preserve API connection identities and model family identities.
+  - Keep SenseVoice text-only and retain the current Moonshot identity.
+  - Validate mappings, asset files, source digests, and disabled catalog identities during the build.
+  - Preserve visible labels, accessible controls, and narrow layouts.
+  Validation: Start with failing browser tests. Run focused browser and asset checks, then final `make ci`.
+  Results:
+  - Added 18 local SVG assets with a retained license and pinned source digests.
+  - The shared manifest covers 13 providers and 29 families, including disabled candidates.
+  - Both management card faces and family labels show the selected logos.
+  - The public renderer adds icons to route labels and model matrix labels.
+  - SenseVoice remains text-only. Existing service and model identities remain intact.
+  - Initial browser tests failed on missing icons before the application changes.
+  - The focused browser and renderer suite passed 27 tests.
+  - The final icon suite passed 11 tests, including invalid build inputs and 390px layouts.
+  - Frontend lint and the Governor check passed. Changed prose has no mechanical language findings.
+  - Initial CI found a missing validator in the dependency test fixture: `MODULE_NOT_FOUND`.
+  - Updated the fixture and added dependency coverage for `make check-brand-icons`. The dependency contract target passed.
+  - Full browser validation found a 5.3px card header offset and two obsolete HTML assertions.
+  - Centered the card header items and updated the assertions to require generated family icons.
+  - All 13 focused correction tests passed. Final `make ci` passed all 12 gates with 100.0% Go statement coverage.
+  - Full CI passed 110 browser tests, the Pages artifact check, and the management authentication test.
+  - Updated files: brand modules, SVG assets, styles, both HTML entry points, renderer, validator, browser tests, Makefile, README, and icon documentation.
+  - No API field or event contract changed.
+  Resolution: Both surfaces show the selected local logos. Repository validation passed. The changes remain local and uncommitted.
+
 - [x] [I252] (P1) Qualify the current Gemini candidates on Vertex AI.
   Goal:
   Establish whether Vertex resolves the current Google quota and request failures before the provider migration.
@@ -5171,6 +5200,20 @@ retain satisfied historical dependencies.
 
 
 ## Planning
+
+- [x] [P013] (P2) Plan provider and model logos for management and the public catalog.
+  Goal: Define small logos that distinguish API connections from model families on both surfaces.
+  Requirements:
+  - Record exact provider and family mappings with asset sources.
+  - Preserve the API connection and model family separation from I237.
+  - Specify icon placement, dimensions, accessibility, and shared asset ownership.
+  - Record uncertain brand identities and the implementation acceptance criteria.
+  Deliverable: `docs/provider-model-icons.md`.
+  Scope: This issue defines the plan. It does not authorize application implementation.
+  Resolution (2026-09-07): Recorded 13 provider mappings and 29 family mappings with 18 candidate SVG assets.
+  The proposal gives SenseVoice an explicit text-only presentation and records the current Moonshot identity decision.
+  The visual comparison passed a theme-switch check and a 390px layout check.
+  The plan passed the prose checker and Governor check. No application or event contract changed.
 
 - [!] [P012] (P1) Plan reliable Gemini access through independent customer connections.
   Goal:
