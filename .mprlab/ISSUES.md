@@ -25,6 +25,36 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B199] (P2) Remove models without active provider offerings from runtime discovery.
+  Evidence: A disabled Vertex provider leaves public models with no capabilities or provider offerings.
+  Requirements:
+  - Remove models when their last active provider offering is disabled.
+  - Remove families without runtime models.
+  - Keep models available through another active provider offering.
+  - Keep the private catalog metadata.
+  Validation: Use public HTTP tests and final CI after B200.
+  Implementation: Runtime models now require an active provider offering. Runtime families use these models.
+  The private catalog retains all metadata. Shared models remain available through active providers.
+  The initial HTTP test found four Vertex models with empty capabilities and provider offerings.
+  Resolution (2026-09-07): `make test-provider-catalog` and final `make ci` passed.
+  CI passed all 12 gates with 100.0% Go statement coverage.
+  Changed files: `internal/proxy/provider_catalog_schema.go`, `internal/proxy/model_activation_test.go`, and `docs/provider-catalog.md`.
+  No event contract changed.
+
+- [x] [B200] (P2) Keep reported Qianfan token usage when response policy rejects content.
+  Evidence: A blocked response with valid token usage produces a failed request with zero recorded tokens.
+  Requirements:
+  - Parse valid token usage before response policy checks.
+  - Keep reported usage on failed requests without exposing rejected text.
+  Validation: Use public HTTP tests and final CI.
+  Implementation: The parser now keeps valid usage before the Qianfan policy checks.
+  Failed requests retain reported tokens without exposing rejected text.
+  The initial accounting test recorded zero tokens instead of two input tokens and three output tokens.
+  Resolution (2026-09-07): `make test-baidu` and final `make ci` passed.
+  CI passed all 12 gates with 100.0% Go statement coverage in 254 seconds.
+  Changed files: `internal/proxy/openai_compatible_chat.go`, `internal/proxy/baidu_usage_test.go`, and `docs/baidu-qianfan.md`.
+  No event contract changed.
+
 - [x] [B198] (P1) Permit a disabled candidate for a new provider operation.
   Evidence:
   F054 adds Meta dictation as a disabled candidate.
