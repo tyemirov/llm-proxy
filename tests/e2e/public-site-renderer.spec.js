@@ -2,7 +2,7 @@
 
 import { expect, test } from "@playwright/test";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -13,6 +13,20 @@ const executeFile = promisify(execFile);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const publicCapabilitiesPath = "/api/public/capabilities";
 
+test("brand icons public renderer rejects an unmapped runtime family", async () => {
+  const capabilities = normalizedCapabilityFixture();
+  capabilities.families[0].identifier = "new-family";
+  capabilities.models[0].family = "new-family";
+  await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+    const fixture = await siteFixture();
+    try {
+      await expect(renderFixture(fixture, capabilitiesURL)).rejects.toThrow(/brand_icon_mapping_missing: family=new-family/u);
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+});
+
 test("public site renders Google credential profile offerings", async ({ page }) => {
   const capabilities = normalizedCapabilityFixture();
   capabilities.providers[0].credential_kinds = ["google_credential_profile"];
@@ -21,7 +35,7 @@ test("public site renders Google credential profile offerings", async ({ page })
     try {
       await renderFixture(fixture, capabilitiesURL);
       await page.setContent(await readFile(path.join(fixture.output, "index.html"), "utf8"));
-      await expect(page.locator('[data-route-provider="example-provider"]')).toBeAttached();
+      await expect(page.locator('[data-route-provider="deepseek"]')).toBeAttached();
     } finally {
       await rm(fixture.root, { recursive: true, force: true });
     }
@@ -139,9 +153,9 @@ test("public site rendering writes the normalized exact model catalog", async ()
       expect(renderedLanding).toContain('data-route-capability="text" aria-label="Text generation" title="Text generation" aria-pressed="true"');
       expect(renderedLanding).toContain('data-route-family-weight-access="proprietary"');
       expect(renderedLanding).toContain('data-route-provider-capabilities="text"');
-      expect(renderedLanding).toContain('data-route-family="example-family"');
-      expect(renderedLanding).toContain('data-route-model="example-model" data-route-model-family="example-family"');
-      expect(renderedLanding).toContain('data-route-provider="example-provider"');
+      expect(renderedLanding).toContain('data-route-family="deepseek-v4"');
+      expect(renderedLanding).toContain('data-route-model="example-model" data-route-model-family="deepseek-v4"');
+      expect(renderedLanding).toContain('data-route-provider="deepseek"');
       expect(renderedLanding).not.toContain("data-route-publisher");
       expect(renderedLanding).toContain('<strong>1</strong><span>Exact models</span>');
       expect(renderedLanding).not.toContain("provider_model");
@@ -177,10 +191,10 @@ function normalizedCapabilityFixture() {
       { id: "dictation", input_artifacts: ["audio"], output_artifacts: ["text"] },
       { id: "video_generation", input_artifacts: ["text", "image"], output_artifacts: ["video"] },
     ],
-    providers: [{ identifier: "example-provider", label: "Example Provider", credential_kinds: ["api_key"] }],
+    providers: [{ identifier: "deepseek", label: "Example Provider", credential_kinds: ["api_key"] }],
     publishers: [{ identifier: "example-publisher", label: "Example Publisher", model_count: 1 }],
     families: [{
-      identifier: "example-family",
+      identifier: "deepseek-v4",
       publisher: "example-publisher",
       label: "Example Family",
       weight_access: "proprietary",
@@ -188,16 +202,16 @@ function normalizedCapabilityFixture() {
     models: [{
       identifier: "example-model",
       publisher: "example-publisher",
-      family: "example-family",
+      family: "deepseek-v4",
       version: "1",
       operations: ["text"],
       media_inputs: [],
       capabilities: ["text"],
-      provider_offerings: ["example-provider:example-model"],
+      provider_offerings: ["deepseek:example-model"],
     }],
     offerings: [{
-      identifier: "example-provider:example-model",
-      provider: "example-provider",
+      identifier: "deepseek:example-model",
+      provider: "deepseek",
       model: "example-model",
       capabilities: ["text"],
       wire_contract: "openai_chat_completions",
@@ -209,7 +223,7 @@ function normalizedCapabilityFixture() {
       media_limits: [],
     }],
     prices: [{
-      provider: "example-provider",
+      provider: "deepseek",
       model: "example-model",
       operation: "text",
       available: false,
@@ -264,6 +278,7 @@ async function siteFixture() {
     '<mpr-header data-config-url="/config-ui.yaml"></mpr-header>',
     "utf8",
   );
+  await cp(path.join(repositoryRoot, "site/assets/llm-proxy/img/brands"), path.join(source, "assets/llm-proxy/img/brands"), { recursive: true });
   return { root, source, output: path.join(root, "output") };
 }
 

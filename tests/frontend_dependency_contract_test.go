@@ -34,6 +34,14 @@ func TestOperationalFrontendValidationPreparesPinnedDependencies(testingInstance
 		expectedCommands []string
 	}{
 		{
+			name:   "brand-icons",
+			target: "check-brand-icons",
+			expectedCommands: []string{
+				"ci",
+				"playwright install --with-deps chromium",
+			},
+		},
+		{
 			name:   "frontend-lint",
 			target: "frontend-lint",
 			expectedCommands: []string{
@@ -194,7 +202,7 @@ func prepareFrontendDependencyFixture(testingInstance *testing.T, repositoryRoot
 		testingInstance,
 		filepath.Join(fixtureRoot, "Makefile"),
 		string(makefileBytes)+`
-test-release-policy check-format go-lint python-lint python-test test-openapi-pages-artifact test-live-provider-harness:
+test-release-policy check-format go-lint python-lint python-test check-brand-icons test-openapi-pages-artifact test-live-provider-harness:
 	@:
 
 go-test:
