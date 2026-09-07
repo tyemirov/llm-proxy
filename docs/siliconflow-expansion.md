@@ -2,6 +2,8 @@
 
 P010 records the next SiliconFlow expansion from the September 5, 2026 provider audit.
 This assessment does not register new routes.
+The user approved the full expansion on September 6, 2026.
+F059 owns all six offerings, provider-specific controls, Kimi image input, and independent qualification.
 
 ## Current contract
 

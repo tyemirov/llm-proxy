@@ -1,14 +1,17 @@
 # Current Gemini Candidates
 
-F047 adds disabled catalog records for `gemini-3.8-flash` and `gemini-3.5-flash-lite`.
-The public catalog excludes both models until their live qualification passes.
+F047 adds Developer API offerings for `gemini-3.8-flash` and `gemini-3.5-flash-lite`.
+These offerings remain disabled.
+F060 enables both models through the separate [Vertex provider](vertex-gemini.md).
 The Gemini provider default remains `gemini-3.5-flash`.
 
 ## Request contract
 
 Both candidates use the existing Gemini Interactions adapter and Gemini model family.
 They accept text, JPEG, PNG, WebP, audio, and the existing structured output contract.
-Text requests use stored background interactions with retrieval and deletion.
+Gemini 3.8 Flash text requests use stored background interactions with retrieval and deletion.
+Flash-Lite text requests use synchronous completion with `background: false` and `store: false`.
+Google rejects background interactions for Flash-Lite with HTTP 400.
 Media requests use synchronous interactions without storage.
 Assistant history remains invalid for these routes.
 
@@ -54,24 +57,56 @@ Refresh the price records before the published change date.
 ## Qualification
 
 The existing repository key returned HTTP 200 metadata for both exact model IDs and token limits.
-Gemini 3.8 Flash's first omitted-effort request timed out after 45,004 milliseconds without response bytes.
-Flash-Lite passed omitted effort and all four explicit efforts.
-Its background completion request returned HTTP 400 at creation.
-Neither candidate passed the full stored interaction lifecycle.
-Gemini 3.8 Flash passed disposable key verification and the image smoke test.
-Flash-Lite returned HTTP 422 `provider_key_rejected` during disposable key verification, before its image test.
-Its successful metadata and direct text requests show that the key has access to the model.
+Both candidates remain disabled until all applicable qualification checks pass.
+
+### September 7 Vertex qualification
+
+I252 passed all 22 direct Vertex requests on the existing billed LLM Proxy project.
+The matrix covered Pro, Flash, and Flash-Lite reasoning, structured output, image input, and audio input.
+The [Vertex qualification report](vertex-gemini-qualification.md) contains the exact results and required proxy changes.
+F060 owns the proxy transport migration and its separate acceptance checks.
+These direct results do not activate the existing Developer API routes.
+
+### September 6 diagnosis
+
+I251 adds bounded provider error details to the standard candidate command.
+The command excludes credentials, request input, generated output, and unrelated response fields from diagnostics.
+It reports quota details and retry metadata when the provider returns those fields.
+
+Gemini 3.8 Flash passed omitted, `low`, and `medium` effort.
+Its `high` request returned HTTP 429 with `generate_content_free_tier_requests, limit: 5`.
+The provider requested a retry after approximately 41 seconds.
+This error identifies a request quota, not an unsupported reasoning value.
+The stored lifecycle and live audio still require qualification.
+Evidence: `/tmp/llm-proxy-f047-gemini38-diagnosis.log`.
+A separate lifecycle probe timed out after 45,003 milliseconds at its omitted-effort request.
+It produced no further lifecycle evidence.
+Evidence: `/tmp/llm-proxy-f047-flash-lifecycle-diagnosis.log`.
+
+Flash-Lite returned HTTP 400 with this exact provider message:
+`Model 'gemini-3.5-flash-lite' does not support background interactions.`
+B197 changes its text transport to synchronous completion.
+The corrected candidate command passed omitted, `minimal`, `low`, `medium`, and `high` effort with HTTP 200.
+An earlier synchronous request returned HTTP 500 because the model had high demand.
+That transient response differs from the reproducible background request defect.
+Evidence: `/tmp/llm-proxy-f047-lite-background-diagnosis.log` and `/tmp/llm-proxy-b197-lite-live.log`.
+The disposable proxy then passed Flash-Lite key verification and omitted-effort text with HTTP 200.
+Its next reasoning request timed out after 45,003 milliseconds without response bytes.
+This proxy matrix remains incomplete despite the successful direct matrix.
+Evidence: `/tmp/llm-proxy-b197-lite-proxy-live.log`.
+Flash-Lite then passed disposable key verification and the image smoke test with HTTP 200.
+That run used `.mprlab/deploy/.env` through the standard credential loader.
+The first media attempt stopped at a dotenv parse error in `configs/.env`.
 Live audio remains unqualified for both candidates.
+Evidence: `/tmp/llm-proxy-b197-lite-media-declared-env.log`.
 
-Independent acceptance runs on September 5 reproduced both blockers with the existing repository credential.
-Gemini 3.8 Flash timed out after 45,005 milliseconds before its omitted-effort response.
-Flash-Lite again passed all five reasoning cases, then returned HTTP 400 at background creation.
-Both candidates remain disabled.
-
-The latest Gemini 3.8 Flash run passed omitted, `low`, and `medium` effort with HTTP 200.
-Its `high` effort request returned HTTP 429, which stopped the run before lifecycle checks.
-This result replaces the timeout as the latest acceptance blocker.
-Evidence: `/tmp/llm-proxy-f047-gemini38-goal-refresh.log`.
+I234 remains blocked by the credential project's Gemini 3.1 Pro quota.
+Its omitted-effort request reports zero free-tier input-token quota and zero free-tier request quota.
+The exact API model remains `gemini-3.1-pro-preview`.
+The quota message names the `gemini-3.1-pro` quota group.
+The repository contains one distinct Gemini credential across its declared environment inputs.
+The operator must provide a project with nonzero quota before Pro acceptance can continue.
+Evidence: `/tmp/llm-proxy-i234-diagnosis.log`.
 
 Run each lifecycle check separately:
 
@@ -95,8 +130,19 @@ make test-live-provider-candidate-media \
   LIVE_CANDIDATE_MODEL=gemini/MODEL_ID LIVE_ENV_FILE=configs/.env
 ```
 
-Activate a candidate only after reasoning, media, completion, active retrieval, cancellation, and deletion all pass.
+Activate a candidate only after reasoning, media, and its declared completion lifecycle pass.
+For Gemini 3.8 Flash, also verify active retrieval, cancellation, and deletion.
+For Flash-Lite, verify synchronous key checks and text completion without stored interactions.
 Production deployment remains operator-owned.
+
+## Local validation
+
+B197 and I251 passed the focused HTTP and CLI checks.
+Final CI passed all 12 gates with 100.0% Go statement coverage in 245 seconds.
+The tests cover synchronous key verification, reasoning, output-limit errors, media, public discovery, and the required Gemini default.
+The diagnostic tests verify provider error details and private data exclusion.
+These source checks do not replace the remaining F047 live qualification.
+Evidence: `/tmp/llm-proxy-b197-ci-verified.log`.
 
 ## Sources
 
@@ -109,3 +155,9 @@ Production deployment remains operator-owned.
 - [Image count](https://ai.google.dev/gemini-api/docs/image-understanding)
 - [Files API limits](https://ai.google.dev/gemini-api/docs/files)
 - [Audio input](https://ai.google.dev/gemini-api/docs/audio)
+
+## Vertex qualification
+
+F060 adds qualified Vertex routes for Gemini 3.8 Flash, 3.5 Flash-Lite, and 3.1 Pro Preview.
+The Developer API offerings for Flash 3.8 and Flash-Lite remain disabled.
+The [Vertex contract](vertex-gemini.md) records service-account acceptance and the explicit tenant cutover.

@@ -1,0 +1,777 @@
+{
+  "qualification_date": "2026-09-07",
+  "issue": "I252",
+  "endpoint": "https://aiplatform.googleapis.com/v1/projects/llm-proxy-499919/locations/global/publishers/google/models/{model}:generateContent",
+  "authentication": "local Google Cloud user OAuth",
+  "request_deadline_seconds": 45,
+  "max_output_tokens": 4096,
+  "results": [
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.1-pro-preview",
+      "effort": "omitted",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 102,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 93
+      },
+      "model_version": "gemini-3.1-pro-preview",
+      "passed": true,
+      "elapsed_seconds": 2.277,
+      "case": "text"
+    },
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.8-flash",
+      "effort": "omitted",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 67,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 58
+      },
+      "model_version": "gemini-3.8-flash",
+      "passed": true,
+      "elapsed_seconds": 1.992,
+      "case": "text"
+    },
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "omitted",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 9,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ]
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.54,
+      "case": "text"
+    },
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.1-pro-preview",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 82,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 73
+      },
+      "model_version": "gemini-3.1-pro-preview",
+      "passed": true,
+      "elapsed_seconds": 2.38
+    },
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.1-pro-preview",
+      "effort": "medium",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 170,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 161
+      },
+      "model_version": "gemini-3.1-pro-preview",
+      "passed": true,
+      "elapsed_seconds": 2.681
+    },
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.1-pro-preview",
+      "effort": "high",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 128,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 119
+      },
+      "model_version": "gemini-3.1-pro-preview",
+      "passed": true,
+      "elapsed_seconds": 2.614
+    },
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.1-pro-preview",
+      "effort": "omitted",
+      "case": "schema",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 61,
+        "candidatesTokenCount": 5,
+        "totalTokenCount": 195,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 61
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 5
+          }
+        ],
+        "thoughtsTokenCount": 129
+      },
+      "model_version": "gemini-3.1-pro-preview",
+      "passed": true,
+      "elapsed_seconds": 2.483
+    },
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.1-pro-preview",
+      "effort": "omitted",
+      "case": "image",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 1103,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 1235,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 14
+          },
+          {
+            "modality": "IMAGE",
+            "tokenCount": 1089
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 131
+      },
+      "model_version": "gemini-3.1-pro-preview",
+      "passed": true,
+      "elapsed_seconds": 2.578
+    },
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.1-pro-preview",
+      "effort": "omitted",
+      "case": "audio",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 75,
+        "candidatesTokenCount": 9,
+        "totalTokenCount": 332,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "AUDIO",
+            "tokenCount": 64
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 11
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 9
+          }
+        ],
+        "thoughtsTokenCount": 248
+      },
+      "model_version": "gemini-3.1-pro-preview",
+      "passed": true,
+      "elapsed_seconds": 4.063
+    },
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.8-flash",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 43,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 34
+      },
+      "model_version": "gemini-3.8-flash",
+      "passed": true,
+      "elapsed_seconds": 1.571
+    },
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.8-flash",
+      "effort": "medium",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 76,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 67
+      },
+      "model_version": "gemini-3.8-flash",
+      "passed": true,
+      "elapsed_seconds": 1.784
+    },
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.8-flash",
+      "effort": "high",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 121,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 112
+      },
+      "model_version": "gemini-3.8-flash",
+      "passed": true,
+      "elapsed_seconds": 2.105
+    },
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.8-flash",
+      "effort": "omitted",
+      "case": "schema",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 61,
+        "candidatesTokenCount": 5,
+        "totalTokenCount": 199,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 61
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 5
+          }
+        ],
+        "thoughtsTokenCount": 133
+      },
+      "model_version": "gemini-3.8-flash",
+      "passed": true,
+      "elapsed_seconds": 2.871
+    },
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.8-flash",
+      "effort": "omitted",
+      "case": "image",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 1103,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 1150,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 14
+          },
+          {
+            "modality": "IMAGE",
+            "tokenCount": 1089
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 46
+      },
+      "model_version": "gemini-3.8-flash",
+      "passed": true,
+      "elapsed_seconds": 1.721
+    },
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.8-flash",
+      "effort": "omitted",
+      "case": "audio",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 75,
+        "candidatesTokenCount": 9,
+        "totalTokenCount": 114,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11
+          },
+          {
+            "modality": "AUDIO",
+            "tokenCount": 64
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 9
+          }
+        ],
+        "thoughtsTokenCount": 30
+      },
+      "model_version": "gemini-3.8-flash",
+      "passed": true,
+      "elapsed_seconds": 2.549
+    },
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "minimal",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 9,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ]
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.486
+    },
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 75,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 66
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 1.046
+    },
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "medium",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 81,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 72
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.847
+    },
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "high",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 137,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 128
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 1.033
+    },
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "omitted",
+      "case": "schema",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 61,
+        "candidatesTokenCount": 11,
+        "totalTokenCount": 72,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 61
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11
+          }
+        ]
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.765
+    },
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "omitted",
+      "case": "image",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 1103,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 1104,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 14
+          },
+          {
+            "modality": "IMAGE",
+            "tokenCount": 1089
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ]
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.863
+    },
+    {
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "omitted",
+      "case": "audio",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 75,
+        "candidatesTokenCount": 10,
+        "totalTokenCount": 85,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11
+          },
+          {
+            "modality": "AUDIO",
+            "tokenCount": 64
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 10
+          }
+        ]
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 1.178
+    }
+  ]
+}

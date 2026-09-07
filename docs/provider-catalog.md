@@ -12,14 +12,14 @@ configuration. The loader accepts only schema version 1.
 
 The current provider catalog has these records:
 
-- 12 provider definitions.
+- 13 provider definitions.
 - 12 model publishers.
-- 27 model families, with 25 runtime families.
-- 78 exact models, with 66 enabled models.
-- 80 provider offerings, with 68 runtime offerings.
-- 80 price records, with 68 runtime records.
+- 29 model families, with 26 runtime families.
+- 81 exact models, with 71 enabled models.
+- 86 provider offerings, with 74 runtime offerings.
+- 86 price records, with 74 runtime records.
 - 13 managed model migrations.
-- Eight configured request protocols.
+- Ten configured request protocols.
 - Two lifecycle values.
 
 The two [GLM 5.3 candidates](zai-current-models.md) remain disabled during provider qualification.
@@ -27,7 +27,9 @@ The five [Qwen 3.8 candidates](qwen-current-models.md) remain disabled during pr
 The two open models use the `qwen3-8` family with `open_weights` metadata.
 Gemini 3.5 Transcribe is enabled for file dictation. See the [transcription contract](gemini-transcription.md).
 Gemini 3.6 and 3.7 Flash are enabled. See [qualified Gemini models](gemini-qualified-models.md).
-Gemini 3.8 Flash and 3.5 Flash-Lite remain disabled during provider qualification.
+Gemini 3.8 Flash and 3.5 Flash-Lite are enabled on Vertex after service-account qualification.
+Their Developer API offerings remain disabled.
+See the [Vertex contract and cutover procedure](vertex-gemini.md).
 Their [candidate contract](gemini-current-models.md) records current limits, prices, effort levels, and acceptance requirements.
 The disabled [Muse Spark 1.3 candidate](meta-current-model.md) adds Standard-tier text and six reasoning effort levels.
 The disabled [Grok 4.6 candidate](grok-current-model.md) adds xAI reasoning controls and current price tiers.
@@ -54,6 +56,16 @@ Dimension checks currently require an explicit JPEG/PNG format list because thes
 The loader rejects other dimension formats and invalid dimension descriptors.
 The server checks inline images and tenant assets before dispatch.
 It preserves the asset reader contents for the provider request.
+
+## Provider and offering activation
+
+A provider or offering can declare `enabled: false` to stop its runtime routes.
+Omission means enabled for these two record types.
+The loader validates disabled records before it removes them from the runtime catalog.
+A disabled offering cannot be a provider default.
+An offering requires an enabled provider, model, and offering record.
+The model can remain available through another qualified provider.
+This rule keeps Vertex qualification separate from Developer API qualification.
 
 ## Model activation
 
@@ -209,7 +221,8 @@ and lifecycle behavior. Provider identifiers do not select protocol code.
 | `dashscope_responses` | `synchronous_completion` |
 | `openai_chat_completions` | `synchronous_completion` |
 | `anthropic_messages` | `synchronous_completion` |
-| `gemini_interactions` | `pollable_resource` for text and `synchronous_completion` for dictation |
+| `vertex_generate_content` | `synchronous_completion` for text and dictation. |
+| `gemini_interactions` | `pollable_resource` or `synchronous_completion` for text. `synchronous_completion` for dictation. |
 | `multipart_transcription` | `synchronous_completion` |
 | `xai_videos_generations` | `pollable_resource` |
 
@@ -266,7 +279,7 @@ requires `openai_chat_completions` and sends `reasoning_split: true`.
 Generation and credential verification use the same profile.
 
 The accepted reasoning adapters are `xai_responses`, `openai_responses`,
-`openai_chat_completions`, `chat_completions_thinking`, `gemini_interactions`, and `anthropic_messages`. Startup requires each
+`openai_chat_completions`, `chat_completions_thinking`, `gemini_interactions`, `vertex_generate_content`, and `anthropic_messages`. Startup requires each
 adapter to match its exact wire contract. Each offering declares only the
 ordered effort values that its exact provider/model route accepts.
 
@@ -433,5 +446,18 @@ See the [SiliconFlow expansion assessment](siliconflow-expansion.md) for the acc
 
 ## Meta media assessment
 
+See [Muse Spark 1.3](meta-current-model.md) for the enabled text offering and live acceptance.
+
 P009 separates file dictation, image operations, and realtime transcription.
 See the [Meta media assessment](meta-media-assessment.md) for exact endpoints, limits, retention gaps, and proposed acceptance requirements.
+
+See [OpenAI transcription retirement](openai-transcription-retirement.md) for the schema-version-16 migration and operator acceptance.
+
+See [GPT-6 Astra](astra.md) for the enabled Responses offering, limits, price tiers, and live acceptance.
+
+## Google credential profiles
+
+The `google_credentials` authentication kind resolves a tenant-bound operator profile.
+The public credential kind is `google_credential_profile`.
+The `vertex_generate_content` protocol uses synchronous completion and the Google OAuth library.
+The [Vertex contract](vertex-gemini.md) defines the configuration, request mapping, limits, and tenant cutover.

@@ -1,16 +1,19 @@
 # Meta media assessment
 
 P009 assessed the hosted Meta media models on September 5, 2026.
-This document records provider facts and proposed integration scope.
-Implementation approval and paid provider acceptance remain pending.
+This document records provider facts and the full scope approved on September 6, 2026.
+F054 through F058 own implementation. Paid provider acceptance remains pending.
+
+The approved scope includes file dictation, structured file transcription, realtime sessions, image generation, image edits, and image conversations.
+P011 specifies the shared media operation design. F022 and I046 implement its required storage, execution, and capacity contracts.
 
 ## Scope
 
-| Exact model | Provider capability | Proposed repository work |
+| Exact model | Provider capability | Approved repository work |
 | --- | --- | --- |
 | `muse-voice-transcribe-1.0` | File transcription | A native codec for the current dictation interface. |
 | `muse-image-1.0` | Image generation and image edits | Provider execution through the F022 media operation interface. |
-| `muse-voice-transcribe-1.0` | Realtime transcription | A separate public session interface decision. |
+| `muse-voice-transcribe-1.0` | Realtime transcription | A tenant-owned public session interface. |
 | Muse Glimmer | Local inference from model weights | P008 owns this scope. |
 
 The [Meta model list](https://dev.meta.ai/docs/models) confirms these capability boundaries.
@@ -38,13 +41,11 @@ The [speech guide](https://dev.meta.ai/docs/speech-to-text) defines result field
 Its JSON `transcript` contains the complete text.
 The `turns` array is empty in `PUSH_TO_TALK` mode.
 
-The current multipart codec sends different part names and reads a `text` result.
-As a result, Meta needs a native codec.
-The proposed first scope uses `PUSH_TO_TALK` with a buffered JSON result.
+The native `meta_transcription` codec uses `PUSH_TO_TALK` with a buffered JSON result.
 The codec maps `transcript` to the current public `text` field.
 The existing `/dictate` and `/v1/audio/transcriptions` endpoints can retain their current shapes.
 
-Proposed implementation requirements:
+Implementation requirements:
 
 1. Validate the WAV content, duration, and complete encoded request at the input boundary.
 2. Preserve the existing public upload limit when it is smaller than the provider limit.
@@ -53,8 +54,28 @@ Proposed implementation requirements:
 5. Preserve explicit tenant defaults and current usage records.
 6. Add public integration tests for both dictation endpoints before the codec change.
 
-Transcoding and public speaker labels require separate scope decisions.
+F055 owns public speaker labels, timestamps, and file transcription controls.
+The native file input remains WAV. Additional audio format conversion requires its own verified contract.
 The current text result cannot represent speaker turns or timestamps.
+
+### Candidate implementation
+
+F054 registers `muse-voice-transcribe-1.0` as a disabled candidate.
+Its `created` value records the catalog entry date, September 6, 2026.
+The adapter sends explicit `PUSH_TO_TALK` settings and preserves valid WAV bytes.
+It returns only the complete transcript through the existing public output formats.
+It validates chunk sizes, PCM fields, sample rates, and duration before dispatch.
+The gateway bounds the complete multipart body at 32,000,000 bytes.
+This gateway bound does not resolve the provider's exact meaning of 32 MB.
+The smaller configured public upload limit still applies.
+Provider failures preserve safe status metadata and exclude response bodies from public errors.
+
+`make test-meta-transcription` tests both HTTP interfaces, tenant defaults, usage, cancellation, upload limits, and candidate discovery.
+The official Go client reads the activated transport through the real public capability endpoint.
+B198 requires defaults only for enabled provider operations and validates all retained candidate metadata.
+
+Activation requires verified provider access, file retention evidence, the exact request bound, and paid acceptance at both sample rates.
+After acceptance, enable the candidate and assign its Meta dictation default in the same catalog change.
 
 ## Image generation and edits
 
@@ -79,7 +100,7 @@ The [image schemas](https://dev.meta.ai/docs/api-reference/images/schemas) defin
 The [image guide](https://dev.meta.ai/docs/image-generation) defines completed events and tool behavior.
 The schema includes partial event types, but the guide does not promise partial output.
 
-Proposed implementation requirements:
+Implementation requirements:
 
 1. Complete the F022 decisions in the [media design](media-gateway-consolidation.md) before image execution.
 2. Use one immutable media operation plan for each accepted request.
@@ -99,7 +120,7 @@ MediaOps retains workflow ownership.
 Meta also supports image conversations through Responses.
 That path carries `image_generation_call` items and signed identifiers between turns.
 The proposed first image scope uses the dedicated image endpoints.
-Conversational image state requires a separate scope decision.
+F058 implements conversational image state after F057.
 
 ## Realtime transcription
 
@@ -156,13 +177,14 @@ The speech guide rounds processed duration down to whole seconds.
 File and realtime transcription share eight concurrent sessions and 1,000 session starts per hour.
 These limits apply across API keys in one provider team.
 
-`MODEL_API_KEY` was absent from the process and all six repository private environment files during this assessment.
+The existing Meta key is available as `MUSE_API_KEY` in `configs/.env`.
+All live Meta tests use this catalog-defined environment binding.
 Paid discovery, model access, output quality, latency, and cleanup acceptance remain pending.
 
-Proposed qualification sequence:
+Qualification sequence:
 
-1. Resolve the evidence gaps and approve each implementation outcome separately.
-2. Create Feature issues for the approved outcomes.
+1. Resolve the provider evidence gaps required by the selected implementation issue.
+2. Implement the approved outcomes through F054, F055, F056, F057, and F058 in dependency order.
 3. Verify exact model access with the selected tenant connection.
 4. Implement and test the selected public contract with controlled provider responses.
 5. Qualify real transcription at both sample rates with known speech and boundary inputs.
@@ -171,13 +193,12 @@ Proposed qualification sequence:
 
 ## Open Decisions
 
-- Approve or reject the file dictation scope without transcoding.
-- Approve or reject image generation and edits after F022 decisions.
+- Complete the F022 and I046 implementation dependencies for image operations.
 - Define image input byte and count limits from endpoint-specific evidence.
 - Verify the exact byte interpretation of the ASR 32 MB limit.
 - Obtain the content-log retention policy for image and file transcription requests.
-- Verify temporary image URL lifetime if a future scope uses URL output.
-- Verify response and signed image identifier lifetimes if a future scope uses image conversations.
+- Verify temporary image URL lifetime for supported URL output.
+- Verify response and signed image identifier lifetimes for F058 image conversations.
 - Define public realtime events, session ownership, disconnect behavior, and usage before realtime implementation.
 
 These decisions remain separate from completion of the P009 assessment.

@@ -1,0 +1,499 @@
+{
+  "issue": "P012",
+  "date": "2026-09-07",
+  "scope": "Local selection and acceptance of the user-supplied billed AI Studio key.",
+  "local_configuration": {
+    "file": "configs/.env",
+    "user_requested_key_variable": "AI_STUDIO_API_KEY",
+    "canonical_gemini_variable": "GEMINI_API_KEY",
+    "both_variables_select_same_key": true,
+    "matches_previously_qualified_billed_key": true,
+    "unrelated_assignments_preserved": true,
+    "production_configuration_changed": false
+  },
+  "initial_local_diagnostic_error": {
+    "command": "Shell source of configs/.env",
+    "error": "configs/.env: line 25: Proxy: command not found",
+    "resolution": "Acceptance commands use the existing repository dotenv loader. Other dotenv values were preserved."
+  },
+  "commands": [
+    {
+      "model": "gemini-3.1-pro-preview",
+      "target": "test-live-provider-candidate",
+      "exit_code": 2,
+      "elapsed_seconds": 0.39,
+      "results": [
+        "error: candidate offering is absent from the selected provider",
+        "make: *** [test-live-provider-candidate] Error 1"
+      ],
+      "failure_class": "No Gemini provider offering in current catalog; no provider request."
+    },
+    {
+      "model": "gemini-3.5-flash",
+      "target": "test-live-providers",
+      "exit_code": 0,
+      "elapsed_seconds": 7.832,
+      "results": [
+        "live provider verification passed: provider=gemini model=gemini-3.5-flash status=200",
+        "live provider smoke passed: provider=gemini model=gemini-3.5-flash status=200 reasoning_effort=omitted"
+      ]
+    },
+    {
+      "model": "gemini-3.5-flash",
+      "target": "test-live-provider-media",
+      "exit_code": 0,
+      "elapsed_seconds": 5.097,
+      "results": [
+        "live provider verification passed: provider=gemini model=gemini-3.5-flash status=200",
+        "live provider image smoke passed: provider=gemini model=gemini-3.5-flash status=200"
+      ]
+    },
+    {
+      "model": "gemini-3.8-flash",
+      "target": "test-live-provider-candidate",
+      "exit_code": 2,
+      "elapsed_seconds": 3.234,
+      "results": [
+        "error: live provider verification failed: provider=gemini model=gemini-3.8-flash status=422 error=provider_key_rejected",
+        "make: *** [test-live-provider-candidate] Error 1"
+      ],
+      "failure_class": "Initial proxy connection verification rejection; upstream cause not captured."
+    },
+    {
+      "model": "gemini-3.8-flash",
+      "target": "test-live-provider-candidate-media",
+      "exit_code": 0,
+      "elapsed_seconds": 5.32,
+      "results": [
+        "live provider verification passed: provider=gemini model=gemini-3.8-flash status=200",
+        "live provider image smoke passed: provider=gemini model=gemini-3.8-flash status=200"
+      ]
+    },
+    {
+      "model": "gemini-3.5-flash-lite",
+      "target": "test-live-provider-candidate",
+      "exit_code": 0,
+      "elapsed_seconds": 6.964,
+      "results": [
+        "live provider verification passed: provider=gemini model=gemini-3.5-flash-lite status=200",
+        "live provider smoke passed: provider=gemini model=gemini-3.5-flash-lite status=200 reasoning_effort=omitted",
+        "live provider smoke passed: provider=gemini model=gemini-3.5-flash-lite status=200 reasoning_effort=minimal",
+        "live provider smoke passed: provider=gemini model=gemini-3.5-flash-lite status=200 reasoning_effort=low",
+        "live provider smoke passed: provider=gemini model=gemini-3.5-flash-lite status=200 reasoning_effort=medium",
+        "live provider smoke passed: provider=gemini model=gemini-3.5-flash-lite status=200 reasoning_effort=high"
+      ]
+    },
+    {
+      "model": "gemini-3.5-flash-lite",
+      "target": "test-live-provider-candidate-media",
+      "exit_code": 0,
+      "elapsed_seconds": 3.555,
+      "results": [
+        "live provider verification passed: provider=gemini model=gemini-3.5-flash-lite status=200",
+        "live provider image smoke passed: provider=gemini model=gemini-3.5-flash-lite status=200"
+      ]
+    },
+    {
+      "model": "gemini-3.5-flash-lite",
+      "target": "test-live-gemini-candidate",
+      "exit_code": 0,
+      "elapsed_seconds": 4.54,
+      "results": [
+        "live Gemini candidate reasoning passed: model=gemini-3.5-flash-lite reasoning_effort=omitted status=200",
+        "live Gemini candidate reasoning passed: model=gemini-3.5-flash-lite reasoning_effort=minimal status=200",
+        "live Gemini candidate reasoning passed: model=gemini-3.5-flash-lite reasoning_effort=low status=200",
+        "live Gemini candidate reasoning passed: model=gemini-3.5-flash-lite reasoning_effort=medium status=200",
+        "live Gemini candidate reasoning passed: model=gemini-3.5-flash-lite reasoning_effort=high status=200",
+        "live Gemini candidate acceptance passed: models=gemini-3.5-flash-lite"
+      ]
+    },
+    {
+      "model": "gemini-3.1-pro-preview",
+      "target": "test-live-gemini-candidate",
+      "exit_code": 0,
+      "elapsed_seconds": 21.013,
+      "results": [
+        "live Gemini candidate reasoning passed: model=gemini-3.1-pro-preview reasoning_effort=omitted status=200",
+        "live Gemini candidate reasoning passed: model=gemini-3.1-pro-preview reasoning_effort=low status=200",
+        "live Gemini candidate reasoning passed: model=gemini-3.1-pro-preview reasoning_effort=medium status=200",
+        "live Gemini candidate reasoning passed: model=gemini-3.1-pro-preview reasoning_effort=high status=200",
+        "live Gemini candidate completion lifecycle passed: model=gemini-3.1-pro-preview status=completed",
+        "live Gemini candidate cancellation lifecycle passed: model=gemini-3.1-pro-preview status=cancelled",
+        "live Gemini candidate acceptance passed: models=gemini-3.1-pro-preview"
+      ]
+    },
+    {
+      "model": "gemini-3.8-flash",
+      "target": "test-live-provider-candidate",
+      "exit_code": 0,
+      "separate_diagnostic_run": true,
+      "results": [
+        "live provider verification passed: provider=gemini model=gemini-3.8-flash status=200",
+        "live provider smoke passed: provider=gemini model=gemini-3.8-flash status=200 reasoning_effort=omitted",
+        "live provider smoke passed: provider=gemini model=gemini-3.8-flash status=200 reasoning_effort=low",
+        "live provider smoke passed: provider=gemini model=gemini-3.8-flash status=200 reasoning_effort=medium",
+        "live provider smoke passed: provider=gemini model=gemini-3.8-flash status=200 reasoning_effort=high"
+      ]
+    },
+    {
+      "model": "gemini-3.8-flash",
+      "target": "test-live-gemini-candidate",
+      "exit_code": 0,
+      "separate_diagnostic_run": true,
+      "results": [
+        "live Gemini candidate reasoning passed: model=gemini-3.8-flash reasoning_effort=omitted status=200",
+        "live Gemini candidate reasoning passed: model=gemini-3.8-flash reasoning_effort=low status=200",
+        "live Gemini candidate reasoning passed: model=gemini-3.8-flash reasoning_effort=medium status=200",
+        "live Gemini candidate reasoning passed: model=gemini-3.8-flash reasoning_effort=high status=200",
+        "live Gemini candidate completion lifecycle passed: model=gemini-3.8-flash status=completed",
+        "live Gemini candidate cancellation lifecycle passed: model=gemini-3.8-flash status=cancelled",
+        "live Gemini candidate acceptance passed: models=gemini-3.8-flash"
+      ]
+    }
+  ],
+  "direct_verification_diagnosis": [
+    {
+      "output_limit": 16,
+      "create_status": 200,
+      "interaction_status": "in_progress",
+      "get_status": 200,
+      "get_interaction_status": "in_progress",
+      "cancel_status": 200,
+      "delete_status": 200
+    },
+    {
+      "output_limit": 4096,
+      "create_status": 200,
+      "interaction_status": "in_progress",
+      "get_status": 200,
+      "get_interaction_status": "in_progress",
+      "cancel_status": 200,
+      "delete_status": 200
+    }
+  ],
+  "direct_verification_concurrency_10": [
+    {
+      "case": 1,
+      "steps": [
+        {
+          "method": "POST",
+          "operation": "create",
+          "http_status": 200,
+          "state": "in_progress"
+        },
+        {
+          "method": "GET",
+          "operation": "retrieve",
+          "http_status": 200,
+          "state": "in_progress"
+        },
+        {
+          "method": "POST",
+          "operation": "cancel",
+          "http_status": 200,
+          "state": "cancelled"
+        },
+        {
+          "method": "DELETE",
+          "operation": "delete",
+          "http_status": 200,
+          "state": null
+        }
+      ],
+      "elapsed_seconds": 1.72,
+      "passed": true
+    },
+    {
+      "case": 2,
+      "steps": [
+        {
+          "method": "POST",
+          "operation": "create",
+          "http_status": 200,
+          "state": "in_progress"
+        },
+        {
+          "method": "GET",
+          "operation": "retrieve",
+          "http_status": 200,
+          "state": "in_progress"
+        },
+        {
+          "method": "POST",
+          "operation": "cancel",
+          "http_status": 200,
+          "state": "cancelled"
+        },
+        {
+          "method": "DELETE",
+          "operation": "delete",
+          "http_status": 200,
+          "state": null
+        }
+      ],
+      "elapsed_seconds": 1.522,
+      "passed": true
+    },
+    {
+      "case": 3,
+      "steps": [
+        {
+          "method": "POST",
+          "operation": "create",
+          "http_status": 200,
+          "state": "in_progress"
+        },
+        {
+          "method": "GET",
+          "operation": "retrieve",
+          "http_status": 200,
+          "state": "in_progress"
+        },
+        {
+          "method": "POST",
+          "operation": "cancel",
+          "http_status": 200,
+          "state": "cancelled"
+        },
+        {
+          "method": "DELETE",
+          "operation": "delete",
+          "http_status": 200,
+          "state": null
+        }
+      ],
+      "elapsed_seconds": 1.475,
+      "passed": true
+    },
+    {
+      "case": 4,
+      "steps": [
+        {
+          "method": "POST",
+          "operation": "create",
+          "http_status": 200,
+          "state": "in_progress"
+        },
+        {
+          "method": "GET",
+          "operation": "retrieve",
+          "http_status": 200,
+          "state": "in_progress"
+        },
+        {
+          "method": "POST",
+          "operation": "cancel",
+          "http_status": 200,
+          "state": "cancelled"
+        },
+        {
+          "method": "DELETE",
+          "operation": "delete",
+          "http_status": 200,
+          "state": null
+        }
+      ],
+      "elapsed_seconds": 1.701,
+      "passed": true
+    },
+    {
+      "case": 5,
+      "steps": [
+        {
+          "method": "POST",
+          "operation": "create",
+          "http_status": 200,
+          "state": "in_progress"
+        },
+        {
+          "method": "GET",
+          "operation": "retrieve",
+          "http_status": 200,
+          "state": "in_progress"
+        },
+        {
+          "method": "POST",
+          "operation": "cancel",
+          "http_status": 200,
+          "state": "cancelled"
+        },
+        {
+          "method": "DELETE",
+          "operation": "delete",
+          "http_status": 200,
+          "state": null
+        }
+      ],
+      "elapsed_seconds": 1.913,
+      "passed": true
+    },
+    {
+      "case": 6,
+      "steps": [
+        {
+          "method": "POST",
+          "operation": "create",
+          "http_status": 200,
+          "state": "in_progress"
+        },
+        {
+          "method": "GET",
+          "operation": "retrieve",
+          "http_status": 200,
+          "state": "in_progress"
+        },
+        {
+          "method": "POST",
+          "operation": "cancel",
+          "http_status": 200,
+          "state": "cancelled"
+        },
+        {
+          "method": "DELETE",
+          "operation": "delete",
+          "http_status": 200,
+          "state": null
+        }
+      ],
+      "elapsed_seconds": 1.693,
+      "passed": true
+    },
+    {
+      "case": 7,
+      "steps": [
+        {
+          "method": "POST",
+          "operation": "create",
+          "http_status": 200,
+          "state": "in_progress"
+        },
+        {
+          "method": "GET",
+          "operation": "retrieve",
+          "http_status": 200,
+          "state": "in_progress"
+        },
+        {
+          "method": "POST",
+          "operation": "cancel",
+          "http_status": 200,
+          "state": "cancelled"
+        },
+        {
+          "method": "DELETE",
+          "operation": "delete",
+          "http_status": 200,
+          "state": null
+        }
+      ],
+      "elapsed_seconds": 1.652,
+      "passed": true
+    },
+    {
+      "case": 8,
+      "steps": [
+        {
+          "method": "POST",
+          "operation": "create",
+          "http_status": 200,
+          "state": "in_progress"
+        },
+        {
+          "method": "GET",
+          "operation": "retrieve",
+          "http_status": 200,
+          "state": "in_progress"
+        },
+        {
+          "method": "POST",
+          "operation": "cancel",
+          "http_status": 200,
+          "state": "cancelled"
+        },
+        {
+          "method": "DELETE",
+          "operation": "delete",
+          "http_status": 200,
+          "state": null
+        }
+      ],
+      "elapsed_seconds": 1.655,
+      "passed": true
+    },
+    {
+      "case": 9,
+      "steps": [
+        {
+          "method": "POST",
+          "operation": "create",
+          "http_status": 200,
+          "state": "in_progress"
+        },
+        {
+          "method": "GET",
+          "operation": "retrieve",
+          "http_status": 200,
+          "state": "in_progress"
+        },
+        {
+          "method": "POST",
+          "operation": "cancel",
+          "http_status": 200,
+          "state": "cancelled"
+        },
+        {
+          "method": "DELETE",
+          "operation": "delete",
+          "http_status": 200,
+          "state": null
+        }
+      ],
+      "elapsed_seconds": 1.632,
+      "passed": true
+    },
+    {
+      "case": 10,
+      "steps": [
+        {
+          "method": "POST",
+          "operation": "create",
+          "http_status": 200,
+          "state": "in_progress"
+        },
+        {
+          "method": "GET",
+          "operation": "retrieve",
+          "http_status": 200,
+          "state": "in_progress"
+        },
+        {
+          "method": "POST",
+          "operation": "cancel",
+          "http_status": 200,
+          "state": "cancelled"
+        },
+        {
+          "method": "DELETE",
+          "operation": "delete",
+          "http_status": 200,
+          "state": null
+        }
+      ],
+      "elapsed_seconds": 1.461,
+      "passed": true
+    }
+  ],
+  "conclusions": [
+    "Current Gemini 3.5 Flash passed proxy key verification, text, and image checks.",
+    "Flash 3.8 passed all declared proxy reasoning and image checks on repeat; initial HTTP 422 remains a first-attempt failure with unresolved cause.",
+    "Flash-Lite 3.5 passed proxy reasoning and image checks.",
+    "Direct Pro, Flash and Flash-Lite suites passed; Pro and Flash passed supported lifecycle checks.",
+    "Pro 3.1 has no Gemini provider offering in the current catalog, so its proxy acceptance remains unavailable."
+  ],
+  "user_capacity_target": {
+    "concurrent_requests": 10,
+    "steady_request_rate_per_minute": null
+  },
+  "application_code_changed_in_this_step": false,
+  "production_acceptance": false
+}
