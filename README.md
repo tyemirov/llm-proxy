@@ -1440,11 +1440,19 @@ generated client key is the value that applications store as
 
 This repository exposes the standard local targets used by MPR app repos:
 
+Hosted CI runs backend and frontend qualification in independent jobs.
+Each job has a ten-minute limit.
+Together, the jobs run every gate from local `make ci`.
+The required `Test / test` check passes only when both jobs succeed.
+A failed, cancelled, skipped, or missing job result prevents success.
+
 | Command | Purpose |
 |---------|---------|
 | `make frontend-dependencies` | Install the pinned npm graph and Chromium into ignored project-local state. Focused frontend validation, `make lint`, `make test`, and `make ci` invoke this target automatically. |
 | `make check-brand-icons` | Validate local SVG assets and all provider and family mappings. See [Provider and model icons](docs/provider-model-icons.md). |
 | `make test-brand-icons` | Run browser and build checks for management and public catalog icons. |
+| `make ci-backend` | Run the release contract, Go formatting and analysis, Python analysis, Go coverage tests, Python tests, and local provider preflight. |
+| `make ci-frontend` | Run frontend analysis, browser tests, the Pages artifact check, and the management authentication test. |
 | `make up` | Require the ignored private `configs/.env.local`, then build and run the complete local browser orchestration: ghttp static UI and same-origin TAuth routes on `localhost:4179`, plus the API on `localhost:8080`. It waits for Compose startup before verifying the static/config/auth/API boundaries and reporting ready. |
 | `make down` | Stop the exact local Compose project started by `make up`, including orphaned services and its project network, while retaining the named local TAuth and management data volumes. |
 | `make ci` | Prepare pinned frontend dependencies, then run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, frontend syntax checks, the 100% coverage-gated Go test suite, Python pytest, Playwright browser tests, the app lifecycle contract test, and the non-paid live-harness preflight. A successful run ends with a per-gate table, current-run coverage, and an explicit `CI PASSED` receipt. |
