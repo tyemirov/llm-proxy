@@ -25,6 +25,28 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B203] (P2) Prepare the capability binary before browser test hooks.
+  Evidence: Run `34160268019` passed backend qualification but failed frontend setup at the 30-second hook limit.
+  The independent frontend job compiled Go code with an empty build cache inside `beforeAll`.
+  Requirements:
+  - Build the capability binary before Playwright starts test workers.
+  - Keep the browser test and hosted job limits unchanged.
+  - Remove temporary build output after success or failure.
+  Validation: Run browser tests with an empty Go build cache, then run final local CI.
+  Results:
+  - The hosted frontend setup log confirmed a Go cache miss.
+  - The local five-second probe reproduced the hook timeout with an empty Go build cache.
+  - Both selected browser tests passed the same probe after the build moved into global setup.
+  - The full frontend lane passed with an empty Go build cache in 105 seconds.
+  - All 112 browser tests, the Pages artifact check, and the authentication test passed with their normal limits.
+  - An injected compiler failure stopped qualification before browser hooks and preserved the Go error.
+  - The failure check confirmed removal of temporary build output.
+  - Final local `make ci` passed all 12 gates in 272 seconds, with 100.0% Go statement coverage.
+  - Governor and changed-prose checks passed. Existing language findings remain outside this change.
+  - Changed files: Playwright configuration, global setup, management browser tests, and README.
+  - No application API or event contract changed.
+  Resolution: Local qualification passed. Hosted confirmation requires source sync and a new PR run.
+
 - [x] [B202] (P2) Complete hosted CI within independent job budgets.
   Evidence: Run `34158361621` reached the ten-minute job deadline during authentication test startup.
   Go integration tests passed in 345 seconds. All 112 browser tests passed in 119 seconds.
