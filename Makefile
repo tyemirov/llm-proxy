@@ -154,7 +154,7 @@ test-release-policy:
 
 .PHONY: test-provider-catalog
 test-provider-catalog: frontend-dependencies
-	$(GO) test ./internal/proxy ./tests -run 'Test(ProviderCatalog|CatalogDefined|ModelActivation)' -count=1
+	$(GO) test ./internal/proxy ./tests ./cmd/cli -run 'Test(ProviderCatalog|CatalogDefined|ModelActivation|RootCommandPrintsCatalogDerivedLiveDiscovery)' -count=1
 
 .PHONY: test-deepseek-retirement
 test-deepseek-retirement: frontend-dependencies
@@ -190,7 +190,7 @@ test-gemini-current:
 	$(GO) test ./internal/proxy -run '^TestGemini(CurrentModels|InlineRequestLimit)' -count=1
 
 test-gemini-candidate-contract:
-	$(GO) test ./tests -run '^TestOperationalGeminiCandidateHarness' -count=1
+	$(GO) test ./tests -run '^TestOperational(GeminiCandidateHarness|ShellScriptsDoNotUseHeredocs)' -count=1
 
 .PHONY: test-gemini-transcription
 test-gemini-transcription:
@@ -212,6 +212,17 @@ test-grok-current:
 .PHONY: test-meta-current
 test-meta-current:
 	$(GO) test ./internal/proxy -run '^TestMetaCurrent' -count=1
+
+.PHONY: test-meta-transcription
+test-meta-transcription:
+	$(GO) test ./internal/proxy -run '^(TestMetaTranscription|TestModelActivation)' -count=1
+
+.PHONY: test-openai-transcription-retirement test-live-openai-transcription
+test-openai-transcription-retirement:
+	$(GO) test ./internal/proxy -run '^TestOpenAITranscriptionRetirement' -count=1
+
+test-live-openai-transcription:
+	LLM_PROXY_LIVE_OPENAI_TRANSCRIPTION=true $(GO) test ./internal/proxy -run '^TestOpenAITranscriptionRetirementLive$$' -count=1 -v
 
 .PHONY: test-dashscope-media-limits
 test-dashscope-media-limits:
@@ -242,3 +253,11 @@ test-live-provider-defaults:
 .PHONY: test-gemini-qualified
 test-gemini-qualified:
 	$(GO) test ./internal/proxy ./tests -run '^Test(GeminiQualified|GeminiCurrent|PublicCapabilityCatalog|ManagementProfileListsCurrentCatalogModels)' -count=1
+
+.PHONY: test-astra
+test-astra:
+	$(GO) test ./internal/proxy -run '^TestAstra' -count=1
+
+.PHONY: test-live-astra-capabilities
+test-live-astra-capabilities:
+	LLM_PROXY_LIVE_ASTRA=true $(GO) test ./internal/proxy -run '^TestAstraLive$$' -count=1 -v
