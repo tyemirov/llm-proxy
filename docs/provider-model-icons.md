@@ -160,6 +160,8 @@ A change to that service title requires a separate explicit catalog decision.
 
 The icons retain native color and use 20px title dimensions.
 Monochrome marks and dark Qwen, Baidu, and DeepSeek artwork use a neutral light background.
+The white Kimi symbol uses a neutral dark background in every theme.
+Browser checks set both theme and palette attributes and verify the actual page colors before icon contrast.
 
 [svg-directory]: https://github.com/lobehub/lobe-icons/tree/a94750e3f5f8fc33757b839d85030e742284e43a/packages/static-svg/icons
 
