@@ -25,6 +25,31 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B202] (P2) Complete hosted CI within independent job budgets.
+  Evidence: Run `34158361621` reached the ten-minute job deadline during authentication test startup.
+  Go integration tests passed in 345 seconds. All 112 browser tests passed in 119 seconds.
+  Requirements:
+  - Run backend and frontend qualification in independent jobs with ten-minute limits.
+  - Keep every canonical CI gate and the 100% Go coverage requirement.
+  - Require both jobs to succeed before the existing `test` check passes.
+  - Reject failed, cancelled, skipped, or missing job results.
+  - Keep `make ci` as the complete local qualification command.
+  Validation: Add failing public Make and workflow command tests. Run focused checks and final local CI.
+  Results:
+  - Initial regressions found missing `ci-backend` and `ci-frontend` targets and the absent aggregate check.
+  - The hosted jobs now run the backend and frontend gate groups independently.
+  - Both groups retain ten-minute limits. The aggregate check retains the `test` name.
+  - Removed duplicate Go lint tool installation from the workflow. Make continues to own Go analysis.
+  - The dependency contract target passed with both new public Make entry points.
+  - The workflow command passed all 25 combinations of successful, failed, cancelled, skipped, and missing dependency results.
+  - The contract test requires the hosted groups to cover every local CI gate exactly once.
+  - Final local `make ci` passed all 12 gates in 317 seconds, with 100.0% Go statement coverage.
+  - All 112 browser tests and the management authentication test passed.
+  - Governor and changed-prose checks passed. Existing language findings remain outside this change.
+  - Changed files: workflow, Makefile, dependency tests, hosted CI tests, and README.
+  - No application API or event contract changed.
+  Resolution: Source changes passed local validation. The changes remain uncommitted. Hosted confirmation requires a new PR run after source sync.
+
 - [x] [B201] (P2) Preserve Kimi logo contrast in light themes.
   Evidence: The white Kimi symbol has no background and disappears on light surfaces.
   Requirements:
