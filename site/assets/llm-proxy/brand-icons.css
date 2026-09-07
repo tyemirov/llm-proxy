@@ -1,0 +1,41 @@
+brand-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+brand-icon[hidden] {
+  display: none;
+}
+
+.brand-icon {
+  box-sizing: border-box;
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  object-fit: contain;
+  vertical-align: middle;
+}
+
+.brand-icon--light {
+  padding: 2px;
+  border-radius: 3px;
+  background: #f2f4f7;
+}
+
+.brand-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.brand-label > b {
+  font-weight: inherit;
+}
+
+.brand-label--small .brand-icon {
+  width: 16px;
+  height: 16px;
+}
