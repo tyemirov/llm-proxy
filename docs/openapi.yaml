@@ -6,6 +6,14 @@ info:
     The sole canonical wire contract for llm-proxy-owned proxy, browser
     configuration, and management endpoints. Each configured text model owns
     one explicit upstream wire contract and execution lifecycle. OpenAI
+    Gemini 3.5 Transcribe accepts file dictation through synchronous Interactions.
+    The filename extension selects a supported audio MIME type. An unsupported
+    extension returns HTTP 400 with invalid_audio_input. The upload byte limit
+    applies. Gemini enforces its one-hour audio duration limit.
+    Gemini 3.6 Flash accepts reasoning efforts minimal, low, medium, and high.
+    Gemini 3.7 Flash accepts low, medium, and high. An omitted effort leaves
+    the provider default in effect. Both routes accept text, image, and audio
+    input with a maximum of 65,536 output tokens.
     Responses and Gemini 3.x Interactions use stored pollable resources.
     OpenAI-compatible Chat Completions and Anthropic Messages complete
     synchronously. Public proxy operations remain blocking and never expose an
@@ -1428,7 +1436,7 @@ paths:
     put:
       operationId: putManagementTenantDefaults
       summary: Replace the tenant routing defaults
-      description: Every nonempty provider/model pair must use a provider for which this tenant has a saved API key. The text pair is empty only when no provider key exists. The dictation pair is empty when no keyed provider supports dictation.
+      description: Every nonempty provider/model pair must use a provider for which this tenant has a saved API key. The text pair is empty only when no provider key exists. An empty dictation pair is a valid unset selection. A catalog capability change preserves it.
       tags:
         - Management
       security:
@@ -3333,6 +3341,14 @@ components:
         model:
           type: string
           minLength: 1
+        image_mime_types:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum: [image/jpeg, image/png, image/webp]
+          description: Explicit image formats for this offering. Omission uses the protocol adapter formats.
         capabilities:
           type: array
           minItems: 1
@@ -3487,11 +3503,13 @@ components:
           enum:
             - bytes
             - files
+            - pixels
         scope:
           type: string
           enum:
             - attachment
             - attachment_encoded_bytes
+            - attachment_data_uri_bytes
             - request
             - request_encoded_bytes
         source:
@@ -4260,10 +4278,10 @@ components:
           description: Canonical model for provider, or empty with provider when no provider connection exists.
         dictation_provider:
           type: string
-          description: Canonical configured dictation provider, or empty with dictation_model when no configured provider supports dictation.
+          description: Canonical configured dictation provider, or empty with dictation_model for an unset selection.
         dictation_model:
           type: string
-          description: Canonical dictation model, or empty with dictation_provider when no configured provider supports dictation.
+          description: Canonical dictation model, or empty with dictation_provider for an unset selection.
         system_prompt:
           type: string
         reasoning_effort:
@@ -4394,7 +4412,7 @@ components:
           description: Canonical text model paired with provider, or empty when provider is empty.
         dictation_provider:
           type: string
-          description: Canonical configured dictation provider, or empty when no configured provider supports dictation.
+          description: Canonical configured dictation provider, or empty for an unset selection.
         dictation_model:
           type: string
           description: Canonical dictation model paired with dictation_provider, or empty when dictation_provider is empty.

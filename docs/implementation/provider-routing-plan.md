@@ -47,7 +47,10 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 - `messages[].order` is optional. When any submitted message includes `order`, every submitted message must include a unique non-negative integer `order`; the proxy sorts submitted messages by ascending `order` before adding a request or tenant system prompt and before routing upstream.
 - With `messages[]` on `POST /`, body `system_prompt` is prepended as a system message only when the transcript does not already contain a `system` message. A body containing both `system_prompt` and a system message is invalid. With `POST /v2`, callers send system instructions as `system` role messages.
 - `max_tokens` is an optional positive integer on `GET /` query strings and JSON `POST /` bodies. It is the initial per-attempt output budget and is reused for missing-suffix attempts.
-- Provided `max_tokens` maps to OpenAI Responses `max_output_tokens`, Meta, Moonshot, and MiniMax Chat Completions `max_completion_tokens`, other OpenAI-compatible chat completions `max_tokens`, Anthropic Messages `max_tokens`, and Gemini Interactions `generation_config.max_output_tokens`.
+- OpenAI and xAI Responses map public `max_tokens` to `max_output_tokens`.
+- Meta, Moonshot, and MiniMax Chat Completions map it to `max_completion_tokens`.
+- Other Chat Completions providers and Anthropic Messages use `max_tokens`.
+- Gemini Interactions maps it to `generation_config.max_output_tokens`.
 - Omitted `max_tokens` means the proxy omits provider max-token fields and lets the selected provider/model default apply, except Anthropic Messages where the upstream API requires `max_tokens` and the proxy sends the selected model's configured synchronous output limit. After an output-budget stop with no visible progress, a configured model output limit becomes the generic ceiling for increasing the next attempt.
 - Known provider-specific output-token ceilings are validated before upstream calls. MiniMax M2 routes reject `max_tokens` above `204800`. Gemini text models reject values above `65536`. Claude models reject values above their configured synchronous Messages output limits with `400 Bad Request`.
 - `reasoning_effort` is optional on `GET /` as a query parameter and on JSON `POST /` and `POST /v2` as a body field. Omission retains the resolved tenant default. A supplied value must be nonblank and supported by the exact resolved text provider/model route; blank, `null`, or unsupported values return `400 Bad Request` before a provider call.
@@ -99,14 +102,14 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 | `openai` | none | `openai_responses` | `pollable_resource` | OpenAI audio transcription | Supported by configured OpenAI model entries with `web_search: true` |
 | `meta` | none | `openai_chat_completions` | `synchronous_completion` | Not supported | Not supported |
 | `deepseek` | none | `openai_chat_completions` | `synchronous_completion` | Not supported | Not supported |
-| `dashscope` | `qwen` | `openai_chat_completions` | `synchronous_completion` | Not supported | Not supported |
+| `dashscope` | `qwen` | `dashscope_responses` | `synchronous_completion` | Not supported | Not supported |
 | `moonshot` | `kimi` | `openai_chat_completions` | `synchronous_completion` | Not supported | Not supported |
 | `minimax` | none | `openai_chat_completions` | `synchronous_completion` | Not supported | Not supported |
 | `siliconflow` | none | `openai_chat_completions` | `synchronous_completion` | OpenAI-compatible audio transcription | Not supported |
 | `zai` | none | `openai_chat_completions` | `synchronous_completion` | Z.AI GLM-ASR transcription | Not supported |
 | `gemini` | none | `gemini_interactions` | `pollable_resource` | Not supported | Not supported |
 | `anthropic` | `claude` | `anthropic_messages` | `synchronous_completion` | Not supported | Not supported |
-| `xai` | none | Model-specific: `grok-4.5` uses `openai_responses`, and other text models use `openai_chat_completions` | `synchronous_completion` | xAI STT | Not supported |
+| `xai` | none | `xai_responses` | `synchronous_completion` | xAI STT | Not supported |
 
 This matrix describes capabilities wired through `llm-proxy`. Upstream products
 can expose speech APIs that are not yet proxy adapters; do not mark them
@@ -120,6 +123,9 @@ provider dispatch.
 The canonical Meta contract uses selector `meta` with no aliases and
 `https://api.meta.ai/v1`. Each tenant supplies one Meta API key. Muse Spark 1.1
 remains the default. Muse Spark 1.2 is an additional Standard-tier text model.
+The private catalog contains the disabled [Muse Spark 1.3 candidate](../meta-current-model.md).
+Its Standard-tier text route declares six explicit reasoning effort levels.
+Live key verification and the complete effort matrix must pass before activation.
 llm-proxy sends both models through the shared Chat Completions adapter. It
 maps public `max_tokens` to Meta's `max_completion_tokens` field. Meta describes
 Muse Spark 1.2 as coding-focused. This focus does not change the provider
@@ -135,20 +141,23 @@ DashScope is the only Alibaba provider. Each managed tenant saves its Singapore
 Model Studio workspace URL with the matching regional API key. Verification and
 routed requests use that saved tenant URL. The `qwen` alias resolves to DashScope. `qwen-plus`
 remains the exact default. `qwen3.7-max`, `qwen3.7-plus`, and `qwen3.6-flash`
-are additional text-only Chat Completions routes. Each has a 1,000,000-token
-context record and a `65536` output boundary, and maps public `max_tokens` to
-the documented upstream field. Singapore availability, workspace routing,
-limits, and list pricing were verified from Alibaba's official model,
-compatibility, and pricing references on 2026-08-13.
+use the dedicated `dashscope_responses` codec. The Plus 3.7 and Flash 3.6
+routes also accept images. The three newer models retain their 1,000,000-token
+context record and `65536` output boundary. Every DashScope route maps public
+`max_tokens` to `max_output_tokens` and requires at least 16 output tokens.
+See [the current DashScope contract](../dashscope-responses.md).
 
-MiniMax is a distinct text-only provider with canonical selector `minimax`,
+MiniMax has the canonical selector `minimax`,
 endpoint `https://api.minimax.io/v1`, and a tenant-managed API key. The seven M2
 routes use exact lowercase canonical model ids and exact provider-native model
 ids. `minimax-m2.7` remains the default. The shared adapter maps public
 `max_tokens` to MiniMax `max_completion_tokens`. Each route has the documented
 204,800-token context and output boundary. MiniMax's supported-model, API,
-limit, and standard PAYG price records were verified on 2026-08-13. The proxy
-does not add MiniMax-specific reasoning, tools, streaming, or media controls.
+limit, and standard PAYG price records were verified on 2026-08-13.
+The disabled M3 offering uses the same transport and MiniMax request profile.
+M3 has a 1,000,000-token context, a 524,288-token output maximum, and JPEG, PNG, and WebP input.
+Its limits and standard prices were verified on 2026-09-05.
+See [MiniMax M3](../minimax-m3.md) for the activation gate and live qualification procedure.
 
 ## Configuration
 
@@ -218,6 +227,9 @@ request. This private message includes `reasoning_content` and never enters a
 public response or log.
 All seven MiniMax M2 routes map public `max_tokens` to
 `max_completion_tokens` and carry a configured 204800-token output ceiling.
+Their `minimax_chat_completions` request profile sends `reasoning_split: true`
+for generation and key verification. This separates private reasoning from
+visible answers and visible continuation content.
 GLM-5.2 uses the international Z.AI Chat Completions endpoint. Its
 128K output maximum is catalog metadata. The proxy does not expose optional
 `thinking` or provider-native `reasoning_effort` controls. The
@@ -299,7 +311,9 @@ signatures that a `model_output` step requires.
 
 Gemini offering media limits are part of the validated catalog and public
 capability resource. The inline request limit is 20,000,000 encoded request
-bytes. The image-count limit is 3,600 files for one request. The published
+bytes for all six Gemini offerings. Both media-specific guides state this bound.
+The general file guide lists 100 MB but notes that limits vary by file type and model.
+The image-count limit is 3,600 files for one request. The published
 audio-count limit is `unknown`. Each image or audio Files API upload is limited
 to 2,000,000,000 bytes. The adapter builds the complete inline interaction and
 uses inline `data` when its encoded size is within the limit. A larger request
@@ -409,7 +423,9 @@ provider transport for one fixed, non-user-content probe:
   `background: false`, `store: false`, and a 16-token output limit.
 - xAI synchronous Responses uses one `POST /responses` at the selected xAI
   base URL. It sends `store: false` and a 16-token output limit.
-- DeepSeek, DashScope, Moonshot, MiniMax, SiliconFlow, Z.AI, Meta, and xAI
+- DashScope uses one synchronous `POST /responses` at the saved workspace URL.
+  It sends `store: false` and a 16-token output limit.
+- DeepSeek, Moonshot, MiniMax, SiliconFlow, Z.AI, and Meta
   Chat Completions models use one authenticated `POST /chat/completions`.
   The request uses the provider's declared token-limit parameter.
 - A Gemini model creates one stored background interaction. It then
@@ -418,6 +434,12 @@ provider transport for one fixed, non-user-content probe:
   the credential.
 - Anthropic uses one Messages request with `x-api-key`,
   `anthropic-version: 2023-06-01`, and `max_tokens: 16`.
+
+Claude Fable 5.1 and Opus 5 use the existing Anthropic Messages transport.
+Their `anthropic_messages` reasoning adapter maps named effort levels to `output_config.effort`.
+The same output configuration retains a structured response format when requested.
+The request preserves adaptive thinking defaults. Responses expose text blocks only.
+See [current Claude models](../claude-current-models.md) for limits, prices, retention requirements, and qualification.
 
 The verifier uses the management request context and the shared upstream
 worker, queue, and origin-rate-limit boundary. It applies the selected
@@ -797,6 +819,11 @@ and records version 12. Current startup rejects later dimension drift.
 Current startup validates only the distinct endpoint, provider, and model
 combinations in the usage table.
 
+Schema version 14 migrates retired direct DeepSeek selections and their tenant default reasoning controls.
+Private migration records can preserve exact source identities in historical usage.
+Current startup accepts those declared historical identities without exposing them as routes.
+See [DeepSeek retirement](../deepseek-retirement.md) for the migration and operator checks.
+
 Schema version 13 replaces the usage success flag with one required request
 disposition: `rejected`, `succeeded`, or `failed`. The bounded upgrade maps
 historical successful rows to `succeeded`. It maps `invalid_request` and
@@ -963,7 +990,7 @@ that response or structured provider-failure logs.
   capability, ordered image and audio attachments become typed interaction
   content after the message text. The adapter selects inline `data` or Files
   API `uri` content from the exact provider offering limits.
-- xAI uses the shared Chat Completions adapter for text-only models. The `grok-4.5` image route uses synchronous Responses.
+- xAI uses its own synchronous Responses codec for all text models. The `grok-4.5` route also accepts images.
 - OpenAI-compatible chat providers receive validated and sorted `messages[]` as provider-supported `role` and `content` items.
 - OpenAI Responses payload shape comes from the selected configured model's stable `request_profile`; model-specific web-search support comes from the selected model catalog entry. OpenAI Responses text calls run in background mode with stored responses so long provider work can be polled by llm-proxy while the caller waits on one REST request.
 - Gemini receives user messages as `user_input` steps and system messages as
@@ -1027,3 +1054,13 @@ The public capability catalog exposes that declaration.
 The OpenAI provider adapters translate function declarations, calls, and results.
 The client executes each function. Provider web search remains a separate capability.
 See [client protocols](../client-protocols.md) for the HTTP subsets and acceptance evidence.
+
+## Qualified Gemini Flash routes
+
+`gemini-3.6-flash` accepts `minimal`, `low`, `medium`, and `high`.
+`gemini-3.7-flash` accepts `low`, `medium`, and `high`.
+The existing Interactions adapter writes the selected effort to `generation_config.thinking_level`.
+When the request and tenant default omit the effort, the provider selects its default.
+Both routes permit text, image, and audio input and a maximum of 65,536 output tokens.
+The Gemini provider default remains `gemini-3.5-flash`.
+See [qualified Gemini models](../gemini-qualified-models.md) for acceptance evidence.
