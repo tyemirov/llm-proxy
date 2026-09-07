@@ -83,6 +83,33 @@ test("public site rendering accepts an explicit media lifecycle", async () => {
   });
 });
 
+test("public site rendering validates image formats and pixel dimensions", async () => {
+  const capabilities = normalizedCapabilityFixture();
+  capabilities.models[0].media_inputs = ["image"];
+  capabilities.models[0].capabilities = ["image_input", "text"];
+  const dimension = {id: "image_width_pixels", media_type: "image", transport: "any", status: "bounded", value: 6000,
+    unit: "pixels", scope: "attachment", source: "https://docs.z.ai/openapi.json", last_verified: "2026-09-05"};
+  const offering = Object.assign(capabilities.offerings[0], {
+    capabilities: ["image_input", "text"], media_execution_lifecycle: "synchronous_completion",
+    image_mime_types: ["image/jpeg", "image/png"], media_limits: [dimension],
+  });
+  await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+    const fixture = await siteFixture();
+    try {
+      await renderFixture(fixture, capabilitiesURL);
+      await rm(fixture.output, { recursive: true, force: true });
+      dimension.unit = "bytes";
+      await expect(renderFixture(fixture, capabilitiesURL)).rejects.toThrow(/image dimension/u);
+      await rm(fixture.output, { recursive: true, force: true });
+      dimension.unit = "pixels";
+      offering.image_mime_types = ["image/gif"];
+      await expect(renderFixture(fixture, capabilitiesURL)).rejects.toThrow(/image_mime_types/u);
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+});
+
 test("public site rendering writes the normalized exact model catalog", async () => {
   await withCapabilityServer(200, normalizedCapabilityFixture(), async (capabilitiesURL) => {
     const fixture = await siteFixture();

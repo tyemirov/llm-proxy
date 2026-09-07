@@ -1879,6 +1879,7 @@ func TestOperationalGeminiCandidateHarnessExercisesExactAcceptanceMatrix(testing
 exit 0
 `, 0o755)
 	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "curl"), `#!/usr/bin/env python3
+import base64
 import json
 import os
 import pathlib
@@ -1917,7 +1918,19 @@ status_code = "200"
 response = {}
 base_url = "https://generativelanguage.googleapis.com/v1beta/interactions"
 if method == "POST" and url == base_url and background is False:
+    if model == "gemini-3.5-transcribe":
+        audio = payload["input"]
+        if len(audio) != 1 or audio[0]["type"] != "audio" or audio[0]["mime_type"] != "audio/wav":
+            raise SystemExit(43)
+        if base64.b64decode(audio[0]["data"]) != pathlib.Path(os.environ["LLM_PROXY_LIVE_GEMINI_AUDIO_FILE"]).read_bytes():
+            raise SystemExit(44)
+        if payload.get("store") is not False or "generation_config" in payload:
+            raise SystemExit(45)
     response = {"id": interaction_id, "status": "completed", "steps": [{"type": "model_output", "content": [{"type": "text", "text": "OK"}]}]}
+    if model == "gemini-3.5-transcribe":
+        response["status"] = os.environ.get("GEMINI_FAKE_TRANSCRIPTION_STATUS", "completed")
+        response["steps"][0]["content"][0]["text"] = os.environ.get("GEMINI_FAKE_TRANSCRIPTION_TEXT", "OK")
+        status_code = os.environ.get("GEMINI_FAKE_TRANSCRIPTION_HTTP_STATUS", "200")
 elif method == "POST" and url == base_url and background is True:
     response = {"id": interaction_id, "status": "in_progress"}
 elif method == "GET" and url.startswith(base_url + "/"):
@@ -2000,6 +2013,87 @@ sys.stdout.write(status_code)
 			testingInstance.Fatalf("candidate harness exposed private value %q", privateValue)
 		}
 	}
+	for _, candidate := range []struct {
+		model   string
+		efforts []string
+	}{
+		{model: "gemini-3.1-pro-preview", efforts: []string{"omitted", "low", "medium", "high"}},
+		{model: "gemini-3.8-flash", efforts: []string{"omitted", "low", "medium", "high"}},
+		{model: "gemini-3.5-flash-lite", efforts: []string{"omitted", "minimal", "low", "medium", "high"}},
+	} {
+		if err := os.Truncate(capturePath, 0); err != nil {
+			testingInstance.Fatal(err)
+		}
+		candidateOutput := runOperationalCommand(testingInstance, repositoryRoot,
+			append(environment, "LLM_PROXY_LIVE_GEMINI_MODEL="+candidate.model),
+			filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"), "--gemini-candidates")
+		if !strings.Contains(candidateOutput, "live Gemini candidate acceptance passed: models="+candidate.model) {
+			testingInstance.Fatalf("selected candidate output=%s", candidateOutput)
+		}
+		captured, err := os.ReadFile(capturePath)
+		if err != nil {
+			testingInstance.Fatal(err)
+		}
+		candidateCapture := string(captured)
+		for _, effort := range candidate.efforts {
+			if !strings.Contains(candidateCapture, "model="+candidate.model+" background=False thinking_level="+effort) {
+				testingInstance.Fatalf("missing exact effort=%s capture=%s", effort, candidateCapture)
+			}
+		}
+		if strings.Count(candidateCapture, "POST ") != len(candidate.efforts)+3 || strings.Count(candidateCapture, "GET ") != 3 || strings.Count(candidateCapture, "DELETE ") != 2 {
+			testingInstance.Fatalf("selected candidate lifecycle=%s", candidateCapture)
+		}
+	}
+
+	audioPath := filepath.Join(fixtureRoot, "speech.wav")
+	runOperationalCommand(testingInstance, repositoryRoot, environment, "python3", "-c", "import wave,sys; f=wave.open(sys.argv[1], 'wb'); f.setnchannels(1); f.setsampwidth(2); f.setframerate(16000); f.writeframes(bytes(3200)); f.close()", audioPath)
+	if err := os.Truncate(capturePath, 0); err != nil {
+		testingInstance.Fatal(err)
+	}
+	transcriptionOutput := runOperationalCommand(testingInstance, repositoryRoot,
+		append(environment, "LLM_PROXY_LIVE_GEMINI_MODEL=gemini-3.5-transcribe", "LLM_PROXY_LIVE_GEMINI_AUDIO_FILE="+audioPath, "LLM_PROXY_LIVE_GEMINI_EXPECTED_TRANSCRIPT=OK"),
+		filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"), "--gemini-candidates")
+	if !strings.Contains(transcriptionOutput, "live Gemini candidate transcription passed: model=gemini-3.5-transcribe status=200") {
+		testingInstance.Fatalf("transcription output=%s", transcriptionOutput)
+	}
+	transcriptionCapture, captureError := os.ReadFile(capturePath)
+	if captureError != nil || strings.Count(string(transcriptionCapture), "POST ") != 1 || strings.Contains(string(transcriptionCapture), "GET ") {
+		testingInstance.Fatalf("transcription requests=%s error=%v", transcriptionCapture, captureError)
+	}
+
+	for _, failure := range []struct {
+		name      string
+		variables []string
+		message   string
+	}{
+		{"empty output", []string{"GEMINI_FAKE_TRANSCRIPTION_TEXT="}, "did not match the expected words"},
+		{"wrong output", []string{"GEMINI_FAKE_TRANSCRIPTION_TEXT=private transcript words"}, "did not match the expected words"},
+		{"incomplete output", []string{"GEMINI_FAKE_TRANSCRIPTION_STATUS=incomplete"}, "did not match the expected words"},
+		{"provider rejection", []string{"GEMINI_FAKE_TRANSCRIPTION_HTTP_STATUS=400"}, "status=400"},
+		{"missing audio", []string{"LLM_PROXY_LIVE_GEMINI_AUDIO_FILE="}, "requires an audio file and expected transcript"},
+		{"missing expected words", []string{"LLM_PROXY_LIVE_GEMINI_EXPECTED_TRANSCRIPT="}, "requires an audio file and expected transcript"},
+	} {
+		command := exec.Command(filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"), "--gemini-candidates")
+		command.Dir = repositoryRoot
+		command.Env = append(append(environment, "LLM_PROXY_LIVE_GEMINI_MODEL=gemini-3.5-transcribe", "LLM_PROXY_LIVE_GEMINI_AUDIO_FILE="+audioPath, "LLM_PROXY_LIVE_GEMINI_EXPECTED_TRANSCRIPT=OK"), failure.variables...)
+		output, err := command.CombinedOutput()
+		if err == nil || !strings.Contains(string(output), failure.message) || strings.Contains(string(output), "private transcript words") || strings.Contains(string(output), providerCredential) || strings.Contains(string(output), "transcription passed") {
+			testingInstance.Fatalf("case=%s error=%v output=%s", failure.name, err, output)
+		}
+	}
+
+	if err := os.Truncate(capturePath, 0); err != nil {
+		testingInstance.Fatal(err)
+	}
+	invalidCommand := exec.Command(filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"), "--gemini-candidates")
+	invalidCommand.Dir = repositoryRoot
+	invalidCommand.Env = append(environment, "LLM_PROXY_LIVE_GEMINI_MODEL=gemini-unknown")
+	invalidOutput, invalidError := invalidCommand.CombinedOutput()
+	invalidCapture, captureError := os.ReadFile(capturePath)
+	if invalidError == nil || !strings.Contains(string(invalidOutput), "unsupported Gemini candidate model") || captureError != nil || len(invalidCapture) != 0 {
+		testingInstance.Fatalf("invalid candidate error=%v output=%s capture=%s capture_error=%v", invalidError, invalidOutput, invalidCapture, captureError)
+	}
+
 }
 
 func TestOperationalGeminiCandidateHarnessPreservesExplicitReasoningMatrixOverride(testingInstance *testing.T) {
@@ -2361,7 +2455,7 @@ func TestOperationalLiveHarnessDiscoversCatalogOnlyProviderFields(testingInstanc
 		"CATALOG_TEST_TOKEN="+providerKey+"\nCATALOG_TEST_URL="+providerURL+"\n",
 		0o600,
 	)
-	discoveryFixture := `{"schema_version":1,"providers":[{"id":"catalog-test","fields":[{"id":"access_token","kind":"credential","required":true,"environment":"CATALOG_TEST_TOKEN"},{"id":"gateway_url","kind":"setting","required":true,"environment":"CATALOG_TEST_URL"}]}]}`
+	discoveryFixture := `{"schema_version":1,"providers":[{"id":"catalog-test","fields":[{"id":"access_token","kind":"credential","required":true,"environment":"CATALOG_TEST_TOKEN","default":""},{"id":"gateway_url","kind":"setting","required":true,"environment":"CATALOG_TEST_URL","default":""}]}]}`
 	command := exec.Command(filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"))
 	command.Dir = repositoryRoot
 	command.Env = []string{
@@ -2711,7 +2805,7 @@ builtin printf '%s\n' \
   '  if [[ -n "${PROVIDER_DISCOVERY_FIXTURE:-}" ]]; then' \
   '    builtin printf "%s\n" "${PROVIDER_DISCOVERY_FIXTURE}"' \
   '  else' \
-  '    builtin printf "%s\n" '\''{"schema_version":1,"providers":[{"id":"openai","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"OPENAI_API_KEY"}]},{"id":"deepseek","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"DEEPSEEK_API_KEY"}]},{"id":"dashscope","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"DASHSCOPE_API_KEY"},{"id":"base_url","kind":"setting","required":true,"environment":"DASHSCOPE_BASE_URL"}]},{"id":"moonshot","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"MOONSHOT_API_KEY"}]},{"id":"minimax","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"MINIMAX_API_KEY"}]},{"id":"siliconflow","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"SILICONFLOW_API_KEY"}]},{"id":"zai","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"ZAI_API_KEY"}]},{"id":"gemini","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"GEMINI_API_KEY"}]},{"id":"anthropic","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"ANTHROPIC_API_KEY"}]},{"id":"meta","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"MODEL_API_KEY"}]},{"id":"xai","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"XAI_API_KEY"}]}]}'\''' \
+  '    builtin printf "%s\n" '\''{"schema_version":1,"providers":[{"id":"openai","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"OPENAI_API_KEY","default":""}]},{"id":"deepseek","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"DEEPSEEK_API_KEY","default":""}]},{"id":"dashscope","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"DASHSCOPE_API_KEY","default":""},{"id":"base_url","kind":"setting","required":true,"environment":"DASHSCOPE_BASE_URL","default":""}]},{"id":"moonshot","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"MOONSHOT_API_KEY","default":""}]},{"id":"minimax","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"MINIMAX_API_KEY","default":""}]},{"id":"siliconflow","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"SILICONFLOW_API_KEY","default":""}]},{"id":"zai","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"ZAI_API_KEY","default":""}]},{"id":"gemini","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"GEMINI_API_KEY","default":""}]},{"id":"anthropic","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"ANTHROPIC_API_KEY","default":""}]},{"id":"meta","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"MODEL_API_KEY","default":""}]},{"id":"xai","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"XAI_API_KEY","default":""}]}]}'\''' \
   '  fi' \
   '  exit 0' \
   'fi' \
@@ -3103,4 +3197,97 @@ func runOperationalCommand(testingInstance *testing.T, directory string, environ
 		testingInstance.Fatalf("operational command failed: %s %s: %v\n%s", commandName, strings.Join(arguments, " "), commandError, output)
 	}
 	return string(output)
+}
+
+func TestOperationalLiveCandidateCatalogIsolation(t *testing.T) {
+	root := operationalRepositoryRoot(t)
+	originalPath := filepath.Join(root, "configs", "providers.yml")
+	original, err := os.ReadFile(originalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range []string{"minimax/minimax-m3", "minimax/missing", "openai/minimax-m3", "minimax/minimax-m2.7", "../minimax-m3"} {
+		t.Run(candidate, func(t *testing.T) {
+			output := filepath.Join(t.TempDir(), "config.yml")
+			command := exec.Command("bash", filepath.Join(root, "scripts", "test_live_providers.sh"), "--write-config", output, "--candidate-model", candidate)
+			command.Dir = root
+			command.Env = []string{"PATH=" + os.Getenv("PATH"), "GO=/does/not/exist"}
+			result, err := command.CombinedOutput()
+			if candidate != "minimax/minimax-m3" {
+				if err == nil {
+					t.Fatalf("invalid candidate accepted: %s", result)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("candidate config error=%v output=%s", err, result)
+			}
+			copied, err := os.ReadFile(filepath.Join(filepath.Dir(output), "providers.yml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			expected := strings.Replace(string(original), "    - id: minimax-m3\n      enabled: false", "    - id: minimax-m3\n      enabled: true", 1)
+			if string(copied) != expected || string(copied) == string(original) {
+				t.Fatal("candidate must change exactly its copied activation flag")
+			}
+		})
+	}
+	after, err := os.ReadFile(originalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(original) {
+		t.Fatal("live qualification changed the primary catalog")
+	}
+}
+
+func TestOperationalLiveHarnessCatalogDefault(t *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(t)
+	fixture := newOperationalLiveHarnessFixture(t)
+	capturePath := filepath.Join(t.TempDir(), "operations.log")
+	environmentPath := filepath.Join(t.TempDir(), "provider.env")
+	environmentFile, err := os.Create(environmentPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := environmentFile.WriteString("BAIDU_API_KEY=fixture-baidu-key\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := environmentFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command(filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"))
+	command.Dir = repositoryRoot
+	command.Env = []string{
+		"PATH=" + fixture.toolDirectory + string(os.PathListSeparator) + os.Getenv("PATH"),
+		"GO=" + filepath.Join(fixture.toolDirectory, "go"),
+		"LLM_PROXY_LIVE_PORT=" + strconv.Itoa(operationalLoopbackPort(t)),
+		"PROXY_PID_CAPTURE=" + fixture.proxyPIDPath,
+		"LLM_PROXY_LIVE_PROVIDERS=baidu",
+		"LLM_PROXY_LIVE_BAIDU_MODEL=ernie-5.0",
+		"BAIDU_API_KEY=stale-process-key",
+		"LIVE_ENV_FILE=" + environmentPath,
+		"LIVE_OPERATION_CAPTURE=" + capturePath,
+		`PROVIDER_DISCOVERY_FIXTURE={"schema_version":1,"providers":[{"id":"baidu","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"BAIDU_API_KEY","default":""},{"id":"base_url","kind":"setting","required":true,"environment":"","default":"https://api.baiduqianfan.ai/v1"}]}]}`,
+	}
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("default URL harness failed: %v\n%s", err, output)
+	}
+	for _, fragment := range []string{"live provider verification passed: provider=baidu model=ernie-5.0 status=200", "live provider smoke passed: provider=baidu model=ernie-5.0 status=200"} {
+		if !strings.Contains(string(output), fragment) {
+			t.Fatalf("missing receipt=%s output=%s", fragment, output)
+		}
+	}
+	captured, err := os.ReadFile(capturePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(captured), `"fields":{"api_key":"fixture-baidu-key","base_url":"https://api.baiduqianfan.ai/v1"}`) {
+		t.Fatalf("default URL absent in connection request: %s", captured)
+	}
+	if strings.Contains(string(output), "fixture-baidu-key") {
+		t.Fatal("credential exposed")
+	}
+	assertOperationalProxyChildStopped(t, fixture.proxyPIDPath)
 }
