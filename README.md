@@ -1443,6 +1443,9 @@ This repository exposes the standard local targets used by MPR app repos:
 Hosted CI runs backend and frontend qualification in independent jobs.
 Each job has a ten-minute limit.
 Together, the jobs run every gate from local `make ci`.
+Playwright global setup builds the capability binary before browser test workers start.
+The build does not use the 30-second test hook limit.
+Global teardown removes the temporary binary after the browser tests.
 The required `Test / test` check passes only when both jobs succeed.
 A failed, cancelled, skipped, or missing job result prevents success.
 
