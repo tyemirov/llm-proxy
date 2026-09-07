@@ -293,17 +293,21 @@ func newProviderCatalog(schema ProviderCatalogSchema, revision string) (*Provide
 func enabledProviderCatalog(schema ProviderCatalogSchema, catalog ModelCatalog) (ProviderCatalogSchema, ModelCatalog) {
 	enabledOfferings := make(map[string]bool)
 	enabledProviders := make(map[string]bool, len(schema.Providers))
+	modelsWithEnabledOfferings := make(map[string]bool, len(schema.Models))
 	for _, provider := range schema.Providers {
 		enabledProviders[provider.ID] = provider.Enabled != ModelDisabled
 		for _, offering := range provider.Offerings {
 			enabledOfferings[provider.ID+"\x00"+offering.Model] = offering.Enabled != ModelDisabled
+			if enabledProviders[provider.ID] && offering.Enabled != ModelDisabled {
+				modelsWithEnabledOfferings[offering.Model] = true
+			}
 		}
 	}
 	enabledModels := make(map[string]bool, len(schema.Models))
 	enabledFamilies := make(map[string]bool, len(schema.Families))
 	for _, model := range schema.Models {
-		enabledModels[model.ID] = model.Enabled == ModelEnabled
-		if model.Enabled == ModelEnabled {
+		enabledModels[model.ID] = model.Enabled == ModelEnabled && modelsWithEnabledOfferings[model.ID]
+		if enabledModels[model.ID] {
 			enabledFamilies[model.Family] = true
 		}
 	}

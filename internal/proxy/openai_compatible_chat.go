@@ -162,16 +162,16 @@ func parseChatCompletionResponse(responseBytes []byte, policy chatCompletionResp
 	if decodeError := json.Unmarshal(responseBytes, &response); decodeError != nil {
 		return textGenerationResult{}, decodeError
 	}
-	if policy == chatCompletionResponsePolicyQianfan {
-		if err := validateQianfanChatChoices(response.Choices); err != nil {
-			return textGenerationResult{}, err
-		}
-	}
 	usage, usageError := parseChatCompletionTokenUsage(response.Usage)
 	if usageError != nil {
 		return textGenerationResult{}, usageError
 	}
 	generation := textGenerationResult{usage: usage}
+	if policy == chatCompletionResponsePolicyQianfan {
+		if err := validateQianfanChatChoices(response.Choices); err != nil {
+			return generation, err
+		}
+	}
 	for _, choice := range response.Choices {
 		finishReason := strings.TrimSpace(choice.FinishReason)
 		if finishReason == constants.EmptyString {

@@ -18,6 +18,71 @@ import (
 
 const activationDisabledTextModel = "gpt-4o-mini"
 
+func TestModelActivationPrunesModelsWithoutActiveOfferingsFromHTTP(t *testing.T) {
+	for _, providerID := range []string{"vertex", "baidu"} {
+		for _, disabledRecord := range []string{"provider", "offerings"} {
+			t.Run(providerID+"/"+disabledRecord, func(t *testing.T) {
+				schema := testfixtures.ProviderCatalog(t).Schema()
+				for index := range schema.Providers {
+					provider := &schema.Providers[index]
+					if provider.ID != providerID {
+						continue
+					}
+					if disabledRecord == "provider" {
+						provider.Enabled = proxy.ModelDisabled
+					} else {
+						for offeringIndex := range provider.Offerings {
+							provider.Offerings[offeringIndex].Enabled = proxy.ModelDisabled
+							provider.Offerings[offeringIndex].DefaultOperations = nil
+						}
+					}
+				}
+				catalog, err := proxy.NewProviderCatalog(schema)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(catalog.Schema().Models) != len(schema.Models) || len(catalog.Schema().Families) != len(schema.Families) {
+					t.Fatal("private catalog metadata was removed")
+				}
+				router := newManagementRouterWithDatabasePath(t, proxy.Configuration{ProviderCatalog: catalog}, filepath.Join(t.TempDir(), "activation.db"))
+				server := httptest.NewServer(router)
+				defer server.Close()
+				response, err := server.Client().Get(server.URL + proxy.PublicCapabilitiesPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer response.Body.Close()
+				if response.StatusCode != http.StatusOK {
+					t.Fatalf("capabilities status=%d", response.StatusCode)
+				}
+				var public proxy.PublicCapabilityCatalog
+				if err := json.NewDecoder(response.Body).Decode(&public); err != nil {
+					t.Fatal(err)
+				}
+				families := map[string]bool{}
+				sharedModelFound := false
+				for _, model := range public.Models {
+					if len(model.Capabilities) == 0 || len(model.ProviderOfferings) == 0 {
+						t.Errorf("model=%s capabilities=%v offerings=%v", model.Identifier, model.Capabilities, model.ProviderOfferings)
+					}
+					families[model.Family] = true
+					if model.Identifier == "deepseek-v4-pro" {
+						sharedModelFound = true
+					}
+				}
+				if !sharedModelFound {
+					t.Error("model served by the active DeepSeek provider was removed")
+				}
+				for _, family := range public.Families {
+					if !families[family.Identifier] || (providerID == "baidu" && family.Identifier == "ernie-5") {
+						t.Errorf("unused family=%s", family.Identifier)
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestModelActivationCatalogServiceRequiresRuntimeDefault(t *testing.T) {
 	for _, duplicate := range []bool{false, true} {
 		catalog := testfixtures.ProviderCatalog(t).ModelCatalog()
