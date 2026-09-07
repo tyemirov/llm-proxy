@@ -1,8 +1,7 @@
 # LLM Proxy
 
-LLM Proxy is a lightweight HTTP service that forwards user prompts to OpenAI's
-Responses API, OpenAI-compatible chat providers, Anthropic's native Messages
-API, Google Gemini's native Interactions API, and audio transcription APIs.
+LLM Proxy is an HTTP service for text generation and audio transcription.
+It supports OpenAI, compatible chat providers, Anthropic Messages, Gemini Interactions, and Vertex AI.
 It exposes protected HTTP endpoints that require a tenant secret and simplify
 integrating provider capabilities without embedding API credentials in each
 client. Canonical `POST /v2` user messages can also carry provider-neutral,
@@ -354,7 +353,7 @@ adapters before they are available through `/dictate`.
 
 | Provider selector | Aliases | Wire contract | Execution lifecycle | Configured default text model | Credential field | Default base URL | Dictation | Web search |
 |-------------------|---------|---------------|---------------------|-------------------------------|------------------|------------------|-----------|------------|
-| `openai` | none | `openai_responses` | `pollable_resource` | `gpt-4.1` | Tenant-managed API key | `https://api.openai.com/v1` | Yes: `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | Yes, on marked OpenAI models |
+| `openai` | none | `openai_responses` | `pollable_resource` | `gpt-4.1` | Tenant-managed API key | `https://api.openai.com/v1` | Yes: `gpt-transcribe` | Yes, on marked OpenAI models |
 | `baidu` | none | `openai_chat_completions` | `synchronous_completion` | `ernie-5.0` | Tenant-managed API key | `https://api.baiduqianfan.ai/v1` | No | No |
 | `meta` | none | `openai_chat_completions` | `synchronous_completion` | `muse-spark-1.1` | Tenant-managed API key | `https://api.meta.ai/v1` | No | No |
 | `deepseek` | none | `openai_chat_completions` | `synchronous_completion` | `deepseek-v4-flash` | Tenant-managed API key | `https://api.deepseek.com` | No | No |
@@ -391,7 +390,9 @@ See [current Claude models](docs/claude-current-models.md) for prices, provider 
 See [Opus 4.1 retirement](docs/claude-retirement.md) for the bounded Opus 5 selection migration and operator procedure.
 Gemini 3.6 and 3.7 Flash are enabled after their live reasoning and stored interaction checks passed.
 See [qualified Gemini models](docs/gemini-qualified-models.md) for the exact route controls.
-Gemini 3.8 Flash and 3.5 Flash-Lite remain disabled until live qualification passes.
+Gemini 3.8 Flash and 3.5 Flash-Lite are enabled through Vertex after service-account qualification.
+Their Developer API offerings remain disabled.
+See the [Vertex configuration and tenant cutover](docs/vertex-gemini.md).
 See [current Gemini candidates](docs/gemini-current-models.md) for their limits, prices, and acceptance checks.
 Grok 4.6 remains disabled until live qualification passes.
 See [the GLM 5.3 candidates](docs/zai-current-models.md) for text and Flash image contracts, current prices, and qualification requirements.
@@ -406,8 +407,8 @@ The loader rejects unknown fields and unsupported schema versions. It also
 rejects invalid identities, references, defaults, protocols, capabilities,
 limits, and prices.
 
-The current snapshot contains 12 providers, 77 exact models, 79 provider offerings, and 79 price records.
-Runtime discovery contains 65 enabled exact models, 67 offerings, and 67 price records.
+The current snapshot contains 13 providers, 81 exact models, 86 provider offerings, and 86 price records.
+Runtime discovery contains 71 enabled exact models, 74 offerings, and 74 price records.
 The application compiles one immutable registry from this snapshot.
 
 [Baidu Qianfan](docs/baidu-qianfan.md) provides four text offerings through one API key.
@@ -509,12 +510,12 @@ Provider-specific details:
   and [PAYG prices](https://platform.minimax.io/docs/guides/pricing-paygo).
 * Meta Model API requests use that shared Chat Completions adapter with the
   exact `meta` selector and `https://api.meta.ai/v1` base URL. The provider
-  offerings are `muse-spark-1.1` and `muse-spark-1.2`. Muse Spark 1.1 remains
+  offerings are `muse-spark-1.1`, `muse-spark-1.2`, and `muse-spark-1.3`. Muse Spark 1.1 remains
   the Meta default. llm-proxy exposes the public `max_tokens` input upstream as Meta's current
   `max_completion_tokens` field rather than Meta's deprecated `max_tokens` field.
-  The private catalog also contains the disabled [Muse Spark 1.3 candidate](docs/meta-current-model.md).
+  The enabled [Muse Spark 1.3 offering](docs/meta-current-model.md) passed live qualification with the existing Meta key.
   That Standard-tier model adds six reasoning effort levels and current prices.
-  The proxy exposes both active models only as text generation through `GET /`,
+  The proxy exposes these models as text generation through `GET /`,
   `POST /`, and `POST /v2`. Meta describes Muse Spark 1.2 as coding-focused.
   This focus does not change the provider transport or add agent orchestration.
   The proxy does not expose Meta dictation, `web_search`, tools, multimodal
@@ -1530,7 +1531,7 @@ an ignored coverage artifact from an earlier run cannot satisfy completion.
 |----------|--------------|----------------|
 | OpenAI | `OPENAI_API_KEY` | `LLM_PROXY_LIVE_OPENAI_MODEL` |
 | Baidu Qianfan | `BAIDU_API_KEY` | `LLM_PROXY_LIVE_BAIDU_MODEL` |
-| Meta Muse Spark | `MODEL_API_KEY` | `LLM_PROXY_LIVE_META_MODEL` |
+| Meta Muse Spark | `MUSE_API_KEY` | `LLM_PROXY_LIVE_META_MODEL` |
 | DeepSeek | `DEEPSEEK_API_KEY` | `LLM_PROXY_LIVE_DEEPSEEK_MODEL` |
 | DashScope/Qwen | `DASHSCOPE_API_KEY` | `LLM_PROXY_LIVE_DASHSCOPE_MODEL` |
 | Moonshot/Kimi | `MOONSHOT_API_KEY` | `LLM_PROXY_LIVE_MOONSHOT_MODEL` |
@@ -2398,7 +2399,7 @@ Optional model override:
 ```shell
 curl -X POST \
   -F "audio=@./recording.webm" \
-  "http://localhost:8080/dictate?key=mysecret&model=gpt-4o-mini-transcribe"
+  "http://localhost:8080/dictate?key=mysecret&model=gpt-transcribe"
 ```
 
 ### Response formats
@@ -2495,6 +2496,7 @@ API family and accepts the same four original GPT-5 effort values:
 | `gpt-5.5` | `none`, `low`, `medium`, `high`, `xhigh` |
 | `gpt-5.5-pro` | `medium`, `high`, `xhigh` |
 | `gpt-5.6`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna` | `none`, `low`, `medium`, `high`, `xhigh`, `max` |
+| `gpt-6-astra` | `low`, `medium`, `high`, `xhigh`, `max` |
 
 See OpenAI's [GPT-4.1 model reference](https://developers.openai.com/api/docs/models/gpt-4.1),
 [GPT-5 API launch contract](https://openai.com/index/introducing-gpt-5-for-developers/),
@@ -2502,6 +2504,8 @@ See OpenAI's [GPT-4.1 model reference](https://developers.openai.com/api/docs/mo
 [GPT-5.5 model reference](https://developers.openai.com/api/docs/models/gpt-5.5),
 [GPT-5.5 Pro model reference](https://developers.openai.com/api/docs/models/gpt-5.5-pro),
 and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-model).
+
+See the [Astra contract and acceptance](docs/astra.md) for limits, prices, and live verification.
 
 Kimi K3 accepts `low`, `high`, and `max`. Omission keeps Moonshot's provider
 default. Kimi K2.6 and the Kimi K2.7 Code routes do not expose a selectable
@@ -2529,8 +2533,10 @@ See the [operator procedure](docs/deepseek-retirement.md) for acceptance, migrat
 | `gpt-5.6-sol` | OpenAI | No | - | Yes |
 | `gpt-5.6-terra` | OpenAI | No | - | Yes |
 | `gpt-5.6-luna` | OpenAI | No | - | Yes |
+| `gpt-6-astra` | OpenAI | No | `128000` | Yes |
 | `muse-spark-1.1` | Meta | Yes | - | No |
 | `muse-spark-1.2` | Meta | No | - | No |
+| `muse-spark-1.3` | Meta | No | - | No |
 | `deepseek-v4-flash` | DeepSeek | Yes | - | No |
 | `deepseek-v4-pro` | DeepSeek | No | - | No |
 | `deepseek-reasoner` | SiliconFlow | Yes | - | No |
@@ -2612,10 +2618,12 @@ were verified on 2026-08-13 against MiniMax's official references above.
 
 | Provider selector | Models | Credential field | Provider transport | Notes |
 |-------------------|--------|------------------|--------------------|-------|
-| `openai` | `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | Tenant-managed API key | Catalog `dictation` transport | Default dictation provider and default model `gpt-4o-mini-transcribe`. |
+| `openai` | `gpt-transcribe` | Tenant-managed API key | Catalog `dictation` transport | Default dictation provider and default model `gpt-transcribe`. |
 | `siliconflow` | `sensevoice-small` | Tenant-managed API key | Catalog `dictation` transport | OpenAI-compatible audio transcription. |
 | `zai` | `glm-asr-2512` | Tenant-managed API key | Catalog `dictation` transport | Z.AI GLM-ASR sends `model=glm-asr-2512`. |
 | `xai` | `xai-stt` | Tenant-managed API key | Catalog `dictation` transport | The upstream request omits the multipart `model` field. |
+
+See [OpenAI transcription retirement](docs/openai-transcription-retirement.md) for the current model, saved-selection migration, and operator activation checks.
 
 ### Status codes
 
