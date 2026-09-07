@@ -1953,7 +1953,17 @@ elif method == "DELETE" and url.startswith(base_url + "/"):
 else:
     raise SystemExit(43)
 
-output_path.write_text(json.dumps(response), encoding="utf-8")
+if os.environ.get("GEMINI_FAKE_ERROR"):
+    status_code = "429"
+    response = {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": "Quota exceeded: " + os.environ["GEMINI_API_KEY"] + " " + payload.get("input", ""), "details": [{"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "17s"}, {"@type": "type.googleapis.com/google.rpc.QuotaFailure", "violations": [{"quotaMetric": "generativelanguage.googleapis.com/generate_requests_per_model", "quotaId": "GenerateRequestsPerDayPerProjectPerModel", "quotaValue": "0", "quotaDimensions": {"project": "private-project"}}]}]}, "steps": [{"text": "private-generated-output"}]}
+if "-D" in arguments:
+    pathlib.Path(arguments[arguments.index("-D") + 1]).write_text("HTTP/2 " + status_code + "\r\nRetry-After: 17\r\nX-Private: private-header\r\n", encoding="utf-8")
+body = json.dumps(response)
+if os.environ.get("GEMINI_FAKE_ERROR") == "malformed":
+    body = "private non-json error body"
+elif os.environ.get("GEMINI_FAKE_ERROR") == "missing":
+    body = json.dumps({"message": "private error outside contract"})
+output_path.write_text(body, encoding="utf-8")
 sys.stdout.write(status_code)
 `, 0o755)
 
@@ -2040,8 +2050,46 @@ sys.stdout.write(status_code)
 				testingInstance.Fatalf("missing exact effort=%s capture=%s", effort, candidateCapture)
 			}
 		}
-		if strings.Count(candidateCapture, "POST ") != len(candidate.efforts)+3 || strings.Count(candidateCapture, "GET ") != 3 || strings.Count(candidateCapture, "DELETE ") != 2 {
+		posts, gets, deletes := len(candidate.efforts)+3, 3, 2
+		if candidate.model == "gemini-3.5-flash-lite" {
+			posts, gets, deletes = len(candidate.efforts), 0, 0
+			if strings.Contains(candidateCapture, "background=True") {
+				testingInstance.Fatalf("Flash-Lite sent an unsupported background request: %s", candidateCapture)
+			}
+		}
+		if strings.Count(candidateCapture, "POST ") != posts || strings.Count(candidateCapture, "GET ") != gets || strings.Count(candidateCapture, "DELETE ") != deletes {
 			testingInstance.Fatalf("selected candidate lifecycle=%s", candidateCapture)
+		}
+	}
+
+	diagnosticCommand := exec.Command(filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"), "--gemini-candidates")
+	diagnosticCommand.Dir = repositoryRoot
+	diagnosticCommand.Env = append(environment, "GEMINI_FAKE_ERROR=true")
+	diagnosticOutput, diagnosticError := diagnosticCommand.CombinedOutput()
+	if diagnosticError == nil {
+		testingInstance.Fatal("provider error must fail candidate acceptance")
+	}
+	for _, expected := range []string{"RESOURCE_EXHAUSTED", "Quota exceeded", "GenerateRequestsPerDayPerProjectPerModel", `"quotaValue":"0"`, `"retryDelay":"17s"`, `"retry_after":"17"`} {
+		if !strings.Contains(string(diagnosticOutput), expected) {
+			testingInstance.Fatalf("provider diagnostics omitted %q: %s", expected, diagnosticOutput)
+		}
+	}
+	for _, privateValue := range []string{providerCredential, "Reply with exactly OK and no punctuation.", "private-generated-output", "private-project", "private-header"} {
+		if strings.Contains(string(diagnosticOutput), privateValue) {
+			testingInstance.Fatalf("provider diagnostics exposed private content")
+		}
+	}
+
+	for _, failure := range []struct{ mode, expected string }{
+		{"malformed", "invalid JSON error body"},
+		{"missing", "error object absent"},
+	} {
+		command := exec.Command(filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"), "--gemini-candidates")
+		command.Dir = repositoryRoot
+		command.Env = append(environment, "GEMINI_FAKE_ERROR="+failure.mode)
+		output, err := command.CombinedOutput()
+		if err == nil || !strings.Contains(string(output), failure.expected) || strings.Contains(string(output), "private") {
+			testingInstance.Fatalf("invalid provider error handling: error=%v output=%s", err, output)
 		}
 	}
 
@@ -2805,7 +2853,7 @@ builtin printf '%s\n' \
   '  if [[ -n "${PROVIDER_DISCOVERY_FIXTURE:-}" ]]; then' \
   '    builtin printf "%s\n" "${PROVIDER_DISCOVERY_FIXTURE}"' \
   '  else' \
-  '    builtin printf "%s\n" '\''{"schema_version":1,"providers":[{"id":"openai","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"OPENAI_API_KEY","default":""}]},{"id":"deepseek","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"DEEPSEEK_API_KEY","default":""}]},{"id":"dashscope","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"DASHSCOPE_API_KEY","default":""},{"id":"base_url","kind":"setting","required":true,"environment":"DASHSCOPE_BASE_URL","default":""}]},{"id":"moonshot","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"MOONSHOT_API_KEY","default":""}]},{"id":"minimax","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"MINIMAX_API_KEY","default":""}]},{"id":"siliconflow","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"SILICONFLOW_API_KEY","default":""}]},{"id":"zai","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"ZAI_API_KEY","default":""}]},{"id":"gemini","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"GEMINI_API_KEY","default":""}]},{"id":"anthropic","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"ANTHROPIC_API_KEY","default":""}]},{"id":"meta","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"MODEL_API_KEY","default":""}]},{"id":"xai","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"XAI_API_KEY","default":""}]}]}'\''' \
+  '    builtin printf "%s\n" '\''{"schema_version":1,"providers":[{"id":"openai","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"OPENAI_API_KEY","default":""}]},{"id":"deepseek","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"DEEPSEEK_API_KEY","default":""}]},{"id":"dashscope","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"DASHSCOPE_API_KEY","default":""},{"id":"base_url","kind":"setting","required":true,"environment":"DASHSCOPE_BASE_URL","default":""}]},{"id":"moonshot","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"MOONSHOT_API_KEY","default":""}]},{"id":"minimax","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"MINIMAX_API_KEY","default":""}]},{"id":"siliconflow","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"SILICONFLOW_API_KEY","default":""}]},{"id":"zai","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"ZAI_API_KEY","default":""}]},{"id":"gemini","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"GEMINI_API_KEY","default":""}]},{"id":"anthropic","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"ANTHROPIC_API_KEY","default":""}]},{"id":"meta","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"MUSE_API_KEY","default":""}]},{"id":"xai","fields":[{"id":"api_key","kind":"credential","required":true,"environment":"XAI_API_KEY","default":""}]}]}'\''' \
   '  fi' \
   '  exit 0' \
   'fi' \
@@ -3206,14 +3254,14 @@ func TestOperationalLiveCandidateCatalogIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, candidate := range []string{"minimax/minimax-m3", "minimax/missing", "openai/minimax-m3", "minimax/minimax-m2.7", "../minimax-m3"} {
+	for _, candidate := range []string{"minimax/minimax-m3", "gemini/gemini-3.8-flash", "vertex/gemini-3.8-flash", "minimax/missing", "openai/minimax-m3", "minimax/minimax-m2.7", "../minimax-m3"} {
 		t.Run(candidate, func(t *testing.T) {
 			output := filepath.Join(t.TempDir(), "config.yml")
 			command := exec.Command("bash", filepath.Join(root, "scripts", "test_live_providers.sh"), "--write-config", output, "--candidate-model", candidate)
 			command.Dir = root
 			command.Env = []string{"PATH=" + os.Getenv("PATH"), "GO=/does/not/exist"}
 			result, err := command.CombinedOutput()
-			if candidate != "minimax/minimax-m3" {
+			if candidate != "minimax/minimax-m3" && candidate != "gemini/gemini-3.8-flash" {
 				if err == nil {
 					t.Fatalf("invalid candidate accepted: %s", result)
 				}
@@ -3227,6 +3275,9 @@ func TestOperationalLiveCandidateCatalogIsolation(t *testing.T) {
 				t.Fatal(err)
 			}
 			expected := strings.Replace(string(original), "    - id: minimax-m3\n      enabled: false", "    - id: minimax-m3\n      enabled: true", 1)
+			if candidate == "gemini/gemini-3.8-flash" {
+				expected = strings.Replace(string(original), "        - model: gemini-3.8-flash\n          enabled: false", "        - model: gemini-3.8-flash\n          enabled: true", 1)
+			}
 			if string(copied) != expected || string(copied) == string(original) {
 				t.Fatal("candidate must change exactly its copied activation flag")
 			}

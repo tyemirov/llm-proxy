@@ -26,7 +26,7 @@ let sequence=-1;let finished=false;
 for await (const event of events){assert.equal(event.sequence_number,++sequence);if(event.type==='response.completed'){finished=true;assert.equal(event.response.output[0].content[0].text,'hello client');}}
 assert.ok(finished);
 const models=await client.models.list();assert.ok(models.data.some(record=>record.id===model));
-const transcription=await client.audio.transcriptions.create({model:'openai/gpt-4o-transcribe',file:await toFile(Buffer.from('fixture audio'),'sample.wav')});
+const transcription=await client.audio.transcriptions.create({model:'openai/gpt-transcribe',file:await toFile(Buffer.from('fixture audio'),'sample.wav')});
 assert.equal(transcription.text,'fixture transcription');
 await assert.rejects(client.responses.create({model,input:'hello',store:true}),error=>error.status===400&&error.error.code==='invalid_request');
 console.log('OpenAI SDK text, tools, events, discovery, transcription, and errors passed.');

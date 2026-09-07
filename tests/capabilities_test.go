@@ -134,7 +134,7 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 	if catalogError != nil {
 		testingInstance.Fatalf("NewPublicCapabilityCatalog error: %v", catalogError)
 	}
-	if catalog.Revision == "" || len(catalog.Operations) != 3 || len(catalog.Prices) != 68 || len(catalog.Prices) != len(catalog.Offerings) || catalog.Counts.Providers != 12 || catalog.Counts.ModelPublishers != 12 || catalog.Counts.ModelFamilies != 25 || catalog.Counts.ModelFamilies != len(catalog.Families) || catalog.Counts.ExactModels != 66 || catalog.Counts.ExactModels != len(catalog.Models) || catalog.Counts.ProviderOfferings != 68 || catalog.Counts.ProviderOfferings != len(catalog.Offerings) || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
+	if catalog.Revision == "" || len(catalog.Operations) != 3 || len(catalog.Prices) != 74 || len(catalog.Prices) != len(catalog.Offerings) || catalog.Counts.Providers != 13 || catalog.Counts.ModelPublishers != 12 || catalog.Counts.ModelFamilies != 26 || catalog.Counts.ModelFamilies != len(catalog.Families) || catalog.Counts.ExactModels != 71 || catalog.Counts.ExactModels != len(catalog.Models) || catalog.Counts.ProviderOfferings != 74 || catalog.Counts.ProviderOfferings != len(catalog.Offerings) || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
 		testingInstance.Fatalf("catalog summary=%+v", catalog)
 	}
 	weightAccessFound := map[string]bool{}
@@ -162,8 +162,7 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 		},
 	}
 	retiredGeminiModels := map[string]struct{}{
-		"gemini-3.1-flash-lite":  {},
-		"gemini-3.1-pro-preview": {},
+		"gemini-3.1-flash-lite": {},
 	}
 	openAIDictationCapabilityFound := false
 	expectedKimiModels := map[string]struct{}{
@@ -371,7 +370,8 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 		testingInstance.Fatalf("NewPublicCapabilityCatalog error: %v", catalogError)
 	}
 	expectedOfferingCounts := map[string]int{
-		proxy.ProviderNameOpenAI:    11,
+		proxy.ProviderNameOpenAI:    12,
+		"vertex":                    4,
 		proxy.ProviderNameDashScope: 2,
 		proxy.ProviderNameGemini:    4,
 		proxy.ProviderNameAnthropic: 10,
@@ -389,7 +389,7 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 		}
 		observedOfferingCounts[offering.Provider]++
 		expectedLimitCount := 3
-		if offering.Provider == proxy.ProviderNameGemini && slices.Contains(offering.Capabilities, proxy.ModelOperationText) {
+		if (offering.Provider == proxy.ProviderNameGemini || offering.Provider == "vertex") && slices.Contains(offering.Capabilities, proxy.ModelOperationText) {
 			expectedLimitCount = 5
 		}
 		if _, expectedProvider := expectedOfferingCounts[offering.Provider]; !expectedProvider || len(offering.MediaLimits) != expectedLimitCount {
@@ -398,7 +398,9 @@ func TestPublicCapabilityCatalogPublishesExactProviderMediaLimits(testingInstanc
 		observedLimitIDs := map[string]proxy.CatalogMediaLimit{}
 		for _, limit := range offering.MediaLimits {
 			expectedVerificationDate := "2026-08-11"
-			if offering.Provider == proxy.ProviderNameMoonshot {
+			if offering.Provider == "vertex" || (offering.Provider == proxy.ProviderNameOpenAI && offering.Model == "gpt-6-astra") {
+				expectedVerificationDate = "2026-09-07"
+			} else if offering.Provider == proxy.ProviderNameMoonshot {
 				expectedVerificationDate = "2026-08-13"
 			} else if offering.Provider == proxy.ProviderNameAnthropic && (offering.Model == "claude-fable-5-1" || offering.Model == "claude-opus-5") {
 				expectedVerificationDate = "2026-09-05"

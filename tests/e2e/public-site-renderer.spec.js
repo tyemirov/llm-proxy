@@ -13,6 +13,21 @@ const executeFile = promisify(execFile);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const publicCapabilitiesPath = "/api/public/capabilities";
 
+test("public site renders Google credential profile offerings", async ({ page }) => {
+  const capabilities = normalizedCapabilityFixture();
+  capabilities.providers[0].credential_kinds = ["google_credential_profile"];
+  await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+    const fixture = await siteFixture();
+    try {
+      await renderFixture(fixture, capabilitiesURL);
+      await page.setContent(await readFile(path.join(fixture.output, "index.html"), "utf8"));
+      await expect(page.locator('[data-route-provider="example-provider"]')).toBeAttached();
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+});
+
 test("public site rendering rejects a missing capability REST resource", async () => {
   await withCapabilityServer(404, { error: "missing" }, async (capabilitiesURL) => {
     const fixture = await siteFixture();
