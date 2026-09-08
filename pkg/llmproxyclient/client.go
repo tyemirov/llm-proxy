@@ -484,6 +484,11 @@ func (client Client) messagesPostRequest(request MessagesRequest) (url.URL, []by
 }
 
 func (client Client) postPayload(contextValue context.Context, requestURL url.URL, requestBody []byte, requestTimeoutSeconds *int, idempotencyKey string) (string, error) {
+	result, err := client.postCompletionPayload(contextValue, requestURL, requestBody, requestTimeoutSeconds, idempotencyKey)
+	return result.Text(), err
+}
+
+func (client Client) postCompletionPayload(contextValue context.Context, requestURL url.URL, requestBody []byte, requestTimeoutSeconds *int, idempotencyKey string) (CompletionResult, error) {
 	httpRequest := (&http.Request{
 		Method:        http.MethodPost,
 		URL:           &requestURL,
@@ -502,22 +507,27 @@ func (client Client) postPayload(contextValue context.Context, requestURL url.UR
 
 	httpResponse, httpError := client.httpClient.Do(httpRequest)
 	if httpError != nil {
-		return "", fmt.Errorf("%w: post request: %v", ErrClientHTTPFailure, httpError)
+		return CompletionResult{}, fmt.Errorf("%w: post request: %v", ErrClientHTTPFailure, httpError)
 	}
+	result, metadataError := completionMetadata(httpResponse.Header)
 	responseBody, readError := io.ReadAll(httpResponse.Body)
 	_ = httpResponse.Body.Close()
 	if readError != nil {
-		return "", fmt.Errorf("%w: read response body: %v", ErrClientHTTPFailure, readError)
+		return CompletionResult{}, fmt.Errorf("%w: read response body: %v", ErrClientHTTPFailure, readError)
+	}
+	if metadataError != nil {
+		return CompletionResult{}, metadataError
 	}
 	if httpResponse.StatusCode == http.StatusAccepted {
 		pendingResult, pendingError := decodeStructuredRequestPending(responseBody)
 		if pendingError != nil {
-			return "", pendingError
+			return CompletionResult{}, pendingError
 		}
-		return "", &StructuredRequestPendingError{snapshot: pendingResult}
+		return CompletionResult{}, &StructuredRequestPendingError{snapshot: pendingResult}
 	}
 	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
-		return "", newHTTPFailure(httpResponse.StatusCode, responseBody)
+		return result, newHTTPFailure(httpResponse.StatusCode, responseBody)
 	}
-	return string(responseBody), nil
+	result.text = string(responseBody)
+	return result, nil
 }

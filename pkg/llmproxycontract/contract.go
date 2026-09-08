@@ -2,6 +2,15 @@
 package llmproxycontract
 
 const (
+	// HeaderResolvedModel identifies the exact catalog model selected for provider dispatch.
+	HeaderResolvedModel = "X-LLM-Proxy-Resolved-Model"
+	// HeaderRequestTokens carries available provider input usage.
+	HeaderRequestTokens = "X-LLM-Proxy-Request-Tokens"
+	// HeaderResponseTokens carries available provider output usage.
+	HeaderResponseTokens = "X-LLM-Proxy-Response-Tokens"
+	// HeaderTotalTokens carries available provider total usage.
+	HeaderTotalTokens = "X-LLM-Proxy-Total-Tokens"
+
 	// AssetPath is the authenticated tenant asset upload endpoint.
 	AssetPath = "/model/v1/assets"
 	// HeaderRequestID carries the proxy-owned identifier used to correlate one public request with structured logs.
