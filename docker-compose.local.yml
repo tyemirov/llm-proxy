@@ -15,7 +15,7 @@ services:
       - ./configs/.env.frontend.local
     environment:
       GHTTP_SERVE_DIRECTORY: "/app/render/site"
-      GHTTP_SERVE_PROXIES: "/openapi.yaml=http://schema:4179,/config-ui.yaml=http://api:8080,/auth=http://tauth:8080,/me=http://tauth:8080"
+      GHTTP_SERVE_PROXIES: "/openapi.yaml=http://schema:4179,/config-ui.yaml=http://api:8080,/auth=http://tauth:8080,/me=http://tauth:8080,/oauth=http://tauth:8080,/.well-known/oauth-authorization-server=http://tauth:8080"
       GHTTP_SERVE_RESPONSE_HEADERS: "/=Cache-Control:no-store"
     ports:
       - "127.0.0.1:${LLM_PROXY_LOCAL_FRONTEND_HOST_PORT:-4179}:4179"
