@@ -1063,6 +1063,19 @@ retain satisfied historical dependencies.
 
 ## Features
 
+- [-] [F062] (P1) Return completion measurements through the official Go client
+  Goal: TellTale I022 can record the resolved model and available token counts for each provider call.
+  Requirements:
+  - Return response text, resolved model identity, and optional token usage through a typed client result.
+  - Preserve available metadata when a provider call fails.
+  - Keep unavailable usage distinct from measured zero tokens.
+  - Define resolved identity as the exact catalog model selected for dispatch.
+  Deliverables:
+  - The official Go client method and canonical HTTP metadata contract.
+  - Real HTTP tests for tenant defaults, explicit models, usage, and failures.
+  Validation:
+  - Run `make test-client-contracts` and final `make ci`.
+
 - [!] [F061] (P1) Add GPT-6 Astra through the existing OpenAI provider.
   Goal:
   Add the requested exact `gpt-6-astra` model to current public text interfaces.
