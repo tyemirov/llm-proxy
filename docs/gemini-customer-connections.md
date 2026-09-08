@@ -8,7 +8,7 @@ P001 owns the shared provider connection interface.
 
 Continue Vertex qualification at the selected concurrency of 10 requests.
 Retain Gemini Flash 3.8 as a separate candidate with its own customer key.
-Resolve the Gemini Pro request quota and the Flash-Lite response failure before accepting those offerings at the tested load.
+Resolve the Gemini Pro request quota and both Flash-Lite output failures before accepting those offerings at the tested load.
 Permit the same exact model through both providers when each offering passes all required checks.
 Require explicit provider selection and separate credential records.
 
@@ -332,7 +332,8 @@ Actual invoice charges remain unverified.
 
 ### Follow-Up Work
 
-Two automated sessions will run at 12-hour intervals and retain their results separately.
+Session 2 completed more than 12 hours after session 1.
+Session 3 remains scheduled for the 24-hour check. Each session retains separate results.
 They test Vertex Pro, Flash, and Flash-Lite, plus Gemini Flash and Flash-Lite, at concurrency 10.
 Gemini Pro remains excluded until its quota or the intended request rate is resolved.
 The automation pauses after the third session.
@@ -341,3 +342,38 @@ Its local runner is `tmp/p012/capacity-session.py`, with a retained audio fixtur
 For Gemini Pro, select an intended request rate within the current quota or obtain a higher project quota.
 For Vertex, complete the remaining time-separated sessions and independent customer setup before the bounded F060 API-key revision.
 Keep the original failures in the support decision and all aggregate success counts.
+
+## Capacity Session 2
+
+Session 2 started on September 8 at 05:16 UTC, more than 12 hours after the first session.
+The existing runner sent each request once at concurrency 10.
+It stopped each offering after its first failed batch.
+Gemini Pro remained excluded because its request quota remains unresolved.
+The [session 2 evidence](evidence/gemini-vertex-capacity-2026-09-08-session-2.json) retains all 320 attempts and their token usage.
+
+| Provider | Exact model | Passed / attempted | Successful p95 latency | Result |
+|---|---|---:|---:|---|
+| Vertex | `gemini-3.1-pro-preview` | 70/70 | 4.727 seconds | Complete matrix passed. |
+| Vertex | `gemini-3.8-flash` | 70/70 | 2.486 seconds | Complete matrix passed. |
+| Vertex | `gemini-3.5-flash-lite` | 29/30 | 0.833 seconds | Output failure stopped this offering. |
+| Gemini | `gemini-3.8-flash` | 70/70 | 2.227 seconds | Complete matrix passed. |
+| Gemini | `gemini-3.5-flash-lite` | 80/80 | 1.130 seconds | Complete matrix passed. |
+
+Vertex Flash-Lite returned HTTP 200 at low reasoning with a missing finish reason and an answer that failed the acceptance check.
+The request took 0.726 seconds. Its usage record contained 69 reasoning tokens.
+The runner stopped the remaining 50 cases for that offering.
+The failure cause remains unknown. No request was retried or replaced.
+
+The estimated session charge is USD 0.227892 with the retained September 7 price snapshot.
+Actual invoice charges remain unverified.
+
+Across both sessions, Vertex Pro passed 160/160 and Flash 3.8 passed 140/140 through each provider.
+Each Flash-Lite offering passed 109/110, or 99.091 percent, with its original failure retained.
+Gemini Pro retains its nine quota failures from session 1.
+The two sessions contain 690 requests, 679 accepted results, and 11 failures.
+These totals preserve the 20 additional Vertex Pro requests from the initial interrupted comparison.
+
+Session 3 remains necessary for the three-session acceptance gate across at least 24 hours.
+Both Flash-Lite offerings have observed output failures, so the current samples do not establish a reliability advantage for either offering.
+The Vertex Pro results continue to show capacity beyond the tested Gemini Pro quota.
+Customer setup, public proxy capacity, actual charges, and the F060 implementation decision remain separate open gates.
