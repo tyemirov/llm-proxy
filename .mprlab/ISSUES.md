@@ -5381,9 +5381,19 @@ retain satisfied historical dependencies.
   - `docs/evidence/gemini-vertex-capacity-2026-09-07-session-1.json` records the first capacity session.
   - Two automated follow-up sessions run at 12-hour intervals. Gemini Pro remains excluded pending quota or request-rate resolution.
   - The current evidence favors Vertex for repeated bursts. The support decision remains provisional.
+  Capacity session 2 (2026-09-08 UTC):
+  - The scheduled run began more than 12 hours after session 1, with 10 concurrent requests.
+  - Vertex Pro and Flash each passed 70/70. Gemini Flash passed 70/70 and Flash-Lite passed 80/80.
+  - Vertex Flash-Lite passed 29/30 before one HTTP 200 response lacked a finish reason and failed answer acceptance.
+  - The runner stopped the remaining 50 Vertex Flash-Lite cases. The failure cause remains unknown.
+  - The session retained 320 attempts, 319 accepted results, and one failure. No request was retried or replaced.
+  - Estimated token charges total USD 0.227892 with the retained September 7 rates. Actual charges remain unverified.
+  - Each Flash-Lite offering now has one failure among 110 attempts across both sessions.
+  - `docs/evidence/gemini-vertex-capacity-2026-09-08-session-2.json` retains the separate results and cumulative counts.
+  - Session 3 remains scheduled. The initial quota and output failures remain in the support decision.
   Blocked:
   Complete key acquisition and public proxy acceptance through a separate customer account without proxy-server access.
-  Complete the 24-hour capacity evidence and record actual costs. Resolve the Gemini Pro request-rate decision and the Flash-Lite output failure.
+  Complete the 24-hour capacity evidence and record actual costs. Resolve the Gemini Pro request-rate decision and both Flash-Lite output failures.
   Obtain implementation approval for the bounded F060 API-key revision.
   Keep the support decision provisional until this evidence is available.
   Sources:
