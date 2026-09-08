@@ -186,6 +186,8 @@ local_orchestration_prepare_environment() {
     "LLM_PROXY_MANAGEMENT_API_ORIGIN" \
     "LLM_PROXY_MANAGEMENT_PROXY_ORIGIN"
   local_orchestration_write_scoped_environment "${source_environment_path}" "${scoped_tauth_environment_path}" \
+    "TAUTH_OAUTH_ES256_PRIVATE_KEY_BASE64" \
+    "LLM_PROXY_MANAGEMENT_PROXY_ORIGIN" \
     "TAUTH_CONFIG_FILE" \
     "TAUTH_LISTEN_ADDR" \
     "TAUTH_DATABASE_URL" \
