@@ -46,6 +46,26 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [ ] [I255] (P1) Distinguish Gemini model-operation failures from rejected credentials.
+  Goal:
+  Improve the existing connection verification error classification.
+  Requirements:
+  - Preserve bounded upstream error details at the Gemini verification boundary.
+  - Distinguish explicit credential rejection from an unsupported model operation.
+  - Keep provider secrets and raw provider responses out of public errors and logs.
+  - Preserve the current atomic connection-save contract after failed verification.
+  - Use explicit error classification without another provider or operation attempt.
+  Evidence:
+  P012 captured HTTP 400 when Flash 3.8 rejected a background interaction with the required API revision.
+  The verification code currently discards error bodies and maps all upstream HTTP 400 responses to `provider_key_rejected`.
+  The original uninstrumented HTTP 422 has no captured upstream response. Its exact cause remains unproven.
+  Deliverables:
+  Bounded error classification, public integration tests, and current error documentation.
+  Validation:
+  Prove the different outcomes for invalid credentials and unsupported operations through public management HTTP requests.
+  Prove that both failures preserve the previous connection and its settings.
+
+
 - [x] [I254] (P2) Use the Governor template for the managed issue format.
   Goal: Remove the format template drift reported during B204 validation.
   Requirements: Keep the cross-repository dependency specification in a separate document.
@@ -952,26 +972,30 @@ retain satisfied historical dependencies.
   Sources:
   - https://developers.openai.com/api/docs/models/gpt-6-astra
   - https://developers.openai.com/api/docs/pricing
-- [!] [F060] (P1) {P012} Migrate Gemini completion routes to Vertex AI.
+- [!] [F060] (P1) {P012} Connect Gemini completion routes through Vertex API keys.
   Goal:
-  Use the Vertex route that passed I252 for Gemini completion through the public proxy APIs.
+  Provide Vertex Gemini completion through the existing tenant API-key connection contract.
   Requirements:
-  - Use the global Vertex `v1 generateContent` endpoint and exact qualified model IDs.
-  - Implement the typed Google credential profile contract from F043 for this route.
+  - Use the tested global `v1 generateContent` endpoint and exact qualified model IDs.
+  - Accept one secret `api_key` field and send it through `x-goog-api-key`.
+  - Use the key-only model path without a project or location segment.
+  - Store each customer key in its encrypted tenant connection record.
+  - Reject obsolete credential-profile fields and configuration declarations.
   - Keep inline requests independent of the separate F043 media staging work.
-  - Use the Google authentication library for scoped OAuth tokens and token refresh.
-  - Bind each credential profile to its tenant, project, location, and approved runtime identity.
   - Map text, structured output, reasoning, media, finish reasons, and usage through the native Vertex contract.
   - Preserve public deadlines, output-limit errors, media order, and tenant isolation.
-  - Qualify every existing Gemini offering affected by the migration, including dictation routes where applicable.
-  - Migrate tenant credentials and route selection through one explicit transition into the Vertex contract.
+  - Qualify each affected offering, including both public dictation protocols where applicable.
+  - Complete customer setup and public proxy acceptance before customer activation.
   Deliverables:
-  Vertex transport, credential profiles, catalog mappings, migration procedure, public integration tests, and operator documentation.
+  API-key transport, catalog mappings, explicit operator-profile transition, public integration tests, and customer documentation.
   Validation:
-  - Start with failing public HTTP tests for the new transport and credential contract.
-  - Prove OAuth refresh, project isolation, provider errors, cancellation, structured output, media, and exact usage.
-  - Run proxy acceptance with the intended runtime identity and complete final CI.
-  - Record production acceptance after the operator cutover.
+  - Start with failing public HTTP tests for API-key connections and the new endpoint.
+  - Verify key replacement, disconnect, tenant isolation, provider errors, cancellation, structured output, media, and exact usage.
+  - Run Flash 3.8 proxy acceptance at concurrency 10 and complete final CI.
+  - Record production acceptance after the separately approved cutover.
+  Approval (2026-09-08):
+  The user approved replacement of the operator credential-profile input with the customer API-key contract.
+  This approval supersedes the initial OAuth requirements. Production deployment remains a separate action.
   Source:
   `docs/vertex-gemini-qualification.md` records 22 successful direct Vertex requests on September 7, 2026.
   Implementation (2026-09-07):
@@ -994,17 +1018,35 @@ retain satisfied historical dependencies.
   Blocked:
   P012 requires independent customer setup through the accepted API-key flow.
   The implemented operator credential profiles do not satisfy that requirement.
-  Complete the P012 comparison and approve the revised connection contract before further authentication changes or customer cutover.
-  The earlier operator deployment procedure is not the next customer step.
+  The API-key revision has explicit user approval. Complete its proxy acceptance and the remaining P012 customer gates.
+  The earlier operator procedure remains historical evidence.
   Exact Vertex prices remain unavailable until their import.
+  API-key implementation (2026-09-08):
+  - Replaced the operator profile with the tenant `api_key` field and `VERTEX_API_KEY` local binding.
+  - Reused catalog authentication to send `x-goog-api-key` to the key-only model endpoint.
+  - Removed the Google profile loader, OAuth dependency, and public profile credential kind.
+  - Public HTTP tests cover valid replacement, rejected replacement, tenant isolation, disconnect, and obsolete-field rejection.
+  - The initial API-key test failed with HTTP 400 before an upstream request. The corrected focused tests passed.
+  - Flash 3.8 passed 70/70 public requests at concurrency 10 and all 15 connection and tenant checks.
+  - Public p95 latency was 5.451 seconds. The maximum was 6.486 seconds with a 45-second deadline.
+  - All 28 additional live offering checks passed, including both dictation endpoints.
+  - The first live trial failed ten structured requests locally. The corrected trial used its own temporary asset store.
+  - `docs/evidence/vertex-api-key-acceptance-2026-09-08-summary.json` retains the acceptance results and remaining gates.
+  - Local `configs/.env` contains the approved Vertex key. Production configuration and catalog activation remain unchanged.
+  - The OpenAPI artifact, browser validator, catalog guide, and Vertex runbook describe the current API-key contract.
+  - Final `make ci` passed all 12 gates in 284 seconds with 100.0 percent Go statement coverage.
+  - Governor and changed-prose checks passed. The tracker retains 79 language findings outside this change.
+  - Changed contracts: Vertex uses `api_key`, `VERTEX_API_KEY`, and header authentication. The public profile credential kind was removed.
+  - Changed files: the Vertex transport and tests, catalog and configuration validators, OpenAPI artifact, browser validator, dependencies, and runbooks.
+  - Independent customer setup, live provider-key replacement, Google revocation, and production acceptance remain open.
   Reconciliation (2026-09-07):
   `docs/gemini-customer-connections.md` records the proposed F060 revision and customer acceptance gates.
   Retain the 28 successful requests as transport evidence only.
-  Changed contracts:
+  Initial changed contracts (2026-09-07):
   The public credential kind adds `google_credential_profile`.
   The provider catalog adds `vertex_generate_content`, `google_credentials`, and provider/offerings `enabled` flags.
   Existing public request paths and event schemas are unchanged.
-  Changed files:
+  Initial changed files (2026-09-07):
   - `configs/providers.yml`, `cmd/cli/config_file.go`, `go.mod`, and `go.sum`.
   - The Vertex codec, Google profiles, routing, catalog, management verification, media, and schema files in `internal/proxy/`.
   - `pkg/llmproxyclient/capabilities.go`, `scripts/render_public_site.mjs`, and `scripts/test_live_providers.sh`.
@@ -1600,6 +1642,9 @@ retain satisfied historical dependencies.
   Operator credential profiles do not satisfy P012's customer setup requirement.
   Resolve P012 and approve a separate storage ownership contract before further Google credential implementation under F043.
   `docs/gemini-customer-connections.md` records the proposed boundary.
+  F060 API-key revision (2026-09-08):
+  F060 removed the completion route's operator profile loader after explicit user approval.
+  Future storage credentials require the separate F043 ownership contract.
   Validation:
   - Use real files and HTTP serving to prove exact fetched bytes, digest, expiry, and cleanup.
   - Prove tenant isolation, active reference retention, failed staging, and secret-free public output.
@@ -2561,10 +2606,35 @@ retain satisfied historical dependencies.
   - Each Flash-Lite offering now has one failure among 110 attempts across both sessions.
   - `docs/evidence/gemini-vertex-capacity-2026-09-08-session-2.json` retains the separate results and cumulative counts.
   - Session 3 remains scheduled. The initial quota and output failures remain in the support decision.
+  Capacity session 3 and aggregate (2026-09-08 UTC):
+  - Session 3 started 24.388 hours after session 1 at concurrency 10.
+  - It retained 250 attempts, 238 accepted results, and 12 failures. No request was retried or replaced.
+  - Ten Vertex Pro audio requests reached the client read deadline. Their upstream outcomes remain unknown.
+  - Vertex Flash-Lite had one timeout. Gemini Flash-Lite returned another malformed response at low reasoning.
+  - Both Flash 3.8 offerings passed 210/210 across three complete direct matrices.
+  - Vertex Pro passed 220/230. Gemini Pro retains 21/30 and its original quota blocker.
+  - Gemini Flash-Lite passed 138/140. Vertex Flash-Lite passed 118/120. Both remain below 99 percent observed success.
+  - The aggregate retains 940 attempts, 917 accepted results, and 23 failures across three finite burst sessions.
+  - Returned token usage gives an estimated USD 0.69257860. Eleven timeout requests have unknown usage and charges.
+  - `docs/evidence/gemini-vertex-capacity-2026-09-08-session-3.json` records the separate final session.
+  - `docs/evidence/gemini-vertex-capacity-2026-09-08-summary.json` records aggregate results and the remaining gates.
+  - The automation is paused after the two authorized follow-up sessions. Runtime and production configuration remain unchanged.
+  Public proxy diagnostics (2026-09-08):
+  - The first Flash 3.8 connection returned HTTP 422. Its upstream cause remains unproven.
+  - A corrected recorder retained the required API revision and captured an intermittent background-operation rejection from Google.
+  - Flash 3.8 text generation passed 9/10 at concurrency 10. Google returned HTTP 400 for the other creation.
+  - All 15 connection and tenant checks passed. Ten separate concurrent connection saves also passed.
+  - The capacity runner stopped before the remaining reasoning, schema, image, and audio cases.
+  - The initial recorder omitted the API revision. Its results remain excluded from acceptance.
+  - The separate model diagnostic passed 43/44. Gemini Flash-Lite returned another malformed response at low reasoning.
+  - Vertex Pro audio passed 11/11. Vertex Flash-Lite passed 22/22. The earlier failures remain in the qualification evidence.
+  - `docs/evidence/gemini-customer-proxy-diagnostics-2026-09-08-summary.json` records the results and instrumentation limits.
+  - I255 records the verification error-classification work. The user approved the bounded F060 API-key change.
   Blocked:
+  Resolve the Gemini Interactions background rejection or qualify the approved Vertex API-key route.
   Complete key acquisition and public proxy acceptance through a separate customer account without proxy-server access.
-  Complete the 24-hour capacity evidence and record actual costs. Resolve the Gemini Pro request-rate decision and both Flash-Lite output failures.
-  Obtain implementation approval for the bounded F060 API-key revision.
+  Diagnose Vertex Pro audio timeouts and both Flash-Lite failure sets. Resolve the Gemini Pro request-rate decision and record actual costs.
+  Complete the approved F060 API-key revision and its public proxy acceptance.
   Keep the support decision provisional until this evidence is available.
   Sources:
   - https://docs.cloud.google.com/vertex-ai/generative-ai/docs/start/api-keys
