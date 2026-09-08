@@ -1,13 +1,17 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/jsonschema-go/jsonschema"
@@ -119,10 +123,50 @@ func registerMCPRoutes(router *gin.Engine, configuration Configuration, service 
 			c.Status(http.StatusForbidden)
 			return
 		}
+		if status := readMCPBody(c.Writer, c.Request, configuration.requestTimeoutPolicy.defaultBudget.duration, maximumV2RequestBytes(configuration.MaxPromptBytes, configuration.ModelCatalog)); status != 0 {
+			c.Header("Connection", "close")
+			c.Status(status)
+			return
+		}
 		identity := mcpIdentity{subject: claims.Subject, requestID: requestIDFromContext(c)}
 		transport.ServeHTTP(c.Writer, c.Request.WithContext(context.WithValue(c.Request.Context(), mcpIdentityKey{}, identity)))
 	})
 	return nil
+}
+
+// Read the upload before SDK dispatch so its deadline cannot cancel generation.
+func readMCPBody(writer http.ResponseWriter, request *http.Request, budget time.Duration, maximumBytes int64) int {
+	controller := http.NewResponseController(writer)
+	if err := controller.SetReadDeadline(time.Now().Add(budget)); err != nil {
+		return http.StatusInternalServerError
+	}
+	canceled := make(chan error, 1)
+	stop := context.AfterFunc(request.Context(), func() {
+		// A context alone cannot interrupt a blocked socket read.
+		canceled <- controller.SetReadDeadline(time.Now())
+	})
+	body, err := io.ReadAll(http.MaxBytesReader(writer, request.Body, maximumBytes))
+	if !stop() {
+		// Join the callback before a successful read clears the socket deadline.
+		if cancellationError := <-canceled; cancellationError != nil {
+			return http.StatusInternalServerError
+		}
+	}
+	var timeout net.Error
+	var oversized *http.MaxBytesError
+	switch {
+	case request.Context().Err() != nil || errors.As(err, &timeout) && timeout.Timeout():
+		return http.StatusRequestTimeout
+	case errors.As(err, &oversized):
+		return http.StatusRequestEntityTooLarge
+	case err != nil:
+		return http.StatusBadRequest
+	}
+	if err := controller.SetReadDeadline(time.Time{}); err != nil {
+		return http.StatusInternalServerError
+	}
+	request.Body = io.NopCloser(bytes.NewReader(body))
+	return 0
 }
 
 func mcpCurrentProtocol(next mcp.MethodHandler) mcp.MethodHandler {

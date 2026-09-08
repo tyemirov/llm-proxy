@@ -1,13 +1,17 @@
 package proxy_test
 
 import (
+	"bufio"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -729,4 +733,168 @@ func TestMCPBodyBound(t *testing.T) {
 	if response.StatusCode != 413 {
 		t.Fatalf("body bound status=%d", response.StatusCode)
 	}
+}
+
+func TestMCPStalledUploadDeadline(t *testing.T) {
+	fixture := newMCPFixtureWithConfig(t, nil, proxy.Configuration{RequestTimeoutSeconds: 1})
+	connection, err := net.Dial("tcp", fixture.server.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	if err := connection.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	_, err = fmt.Fprintf(connection, "POST /mcp HTTP/1.1\r\nHost: %s\r\nAuthorization: Bearer %s\r\nMCP-Protocol-Version: 2026-07-28\r\nContent-Type: application/json\r\nAccept: application/json, text/event-stream\r\nContent-Length: 4096\r\nConnection: close\r\n\r\n{", fixture.server.Listener.Addr().String(), fixture.token(t, "stalled-owner", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := http.ReadResponse(bufio.NewReader(connection), nil)
+	if err != nil {
+		t.Fatalf("stalled MCP upload did not terminate within the server budget: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusRequestTimeout {
+		t.Fatalf("stalled upload status=%d want=408", response.StatusCode)
+	}
+	fixture.waitUsageEvents(t, 0)
+}
+
+type mcpDeadlineWriter struct {
+	http.ResponseWriter
+	setDeadline func(time.Time) error
+}
+
+func TestMCPStalledUploadCancellation(t *testing.T) {
+	fixture := newMCPFixtureWithConfig(t, nil, proxy.Configuration{RequestTimeoutSeconds: 30})
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	reading, finished := make(chan struct{}, 1), make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = &observedClientBody{ReadCloser: r.Body, reading: reading}
+		fixture.router.ServeHTTP(w, r.WithContext(ctx))
+		close(finished)
+	}))
+	defer server.Close()
+	connection, err := net.Dial("tcp", server.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	if err := connection.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	_, err = fmt.Fprintf(connection, "POST /mcp HTTP/1.1\r\nHost: %s\r\nAuthorization: Bearer %s\r\nMCP-Protocol-Version: 2026-07-28\r\nContent-Type: application/json\r\nContent-Length: 4096\r\n\r\n{", server.Listener.Addr().String(), fixture.token(t, "canceled-owner", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-reading:
+	case <-time.After(3 * time.Second):
+		t.Fatal("upload read did not start")
+	}
+	cancel()
+	select {
+	case <-finished:
+	case <-time.After(3 * time.Second):
+		t.Fatal("cancellation did not release the HTTP handler")
+	}
+	response, err := http.ReadResponse(bufio.NewReader(connection), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusRequestTimeout {
+		t.Fatalf("canceled upload status=%d want=408", response.StatusCode)
+	}
+	fixture.waitUsageEvents(t, 0)
+}
+
+func (writer mcpDeadlineWriter) SetReadDeadline(deadline time.Time) error {
+	return writer.setDeadline(deadline)
+}
+
+func TestMCPUploadBoundaryFailures(t *testing.T) {
+	fixture := newMCPFixture(t, nil)
+	for _, scenario := range []struct {
+		name         string
+		failDeadline int
+		cancel       bool
+		status       int
+	}{
+		{name: "initial deadline unavailable", failDeadline: 1, status: 500},
+		{name: "deadline cleanup fails", failDeadline: 2, status: 500},
+		{name: "canceled upload", cancel: true, status: 408},
+		{name: "cancellation deadline fails", failDeadline: 2, cancel: true, status: 500},
+		{name: "incomplete body", status: 400},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				ctx, cancel := context.WithCancel(r.Context())
+				defer cancel()
+				calls := 0
+				cancellationApplied := make(chan struct{})
+				writer := mcpDeadlineWriter{ResponseWriter: w, setDeadline: func(deadline time.Time) error {
+					calls++
+					if scenario.cancel && calls == 2 {
+						defer close(cancellationApplied)
+					}
+					if calls == scenario.failDeadline {
+						return errors.New("injected deadline failure")
+					}
+					return http.NewResponseController(w).SetReadDeadline(deadline)
+				}}
+				if scenario.cancel {
+					r.Body = io.NopCloser(mcpUploadReader(func([]byte) (int, error) {
+						cancel()
+						<-cancellationApplied
+						return 0, io.ErrUnexpectedEOF
+					}))
+				} else if scenario.failDeadline == 0 {
+					r.Body = io.NopCloser(mcpUploadReader(func([]byte) (int, error) { return 0, io.ErrUnexpectedEOF }))
+				}
+				fixture.router.ServeHTTP(writer, r.WithContext(ctx))
+			}))
+			defer server.Close()
+			request, _ := http.NewRequestWithContext(t.Context(), "POST", server.URL+"/mcp", strings.NewReader("{}"))
+			request.Header.Set("Authorization", "Bearer "+fixture.token(t, "boundary-owner", nil))
+			request.Header.Set("MCP-Protocol-Version", "2026-07-28")
+			response, err := server.Client().Do(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer response.Body.Close()
+			if response.StatusCode != scenario.status {
+				t.Fatalf("upload status=%d want=%d", response.StatusCode, scenario.status)
+			}
+		})
+	}
+	fixture.waitUsageEvents(t, 0)
+}
+
+type mcpUploadReader func([]byte) (int, error)
+
+func (read mcpUploadReader) Read(data []byte) (int, error) { return read(data) }
+
+func TestMCPUploadDeadlineClearedBeforeGeneration(t *testing.T) {
+	fixture := newMCPFixtureWithConfig(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.Copy(io.Discard, r.Body)
+		select {
+		case <-time.After(1200 * time.Millisecond):
+			w.Header().Set("Content-Type", "application/json")
+			io.WriteString(w, `{"id":"response-fixture","status":"completed","output":[{"type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"generation finished"}]}]}`)
+		case <-r.Context().Done():
+			t.Error("upload deadline canceled generation")
+		}
+	}), proxy.Configuration{RequestTimeoutSeconds: 1, MaxRequestTimeoutSeconds: 3})
+	owner := managementSessionCookie(t, "upload-owner")
+	tenant := requestManagementAccount(t, fixture.router, owner).Tenants[0].ID
+	saveManagementProviderKey(t, fixture.router, owner, tenant, "upload-key", proxy.ModelNameGPT41, "")
+	client := fixture.client(t, "upload-owner")
+	result := mcpCall(t, client, "llm_proxy.generate_text", map[string]any{"tenant_id": tenant, "messages": []map[string]string{{"role": "user", "content": "hi"}}, "request_timeout_seconds": 3})
+	if result.IsError {
+		t.Fatalf("generation failed after upload deadline: %+v", result)
+	}
+	mcpTenants(t, client)
+	fixture.waitUsageEvents(t, 1)
 }
