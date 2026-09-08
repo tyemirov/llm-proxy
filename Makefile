@@ -294,3 +294,7 @@ test-astra:
 .PHONY: test-live-astra-capabilities
 test-live-astra-capabilities:
 	LLM_PROXY_LIVE_ASTRA=true $(GO) test ./internal/proxy -run '^TestAstraLive$$' -count=1 -v
+
+.PHONY: test-completion-measurements
+test-completion-measurements:
+	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run '^TestClientProtocolsCompletionMeasurements|^TestMessagesRequestCompletion' -count=1
