@@ -1063,19 +1063,6 @@ retain satisfied historical dependencies.
 
 ## Features
 
-- [-] [F062] (P1) Return completion measurements through the official Go client
-  Goal: TellTale I022 can record the resolved model and available token counts for each provider call.
-  Requirements:
-  - Return response text, resolved model identity, and optional token usage through a typed client result.
-  - Preserve available metadata when a provider call fails.
-  - Keep unavailable usage distinct from measured zero tokens.
-  - Define resolved identity as the exact catalog model selected for dispatch.
-  Deliverables:
-  - The official Go client method and canonical HTTP metadata contract.
-  - Real HTTP tests for tenant defaults, explicit models, usage, and failures.
-  Validation:
-  - Run `make test-client-contracts` and final `make ci`.
-
 - [!] [F061] (P1) Add GPT-6 Astra through the existing OpenAI provider.
   Goal:
   Add the requested exact `gpt-6-astra` model to current public text interfaces.
@@ -2507,6 +2494,12 @@ retain satisfied historical dependencies.
   The corrected harness passed tenant discovery, route reads, and generation with a local TAuth-issued token.
   OpenCode 1.18.28 now passes local connection and tool discovery.
   The agent protocol map distinguishes measured offers, installed SDK declarations, and vendor documentation.
+  Documentation update: 2026-09-08 — Expanded the client map with Antigravity, Grok, Z.AI, and other researched clients.
+  Added the server support table, source links, result limits, and required capture procedure.
+  Current March 2025 client demand remains unverified. The documented server implementation still includes that revision.
+  Documentation validation: Governor checks, local Markdown links, and whitespace checks passed.
+  Reviewed the changed prose. The two MCP documents have no mechanical language findings.
+  The 79 findings in unchanged tracker text remain outside this documentation update.
   The first full CI run reported one uncovered block at `mcp.go:155` in an unused response-writer method.
   Removed that method. Protocol and cache behavior remain covered through HTTP requests.
   Final validation for expanded support: `make ci` passed all 12 gates in 339 seconds with 100% Go coverage.
