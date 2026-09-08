@@ -125,7 +125,7 @@ func openAIClientAdapters(configuration Configuration, auth tenantAuthenticator,
 }
 
 func registerClientMethodErrors(router *gin.Engine) {
-	methods := map[string]string{chatCompletionsPath: http.MethodPost, responsesPath: http.MethodPost, modelsPath: http.MethodGet, transcriptionsPath: http.MethodPost}
+	methods := map[string]string{mcpPath: http.MethodPost, chatCompletionsPath: http.MethodPost, responsesPath: http.MethodPost, modelsPath: http.MethodGet, transcriptionsPath: http.MethodPost}
 	router.NoRoute(func(c *gin.Context) {
 		if method, found := methods[c.Request.URL.Path]; found {
 			c.Header("Allow", method)

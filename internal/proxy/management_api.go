@@ -424,6 +424,20 @@ func (service *managementService) applyCORSHeaders(ginContext *gin.Context) {
 	ginContext.Header(headerVary, headerOrigin)
 }
 
+func tenantSummaryResponses(summaries []managedTenantSummary) []managementTenantSummaryResponse {
+	tenants := make([]managementTenantSummaryResponse, 0, len(summaries))
+	for _, tenantSummary := range summaries {
+		tenants = append(tenants, managementTenantSummaryResponse{
+			ID:        tenantSummary.tenantID,
+			Name:      tenantSummary.name,
+			HasSecret: tenantSummary.hasSecret,
+			CreatedAt: tenantSummary.createdAt.Format(time.RFC3339),
+			UpdatedAt: tenantSummary.updatedAt.Format(time.RFC3339),
+		})
+	}
+	return tenants
+}
+
 func (service *managementService) accountHandler() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		principal := managementPrincipalFromContext(ginContext)
@@ -432,16 +446,7 @@ func (service *managementService) accountHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusInternalServerError, snapshotError.Error())
 			return
 		}
-		tenants := make([]managementTenantSummaryResponse, 0, len(snapshot.tenants))
-		for _, tenantSummary := range snapshot.tenants {
-			tenants = append(tenants, managementTenantSummaryResponse{
-				ID:        tenantSummary.tenantID,
-				Name:      tenantSummary.name,
-				HasSecret: tenantSummary.hasSecret,
-				CreatedAt: tenantSummary.createdAt.Format(time.RFC3339),
-				UpdatedAt: tenantSummary.updatedAt.Format(time.RFC3339),
-			})
-		}
+		tenants := tenantSummaryResponses(snapshot.tenants)
 		ginContext.Header(headerCacheControl, cacheControlNoStore)
 		ginContext.JSON(http.StatusOK, managementAccountResponse{
 			User: managementUserResponse{

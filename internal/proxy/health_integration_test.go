@@ -14,6 +14,7 @@ import (
 
 func TestPublicHealthChecksDatastoreWithoutUsage(t *testing.T) {
 	management := ManagementConfiguration{
+		TAuthURL: "http://localhost", ProxyOrigin: "http://localhost",
 		PublicOrigin: "http://localhost", UIOrigins: []string{"http://localhost"},
 		TAuthTenantID: "health-test", JWTSigningKey: "health-signing-key",
 		JWTIssuer: DefaultManagementJWTIssuer, SessionCookieName: "health-session",
@@ -35,6 +36,11 @@ func TestPublicHealthChecksDatastoreWithoutUsage(t *testing.T) {
 		ModelCatalog: models, LogLevel: LogLevelInfo, AssetStorePath: t.TempDir(),
 		upstreamRateLimits:         upstreamRateLimits{rules: map[string]upstreamRateLimitRule{}},
 		managementSessionValidator: validator, requestTimeoutPolicy: policy, validated: true,
+	}
+	invalidConfig := config
+	invalidConfig.Management.TAuthURL = ""
+	if _, err := buildRouter(invalidConfig, zap.NewNop().Sugar(), newManagedTenantStore); err == nil || !strings.Contains(err.Error(), "mcp.configure") {
+		t.Fatalf("invalid OAuth startup error=%v", err)
 	}
 	core, logs := observer.New(zap.InfoLevel)
 	var store *managedTenantStore
