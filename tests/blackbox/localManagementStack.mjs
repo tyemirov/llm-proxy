@@ -1,4 +1,7 @@
+// @ts-check
+import * as yaml from "js-yaml";
 import { spawn } from "node:child_process";
+import { generateKeyPairSync } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
@@ -65,7 +68,8 @@ export async function startLocalManagementStack() {
     frontend.setTAuthOrigin(tAuthOrigin);
 
     const tAuthConfigPath = path.join(temporaryDirectory, "tauth-config.yaml");
-    await writeFile(tAuthConfigPath, tAuthConfig(tAuthPort, frontendOrigin), { mode: 0o600 });
+    const oauthKey = Buffer.from(generateKeyPairSync("ec", { namedCurve: "prime256v1" }).privateKey.export({ type: "pkcs8", format: "pem" })).toString("base64");
+    await writeFile(tAuthConfigPath, await tAuthConfig(tAuthPort, frontendOrigin, llmProxyOrigin, oauthKey), { mode: 0o600 });
 
     const packagedLLMProxyConfig = await readFile(path.join(repoRoot, "configs/config.yml"), "utf8");
     let llmProxyConfig = packagedLLMProxyConfig.replace("  port: 8080\n", `  port: ${llmProxyPort}\n`);
@@ -257,7 +261,7 @@ async function handleFrontendRequest(request, response, managementAPIOrigin, tAu
       response.end(Buffer.from(await upstreamResponse.arrayBuffer()));
       return;
     }
-    if (requestURL.pathname === "/auth" || requestURL.pathname.startsWith("/auth/") || requestURL.pathname === "/me") {
+    if (requestURL.pathname === "/auth" || requestURL.pathname.startsWith("/auth/") || requestURL.pathname === "/me" || requestURL.pathname.startsWith("/oauth/") || requestURL.pathname.startsWith("/.well-known/")) {
       if (!tAuthOrigin) {
         throw new Error("tauth_origin_not_ready");
       }
@@ -266,7 +270,7 @@ async function handleFrontendRequest(request, response, managementAPIOrigin, tAu
     }
     if (request.method === "POST" && requestURL.pathname === "/v1/responses") {
       response.writeHead(200, { "content-type": mimeTypes[".json"] });
-      response.end(JSON.stringify({ id: "resp_local_provider_key_verification", status: "completed" }));
+      response.end(JSON.stringify({ id: "resp_local_provider_key_verification", status: "completed", output_text: "Local MCP answer", usage: { input_tokens: 2, output_tokens: 3, total_tokens: 5 } }));
       return;
     }
 
@@ -311,8 +315,8 @@ async function proxyFrontendRequest(request, response, upstreamOrigin) {
   });
 }
 
-function tAuthConfig(port, frontendOrigin) {
-  return `server:
+async function tAuthConfig(port, frontendOrigin, llmProxyOrigin, oauthKey) {
+  const config = yaml.load(`server:
   listen_addr: ":${port}"
   database_url: ""
   enable_cors: true
@@ -345,7 +349,14 @@ tenants:
     refresh_ttl: "720h"
     nonce_ttl: "5m"
     allow_insecure_http: true
-`;
+`);
+  const template = await readFile(path.join(repoRoot, "configs/tauth.local.yml"), "utf8");
+  const replacements = { LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN: frontendOrigin, LLM_PROXY_MANAGEMENT_PROXY_ORIGIN: llmProxyOrigin, TAUTH_OAUTH_ES256_PRIVATE_KEY_BASE64: oauthKey };
+  const local = yaml.load(template.replace(/\$\{([^}]+)\}/g, (match, key) => replacements[key] ?? match));
+  config.oauth = local.oauth;
+  config.tenants[0].oauth = local.tenants[0].oauth;
+  config.tenants[0].oauth.clients = [{ id: "local-mcp-client", display_name: "Local MCP Client", application_type: "native", redirect_uris: [`${frontendOrigin}/oauth/callback`], grants: [{resource: llmProxyOrigin, scopes: ["llm-proxy:use"]}] }];
+  return yaml.dump(config);
 }
 
 function llmProxyEnvironment(frontendOrigin, tAuthOrigin, llmProxyOrigin, temporaryDirectory) {

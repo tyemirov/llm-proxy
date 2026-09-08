@@ -246,6 +246,7 @@ func TestManagedUsageWriterKeepsPublicResponsesIndependentFromPersistence(t *tes
 	store := newManagedTenantStoreWithDatabaseAndCipherAndUsageQueue(database, providerKeyCipher, 1)
 
 	managementConfiguration := ManagementConfiguration{
+		TAuthURL: "http://localhost", ProxyOrigin: "http://localhost",
 		PublicOrigin:      "http://localhost:8080",
 		UIOrigins:         []string{"http://localhost:8080"},
 		TAuthTenantID:     "llm-proxy-test",

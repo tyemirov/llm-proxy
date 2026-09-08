@@ -101,6 +101,10 @@ func TestOpenAPIContractDocumentsActualAuthenticationBoundaries(t *testing.T) {
 	for _, operation := range operations {
 		expectedSecurity := [][]string{{"TAuthSession"}}
 		switch operation.Path {
+		case "/mcp":
+			expectedSecurity = [][]string{{"MCPAccessToken"}}
+		case "/.well-known/oauth-protected-resource/mcp":
+			expectedSecurity = [][]string{}
 		case "/", "/v2", llmproxycontract.TenantIdentityPath, "/v2/requests", "/dictate", "/model/v1/assets", "/model/v1/assets/{asset_id}":
 			expectedSecurity = [][]string{{"TenantClientKey"}}
 		case "/v1/chat/completions", "/v1/responses", "/v1/models", "/v1/audio/transcriptions":

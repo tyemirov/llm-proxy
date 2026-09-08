@@ -44,6 +44,110 @@ tags:
   - name: Management
     description: TAuth-session-authenticated tenant management operations.
 paths:
+  /.well-known/oauth-protected-resource/mcp:
+    get:
+      operationId: getMCPResourceMetadata
+      summary: Read OAuth metadata for the MCP resource.
+      security: []
+      responses:
+        '200':
+          description: The metadata identifies the TAuth issuer and required scope.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [resource, authorization_servers, scopes_supported, bearer_methods_supported]
+                properties:
+                  resource:
+                    type: string
+                    format: uri
+                  authorization_servers:
+                    type: array
+                    items:
+                      type: string
+                      format: uri
+                  scopes_supported:
+                    type: array
+                    items:
+                      type: string
+                      const: llm-proxy:use
+                  bearer_methods_supported:
+                    type: array
+                    items:
+                      type: string
+                      const: header
+  /mcp:
+    post:
+      operationId: postMCPRequest
+      summary: Use an owned tenant through MCP.
+      description: >-
+        Stateless Streamable HTTP uses protocol version 2026-07-28 and JSON responses.
+        TAuth issues tokens for the API origin with the llm-proxy:use scope.
+        Each request requires a bearer token.
+        The body must arrive within server.request_timeout_seconds and cannot exceed 8 MiB.
+        An upload timeout returns HTTP 408 before tool execution.
+        Generation uses a separate request_timeout_seconds budget after the upload.
+        The llm_proxy.list_tenants tool provides all owned tenant summaries.
+        The llm_proxy.generate_text tool requires tenant_id and messages.
+        The llm-proxy://tenants/{tenant_id}/routes resource template provides configured text routes.
+        Tool execution failures use isError with a sanitized code.
+        Resource errors and protocol errors use JSON-RPC errors with the protocol HTTP status.
+      security:
+        - MCPAccessToken: []
+      parameters:
+        - name: MCP-Protocol-Version
+          in: header
+          required: true
+          schema:
+            type: string
+            const: '2026-07-28'
+        - name: Mcp-Method
+          in: header
+          required: true
+          schema:
+            type: string
+          description: The value must equal the JSON-RPC method.
+        - name: Mcp-Name
+          in: header
+          schema:
+            type: string
+          description: Supply the tool name for tools/call or the resource URI for resources/read.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MCPRequest'
+      responses:
+        '200':
+          description: An MCP result or application error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MCPResponse'
+        '400':
+          description: The protocol version, resource URI, or request is invalid.
+        '401':
+          description: A valid TAuth OAuth access token is required.
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+        '403':
+          description: The required scope is absent or the origin is prohibited.
+        '404':
+          description: The MCP method is unknown.
+        '406':
+          description: The Accept header does not permit the required response type.
+        '408':
+          description: The request body did not arrive within the server timeout or the request was canceled.
+        '413':
+          description: The request exceeds the configured message limit.
+        '415':
+          description: The request content type is unsupported.
+        '500':
+          description: The requested resource is unavailable because of a server error.
   /healthz:
     get:
       operationId: getHealth
@@ -1491,6 +1595,11 @@ paths:
           $ref: '#/components/responses/ManagementInternalError'
 components:
   securitySchemes:
+    MCPAccessToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: TAuth OAuth access token with the API audience and llm-proxy:use scope.
     TenantBearerKey:
       type: http
       scheme: bearer
@@ -2285,6 +2394,92 @@ components:
           - failed
           - uncertain
   schemas:
+    MCPRequest:
+      type: object
+      additionalProperties: false
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc:
+          type: string
+          const: '2.0'
+        id:
+          type: [string, integer]
+        method:
+          type: string
+        params:
+          type: object
+          description: The MCP method defines parameters and required protocol metadata.
+    MCPResponse:
+      type: object
+      additionalProperties: false
+      required: [jsonrpc, id]
+      properties:
+        jsonrpc:
+          type: string
+          const: '2.0'
+        id:
+          type: [string, integer, 'null']
+        result:
+          type: object
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: integer
+            message:
+              type: string
+      oneOf:
+        - required: [result]
+        - required: [error]
+    MCPGenerateInput:
+      type: object
+      additionalProperties: false
+      required: [tenant_id, messages]
+      properties:
+        tenant_id:
+          type: string
+          minLength: 1
+        messages:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/V2ChatMessage'
+        provider:
+          type: string
+        model:
+          type: string
+        web_search:
+          type: boolean
+        max_tokens:
+          type: integer
+          minimum: 1
+        reasoning_effort:
+          type: string
+          minLength: 1
+        request_timeout_seconds:
+          type: integer
+          minimum: 1
+    MCPGenerateOutput:
+      type: object
+      additionalProperties: false
+      required: [text, request_id, provider, model, usage, request_timeout_seconds]
+      properties:
+        text:
+          type: string
+        request_id:
+          type: string
+        provider:
+          type: string
+        model:
+          type: string
+        usage:
+          oneOf:
+            - $ref: '#/components/schemas/TokenUsage'
+            - type: 'null'
+        request_timeout_seconds:
+          type: integer
+          minimum: 1
     ClientFunction:
       type: object
       additionalProperties: false

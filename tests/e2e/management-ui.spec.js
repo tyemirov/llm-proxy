@@ -1796,7 +1796,9 @@ test("site publishes the exact canonical OpenAPI artifact and its derived refere
   expect(documentationHTML).toContain("<code>reasoning_effort</code>");
   expect(documentationHTML).toContain(`href="${openAPIPath}"`);
   expect(documentationHTML).toContain('id="operation-getHealth"');
-  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(31 + (28 - 27));
+  expect(documentationHTML).toContain('id="operation-postMCPRequest"');
+  expect(documentationHTML).toContain('id="operation-getMCPResourceMetadata"');
+  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(34);
 });
 
 test("OpenCode integration opens the bearer-authenticated client API reference", async ({ page }) => {
@@ -2095,6 +2097,41 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
   const robotsText = await robotsResponse.text();
   expect(robotsText).toContain("User-agent: *");
   expect(robotsText).toContain("Sitemap: https://llm-proxy.mprlab.com/sitemap.xml");
+});
+
+test("MCP account URL can be copied before provider setup", async ({ page }) => {
+  await installClipboardMock(page);
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { hasSecret: false });
+  await page.goto(`${baseURL}${applicationPath}`);
+  const settings = page.getByRole("dialog", { name: "Settings" });
+  await expect(settings).toBeVisible();
+  const copyMCP = settings.getByRole("button", { name: "Copy MCP URL", exact: true });
+  await expect(copyMCP).toHaveCount(1);
+  await copyMCP.click();
+  await expect.poll(() => copiedText(page)).toBe(`${baseURL}/mcp`);
+  await expect(settings).toContainText("Generation requires a configured text route in the selected tenant.");
+});
+
+test("MCP account URL remains the same after tenant creation", async ({ page }) => {
+  await installClipboardMock(page);
+  await installAssetRoutes(page);
+  await installMultiTenantRoutes(page, { profiles: [managementTenantProfile("tenant_1", "Default")] });
+  await page.goto(`${baseURL}${applicationPath}`);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  const settings = page.getByRole("dialog", { name: "Settings" });
+  await settings.getByRole("button", { name: "Copy MCP URL", exact: true }).click();
+  await expect.poll(() => copiedText(page)).toBe(`${baseURL}/mcp`);
+  await settings.getByRole("button", { name: "Create tenant" }).click();
+  const createDialog = page.getByRole("dialog", { name: "Create tenant" });
+  await createDialog.getByRole("textbox", { name: "Tenant name" }).fill("Second");
+  await createDialog.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(createDialog).toBeHidden();
+  const copyMCP = settings.getByRole("button", { name: "Copy MCP URL", exact: true });
+  await expect(copyMCP).toHaveCount(1);
+  await copyMCP.click();
+  await expect.poll(() => copiedText(page)).toBe(`${baseURL}/mcp`);
 });
 
 test("usage defaults to all tenants while tenant management lives in Settings", async ({ page }) => {

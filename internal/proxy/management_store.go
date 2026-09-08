@@ -1028,7 +1028,7 @@ func managedUsageRouteIsCurrent(record managedUsageEventRecord, providers *provi
 	}
 	for _, migrations := range providers.modelMigrations {
 		for _, migration := range migrations {
-			if migration.preserveSourceUsage && migration.provider == record.ProviderID && migration.source == record.ModelID && ((migration.operation == ModelOperationText && (record.Endpoint == usageEndpointText || record.Endpoint == usageEndpointV2)) || (migration.operation == ModelOperationDictation && record.Endpoint == usageEndpointDictation)) {
+			if migration.preserveSourceUsage && migration.provider == record.ProviderID && migration.source == record.ModelID && ((migration.operation == ModelOperationText && (record.Endpoint == usageEndpointText || record.Endpoint == usageEndpointV2 || record.Endpoint == usageEndpointMCP)) || (migration.operation == ModelOperationDictation && record.Endpoint == usageEndpointDictation)) {
 				return true
 			}
 		}
@@ -1038,7 +1038,7 @@ func managedUsageRouteIsCurrent(record managedUsageEventRecord, providers *provi
 		return false
 	}
 	switch record.Endpoint {
-	case usageEndpointText, usageEndpointV2:
+	case usageEndpointText, usageEndpointV2, usageEndpointMCP:
 		model, modelExists := definition.textModels[strings.ToLower(record.ModelID)]
 		return modelExists && model.identifier.string() == record.ModelID
 	case usageEndpointDictation:

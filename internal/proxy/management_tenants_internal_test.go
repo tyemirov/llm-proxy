@@ -611,7 +611,7 @@ func TestManagedTenantQwenCloudRetirementMigrationReconcilesCurrentTenants(t *te
 	endpoints := NewEndpoints()
 	endpoints.SetResponsesURL(upstreamServer.URL)
 	configuration := Configuration{
-		Management:  ManagementConfiguration{},
+		Management:  ManagementConfiguration{TAuthURL: "http://localhost", ProxyOrigin: "http://localhost"},
 		WorkerCount: 1, QueueSize: 1, MaxPromptBytes: 1024,
 		Endpoints: endpoints, ProviderCatalog: internalTestProviderCatalog(internalManagedUsageWriterProviderModels()), ModelCatalog: internalManagedUsageWriterProviderModels(),
 		upstreamRateLimits:   upstreamRateLimits{rules: map[string]upstreamRateLimitRule{}},

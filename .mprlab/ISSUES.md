@@ -4,6 +4,8 @@ Entries record newly discovered requests or changes.
 
 Read @AGENTS.md (Workflow section), @POLICY.md, and relevant stack guides before implementing changes.
 
+For cross-repository dependencies, read [Dependency References](DEPENDENCY-REFERENCES.md).
+
 Format: `- [ ] [B042] (P1) {I007} Title`
 
 - `[ ]` open, `[-]` taken, `[!]` blocked, `[x]` closed.
@@ -25,7 +27,34 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B204] (P2) Bound MCP request uploads in time.
+  Observed: An authenticated client can leave an incomplete `/mcp` upload open indefinitely.
+  The SDK waits for the body before the F021 generation timeout starts.
+  The initial HTTP regression exceeded the one-second server budget and failed
+  with `stalled MCP upload did not terminate within the server budget`.
+  Requirements: Apply the server default timeout before SDK body processing.
+  Stop reads on cancellation. Clear the upload deadline before generation.
+  Return HTTP `408` for an upload timeout and retain the byte limit.
+  Validation: Use real HTTP uploads and SDK calls. Run `make test-mcp` and `make ci`.
+  Resolution: Added a cancellable socket read deadline before SDK dispatch.
+  Cleared that deadline before generation. Retained the request byte limit.
+  Verified stalled uploads, cancellation, read errors, deadline errors, and longer generation budgets.
+  `make test-mcp` and `GOFLAGS=-race make test-mcp` passed.
+  `make ci` passed all 12 gates with 100% Go coverage.
+  Updated the MCP guide and OpenAPI reference. Usage event contracts did not change.
+  The initial Governor check reported format template drift. I254 records its correction.
+
 ## Improvements
+
+- [x] [I254] (P2) Use the Governor template for the managed issue format.
+  Goal: Remove the format template drift reported during B204 validation.
+  Requirements: Keep the cross-repository dependency specification in a separate document.
+  Link that document from the tracker. Use the canonical template for the managed format guide.
+  Validation: Run the Governor check, changed-prose review, identifier checks, and `git diff --check`.
+  Resolution: Restored the managed format guide from the current Governor template.
+  Moved the complete dependency specification to `DEPENDENCY-REFERENCES.md` and linked it from this tracker.
+  The Governor check passed with no drift or warnings. Changed-prose checks and identifier checks passed.
+  No application or event contract changed.
 
 - [ ] [I244] (P1) {F024,F025,F026,F027,F039,F040,F041,F042} Remove the completed MediaOps operation-import bridge.
   Goal:
@@ -2146,14 +2175,18 @@ retain satisfied historical dependencies.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
-- [ ] [F021] (P1) Add OAuth-authenticated tenant-scoped MCP access.
+- [ ] [F021] (P1) Add OAuth-authenticated MCP access with tenant discovery.
   Goal:
-  An authenticated user can connect a remote MCP client to one owned tenant.
-  The server uses that tenant's saved provider credentials, routing defaults,
+  An authenticated user can connect one remote MCP client to all owned tenants.
+  The client obtains the tenant list and selects one tenant for each operation.
+  The server uses the selected tenant's saved provider credentials, routing defaults,
   and standard text-generation lifecycle for each MCP request.
   Current contract:
   - Public proxy requests use a generated tenant secret in `key=...`.
   - TAuth browser sessions authorize management operations.
+  - `GET /api/management/account` provides the user and summaries of all owned tenants.
+  - Each summary contains `id`, `name`, `has_secret`, `created_at`, and `updated_at`.
+  - The account handler can create a user and a default tenant during account setup.
   - Provider credentials remain on the server and belong to one tenant.
   - TAuth provides the OAuth authorization-server contract that a remote MCP
     client requires.
@@ -2162,46 +2195,59 @@ retain satisfied historical dependencies.
     `llm-proxy:use` scope.
   Requirements:
   - Serve MCP protocol version `2026-07-28` at the exact resource URL
-    `https://llm-proxy-api.mprlab.com/mcp/{tenant_id}`.
+    `https://llm-proxy-api.mprlab.com/mcp`.
   - Use the official Go MCP SDK in stateless Streamable HTTP mode. Return JSON
     responses and reject every unsupported protocol version.
   - Do not create an MCP session or implement an earlier MCP transport.
   - Use `https://llm-proxy-api.mprlab.com` as the OAuth protected-resource
     identifier and access-token audience.
-  - Confirm the token subject owns the exact `{tenant_id}` path resource.
   - Publish path-specific OAuth Protected Resource Metadata at
-    `/.well-known/oauth-protected-resource/mcp/{tenant_id}`.
+    `/.well-known/oauth-protected-resource/mcp`.
   - Return an RFC-compliant Bearer challenge for an unauthenticated MCP
     request. Include the protected-resource metadata URL in the challenge.
   - Validate each JWT access token signature, issuer, subject, exact audience,
     expiry, and required `llm-proxy:use` scope at the HTTP edge.
-  - Confirm that the token subject owns `{tenant_id}` before an MCP operation.
-    Return the same `404 Not Found` result for a missing tenant and a foreign
-    tenant after successful token validation.
+  - Use the TAuth subject as the account identity for tenant discovery and ownership checks.
+  - Permit the OAuth grant to access all tenants that the account currently owns.
+  - Confirm current ownership before each operation that selects a tenant.
+  - Give the same sanitized error for a missing tenant and a foreign tenant.
+    For tool calls, use `isError: true` with the canonical not-found classification.
+    For resource reads, use the same MCP resource-not-found error for both cases.
+  - Require an explicit `tenant_id` for generation and route discovery.
+  - Keep tenant selection in each request. Do not store an active tenant in an MCP connection.
   - Keep provider credentials on the server. Never return provider credentials,
     tenant secrets, access tokens, refresh tokens, or session data through MCP.
-  - Expose one tool named `llm_proxy.generate_text`. Require `messages` and
-    accept optional `provider`, `model`, `web_search`, `max_tokens`,
+  - Add `llm_proxy.list_tenants` with an empty input object and a structured `tenants` array.
+  - Include all owned tenants, including tenants without provider configuration.
+  - Use the same summary fields and ownership query as `GET /api/management/account`.
+  - Extract a shared read operation for tenant summaries. Keep account setup outside MCP discovery.
+  - If the account has no tenants, provide an empty array without account or tenant creation.
+  - Mark tenant discovery as read-only, not destructive, idempotent, and closed-world.
+  - Keep the existing REST account endpoint under TAuth session authentication.
+  - Require only the OAuth bearer token and `llm-proxy:use` scope for MCP discovery.
+  - Add `llm_proxy.generate_text`. Require `tenant_id` and `messages`.
+    Accept optional `provider`, `model`, `web_search`, `max_tokens`,
     `reasoning_effort`, and `request_timeout_seconds` inputs.
   - Use the canonical `/v2` message and attachment contract for the tool.
     Preserve ordered image and audio attachments on user messages.
   - Return generated text and structured `request_id`, `provider`, `model`,
     `usage`, and `request_timeout_seconds` fields from a successful tool call.
-  - Mark the tool as not read-only, not destructive, not idempotent, and
+  - Mark the generation tool as not read-only, not destructive, not idempotent, and
     open-world because one call can create provider charges.
   - Return a sanitized MCP tool error with `isError: true` for an accepted tool
     call that fails. Preserve the canonical proxy error classification without
     exposing an upstream body, provider message, prompt, response, or secret.
-  - Expose `llm-proxy://routes` as a tenant-scoped resource. Return only the
-    tenant's configured text routes, defaults, and declared capabilities.
-  - Keep management and dictation outside this first MCP contract.
+  - Add the resource template `llm-proxy://tenants/{tenant_id}/routes` for route discovery.
+  - Include only the selected tenant's configured text routes, defaults, and declared capabilities.
+  - Keep tenant mutations, credential management, and dictation outside this first MCP contract.
   - Extract one transport-neutral text-generation service from the current
     HTTP handlers. Make `/v2` and MCP use the same routing, admission, queue,
     rate-limit, timeout, cancellation, continuation, error, and usage logic.
   - Record MCP usage with endpoint value `mcp`. Record the logical proxy result
     status when an MCP tool error uses a successful HTTP transport response.
-  - Add a `Copy MCP URL` action for each owned tenant. Show the action only
-    after the tenant has at least one configured text route.
+  - Add one `Copy MCP URL` action for the authenticated account.
+  - Permit discovery before provider setup. Explain that generation requires a configured text route in the selected tenant.
+  - Use only `/mcp`. Do not implement `/mcp/{tenant_id}` or the previous `llm-proxy://routes` resource.
   - Document the MCP URL, OAuth flow, tool schema, resource schema, client
     configuration, security boundary, and provider-key requirement.
   - Add the MCP route and OAuth metadata to OpenAPI, runtime configuration, and
@@ -2212,9 +2258,10 @@ retain satisfied historical dependencies.
   - Add the stateless MCP transport and the path-specific protected-resource
     metadata endpoint.
   - Add strict OAuth bearer-token validation and tenant ownership checks.
-  - Add the shared text-generation service, `llm_proxy.generate_text` tool,
-    and `llm-proxy://routes` resource.
-  - Add tenant UI copy, configuration, OpenAPI, deployment, and user-guide
+  - Add the shared tenant query and `llm_proxy.list_tenants` tool.
+  - Add the shared text-generation service and `llm_proxy.generate_text` tool with explicit tenant selection.
+  - Add the resource template `llm-proxy://tenants/{tenant_id}/routes`.
+  - Add account UI copy, configuration, OpenAPI, deployment, and user-guide
     updates for the MCP connection contract.
   - Add black-box integration and browser coverage through public entry points.
   Validation:
@@ -2224,18 +2271,47 @@ retain satisfied historical dependencies.
     revocation, and consent behavior.
   - Verify missing, malformed, expired, wrong-issuer, wrong-audience, and
     wrong-scope tokens. Verify missing and foreign tenant identifiers.
+  - Compare MCP tenant summaries with the REST account response for the same existing account.
+  - Verify discovery with two owned tenants and another account's tenant.
+  - Verify that discovery includes tenants without configured routes and excludes every foreign tenant.
+  - Verify that an empty result creates no account, tenant, secret, provider request, or generation usage event.
+  - Use one connection and OAuth grant to generate text through each owned tenant.
+  - Verify each tenant's credentials, defaults, route resource, and usage attribution.
+  - Verify that concurrent calls to different tenants cannot change another call's tenant selection.
+  - Verify missing `tenant_id`, tenant deletion after discovery, and direct access to a foreign tenant.
+  - Verify that repeated discovery reflects tenant creation, renaming, and deletion through the management API.
+  - Verify MCP discovery without a browser cookie or tenant secret.
+  - Verify the account copy action before provider setup and after tenant creation.
   - Verify exact tool discovery, input-schema validation, route selection,
     defaults, media inputs, structured success output, and route-resource data.
   - Verify queue rejection, provider rate limits, request timeouts, caller
     cancellation, sanitized tool errors, and managed usage records.
-  - Verify that logs, MCP results, OAuth responses, and browser content contain
-    no provider credential, tenant secret, token, prompt, or generated response.
+  - Verify that logs and errors contain no provider credential, tenant secret, token, prompt, or generated response.
+  - Verify that MCP results contain no credentials or tokens. Permit generated text only in successful generation results.
+  - Verify that OAuth tokens appear only in the authorized token response and client storage.
   - Run `/v2` regression scenarios to prove one shared execution lifecycle and
     unchanged tenant-secret authentication for the REST contract.
   - Use MCP Inspector and one supported remote MCP client for manual local
     acceptance. Record live-host acceptance as a separate deployment result.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  - Obey `.mprlab/POLICY.md` for focused validation and the final `make ci` checkpoint.
+  Scope update: 2026-09-07 — Tenant discovery uses one account connection and explicit tenant selection for each operation.
+  Implementation: 2026-09-08 — Added the account MCP endpoint, tenant discovery,
+  generation tool, route resource, OAuth validation, and shared text service.
+  Added the account copy action, local TAuth configuration, and API documentation.
+  MCP usage preserves its tenant, logical status, and route after database reopen.
+  Local checks passed with the official Go SDK v1.7.0 and MCP Inspector 2.5.0.
+  The real TAuth flow passed PKCE login, consent denial and approval, refresh, and revocation checks.
+  Public tests passed tenant isolation, concurrent selection, media, queue rejection,
+  provider rate limits, timeout, cancellation, body limits, and sanitized failures.
+  Go coverage reached 100% with no uncovered blocks.
+  Final validation: `make ci` passed all 12 gates in 282 seconds.
+  The browser suite passed 114 tests. Local OAuth and Inspector checks passed.
+  Remaining acceptance: Complete manual local acceptance with a supported remote client.
+  OpenCode 1.18.28 could not connect. It reported `SSE error: Non-200 status code (405)`.
+  The server retains the required MCP version and rejects the earlier transport.
+  Production deployment and live-host acceptance remain separate and were not run.
+  F021 remains open for the remaining manual acceptance.
+  I254 resolved the issue-format drift. The changed prose has no mechanical findings.
   Dependency handoff: 2026-08-15 — gateway F001 and both application manifests
   passed local contract validation. Production activation remains separate.
 - [ ] [F028] (P2) {F027} Add HeyGen Avatar V as a gateway-owned avatar engine.
@@ -2934,5 +3010,3 @@ retain satisfied historical dependencies.
   - Recorded the concrete contract in `docs/media-gateway-consolidation.md`.
   - Paired the consumer delivery with MediaOps P006.
   - Kept implementation issues open and identified the required FamilyHome P003 revision.
-
-

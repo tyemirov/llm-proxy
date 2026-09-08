@@ -140,6 +140,9 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	)
 	managementService := newManagementService(configuration.Management, configuration.managementSessionValidator, managedTenants, providers, keyVerifier, structuredLogger)
 	managementService.registerRoutes(router)
+	if err := registerMCPRoutes(router, configuration, managementService, upstreamProviders, assetStore); err != nil {
+		return nil, err
+	}
 	router.GET(llmproxycontract.TenantIdentityPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, tenantIdentityHandler()))
 	router.GET(llmproxycontract.StructuredRequestPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, structuredRequestStatusHandler(structuredRequests)))
 	router.POST(llmproxycontract.AssetPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, tenantAssetUploadHandler(assetStore))))
@@ -461,115 +464,26 @@ func chatRequestFromPayload(ginContext *gin.Context, payload chatRequestPayload,
 }
 
 func chatRequestFromV2Payload(ginContext *gin.Context, payload chatV2RequestPayload, defaults textRequestDefaults, validator *modelValidator, requestTenant tenant, assetStore *tenantAssetStore) (chatRequestParameters, bool) {
-	if payload.Prompt != nil {
-		ginContext.String(http.StatusBadRequest, errorUnsupportedPromptParameter)
-		return chatRequestParameters{}, false
+	request, err := prepareV2TextRequest(ginContext.Request.Context(), payload, ginContext.Query(queryParameterProvider), ginContext.Query(queryParameterModel), ginContext.Request.Header.Values(llmproxycontract.HeaderIdempotencyKey), requestTimeoutStateFromContext(ginContext).budget, defaults, validator, requestTenant, assetStore)
+	if err == nil {
+		return request, true
 	}
-	if payload.SystemPrompt != nil {
-		ginContext.String(http.StatusBadRequest, errorUnsupportedSystemPrompt)
-		return chatRequestParameters{}, false
+	if errors.Is(err, ErrProviderNotConfigured) {
+		markManagedUsageOutcome(ginContext, managedUsageOutcomeProviderNotConfigured)
 	}
-	if payload.Messages == nil {
-		ginContext.String(http.StatusBadRequest, errorMissingMessages)
-		return chatRequestParameters{}, false
-	}
-
-	modelIdentifier, modelParameterError := resolveJSONModelParameter(ginContext.Query(queryParameterModel), payload.Model)
-	if modelParameterError != nil {
-		ginContext.String(statusCodeForError(modelParameterError), responseMessageForError(modelParameterError))
-		return chatRequestParameters{}, false
-	}
-	if payload.MaxTokens != nil && *payload.MaxTokens <= 0 {
-		ginContext.String(http.StatusBadRequest, errorInvalidMaxTokens)
-		return chatRequestParameters{}, false
-	}
-
-	providerDefinition, resolvedModel, verificationError := validator.ResolveText(
-		ginContext.Query(queryParameterProvider),
-		modelIdentifier,
-		defaults.provider,
-		defaults.model,
-		payload.WebSearch,
-	)
-	if verificationError != nil {
-		bindRejectedTextRequestRoute(ginContext, providerDefinition, resolvedModel, verificationError)
-		ginContext.String(statusCodeForError(verificationError), responseMessageForError(verificationError))
-		return chatRequestParameters{}, false
-	}
-	bindRequestTelemetryRoute(ginContext, providerDefinition, resolvedModel.identifier)
-	if maxTokensError := validateTextMaxTokens(providerDefinition, resolvedModel, payload.MaxTokens); maxTokensError != nil {
-		ginContext.String(http.StatusBadRequest, errorInvalidMaxTokens)
-		return chatRequestParameters{}, false
-	}
-	reasoningEffort, reasoningEffortError := requestReasoningEffortForResolvedTextRoute(providerDefinition, resolvedModel, defaults.reasoningEffort, payload.ReasoningEffort)
-	if reasoningEffortError != nil {
-		ginContext.String(http.StatusBadRequest, errorInvalidReasoningEffort)
-		return chatRequestParameters{}, false
-	}
-	structuredOutput, structuredOutputError := newStructuredOutputSchema(payload.StructuredOutput)
-	if structuredOutputError != nil {
-		ginContext.String(http.StatusBadRequest, "invalid structured_output")
-		return chatRequestParameters{}, false
-	}
-	idempotencyKey, idempotencyError := structuredRequestKey(ginContext, structuredOutput)
-	if idempotencyError != nil {
-		ginContext.String(http.StatusBadRequest, "invalid Idempotency-Key")
-		return chatRequestParameters{}, false
-	}
-	if structuredOutput != nil && payload.WebSearch {
-		ginContext.String(http.StatusBadRequest, "structured_output does not support web_search")
-		return chatRequestParameters{}, false
-	}
-	if routeError := validateStructuredOutputRoute(resolvedModel, structuredOutput); routeError != nil {
-		ginContext.String(http.StatusBadRequest, "structured_output is unsupported for the selected route")
-		return chatRequestParameters{}, false
-	}
-	messages, messageError := newV2PayloadChatMessages(*payload.Messages, defaults.systemPrompt, requestTenant, assetStore)
-	if messageError != nil {
-		if isTenantAssetError(messageError) {
-			if errors.Is(messageError, errAssetStore) {
-				markManagedUsageOutcome(ginContext, managedUsageOutcomeProxyError)
-			}
-			writeTenantAssetError(ginContext, messageError)
-		} else {
-			ginContext.String(statusCodeForError(messageError), responseMessageForError(messageError))
+	if isTenantAssetError(err) {
+		if errors.Is(err, errAssetStore) {
+			markManagedUsageOutcome(ginContext, managedUsageOutcomeProxyError)
 		}
-		return chatRequestParameters{}, false
+		writeTenantAssetError(ginContext, err)
+	} else {
+		status, message := textValidationResponse(err)
+		ginContext.String(status, message)
 	}
-	if routeMessageError := validateMessagesForResolvedTextRoute(resolvedModel, messages); routeMessageError != nil {
-		messages.closeMedia()
-		ginContext.String(statusCodeForError(routeMessageError), responseMessageForError(routeMessageError))
-		return chatRequestParameters{}, false
-	}
-	if mediaCapabilityError := validateMessageMediaForResolvedTextRoute(providerDefinition, resolvedModel, messages); mediaCapabilityError != nil {
-		messages.closeMedia()
-		ginContext.String(statusCodeForError(mediaCapabilityError), responseMessageForError(mediaCapabilityError))
-		return chatRequestParameters{}, false
-	}
-
-	tools, toolsError := newCallerTools(payload.Tools, payload.ToolChoice, payload.ParallelToolCalls, resolvedModel, messages)
-	if toolsError != nil || (tools != nil && structuredOutput != nil) {
-		messages.closeMedia()
-		ginContext.String(http.StatusBadRequest, "invalid or unsupported caller tools")
-		return chatRequestParameters{}, false
-	}
-
-	return chatRequestParameters{
-		tools:            tools,
-		messages:         messages,
-		requestDisplay:   messages.requestDisplayText(),
-		provider:         providerDefinition,
-		model:            resolvedModel,
-		webSearchEnabled: payload.WebSearch,
-		maxTokens:        payload.MaxTokens,
-		reasoningEffort:  reasoningEffort,
-		structuredOutput: structuredOutput,
-		idempotencyKey:   idempotencyKey,
-	}, true
+	return chatRequestParameters{}, false
 }
 
-func structuredRequestKey(ginContext *gin.Context, structuredOutput *structuredOutputSchema) (string, error) {
-	values := ginContext.Request.Header.Values(llmproxycontract.HeaderIdempotencyKey)
+func structuredRequestKeyValues(values []string, structuredOutput *structuredOutputSchema) (string, error) {
 	if structuredOutput == nil {
 		if len(values) == 0 {
 			return "", nil
@@ -612,14 +526,14 @@ func requestReasoningEffortForResolvedTextRoute(provider providerDefinition, mod
 
 func submitChatRequest(ginContext *gin.Context, upstreamProviders *providerRouter, chatRequest chatRequestParameters, requestTenant tenant, usageEndpoint string, managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger, encoder completionEncoder) {
 	requestStart := time.Now()
-	generation, requestError := upstreamProviders.generateText(ginContext.Request.Context(), chatRequest, structuredLogger)
+	generation, requestError := executeText(ginContext.Request.Context(), upstreamProviders, chatRequest, structuredLogger)
 	if requestError != nil {
 		if requestContextEnded(ginContext) {
 			recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, ginContext.Writer.Status(), generation.usage, requestStart)
 			return
 		}
-		markRequestOutcome(ginContext, requestFailureOutcome(requestError), managedRequestFailureOutcome(requestError))
-		statusCode := statusCodeForError(requestError)
+		statusCode, usageOutcome := textExecutionOutcome(ginContext.Request.Context(), requestError)
+		markRequestOutcome(ginContext, requestFailureOutcome(requestError), usageOutcome)
 		formattingStartedAt := time.Now()
 		writeProviderRequestErrorResponse(ginContext, chatRequest.provider.identifier.string(), requestError, structuredLogger)
 		addRequestTelemetryPhase(ginContext.Request.Context(), requestTelemetryPhaseResponseFormatting, formattingStartedAt)
@@ -785,20 +699,7 @@ func recordManagedUsage(managedTenants *managedTenantStore, structuredLogger *za
 	formattingStartedAt := time.Now()
 	ginContext.Writer.Flush()
 	addRequestTelemetryPhase(ginContext.Request.Context(), requestTelemetryPhaseResponseFormatting, formattingStartedAt)
-	enqueueStartedAt := time.Now()
-	var route *managedUsageRoute
-	if telemetry := requestTelemetryFromContext(ginContext.Request.Context()); telemetry != nil {
-		route = telemetry.usageRoute()
-	}
-	managedTenants.usageWriter.submit(requestTenant, managedUsageEvent{
-		endpoint:            endpoint,
-		route:               route,
-		statusCode:          statusCode,
-		outcomeCode:         requestTimeoutStateFromContext(ginContext).managedUsageOutcome,
-		latencyMilliseconds: time.Since(requestStart).Milliseconds(),
-		usage:               usage,
-	}, structuredLogger)
-	addRequestTelemetryPhase(ginContext.Request.Context(), requestTelemetryPhaseManagedUsageEnqueue, enqueueStartedAt)
+	enqueueManagedUsage(managedTenants, structuredLogger, ginContext.Request.Context(), requestTenant, endpoint, statusCode, requestTimeoutStateFromContext(ginContext).managedUsageOutcome, usage, requestStart)
 }
 
 func recordManagedUsageValidationFailure(managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger, ginContext *gin.Context, requestTenant tenant, endpoint string, requestStart time.Time) {
