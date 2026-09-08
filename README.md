@@ -591,6 +591,15 @@ Baidu supplies the international Qianfan URL as its catalog default. The provide
 The `management` configuration is mandatory. Provider blocks in `config.yml`
 are unknown YAML keys and fail startup.
 
+### Account MCP access
+
+Use `https://llm-proxy-api.mprlab.com/mcp` with an OAuth client that supports MCP version `2026-07-28`.
+In Settings, select **Copy MCP URL**.
+TAuth authorizes one account grant for all currently owned tenants.
+Call `llm_proxy.list_tenants`, then select an explicit `tenant_id` for generation or route discovery.
+Discovery works before provider setup and creates no account or tenant.
+See the [MCP connection and authorization contract](docs/mcp.md) for tools, resources, configuration, and local tests.
+
 ### Self-service management UI
 
 The mandatory management configuration exposes TAuth-protected management APIs
@@ -1391,7 +1400,7 @@ artifact for ghttp to serve read-only. Startup rejects a failed API resource or
 site build, and shutdown removes the temporary artifact.
 
 ghttp proxies `http://localhost:4179/config-ui.yaml` to the API and the
-same-origin `/auth/*` and `/me` routes to the internal TAuth service. The
+same-origin `/auth/*`, `/me`, `/oauth/*`, and OAuth discovery routes to the internal TAuth service. The
 browser receives `http://localhost:4179` as its TAuth origin and the direct API
 origin from that one runtime configuration. Production keeps its explicit
 split-origin topology; local authentication stays on the front door so another
