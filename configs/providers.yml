@@ -5544,8 +5544,8 @@ providers:
       api_service_label: Google Cloud Vertex AI
       key_acquisition_url: https://console.cloud.google.com/vertex-ai
       fields:
-        - id: credential_profile
-          label: Google credential profile
+        - id: api_key
+          label: API key
           kind: credential
           type: opaque
           required: true
@@ -5553,18 +5553,18 @@ providers:
           secret: true
           validation:
             minimum_length: 1
-          environment: VERTEX_CREDENTIAL_PROFILE
+          environment: VERTEX_API_KEY
       transports:
         - id: generate_content
           endpoint:
             method: POST
             default_base_url: https://aiplatform.googleapis.com/v1
-            path: /projects
+            path: /publishers/google/models
           authentication:
-            kind: google_credentials
-            field: credential_profile
-            header: Authorization
-            prefix: 'Bearer '
+            kind: header
+            field: api_key
+            header: x-goog-api-key
+            prefix: ''
           request_protocol: vertex_generate_content
           response_protocol: vertex_generate_content
           usage_mapping: vertex_generate_content

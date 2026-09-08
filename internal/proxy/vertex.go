@@ -116,12 +116,12 @@ func buildVertexPayload(messages chatMessages, maxTokens *int, effort string, sc
 	return payload, nil
 }
 
-func buildVertexRequest(ctx context.Context, provider providerDefinition, profile googleCredentialProfile, model string, payload vertexRequest) (*http.Request, error) {
+func buildVertexRequest(ctx context.Context, provider providerDefinition, model string, payload vertexRequest) (*http.Request, error) {
 	encoded, _ := json.Marshal(payload)
 	if len(encoded) > vertexInlineRequestLimit {
 		return nil, ErrProviderMediaLimit
 	}
-	endpoint := provider.textBaseURL + "/projects/" + profile.project + "/locations/" + profile.location + "/publishers/google/models/" + url.PathEscape(model) + ":generateContent"
+	endpoint := provider.textEndpointURL + "/" + url.PathEscape(model) + ":generateContent"
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(encoded))
 	if err != nil {
 		return nil, fmt.Errorf("build Vertex request: %w", err)
@@ -131,20 +131,11 @@ func buildVertexRequest(ctx context.Context, provider providerDefinition, profil
 }
 
 func generateVertexContent(ctx context.Context, httpClient HTTPDoer, provider providerDefinition, model string, payload vertexRequest) (textGenerationResult, error) {
-	profile, err := provider.googleCredentialProfile(provider.credentialFor(endpointKindText))
+	request, err := buildVertexRequest(ctx, provider, model, payload)
 	if err != nil {
 		return textGenerationResult{}, err
 	}
-	request, err := buildVertexRequest(ctx, provider, profile, model, payload)
-	if err != nil {
-		return textGenerationResult{}, err
-	}
-	token, err := profile.credentials.Token(ctx)
-	if err != nil || token == nil || token.Value == "" {
-		return textGenerationResult{}, fmt.Errorf("%w: Google OAuth token acquisition failed", ErrProviderAPI)
-	}
-	request.Header.Set("Authorization", "Bearer "+token.Value)
-	request.Header.Set(googleQuotaProjectHeader, profile.project)
+	httpClient = newProviderTransportHTTPDoer(httpClient, provider, provider.credentialFor(endpointKindText))
 	response, err := httpClient.Do(request)
 	if err != nil {
 		return textGenerationResult{}, fmt.Errorf("send Vertex request: %w", err)

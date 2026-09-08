@@ -1,0 +1,191 @@
+{
+  "issue": "P012",
+  "started_at": "2026-09-08T18:22:06.266666+00:00",
+  "provider": "gemini",
+  "model": "gemini-3.8-flash",
+  "scope": "disposable proxy; synthetic management sessions; live billed key",
+  "production_changed": false,
+  "results": [
+    {
+      "case": "connect_and_verify",
+      "http_status": 200,
+      "elapsed_seconds": 1.718,
+      "passed": true
+    },
+    {
+      "case": "key_absent_from_profile",
+      "http_status": 200,
+      "elapsed_seconds": 0.001,
+      "passed": true
+    },
+    {
+      "case": "reject_invalid_replacement",
+      "http_status": 422,
+      "elapsed_seconds": 0.107,
+      "passed": true
+    },
+    {
+      "case": "original_key_preserved_after_rejection",
+      "http_status": 200,
+      "elapsed_seconds": 1.782,
+      "passed": true
+    },
+    {
+      "case": "second_user_distinct_tenant",
+      "http_status": 200,
+      "elapsed_seconds": 0.002,
+      "passed": true
+    },
+    {
+      "case": "second_user_has_no_gemini_connection",
+      "http_status": 200,
+      "elapsed_seconds": 0.002,
+      "passed": true
+    },
+    {
+      "case": "cross_user_disconnect_denied",
+      "http_status": 404,
+      "elapsed_seconds": 0.001,
+      "passed": true
+    },
+    {
+      "case": "cross_user_profile_denied",
+      "http_status": 404,
+      "elapsed_seconds": 0.001,
+      "passed": true
+    },
+    {
+      "case": "capacity_text",
+      "http_status": 200,
+      "elapsed_seconds": 3.949,
+      "passed": true,
+      "reasoning_effort": "omitted",
+      "concurrency": 10,
+      "repeat": 1
+    },
+    {
+      "case": "capacity_text",
+      "http_status": 200,
+      "elapsed_seconds": 4.109,
+      "passed": true,
+      "reasoning_effort": "omitted",
+      "concurrency": 10,
+      "repeat": 2
+    },
+    {
+      "case": "capacity_text",
+      "http_status": 502,
+      "elapsed_seconds": 0.181,
+      "passed": false,
+      "reasoning_effort": "omitted",
+      "concurrency": 10,
+      "repeat": 3,
+      "response_excerpt": "{\"error\":{\"code\":\"provider_error\",\"provider\":\"gemini\",\"upstream_status\":400,\"retryable\":false,\"request_id\":\"VXCI3A6FNAHDQVEQSYZH3CWW4H\",\"retry_after\":null}}"
+    },
+    {
+      "case": "capacity_text",
+      "http_status": 200,
+      "elapsed_seconds": 3.415,
+      "passed": true,
+      "reasoning_effort": "omitted",
+      "concurrency": 10,
+      "repeat": 4
+    },
+    {
+      "case": "capacity_text",
+      "http_status": 200,
+      "elapsed_seconds": 7.265,
+      "passed": true,
+      "reasoning_effort": "omitted",
+      "concurrency": 10,
+      "repeat": 5
+    },
+    {
+      "case": "capacity_text",
+      "http_status": 200,
+      "elapsed_seconds": 3.67,
+      "passed": true,
+      "reasoning_effort": "omitted",
+      "concurrency": 10,
+      "repeat": 6
+    },
+    {
+      "case": "capacity_text",
+      "http_status": 200,
+      "elapsed_seconds": 4.136,
+      "passed": true,
+      "reasoning_effort": "omitted",
+      "concurrency": 10,
+      "repeat": 7
+    },
+    {
+      "case": "capacity_text",
+      "http_status": 200,
+      "elapsed_seconds": 3.902,
+      "passed": true,
+      "reasoning_effort": "omitted",
+      "concurrency": 10,
+      "repeat": 8
+    },
+    {
+      "case": "capacity_text",
+      "http_status": 200,
+      "elapsed_seconds": 3.941,
+      "passed": true,
+      "reasoning_effort": "omitted",
+      "concurrency": 10,
+      "repeat": 9
+    },
+    {
+      "case": "capacity_text",
+      "http_status": 200,
+      "elapsed_seconds": 3.673,
+      "passed": true,
+      "reasoning_effort": "omitted",
+      "concurrency": 10,
+      "repeat": 10
+    },
+    {
+      "case": "disconnect",
+      "http_status": 200,
+      "elapsed_seconds": 0.001,
+      "passed": true
+    },
+    {
+      "case": "generation_rejected_after_disconnect",
+      "http_status": 409,
+      "elapsed_seconds": 0.001,
+      "passed": true
+    },
+    {
+      "case": "reconnect_and_verify",
+      "http_status": 200,
+      "elapsed_seconds": 1.892,
+      "passed": true
+    },
+    {
+      "case": "generation_after_reconnect",
+      "http_status": 200,
+      "elapsed_seconds": 2.43,
+      "passed": true
+    },
+    {
+      "case": "rotate_tenant_key",
+      "http_status": 200,
+      "elapsed_seconds": 0.002,
+      "passed": true
+    },
+    {
+      "case": "old_tenant_key_rejected",
+      "http_status": 403,
+      "elapsed_seconds": 0.001,
+      "passed": true
+    },
+    {
+      "case": "new_tenant_key_accepted",
+      "http_status": 200,
+      "elapsed_seconds": 2.414,
+      "passed": true
+    }
+  ]
+}

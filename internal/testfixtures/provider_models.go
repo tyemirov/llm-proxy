@@ -175,7 +175,7 @@ func testProviderTransport(identifier string, offering proxy.ProviderOffering) p
 		}
 	}
 	if offering.WireContract == proxy.CatalogProtocolVertexGenerateContent {
-		transport.Authentication.Kind = proxy.CatalogAuthenticationGoogleCredentials
+		transport.Authentication = proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationHeader, Field: proxy.CatalogCredentialAPIKey, Header: "x-goog-api-key"}
 	}
 	if offering.WireContract == proxy.CatalogProtocolGeminiInteractions {
 		transport.Authentication = proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationHeader, Field: proxy.CatalogCredentialAPIKey, Header: "x-goog-api-key"}
@@ -263,7 +263,7 @@ func testProviderProtocolParameters(offering proxy.ProviderOffering) proxy.Provi
 func testProviderProtocolPath(protocol string) string {
 	switch protocol {
 	case proxy.CatalogProtocolVertexGenerateContent:
-		return "/projects"
+		return "/publishers/google/models"
 	case proxy.CatalogProtocolOpenAIResponses, proxy.CatalogProtocolXAIResponses, proxy.CatalogProtocolDashScopeResponses:
 		return "/responses"
 	case proxy.CatalogProtocolOpenAIChatCompletions:

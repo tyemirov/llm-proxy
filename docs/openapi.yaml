@@ -3358,7 +3358,6 @@ components:
             type: string
             enum:
               - api_key
-              - google_credential_profile
     PublicModelOperation:
       type: object
       additionalProperties: false

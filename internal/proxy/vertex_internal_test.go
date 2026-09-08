@@ -10,20 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"cloud.google.com/go/auth"
 	"go.uber.org/zap"
 )
 
-type vertexTestTokenProvider struct{ err error }
-
-func (provider vertexTestTokenProvider) Token(context.Context) (*auth.Token, error) {
-	if provider.err != nil {
-		return nil, provider.err
-	}
-	return &auth.Token{Value: "test-token", Expiry: time.Now().Add(time.Hour)}, nil
-}
 func vertexBoundaryProvider() providerDefinition {
-	return providerDefinition{tenantIdentifier: "tenant", textAPIKey: "profile", textBaseURL: "https://vertex.example/v1", googleCredentials: map[string]googleCredentialProfile{"profile": {tenantID: "tenant", project: "test-project", location: "global", credentials: auth.NewCredentials(&auth.CredentialsOptions{TokenProvider: vertexTestTokenProvider{}})}}}
+	return providerDefinition{textAPIKey: "test-key", textEndpointURL: "https://vertex.example/v1/publishers/google/models", activeTransport: providerTransportDefinition{authentication: ProviderCatalogAuthentication{Kind: CatalogAuthenticationHeader, Field: CatalogCredentialAPIKey, Header: "x-goog-api-key"}}}
 }
 
 func TestGeminiCurrentModelsVertexIOFailures(t *testing.T) {
@@ -48,7 +39,7 @@ func TestGeminiCurrentModelsVertexIOFailures(t *testing.T) {
 			}
 		})
 	}
-	provider.textBaseURL = ":invalid"
+	provider.textEndpointURL = ":invalid"
 	if _, err := generateVertexContent(context.Background(), http.DefaultClient, provider, "gemini-3.8-flash", vertexRequest{}); err == nil {
 		t.Fatal("invalid endpoint accepted")
 	}
@@ -57,12 +48,7 @@ func TestGeminiCurrentModelsVertexIOFailures(t *testing.T) {
 	if _, err := generateVertexContent(context.Background(), http.DefaultClient, provider, "gemini-3.8-flash", payload); !errors.Is(err, ErrProviderMediaLimit) {
 		t.Fatalf("oversize request error=%v", err)
 	}
-	profile := provider.googleCredentials["profile"]
-	profile.credentials = auth.NewCredentials(&auth.CredentialsOptions{TokenProvider: vertexTestTokenProvider{err: errors.New("private credential failure")}})
-	provider.googleCredentials["profile"] = profile
-	if _, err := generateVertexContent(context.Background(), http.DefaultClient, provider, "gemini-3.8-flash", vertexRequest{}); !errors.Is(err, ErrProviderAPI) || strings.Contains(err.Error(), "private credential failure") {
-		t.Fatalf("token failure=%v", err)
-	}
+
 }
 
 func TestGeminiCurrentModelsVertexMediaReadAndLimits(t *testing.T) {
@@ -121,13 +107,13 @@ func TestGeminiCurrentModelsVertexCredentialVerification(t *testing.T) {
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			doer := geminiEdgeDoer(func(request *http.Request) (*http.Response, error) {
-				if request.Header.Get("Authorization") != "Bearer test-token" {
-					t.Error("missing OAuth header")
+				if request.Header.Get("x-goog-api-key") != "test-key" || request.Header.Get("Authorization") != "" {
+					t.Error("invalid API-key header")
 				}
 				return geminiEdgeResponse(testCase.status, strings.NewReader(testCase.body), nil), nil
 			})
 			verifier := newOperationalProviderKeyVerifier(doer, NewEndpoints(), time.Second, zap.NewNop().Sugar())
-			err := verifier.verify(context.Background(), vertexBoundaryProvider(), textModelDefinition{providerIdentifier: modelID("gemini-3.8-flash"), wireContract: textWireContractVertexGenerateContent, executionLifecycle: textExecutionLifecycleSynchronousCompletion}, "profile")
+			err := verifier.verify(context.Background(), vertexBoundaryProvider(), textModelDefinition{providerIdentifier: modelID("gemini-3.8-flash"), wireContract: textWireContractVertexGenerateContent, executionLifecycle: textExecutionLifecycleSynchronousCompletion}, "test-key")
 			if !errors.Is(err, testCase.want) {
 				t.Fatalf("verification error=%v want=%v", err, testCase.want)
 			}

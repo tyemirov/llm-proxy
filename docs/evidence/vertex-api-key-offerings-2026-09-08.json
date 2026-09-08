@@ -1,0 +1,233 @@
+{
+  "issue": "F060",
+  "provider": "vertex",
+  "authentication": "authorization_api_key",
+  "credential_reference": "p012-vertex-acceptance-verified",
+  "scope": "public proxy text/media/schema/dictation; local managed-tenant fixture",
+  "request_timeout_seconds": 45,
+  "client_timeout_seconds": 50,
+  "results": [
+    {
+      "accepted": true,
+      "case": "default",
+      "elapsed_ms": 1155,
+      "http_status": 200,
+      "model": "gemini-3.5-flash",
+      "total_tokens": "74"
+    },
+    {
+      "accepted": true,
+      "case": "schema",
+      "elapsed_ms": 2007,
+      "http_status": 200,
+      "model": "gemini-3.5-flash",
+      "total_tokens": "279"
+    },
+    {
+      "accepted": true,
+      "case": "image",
+      "elapsed_ms": 1811,
+      "http_status": 200,
+      "model": "gemini-3.5-flash",
+      "total_tokens": "1306"
+    },
+    {
+      "accepted": true,
+      "case": "audio",
+      "elapsed_ms": 2299,
+      "http_status": 200,
+      "model": "gemini-3.5-flash",
+      "total_tokens": "285"
+    },
+    {
+      "accepted": true,
+      "case": "default",
+      "elapsed_ms": 2328,
+      "http_status": 200,
+      "model": "gemini-3.1-pro-preview",
+      "total_tokens": "95"
+    },
+    {
+      "accepted": true,
+      "case": "low",
+      "elapsed_ms": 2282,
+      "http_status": 200,
+      "model": "gemini-3.1-pro-preview",
+      "total_tokens": "90"
+    },
+    {
+      "accepted": true,
+      "case": "medium",
+      "elapsed_ms": 2238,
+      "http_status": 200,
+      "model": "gemini-3.1-pro-preview",
+      "total_tokens": "87"
+    },
+    {
+      "accepted": true,
+      "case": "high",
+      "elapsed_ms": 2307,
+      "http_status": 200,
+      "model": "gemini-3.1-pro-preview",
+      "total_tokens": "123"
+    },
+    {
+      "accepted": true,
+      "case": "schema",
+      "elapsed_ms": 2475,
+      "http_status": 200,
+      "model": "gemini-3.1-pro-preview",
+      "total_tokens": "182"
+    },
+    {
+      "accepted": true,
+      "case": "image",
+      "elapsed_ms": 2919,
+      "http_status": 200,
+      "model": "gemini-3.1-pro-preview",
+      "total_tokens": "1292"
+    },
+    {
+      "accepted": true,
+      "case": "audio",
+      "elapsed_ms": 4322,
+      "http_status": 200,
+      "model": "gemini-3.1-pro-preview",
+      "total_tokens": "444"
+    },
+    {
+      "accepted": true,
+      "case": "default",
+      "elapsed_ms": 1541,
+      "http_status": 200,
+      "model": "gemini-3.8-flash",
+      "total_tokens": "99"
+    },
+    {
+      "accepted": true,
+      "case": "low",
+      "elapsed_ms": 2296,
+      "http_status": 200,
+      "model": "gemini-3.8-flash",
+      "total_tokens": "30"
+    },
+    {
+      "accepted": true,
+      "case": "medium",
+      "elapsed_ms": 1686,
+      "http_status": 200,
+      "model": "gemini-3.8-flash",
+      "total_tokens": "109"
+    },
+    {
+      "accepted": true,
+      "case": "high",
+      "elapsed_ms": 1417,
+      "http_status": 200,
+      "model": "gemini-3.8-flash",
+      "total_tokens": "111"
+    },
+    {
+      "accepted": true,
+      "case": "schema",
+      "elapsed_ms": 1676,
+      "http_status": 200,
+      "model": "gemini-3.8-flash",
+      "total_tokens": "111"
+    },
+    {
+      "accepted": true,
+      "case": "image",
+      "elapsed_ms": 2114,
+      "http_status": 200,
+      "model": "gemini-3.8-flash",
+      "total_tokens": "1181"
+    },
+    {
+      "accepted": true,
+      "case": "audio",
+      "elapsed_ms": 2118,
+      "http_status": 200,
+      "model": "gemini-3.8-flash",
+      "total_tokens": "195"
+    },
+    {
+      "accepted": true,
+      "case": "default",
+      "elapsed_ms": 566,
+      "http_status": 200,
+      "model": "gemini-3.5-flash-lite",
+      "total_tokens": "7"
+    },
+    {
+      "accepted": true,
+      "case": "low",
+      "elapsed_ms": 523,
+      "http_status": 200,
+      "model": "gemini-3.5-flash-lite",
+      "total_tokens": "7"
+    },
+    {
+      "accepted": true,
+      "case": "medium",
+      "elapsed_ms": 698,
+      "http_status": 200,
+      "model": "gemini-3.5-flash-lite",
+      "total_tokens": "90"
+    },
+    {
+      "accepted": true,
+      "case": "high",
+      "elapsed_ms": 856,
+      "http_status": 200,
+      "model": "gemini-3.5-flash-lite",
+      "total_tokens": "86"
+    },
+    {
+      "accepted": true,
+      "case": "schema",
+      "elapsed_ms": 650,
+      "http_status": 200,
+      "model": "gemini-3.5-flash-lite",
+      "total_tokens": "78"
+    },
+    {
+      "accepted": true,
+      "case": "image",
+      "elapsed_ms": 1131,
+      "http_status": 200,
+      "model": "gemini-3.5-flash-lite",
+      "total_tokens": "1158"
+    },
+    {
+      "accepted": true,
+      "case": "audio",
+      "elapsed_ms": 1282,
+      "http_status": 200,
+      "model": "gemini-3.5-flash-lite",
+      "total_tokens": "138"
+    },
+    {
+      "accepted": true,
+      "case": "minimal",
+      "elapsed_ms": 531,
+      "http_status": 200,
+      "model": "gemini-3.5-flash-lite",
+      "total_tokens": "7"
+    },
+    {
+      "accepted": true,
+      "case": "/dictate",
+      "elapsed_ms": 861,
+      "http_status": 200,
+      "model": "gemini-3.5-transcribe-preview"
+    },
+    {
+      "accepted": true,
+      "case": "/v1/audio/transcriptions",
+      "elapsed_ms": 769,
+      "http_status": 200,
+      "model": "gemini-3.5-transcribe-preview"
+    }
+  ]
+}

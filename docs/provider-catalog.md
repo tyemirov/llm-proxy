@@ -456,9 +456,9 @@ See [OpenAI transcription retirement](openai-transcription-retirement.md) for th
 
 See [GPT-6 Astra](astra.md) for the enabled Responses offering, limits, price tiers, and live acceptance.
 
-## Google credential profiles
+## Vertex API Keys
 
-The `google_credentials` authentication kind resolves a tenant-bound operator profile.
-The public credential kind is `google_credential_profile`.
-The `vertex_generate_content` protocol uses synchronous completion and the Google OAuth library.
-The [Vertex contract](vertex-gemini.md) defines the configuration, request mapping, limits, and tenant cutover.
+The `vertex_generate_content` protocol uses synchronous completion with a customer API key.
+Its authentication kind is `header`, and its public credential kind is `api_key`.
+The catalog selects `x-goog-api-key` and the key-only model endpoint.
+The [Vertex contract](vertex-gemini.md) defines tenant connections, request mapping, limits, and the operator-profile transition.

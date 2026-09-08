@@ -8,6 +8,7 @@ FamilyHome uses the gateway through its backend.
 Dictator remains a private runtime behind the gateway.
 
 P011 records this implementation plan on 2026-09-06.
+The 2026-09-08 revision adds provider catalog, protocol adapter, and second-provider acceptance requirements.
 MediaOps P006 records the corresponding consumer plan.
 The implementation issues remain open.
 This plan changes the delivery contract. It does not establish runtime acceptance.
@@ -82,6 +83,65 @@ Its metadata uses files. Managed tenant data already uses SQLite.
 The structured text store also uses files and a process-local mutex.
 Its terminal cleanup and failed-request retry behavior are insufficient for paid media operations.
 F022 adds a media operation store instead of adopting those retry rules.
+
+## Provider Catalog And Protocol Adapters
+
+This contract applies to every migrated capability and each later provider addition.
+The [provider catalog contract](provider-catalog.md) defines the current provider data and the procedure for a compatible provider addition.
+The media migration extends that same catalog and registry.
+The schema validates provider definitions. Executable protocol adapters implement the supported API behavior.
+
+| Layer | Owner and responsibility |
+| --- | --- |
+| Provider catalog | `configs/providers.yml` owns provider fields, transports, offerings, operations, controls, limits, prices, and protocol adapter selection. |
+| Protocol adapters | Reusable code owns native requests, authentication, responses, errors, usage translation, submission, observation, cancellation, and recovery. |
+| Shared media service | F022 owns tenant authorization, operation storage, worker claims, duplicate prevention, assets, retention, and usage delivery. I046 owns network capacity. |
+| Consumer services | MediaOps and other backends own product workflows and use the official gateway clients. |
+
+Keep credential values and tenant settings in their existing stores outside the catalog.
+Use catalog projections for provider discovery, connection forms, capability validation, routing, and price metadata.
+Select executable adapters through the declared protocol and lifecycle.
+Keep provider identity as route data in the shared service.
+Keep native API behavior inside protocol adapters.
+
+Before each capability slice, record its provider offering, protocol adapter, lifecycle, supported controls, and required assets.
+Classify each addition with the following table.
+
+| Condition | Required change |
+| --- | --- |
+| An existing adapter implements the complete contract. | Add catalog data and connection values. Keep production code unchanged. Complete the second-provider acceptance procedure below. |
+| The provider needs an unsupported protocol variation. | Add or extend a reusable protocol adapter and its strict schema contract. Then add the provider definition. |
+| The provider needs a new capability or lifecycle. | Add the typed capability or shared lifecycle first. Then add its protocol adapter and catalog records. |
+
+Compare authentication, request fields, response fields, controls, errors, usage, and execution lifecycle before selecting an adapter.
+A shared endpoint name or an OpenAI compatibility claim does not establish that complete match.
+Current catalog mappings must match implemented adapter contracts.
+Reject unsupported protocol declarations and incompatible controls at the applicable startup or request boundary.
+Add new behavior through typed code and its schema contract, rather than executable expressions in provider data.
+
+### Acceptance Through A Second Provider
+
+F022 owns the reusable acceptance harness and the shared service boundary.
+Each capability issue owns this acceptance for every protocol adapter that it adds or extends.
+F024 supplies the first image proof. F039 through F043 and F025 through F027 apply the same requirement to their slices.
+
+1. Start the real service with its YAML loader, SQLite database, filesystem, and official client.
+2. Exercise one provider through a controlled implementation of the selected external protocol.
+3. Add a second provider identity through a disposable `providers.yml` fixture with that same protocol adapter and lifecycle.
+4. Give the second definition distinct connection fields, endpoint values, and upstream model identifiers where the protocol permits them.
+5. Supply test credentials through the existing connection contract.
+6. Reload the catalog through normal service startup. Use the same service executable, clients, and protocol adapter for both definitions.
+7. Use public HTTP and browser assertions for provider discovery, generated connection forms, and capability metadata.
+8. Use public assertions for routing, accepted controls, tenant isolation, artifact downloads, and one execution usage event per operation.
+9. Exercise duplicate requests, process restart, cancellation, and result recovery according to the declared protocol contract.
+10. Make sure the result records uncertainty or unsupported cancellation when the remote outcome cannot be established.
+11. Make sure an invalid adapter declaration stops startup. Make sure an unsupported request causes zero provider dispatch.
+12. Record the catalog changes, test configuration, unchanged executable, and public test results in the slice's acceptance evidence.
+
+The second provider requires only catalog data, connection values, and controlled test infrastructure after the adapter exists.
+If that addition requires production changes, complete the missing shared contract before accepting the slice.
+Keep fictional provider definitions in test fixtures only.
+This procedure proves architectural reuse. Qualify each actual provider separately through authorized live acceptance.
 
 ## First API Contract
 
@@ -213,6 +273,9 @@ Implementation starts with a failing test through the relevant public API or pro
 | 11 | F027, MediaOps I012 | Move HeyGen and remaining Kling account/resource capabilities. |
 | 12 | MediaOps I088, I244 | Reconcile migration receipts and remove the final direct-provider dependencies and temporary import tools. |
 
+Complete the provider catalog and protocol adapter acceptance above before each capability's consumer switch.
+Keep its evidence with the same slice's migration receipt.
+
 Within F025, use this order: Runway, Vertex, FAL, Kling, then xAI.
 Complete each provider's API, official client, consumer switch, and acceptance before the next provider switch.
 Each provider slice must preserve the controls currently exposed by MediaOps.
@@ -289,6 +352,7 @@ Keep product behavior tests in MediaOps and provider protocol tests in LLM Proxy
 F022 must prove concurrent duplicate convergence, intent conflicts, tenant isolation, and zero dispatch for invalid input or credentials.
 Use the real HTTP listener, SQLite database, filesystem, and official client.
 Use controlled external-provider protocols for repeatable failure tests.
+Apply the [second-provider acceptance procedure](#acceptance-through-a-second-provider) to the shared harness and each affected protocol adapter.
 
 Exercise process death before dispatch, after dispatch intent, after provider acceptance, during output transfer, and during usage delivery.
 Prove stale-worker rejection and explicit uncertainty where recovery is unavailable.

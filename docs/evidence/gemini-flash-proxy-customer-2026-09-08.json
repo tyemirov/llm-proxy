@@ -1,0 +1,17 @@
+{
+  "issue": "P012",
+  "started_at": "2026-09-08T18:19:08.539148+00:00",
+  "provider": "gemini",
+  "model": "gemini-3.8-flash",
+  "scope": "disposable proxy; synthetic management sessions; live billed key",
+  "production_changed": false,
+  "results": [
+    {
+      "case": "connect_and_verify",
+      "http_status": 422,
+      "elapsed_seconds": 0.291,
+      "passed": false,
+      "response_excerpt": "provider_key_rejected"
+    }
+  ]
+}

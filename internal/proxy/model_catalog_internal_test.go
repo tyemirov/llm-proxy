@@ -195,7 +195,7 @@ func internalTestProviderProtocolPath(protocol string) string {
 	case CatalogProtocolAnthropicMessages:
 		return "/v1/messages"
 	case CatalogProtocolVertexGenerateContent:
-		return "/projects"
+		return "/publishers/google/models"
 	case CatalogProtocolGeminiInteractions:
 		return "/interactions"
 	case CatalogProtocolMultipartTranscription:

@@ -27,6 +27,23 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B205] (P2) Sequence the key persistence test across router reloads.
+  Observed: GitHub run `34264915879` failed at commit `b2731cb`.
+  `TestManagementProviderKeyRevealPersistsUpdatedKey` expected two usage records but observed one before its one-second deadline.
+  The test sent requests through two database runtimes before either usage write completed.
+  The second write continued after test cleanup started.
+  Requirements: Verify each usage record before the next test phase.
+  Construct the second router after the first request and its usage write complete.
+  Retain the key, response, usage, and corrupt-record assertions. Keep the current timeout.
+  Validation: Run focused HTTP tests with coverage and the race detector. Run `make ci`.
+  Resolution: The test now verifies the first usage record before it constructs the second router.
+  It verifies both records after the second request. All previous assertions remain in place.
+  Added `make test-management-persistence` for the related HTTP tests.
+  Focused tests passed with coverage and the race detector.
+  `make ci` passed all 12 gates with 100% Go statement coverage.
+  The Governor check and changed-prose review passed. Application and event contracts did not change.
+  The changes remain uncommitted. GitHub did not run the fix.
+
 - [x] [B204] (P2) Bound MCP request uploads in time.
   Observed: An authenticated client can leave an incomplete `/mcp` upload open indefinitely.
   The SDK waits for the body before the F021 generation timeout starts.
@@ -45,6 +62,26 @@ retain satisfied historical dependencies.
   The initial Governor check reported format template drift. I254 records its correction.
 
 ## Improvements
+
+- [ ] [I255] (P1) Distinguish Gemini model-operation failures from rejected credentials.
+  Goal:
+  Improve the existing connection verification error classification.
+  Requirements:
+  - Preserve bounded upstream error details at the Gemini verification boundary.
+  - Distinguish explicit credential rejection from an unsupported model operation.
+  - Keep provider secrets and raw provider responses out of public errors and logs.
+  - Preserve the current atomic connection-save contract after failed verification.
+  - Use explicit error classification without another provider or operation attempt.
+  Evidence:
+  P012 captured HTTP 400 when Flash 3.8 rejected a background interaction with the required API revision.
+  The verification code currently discards error bodies and maps all upstream HTTP 400 responses to `provider_key_rejected`.
+  The original uninstrumented HTTP 422 has no captured upstream response. Its exact cause remains unproven.
+  Deliverables:
+  Bounded error classification, public integration tests, and current error documentation.
+  Validation:
+  Prove the different outcomes for invalid credentials and unsupported operations through public management HTTP requests.
+  Prove that both failures preserve the previous connection and its settings.
+
 
 - [x] [I254] (P2) Use the Governor template for the managed issue format.
   Goal: Remove the format template drift reported during B204 validation.
@@ -952,26 +989,30 @@ retain satisfied historical dependencies.
   Sources:
   - https://developers.openai.com/api/docs/models/gpt-6-astra
   - https://developers.openai.com/api/docs/pricing
-- [!] [F060] (P1) {P012} Migrate Gemini completion routes to Vertex AI.
+- [!] [F060] (P1) {P012} Connect Gemini completion routes through Vertex API keys.
   Goal:
-  Use the Vertex route that passed I252 for Gemini completion through the public proxy APIs.
+  Provide Vertex Gemini completion through the existing tenant API-key connection contract.
   Requirements:
-  - Use the global Vertex `v1 generateContent` endpoint and exact qualified model IDs.
-  - Implement the typed Google credential profile contract from F043 for this route.
+  - Use the tested global `v1 generateContent` endpoint and exact qualified model IDs.
+  - Accept one secret `api_key` field and send it through `x-goog-api-key`.
+  - Use the key-only model path without a project or location segment.
+  - Store each customer key in its encrypted tenant connection record.
+  - Reject obsolete credential-profile fields and configuration declarations.
   - Keep inline requests independent of the separate F043 media staging work.
-  - Use the Google authentication library for scoped OAuth tokens and token refresh.
-  - Bind each credential profile to its tenant, project, location, and approved runtime identity.
   - Map text, structured output, reasoning, media, finish reasons, and usage through the native Vertex contract.
   - Preserve public deadlines, output-limit errors, media order, and tenant isolation.
-  - Qualify every existing Gemini offering affected by the migration, including dictation routes where applicable.
-  - Migrate tenant credentials and route selection through one explicit transition into the Vertex contract.
+  - Qualify each affected offering, including both public dictation protocols where applicable.
+  - Complete customer setup and public proxy acceptance before customer activation.
   Deliverables:
-  Vertex transport, credential profiles, catalog mappings, migration procedure, public integration tests, and operator documentation.
+  API-key transport, catalog mappings, explicit operator-profile transition, public integration tests, and customer documentation.
   Validation:
-  - Start with failing public HTTP tests for the new transport and credential contract.
-  - Prove OAuth refresh, project isolation, provider errors, cancellation, structured output, media, and exact usage.
-  - Run proxy acceptance with the intended runtime identity and complete final CI.
-  - Record production acceptance after the operator cutover.
+  - Start with failing public HTTP tests for API-key connections and the new endpoint.
+  - Verify key replacement, disconnect, tenant isolation, provider errors, cancellation, structured output, media, and exact usage.
+  - Run Flash 3.8 proxy acceptance at concurrency 10 and complete final CI.
+  - Record production acceptance after the separately approved cutover.
+  Approval (2026-09-08):
+  The user approved replacement of the operator credential-profile input with the customer API-key contract.
+  This approval supersedes the initial OAuth requirements. Production deployment remains a separate action.
   Source:
   `docs/vertex-gemini-qualification.md` records 22 successful direct Vertex requests on September 7, 2026.
   Implementation (2026-09-07):
@@ -994,17 +1035,35 @@ retain satisfied historical dependencies.
   Blocked:
   P012 requires independent customer setup through the accepted API-key flow.
   The implemented operator credential profiles do not satisfy that requirement.
-  Complete the P012 comparison and approve the revised connection contract before further authentication changes or customer cutover.
-  The earlier operator deployment procedure is not the next customer step.
+  The API-key revision has explicit user approval. Complete its proxy acceptance and the remaining P012 customer gates.
+  The earlier operator procedure remains historical evidence.
   Exact Vertex prices remain unavailable until their import.
+  API-key implementation (2026-09-08):
+  - Replaced the operator profile with the tenant `api_key` field and `VERTEX_API_KEY` local binding.
+  - Reused catalog authentication to send `x-goog-api-key` to the key-only model endpoint.
+  - Removed the Google profile loader, OAuth dependency, and public profile credential kind.
+  - Public HTTP tests cover valid replacement, rejected replacement, tenant isolation, disconnect, and obsolete-field rejection.
+  - The initial API-key test failed with HTTP 400 before an upstream request. The corrected focused tests passed.
+  - Flash 3.8 passed 70/70 public requests at concurrency 10 and all 15 connection and tenant checks.
+  - Public p95 latency was 5.451 seconds. The maximum was 6.486 seconds with a 45-second deadline.
+  - All 28 additional live offering checks passed, including both dictation endpoints.
+  - The first live trial failed ten structured requests locally. The corrected trial used its own temporary asset store.
+  - `docs/evidence/vertex-api-key-acceptance-2026-09-08-summary.json` retains the acceptance results and remaining gates.
+  - Local `configs/.env` contains the approved Vertex key. Production configuration and catalog activation remain unchanged.
+  - The OpenAPI artifact, browser validator, catalog guide, and Vertex runbook describe the current API-key contract.
+  - Final `make ci` passed all 12 gates in 284 seconds with 100.0 percent Go statement coverage.
+  - Governor and changed-prose checks passed. The tracker retains 79 language findings outside this change.
+  - Changed contracts: Vertex uses `api_key`, `VERTEX_API_KEY`, and header authentication. The public profile credential kind was removed.
+  - Changed files: the Vertex transport and tests, catalog and configuration validators, OpenAPI artifact, browser validator, dependencies, and runbooks.
+  - Independent customer setup, live provider-key replacement, Google revocation, and production acceptance remain open.
   Reconciliation (2026-09-07):
   `docs/gemini-customer-connections.md` records the proposed F060 revision and customer acceptance gates.
   Retain the 28 successful requests as transport evidence only.
-  Changed contracts:
+  Initial changed contracts (2026-09-07):
   The public credential kind adds `google_credential_profile`.
   The provider catalog adds `vertex_generate_content`, `google_credentials`, and provider/offerings `enabled` flags.
   Existing public request paths and event schemas are unchanged.
-  Changed files:
+  Initial changed files (2026-09-07):
   - `configs/providers.yml`, `cmd/cli/config_file.go`, `go.mod`, and `go.sum`.
   - The Vertex codec, Google profiles, routing, catalog, management verification, media, and schema files in `internal/proxy/`.
   - `pkg/llmproxyclient/capabilities.go`, `scripts/render_public_site.mjs`, and `scripts/test_live_providers.sh`.
@@ -1502,6 +1561,7 @@ retain satisfied historical dependencies.
   Goal:
   Preserve the current MediaOps OpenAI image contract before its complete provider cutover.
   Requirements:
+  - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
   - Add image editing, ordered multi-image inputs, masks, and the current Images and Responses controls.
   - Preserve output counts, formats, quality, transparency, compression, and supported progressive-image behavior.
   - Represent response chains through tenant-owned gateway resources. Keep native response identifiers private.
@@ -1511,6 +1571,7 @@ retain satisfied historical dependencies.
   Deliverables:
   - Typed controls, provider translation, official-client methods, capability data, and recovery evidence.
   Validation:
+  - Complete the P011 second-provider acceptance procedure for each protocol adapter added or changed in this slice.
   - Prove current OpenAI generate/edit parity through real handlers and controlled provider fixtures.
   - Prove tenant-isolated response chains, partial output order, cancellation, and final artifact integrity.
   - Run current repository validation and separately record explicitly authorized live acceptance.
@@ -1518,6 +1579,7 @@ retain satisfied historical dependencies.
   Goal:
   Move the current Vertex image provider contract behind the shared gateway.
   Requirements:
+  - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
   - Add the current Vertex generation and editing routes with their exact supported controls.
   - Use the F043 Google credential and staging contract where the selected route requires it.
   - Keep project, location, credential references, and provider-native identifiers inside validated server configuration.
@@ -1527,12 +1589,14 @@ retain satisfied historical dependencies.
   Deliverables:
   - Vertex image adapters, catalog entries, client types, and bounded recovery or migration support.
   Validation:
+  - Complete the P011 second-provider acceptance procedure for each protocol adapter added or changed in this slice.
   - Prove exact route controls, tenant isolation, staging ownership, duplicate prevention, and artifact integrity.
   - Run current repository validation and separately record explicitly authorized live acceptance.
 - [ ] [F041] (P1) {F022} Add FAL image operations and queue recovery.
   Goal:
   Move current FAL image generation and recoverable queue state behind the shared gateway.
   Requirements:
+  - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
   - Add current FAL image routes with tenant provider connections and provider-readable staging where required.
   - Require F043 only when the selected route needs staged inputs. Current prompt-only generation has no staging dependency.
   - Persist queue handles privately and recover the original operation without provider resubmission.
@@ -1543,6 +1607,7 @@ retain satisfied historical dependencies.
   Deliverables:
   - FAL image adapter, queue recovery, catalog entries, client types, and evidence-based migration tools.
   Validation:
+  - Complete the P011 second-provider acceptance procedure for each protocol adapter added or changed in this slice.
   - Prove queue recovery after restart, uncertain transport behavior, exact controls, and ordered verified artifacts.
   - Prove staging fetch and cleanup through real files and an HTTP serving boundary.
   - Run current repository validation and separately record explicitly authorized live acceptance.
@@ -1553,6 +1618,7 @@ retain satisfied historical dependencies.
   - MediaOps currently calls Dictator through one internal adapter.
   - After consolidation, LLM Proxy owns that adapter and the public tenant authorization boundary.
   Requirements:
+  - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
   - Inventory retained capabilities against the current Dictator gRPC contract and MediaOps capability matrix.
   - Cover transcription, diarization, subtitles, alignment, synthesis, voice extraction, and discovery where currently supported.
   - Define tenant-owned voices, history, assets, artifacts, and operation resources for retained capabilities.
@@ -1573,6 +1639,7 @@ retain satisfied historical dependencies.
   - Select the current transcription route disposition without creating competing permanent contracts.
   - Inventory runtime access and retained data before deciding exact migration and deployment changes.
   Validation:
+  - Complete the P011 second-provider acceptance procedure for each protocol adapter added or changed in this slice.
   - Start with real public API and persistence tests against a controlled Dictator protocol boundary.
   - Prove tenant isolation for voices, histories, operations, and artifacts.
   - Prove exact speech behavior, native identifier privacy, restart recovery, and truthful cancellation.
@@ -1582,6 +1649,7 @@ retain satisfied historical dependencies.
   Goal:
   Let gateway providers read tenant media through the exact storage and credential contracts they require.
   Requirements:
+  - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
   - Extend the existing tenant asset store rather than create another public upload identity.
   - Add explicit GCS staging where Vertex routes require it.
   - Support bounded provider-readable HTTP staging for routes that accept that transport.
@@ -1600,7 +1668,11 @@ retain satisfied historical dependencies.
   Operator credential profiles do not satisfy P012's customer setup requirement.
   Resolve P012 and approve a separate storage ownership contract before further Google credential implementation under F043.
   `docs/gemini-customer-connections.md` records the proposed boundary.
+  F060 API-key revision (2026-09-08):
+  F060 removed the completion route's operator profile loader after explicit user approval.
+  Future storage credentials require the separate F043 ownership contract.
   Validation:
+  - Complete the P011 second-provider acceptance procedure for each protocol adapter added or changed in this slice.
   - Use real files and HTTP serving to prove exact fetched bytes, digest, expiry, and cleanup.
   - Prove tenant isolation, active reference retention, failed staging, and secret-free public output.
   - Run repository validation and record storage acceptance separately from paid generation acceptance.
@@ -1738,6 +1810,7 @@ retain satisfied historical dependencies.
   Extend the existing tenant API with durable media execution and result artifacts.
   Use P011 and `docs/media-gateway-consolidation.md` as the current implementation contract.
   Requirements:
+  - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
   - Reuse managed tenant keys and bearer authentication for media resources.
   - Extend the existing asset contract and official Go client in the same API change.
   - Add capabilities, operations, cancellation resources, asset metadata reads, and bounded byte downloads under `/model/v1`.
@@ -1767,9 +1840,11 @@ retain satisfied historical dependencies.
   - Coordinate network capacity with I046. Keep provider-specific staging in F043.
   - Add migration tools only when an actual retained-record inventory requires them.
   Deliverables:
+  - A reusable second-provider acceptance harness with catalog-selected adapters and controlled external protocols.
   - Operation service, SQLite tables, worker, asset lifecycle, OpenAPI contract, and official Go client methods.
   - A real-service client example with controlled provider protocols.
   Validation:
+  - Exercise the P011 second-provider procedure through the shared service harness.
   - Start with a failing integration test through the real HTTP listener, SQLite database, and filesystem.
   - Prove duplicate convergence, intent conflicts, tenant isolation, and zero dispatch for rejected requests.
   - Prove restart recovery, stale-worker rejection, explicit uncertainty, and truthful cancellation.
@@ -1781,6 +1856,7 @@ retain satisfied historical dependencies.
   Let a backend tenant generate an image and retrieve verified bytes through the official LLM Proxy client.
   FamilyHome is the first independent consumer. It uses its existing tenant credential.
   Requirements:
+  - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
   - Add terminal `image.generate` requests through the existing OpenAI tenant provider connection.
   - Preserve explicit model, prompt, quality, size, background, format, compression, and output-count controls for qualified routes.
   - Qualify `gpt-image-2` with `quality=low` for the FamilyHome acceptance case.
@@ -1797,6 +1873,7 @@ retain satisfied historical dependencies.
   - OpenAI image adapter, catalog route, operation schema, artifact results, and official-client example.
   - A backend-to-gateway acceptance fixture with the same tenant model as text calls.
   Validation:
+  - Complete the first image proof through the P011 second-provider acceptance harness.
   - Start with a failing real-service integration test and controlled OpenAI protocol fixture.
   - Prove exact selected controls, duplicate convergence, lost-response recovery, output order, and artifact integrity.
   - Prove cross-tenant reads fail and invalid credentials cause zero provider dispatch.
@@ -1811,6 +1888,7 @@ retain satisfied historical dependencies.
   - MediaOps I010 consumes this released video slice independently of the
     image cutover.
   Requirements:
+  - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
   - Add a typed `video.generate` contract for prompt, start/end frame, source
     video, ordered image/video/audio references, reusable provider assets,
     duration, aspect, resolution, audio, extension, seed, moderation, and
@@ -1831,6 +1909,7 @@ retain satisfied historical dependencies.
   - Add all video adapters, operation schemas, capability/price entries,
     recovery paths, official-client types, fixture servers, and docs.
   Validation:
+  - Complete the P011 second-provider acceptance procedure for each protocol adapter added or changed in this slice.
   - Prove every text, keyframe, reference, extension, and source-video mode,
     long polling across restart, uncertain transport recovery, output hash and
     MIME validation, and provider resource cleanup.
@@ -1851,6 +1930,7 @@ retain satisfied historical dependencies.
   - MediaOps I011 consumes this released audio slice independently of the
     image and video cutovers.
   Requirements:
+  - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
   - Add typed operations for speech generation, speech conversion, voice
     discovery, history listing/download, prompt music, composition plans,
     detailed and streamed composition, composition upload, video-to-music,
@@ -1871,6 +1951,7 @@ retain satisfied historical dependencies.
   - Add the ElevenLabs credential profile, adapters, catalogs, prices,
     official-client types, recovery handlers, fake upstream fixtures, and docs.
   Validation:
+  - Complete the P011 second-provider acceptance procedure for each protocol adapter added or changed in this slice.
   - Prove all read-only, paid, upload, streaming, and recovery paths; bounded
     concurrency; cancellation; exact output order; and artifact integrity.
   - Run explicitly enabled minimal ElevenLabs live acceptance only after the
@@ -1889,6 +1970,7 @@ retain satisfied historical dependencies.
   - MediaOps I012 consumes this released account-operation slice independently
     of the other current-provider cutovers.
   Requirements:
+  - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
   - Add typed operations for HeyGen translation, existing-video lip-sync,
     photo-avatar creation, motion enhancement, avatar-video generation, quota
     reads, and Kling/HeyGen lip-sync where currently supported.
@@ -1907,6 +1989,7 @@ retain satisfied historical dependencies.
   - Add HeyGen and Kling operation adapters, catalogs, prices, recovery,
     official-client types, provider fixtures, and docs.
   Validation:
+  - Complete the P011 second-provider acceptance procedure for each protocol adapter added or changed in this slice.
   - Prove read-only versus paid versus mutating versus destructive behavior,
     duplicate idempotency, restart recovery, asset ownership, quota reporting,
     and sanitized errors through public black-box tests.
@@ -2561,10 +2644,35 @@ retain satisfied historical dependencies.
   - Each Flash-Lite offering now has one failure among 110 attempts across both sessions.
   - `docs/evidence/gemini-vertex-capacity-2026-09-08-session-2.json` retains the separate results and cumulative counts.
   - Session 3 remains scheduled. The initial quota and output failures remain in the support decision.
+  Capacity session 3 and aggregate (2026-09-08 UTC):
+  - Session 3 started 24.388 hours after session 1 at concurrency 10.
+  - It retained 250 attempts, 238 accepted results, and 12 failures. No request was retried or replaced.
+  - Ten Vertex Pro audio requests reached the client read deadline. Their upstream outcomes remain unknown.
+  - Vertex Flash-Lite had one timeout. Gemini Flash-Lite returned another malformed response at low reasoning.
+  - Both Flash 3.8 offerings passed 210/210 across three complete direct matrices.
+  - Vertex Pro passed 220/230. Gemini Pro retains 21/30 and its original quota blocker.
+  - Gemini Flash-Lite passed 138/140. Vertex Flash-Lite passed 118/120. Both remain below 99 percent observed success.
+  - The aggregate retains 940 attempts, 917 accepted results, and 23 failures across three finite burst sessions.
+  - Returned token usage gives an estimated USD 0.69257860. Eleven timeout requests have unknown usage and charges.
+  - `docs/evidence/gemini-vertex-capacity-2026-09-08-session-3.json` records the separate final session.
+  - `docs/evidence/gemini-vertex-capacity-2026-09-08-summary.json` records aggregate results and the remaining gates.
+  - The automation is paused after the two authorized follow-up sessions. Runtime and production configuration remain unchanged.
+  Public proxy diagnostics (2026-09-08):
+  - The first Flash 3.8 connection returned HTTP 422. Its upstream cause remains unproven.
+  - A corrected recorder retained the required API revision and captured an intermittent background-operation rejection from Google.
+  - Flash 3.8 text generation passed 9/10 at concurrency 10. Google returned HTTP 400 for the other creation.
+  - All 15 connection and tenant checks passed. Ten separate concurrent connection saves also passed.
+  - The capacity runner stopped before the remaining reasoning, schema, image, and audio cases.
+  - The initial recorder omitted the API revision. Its results remain excluded from acceptance.
+  - The separate model diagnostic passed 43/44. Gemini Flash-Lite returned another malformed response at low reasoning.
+  - Vertex Pro audio passed 11/11. Vertex Flash-Lite passed 22/22. The earlier failures remain in the qualification evidence.
+  - `docs/evidence/gemini-customer-proxy-diagnostics-2026-09-08-summary.json` records the results and instrumentation limits.
+  - I255 records the verification error-classification work. The user approved the bounded F060 API-key change.
   Blocked:
+  Resolve the Gemini Interactions background rejection or qualify the approved Vertex API-key route.
   Complete key acquisition and public proxy acceptance through a separate customer account without proxy-server access.
-  Complete the 24-hour capacity evidence and record actual costs. Resolve the Gemini Pro request-rate decision and both Flash-Lite output failures.
-  Obtain implementation approval for the bounded F060 API-key revision.
+  Diagnose Vertex Pro audio timeouts and both Flash-Lite failure sets. Resolve the Gemini Pro request-rate decision and record actual costs.
+  Complete the approved F060 API-key revision and its public proxy acceptance.
   Keep the support decision provisional until this evidence is available.
   Sources:
   - https://docs.cloud.google.com/vertex-ai/generative-ai/docs/start/api-keys
@@ -2999,6 +3107,7 @@ retain satisfied historical dependencies.
   Goal:
   Define one shared gateway product and a complete first consumer delivery.
   Deliverables:
+  - Specify catalog ownership, protocol adapter selection, and acceptance through a second provider definition.
   - Record API, storage, worker, authentication, capacity, and resource ownership decisions.
   - Specify the provider sequence, paired consumer changes, data receipts, and release evidence.
   - Align F022 and related migration issues with one idempotent operation creation contract.
@@ -3007,6 +3116,10 @@ retain satisfied historical dependencies.
   - Verify source paths, issue references, API consistency, and changed documentation language.
   - Verify that staged changes exclude unrelated provider work.
   Resolution:
+  - Added the provider catalog and protocol adapter contract on 2026-09-08.
+  - Required a second provider to use the same executable and clients through catalog data and connection values.
+  - Assigned the harness to F022 and the first image proof to F024.
+  - Applied the acceptance requirement to each affected media slice.
   - Recorded the concrete contract in `docs/media-gateway-consolidation.md`.
   - Paired the consumer delivery with MediaOps P006.
   - Kept implementation issues open and identified the required FamilyHome P003 revision.

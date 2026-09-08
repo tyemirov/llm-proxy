@@ -3,11 +3,7 @@ package proxy_test
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"github.com/tyemirov/llm-proxy/internal/proxy"
 	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"go.uber.org/zap"
@@ -16,7 +12,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -110,7 +105,7 @@ func TestGeminiCurrentModelsVertexCancellation(t *testing.T) {
 			close(canceled)
 		case <-time.After(5 * time.Second):
 		}
-	}, "test", vertexTokenReply)
+	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+"/?key="+TestSecret+"&provider=vertex&prompt=test", nil)
@@ -155,10 +150,10 @@ func vertexCatalog(t *testing.T) *proxy.ProviderCatalog {
 		for j := range provider.Transports {
 			transport := &provider.Transports[j]
 			transport.Endpoint.DefaultBaseURL = "https://aiplatform.googleapis.com/v1"
-			transport.Endpoint.Path = "/projects"
-			transport.Authentication.Kind = "google_credentials"
-			transport.Authentication.Header = "Authorization"
-			transport.Authentication.Prefix = "Bearer "
+			transport.Endpoint.Path = "/publishers/google/models"
+			transport.Authentication.Kind = "header"
+			transport.Authentication.Header = "x-goog-api-key"
+			transport.Authentication.Prefix = ""
 			transport.Headers = nil
 			transport.RequestProtocol = "vertex_generate_content"
 			transport.ResponseProtocol = "vertex_generate_content"
@@ -198,50 +193,18 @@ func vertexCatalog(t *testing.T) *proxy.ProviderCatalog {
 	return catalog
 }
 
-func vertexCredentialFile(t *testing.T, tokenURL string) string {
-	t.Helper()
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatal(err)
-	}
-	privatePEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(privateKey)})
-	credentialBytes, _ := json.Marshal(map[string]string{"type": "service_account", "project_id": "vertex-test-project", "client_email": "vertex@test.iam.gserviceaccount.com", "private_key": string(privatePEM), "token_uri": tokenURL})
-	file, err := os.CreateTemp(t.TempDir(), "credential-*.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = file.Write(credentialBytes); err != nil {
-		t.Fatal(err)
-	}
-	if err = file.Close(); err != nil {
-		t.Fatal(err)
-	}
-	return file.Name()
-}
-
-func vertexHTTPFixture(t *testing.T, handler http.HandlerFunc, profileTenant string, tokenReply string) (*httptest.Server, *atomic.Int32) {
+func vertexHTTPFixture(t *testing.T, handler http.HandlerFunc) (*httptest.Server, *atomic.Int32) {
 	t.Helper()
 	calls := &atomic.Int32{}
-	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls.Add(1)
-		if err := r.ParseForm(); err != nil {
-			t.Error(err)
-		}
-		if r.Form.Get("grant_type") != "urn:ietf:params:oauth:grant-type:jwt-bearer" || r.Form.Get("assertion") == "" {
-			t.Error("missing signed credential assertion")
-		}
-		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, tokenReply)
-	}))
-	t.Cleanup(tokenServer.Close)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer vertex-test-token" || r.Header.Get("x-goog-user-project") != "vertex-test-project" {
-			t.Error("incorrect OAuth authorization or quota project")
+		calls.Add(1)
+		if r.Header.Get("x-goog-api-key") != "sk-gemini" || r.Header.Get("Authorization") != "" || r.Header.Get("x-goog-user-project") != "" {
+			t.Error("incorrect Vertex API-key authorization")
 		}
 		handler(w, r)
 	}))
 	t.Cleanup(upstream.Close)
-	config := proxy.Configuration{AssetStorePath: t.TempDir(), ProviderCatalog: vertexCatalog(t), Endpoints: providerEndpointOverrides(map[string]string{"gemini": upstream.URL, "vertex": upstream.URL}, map[string]map[string]string{"gemini": {"dictation": upstream.URL + "/projects"}}), GoogleCredentialProfiles: []proxy.GoogleCredentialProfile{{ID: "sk-gemini", TenantID: profileTenant, Project: "vertex-test-project", Location: "global", CredentialsFile: vertexCredentialFile(t, tokenServer.URL), CredentialType: "service_account"}}}
+	config := proxy.Configuration{AssetStorePath: t.TempDir(), ProviderCatalog: vertexCatalog(t), Endpoints: providerEndpointOverrides(map[string]string{"gemini": upstream.URL, "vertex": upstream.URL}, map[string]map[string]string{"gemini": {"dictation": upstream.URL + "/publishers/google/models"}})}
 	tenantConfig := proxy.StandardManagedTenantTestConfiguration(TestSecret)
 	tenantConfig.ProviderKeys["vertex"] = "sk-gemini"
 	router, err := proxy.BuildRouterWithManagedTenantForTest(t, config, zap.NewNop().Sugar(), tenantConfig)
@@ -253,63 +216,11 @@ func vertexHTTPFixture(t *testing.T, handler http.HandlerFunc, profileTenant str
 	return server, calls
 }
 
-const vertexTokenReply = `{"access_token":"vertex-test-token","token_type":"Bearer","expires_in":3600}`
-
 const vertexSuccess = `{"candidates":[{"content":{"parts":[{"text":"private thought","thought":true},{"text":"Vertex OK"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":2,"thoughtsTokenCount":4,"totalTokenCount":16}}`
-
-func TestGeminiCurrentModelsVertexManagementConnection(t *testing.T) {
-	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, vertexTokenReply)
-	}))
-	defer tokenServer.Close()
-	calls := 0
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls++
-		if r.Header.Get("Authorization") != "Bearer vertex-test-token" || !strings.Contains(r.URL.Path, "/projects/vertex-test-project/") {
-			t.Error("invalid managed Vertex authorization")
-		}
-		io.WriteString(w, vertexSuccess)
-	}))
-	defer upstream.Close()
-	config := proxy.Configuration{ProviderCatalog: testfixtures.ProviderCatalog(t), Endpoints: providerEndpointOverrides(map[string]string{"vertex": upstream.URL}, nil)}
-	database := t.TempDir() + "/managed.db"
-	router := newOperationalProviderKeyVerificationRouter(t, config, zap.NewNop().Sugar(), database, TestTimeout)
-	cookie := managementSessionCookie(t, "vertex-owner")
-	tenantID := managementDefaultTenantTestID(t, router, cookie)
-	config.GoogleCredentialProfiles = []proxy.GoogleCredentialProfile{{ID: "vertex-owned-profile", TenantID: tenantID, Project: "vertex-test-project", Location: "global", CredentialType: "service_account", CredentialsFile: vertexCredentialFile(t, tokenServer.URL)}}
-	router = newOperationalProviderKeyVerificationRouter(t, config, zap.NewNop().Sugar(), database, TestTimeout)
-	putConnection := func(tenantID string, cookie *http.Cookie) *httptest.ResponseRecorder {
-		request := httptest.NewRequest(http.MethodPut, "/api/management/tenants/"+tenantID+"/provider-connections/vertex", strings.NewReader(`{"fields":{"credential_profile":"vertex-owned-profile"},"text_model":"gemini-3.8-flash","system_prompt":"Vertex system"}`))
-		request.Header.Set("Content-Type", "application/json")
-		request.AddCookie(cookie)
-		response := httptest.NewRecorder()
-		router.ServeHTTP(response, request)
-		return response
-	}
-	response := putConnection(tenantID, cookie)
-	if response.Code != 200 || calls != 1 {
-		t.Fatalf("save Vertex status=%d calls=%d body=%s", response.Code, calls, response.Body)
-	}
-	profile := requestProviderKeyVerificationProfile(t, router, cookie, tenantID)
-	provider := verificationProfileProvider(t, profile, "vertex")
-	if !provider.Configured || provider.TextModel != "gemini-3.8-flash" || profile.Tenant.Defaults.Provider != "vertex" {
-		t.Fatal("verified Vertex connection was not saved")
-	}
-	otherCookie := managementSessionCookie(t, "vertex-other-owner")
-	otherTenant := managementDefaultTenantTestID(t, router, otherCookie)
-	response = putConnection(otherTenant, otherCookie)
-	if response.Code != 503 || calls != 1 {
-		t.Fatalf("cross-tenant profile status=%d calls=%d", response.Code, calls)
-	}
-	if strings.Contains(response.Body.String(), "vertex-owned-profile") {
-		t.Fatal("credential profile leaked in rejection")
-	}
-}
 
 func TestGeminiCurrentModelsVertexContract(t *testing.T) {
 	server, calls := vertexHTTPFixture(t, func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasSuffix(r.URL.Path, "/projects/vertex-test-project/locations/global/publishers/google/models/gemini-3.5-flash:generateContent") {
+		if !strings.HasSuffix(r.URL.Path, "/publishers/google/models/gemini-3.5-flash:generateContent") {
 			t.Errorf("path=%s", r.URL.Path)
 		}
 		var body map[string]any
@@ -321,7 +232,7 @@ func TestGeminiCurrentModelsVertexContract(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		io.WriteString(w, vertexSuccess)
-	}, "test", vertexTokenReply)
+	})
 	for range 2 {
 		response, err := http.Get(server.URL + "/?key=" + TestSecret + "&provider=gemini&prompt=test")
 		if err != nil {
@@ -336,8 +247,8 @@ func TestGeminiCurrentModelsVertexContract(t *testing.T) {
 			t.Errorf("usage headers=%v", response.Header)
 		}
 	}
-	if calls.Load() != 1 {
-		t.Fatalf("token cache calls=%d", calls.Load())
+	if calls.Load() != 2 {
+		t.Fatalf("upstream calls=%d", calls.Load())
 	}
 }
 
@@ -374,7 +285,7 @@ func TestGeminiCurrentModelsVertexMediaAndSchema(t *testing.T) {
 			t.Error("media order or MIME mismatch")
 		}
 		io.WriteString(w, `{"candidates":[{"content":{"parts":[{"text":"{\"answer\":\"OK\"}"}]},"finishReason":"STOP"}]}`)
-	}, "test", vertexTokenReply)
+	})
 	payload := `{"model":"gemini-3.7-flash","reasoning_effort":"high","max_tokens":1024,"messages":[{"role":"system","content":"Be exact"},{"role":"assistant","content":"Earlier answer"},{"role":"user","content":"inspect","attachments":[{"type":"image","mime_type":"image/png","data":"aW1hZ2U="},{"type":"audio","mime_type":"audio/wav","data":"YXVkaW8="}]}],"structured_output":{"schema":{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"],"additionalProperties":false}}}`
 	request, err := http.NewRequest(http.MethodPost, server.URL+"/v2?key="+TestSecret+"&provider=gemini", strings.NewReader(payload))
 	if err != nil {
@@ -412,7 +323,7 @@ func TestGeminiCurrentModelsVertexFailures(t *testing.T) {
 			server, _ := vertexHTTPFixture(t, func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(testCase.status)
 				io.WriteString(w, testCase.body)
-			}, "test", vertexTokenReply)
+			})
 			response, err := http.Get(server.URL + "/?key=" + TestSecret + "&provider=gemini&prompt=test")
 			if err != nil {
 				t.Fatal(err)
@@ -426,80 +337,8 @@ func TestGeminiCurrentModelsVertexFailures(t *testing.T) {
 	}
 }
 
-func TestGeminiCurrentModelsVertexTenantIsolation(t *testing.T) {
-	server, calls := vertexHTTPFixture(t, func(w http.ResponseWriter, r *http.Request) { t.Error("cross-tenant dispatch") }, "another-tenant", vertexTokenReply)
-	response, err := http.Get(server.URL + "/?key=" + TestSecret + "&provider=gemini&prompt=test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	response.Body.Close()
-	if response.StatusCode != 502 || calls.Load() != 0 {
-		t.Fatalf("status=%d token calls=%d", response.StatusCode, calls.Load())
-	}
-}
-
-func TestGeminiCurrentModelsVertexCredentialProfiles(t *testing.T) {
-	valid := proxy.GoogleCredentialProfile{ID: "profile", TenantID: "test", Project: "vertex-test-project", Location: "global", CredentialType: "service_account", CredentialsFile: vertexCredentialFile(t, "https://oauth2.googleapis.com/token")}
-	for _, testCase := range []struct {
-		name string
-		edit func(*proxy.GoogleCredentialProfile)
-	}{
-		{"missing id", func(p *proxy.GoogleCredentialProfile) { p.ID = "" }},
-		{"missing tenant", func(p *proxy.GoogleCredentialProfile) { p.TenantID = "" }},
-		{"invalid project", func(p *proxy.GoogleCredentialProfile) { p.Project = "../another-project" }},
-		{"invalid location", func(p *proxy.GoogleCredentialProfile) { p.Location = "../../global" }},
-		{"caller path", func(p *proxy.GoogleCredentialProfile) { p.CredentialsFile = "caller.json" }},
-		{"unknown credential type", func(p *proxy.GoogleCredentialProfile) { p.CredentialType = "authorized_user" }},
-		{"unavailable file", func(p *proxy.GoogleCredentialProfile) { p.CredentialsFile = t.TempDir() + "/missing.json" }},
-		{"wrong file type", func(p *proxy.GoogleCredentialProfile) { p.CredentialType = "external_account" }},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			profile := valid
-			testCase.edit(&profile)
-			_, err := proxy.NewConfiguration(proxy.Configuration{ProviderCatalog: vertexCatalog(t), GoogleCredentialProfiles: []proxy.GoogleCredentialProfile{profile}})
-			if err == nil {
-				t.Fatal("invalid profile accepted")
-			}
-		})
-	}
-	if _, err := proxy.NewConfiguration(proxy.Configuration{ProviderCatalog: vertexCatalog(t), GoogleCredentialProfiles: []proxy.GoogleCredentialProfile{valid, valid}}); err == nil {
-		t.Fatal("duplicate profile accepted")
-	}
-}
-
-func TestGeminiCurrentModelsVertexOAuthRefreshAndFailure(t *testing.T) {
-	for _, testCase := range []struct {
-		name, reply string
-		want, calls int
-	}{
-		{"refresh window", `{"access_token":"vertex-test-token","token_type":"Bearer","expires_in":1}`, 200, 2},
-		{"rejected", `{"error":"invalid_grant","error_description":"private credential detail"}`, 502, 2},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			server, calls := vertexHTTPFixture(t, func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, vertexSuccess) }, "test", testCase.reply)
-			for index := range 2 {
-				if index == 1 && testCase.name == "refresh window" {
-					time.Sleep(1100 * time.Millisecond)
-				}
-				response, err := http.Get(server.URL + "/?key=" + TestSecret + "&provider=gemini&prompt=test")
-				if err != nil {
-					t.Fatal(err)
-				}
-				body, _ := io.ReadAll(response.Body)
-				response.Body.Close()
-				if response.StatusCode != testCase.want || strings.Contains(string(body), "private credential detail") {
-					t.Fatalf("status=%d body=%s", response.StatusCode, body)
-				}
-			}
-			if int(calls.Load()) != testCase.calls {
-				t.Fatalf("token requests=%d", calls.Load())
-			}
-		})
-	}
-}
-
 func TestGeminiCurrentModelsVertexShippedRoute(t *testing.T) {
-	server, _ := vertexHTTPFixture(t, func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, vertexSuccess) }, "test", vertexTokenReply)
+	server, _ := vertexHTTPFixture(t, func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, vertexSuccess) })
 	response, err := http.Get(server.URL + "/?key=" + TestSecret + "&provider=vertex&prompt=test")
 	if err != nil {
 		t.Fatal(err)
@@ -526,7 +365,7 @@ func TestGeminiCurrentModelsVertexDictationProtocol(t *testing.T) {
 					t.Error("missing native audio contents")
 				}
 				io.WriteString(w, vertexSuccess)
-			}, "test", vertexTokenReply)
+			})
 			var body bytes.Buffer
 			writer := multipart.NewWriter(&body)
 			part, err := writer.CreateFormFile("audio", filename)

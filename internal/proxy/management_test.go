@@ -636,7 +636,8 @@ func TestManagementProviderKeyRevealPersistsUpdatedKey(t *testing.T) {
 		t.Fatalf("decode generated secret: %v", decodeError)
 	}
 
-	for _, proxyRouter := range []http.Handler{router, newManagementRouterWithDatabasePath(t, proxy.Configuration{Endpoints: providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek)}, databasePath)} {
+	requestWithUpdatedKey := func(proxyRouter http.Handler) {
+		t.Helper()
 		proxyRequest := httptest.NewRequest(http.MethodGet, "/?key="+url.QueryEscape(secretPayload.Secret)+"&provider=deepseek&model="+proxy.ModelNameDeepSeekV4Flash+"&prompt=hello", nil)
 		proxyResponse := httptest.NewRecorder()
 		proxyRouter.ServeHTTP(proxyResponse, proxyRequest)
@@ -644,10 +645,16 @@ func TestManagementProviderKeyRevealPersistsUpdatedKey(t *testing.T) {
 			t.Fatalf("updated key proxy status=%d body=%s", proxyResponse.Code, proxyResponse.Body.String())
 		}
 	}
+	requestWithUpdatedKey(router)
+	waitForManagementRequestCount(t, router, ownerCookie, 1)
+
+	reloadedRouter := newManagementRouterWithDatabasePath(t, proxy.Configuration{Endpoints: providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek)}, databasePath)
+	requestWithUpdatedKey(reloadedRouter)
+	waitForManagementRequestCount(t, reloadedRouter, ownerCookie, 2)
+
 	if len(capturedAuthorizations) != 2 || capturedAuthorizations[0] != "Bearer "+updatedProviderKey || capturedAuthorizations[1] != "Bearer "+updatedProviderKey {
 		t.Fatalf("updated key authorizations=%v", capturedAuthorizations)
 	}
-	waitForManagementRequestCount(t, router, ownerCookie, 2)
 	if updateError := database.Model(&managedProviderConnectionFixture{}).Where("tenant_id = ? AND provider_id = ? AND field_id = ?", ownerTenantID, proxy.ProviderNameDeepSeek, proxy.CatalogCredentialAPIKey).Update("value", "invalid").Error; updateError != nil {
 		t.Fatalf("corrupt updated provider key record: %v", updateError)
 	}

@@ -1,57 +1,28 @@
 # Vertex Gemini
 
-## P012 Customer Acceptance Gate
+## Customer API-Key Contract
 
-P012 requires each customer to connect through an independently managed API-key flow.
-The operator credential procedure below does not satisfy that requirement.
-The [customer connection assessment](gemini-customer-connections.md) defines the next acceptance steps and proposed F060 revision.
-P012 now records 22 successful direct Vertex API-key cases with the selected existing account.
-Public proxy acceptance of that key remains pending.
-Complete the P012 decision before further authentication changes or customer cutover.
-The remaining sections describe the implemented operator transport and its retained evidence.
+The user approved the F060 API-key revision on September 8, 2026.
+The `vertex` provider accepts one customer authorization key in its secret `api_key` field.
+The service stores the key in the encrypted tenant connection record.
+The catalog binds local acceptance credentials to `VERTEX_API_KEY`.
+The [customer assessment](gemini-customer-connections.md) records the qualification results and remaining activation gates.
 
-## Implemented Transport
+The transport uses this global endpoint:
 
-F060 adds the `vertex` provider for Google Cloud Gemini requests.
-The route uses the global `v1 generateContent` endpoint with OAuth credentials.
-I252 records the earlier direct-provider qualification.
-The [proxy evidence](evidence/vertex-proxy-2026-09-07.json) records 28 successful requests with the service account on September 7, 2026.
-The enabled text routes are `gemini-3.5-flash`, `gemini-3.1-pro-preview`, `gemini-3.8-flash`, and `gemini-3.5-flash-lite`.
-The enabled dictation route is `gemini-3.5-transcribe-preview`.
-Exact Vertex prices remain unavailable in the catalog until their import.
-
-## Runtime credentials
-
-An operator declares each Google credential profile in the selected `config.yml`.
-Each profile belongs to one tenant and one Google Cloud project.
-The tenant stores the profile ID in its `credential_profile` connection field.
-The service loads the credential file through the Google authentication library.
-The library obtains and refreshes OAuth tokens with the `cloud-platform` scope.
-Each request uses the profile project in its URL and `x-goog-user-project` header.
-
-```yaml
-google_credential_profiles:
-  - id: vertex-primary
-    tenant_id: REPLACE_WITH_MANAGED_TENANT_ID
-    project: llm-proxy-499919
-    location: global
-    credentials_file: /data/credentials/llm-proxy-vertex.json
-    credential_type: service_account
+```text
+POST https://aiplatform.googleapis.com/v1/publishers/google/models/{model}:generateContent
+x-goog-api-key: CUSTOMER_VERTEX_API_KEY
 ```
 
-The current location contract accepts `global`.
-The file path must be absolute.
-The credential type must be `service_account`, `external_account`, or `impersonated_service_account`.
-The operator must approve the credential file and its identity before service startup.
-The profile ID must be unique.
-Unknown profiles and profiles for a different tenant fail before provider dispatch.
-Tenant APIs accept the profile ID only.
+The request uses the key to authorize the selected exact model.
+The transport uses the catalog authentication contract and synchronous completion.
+The current runtime rejects operator credential-profile fields and configuration declarations.
+The earlier service-account results remain historical transport evidence in I252 and F060.
 
-The acceptance identity is `llm-proxy-vertex@llm-proxy-499919.iam.gserviceaccount.com`.
-It has `roles/aiplatform.user` in `llm-proxy-499919`.
-The local credential file is `tmp/vertex/credentials.json` in the primary checkout.
-Git excludes this file.
-The operator installs the credential in the existing `/data` volume through the production secret procedure.
+The catalog contains `gemini-3.5-flash`, `gemini-3.1-pro-preview`, `gemini-3.8-flash`, and `gemini-3.5-flash-lite` text routes.
+The dictation route is `gemini-3.5-transcribe-preview`.
+Each offering requires separate acceptance. Exact Vertex prices remain unavailable in the catalog until their import.
 
 ## Request contract
 
@@ -79,60 +50,92 @@ Vertex dictation uses the exact model `gemini-3.5-transcribe-preview` and audio-
 Google documents this model as a preview.
 The Developer API identifier `gemini-3.5-transcribe` returned HTTP 404 on Vertex.
 
-## Tenant cutover
+## Tenant Connection
 
-The production operator owns deployment and production acceptance.
-Use the following explicit transition for each tenant.
-
-1. Install the approved credential file in the service runtime.
-2. Add the tenant-bound profile to the selected service configuration.
-3. Run `make release`, `make publish`, and `make deploy` from the clean release checkout.
-4. Open the tenant settings with its authorized management session.
-5. Save the Vertex connection with the profile ID, exact text model, and required system prompt.
-6. Set the tenant text default to `vertex` and its qualified model.
-7. If dictation must move, select `vertex` and `gemini-3.5-transcribe-preview` for dictation.
-8. Send text, structured output, image, audio, and dictation requests through the production endpoint.
-9. Record the production results against F060.
+1. Obtain a Vertex authorization key that permits `aiplatform.googleapis.com` requests.
+2. Open the selected tenant settings with its authorized management session.
+3. Save the Vertex key, exact text model, and system prompt.
+4. Select the accepted Vertex offering as the tenant text default.
+5. Verify the required generation capabilities through the public proxy.
+6. To disconnect, delete the Vertex connection through the management operation.
+7. To revoke the provider key, delete it through the Google credential interface.
 
 The connection operation is `PUT /api/management/tenants/{tenant_id}/provider-connections/vertex`.
-For example, its body can contain:
+Its request body has this shape:
 
 ```json
 {
-  "fields": {"credential_profile": "vertex-primary"},
+  "fields": {"api_key": "CUSTOMER_VERTEX_API_KEY"},
   "text_model": "gemini-3.8-flash",
   "system_prompt": ""
 }
 ```
 
-The service verifies the new profile with Vertex before it saves the connection.
+The service verifies the key with Vertex before it saves the connection.
+Failed verification preserves the previous connection.
+A successful replacement changes only the selected tenant connection.
 The default operation is `PUT /api/management/tenants/{tenant_id}/defaults`.
-Submit all required fields from the [OpenAPI contract](openapi.yaml), including the current system prompt and dictation selection.
-For each explicit request, change the provider to `vertex` and select one of its qualified exact models.
-The two provider IDs have separate credential and usage records.
+Submit the required fields from the [OpenAPI contract](openapi.yaml).
+The `gemini` and `vertex` provider identities have separate credentials, model selection, and usage records.
 
-## Repeat acceptance
+## Existing Operator-Profile Transition
 
-The live test uses a temporary proxy and tenant store.
-It uses the real OAuth library, service account, and Vertex endpoint.
+An operator-profile reference cannot become a customer API key.
+For an existing installation, complete one explicit transition:
+
+1. Disconnect each Vertex connection through the previous runtime's management API.
+2. Remove the operator profile declarations from its service configuration.
+3. Update the runtime through the approved release procedure.
+4. Reconnect each tenant with its own Vertex API key.
+5. Complete production acceptance for each selected offering.
+
+The current runtime rejects obsolete connection fields and configuration shapes.
+This implementation does not change production configuration or deploy the service.
+F043 separately owns the credential requirements for provider media staging.
+
+## Repeat Acceptance
+
+The live test uses a disposable proxy and tenant store with the customer API-key transport.
+Supply `VERTEX_API_KEY` through the selected environment before the live command.
 Use a WAV file with the spoken phrase `The quick brown fox jumps over the lazy dog`.
 
 ```bash
 LLM_PROXY_LIVE_VERTEX=true \
-GOOGLE_APPLICATION_CREDENTIALS="$PWD/tmp/vertex/credentials.json" \
-GOOGLE_CLOUD_PROJECT=llm-proxy-499919 \
 LLM_PROXY_LIVE_VERTEX_AUDIO=/absolute/path/acceptance.wav \
 GOFLAGS=-v make test-gemini-current
 ```
 
-A failed required case stops qualification.
 The ordinary CI run skips paid requests.
-Local proxy acceptance and production acceptance are separate results.
+A failed required case blocks qualification. A later successful diagnostic does not replace that failure.
+Local proxy acceptance, independent customer setup, and production acceptance remain separate results.
+
+## September 8 API-Key Acceptance
+
+Flash 3.8 passed 70/70 public generation requests at concurrency 10.
+Cases covered four reasoning selections, structured output, an image, and an audio clip.
+Observed p95 latency was 5.451 seconds. The maximum was 6.486 seconds.
+The server and client request deadlines were 45 seconds.
+All 15 connection and tenant checks passed with the live key.
+All 28 additional offering checks passed, including both public dictation protocols.
+The [API-key evidence](evidence/vertex-api-key-acceptance-2026-09-08-summary.json) records the counts, scope, and remaining gates.
+
+The first diagnostic inherited the repository asset path and failed ten structured requests with `structured_request_store_error`.
+The corrected diagnostic used its own temporary asset store. It passed the complete matrix.
+Both trials remain in the evidence. The initial failure does not establish a provider failure.
+
+These checks used the existing billed account and synthetic local management users.
+Independent customer setup, live provider-key replacement, Google revocation, sustained request rate, and production acceptance remain unverified.
+The earlier Pro and Flash-Lite reliability failures remain in P012.
 
 ## Sources
 
-- [Google authentication library](https://pkg.go.dev/cloud.google.com/go/auth/credentials)
+- [Vertex API keys](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/start/api-keys)
+- [Vertex Express endpoint](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/start/express-mode/vertex-ai-express-mode-api-reference)
 - [Gemini 3.8 Flash](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-8-flash)
 - [Gemini 3.1 Pro](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-1-pro)
 - [Gemini 3.5 Flash-Lite](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-5-flash-lite)
 - [Gemini 3.5 Transcribe](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-5-transcribe)
+
+Final `make ci` passed all 12 gates in 284 seconds with 100.0 percent Go statement coverage.
+The Governor check, changed-prose review, issue-reference check, and `git diff --check` passed.
+The tracker retains 79 language findings outside the changed scope.
