@@ -593,7 +593,9 @@ are unknown YAML keys and fail startup.
 
 ### Account MCP access
 
-Use `https://llm-proxy-api.mprlab.com/mcp` with an OAuth client that supports MCP version `2026-07-28`.
+Use `https://llm-proxy-api.mprlab.com/mcp` with an OAuth Streamable HTTP client.
+Supported MCP revisions are `2026-07-28`, `2025-11-25`, `2025-06-18`, and `2025-03-26`.
+See the [agent protocol map](docs/mcp-clients.md) for client-specific evidence.
 In Settings, select **Copy MCP URL**.
 TAuth authorizes one account grant for all currently owned tenants.
 Call `llm_proxy.list_tenants`, then select an explicit `tenant_id` for generation or route discovery.

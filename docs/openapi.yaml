@@ -82,7 +82,9 @@ paths:
       operationId: postMCPRequest
       summary: Use an owned tenant through MCP.
       description: >-
-        Stateless Streamable HTTP uses protocol version 2026-07-28 and JSON responses.
+        Stateless Streamable HTTP supports 2026-07-28, 2025-11-25, 2025-06-18, and 2025-03-26 with JSON responses.
+        The 2025 revisions use initialize and notifications/initialized.
+        The 2026 revision uses server/discover and per-request protocol metadata.
         TAuth issues tokens for the API origin with the llm-proxy:use scope.
         Each request requires a bearer token.
         The body must arrive within server.request_timeout_seconds and cannot exceed 8 MiB.
@@ -98,16 +100,17 @@ paths:
       parameters:
         - name: MCP-Protocol-Version
           in: header
-          required: true
+          description: >-
+            Send the negotiated version after initialization. The initial handshake can omit this header.
+            An absent header selects the protocol-defined 2025-03-26 default. Repeated headers are rejected.
           schema:
             type: string
-            const: '2026-07-28'
+            enum: ['2026-07-28', '2025-11-25', '2025-06-18', '2025-03-26']
         - name: Mcp-Method
           in: header
-          required: true
           schema:
             type: string
-          description: The value must equal the JSON-RPC method.
+          description: Required for 2026-07-28. The value must equal the JSON-RPC method.
         - name: Mcp-Name
           in: header
           schema:
@@ -126,6 +129,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MCPResponse'
+        '202':
+          description: The handshake-family notification was accepted. The response has no body.
         '400':
           description: The protocol version, resource URI, or request is invalid.
         '401':

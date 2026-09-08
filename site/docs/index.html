@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="02aa1029d5bfcc42164909f6b4bcbc763d4f7a0dd8dbf62cb741f8ba204e7434">
+    <meta name="openapi-source-sha256" content="10193211a0bc60433e77be539ace52b2e9118bc342c7ab8264455e6ac0173626">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="02aa1029d5bfcc42164909f6b4bcbc763d4f7a0dd8dbf62cb741f8ba204e7434">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="10193211a0bc60433e77be539ace52b2e9118bc342c7ab8264455e6ac0173626">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>02aa1029d5bfcc42164909f6b4bcbc763d4f7a0dd8dbf62cb741f8ba204e7434</code></span>
+          <span>Source SHA-256 <code>10193211a0bc60433e77be539ace52b2e9118bc342c7ab8264455e6ac0173626</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -145,7 +145,9 @@ paths:
       operationId: postMCPRequest
       summary: Use an owned tenant through MCP.
       description: &gt;-
-        Stateless Streamable HTTP uses protocol version 2026-07-28 and JSON responses.
+        Stateless Streamable HTTP supports 2026-07-28, 2025-11-25, 2025-06-18, and 2025-03-26 with JSON responses.
+        The 2025 revisions use initialize and notifications/initialized.
+        The 2026 revision uses server/discover and per-request protocol metadata.
         TAuth issues tokens for the API origin with the llm-proxy:use scope.
         Each request requires a bearer token.
         The body must arrive within server.request_timeout_seconds and cannot exceed 8 MiB.
@@ -161,16 +163,17 @@ paths:
       parameters:
         - name: MCP-Protocol-Version
           in: header
-          required: true
+          description: &gt;-
+            Send the negotiated version after initialization. The initial handshake can omit this header.
+            An absent header selects the protocol-defined 2025-03-26 default. Repeated headers are rejected.
           schema:
             type: string
-            const: &#39;2026-07-28&#39;
+            enum: [&#39;2026-07-28&#39;, &#39;2025-11-25&#39;, &#39;2025-06-18&#39;, &#39;2025-03-26&#39;]
         - name: Mcp-Method
           in: header
-          required: true
           schema:
             type: string
-          description: The value must equal the JSON-RPC method.
+          description: Required for 2026-07-28. The value must equal the JSON-RPC method.
         - name: Mcp-Name
           in: header
           schema:
@@ -189,6 +192,8 @@ paths:
             application/json:
               schema:
                 $ref: &#39;#/components/schemas/MCPResponse&#39;
+        &#39;202&#39;:
+          description: The handshake-family notification was accepted. The response has no body.
         &#39;400&#39;:
           description: The protocol version, resource URI, or request is invalid.
         &#39;401&#39;:
@@ -6910,7 +6915,7 @@ components:
           <span class="api-operation-id">postMCPRequest</span>
         </header>
         <h2>Use an owned tenant through MCP.</h2>
-        <p>Stateless Streamable HTTP uses protocol version 2026-07-28 and JSON responses. TAuth issues tokens for the API origin with the llm-proxy:use scope. Each request requires a bearer token. The body must arrive within server.request_timeout_seconds and cannot exceed 8 MiB. An upload timeout returns HTTP 408 before tool execution. Generation uses a separate request_timeout_seconds budget after the upload. The llm_proxy.list_tenants tool provides all owned tenant summaries. The llm_proxy.generate_text tool requires tenant_id and messages. The llm-proxy://tenants/{tenant_id}/routes resource template provides configured text routes. Tool execution failures use isError with a sanitized code. Resource errors and protocol errors use JSON-RPC errors with the protocol HTTP status.</p>
+        <p>Stateless Streamable HTTP supports 2026-07-28, 2025-11-25, 2025-06-18, and 2025-03-26 with JSON responses. The 2025 revisions use initialize and notifications/initialized. The 2026 revision uses server/discover and per-request protocol metadata. TAuth issues tokens for the API origin with the llm-proxy:use scope. Each request requires a bearer token. The body must arrive within server.request_timeout_seconds and cannot exceed 8 MiB. An upload timeout returns HTTP 408 before tool execution. Generation uses a separate request_timeout_seconds budget after the upload. The llm_proxy.list_tenants tool provides all owned tenant summaries. The llm_proxy.generate_text tool requires tenant_id and messages. The llm-proxy://tenants/{tenant_id}/routes resource template provides configured text routes. Tool execution failures use isError with a sanitized code. Resource errors and protocol errors use JSON-RPC errors with the protocol HTTP status.</p>
         <p class="api-security"><strong>Authentication:</strong> MCPAccessToken (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
         <div class="api-contract-block">
           <h3>Parameters</h3>
@@ -6918,8 +6923,8 @@ components:
             <table>
               <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>MCP-Protocol-Version</code></td><td>header</td><td>Yes</td><td>string</td><td></td></tr>
-<tr><td><code>Mcp-Method</code></td><td>header</td><td>Yes</td><td>string</td><td>The value must equal the JSON-RPC method.</td></tr>
+                <tr><td><code>MCP-Protocol-Version</code></td><td>header</td><td>No</td><td>string</td><td>Send the negotiated version after initialization. The initial handshake can omit this header. An absent header selects the protocol-defined 2025-03-26 default. Repeated headers are rejected.</td></tr>
+<tr><td><code>Mcp-Method</code></td><td>header</td><td>No</td><td>string</td><td>Required for 2026-07-28. The value must equal the JSON-RPC method.</td></tr>
 <tr><td><code>Mcp-Name</code></td><td>header</td><td>No</td><td>string</td><td>Supply the tool name for tools/call or the resource URI for resources/read.</td></tr>
               </tbody>
             </table>
@@ -6946,6 +6951,7 @@ components:
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>200</code></td><td>application/json</td><td>none</td><td>An MCP result or application error.</td></tr>
+<tr><td><code>202</code></td><td>none</td><td>none</td><td>The handshake-family notification was accepted. The response has no body.</td></tr>
 <tr><td><code>400</code></td><td>none</td><td>none</td><td>The protocol version, resource URI, or request is invalid.</td></tr>
 <tr><td><code>401</code></td><td>none</td><td>WWW-Authenticate</td><td>A valid TAuth OAuth access token is required.</td></tr>
 <tr><td><code>403</code></td><td>none</td><td>none</td><td>The required scope is absent or the origin is prohibited.</td></tr>
