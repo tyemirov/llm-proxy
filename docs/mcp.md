@@ -6,6 +6,23 @@ All four revisions use the same stateless Streamable HTTP endpoint with JSON res
 See the [agent protocol map](mcp-clients.md) for measured client versions and vendor documentation.
 Each request selects its tenant. The connection has no active tenant or MCP session.
 
+## Supported MCP revisions
+
+This table describes the current repository implementation.
+Client research and local tests do not establish production acceptance.
+
+| Revision | Connection method | Client use and local checks |
+| --- | --- | --- |
+| `2026-07-28` | `server/discover` with protocol metadata on each request | Antigravity reports and Claude Code documentation show client use. Local Go SDK and MCP Inspector checks passed. |
+| `2025-11-25` | `initialize` and `notifications/initialized` | Local Claude Code and OpenCode requests selected this revision. Authenticated HTTP tests passed. |
+| `2025-06-18` | `initialize` and `notifications/initialized` | Codex 0.153.4 selected this revision. Gemini CLI 0.59.0 connection code selects it. Local Codex tool calls passed. |
+| `2025-03-26` | `initialize` and `notifications/initialized` | Authenticated HTTP tests passed. Current Windsurf use requires a new capture. This is also the SDK default for an absent version header. |
+
+All listed revisions use `/mcp`, OAuth authorization, JSON responses, and explicit tenant selection.
+The source list is `mcpProtocolVersions` in `internal/proxy/mcp.go`.
+The [client map](mcp-clients.md) records builds, sources, and limits for each client result.
+The source currently includes March 2025 support. The research does not establish a current client requirement for that revision.
+
 ## Connect a client
 
 1. Sign in to the application.

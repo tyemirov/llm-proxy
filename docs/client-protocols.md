@@ -125,7 +125,7 @@ It does not identify a provider-reported revision. Keep the requested model valu
 The method rejects durable structured requests. Those requests use their existing reconciliation contract.
 
 The HTTP contract uses `X-LLM-Proxy-Resolved-Model` and the three token-count headers.
-Provider failures retain available counts. Validation failures and interrupted connections can have no metadata.
+Provider failures keep available counts. Validation failures and interrupted connections can have no metadata.
 The text method uses the same transport. It returns the response body without measurement access.
 
 ## Validation
