@@ -298,3 +298,7 @@ test-live-astra-capabilities:
 .PHONY: test-completion-measurements
 test-completion-measurements:
 	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run '^TestClientProtocolsCompletionMeasurements|^TestMessagesRequestCompletion' -count=1
+
+.PHONY: test-live-provider-process-cleanup
+test-live-provider-process-cleanup:
+	$(GO) test ./tests -run '^TestOperationalLiveHarnessReapsOwnedProxyChildAfterTermination$$' -count=1
