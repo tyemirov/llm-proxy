@@ -37,9 +37,8 @@ var (
 )
 
 type fileConfiguration struct {
-	GoogleCredentialProfiles []proxy.GoogleCredentialProfile `mapstructure:"google_credential_profiles"`
-	Server                   serverConfiguration             `mapstructure:"server"`
-	Management               managementConfiguration         `mapstructure:"management"`
+	Server     serverConfiguration     `mapstructure:"server"`
+	Management managementConfiguration `mapstructure:"management"`
 }
 
 type serverConfiguration struct {
@@ -228,7 +227,6 @@ func (configuration fileConfiguration) toProxyConfiguration(providerCatalog *pro
 		Management:               managementProxyConfiguration(configuration.Management, usageQueueSize),
 		ProviderCatalog:          providerCatalog,
 		ProviderConnectionValues: providerConnectionValues,
-		GoogleCredentialProfiles: configuration.GoogleCredentialProfiles,
 		Port:                     configuration.Server.Port,
 		LogLevel:                 configuration.Server.LogLevel,
 		WorkerCount:              configuration.Server.Workers,
