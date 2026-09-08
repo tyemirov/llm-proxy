@@ -711,6 +711,10 @@
                 ></p>
 
                 <settings-body>
+                  <div class="mcp-access">
+                    <button type="button" x-on:click="copyMCPURL()" x-text="copy.copyMCPURL"></button>
+                    <p class="field-hint" x-text="copy.mcpSetupHint"></p>
+                  </div>
                   <tenant-access-row role="group" x-bind:aria-label="copy.tenantAccess">
                     <label class="tenant-selector-control">
                       <span class="eyebrow" x-text="copy.tenantContext"></span>

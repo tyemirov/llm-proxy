@@ -7,6 +7,7 @@ import { trapDialogFocus } from "./dialogFocus.js?v=20260903f037";
 
 const EMPTY_STRING = "";
 const MASKED_CLIENT_KEY = "••••••••••••";
+const MCP_PATH = "/mcp";
 
 /** @typedef {ReturnType<typeof import("./managementApplicationState.js").createManagementApplicationState>} ManagementApplicationState */
 /** @typedef {ManagementApplicationState & import("../types.d.js").AlpineMagic & {
@@ -27,6 +28,16 @@ function clientAccessResponsibility(responsibility) {
 /** Create one-time client-key generation, replacement, reveal, and copy behavior. */
 export function createClientAccessResponsibility() {
   return clientAccessResponsibility({
+    async copyMCPURL() {
+      const runtime = /** @type {import("../types.d.js").FrontendRuntimeConfig} */ (this.runtimeConfig);
+      try {
+        await navigator.clipboard.writeText(new URL(MCP_PATH, runtime.proxyOrigin).href);
+        this.setSettingsNotice(NOTICE_KINDS.SUCCESS, COPY.mcpURLCopied);
+      } catch {
+        this.setSettingsNotice(NOTICE_KINDS.ERROR, COPY.copyUnavailable);
+      }
+    },
+
     get hasSecret() {
       return Boolean(this.profile && this.profile.tenant.has_secret);
     },
