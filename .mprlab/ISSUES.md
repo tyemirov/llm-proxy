@@ -2513,6 +2513,10 @@ retain satisfied historical dependencies.
   The browser suite passed 114 tests. Both local TAuth black-box tests passed.
   The separate `make test-mcp-codex` run passed after the final source change.
   Governor normalization passed. Changed prose has no mechanical findings. The 318 findings in unchanged text remain outside this change.
+  CI correction: 2026-09-08 — GitHub run 34286668186 rejected four uncovered completion-client error paths.
+  Added public-client cases for structured requests, missing model profiles, missing resolved models, and duplicate token headers.
+  The focused completion tests passed. Final `make ci` passed all 12 gates in 309 seconds with no uncovered blocks.
+  The browser suite passed 114 tests. Both TAuth black-box tests passed.
   Production deployment and live acceptance of this expanded protocol support remain pending.
   Implementation: 2026-09-08 — Added the account MCP endpoint, tenant discovery,
   generation tool, route resource, OAuth validation, and shared text service.
