@@ -8,6 +8,7 @@
     "frontend:test:blackbox": "playwright test --config=playwright.blackbox.config.js"
   },
   "devDependencies": {
+    "@modelcontextprotocol/inspector": "2.5.0",
     "@playwright/test": "1.62.1",
     "@types/node": "26.4.1",
     "alpinejs": "3.17.1",
