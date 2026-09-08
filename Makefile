@@ -150,6 +150,14 @@ release publish deploy:
 		MPRLAB_APP_ROOT="$${application_root}"
 
 .PHONY: test-client-protocols
+.PHONY: test-mcp
+test-mcp:
+	$(GO) test ./internal/proxy -run '^TestMCP' -count=1
+
+.PHONY: test-mcp-oauth
+test-mcp-oauth: frontend-dependencies
+	$(NPM) run frontend:test:blackbox -- --grep 'MCP OAuth'
+
 test-client-protocols: frontend-dependencies
 	$(GO) test ./internal/proxy -run '^TestClientProtocols' -count=1
 
