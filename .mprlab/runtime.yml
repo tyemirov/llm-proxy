@@ -2,7 +2,7 @@ version: 3
 runner:
     type: bundled
     workdir: ""
-    input_contract_identity: sha256:b3e833d341c0402923961a2bb1258c394456248d044ed065c47df45db88c0dd5
+    contract_version: 1.0.0
 requirements:
     files:
         - Makefile
