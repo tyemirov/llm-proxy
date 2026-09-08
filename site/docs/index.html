@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="d305919699d6f9a72609c9452651c97d0ac97a6f694e0515e074a40d101a8e47">
+    <meta name="openapi-source-sha256" content="6352b2fbde989ef73aa422ab1b8dc0bd9f74b252b4df810480dc30474767b761">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="d305919699d6f9a72609c9452651c97d0ac97a6f694e0515e074a40d101a8e47">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="6352b2fbde989ef73aa422ab1b8dc0bd9f74b252b4df810480dc30474767b761">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>d305919699d6f9a72609c9452651c97d0ac97a6f694e0515e074a40d101a8e47</code></span>
+          <span>Source SHA-256 <code>6352b2fbde989ef73aa422ab1b8dc0bd9f74b252b4df810480dc30474767b761</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -148,6 +148,9 @@ paths:
         Stateless Streamable HTTP uses protocol version 2026-07-28 and JSON responses.
         TAuth issues tokens for the API origin with the llm-proxy:use scope.
         Each request requires a bearer token.
+        The body must arrive within server.request_timeout_seconds and cannot exceed 8 MiB.
+        An upload timeout returns HTTP 408 before tool execution.
+        Generation uses a separate request_timeout_seconds budget after the upload.
         The llm_proxy.list_tenants tool provides all owned tenant summaries.
         The llm_proxy.generate_text tool requires tenant_id and messages.
         The llm-proxy://tenants/{tenant_id}/routes resource template provides configured text routes.
@@ -200,6 +203,8 @@ paths:
           description: The MCP method is unknown.
         &#39;406&#39;:
           description: The Accept header does not permit the required response type.
+        &#39;408&#39;:
+          description: The request body did not arrive within the server timeout or the request was canceled.
         &#39;413&#39;:
           description: The request exceeds the configured message limit.
         &#39;415&#39;:
@@ -6906,7 +6911,7 @@ components:
           <span class="api-operation-id">postMCPRequest</span>
         </header>
         <h2>Use an owned tenant through MCP.</h2>
-        <p>Stateless Streamable HTTP uses protocol version 2026-07-28 and JSON responses. TAuth issues tokens for the API origin with the llm-proxy:use scope. Each request requires a bearer token. The llm_proxy.list_tenants tool provides all owned tenant summaries. The llm_proxy.generate_text tool requires tenant_id and messages. The llm-proxy://tenants/{tenant_id}/routes resource template provides configured text routes. Tool execution failures use isError with a sanitized code. Resource errors and protocol errors use JSON-RPC errors with the protocol HTTP status.</p>
+        <p>Stateless Streamable HTTP uses protocol version 2026-07-28 and JSON responses. TAuth issues tokens for the API origin with the llm-proxy:use scope. Each request requires a bearer token. The body must arrive within server.request_timeout_seconds and cannot exceed 8 MiB. An upload timeout returns HTTP 408 before tool execution. Generation uses a separate request_timeout_seconds budget after the upload. The llm_proxy.list_tenants tool provides all owned tenant summaries. The llm_proxy.generate_text tool requires tenant_id and messages. The llm-proxy://tenants/{tenant_id}/routes resource template provides configured text routes. Tool execution failures use isError with a sanitized code. Resource errors and protocol errors use JSON-RPC errors with the protocol HTTP status.</p>
         <p class="api-security"><strong>Authentication:</strong> MCPAccessToken (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
         <div class="api-contract-block">
           <h3>Parameters</h3>
@@ -6947,6 +6952,7 @@ components:
 <tr><td><code>403</code></td><td>none</td><td>none</td><td>The required scope is absent or the origin is prohibited.</td></tr>
 <tr><td><code>404</code></td><td>none</td><td>none</td><td>The MCP method is unknown.</td></tr>
 <tr><td><code>406</code></td><td>none</td><td>none</td><td>The Accept header does not permit the required response type.</td></tr>
+<tr><td><code>408</code></td><td>none</td><td>none</td><td>The request body did not arrive within the server timeout or the request was canceled.</td></tr>
 <tr><td><code>413</code></td><td>none</td><td>none</td><td>The request exceeds the configured message limit.</td></tr>
 <tr><td><code>415</code></td><td>none</td><td>none</td><td>The request content type is unsupported.</td></tr>
 <tr><td><code>500</code></td><td>none</td><td>none</td><td>The requested resource is unavailable because of a server error.</td></tr>
