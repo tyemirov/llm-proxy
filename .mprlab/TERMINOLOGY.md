@@ -37,6 +37,8 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `node controller`: A private service that controls request admission and runtime container lifecycle on one inference node.
 - `weight access`: A model family classification of proprietary or open weights.
 - `protocol adapter`: Code that translates canonical requests and responses for one reusable provider protocol.
+- `protocol family`: A reusable request and response representation shared by provider offerings.
+- `protocol variation`: A declared, typed difference within one protocol family.
 - `provider catalog`: The canonical YAML file that defines all supported models, providers, provider offerings, controls, limits, and prices.
 - `provider connection`: Tenant values for the credential fields and setting fields in one provider definition.
 - `provider definition`: One provider record in the provider catalog.

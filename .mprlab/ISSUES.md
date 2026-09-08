@@ -63,6 +63,107 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [ ] [I256] (P1) Add shared public scenarios for protocol acceptance.
+  Goal:
+  Add reusable acceptance evidence before changes to the provider catalog and protocol adapters.
+  Requirements:
+  - Extend the current catalog tests and provider HTTP fixtures through the real service and official Go client.
+  - Cover Chat Completions, Responses, Anthropic Messages, Google native protocols, and current dictation adapters.
+  - Record each supported operation, control, protocol variation, and lifecycle in the test cases.
+  - Exercise text, media input, caller tools, structured output, errors, usage, and continuation where the current route supports them.
+  - Prove rejected requests cause zero dispatch for unsupported controls and invalid credentials.
+  - Use controlled external protocols for timeout, cancellation, visibility retry, and terminal-state tests.
+  - Add a second provider definition for each executable protocol adapter through disposable catalog data and connection values.
+  - Use the same executable and clients for both provider definitions.
+  - Use public tests for discovery, connection forms, secret protection, routing, restart persistence, tenant isolation, and usage.
+  - Keep provider constants and production registrations outside the second-provider fixture change.
+  - Keep live-provider qualification separate from local protocol acceptance.
+  Deliverables:
+  - Shared protocol tests, a repository Make target, and inclusion in the applicable CI gate.
+  - A documented procedure to qualify another provider through catalog data.
+  Validation:
+  - Run existing public tests before extraction. Add characterization tests where public coverage is absent.
+  - Prove that the suite detects a wrong endpoint, unsupported field, malformed result, and incorrect usage total.
+  - Run the focused target and applicable repository checks.
+  - Keep all current runtime and public API behavior unchanged.
+
+- [ ] [I257] (P1) {I256} Remove duplicated protocol facts from provider catalog records.
+  Goal:
+  Give each protocol invariant one authoritative definition and reduce provider additions to their required data.
+  The catalog currently repeats adapter constants that `validateProviderCatalogAdapterContract` compares with Go definitions.
+  Requirements:
+  - Keep `configs/providers.yml` as the sole provider catalog.
+  - Select one protocol definition per transport instead of three identifiers that must be equal.
+  - Give each codec one definition for its fixed response fields, finish rules, error rules, and usage mapping.
+  - Derive validation and runtime metadata from that definition.
+  - Keep endpoints, credential fields, settings, offerings, controls, limits, prices, and supported protocol variations in provider data.
+  - Keep every retained variation typed and validate it at the catalog boundary.
+  - Remove repeated invariant values from all provider records and test catalogs in one coordinated schema change.
+  - Reject obsolete fields and shapes. Keep one accepted schema without aliases, dual reads, or compatibility parsers.
+  - Keep provider identities, tenant connections, route defaults, and historical usage.
+  - Rebuild all discovery, management, and live-harness projections from the normalized registry.
+  - Update the catalog reference, onboarding procedure, and affected configuration examples.
+  Deliverables:
+  - A reduced catalog schema, authoritative codec definitions, and converted catalog consumers.
+  Validation:
+  - Run I256 characterization tests before production changes.
+  - First prove rejection of the new catalog shape, then implement its loader and conversion.
+  - Prove rejection of obsolete shapes, unknown variations, missing references, and invalid combinations.
+  - Prove equivalent public discovery, credentials, requests, responses, and usage for every active route.
+  - Run the focused catalog target and applicable repository checks.
+
+- [ ] [I258] (P1) {I257} Separate protocol codecs, authentication, and execution lifecycles.
+  Goal:
+  Let provider transports combine reusable components through validated catalog data.
+  The current adapter validator couples protocol selection to exact authentication headers and permitted lifecycle values.
+  Requirements:
+  - Use separate typed components for request and response codecs, authentication, and execution lifecycles.
+  - Select those components through each catalog transport and construct one validated route at startup.
+  - Reject unsupported combinations through explicit component contracts.
+  - Keep provider identity as route data instead of a selector for shared execution code.
+  - Keep tenant secrets and settings in their existing connection stores.
+  - Keep bearer authentication, direct-header authentication, required static headers, and credential verification behavior.
+  - Keep synchronous completion, resource polling, visibility rules, deadlines, cancellation, and usage accounting.
+  - Share lifecycle code where the execution contract is equal. Retain explicit protocol requirements where behavior differs.
+  - Keep Google credential expansion and media staging under F043.
+  - Keep durable media workers and recovery under F022, and network fairness under I046.
+  - Update the provider catalog reference and media architecture with the final component ownership.
+  Deliverables:
+  - Catalog-selected transport components and one startup composition path for current routes.
+  Validation:
+  - Run I256 tests before extraction and after each component change.
+  - Prove that two catalog-defined providers share a codec with different supported authentication configurations.
+  - Prove that supported synchronous and pollable routes share codec logic without changing their execution behavior.
+  - Prove invalid combinations stop startup and rejected requests cause zero upstream dispatch.
+  - Keep public errors, credential isolation, continuation, timeout budgets, and usage totals.
+  - Run focused transport tests and applicable repository checks.
+
+- [ ] [I259] (P2) {I258} Use one Responses codec with explicit protocol variations.
+  Goal:
+  Reduce repeated request construction and result parsing across OpenAI, xAI, and DashScope Responses routes.
+  This refactor follows the catalog and transport improvements. It is not a prerequisite for F022.
+  Requirements:
+  - Compare the current Responses implementations against provider documentation and I256 characterization evidence.
+  - Extract equal request, output, tool, error, and usage behavior into a shared Responses codec.
+  - Represent each required difference as a closed protocol variation with one documented meaning.
+  - Keep OpenAI background execution and its resource lifecycle.
+  - Keep synchronous xAI and DashScope requests with explicit `store:false` and omission of `background`.
+  - Keep image detail fields, caller tools, structured output support, reasoning controls, and native usage interpretation by route.
+  - Keep xAI output-limit reason checks and DashScope terminal incomplete behavior.
+  - Keep unsupported output rejection and provider-private reasoning protection explicit.
+  - Remove replaced implementations, duplicate schema facts, and obsolete registrations after equivalent behavior passes.
+  - Keep current provider identifiers and tenant records unchanged.
+  - Update I038 and I041 implementation descriptions to reference the shared codec and their required protocol variations.
+  - Keep their separate live acceptance requirements and recorded evidence.
+  Deliverables:
+  - A shared Responses implementation, typed variations, catalog registrations, and current provider documentation.
+  Validation:
+  - Run I256 and existing provider HTTP tests before refactoring.
+  - Compare requests, results, errors, continuation, polling, and usage for every affected active offering.
+  - Exercise each supported variation through the same shared public test suite.
+  - Prove that another provider with an existing variation needs only catalog data and connection values.
+  - Run focused Responses tests and applicable repository checks. Record live-provider acceptance separately.
+
 - [ ] [I255] (P1) Distinguish Gemini model-operation failures from rejected credentials.
   Goal:
   Improve the existing connection verification error classification.
@@ -1805,11 +1906,13 @@ retain satisfied historical dependencies.
   - Prove reduced motion removes nonessential chart movement.
   - Prove the price review command classifies each freshness state.
   - Run `make ci` after the last application change.
-- [ ] [F022] (P1) Add durable tenant-owned media operations to the existing gateway.
+- [ ] [F022] (P1) {I258} Add durable tenant-owned media operations to the existing gateway.
   Goal:
   Extend the existing tenant API with durable media execution and result artifacts.
   Use P011 and `docs/media-gateway-consolidation.md` as the current implementation contract.
   Requirements:
+  - Extend the catalog and transport components completed by I257 and I258.
+  - Extend I256 public protocol tests with durable operations, artifacts, cancellation, and restart recovery.
   - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
   - Reuse managed tenant keys and bearer authentication for media resources.
   - Extend the existing asset contract and official Go client in the same API change.
