@@ -79,6 +79,10 @@ test-openapi-pages-artifact:
 test-management-auth-blackbox: frontend-dependencies
 	$(NPM) run frontend:test:blackbox
 
+.PHONY: test-management-persistence
+test-management-persistence: frontend-dependencies
+	$(GO) test ./internal/proxy -run '^TestManagement(ProviderKeyRevealPersistsUpdatedKey|DatabasePersistenceAndOpenFailures|StartupRejectsInvalidPersistedRoutingDefaults)$$' -count=1
+
 test-live-provider-harness:
 	@GO="$(GO)" ./scripts/test_live_providers.sh --preflight
 
