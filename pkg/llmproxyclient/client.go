@@ -512,11 +512,11 @@ func (client Client) postCompletionPayload(contextValue context.Context, request
 	result, metadataError := completionMetadata(httpResponse.Header)
 	responseBody, readError := io.ReadAll(httpResponse.Body)
 	_ = httpResponse.Body.Close()
-	if readError != nil {
-		return CompletionResult{}, fmt.Errorf("%w: read response body: %v", ErrClientHTTPFailure, readError)
-	}
 	if metadataError != nil {
 		return CompletionResult{}, metadataError
+	}
+	if readError != nil {
+		return result, fmt.Errorf("%w: read response body: %v", ErrClientHTTPFailure, readError)
 	}
 	if httpResponse.StatusCode == http.StatusAccepted {
 		pendingResult, pendingError := decodeStructuredRequestPending(responseBody)

@@ -21,6 +21,7 @@ func TestMessagesRequestCompletion(t *testing.T) {
 		wantUsage, wantError bool
 	}{
 		{"measured", 200, []string{"10", "3", "13"}, true, false},
+		{"truncated response", 200, []string{"10", "3", "13"}, true, true},
 		{"measured zero", 200, []string{"0", "0", "0"}, true, false},
 		{"unavailable", 200, nil, false, false},
 		{"failed with usage", 502, []string{"10", "3", "13"}, true, true},
@@ -44,6 +45,9 @@ func TestMessagesRequestCompletion(t *testing.T) {
 				}
 				if test.name == "duplicate" {
 					w.Header().Add("X-LLM-Proxy-Request-Tokens", "10")
+				}
+				if test.name == "truncated response" {
+					w.Header().Set("Content-Length", "100")
 				}
 				w.WriteHeader(test.status)
 				io.WriteString(w, "private response")
