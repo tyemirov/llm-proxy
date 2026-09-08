@@ -115,6 +115,19 @@ A native tool result returns JSON with `type: tool_calls`, `text`, `tool_calls`,
 A normal text result retains its current format.
 The Go and Python clients expose these request fields. Their text methods return the response body.
 
+## Go completion measurements
+
+Use `Client.PostMessagesCompletion` for ordinary native messages with typed completion metadata.
+Read `Text()` only after success. Read `ResolvedModel()` and `Usage()` after success or failure.
+A nil usage value means that counts are unavailable. A measured zero remains zero.
+The resolved model identifies the exact catalog model selected for dispatch.
+It does not identify a provider-reported revision. Keep the requested model value separately.
+The method rejects durable structured requests. Those requests use their existing reconciliation contract.
+
+The HTTP contract uses `X-LLM-Proxy-Resolved-Model` and the three token-count headers.
+Provider failures retain available counts. Validation failures and interrupted connections can have no metadata.
+The text method uses the same transport. It returns the response body without measurement access.
+
 ## Validation
 
 Run `make test-client-protocols` for real HTTP, OpenAI SDK, native client, and OpenCode acceptance tests.
