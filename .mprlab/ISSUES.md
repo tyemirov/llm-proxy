@@ -4,6 +4,8 @@ Entries record newly discovered requests or changes.
 
 Read @AGENTS.md (Workflow section), @POLICY.md, and relevant stack guides before implementing changes.
 
+For cross-repository dependencies, read [Dependency References](DEPENDENCY-REFERENCES.md).
+
 Format: `- [ ] [B042] (P1) {I007} Title`
 
 - `[ ]` open, `[-]` taken, `[!]` blocked, `[x]` closed.
@@ -25,7 +27,34 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B204] (P2) Bound MCP request uploads in time.
+  Observed: An authenticated client can leave an incomplete `/mcp` upload open indefinitely.
+  The SDK waits for the body before the F021 generation timeout starts.
+  The initial HTTP regression exceeded the one-second server budget and failed
+  with `stalled MCP upload did not terminate within the server budget`.
+  Requirements: Apply the server default timeout before SDK body processing.
+  Stop reads on cancellation. Clear the upload deadline before generation.
+  Return HTTP `408` for an upload timeout and retain the byte limit.
+  Validation: Use real HTTP uploads and SDK calls. Run `make test-mcp` and `make ci`.
+  Resolution: Added a cancellable socket read deadline before SDK dispatch.
+  Cleared that deadline before generation. Retained the request byte limit.
+  Verified stalled uploads, cancellation, read errors, deadline errors, and longer generation budgets.
+  `make test-mcp` and `GOFLAGS=-race make test-mcp` passed.
+  `make ci` passed all 12 gates with 100% Go coverage.
+  Updated the MCP guide and OpenAPI reference. Usage event contracts did not change.
+  The initial Governor check reported format template drift. I254 records its correction.
+
 ## Improvements
+
+- [x] [I254] (P2) Use the Governor template for the managed issue format.
+  Goal: Remove the format template drift reported during B204 validation.
+  Requirements: Keep the cross-repository dependency specification in a separate document.
+  Link that document from the tracker. Use the canonical template for the managed format guide.
+  Validation: Run the Governor check, changed-prose review, identifier checks, and `git diff --check`.
+  Resolution: Restored the managed format guide from the current Governor template.
+  Moved the complete dependency specification to `DEPENDENCY-REFERENCES.md` and linked it from this tracker.
+  The Governor check passed with no drift or warnings. Changed-prose checks and identifier checks passed.
+  No application or event contract changed.
 
 - [ ] [I244] (P1) {F024,F025,F026,F027,F039,F040,F041,F042} Remove the completed MediaOps operation-import bridge.
   Goal:
@@ -2282,7 +2311,7 @@ retain satisfied historical dependencies.
   The server retains the required MCP version and rejects the earlier transport.
   Production deployment and live-host acceptance remain separate and were not run.
   F021 remains open for the remaining manual acceptance.
-  The Governor check reports existing issue-format drift. The changed prose has no mechanical findings.
+  I254 resolved the issue-format drift. The changed prose has no mechanical findings.
   Dependency handoff: 2026-08-15 — gateway F001 and both application manifests
   passed local contract validation. Production activation remains separate.
 - [ ] [F028] (P2) {F027} Add HeyGen Avatar V as a gateway-owned avatar engine.
@@ -2981,5 +3010,3 @@ retain satisfied historical dependencies.
   - Recorded the concrete contract in `docs/media-gateway-consolidation.md`.
   - Paired the consumer delivery with MediaOps P006.
   - Kept implementation issues open and identified the required FamilyHome P003 revision.
-
-
