@@ -120,6 +120,13 @@ For example, queue rejection records `503` even when the MCP transport returns `
 Schema rejection and discovery create no generation usage event.
 Management mutations and dictation are outside this MCP interface.
 
+The server applies the configured message limit to each authenticated request body, with a maximum of 8 MiB.
+The upload must finish within `server.request_timeout_seconds`.
+An upload timeout returns HTTP `408` before SDK dispatch and creates no generation usage event.
+Request cancellation stops the upload read.
+The server clears the upload deadline before tool execution.
+Generation then uses its separate `request_timeout_seconds` budget, or the server default if omitted.
+
 ## Runtime and local acceptance
 
 The server derives its issuer from `management.tauth_url` and its audience from `management.proxy_origin`.

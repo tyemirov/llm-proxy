@@ -85,6 +85,9 @@ paths:
         Stateless Streamable HTTP uses protocol version 2026-07-28 and JSON responses.
         TAuth issues tokens for the API origin with the llm-proxy:use scope.
         Each request requires a bearer token.
+        The body must arrive within server.request_timeout_seconds and cannot exceed 8 MiB.
+        An upload timeout returns HTTP 408 before tool execution.
+        Generation uses a separate request_timeout_seconds budget after the upload.
         The llm_proxy.list_tenants tool provides all owned tenant summaries.
         The llm_proxy.generate_text tool requires tenant_id and messages.
         The llm-proxy://tenants/{tenant_id}/routes resource template provides configured text routes.
@@ -137,6 +140,8 @@ paths:
           description: The MCP method is unknown.
         '406':
           description: The Accept header does not permit the required response type.
+        '408':
+          description: The request body did not arrive within the server timeout or the request was canceled.
         '413':
           description: The request exceeds the configured message limit.
         '415':
