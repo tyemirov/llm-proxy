@@ -1,0 +1,113 @@
+{
+  "issue": "P012",
+  "date": "2026-09-08",
+  "qualification_experiment_changed": false,
+  "production_changed": false,
+  "runtime_source_changed": false,
+  "customer_account_scope": "Existing user-selected billed project. Management sessions are synthetic local test users, not separate Google customers.",
+  "proxy_harness": "Disposable copy of repository native live-provider harness; candidate activation only in its copied catalog; public management and v2 HTTP requests.",
+  "instrumentation": {
+    "corrected_trace": "Forwarded Api-Revision 2026-05-20 and x-goog-api-key through a local recorder to the same Google Interactions endpoint. Recorder adds latency.",
+    "excluded_initial_trace": "gemini-flash-verification-trace-2026-09-08.jsonl omitted Api-Revision. Its associated traced.json also had three incorrect expected status assertions. Both remain as diagnostic history and are excluded from acceptance."
+  },
+  "initial_uninstrumented_connection": [
+    {
+      "case": "connect_and_verify",
+      "http_status": 422,
+      "elapsed_seconds": 0.291,
+      "passed": false,
+      "response_excerpt": "provider_key_rejected"
+    }
+  ],
+  "corrected_proxy_checks": {
+    "attempted": 25,
+    "passed": 24,
+    "capacity_attempted": 10,
+    "capacity_passed": 9,
+    "lifecycle_checks_attempted": 15,
+    "lifecycle_checks_passed": 15,
+    "not_attempted_capacity_cases": [
+      "low",
+      "medium",
+      "high",
+      "schema",
+      "image",
+      "audio"
+    ]
+  },
+  "confirmed_upstream_failure": [
+    {
+      "api_revision": "2026-05-20",
+      "method": "POST",
+      "path": "/v1beta/interactions",
+      "http_status": 400,
+      "elapsed_seconds": 0.177,
+      "upstream_response": {
+        "error": {
+          "message": "Model 'gemini-3.8-flash' does not support background interactions.",
+          "code": "invalid_request"
+        }
+      },
+      "request_controls": {
+        "model": "gemini-3.8-flash",
+        "background": true,
+        "store": true,
+        "generation_config": {
+          "max_output_tokens": 4096
+        }
+      }
+    }
+  ],
+  "verification_followup": {
+    "attempted": 10,
+    "passed": 10,
+    "interpretation": "Ten concurrent saves passed. The earlier uninstrumented 422 has no captured upstream response; its exact cause remains unproven."
+  },
+  "model_diagnostics": {
+    "attempted": 44,
+    "passed": 43,
+    "groups": [
+      {
+        "provider": "gemini",
+        "model": "gemini-3.5-flash-lite",
+        "attempted": 11,
+        "passed": 10,
+        "concurrency_levels": [
+          1,
+          10
+        ]
+      },
+      {
+        "provider": "vertex",
+        "model": "gemini-3.1-pro-preview",
+        "attempted": 11,
+        "passed": 11,
+        "concurrency_levels": [
+          1,
+          10
+        ]
+      },
+      {
+        "provider": "vertex",
+        "model": "gemini-3.5-flash-lite",
+        "attempted": 22,
+        "passed": 22,
+        "concurrency_levels": [
+          1,
+          10
+        ]
+      }
+    ]
+  },
+  "remaining": [
+    "Flash 3.8 Interactions background access is inconsistent. Direct generateContent results do not qualify this proxy transport.",
+    "Vertex API-key proxy adapter awaits explicit F060 approval.",
+    "Separate customer acquisition, successful provider-key replacement, provider-key revocation, sustained request rate, and actual charges remain unverified.",
+    "Original Pro audio and Vertex Lite failures remain in qualification despite successful diagnostic repeats."
+  ],
+  "sources": [
+    "https://ai.google.dev/gemini-api/docs/interactions-overview",
+    "https://ai.google.dev/gemini-api/docs/troubleshooting",
+    "https://docs.cloud.google.com/vertex-ai/generative-ai/docs/model-reference/api-errors"
+  ]
+}

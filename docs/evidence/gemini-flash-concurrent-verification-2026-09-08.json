@@ -1,0 +1,90 @@
+{
+  "issue": "P012",
+  "started_at": "2026-09-08T18:24:45.324662+00:00",
+  "provider": "gemini",
+  "model": "gemini-3.8-flash",
+  "scope": "disposable proxy; synthetic management sessions; live billed key",
+  "production_changed": false,
+  "results": [
+    {
+      "case": "concurrent_connect_and_verify",
+      "http_status": 200,
+      "elapsed_seconds": 4.536,
+      "passed": true,
+      "concurrency": 10,
+      "repeat": 1
+    },
+    {
+      "case": "concurrent_connect_and_verify",
+      "http_status": 200,
+      "elapsed_seconds": 4.734,
+      "passed": true,
+      "concurrency": 10,
+      "repeat": 2
+    },
+    {
+      "case": "concurrent_connect_and_verify",
+      "http_status": 200,
+      "elapsed_seconds": 4.542,
+      "passed": true,
+      "concurrency": 10,
+      "repeat": 3
+    },
+    {
+      "case": "concurrent_connect_and_verify",
+      "http_status": 200,
+      "elapsed_seconds": 4.829,
+      "passed": true,
+      "concurrency": 10,
+      "repeat": 4
+    },
+    {
+      "case": "concurrent_connect_and_verify",
+      "http_status": 200,
+      "elapsed_seconds": 3.928,
+      "passed": true,
+      "concurrency": 10,
+      "repeat": 5
+    },
+    {
+      "case": "concurrent_connect_and_verify",
+      "http_status": 200,
+      "elapsed_seconds": 4.354,
+      "passed": true,
+      "concurrency": 10,
+      "repeat": 6
+    },
+    {
+      "case": "concurrent_connect_and_verify",
+      "http_status": 200,
+      "elapsed_seconds": 4.284,
+      "passed": true,
+      "concurrency": 10,
+      "repeat": 7
+    },
+    {
+      "case": "concurrent_connect_and_verify",
+      "http_status": 200,
+      "elapsed_seconds": 4.116,
+      "passed": true,
+      "concurrency": 10,
+      "repeat": 8
+    },
+    {
+      "case": "concurrent_connect_and_verify",
+      "http_status": 200,
+      "elapsed_seconds": 5.113,
+      "passed": true,
+      "concurrency": 10,
+      "repeat": 9
+    },
+    {
+      "case": "concurrent_connect_and_verify",
+      "http_status": 200,
+      "elapsed_seconds": 4.09,
+      "passed": true,
+      "concurrency": 10,
+      "repeat": 10
+    }
+  ]
+}

@@ -1,0 +1,333 @@
+{
+  "issue": "P012",
+  "date": "2026-09-08",
+  "scope": "Three finite direct-provider burst sessions across more than 24 hours. This is not continuous load or production acceptance.",
+  "session_evidence": [
+    "gemini-vertex-capacity-2026-09-07-session-1.json",
+    "gemini-vertex-capacity-2026-09-08-session-2.json",
+    "gemini-vertex-capacity-2026-09-08-session-3.json"
+  ],
+  "first_session_started_at": "2026-09-07T17:08:40.560004+00:00",
+  "third_session_started_at": "2026-09-08T17:31:57.903767+00:00",
+  "session_start_span_hours": 24.388151,
+  "concurrency": 10,
+  "deadline_seconds": 45,
+  "results": {
+    "attempted": 940,
+    "passed": 917,
+    "failed": 23,
+    "first_attempt_success_percent": 97.553191,
+    "observed_latency_seconds": {
+      "median": 1.651,
+      "p95_nearest_rank": 4.466,
+      "maximum": 45.314
+    },
+    "estimated_reported_token_charge_usd": 0.6925786,
+    "requests_with_unknown_outcome_and_usage": 11
+  },
+  "offering_results": [
+    {
+      "provider": "gemini",
+      "model": "gemini-3.1-pro-preview",
+      "attempted": 30,
+      "passed": 21,
+      "failed": 9,
+      "first_attempt_success_percent": 70.0,
+      "observed_latency_seconds": {
+        "median": 2.511,
+        "p95_nearest_rank": 4.578,
+        "maximum": 4.603
+      },
+      "estimated_reported_token_charge_usd": 0.02613,
+      "requests_with_unknown_outcome_and_usage": 0,
+      "session_coverage": [
+        {
+          "session": 1,
+          "attempted": 30,
+          "all_cases_attempted_ten_times": false,
+          "all_attempted_requests_passed": false
+        },
+        {
+          "session": 2,
+          "attempted": 0,
+          "all_cases_attempted_ten_times": false,
+          "all_attempted_requests_passed": false
+        },
+        {
+          "session": 3,
+          "attempted": 0,
+          "all_cases_attempted_ten_times": false,
+          "all_attempted_requests_passed": false
+        }
+      ],
+      "three_complete_passing_matrices": false,
+      "meets_observed_99_percent_threshold": false,
+      "meets_observed_p95_deadline": true,
+      "sample_acceptance_passed": false
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempted": 140,
+      "passed": 138,
+      "failed": 2,
+      "first_attempt_success_percent": 98.571429,
+      "observed_latency_seconds": {
+        "median": 0.748,
+        "p95_nearest_rank": 1.13,
+        "maximum": 2.23
+      },
+      "estimated_reported_token_charge_usd": 0.015724,
+      "requests_with_unknown_outcome_and_usage": 0,
+      "session_coverage": [
+        {
+          "session": 1,
+          "attempted": 30,
+          "all_cases_attempted_ten_times": false,
+          "all_attempted_requests_passed": false
+        },
+        {
+          "session": 2,
+          "attempted": 80,
+          "all_cases_attempted_ten_times": true,
+          "all_attempted_requests_passed": true
+        },
+        {
+          "session": 3,
+          "attempted": 30,
+          "all_cases_attempted_ten_times": false,
+          "all_attempted_requests_passed": false
+        }
+      ],
+      "three_complete_passing_matrices": false,
+      "meets_observed_99_percent_threshold": false,
+      "meets_observed_p95_deadline": true,
+      "sample_acceptance_passed": false
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.8-flash",
+      "attempted": 210,
+      "passed": 210,
+      "failed": 0,
+      "first_attempt_success_percent": 100.0,
+      "observed_latency_seconds": {
+        "median": 1.293,
+        "p95_nearest_rank": 4.512,
+        "maximum": 7.815
+      },
+      "estimated_reported_token_charge_usd": 0.09184125,
+      "requests_with_unknown_outcome_and_usage": 0,
+      "session_coverage": [
+        {
+          "session": 1,
+          "attempted": 70,
+          "all_cases_attempted_ten_times": true,
+          "all_attempted_requests_passed": true
+        },
+        {
+          "session": 2,
+          "attempted": 70,
+          "all_cases_attempted_ten_times": true,
+          "all_attempted_requests_passed": true
+        },
+        {
+          "session": 3,
+          "attempted": 70,
+          "all_cases_attempted_ten_times": true,
+          "all_attempted_requests_passed": true
+        }
+      ],
+      "three_complete_passing_matrices": true,
+      "meets_observed_99_percent_threshold": true,
+      "meets_observed_p95_deadline": true,
+      "sample_acceptance_passed": true
+    },
+    {
+      "provider": "vertex",
+      "model": "gemini-3.1-pro-preview",
+      "attempted": 230,
+      "passed": 220,
+      "failed": 10,
+      "first_attempt_success_percent": 95.652174,
+      "observed_latency_seconds": {
+        "median": 2.667,
+        "p95_nearest_rank": 5.58,
+        "maximum": 45.314
+      },
+      "estimated_reported_token_charge_usd": 0.4577,
+      "requests_with_unknown_outcome_and_usage": 10,
+      "session_coverage": [
+        {
+          "session": 1,
+          "attempted": 90,
+          "all_cases_attempted_ten_times": true,
+          "all_attempted_requests_passed": true
+        },
+        {
+          "session": 2,
+          "attempted": 70,
+          "all_cases_attempted_ten_times": true,
+          "all_attempted_requests_passed": true
+        },
+        {
+          "session": 3,
+          "attempted": 70,
+          "all_cases_attempted_ten_times": true,
+          "all_attempted_requests_passed": false
+        }
+      ],
+      "three_complete_passing_matrices": false,
+      "meets_observed_99_percent_threshold": false,
+      "meets_observed_p95_deadline": true,
+      "sample_acceptance_passed": false
+    },
+    {
+      "provider": "vertex",
+      "model": "gemini-3.5-flash-lite",
+      "attempted": 120,
+      "passed": 118,
+      "failed": 2,
+      "first_attempt_success_percent": 98.333333,
+      "observed_latency_seconds": {
+        "median": 0.748,
+        "p95_nearest_rank": 26.924,
+        "maximum": 45.043
+      },
+      "estimated_reported_token_charge_usd": 0.0136246,
+      "requests_with_unknown_outcome_and_usage": 1,
+      "session_coverage": [
+        {
+          "session": 1,
+          "attempted": 80,
+          "all_cases_attempted_ten_times": true,
+          "all_attempted_requests_passed": true
+        },
+        {
+          "session": 2,
+          "attempted": 30,
+          "all_cases_attempted_ten_times": false,
+          "all_attempted_requests_passed": false
+        },
+        {
+          "session": 3,
+          "attempted": 10,
+          "all_cases_attempted_ten_times": false,
+          "all_attempted_requests_passed": false
+        }
+      ],
+      "three_complete_passing_matrices": false,
+      "meets_observed_99_percent_threshold": false,
+      "meets_observed_p95_deadline": true,
+      "sample_acceptance_passed": false
+    },
+    {
+      "provider": "vertex",
+      "model": "gemini-3.8-flash",
+      "attempted": 210,
+      "passed": 210,
+      "failed": 0,
+      "first_attempt_success_percent": 100.0,
+      "observed_latency_seconds": {
+        "median": 1.8,
+        "p95_nearest_rank": 3.162,
+        "maximum": 7.155
+      },
+      "estimated_reported_token_charge_usd": 0.08755875,
+      "requests_with_unknown_outcome_and_usage": 0,
+      "session_coverage": [
+        {
+          "session": 1,
+          "attempted": 70,
+          "all_cases_attempted_ten_times": true,
+          "all_attempted_requests_passed": true
+        },
+        {
+          "session": 2,
+          "attempted": 70,
+          "all_cases_attempted_ten_times": true,
+          "all_attempted_requests_passed": true
+        },
+        {
+          "session": 3,
+          "attempted": 70,
+          "all_cases_attempted_ten_times": true,
+          "all_attempted_requests_passed": true
+        }
+      ],
+      "three_complete_passing_matrices": true,
+      "meets_observed_99_percent_threshold": true,
+      "meets_observed_p95_deadline": true,
+      "sample_acceptance_passed": true
+    }
+  ],
+  "failure_groups": [
+    {
+      "provider": "gemini",
+      "model": "gemini-3.1-pro-preview",
+      "count": 9,
+      "classification": "HTTP 429 quota exhaustion at observed 25 RPM limit",
+      "sessions": [
+        1
+      ]
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "count": 2,
+      "classification": "HTTP 200 with MALFORMED_RESPONSE and failed answer acceptance",
+      "sessions": [
+        1,
+        3
+      ]
+    },
+    {
+      "provider": "vertex",
+      "model": "gemini-3.5-flash-lite",
+      "count": 1,
+      "classification": "HTTP 200 with missing finish reason and failed answer acceptance",
+      "sessions": [
+        2
+      ]
+    },
+    {
+      "provider": "vertex",
+      "model": "gemini-3.5-flash-lite",
+      "count": 1,
+      "classification": "Client read timeout; upstream outcome unknown",
+      "sessions": [
+        3
+      ]
+    },
+    {
+      "provider": "vertex",
+      "model": "gemini-3.1-pro-preview",
+      "count": 10,
+      "classification": "Audio-input requests reached the client read deadline; upstream outcomes unknown",
+      "sessions": [
+        3
+      ]
+    }
+  ],
+  "passing_sample_offerings": [
+    {
+      "provider": "gemini",
+      "model": "gemini-3.8-flash"
+    },
+    {
+      "provider": "vertex",
+      "model": "gemini-3.8-flash"
+    }
+  ],
+  "limitations": [
+    "The three scheduled sessions completed, but stopped offerings have incomplete requested repetition coverage.",
+    "Latency includes observed client timeouts; their actual provider completion times are unknown.",
+    "The 20 additional successful Vertex Pro requests from session 1 remain included.",
+    "No failed request was retried, discarded or replaced.",
+    "Burst results do not establish continuous throughput, a service guarantee or statistical certainty about future reliability.",
+    "Timeout usage and charges are unknown. Other charge estimates use the retained September 7 price snapshot.",
+    "Independent customer setup, public proxy capacity, required lifecycle and connection acceptance, actual invoices and implementation approval remain separate gates."
+  ],
+  "automation_status": "PAUSED",
+  "production_changed": false
+}

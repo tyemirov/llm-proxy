@@ -1,22 +1,25 @@
 # Gemini Customer Connections
 
-P012 assesses independent customer connections as of September 7, 2026.
+P012 assesses independent customer connections as of September 8, 2026.
 This document records a proposed support decision and its acceptance gaps.
 P001 owns the shared provider connection interface.
 
 ## Proposed Decision
 
-Continue Vertex qualification at the selected concurrency of 10 requests.
-Retain Gemini Flash 3.8 as a separate candidate with its own customer key.
-Resolve the Gemini Pro request quota and both Flash-Lite output failures before accepting those offerings at the tested load.
+Complete the approved F060 API-key revision and Vertex Flash 3.8 public proxy acceptance.
+Both providers passed the complete direct generation matrix in three sessions at concurrency 10.
+The later Gemini proxy check failed because its Interactions route intermittently rejected background execution.
+Resolve the Gemini Pro request quota, Vertex Pro audio timeouts, and both Flash-Lite failure sets before accepting those offerings.
 Permit the same exact model through both providers when each offering passes all required checks.
 Require explicit provider selection and separate credential records.
 
 F060 proved the Vertex transport with an operator-managed service account.
 That result does not satisfy P012's independent customer setup requirement.
 Both API-key routes passed the direct comparison with the selected existing account.
-The next customer step is independent setup and public proxy acceptance.
-Further authentication changes require the completed P012 decision and separate implementation approval.
+The approved implementation uses the bounded Vertex API-key contract.
+Customer setup and public proxy acceptance remain required before activation.
+The user approved the bounded F060 API-key change on September 8.
+Customer activation still requires the remaining acceptance gates.
 
 ## Customer Flows
 
@@ -157,7 +160,8 @@ The steady request rate remains an open decision. Record account limits for each
 
 ## Proposed Repository Changes
 
-P012 authorizes this assessment only. The following changes require implementation approval after customer acceptance passes.
+P012 defines the assessment. The user separately approved the bounded F060 API-key revision on September 8.
+Customer activation requires the remaining acceptance evidence.
 
 - Reuse P001's catalog-derived acquisition link, encrypted API-key storage, and tenant connection operation.
 - Keep `gemini` and `vertex` as distinct provider identities with independent offering activation.
@@ -174,12 +178,12 @@ Its operator cutover procedure does not satisfy the customer acceptance gate.
 
 ## Open Decisions And Next Evidence
 
-The first capacity session favors Vertex for repeated bursts at the selected concurrency.
-Gemini Flash 3.8 also passed its complete matrix.
+Flash 3.8 passed the three-session direct matrix through both providers.
+The Pro and Flash-Lite offerings retain failures in the final aggregate results below.
 Neither provider has complete separate-customer acceptance in the retained evidence.
-P012 remains blocked on separate-customer setup, public proxy acceptance, and repeated capacity and actual cost evidence.
+P012 remains blocked on separate-customer setup, public proxy acceptance, unresolved offering failures, and actual cost evidence.
 The user selected the primary Google account for the current verification.
-Continue the repeated API-key comparison with that account's existing project and billing setup.
+Use that account's existing project and billing setup for separately authorized follow-up diagnostics.
 Record separate first-use acceptance as a distinct outstanding result.
 Any required account-owner sign-in or payment action belongs to that customer.
 The assessment must then select accepted offerings and present the bounded F060 revision for approval.
@@ -270,7 +274,7 @@ Actual invoice charges remain unverified. Output token variation prevents a cost
 ### Remaining Acceptance
 
 1. Complete independent key acquisition with a separate customer account.
-2. Complete P012's repeated capacity comparison and record actual charges at the agreed customer load.
+2. Resolve the failed offerings and record actual charges at the agreed customer load.
 3. Approve the bounded F060 revision after the customer evidence satisfies the P012 gate.
 4. Replace the customer credential-profile contract with one Vertex API-key field and the tested endpoint.
 5. Verify public connection creation, model selection, replacement, disconnect, revocation, and tenant isolation.
@@ -332,15 +336,15 @@ Actual invoice charges remain unverified.
 
 ### Follow-Up Work
 
-Session 2 completed more than 12 hours after session 1.
-Session 3 remains scheduled for the 24-hour check. Each session retains separate results.
-They test Vertex Pro, Flash, and Flash-Lite, plus Gemini Flash and Flash-Lite, at concurrency 10.
+All three scheduled sessions completed across more than 24 hours. Each session retains separate results.
+The two follow-up sessions tested Vertex Pro, Flash, and Flash-Lite, plus Gemini Flash and Flash-Lite, at concurrency 10.
 Gemini Pro remains excluded until its quota or the intended request rate is resolved.
-The automation pauses after the third session.
+The automation is paused after session 3.
 Its local runner is `tmp/p012/capacity-session.py`, with a retained audio fixture in the same ignored directory.
 
 For Gemini Pro, select an intended request rate within the current quota or obtain a higher project quota.
-For Vertex, complete the remaining time-separated sessions and independent customer setup before the bounded F060 API-key revision.
+For Vertex, resolve the Pro audio and Flash-Lite failures before accepting those capabilities.
+Complete independent customer setup before the bounded F060 API-key revision.
 Keep the original failures in the support decision and all aggregate success counts.
 
 ## Capacity Session 2
@@ -373,7 +377,162 @@ Gemini Pro retains its nine quota failures from session 1.
 The two sessions contain 690 requests, 679 accepted results, and 11 failures.
 These totals preserve the 20 additional Vertex Pro requests from the initial interrupted comparison.
 
-Session 3 remains necessary for the three-session acceptance gate across at least 24 hours.
+The final session below completes the scheduled runs across at least 24 hours.
 Both Flash-Lite offerings have observed output failures, so the current samples do not establish a reliability advantage for either offering.
 The Vertex Pro results continue to show capacity beyond the tested Gemini Pro quota.
 Customer setup, public proxy capacity, actual charges, and the F060 implementation decision remain separate open gates.
+
+## Final Three-Session Result
+
+Session 3 started on September 8 at 17:31 UTC, 24.388 hours after session 1.
+It sent 250 requests, accepted 238 results, and retained 12 failures.
+The runner stopped the remaining 120 requests for the failed Flash-Lite offerings.
+The [session 3 evidence](evidence/gemini-vertex-capacity-2026-09-08-session-3.json) retains every attempt.
+The [aggregate evidence](evidence/gemini-vertex-capacity-2026-09-08-summary.json) combines all three sessions without replacing earlier failures.
+
+| Provider | Exact model | Accepted / attempted | Success rate | Observed p95 | Direct sample gate |
+|---|---|---:|---:|---:|---|
+| Gemini | `gemini-3.8-flash` | 210/210 | 100 percent | 4.512 seconds | Passed all three matrices. |
+| Vertex | `gemini-3.8-flash` | 210/210 | 100 percent | 3.162 seconds | Passed all three matrices. |
+| Gemini | `gemini-3.1-pro-preview` | 21/30 | 70.000 percent | 4.578 seconds | Quota blocked follow-up runs. |
+| Vertex | `gemini-3.1-pro-preview` | 220/230 | 95.652 percent | 5.580 seconds | Audio deadline failures. |
+| Gemini | `gemini-3.5-flash-lite` | 138/140 | 98.571 percent | 1.130 seconds | Output failures and incomplete repetitions. |
+| Vertex | `gemini-3.5-flash-lite` | 118/120 | 98.333 percent | 26.924 seconds | Output failure, timeout, and incomplete repetitions. |
+
+The observed latency includes client timeouts. Their actual upstream completion times remain unknown.
+These are three finite burst samples, not continuous load or a service guarantee.
+The aggregate contains 940 attempts, 917 accepted results, and 23 failures.
+It includes the 20 additional successful Vertex Pro requests from session 1.
+Only the two Flash 3.8 offerings passed all three complete direct matrices and the proposed sample thresholds.
+
+All ten Vertex Pro audio requests reached the client read deadline in session 3.
+Their elapsed times were 45.046 to 45.314 seconds. Their upstream outcomes remain unknown.
+Vertex Pro passed its other 200 requests across all sessions, including the additional initial requests.
+The timeout cause remains unresolved. The evidence does not identify a quota rejection or a provider outage.
+
+Vertex Flash-Lite had one client read timeout in session 3.
+Its earlier output failure remains in the aggregate.
+Gemini Flash-Lite returned another HTTP 200 response with `MALFORMED_RESPONSE` at low reasoning.
+Both Flash-Lite offerings fall below the proposed 99 percent observed success threshold.
+Gemini Pro retains the nine quota failures from session 1 and received no further requests.
+
+The session 3 estimate for returned token usage is USD 0.17998835.
+The three-session estimate for returned token usage is USD 0.69257860, with the retained September 7 rates.
+Eleven timed-out requests have unknown usage and charges. These estimates do not include those unknown amounts.
+Actual invoice charges remain unverified.
+
+### Remaining Gates
+
+1. Complete independent key acquisition and public proxy acceptance for the two Flash 3.8 offerings.
+2. Diagnose Vertex Pro audio timeouts and the Flash-Lite failures with separate, bounded diagnostic work.
+3. Select a supported Gemini Pro request rate or obtain a higher project quota.
+4. Record the intended sustained request rate and actual charges.
+5. Complete connection replacement, disconnect, revocation, tenant isolation, and required operation acceptance.
+6. Complete the approved F060 API-key revision and retain the remaining customer acceptance gates.
+
+P012 remains blocked on these customer and capability gates.
+The scheduled experiment completed. Its automation is paused.
+This execution changed evidence and documentation only. Runtime authentication, offering activation, and production configuration remain unchanged.
+
+
+## Public Proxy Diagnostics
+
+The September 8 check used the current proxy, a disposable catalog, and the existing billed Gemini key.
+Its management sessions represented two synthetic users. They do not establish independent Google customer setup.
+The [diagnostic summary](evidence/gemini-customer-proxy-diagnostics-2026-09-08-summary.json) identifies each run and its limits.
+
+The first direct proxy connection returned HTTP 422, `provider_key_rejected`, after 0.291 seconds.
+Its upstream response was not captured. Its exact cause remains unproven.
+A local recorder then captured the public proxy exchanges with Google.
+The first recorder omitted `Api-Revision`. Its trace remains excluded from acceptance.
+Three assertions in that initial diagnostic also expected incorrect rejection statuses.
+The corrected recorder forwarded `Api-Revision: 2026-05-20` and the provider key.
+
+The corrected run passed 15 connection and tenant checks.
+These checks covered connection creation, secret omission, invalid replacement rejection, retained access, tenant isolation, disconnect, reconnection, and client-key rotation.
+Cross-user profile access and disconnect returned HTTP 404. Generation after disconnect returned HTTP 409.
+The rejected replacement left the original connection usable.
+The rotated client key worked, and the previous client key returned HTTP 403.
+Successful replacement with a different valid provider key and Google key revocation remain unverified.
+
+At concurrency 10, ordinary Flash 3.8 text generation passed 9/10 through the Gemini proxy.
+Google rejected one interaction creation with HTTP 400:
+
+```text
+Model 'gemini-3.8-flash' does not support background interactions.
+```
+
+The same request controls succeeded for the other nine requests.
+The proxy returned HTTP 502 with `provider_error` and `upstream_status: 400` for the rejected creation.
+The runner stopped the capacity matrix before the other reasoning levels, structured output, image, and audio cases.
+A separate batch of ten concurrent connection saves passed all ten verification lifecycles.
+This repeat does not replace the initial HTTP 422 result.
+
+Google lists Flash 3.8 as an Interactions model and describes the API as generally available.
+The live background rejection remains the controlling evidence for this route.
+[Interactions documentation](https://ai.google.dev/gemini-api/docs/interactions-overview)
+The current verification code maps upstream HTTP 400 to `provider_key_rejected` without the response body.
+I255 records the separate error-classification work.
+The direct capacity experiment used `generateContent`, so its successful results do not establish Interactions reliability.
+The proposed Vertex endpoint avoids this background operation.
+
+### Separate Model Diagnostics
+
+The bounded diagnostic sent 44 direct requests at concurrency 1 and 10. It accepted 43 results.
+
+| Provider | Model and case | Accepted / attempted | Result |
+|---|---|---:|---|
+| Vertex | Pro 3.1 Preview audio | 11/11 | The earlier timeout did not repeat. |
+| Gemini | Flash-Lite 3.5, low reasoning | 10/11 | One concurrent result returned `MALFORMED_RESPONSE`. |
+| Vertex | Flash-Lite 3.5, low and omitted reasoning | 22/22 | The earlier failures did not repeat. |
+
+Gemini Flash-Lite returned HTTP 200 with 80 thought tokens and no accepted answer for its failed request.
+The successful repeats do not establish a fix for Vertex Pro or Vertex Flash-Lite.
+Their original failures remain in the three-session evidence.
+The Gemini Pro quota result remains unchanged. This diagnostic sent no Gemini Pro requests.
+
+### Approved Implementation Contract
+
+The proposed F060 change has this bounded contract:
+
+1. Replace the Vertex customer credential-profile field with one secret `api_key` field.
+2. Send the key in `x-goog-api-key` to the tested global endpoint.
+3. Use `https://aiplatform.googleapis.com/v1/publishers/google/models/{model}:generateContent`.
+4. Use the existing tenant connection storage and management verification operation.
+5. Remove the customer credential-profile path in one explicit transition.
+6. Verify Flash 3.8 through public proxy APIs at concurrency 10.
+7. Require customer setup, replacement, revocation, and tenant isolation evidence before customer activation.
+
+The user explicitly approved this authentication change on September 8.
+F060 implements the API-key revision. Customer activation remains subject to acceptance.
+P001 retains ownership of the shared connection interface. F043 retains ownership of media staging.
+The runtime source, primary catalog activation, production configuration, and paused automation did not change during these diagnostics.
+
+
+## Approved Vertex API-Key Implementation
+
+The user approved the bounded F060 revision after the Gemini Interactions failure was captured.
+Vertex now accepts the existing tenant `api_key` contract and sends `x-goog-api-key` to the tested global endpoint.
+The operator credential-profile loader and its public credential kind were removed.
+The current configuration and connection validators reject those obsolete inputs.
+The [Vertex runbook](vertex-gemini.md) defines the explicit transition for any existing operator-profile installation.
+
+The approved Vertex key is stored locally as `VERTEX_API_KEY` in `configs/.env`.
+The existing `AI_STUDIO_API_KEY` and `GEMINI_API_KEY` assignments remain intact.
+The primary catalog activation and production configuration did not change.
+
+Flash 3.8 passed 70/70 public proxy requests at concurrency 10 and all 15 connection and tenant checks.
+Its p95 latency was 5.451 seconds, with a maximum of 6.486 seconds.
+The additional functional suite passed 28/28 across the existing Vertex text offerings and both dictation endpoints.
+The [implementation evidence](evidence/vertex-api-key-acceptance-2026-09-08-summary.json) retains both the initial storage failure and corrected acceptance.
+The first trial failed ten structured requests locally. The complete repeat used a separate temporary asset store.
+
+The local API-key implementation and Flash 3.8 proxy sample passed their focused checks.
+Independent Google customer setup, live replacement with a different provider key, and Google revocation remain open.
+Actual charges, sustained request rate, catalog prices, and production acceptance also remain open.
+The earlier Pro and Flash-Lite failures retain their original status.
+P012 and F060 remain blocked on the applicable customer and activation gates.
+
+Final `make ci` passed all 12 gates in 284 seconds with 100.0 percent Go statement coverage.
+The Governor check, changed-prose review, issue-reference check, and `git diff --check` passed.
+The tracker retains 79 language findings outside the changed scope.

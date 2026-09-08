@@ -1,0 +1,1646 @@
+{
+  "issue": "P012",
+  "started_at": "2026-09-08T18:19:34.824635+00:00",
+  "scope": "separate bounded diagnostic; original qualification failures retained",
+  "timeout_seconds": 45,
+  "results": [
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.1-pro-preview",
+      "effort": "omitted",
+      "case": "audio",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 75,
+        "candidatesTokenCount": 10,
+        "totalTokenCount": 329,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "AUDIO",
+            "tokenCount": 64
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 11
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 10
+          }
+        ],
+        "thoughtsTokenCount": 244
+      },
+      "model_version": "gemini-3.1-pro-preview",
+      "passed": true,
+      "elapsed_seconds": 3.998,
+      "concurrency": 1,
+      "repeat": 1
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.1-pro-preview",
+      "effort": "omitted",
+      "case": "audio",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 75,
+        "candidatesTokenCount": 10,
+        "totalTokenCount": 270,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "AUDIO",
+            "tokenCount": 64
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 11
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 10
+          }
+        ],
+        "thoughtsTokenCount": 185
+      },
+      "model_version": "gemini-3.1-pro-preview",
+      "passed": true,
+      "elapsed_seconds": 3.487,
+      "concurrency": 10,
+      "repeat": 1
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.1-pro-preview",
+      "effort": "omitted",
+      "case": "audio",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 75,
+        "candidatesTokenCount": 10,
+        "totalTokenCount": 282,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "AUDIO",
+            "tokenCount": 64
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 11
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 10
+          }
+        ],
+        "thoughtsTokenCount": 197
+      },
+      "model_version": "gemini-3.1-pro-preview",
+      "passed": true,
+      "elapsed_seconds": 3.352,
+      "concurrency": 10,
+      "repeat": 2
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.1-pro-preview",
+      "effort": "omitted",
+      "case": "audio",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 75,
+        "candidatesTokenCount": 9,
+        "totalTokenCount": 738,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "AUDIO",
+            "tokenCount": 64
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 11
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 9
+          }
+        ],
+        "thoughtsTokenCount": 654
+      },
+      "model_version": "gemini-3.1-pro-preview",
+      "passed": true,
+      "elapsed_seconds": 6.962,
+      "concurrency": 10,
+      "repeat": 3
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.1-pro-preview",
+      "effort": "omitted",
+      "case": "audio",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 75,
+        "candidatesTokenCount": 9,
+        "totalTokenCount": 465,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11
+          },
+          {
+            "modality": "AUDIO",
+            "tokenCount": 64
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 9
+          }
+        ],
+        "thoughtsTokenCount": 381
+      },
+      "model_version": "gemini-3.1-pro-preview",
+      "passed": true,
+      "elapsed_seconds": 6.192,
+      "concurrency": 10,
+      "repeat": 4
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.1-pro-preview",
+      "effort": "omitted",
+      "case": "audio",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 75,
+        "candidatesTokenCount": 9,
+        "totalTokenCount": 270,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "AUDIO",
+            "tokenCount": 64
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 11
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 9
+          }
+        ],
+        "thoughtsTokenCount": 186
+      },
+      "model_version": "gemini-3.1-pro-preview",
+      "passed": true,
+      "elapsed_seconds": 4.663,
+      "concurrency": 10,
+      "repeat": 5
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.1-pro-preview",
+      "effort": "omitted",
+      "case": "audio",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 75,
+        "candidatesTokenCount": 10,
+        "totalTokenCount": 432,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "AUDIO",
+            "tokenCount": 64
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 11
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 10
+          }
+        ],
+        "thoughtsTokenCount": 347
+      },
+      "model_version": "gemini-3.1-pro-preview",
+      "passed": true,
+      "elapsed_seconds": 4.477,
+      "concurrency": 10,
+      "repeat": 6
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.1-pro-preview",
+      "effort": "omitted",
+      "case": "audio",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 75,
+        "candidatesTokenCount": 10,
+        "totalTokenCount": 246,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "AUDIO",
+            "tokenCount": 64
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 11
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 10
+          }
+        ],
+        "thoughtsTokenCount": 161
+      },
+      "model_version": "gemini-3.1-pro-preview",
+      "passed": true,
+      "elapsed_seconds": 3.408,
+      "concurrency": 10,
+      "repeat": 7
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.1-pro-preview",
+      "effort": "omitted",
+      "case": "audio",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 75,
+        "candidatesTokenCount": 10,
+        "totalTokenCount": 345,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "AUDIO",
+            "tokenCount": 64
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 11
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 10
+          }
+        ],
+        "thoughtsTokenCount": 260
+      },
+      "model_version": "gemini-3.1-pro-preview",
+      "passed": true,
+      "elapsed_seconds": 4.042,
+      "concurrency": 10,
+      "repeat": 8
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.1-pro-preview",
+      "effort": "omitted",
+      "case": "audio",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 75,
+        "candidatesTokenCount": 9,
+        "totalTokenCount": 395,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11
+          },
+          {
+            "modality": "AUDIO",
+            "tokenCount": 64
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 9
+          }
+        ],
+        "thoughtsTokenCount": 311
+      },
+      "model_version": "gemini-3.1-pro-preview",
+      "passed": true,
+      "elapsed_seconds": 5.002,
+      "concurrency": 10,
+      "repeat": 9
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.1-pro-preview",
+      "effort": "omitted",
+      "case": "audio",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 75,
+        "candidatesTokenCount": 9,
+        "totalTokenCount": 361,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "AUDIO",
+            "tokenCount": 64
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 11
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 9
+          }
+        ],
+        "thoughtsTokenCount": 277
+      },
+      "model_version": "gemini-3.1-pro-preview",
+      "passed": true,
+      "elapsed_seconds": 4.561,
+      "concurrency": 10,
+      "repeat": 10
+    },
+    {
+      "provider": "gemini",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 9,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 103,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 9
+          }
+        ],
+        "thoughtsTokenCount": 93,
+        "serviceTier": "standard"
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.853,
+      "concurrency": 1,
+      "repeat": 1
+    },
+    {
+      "provider": "gemini",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 9,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 94,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 9
+          }
+        ],
+        "thoughtsTokenCount": 84,
+        "serviceTier": "standard"
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.891,
+      "concurrency": 10,
+      "repeat": 1
+    },
+    {
+      "provider": "gemini",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 9,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 84,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 9
+          }
+        ],
+        "thoughtsTokenCount": 74,
+        "serviceTier": "standard"
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.865,
+      "concurrency": 10,
+      "repeat": 2
+    },
+    {
+      "provider": "gemini",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 9,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 112,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 9
+          }
+        ],
+        "thoughtsTokenCount": 102,
+        "serviceTier": "standard"
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.895,
+      "concurrency": 10,
+      "repeat": 3
+    },
+    {
+      "provider": "gemini",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 9,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 91,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 9
+          }
+        ],
+        "thoughtsTokenCount": 81,
+        "serviceTier": "standard"
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.937,
+      "concurrency": 10,
+      "repeat": 4
+    },
+    {
+      "provider": "gemini",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 9,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 90,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 9
+          }
+        ],
+        "thoughtsTokenCount": 80,
+        "serviceTier": "standard"
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.859,
+      "concurrency": 10,
+      "repeat": 5
+    },
+    {
+      "provider": "gemini",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 9,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 100,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 9
+          }
+        ],
+        "thoughtsTokenCount": 90,
+        "serviceTier": "standard"
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.864,
+      "concurrency": 10,
+      "repeat": 6
+    },
+    {
+      "provider": "gemini",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 9,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 95,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 9
+          }
+        ],
+        "thoughtsTokenCount": 85,
+        "serviceTier": "standard"
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.773,
+      "concurrency": 10,
+      "repeat": 7
+    },
+    {
+      "provider": "gemini",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 9,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 86,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 9
+          }
+        ],
+        "thoughtsTokenCount": 76,
+        "serviceTier": "standard"
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.805,
+      "concurrency": 10,
+      "repeat": 8
+    },
+    {
+      "provider": "gemini",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "MALFORMED_RESPONSE"
+      ],
+      "answer_matches": false,
+      "usage": {
+        "promptTokenCount": 9,
+        "totalTokenCount": 89,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 9
+          }
+        ],
+        "thoughtsTokenCount": 80,
+        "serviceTier": "standard"
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": false,
+      "elapsed_seconds": 0.808,
+      "concurrency": 10,
+      "repeat": 9
+    },
+    {
+      "provider": "gemini",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 9,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 88,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 9
+          }
+        ],
+        "thoughtsTokenCount": 78,
+        "serviceTier": "standard"
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.806,
+      "concurrency": 10,
+      "repeat": 10
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 83,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 74
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.852,
+      "concurrency": 1,
+      "repeat": 1
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 96,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 87
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.933,
+      "concurrency": 10,
+      "repeat": 1
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 92,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 83
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.963,
+      "concurrency": 10,
+      "repeat": 2
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 81,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 72
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.913,
+      "concurrency": 10,
+      "repeat": 3
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 90,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 81
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.92,
+      "concurrency": 10,
+      "repeat": 4
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 90,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 81
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.932,
+      "concurrency": 10,
+      "repeat": 5
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 110,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 101
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.999,
+      "concurrency": 10,
+      "repeat": 6
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 76,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 67
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.869,
+      "concurrency": 10,
+      "repeat": 7
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 92,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 83
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.992,
+      "concurrency": 10,
+      "repeat": 8
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 92,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 83
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 1.866,
+      "concurrency": 10,
+      "repeat": 9
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "low",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 95,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ],
+        "thoughtsTokenCount": 86
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 1.967,
+      "concurrency": 10,
+      "repeat": 10
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "omitted",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 9,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ]
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.581,
+      "concurrency": 1,
+      "repeat": 1
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "omitted",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 9,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ]
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.67,
+      "concurrency": 10,
+      "repeat": 1
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "omitted",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 9,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ]
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.657,
+      "concurrency": 10,
+      "repeat": 2
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "omitted",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 9,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ]
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.531,
+      "concurrency": 10,
+      "repeat": 3
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "omitted",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 9,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ]
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.681,
+      "concurrency": 10,
+      "repeat": 4
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "omitted",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 9,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ]
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.764,
+      "concurrency": 10,
+      "repeat": 5
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "omitted",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 9,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ]
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.621,
+      "concurrency": 10,
+      "repeat": 6
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "omitted",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 9,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ]
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.699,
+      "concurrency": 10,
+      "repeat": 7
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "omitted",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 9,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ]
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.526,
+      "concurrency": 10,
+      "repeat": 8
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "omitted",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 9,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ]
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.582,
+      "concurrency": 10,
+      "repeat": 9
+    },
+    {
+      "provider": "vertex",
+      "credential_type": "authorization_api_key",
+      "project": "llm-proxy-499919",
+      "location": "global",
+      "model": "gemini-3.5-flash-lite",
+      "effort": "omitted",
+      "case": "text",
+      "http_status": 200,
+      "finish_reasons": [
+        "STOP"
+      ],
+      "answer_matches": true,
+      "usage": {
+        "promptTokenCount": 8,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 9,
+        "trafficType": "ON_DEMAND",
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 1
+          }
+        ]
+      },
+      "model_version": "gemini-3.5-flash-lite",
+      "passed": true,
+      "elapsed_seconds": 0.555,
+      "concurrency": 10,
+      "repeat": 10
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "issue": "F060",
+  "related_planning_issue": "P012",
+  "date": "2026-09-08",
+  "user_approved_api_key_change": true,
+  "provider": "vertex",
+  "model": "gemini-3.8-flash",
+  "authentication": "authorization_api_key",
+  "endpoint": "https://aiplatform.googleapis.com/v1/publishers/google/models/{model}:generateContent",
+  "header": "x-goog-api-key",
+  "local_environment_variable": "VERTEX_API_KEY",
+  "production_changed": false,
+  "catalog_activation_changed": false,
+  "original_capacity_experiment_changed": false,
+  "public_proxy_capacity": {
+    "concurrency": 10,
+    "attempted": 70,
+    "passed": 70,
+    "p95_seconds": 5.451,
+    "max_seconds": 6.486,
+    "server_timeout_seconds": 45,
+    "client_timeout_seconds": 45,
+    "cases": [
+      "text omitted",
+      "text low",
+      "text medium",
+      "text high",
+      "structured JSON schema",
+      "image",
+      "audio"
+    ],
+    "fixture_audio_sha256": "9163f8496f9606f9bbac20c91bc9cd3656ee46893e96e952d1582e8fdd900a1e"
+  },
+  "public_lifecycle": {
+    "attempted": 15,
+    "passed": 15,
+    "scope": "synthetic local management users; live upstream key verification"
+  },
+  "other_public_offering_checks": {
+    "attempted": 28,
+    "passed": 28
+  },
+  "first_trial": {
+    "evidence": "vertex-flash-proxy-customer-2026-09-08.json",
+    "attempted": 65,
+    "passed": 55,
+    "failed": 10,
+    "failure": "structured_request_store_error before generation",
+    "configuration_difference": "The diagnostic inherited the repository asset path and request timeout. The corrected disposable configuration uses its own temporary asset store and a 45-second request timeout.",
+    "upstream_failure_established": false
+  },
+  "remaining": [
+    "Independent customer Google acquisition and actual browser setup remain unverified.",
+    "Valid provider-key replacement is covered by controlled public HTTP integration tests; live replacement with a different valid Google key remains unverified.",
+    "Google key revocation remains unverified. Client-key rotation passed.",
+    "Pro audio and Flash-Lite historical reliability failures remain.",
+    "Sustained request rate, invoice charges, catalog prices, and production acceptance remain open."
+  ],
+  "validation": {
+    "initial_public_test": "API-key connection status=400 calls=0 body=management_bad_request: provider=vertex",
+    "focused_go": "make test-gemini-current passed",
+    "focused_browser": "obsolete Google credential profile rejection passed",
+    "ci": {
+      "command": "make ci",
+      "passed": true,
+      "gates": 12,
+      "go_statement_coverage_percent": 100.0,
+      "elapsed_seconds": 284
+    },
+    "documents": {
+      "governor_passed": true,
+      "changed_prose_findings": 0,
+      "preserved_tracker_findings": 79,
+      "duplicate_ids": 0,
+      "missing_dependencies": 0,
+      "diff_check_passed": true
+    }
+  }
+}
