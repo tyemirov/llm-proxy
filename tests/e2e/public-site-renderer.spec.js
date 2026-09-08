@@ -27,15 +27,13 @@ test("brand icons public renderer rejects an unmapped runtime family", async () 
   });
 });
 
-test("public site renders Google credential profile offerings", async ({ page }) => {
+test("public site rejects obsolete Google credential profile offerings", async () => {
   const capabilities = normalizedCapabilityFixture();
   capabilities.providers[0].credential_kinds = ["google_credential_profile"];
   await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
     const fixture = await siteFixture();
     try {
-      await renderFixture(fixture, capabilitiesURL);
-      await page.setContent(await readFile(path.join(fixture.output, "index.html"), "utf8"));
-      await expect(page.locator('[data-route-provider="deepseek"]')).toBeAttached();
+      await expect(renderFixture(fixture, capabilitiesURL)).rejects.toThrow(/public_capabilities_invalid: catalog.providers\[0\].credential_kinds/u);
     } finally {
       await rm(fixture.root, { recursive: true, force: true });
     }
