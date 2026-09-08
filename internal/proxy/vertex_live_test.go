@@ -22,17 +22,16 @@ import (
 	"go.uber.org/zap"
 )
 
-// TestGeminiCurrentModelsVertexLive qualifies the public proxy with a real runtime identity.
+// TestGeminiCurrentModelsVertexLive qualifies the public proxy with a real customer API key.
 // The normal suite skips paid requests unless the operator selects this lane.
 func TestGeminiCurrentModelsVertexLive(t *testing.T) {
 	if os.Getenv("LLM_PROXY_LIVE_VERTEX") != "true" {
 		t.Skip("explicit Vertex acceptance required")
 	}
-	credentialFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
-	project := os.Getenv("GOOGLE_CLOUD_PROJECT")
+	apiKey := os.Getenv("VERTEX_API_KEY")
 	audioFile := os.Getenv("LLM_PROXY_LIVE_VERTEX_AUDIO")
-	if credentialFile == "" || project == "" || audioFile == "" {
-		t.Fatal("GOOGLE_APPLICATION_CREDENTIALS, GOOGLE_CLOUD_PROJECT, and LLM_PROXY_LIVE_VERTEX_AUDIO are required")
+	if apiKey == "" || audioFile == "" {
+		t.Fatal("VERTEX_API_KEY and LLM_PROXY_LIVE_VERTEX_AUDIO are required")
 	}
 	audio, err := os.ReadFile(audioFile)
 	if err != nil {
@@ -62,10 +61,9 @@ func TestGeminiCurrentModelsVertexLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	tenant := proxy.StandardManagedTenantTestConfiguration(TestSecret)
-	tenant.ProviderKeys["vertex"] = "vertex-acceptance"
+	tenant.ProviderKeys["vertex"] = apiKey
 	router, err := proxy.BuildRouterWithManagedTenantForTest(t, proxy.Configuration{
 		ProviderCatalog: catalog, AssetStorePath: t.TempDir(), RequestTimeoutSeconds: 45,
-		GoogleCredentialProfiles: []proxy.GoogleCredentialProfile{{ID: "vertex-acceptance", TenantID: "test", Project: project, Location: "global", CredentialsFile: credentialFile, CredentialType: "service_account"}},
 	}, zap.NewNop().Sugar(), tenant)
 	if err != nil {
 		t.Fatal("build Vertex acceptance proxy failed")

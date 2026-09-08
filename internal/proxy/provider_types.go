@@ -334,8 +334,6 @@ func (definition textModelDefinition) supportsMediaInput(mediaInput messageMedia
 }
 
 type providerDefinition struct {
-	googleCredentials         map[string]googleCredentialProfile
-	tenantIdentifier          string
 	identifier                providerID
 	label                     string
 	apiServiceLabel           string

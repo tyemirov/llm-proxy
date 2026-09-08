@@ -26,19 +26,18 @@ const (
 	CatalogProviderFieldTypeOpaque     = "opaque"
 	CatalogProviderFieldTypeURL        = "url"
 
-	CatalogAuthenticationGoogleCredentials = "google_credentials"
-	CatalogAuthenticationBearer            = "bearer"
-	CatalogAuthenticationHeader            = "header"
-	CatalogEndpointMethodPost              = "POST"
-	CatalogProtocolOpenAIResponses         = "openai_responses"
-	CatalogProtocolDashScopeResponses      = "dashscope_responses"
-	CatalogProtocolXAIResponses            = "xai_responses"
-	CatalogProtocolOpenAIChatCompletions   = "openai_chat_completions"
-	CatalogProtocolAnthropicMessages       = "anthropic_messages"
-	CatalogProtocolVertexGenerateContent   = "vertex_generate_content"
-	CatalogProtocolGeminiInteractions      = "gemini_interactions"
-	CatalogProtocolMultipartTranscription  = "multipart_transcription"
-	CatalogProtocolMetaTranscription       = "meta_transcription"
+	CatalogAuthenticationBearer           = "bearer"
+	CatalogAuthenticationHeader           = "header"
+	CatalogEndpointMethodPost             = "POST"
+	CatalogProtocolOpenAIResponses        = "openai_responses"
+	CatalogProtocolDashScopeResponses     = "dashscope_responses"
+	CatalogProtocolXAIResponses           = "xai_responses"
+	CatalogProtocolOpenAIChatCompletions  = "openai_chat_completions"
+	CatalogProtocolAnthropicMessages      = "anthropic_messages"
+	CatalogProtocolVertexGenerateContent  = "vertex_generate_content"
+	CatalogProtocolGeminiInteractions     = "gemini_interactions"
+	CatalogProtocolMultipartTranscription = "multipart_transcription"
+	CatalogProtocolMetaTranscription      = "meta_transcription"
 
 	providerCatalogResourceVisibilityMaxRetryIntervalMilliseconds = 60000
 	providerCatalogResourceVisibilityMaxRetryLimit                = 100
@@ -764,7 +763,7 @@ func providerCatalogLoopbackHost(host string) bool {
 
 func validateProviderCatalogAuthentication(authentication ProviderCatalogAuthentication, field string) error {
 	switch authentication.Kind {
-	case CatalogAuthenticationBearer, CatalogAuthenticationGoogleCredentials:
+	case CatalogAuthenticationBearer:
 		if authentication.Header != "Authorization" || authentication.Prefix != "Bearer " {
 			return fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
 		}
@@ -898,7 +897,7 @@ func validateProviderCatalogAdapterContract(transport ProviderCatalogTransport, 
 		}
 	case CatalogProtocolVertexGenerateContent:
 		allowedLifecycles = []string{string(textExecutionLifecycleSynchronousCompletion)}
-		expectedAuthentication.Kind = CatalogAuthenticationGoogleCredentials
+		expectedAuthentication = ProviderCatalogAuthentication{Kind: CatalogAuthenticationHeader, Field: transport.Authentication.Field, Header: "x-goog-api-key"}
 		parameters = ProviderCatalogProtocolParameters{
 			ModelField: "path.model", TokenField: "generationConfig.maxOutputTokens", MediaExecutionLifecycle: string(textExecutionLifecycleSynchronousCompletion),
 			OutputFields: []string{"candidates[].content.parts[].text"},
@@ -1014,14 +1013,8 @@ func compileProviderCatalogSchema(schema ProviderCatalogSchema, revision string)
 		modelCatalog.Models = append(modelCatalog.Models, model.ExactModel)
 	}
 	for _, provider := range schema.Providers {
-		credentialKind := CatalogCredentialAPIKey
-		for _, transport := range provider.Transports {
-			if transport.Authentication.Kind == CatalogAuthenticationGoogleCredentials {
-				credentialKind = CatalogCredentialGoogleProfile
-			}
-		}
 		modelCatalog.Providers = append(modelCatalog.Providers, CatalogProvider{
-			ID: provider.ID, Label: provider.Label, CredentialKinds: []string{credentialKind},
+			ID: provider.ID, Label: provider.Label, CredentialKinds: []string{CatalogCredentialAPIKey},
 		})
 		transports := make(map[string]ProviderCatalogTransport, len(provider.Transports))
 		for _, transport := range provider.Transports {

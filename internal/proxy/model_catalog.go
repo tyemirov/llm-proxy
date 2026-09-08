@@ -17,8 +17,6 @@ const (
 	ModelOperationVideoGeneration = "video_generation"
 	// CatalogCredentialAPIKey identifies one opaque provider API key.
 	CatalogCredentialAPIKey = "api_key"
-	// CatalogCredentialGoogleProfile identifies a tenant-bound operator Google credential reference.
-	CatalogCredentialGoogleProfile = "google_credential_profile"
 	// CatalogArtifactText identifies text input or output.
 	CatalogArtifactText = "text"
 	// CatalogArtifactImage identifies image input or output.
