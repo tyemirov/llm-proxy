@@ -235,7 +235,7 @@ function parseCapabilityCatalog(rawCatalog) {
     const provider = requiredRecord(rawProvider, field);
     requireExactKeys(provider, ["identifier", "label", "credential_kinds"], field);
     const credentialKinds = requiredNonemptyStringArray(provider.credential_kinds, `${field}.credential_kinds`);
-    if (credentialKinds.length !== 1 || !["api_key", "google_credential_profile"].includes(credentialKinds[0])) {
+    if (credentialKinds.length !== 1 || credentialKinds[0] !== "api_key") {
       throw new Error(`public_capabilities_invalid: ${field}.credential_kinds`);
     }
     return {
