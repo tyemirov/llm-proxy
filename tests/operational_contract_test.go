@@ -685,6 +685,8 @@ exec "${REAL_AWK_PATH:?}" "$@"
 		"LLM_PROXY_MANAGEMENT_PROXY_ORIGIN",
 	})
 	assertOperationalEnvironmentKeys(testingInstance, filepath.Join(fixtureRoot, "configs", ".env.tauth.local"), []string{
+		"TAUTH_OAUTH_ES256_PRIVATE_KEY_BASE64",
+		"LLM_PROXY_MANAGEMENT_PROXY_ORIGIN",
 		"TAUTH_CONFIG_FILE",
 		"TAUTH_LISTEN_ADDR",
 		"TAUTH_DATABASE_URL",
@@ -710,7 +712,7 @@ exec "${REAL_AWK_PATH:?}" "$@"
 				"./configs/.env.frontend.local",
 				"./configs/.env.api.local",
 				"./configs/.env.tauth.local",
-				"GHTTP_SERVE_PROXIES: \"/openapi.yaml=http://schema:4179,/config-ui.yaml=http://api:8080,/auth=http://tauth:8080,/me=http://tauth:8080\"",
+				"GHTTP_SERVE_PROXIES: \"/openapi.yaml=http://schema:4179,/config-ui.yaml=http://api:8080,/auth=http://tauth:8080,/me=http://tauth:8080,/oauth=http://tauth:8080,/.well-known/oauth-authorization-server=http://tauth:8080\"",
 				"GHTTP_SERVE_RESPONSE_HEADERS: \"/=Cache-Control:no-store\"",
 				"GHTTP_SERVE_DIRECTORY: \"/app/render/site\"",
 				"LLM_PROXY_MANAGEMENT_TAUTH_URL: \"http://localhost:4179\"",
@@ -3158,6 +3160,7 @@ LLM_PROXY_MANAGEMENT_DATABASE_PATH=/data/llm-proxy-management.sqlite
 LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=__GENERATE_ON_FIRST_MAKE_UP__
 LLM_PROXY_MANAGEMENT_API_ORIGIN=http://localhost:8080
 LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=http://localhost:8080
+TAUTH_OAUTH_ES256_PRIVATE_KEY_BASE64=local-fixture-oauth-key
 TAUTH_CONFIG_FILE=/config/tauth.local.yml
 TAUTH_LISTEN_ADDR=:8080
 TAUTH_DATABASE_URL=sqlite:///data/tauth.sqlite
