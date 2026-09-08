@@ -1,5 +1,7 @@
 package proxy
 
+import "github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
+
 const (
 	// LogLevelDebug indicates that the application should log debug information.
 	LogLevelDebug = "debug"
@@ -11,9 +13,9 @@ const (
 	headerContentType            = "Content-Type"
 	headerAccept                 = "Accept"
 	headerAuthorizationPrefix    = "Bearer "
-	headerLLMProxyRequestTokens  = "X-LLM-Proxy-Request-Tokens"
-	headerLLMProxyResponseTokens = "X-LLM-Proxy-Response-Tokens"
-	headerLLMProxyTotalTokens    = "X-LLM-Proxy-Total-Tokens"
+	headerLLMProxyRequestTokens  = llmproxycontract.HeaderRequestTokens
+	headerLLMProxyResponseTokens = llmproxycontract.HeaderResponseTokens
+	headerLLMProxyTotalTokens    = llmproxycontract.HeaderTotalTokens
 
 	// rootPath defines the HTTP path for the root endpoint.
 	rootPath = "/"
