@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="03f33d0e075915bc30cbbeb8b432a2bc7f0a3ef1e83a76e755802938fb0da7e6">
+    <meta name="openapi-source-sha256" content="707f7233b1125e19dd7c3b2d24d892e59ba865557d0f5da525804e2dd0aca593">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="03f33d0e075915bc30cbbeb8b432a2bc7f0a3ef1e83a76e755802938fb0da7e6">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="707f7233b1125e19dd7c3b2d24d892e59ba865557d0f5da525804e2dd0aca593">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>03f33d0e075915bc30cbbeb8b432a2bc7f0a3ef1e83a76e755802938fb0da7e6</code></span>
+          <span>Source SHA-256 <code>707f7233b1125e19dd7c3b2d24d892e59ba865557d0f5da525804e2dd0aca593</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -1962,8 +1962,6 @@ components:
         stop_sequence. Intermediate, safety, refusal, tool, malformed, missing,
         and unknown states do not return text as success.
       headers:
-        X-LLM-Proxy-Resolved-Model:
-          $ref: &#39;#/components/headers/OptionalResolvedModel&#39;
         X-LLM-Proxy-Request-Timeout-Seconds:
           $ref: &#39;#/components/headers/ResolvedRequestTimeout&#39;
         X-LLM-Proxy-Request-Tokens:
@@ -1988,8 +1986,6 @@ components:
     V2Success:
       description: Final text, caller-schema JSON, or caller function calls. Structured output includes durable request state. Function calls use NativeToolResult.
       headers:
-        X-LLM-Proxy-Resolved-Model:
-          $ref: &#39;#/components/headers/OptionalResolvedModel&#39;
         X-LLM-Proxy-Request-Timeout-Seconds:
           $ref: &#39;#/components/headers/ResolvedRequestTimeout&#39;
         X-LLM-Proxy-Request-Tokens:
@@ -2203,14 +2199,6 @@ components:
     ProxyRateLimited:
       description: The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.
       headers:
-        X-LLM-Proxy-Request-Tokens:
-          $ref: &#39;#/components/headers/OptionalTokenCount&#39;
-        X-LLM-Proxy-Response-Tokens:
-          $ref: &#39;#/components/headers/OptionalTokenCount&#39;
-        X-LLM-Proxy-Total-Tokens:
-          $ref: &#39;#/components/headers/OptionalTokenCount&#39;
-        X-LLM-Proxy-Resolved-Model:
-          $ref: &#39;#/components/headers/OptionalResolvedModel&#39;
         X-LLM-Proxy-Request-Timeout-Seconds:
           $ref: &#39;#/components/headers/ResolvedRequestTimeout&#39;
         X-LLM-Proxy-Request-ID:
@@ -2224,16 +2212,8 @@ components:
     CallerClosed:
       description: The caller canceled or closed the request.
     ProxyBadGateway:
-      description: The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. Available token counts and resolved model identity remain in response headers. The error body excludes partial generated text and raw provider errors.
+      description: The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. The error response excludes partial text, token-count headers, and raw provider errors. Managed failure accounting can keep available provider usage.
       headers:
-        X-LLM-Proxy-Request-Tokens:
-          $ref: &#39;#/components/headers/OptionalTokenCount&#39;
-        X-LLM-Proxy-Response-Tokens:
-          $ref: &#39;#/components/headers/OptionalTokenCount&#39;
-        X-LLM-Proxy-Total-Tokens:
-          $ref: &#39;#/components/headers/OptionalTokenCount&#39;
-        X-LLM-Proxy-Resolved-Model:
-          $ref: &#39;#/components/headers/OptionalResolvedModel&#39;
         X-LLM-Proxy-Request-Timeout-Seconds:
           $ref: &#39;#/components/headers/ResolvedRequestTimeout&#39;
         X-LLM-Proxy-Request-ID:
@@ -2267,14 +2247,6 @@ components:
     ProxyTimeout:
       description: The proxy request budget or upstream operation timed out.
       headers:
-        X-LLM-Proxy-Request-Tokens:
-          $ref: &#39;#/components/headers/OptionalTokenCount&#39;
-        X-LLM-Proxy-Response-Tokens:
-          $ref: &#39;#/components/headers/OptionalTokenCount&#39;
-        X-LLM-Proxy-Total-Tokens:
-          $ref: &#39;#/components/headers/OptionalTokenCount&#39;
-        X-LLM-Proxy-Resolved-Model:
-          $ref: &#39;#/components/headers/OptionalResolvedModel&#39;
         X-LLM-Proxy-Request-Timeout-Seconds:
           $ref: &#39;#/components/headers/ResolvedRequestTimeout&#39;
       content:
@@ -2435,11 +2407,6 @@ components:
           schema:
             type: string
   headers:
-    OptionalResolvedModel:
-      description: Exact catalog model selected for dispatch. Absent before dispatch. This value does not identify a provider-reported revision.
-      schema:
-        type: string
-        minLength: 1
     ResolvedRequestTimeout:
       description: The resolved whole-second budget used for the request.
       schema:
@@ -5993,15 +5960,15 @@ components:
             <table>
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Resolved-Model, X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Complete generated text in the selected representation. Each provider offering publishes one validated wire contract and an execution lifecycle for text-only requests. A media-capable offering also publishes media_execution_lifecycle for requests that contain image or audio input. The proxy does not infer a lifecycle from an endpoint or an upstream identifier. The proxy observes queued and in_progress states only for a pollable lifecycle. Each public operation remains blocking. Gemini media requests use synchronous completion and do not poll an Interaction resource. Transports with continuation actions continue exact output-budget stops through new provider calls. These transports are OpenAI Responses incomplete/max_output_tokens, OpenAI-compatible Chat Completions length, and Anthropic max_tokens. Gemini Interactions has no continuation actions. An incomplete result returns a provider error after cleanup. The adapter returns HTTP 200 only after the provider reports its complete signal. These signals are OpenAI or Gemini completed, Chat stop, or Anthropic end_turn or stop_sequence. Intermediate, safety, refusal, tool, malformed, missing, and unknown states do not return text as success.</td></tr>
+                <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Complete generated text in the selected representation. Each provider offering publishes one validated wire contract and an execution lifecycle for text-only requests. A media-capable offering also publishes media_execution_lifecycle for requests that contain image or audio input. The proxy does not infer a lifecycle from an endpoint or an upstream identifier. The proxy observes queued and in_progress states only for a pollable lifecycle. Each public operation remains blocking. Gemini media requests use synchronous completion and do not poll an Interaction resource. Transports with continuation actions continue exact output-budget stops through new provider calls. These transports are OpenAI Responses incomplete/max_output_tokens, OpenAI-compatible Chat Completions length, and Anthropic max_tokens. Gemini Interactions has no continuation actions. An incomplete result returns a provider error after cleanup. The adapter returns HTTP 200 only after the provider reports its complete signal. These signals are OpenAI or Gemini completed, Chat stop, or Anthropic end_turn or stop_sequence. Intermediate, safety, refusal, tool, malformed, missing, and unknown states do not return text as success.</td></tr>
 <tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
 <tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
 <tr><td><code>409</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected catalog route cannot execute because its provider credentials are not configured. No provider dispatch occurs.</td></tr>
-<tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens, X-LLM-Proxy-Resolved-Model, X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.</td></tr>
+<tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
-<tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens, X-LLM-Proxy-Resolved-Model, X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. Available token counts and resolved model identity remain in response headers. The error body excludes partial generated text and raw provider errors.</td></tr>
+<tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. The error response excludes partial text, token-count headers, and raw provider errors. Managed failure accounting can keep available provider usage.</td></tr>
 <tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The bounded request queue is full.</td></tr>
-<tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens, X-LLM-Proxy-Resolved-Model, X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
+<tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
               </tbody>
             </table>
           </div>
@@ -6054,16 +6021,16 @@ components:
             <table>
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Resolved-Model, X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Complete generated text in the selected representation. Each provider offering publishes one validated wire contract and an execution lifecycle for text-only requests. A media-capable offering also publishes media_execution_lifecycle for requests that contain image or audio input. The proxy does not infer a lifecycle from an endpoint or an upstream identifier. The proxy observes queued and in_progress states only for a pollable lifecycle. Each public operation remains blocking. Gemini media requests use synchronous completion and do not poll an Interaction resource. Transports with continuation actions continue exact output-budget stops through new provider calls. These transports are OpenAI Responses incomplete/max_output_tokens, OpenAI-compatible Chat Completions length, and Anthropic max_tokens. Gemini Interactions has no continuation actions. An incomplete result returns a provider error after cleanup. The adapter returns HTTP 200 only after the provider reports its complete signal. These signals are OpenAI or Gemini completed, Chat stop, or Anthropic end_turn or stop_sequence. Intermediate, safety, refusal, tool, malformed, missing, and unknown states do not return text as success.</td></tr>
+                <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Complete generated text in the selected representation. Each provider offering publishes one validated wire contract and an execution lifecycle for text-only requests. A media-capable offering also publishes media_execution_lifecycle for requests that contain image or audio input. The proxy does not infer a lifecycle from an endpoint or an upstream identifier. The proxy observes queued and in_progress states only for a pollable lifecycle. Each public operation remains blocking. Gemini media requests use synchronous completion and do not poll an Interaction resource. Transports with continuation actions continue exact output-budget stops through new provider calls. These transports are OpenAI Responses incomplete/max_output_tokens, OpenAI-compatible Chat Completions length, and Anthropic max_tokens. Gemini Interactions has no continuation actions. An incomplete result returns a provider error after cleanup. The adapter returns HTTP 200 only after the provider reports its complete signal. These signals are OpenAI or Gemini completed, Chat stop, or Anthropic end_turn or stop_sequence. Intermediate, safety, refusal, tool, malformed, missing, and unknown states do not return text as success.</td></tr>
 <tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
 <tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
 <tr><td><code>409</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected catalog route cannot execute because its provider credentials are not configured. No provider dispatch occurs.</td></tr>
 <tr><td><code>413</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The compatibility JSON request limit, dictation audio limit, tenant asset limit, or selected provider media limit was exceeded.</td></tr>
-<tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens, X-LLM-Proxy-Resolved-Model, X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.</td></tr>
+<tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
-<tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens, X-LLM-Proxy-Resolved-Model, X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. Available token counts and resolved model identity remain in response headers. The error body excludes partial generated text and raw provider errors.</td></tr>
+<tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. The error response excludes partial text, token-count headers, and raw provider errors. Managed failure accounting can keep available provider usage.</td></tr>
 <tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The bounded request queue is full.</td></tr>
-<tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens, X-LLM-Proxy-Resolved-Model, X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
+<tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
               </tbody>
             </table>
           </div>
@@ -6908,11 +6875,11 @@ components:
 <tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
 <tr><td><code>409</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected catalog route cannot execute because its provider credentials are not configured. No provider dispatch occurs.</td></tr>
 <tr><td><code>413</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The compatibility JSON request limit, dictation audio limit, tenant asset limit, or selected provider media limit was exceeded.</td></tr>
-<tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens, X-LLM-Proxy-Resolved-Model, X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.</td></tr>
+<tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
-<tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens, X-LLM-Proxy-Resolved-Model, X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. Available token counts and resolved model identity remain in response headers. The error body excludes partial generated text and raw provider errors.</td></tr>
+<tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. The error response excludes partial text, token-count headers, and raw provider errors. Managed failure accounting can keep available provider usage.</td></tr>
 <tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The bounded request queue is full.</td></tr>
-<tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens, X-LLM-Proxy-Resolved-Model, X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
+<tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
               </tbody>
             </table>
           </div>
@@ -7033,7 +7000,7 @@ components:
 <tr><td><code>413</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
 <tr><td><code>500</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
-<tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens, X-LLM-Proxy-Resolved-Model, X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
+<tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
               </tbody>
             </table>
           </div>
@@ -7336,7 +7303,7 @@ components:
             <table>
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Resolved-Model, X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens, X-LLM-Proxy-Structured-Request-State</td><td>Final text, caller-schema JSON, or caller function calls. Structured output includes durable request state. Function calls use NativeToolResult.</td></tr>
+                <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens, X-LLM-Proxy-Structured-Request-State</td><td>Final text, caller-schema JSON, or caller function calls. Structured output includes durable request state. Function calls use NativeToolResult.</td></tr>
 <tr><td><code>202</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Structured-Request-State</td><td>The durable request is active. Reconcile the same key again.</td></tr>
 <tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The canonical message input or referenced asset is invalid.</td></tr>
 <tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
@@ -7344,12 +7311,12 @@ components:
 <tr><td><code>409</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The provider is not configured, or the key identifies a different intent or an uncertain provider outcome.</td></tr>
 <tr><td><code>410</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
 <tr><td><code>413</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The compatibility JSON request limit, dictation audio limit, tenant asset limit, or selected provider media limit was exceeded.</td></tr>
-<tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens, X-LLM-Proxy-Resolved-Model, X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.</td></tr>
+<tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
 <tr><td><code>500</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset store or structured request store failed.</td></tr>
-<tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens, X-LLM-Proxy-Resolved-Model, X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. Available token counts and resolved model identity remain in response headers. The error body excludes partial generated text and raw provider errors.</td></tr>
+<tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. The error response excludes partial text, token-count headers, and raw provider errors. Managed failure accounting can keep available provider usage.</td></tr>
 <tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The bounded request queue is full.</td></tr>
-<tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens, X-LLM-Proxy-Resolved-Model, X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
+<tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
               </tbody>
             </table>
           </div>
