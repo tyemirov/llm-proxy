@@ -1123,6 +1123,11 @@ paths:
             application/yaml:
               schema:
                 type: string
+                description: >-
+                  YAML with llmProxy origins and environment auth configuration.
+                  Auth includes tauthUrl, tenantId, logoutPath, sessionPath, and providers.
+                  The Google provider declares enabled, clientId, loginPath, and noncePath.
+                  Apple and password providers declare enabled false.
   /api/public/capabilities:
     get:
       operationId: getPublicCapabilities

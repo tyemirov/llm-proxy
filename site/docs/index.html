@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="707f7233b1125e19dd7c3b2d24d892e59ba865557d0f5da525804e2dd0aca593">
+    <meta name="openapi-source-sha256" content="9a97f22a15fd4b0e003bf0de9c5fe1aaf8f1fedf79a18b8ca7f55178be7ae2c0">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="707f7233b1125e19dd7c3b2d24d892e59ba865557d0f5da525804e2dd0aca593">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="9a97f22a15fd4b0e003bf0de9c5fe1aaf8f1fedf79a18b8ca7f55178be7ae2c0">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>707f7233b1125e19dd7c3b2d24d892e59ba865557d0f5da525804e2dd0aca593</code></span>
+          <span>Source SHA-256 <code>9a97f22a15fd4b0e003bf0de9c5fe1aaf8f1fedf79a18b8ca7f55178be7ae2c0</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -1186,6 +1186,11 @@ paths:
             application/yaml:
               schema:
                 type: string
+                description: &gt;-
+                  YAML with llmProxy origins and environment auth configuration.
+                  Auth includes tauthUrl, tenantId, logoutPath, sessionPath, and providers.
+                  The Google provider declares enabled, clientId, loginPath, and noncePath.
+                  Apple and password providers declare enabled false.
   /api/public/capabilities:
     get:
       operationId: getPublicCapabilities
@@ -7407,12 +7412,13 @@ components:
       size="small"
       sticky="true"
       wrapper-class="public-site-footer-layout"
+      prefix-class="public-site-footer-prefix"
       privacy-link-label="Privacy"
       privacy-link-href="/privacy/"
       theme-switcher="square"
       theme-config='{"attribute":"data-mpr-theme","targets":["document","body"],"initialMode":"default-dark","modes":[{"value":"default-light","attributeValue":"light","dataset":{"data-llm-proxy-palette":"default"}},{"value":"sunrise-light","attributeValue":"light","dataset":{"data-llm-proxy-palette":"sunrise"}},{"value":"default-dark","attributeValue":"dark","dataset":{"data-llm-proxy-palette":"default"}},{"value":"forest-dark","attributeValue":"dark","dataset":{"data-llm-proxy-palette":"forest"}}]}'
       horizontal-links='{"alignment":"left","links":[{"label":"Terms","href":"/terms/"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
-      links-collection='{"style":"drop-up","text":"Built by Marco Polo Research Lab","links":[{"label":"Marco Polo Research Lab","url":"https://mprlab.com"},{"label":"Gravity Notes","url":"https://gravity.mprlab.com"},{"label":"LoopAware","url":"https://loopaware.mprlab.com"},{"label":"Allergy Wheel","url":"https://allergy.mprlab.com"},{"label":"Social Threader","url":"https://threader.mprlab.com"},{"label":"RSVP","url":"https://rsvp.mprlab.com"},{"label":"Countdown Calendar","url":"https://countdown.mprlab.com"},{"label":"LLM Crossword","url":"https://llm-crossword.mprlab.com"},{"label":"Prompt Bubbles","url":"https://prompts.mprlab.com"},{"label":"Wallpapers","url":"https://wallpapers.mprlab.com"}]}'
+      menu='{"label":"Built by Marco Polo Research Lab","placement":"top","sections":[{"id":"mpr-projects","label":"Projects","mode":"static","links":[{"label":"Marco Polo Research Lab","href":"https://mprlab.com"},{"label":"Gravity Notes","href":"https://gravity.mprlab.com"},{"label":"LoopAware","href":"https://loopaware.mprlab.com"},{"label":"Allergy Wheel","href":"https://allergy.mprlab.com"},{"label":"Social Threader","href":"https://threader.mprlab.com"},{"label":"RSVP","href":"https://rsvp.mprlab.com"},{"label":"Countdown Calendar","href":"https://countdown.mprlab.com"},{"label":"LLM Crossword","href":"https://llm-crossword.mprlab.com"},{"label":"Prompt Bubbles","href":"https://prompts.mprlab.com"},{"label":"Wallpapers","href":"https://wallpapers.mprlab.com"}]}]}'
     >
       <footer class="public-site-footer-fallback" role="contentinfo">
         <nav class="public-site-footer-fallback__nav" aria-label="Footer">

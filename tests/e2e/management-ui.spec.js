@@ -620,7 +620,7 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain('<mpr-header\n      class="public-site-header"');
   expect(html).toContain('<mpr-footer\n      class="public-site-footer"\n      size="small"\n      sticky="true"');
   expect(html).toContain(`privacy-link-href="${privacyPath}"`);
-  expect(html).toContain('links-collection=');
+  expect(html).toContain('menu=');
   expect(html).toContain("Built by Marco Polo Research Lab");
   expect(html).toContain('<meta name="theme-color" content="#0f1114">');
   const publicShellCSS = await readFile(
@@ -6874,7 +6874,7 @@ class MprHeader extends HTMLElement {
 class MprFooter extends HTMLElement {
   connectedCallback() {
     const horizontalLinks = JSON.parse(this.getAttribute("horizontal-links") || '{"links":[]}');
-    const linksCollection = JSON.parse(this.getAttribute("links-collection") || '{"links":[]}');
+    const projectMenu = JSON.parse(this.getAttribute("menu"));
     const footer = document.createElement("footer");
     footer.setAttribute("role", "contentinfo");
     const navigation = document.createElement("nav");
@@ -6895,16 +6895,16 @@ class MprFooter extends HTMLElement {
     const menuWrapper = document.createElement("div");
     const menuToggle = document.createElement("button");
     menuToggle.type = "button";
-    menuToggle.textContent = linksCollection.text || "Built by Marco Polo Research Lab";
+    menuToggle.textContent = projectMenu.label;
     menuToggle.setAttribute("aria-haspopup", "true");
     menuToggle.setAttribute("aria-expanded", "false");
     const menu = document.createElement("ul");
     menu.hidden = true;
-    linksCollection.links.forEach((item) => {
+    projectMenu.sections.flatMap(section => section.links).forEach((item) => {
       const menuItem = document.createElement("li");
       const anchor = document.createElement("a");
       anchor.textContent = item.label;
-      anchor.setAttribute("href", item.url || item.href);
+      anchor.setAttribute("href", item.href);
       menuItem.append(anchor);
       menu.append(menuItem);
     });
@@ -7032,7 +7032,8 @@ function mprUIConfigMock() {
   }
 
   window.MPRUI = {
-    whenAutoOrchestrationReady: () => orchestrationPromise || Promise.resolve()
+    whenAutoOrchestrationReady: () => orchestrationPromise || Promise.resolve(),
+    authenticatedFetch: (_host, input, init) => fetch(input, init)
   };
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", autoOrchestrate, { once: true });

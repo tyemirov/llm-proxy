@@ -27,6 +27,22 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B206] (P1) Clear the application transition after session recovery.
+  Goal:
+  Keep the authenticated application usable after shared session recovery.
+  Requirements:
+  - Dispatch the configured completion event when an authenticated application receives another authenticated event.
+  - Preserve the existing application state and tenant selection.
+  Validation:
+  - The I260 browser regression completed read and mutation recovery, then the shared transition blocked the user menu.
+  - The failure log is `/tmp/llm-proxy-i260-browser-green.log`.
+  - Verify visible user-menu access and logout after recovery at both viewport widths and auth origins.
+  Resolution:
+  The authenticated application now dispatches its configured completion event after shared session recovery.
+  All four recovery scenarios passed with visible user-menu access and logout.
+  Final native CI passed all 12 gates, including 100 percent Go coverage.
+
+
 - [x] [B205] (P2) Sequence the key persistence test across router reloads.
   Observed: GitHub run `34264915879` failed at commit `b2731cb`.
   `TestManagementProviderKeyRevealPersistsUpdatedKey` expected two usage records but observed one before its one-second deadline.
@@ -62,6 +78,39 @@ retain satisfied historical dependencies.
   The initial Governor check reported format template drift. I254 records its correction.
 
 ## Improvements
+
+- [!] [I260] (P1) Prepare the current shared UI migration.
+  Goal:
+  Use the current shared authentication config, footer menu, and protected request transport throughout the browser frontend.
+  Requirements:
+  - Convert the API producer and static config to `auth.providers` with explicit session paths.
+  - Preserve environment-owned Google identifiers and supported origins.
+  - Keep every shared asset URL on literal `@latest`.
+  - Convert the shared footer generator and its generated pages together.
+  - Use shared session recovery for protected management requests.
+  - Preserve authorization before domain mutations.
+  - Qualify the same final shared candidate as the other mpr-ui I009 consumers.
+  Deliverables:
+  - Update producers, consumers, tests, generated pages, and current API documentation together.
+  - Record candidate digests, CI results, public observations, and publication dependencies.
+  Validation:
+  - Verify actual YAML through HTTP and the static config entry point.
+  - Verify login, restoration, read recovery, mutation recovery, logout, and footer use through the real application.
+  - Use controlled external provider responses for local qualification.
+  - Preserve repository coverage requirements.
+  - Keep user-owned publication and real Google acceptance as separate gates.
+
+  Progress:
+  - Both real HTTP cases failed against the flat producers before the source changes.
+  - The API and static config now pass the nested provider-map regression.
+  - The logs are `/tmp/llm-proxy-i260-config-red.log` and `/tmp/llm-proxy-i260-config-green.log`.
+  - Both producers, protected transport, and all 52 generated footers now use the current shared contract.
+  - The browser checks use verified candidate `768f25936497c5aabd426197d21c2100b6e5d9a1`.
+  - Final native CI passed all 12 gates with 100 percent Go coverage, 114 browser tests, and six TAuth/MCP scenarios.
+  - The final log is `/tmp/llm-proxy-i260-ci-final3.log`.
+  - The migration record contains asset digests, public observations, and activation instructions.
+  Blocked: Complete central mpr-ui I009 final-candidate qualification, coordinated publication, cache convergence, and real Google acceptance.
+
 
 - [ ] [I256] (P1) Add shared public scenarios for protocol acceptance.
   Goal:

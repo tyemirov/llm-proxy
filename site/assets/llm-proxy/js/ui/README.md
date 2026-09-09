@@ -32,3 +32,8 @@ All modules share one Alpine component instance. Cross-module calls therefore
 remain explicit component contracts, while server effects continue to pass
 through `core/backendClient.js` and complete profile writes continue to pass
 through `profileMutations.js`.
+
+After shared session recovery, `authenticationLifecycle.js` dispatches
+`llm-proxy:management-ready` when the application is already authenticated.
+This completion event clears the shared transition. It preserves application
+state and tenant selection.

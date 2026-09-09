@@ -291,7 +291,19 @@ async function requestJSON(path, options) {
   if (options.body !== undefined) {
     requestInit.body = JSON.stringify(options.body);
   }
-  const response = await fetch(`${runtimeConfig.managementApiOrigin}${path}`, requestInit);
+  const authHost = document.getElementById(MPR_UI.HEADER_ID);
+  if (!authHost) throw new Error(MPR_UI.HEADER_MISSING);
+  const runtimeGlobal = /** @type {typeof globalThis & { MPRUI: {
+   * authenticatedFetch: (host: HTMLElement, url: string, init: RequestInit, options: {
+   *   mutationReplay: "authorization-before-domain-work"
+   * }) => Promise<Response>
+   * } }} */ (globalThis);
+  const response = await runtimeGlobal.MPRUI.authenticatedFetch(
+    authHost,
+    `${runtimeConfig.managementApiOrigin}${path}`,
+    requestInit,
+    { mutationReplay: "authorization-before-domain-work" },
+  );
   if (!response.ok) {
     throw new BackendClientError(await response.text(), response.status);
   }

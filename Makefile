@@ -76,8 +76,8 @@ test-frontend-dependency-contract:
 test-openapi-pages-artifact:
 	@./scripts/test-openapi-pages-artifact.sh
 
-test-management-auth-blackbox: frontend-dependencies
-	$(NPM) run frontend:test:blackbox
+test-management-auth-blackbox: frontend-dependencies prepare-shared-ui
+	$(NPM) run frontend:test:blackbox $(if $(BLACKBOX_TEST_ARGS),-- $(BLACKBOX_TEST_ARGS))
 
 .PHONY: test-management-persistence
 test-management-persistence: frontend-dependencies
@@ -302,3 +302,21 @@ test-completion-measurements:
 .PHONY: test-live-provider-process-cleanup
 test-live-provider-process-cleanup:
 	$(GO) test ./tests -run '^TestOperationalLiveHarnessReapsOwnedProxyChildAfterTermination$$' -count=1
+
+.PHONY: test-shared-ui-config
+test-shared-ui-config:
+	$(GO) test ./internal/proxy -run '^TestManagementCurrentSharedUIConfigHTTP$$' -count=1
+
+.PHONY: prepare-shared-ui test-shared-ui
+prepare-shared-ui: frontend-dependencies
+	node --input-type=module -e 'import { prepareSharedUI } from "./tests/blackbox/sharedUIAssets.mjs"; await prepareSharedUI();'
+
+test-shared-ui: prepare-shared-ui
+	$(NPM) run frontend:test:blackbox -- tests/blackbox/shared-ui-migration.spec.js $(SHARED_UI_TEST_ARGS)
+
+.PHONY: generate-public-pages
+generate-public-pages:
+	node scripts/generate_public_site_shell.mjs
+	node scripts/generate_legal_pages.mjs
+	node scripts/generate_openapi_docs.mjs
+	node scripts/generate_seo_resources.mjs

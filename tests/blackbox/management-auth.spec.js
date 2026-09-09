@@ -3,6 +3,7 @@
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { assets, directory } from "./sharedUIAssets.mjs";
 import { fileURLToPath } from "node:url";
 import {
   localManagementProfile,
@@ -126,7 +127,7 @@ test("public Log In opens the authenticated app and the TAuth session survives u
   }
   expect(new Set(pageBackgroundColors).size).toBe(4);
   expect(browserAccountRequestCount).toBe(0);
-  const signInButton = page.locator('[data-mpr-header="google-signin-button"]');
+  const signInButton = page.getByRole("button", { name: "Sign in with Google", exact: true });
   await expect(signInButton).toBeVisible();
   await signInButton.hover();
   const signInHoverColors = await signInButton.evaluate((buttonElement) => {
@@ -625,36 +626,14 @@ async function installLocalAssetRoutes(page) {
   await page.route("https://loopaware.mprlab.com/**", async (route) =>
     route.fulfill({ body: "", contentType: "application/javascript" }),
   );
-  await page.route("https://accounts.google.com/gsi/client", async (route) =>
-    route.fulfill({
-      body: `(() => {
-        if (window.google?.accounts?.id?.__llmProxyFixture) {
-          return;
-        }
-        let initializeConfig = null;
-        window.google = {
-          accounts: {
-            id: {
-              __llmProxyFixture: true,
-              initialize(config) {
-                initializeConfig = config;
-              },
-              renderButton() {},
-              prompt() {
-                if (!initializeConfig || typeof initializeConfig.callback !== "function") {
-                  throw new Error("google_identity_fixture_not_initialized");
-                }
-                queueMicrotask(() => initializeConfig.callback({
-                  credential: "local-blackbox-google-credential",
-                }));
-              },
-            },
-          },
-        };
-      })();`,
-      contentType: "application/javascript",
-    }),
-  );
+  for (const name of Object.keys(assets)) {
+    const body = await readFile(path.join(directory, name));
+    await page.route(`https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/${name}*`, route =>
+      route.fulfill({ body, contentType: name.endsWith(".css") ? "text/css" : "application/javascript" }));
+  }
+  const googleScript = await readFile(new URL("./googleIdentityFixture.js", import.meta.url));
+  await page.route("https://accounts.google.com/gsi/client", route =>
+    route.fulfill({ body: googleScript, contentType: "application/javascript" }));
   await page.route("**/alpinejs@3.17.1/dist/module.esm.js", async (route) =>
     fulfillLocalFile(route, "node_modules/alpinejs/dist/module.esm.js", "application/javascript"),
   );
