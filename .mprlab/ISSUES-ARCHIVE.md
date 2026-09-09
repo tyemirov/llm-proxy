@@ -8374,22 +8374,25 @@ issue titles discoverable without making the active tracker noisy.
 
 ## Features
 
-- [x] [F062] (P1) Return completion measurements through the official Go client
-  Goal: TellTale I022 can record the resolved model and available token counts for each provider call.
+- [x] [F062] (P1) Select OpenAI Responses through the official Go client
+  Goal: TellTale I022 can use available model and token data without a new proxy response contract.
   Requirements:
-  - Return response text, resolved model identity, and optional token usage through a typed client result.
-  - Keep available metadata when a provider call fails.
-  - Keep unavailable usage distinct from measured zero tokens.
-  - Define resolved identity as the exact catalog model selected for dispatch.
+  - Add explicit native and OpenAI Responses protocol selection to the official Go client.
+  - Read completed text, model identity, and optional usage from standard OpenAI Responses fields.
+  - Keep valid text available when measurement metadata is absent or invalid.
+  - Report invalid metadata through `MetadataError()`.
+  - Keep unknown usage distinct from measured zero tokens.
+  - Keep the current proxy response and failure accounting contracts.
   Deliverables:
-  - The official Go client method and canonical HTTP metadata contract.
-  - Real HTTP tests for tenant defaults, explicit models, usage, and failures.
+  - The typed Go client result and current client documentation.
+  - Real HTTP tests for measured, absent, invalid, and failed responses.
   Validation:
-  - Run `make test-client-contracts` and final `make ci`.
-  Resolution: Added typed completion results, resolved catalog model headers, and optional usage on successful and failed calls.
+  - Run focused client and proxy tests.
+  - Run final `make ci`.
+  Revision: The user selected OpenAI Responses and explicit client protocol selection on 2026-09-08.
+  Resolution: Added explicit protocol selection and standard OpenAI Responses requests with optional model and usage data.
   Validation result: Final CI passed all 12 gates with 100% Go statement coverage on 2026-09-08.
-  Documentation: Updated the OpenAPI contract, generated API page, and Go client guide.
-  Publication: A release with F062 remains required for TellTale I022.
+  Publication: The official client release remains required for TellTale I022.
 
 - [x] [F001] Add authenticated self-service API key and tenant secret management UI.
 - [x] [F002] Add one-time migration from legacy config tenants and provider API keys into the DB.
