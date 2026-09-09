@@ -1899,8 +1899,6 @@ components:
         stop_sequence. Intermediate, safety, refusal, tool, malformed, missing,
         and unknown states do not return text as success.
       headers:
-        X-LLM-Proxy-Resolved-Model:
-          $ref: '#/components/headers/OptionalResolvedModel'
         X-LLM-Proxy-Request-Timeout-Seconds:
           $ref: '#/components/headers/ResolvedRequestTimeout'
         X-LLM-Proxy-Request-Tokens:
@@ -1925,8 +1923,6 @@ components:
     V2Success:
       description: Final text, caller-schema JSON, or caller function calls. Structured output includes durable request state. Function calls use NativeToolResult.
       headers:
-        X-LLM-Proxy-Resolved-Model:
-          $ref: '#/components/headers/OptionalResolvedModel'
         X-LLM-Proxy-Request-Timeout-Seconds:
           $ref: '#/components/headers/ResolvedRequestTimeout'
         X-LLM-Proxy-Request-Tokens:
@@ -2140,14 +2136,6 @@ components:
     ProxyRateLimited:
       description: The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.
       headers:
-        X-LLM-Proxy-Request-Tokens:
-          $ref: '#/components/headers/OptionalTokenCount'
-        X-LLM-Proxy-Response-Tokens:
-          $ref: '#/components/headers/OptionalTokenCount'
-        X-LLM-Proxy-Total-Tokens:
-          $ref: '#/components/headers/OptionalTokenCount'
-        X-LLM-Proxy-Resolved-Model:
-          $ref: '#/components/headers/OptionalResolvedModel'
         X-LLM-Proxy-Request-Timeout-Seconds:
           $ref: '#/components/headers/ResolvedRequestTimeout'
         X-LLM-Proxy-Request-ID:
@@ -2161,16 +2149,8 @@ components:
     CallerClosed:
       description: The caller canceled or closed the request.
     ProxyBadGateway:
-      description: The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. Available token counts and resolved model identity remain in response headers. The error body excludes partial generated text and raw provider errors.
+      description: The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. The error response excludes partial text, token-count headers, and raw provider errors. Managed failure accounting can keep available provider usage.
       headers:
-        X-LLM-Proxy-Request-Tokens:
-          $ref: '#/components/headers/OptionalTokenCount'
-        X-LLM-Proxy-Response-Tokens:
-          $ref: '#/components/headers/OptionalTokenCount'
-        X-LLM-Proxy-Total-Tokens:
-          $ref: '#/components/headers/OptionalTokenCount'
-        X-LLM-Proxy-Resolved-Model:
-          $ref: '#/components/headers/OptionalResolvedModel'
         X-LLM-Proxy-Request-Timeout-Seconds:
           $ref: '#/components/headers/ResolvedRequestTimeout'
         X-LLM-Proxy-Request-ID:
@@ -2204,14 +2184,6 @@ components:
     ProxyTimeout:
       description: The proxy request budget or upstream operation timed out.
       headers:
-        X-LLM-Proxy-Request-Tokens:
-          $ref: '#/components/headers/OptionalTokenCount'
-        X-LLM-Proxy-Response-Tokens:
-          $ref: '#/components/headers/OptionalTokenCount'
-        X-LLM-Proxy-Total-Tokens:
-          $ref: '#/components/headers/OptionalTokenCount'
-        X-LLM-Proxy-Resolved-Model:
-          $ref: '#/components/headers/OptionalResolvedModel'
         X-LLM-Proxy-Request-Timeout-Seconds:
           $ref: '#/components/headers/ResolvedRequestTimeout'
       content:
@@ -2372,11 +2344,6 @@ components:
           schema:
             type: string
   headers:
-    OptionalResolvedModel:
-      description: Exact catalog model selected for dispatch. Absent before dispatch. This value does not identify a provider-reported revision.
-      schema:
-        type: string
-        minLength: 1
     ResolvedRequestTimeout:
       description: The resolved whole-second budget used for the request.
       schema:
