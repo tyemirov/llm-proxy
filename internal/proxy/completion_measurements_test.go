@@ -34,22 +34,7 @@ func TestClientProtocolsCompletionMeasurements(t *testing.T) {
 	}
 	server := httptest.NewServer(router)
 	defer server.Close()
-	response, err := server.Client().Post(server.URL+"/v2?key="+TestSecret+"&provider=openai", "application/json", strings.NewReader(`{"model":"gpt-5.6","messages":[{"role":"user","content":"private prompt"}]}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(response.Body)
-		t.Fatalf("status=%d body=%s", response.StatusCode, body)
-	}
-	if got := response.Header.Get("X-LLM-Proxy-Resolved-Model"); got != "gpt-5.6" {
-		t.Fatalf("resolved model=%q", got)
-	}
-	if got := response.Header.Get("X-LLM-Proxy-Request-Tokens"); got != "10" {
-		t.Fatalf("input tokens=%q", got)
-	}
-	config, err := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{BaseURL: server.URL, Secret: TestSecret, Provider: "openai"})
+	config, err := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{Protocol: llmproxyclient.ProtocolOpenAIResponses, BaseURL: server.URL, Secret: TestSecret, Provider: "openai"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,8 +51,11 @@ func TestClientProtocolsCompletionMeasurements(t *testing.T) {
 		if (err != nil) != (prompt == "fail request") {
 			t.Fatalf("prompt=%s error=%v", prompt, err)
 		}
-		if result.ResolvedModel() != "gpt-5.6" || result.Usage() == nil || result.Usage().InputTokens() != 10 || result.Usage().OutputTokens() != 3 {
+		if prompt == "success request" && (result.ResolvedModel() != "openai/gpt-5.6" || result.Usage() == nil || result.Usage().InputTokens() != 10 || result.Usage().OutputTokens() != 3) {
 			t.Fatalf("completion=%+v usage=%+v", result, result.Usage())
+		}
+		if prompt == "fail request" && (result.Usage() != nil || result.ResolvedModel() != "") {
+			t.Fatal("failed call invented measurements")
 		}
 	}
 

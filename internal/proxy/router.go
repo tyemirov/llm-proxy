@@ -526,9 +526,7 @@ func requestReasoningEffortForResolvedTextRoute(provider providerDefinition, mod
 
 func submitChatRequest(ginContext *gin.Context, upstreamProviders *providerRouter, chatRequest chatRequestParameters, requestTenant tenant, usageEndpoint string, managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger, encoder completionEncoder) {
 	requestStart := time.Now()
-	ginContext.Header(llmproxycontract.HeaderResolvedModel, chatRequest.model.string())
 	generation, requestError := executeText(ginContext.Request.Context(), upstreamProviders, chatRequest, structuredLogger)
-	writeTokenUsageHeaders(ginContext.Writer.Header(), generation.usage)
 	if requestError != nil {
 		if requestContextEnded(ginContext) {
 			recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, ginContext.Writer.Status(), generation.usage, requestStart)
