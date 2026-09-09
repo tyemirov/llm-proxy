@@ -1,0 +1,98 @@
+{
+  "observed_at": "2026-09-09T06:57:50.678273+00:00",
+  "network_locations": 1,
+  "observations": [
+    {
+      "url": "https://llm-proxy.mprlab.com/",
+      "status": 200,
+      "final_url": "https://llm-proxy.mprlab.com/",
+      "bytes": 272117,
+      "sha256": "20404427062056e0d7840268d75847875269517e2783b50423196825cdf45c9b",
+      "headers": {
+        "Content-Type": "text/html; charset=utf-8",
+        "Last-Modified": "Wed, 09 Sep 2026 06:46:43 GMT",
+        "ETag": "\"6aa100d3-426f5\"",
+        "Cache-Control": "max-age=600",
+        "Vary": "Accept-Encoding"
+      }
+    },
+    {
+      "url": "https://llm-proxy.mprlab.com/app/",
+      "status": 200,
+      "final_url": "https://llm-proxy.mprlab.com/app/",
+      "bytes": 73734,
+      "sha256": "08a61e7c3fa81d3d92db183e0a6f3ca764d9e87832a75075f46f7dc6d90f29f0",
+      "headers": {
+        "Content-Type": "text/html; charset=utf-8",
+        "Last-Modified": "Wed, 09 Sep 2026 06:46:43 GMT",
+        "ETag": "\"6aa100d3-12006\"",
+        "Cache-Control": "max-age=600",
+        "Vary": "Accept-Encoding"
+      }
+    },
+    {
+      "url": "https://llm-proxy.mprlab.com/.mprlab-release.json",
+      "status": 200,
+      "final_url": "https://llm-proxy.mprlab.com/.mprlab-release.json",
+      "bytes": 99,
+      "sha256": "6119f2e6b8cb7e22e3a9868b996f9017054fbc0d27d18cc6b2efd188f20df2a1",
+      "headers": {
+        "Content-Type": "application/json; charset=utf-8",
+        "Last-Modified": "Wed, 09 Sep 2026 06:46:43 GMT",
+        "ETag": "\"6aa100d3-63\"",
+        "Cache-Control": "max-age=600",
+        "Vary": "Accept-Encoding"
+      }
+    },
+    {
+      "url": "https://llm-proxy-api.mprlab.com/config-ui.yaml",
+      "status": 200,
+      "final_url": "https://llm-proxy-api.mprlab.com/config-ui.yaml",
+      "bytes": 590,
+      "sha256": "6a2df80159ce68699bac3898466072f1136c8f097c18335b4d9ca841ada53108",
+      "headers": {
+        "Cache-Control": "no-store",
+        "Content-Type": "application/yaml; charset=utf-8"
+      }
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js",
+      "status": 200,
+      "final_url": "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js",
+      "bytes": 18670,
+      "sha256": "8366e4f63d6c8835380f59427874b0301ec7683542f17b2e75cd38ebcdbc3f6f",
+      "headers": {
+        "Cache-Control": "public, max-age=604800, s-maxage=43200",
+        "Content-Type": "application/javascript; charset=utf-8",
+        "ETag": "W/\"48ee-Rw5ObtlZpgADM9JaVnm9rdqW9J8\"",
+        "Vary": "Accept-Encoding"
+      }
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js",
+      "status": 200,
+      "final_url": "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js",
+      "bytes": 606745,
+      "sha256": "a74e0e5dce0071dfc4164fdc75cee26ceaaaa448dd55ee06c961e715cbe9b206",
+      "headers": {
+        "Cache-Control": "public, max-age=604800, s-maxage=43200",
+        "Content-Type": "application/javascript; charset=utf-8",
+        "ETag": "W/\"94219-F5WvXJt5qqtbDaY9jwSmMXfn/GU\"",
+        "Vary": "Accept-Encoding"
+      }
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css",
+      "status": 200,
+      "final_url": "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css",
+      "bytes": 29498,
+      "sha256": "662b37032b21cac44549ad5376e7bce35bed65915bf4a4c9e86c596e266542c7",
+      "headers": {
+        "Cache-Control": "public, max-age=604800, s-maxage=43200",
+        "Content-Type": "text/css; charset=utf-8",
+        "ETag": "W/\"733a-iMaarW0Htu4UnGvIQUc9DLeSLIg\"",
+        "Vary": "Accept-Encoding"
+      }
+    }
+  ]
+}

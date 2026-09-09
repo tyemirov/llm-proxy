@@ -244,7 +244,7 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 		`description: "LLM Proxy"`,
 		`- "http://localhost:8080"`,
 		`tauthUrl: "http://localhost:8443"`,
-		`googleClientId: "google-client-id"`,
+		`clientId: "google-client-id"`,
 		`tenantId: "llm-proxy-test"`,
 		`loginPath: "/auth/google"`,
 		`sessionPath: "/auth/session"`,

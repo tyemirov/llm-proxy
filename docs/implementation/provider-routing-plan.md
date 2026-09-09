@@ -744,11 +744,35 @@ exact RFC3339 bucket start and metric value. This client-side presentation of
 existing aggregates is not billing, provider performance, provider-key state,
 token share, exact event time, or a new management API contract.
 
-The static app owns the canonical MPR UI contract: API-served `config-ui.yaml`, literal `mpr-ui@latest` assets, `mpr-ui-config.js`, `<mpr-header data-config-url="...">`, the `@latest` bundle marker, `<mpr-user>`, and `<mpr-footer>`. The config declares the current `/auth/session` path and keeps login-button presentation in static MPR UI markup; obsolete `authButton` payloads are not emitted. The Pages artifact contains no static `config-ui.yaml` or `llm-proxy-config.json`; the declared Pages container writes the canonical `https://llm-proxy-api.mprlab.com/config-ui.yaml` URL into the declarative header attribute, and `mpr-ui-config.js` applies that single backend-served YAML before loading the bundle.
+The static app uses API-served `config-ui.yaml`, literal `mpr-ui@latest` assets,
+`mpr-ui-config.js`, `<mpr-header>`, `<mpr-user>`, and `<mpr-footer>`.
+The config declares `auth.providers.google` with `enabled`, `clientId`,
+`loginPath`, and `noncePath`. Apple and password providers are disabled.
+The common auth fields declare `tauthUrl`, `tenantId`, `sessionPath`, and
+`logoutPath`. The session path is `/auth/session`.
+
+The Pages artifact excludes the tracked static config. The Pages build sets
+the header `data-config-url` to
+`https://llm-proxy-api.mprlab.com/config-ui.yaml`.
+The loader applies that API config before it loads the shared bundle.
+The tracked `site/config-ui.yaml` uses the same provider map for static source
+consumers. The footer generator uses the sectioned `menu` attribute.
 
 The shared bundle registers `mpr-legal-document`; P005 remains the sole owner of legal-page routes and document rendering.
 
-MPR UI is the sole browser authentication authority. Application JavaScript listens to documented `mpr-ui:auth:authenticated` and `mpr-ui:auth:unauthenticated` events, uses the documented header `data-mpr-auth-status` only to reconcile lifecycle state that settled before application startup, and never reads TAuth cookies, storage, tokens, claims, or private MPR UI DOM state. The app makes no protected management request until MPR UI reports `authenticated`; after that boundary, a management API failure is an app error and never an application-owned authentication downgrade. The YAML points browser management API calls, generated proxy examples, and MPR UI/TAuth at the configured origins.
+MPR UI owns browser authentication. Application JavaScript consumes
+`mpr-ui:auth:authenticated` and `mpr-ui:auth:unauthenticated` events.
+The header `data-mpr-auth-status` gives the state when authentication completes
+before application startup. The application requests protected data only after
+MPR UI reports `authenticated`.
+
+The backend client uses `MPRUI.authenticatedFetch` with the header as its auth
+host. MPR UI owns session recovery and request replay.
+The backend authorizes requests before domain work. This order permits
+`mutationReplay: "authorization-before-domain-work"`.
+After recovery, an authenticated application dispatches its configured
+`llm-proxy:management-ready` event to clear the shared transition.
+The YAML supplies the management API, proxy, and TAuth origins.
 
 DNS must leave `llm-proxy.mprlab.com` pointed at GitHub Pages and point `llm-proxy-api.mprlab.com` at the MPR gateway; the gateway route for `llm-proxy.mprlab.com` must be removed or moved so the backend only owns the API hostname. Management APIs under `/api/management` validate the configured TAuth session cookie locally with issuer `tauth` unless `management.jwt_issuer` overrides it.
 

@@ -58,21 +58,26 @@ const PUBLIC_THEME_CONFIG = Object.freeze({
     }),
   ]),
 });
-const MPR_PROJECT_LINKS = Object.freeze({
-  style: "drop-up",
-  text: "Built by Marco Polo Research Lab",
-  links: Object.freeze([
-    Object.freeze({ label: "Marco Polo Research Lab", url: "https://mprlab.com" }),
-    Object.freeze({ label: "Gravity Notes", url: "https://gravity.mprlab.com" }),
-    Object.freeze({ label: "LoopAware", url: "https://loopaware.mprlab.com" }),
-    Object.freeze({ label: "Allergy Wheel", url: "https://allergy.mprlab.com" }),
-    Object.freeze({ label: "Social Threader", url: "https://threader.mprlab.com" }),
-    Object.freeze({ label: "RSVP", url: "https://rsvp.mprlab.com" }),
-    Object.freeze({ label: "Countdown Calendar", url: "https://countdown.mprlab.com" }),
-    Object.freeze({ label: "LLM Crossword", url: "https://llm-crossword.mprlab.com" }),
-    Object.freeze({ label: "Prompt Bubbles", url: "https://prompts.mprlab.com" }),
-    Object.freeze({ label: "Wallpapers", url: "https://wallpapers.mprlab.com" }),
-  ]),
+const MPR_PROJECT_MENU = Object.freeze({
+  label: "Built by Marco Polo Research Lab",
+  placement: "top",
+  sections: Object.freeze([Object.freeze({
+    id: "mpr-projects",
+    label: "Projects",
+    mode: "static",
+    links: Object.freeze([
+    Object.freeze({ label: "Marco Polo Research Lab", href: "https://mprlab.com" }),
+    Object.freeze({ label: "Gravity Notes", href: "https://gravity.mprlab.com" }),
+    Object.freeze({ label: "LoopAware", href: "https://loopaware.mprlab.com" }),
+    Object.freeze({ label: "Allergy Wheel", href: "https://allergy.mprlab.com" }),
+    Object.freeze({ label: "Social Threader", href: "https://threader.mprlab.com" }),
+    Object.freeze({ label: "RSVP", href: "https://rsvp.mprlab.com" }),
+    Object.freeze({ label: "Countdown Calendar", href: "https://countdown.mprlab.com" }),
+    Object.freeze({ label: "LLM Crossword", href: "https://llm-crossword.mprlab.com" }),
+    Object.freeze({ label: "Prompt Bubbles", href: "https://prompts.mprlab.com" }),
+    Object.freeze({ label: "Wallpapers", href: "https://wallpapers.mprlab.com" }),
+    ]),
+  })]),
 });
 
 /**
@@ -126,12 +131,13 @@ export function renderPublicFooter() {
       size="small"
       sticky="true"
       wrapper-class="public-site-footer-layout"
+      prefix-class="public-site-footer-prefix"
       privacy-link-label="Privacy"
       privacy-link-href="/privacy/"
       theme-switcher="square"
       theme-config='${JSON.stringify(PUBLIC_THEME_CONFIG)}'
       horizontal-links='${JSON.stringify(PUBLIC_FOOTER_LINKS)}'
-      links-collection='${JSON.stringify(MPR_PROJECT_LINKS)}'
+      menu='${JSON.stringify(MPR_PROJECT_MENU)}'
     >
 ${renderPublicFooterFallback()}
     </mpr-footer>`;
@@ -152,10 +158,10 @@ ${utilityLinks
     .join("\n")}
         </nav>
         <details class="public-site-footer-fallback__projects">
-          <summary>${MPR_PROJECT_LINKS.text}</summary>
+          <summary>${MPR_PROJECT_MENU.label}</summary>
           <ul>
-${MPR_PROJECT_LINKS.links
-    .map((link) => `            <li><a href="${link.url}">${link.label}</a></li>`)
+${MPR_PROJECT_MENU.sections.flatMap((section) => section.links)
+    .map((link) => `            <li><a href="${link.href}">${link.label}</a></li>`)
     .join("\n")}
           </ul>
         </details>

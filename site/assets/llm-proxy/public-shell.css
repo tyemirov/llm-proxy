@@ -205,6 +205,14 @@
   width: 100%;
 }
 
+.public-site-footer-prefix {
+  display: none;
+}
+
+.public-site-footer mpr-dropdown {
+  white-space: nowrap;
+}
+
 .public-site-footer-fallback {
   display: flex;
   width: 100%;
@@ -276,11 +284,11 @@
 
   body mpr-footer.public-site-footer .public-site-footer-layout {
     display: flex;
-    width: calc(100% + 1.4rem);
-    margin-inline: -0.7rem;
+    width: 100%;
     flex-wrap: nowrap;
     justify-content: center;
     gap: 0.25rem;
     white-space: nowrap;
   }
+
 }

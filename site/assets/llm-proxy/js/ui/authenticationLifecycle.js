@@ -118,6 +118,7 @@ export function createAuthenticationLifecycleResponsibility() {
 
     async loadAuthenticatedApp() {
       if (this.authState === AUTH_STATES.AUTHENTICATED || this.authState === AUTH_STATES.ERROR) {
+        await dispatchManagementReady();
         return;
       }
       this.authState = AUTH_STATES.LOADING;
