@@ -1,14 +1,33 @@
 # MCP access
 
 The account MCP URL is `https://llm-proxy-api.mprlab.com/mcp`.
-The server uses MCP version `2026-07-28` and stateless Streamable HTTP with JSON responses.
+The server supports `2026-07-28`, `2025-11-25`, `2025-06-18`, and `2025-03-26`.
+All four revisions use the same stateless Streamable HTTP endpoint with JSON responses.
+See the [agent protocol map](mcp-clients.md) for measured client versions and vendor documentation.
 Each request selects its tenant. The connection has no active tenant or MCP session.
+
+## Supported MCP revisions
+
+This table describes the current repository implementation.
+Client research and local tests do not establish production acceptance.
+
+| Revision | Connection method | Client use and local checks |
+| --- | --- | --- |
+| `2026-07-28` | `server/discover` with protocol metadata on each request | Antigravity reports and Claude Code documentation show client use. Local Go SDK and MCP Inspector checks passed. |
+| `2025-11-25` | `initialize` and `notifications/initialized` | Local Claude Code and OpenCode requests selected this revision. Authenticated HTTP tests passed. |
+| `2025-06-18` | `initialize` and `notifications/initialized` | Codex 0.153.4 selected this revision. Gemini CLI 0.59.0 connection code selects it. Local Codex tool calls passed. |
+| `2025-03-26` | `initialize` and `notifications/initialized` | Authenticated HTTP tests passed. Current Windsurf use requires a new capture. This is also the SDK default for an absent version header. |
+
+All listed revisions use `/mcp`, OAuth authorization, JSON responses, and explicit tenant selection.
+The source list is `mcpProtocolVersions` in `internal/proxy/mcp.go`.
+The [client map](mcp-clients.md) records builds, sources, and limits for each client result.
+The source currently includes March 2025 support. The research does not establish a current client requirement for that revision.
 
 ## Connect a client
 
 1. Sign in to the application.
 2. Open **Settings** and select **Copy MCP URL**.
-3. Add that URL as an HTTP server in a client that supports MCP version `2026-07-28` and OAuth.
+3. Add that URL as a Streamable HTTP server in a client that supports one listed revision and OAuth.
 4. Complete the TAuth login and consent steps in the browser.
 5. Call `llm_proxy.list_tenants` with `{}`.
 6. Select a returned tenant ID for generation or route discovery.
@@ -36,9 +55,28 @@ The document must declare the client's redirect URI and permitted grant.
 The client stores and refreshes its OAuth tokens.
 Do not put a tenant secret or provider credential in the MCP configuration.
 
-OpenCode 1.18.28 cannot connect to this MCP endpoint.
-The pinned client attempts SSE and receives `405`.
+Codex 0.153.4 passed local tenant discovery, route reads, and generation with a TAuth-issued token.
+OpenCode 1.18.28 passed local connection and tool discovery checks.
 MCP Inspector 2.5.0 and the official Go SDK v1.7.0 passed local connection checks.
+
+## Protocol negotiation
+
+The official Go SDK handles both protocol families.
+The `2026-07-28` revision uses `server/discover` and protocol metadata on each request.
+The three `2025` revisions use `initialize`, followed by `notifications/initialized`.
+The server returns the requested supported handshake revision.
+For another offered handshake revision, it returns `2025-11-25` for client agreement.
+
+The initial handshake can omit `MCP-Protocol-Version`.
+Subsequent clients send the negotiated version in that header.
+When the header is absent, the SDK applies the protocol-defined `2025-03-26` default.
+An explicit unsupported header receives HTTP `400`.
+The endpoint rejects repeated version headers, query parameters, and session IDs.
+Authentication and tenant ownership checks apply to all revisions.
+Every response retains `Cache-Control: no-store`.
+
+The endpoint provides no standalone SSE stream. A GET receives HTTP `405`.
+Earlier protocol dates in this support list use Streamable HTTP, without a separate SSE endpoint.
 
 ## Authorization
 
@@ -145,11 +183,14 @@ Run `make test-mcp-oauth` for the real local TAuth browser flow.
 That command uses ephemeral keys, a local provider fixture, the official Go client, and MCP Inspector.
 It checks PKCE, consent, generation, refresh rotation, and revocation.
 It reads the OAuth blocks from `configs/tauth.local.yml`.
-It also verifies the transport rejection for the pinned OpenCode client.
+It also verifies the pinned OpenCode client connection.
+Run `make test-mcp-versions` for the three handshake revisions, authorization, isolation, generation, and version negotiation.
+Run `make test-mcp-codex` with Codex installed for actual Codex MCP calls after the local TAuth flow.
+This target creates an ephemeral client context and runs no model turn.
 Run `make ci` for repository validation.
 These commands do not provide production acceptance evidence.
 
-Low-level callers must send the protocol's method headers and per-request `_meta` fields.
-The server rejects earlier versions, session IDs, query parameters, and unsupported transports.
-Use the SDK to construct these fields.
+For `2026-07-28`, low-level callers must send the method headers and per-request `_meta` fields.
+The handshake revisions use their negotiated version header without those modern fields.
+Use an SDK to construct the fields for the selected revision.
 The generated OpenAPI reference describes the HTTP envelope and generation schema.

@@ -115,6 +115,54 @@ A native tool result returns JSON with `type: tool_calls`, `text`, `tool_calls`,
 A normal text result retains its current format.
 The Go and Python clients expose these request fields. Their text methods return the response body.
 
+## Go client protocol selection
+
+`ConfigInput.Protocol` selects the message completion protocol.
+`ProtocolNative` is the default and uses the native `/v2` text contract.
+`ProtocolOpenAIResponses` uses `POST /v1/responses` with Bearer authentication.
+An unknown protocol causes a configuration error. Protocol selection is fixed for each client.
+
+For OpenAI Responses, set these client fields:
+
+```go
+llmproxyclient.ConfigInput{
+    Protocol: llmproxyclient.ProtocolOpenAIResponses,
+    BaseURL:  "https://llm-proxy.example.com",
+    Secret:   tenantKey,
+    Provider: "openai",
+}
+```
+
+Use a service-root BaseURL without credentials, query parameters, or a fragment.
+Select the exact model in `MessagesRequestInput.Model` or the current model profile.
+The client sends `provider/model` in the standard `model` field.
+It sends ordered messages in `input`, the output budget in `max_output_tokens`, and effort in `reasoning.effort`.
+It sets `store: false` and uses the existing proxy timeout header for the work budget.
+
+`PostMessages` returns text through the selected protocol.
+`PostMessagesCompletion` also returns optional model and usage data for OpenAI Responses.
+Native completion results contain text with unknown measurements.
+The Responses client supports synchronous text completion. It rejects media, caller tools, web search, and durable structured requests before dispatch.
+Use the documented client contracts for those requests.
+
+## Go completion measurements
+
+The Responses client reads completed `output` messages and their `output_text` content.
+It reads `model` and the standard `usage.input_tokens`, `usage.output_tokens`, and `usage.total_tokens` fields.
+This client enhancement requires no new proxy response header or server deployment.
+
+Read `Text()` after success. Read `ResolvedModel()` and `Usage()` when available.
+An empty model means unknown identity. A nil usage value means unknown counts.
+A measured zero remains zero. Missing metadata does not change text completion success.
+The proxy response identifies the selected catalog route. It does not identify a provider-reported revision.
+Keep the requested model in a different field.
+
+`MetadataError()` reports invalid optional metadata. This diagnostic does not change completion success.
+Valid text remains available. The diagnostic excludes response content.
+Invalid usage remains unknown. Other valid metadata remains available.
+HTTP failures, incomplete responses, refusals, and unsupported output return a completion error.
+The proxy keeps its existing failure accounting.
+
 ## Validation
 
 Run `make test-client-protocols` for real HTTP, OpenAI SDK, native client, and OpenCode acceptance tests.

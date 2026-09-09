@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -25,12 +26,16 @@ const (
 	mcpPath             = "/mcp"
 	mcpMetadataPath     = "/.well-known/oauth-protected-resource/mcp"
 	mcpProtocolVersion  = "2026-07-28"
+	mcpHandshakeVersion = "2025-11-25"
 	mcpUseScope         = "llm-proxy:use"
 	mcpListTenantsTool  = "llm_proxy.list_tenants"
 	mcpGenerateTextTool = "llm_proxy.generate_text"
 	mcpRoutesTemplate   = "llm-proxy://tenants/{tenant_id}/routes"
 	mcpNotFound         = "not_found"
 )
+
+// These revisions share one authenticated, stateless Streamable HTTP endpoint.
+var mcpProtocolVersions = []string{mcpProtocolVersion, mcpHandshakeVersion, "2025-06-18", "2025-03-26"}
 
 type mcpIdentityKey struct{}
 
@@ -115,7 +120,7 @@ func registerMCPRoutes(router *gin.Engine, configuration Configuration, service 
 			return
 		}
 
-		if version := c.GetHeader("MCP-Protocol-Version"); version != mcpProtocolVersion || c.Request.URL.RawQuery != "" || c.GetHeader("Mcp-Session-Id") != "" {
+		if version := c.GetHeader("MCP-Protocol-Version"); (version != "" && !slices.Contains(mcpProtocolVersions, version)) || len(c.Request.Header.Values("MCP-Protocol-Version")) > 1 || c.Request.URL.RawQuery != "" || c.GetHeader("Mcp-Session-Id") != "" {
 			c.Status(http.StatusBadRequest)
 			return
 		}
@@ -129,9 +134,22 @@ func registerMCPRoutes(router *gin.Engine, configuration Configuration, service 
 			return
 		}
 		identity := mcpIdentity{subject: claims.Subject, requestID: requestIDFromContext(c)}
-		transport.ServeHTTP(c.Writer, c.Request.WithContext(context.WithValue(c.Request.Context(), mcpIdentityKey{}, identity)))
+		transport.ServeHTTP(mcpPrivateResponseWriter{c.Writer}, c.Request.WithContext(context.WithValue(c.Request.Context(), mcpIdentityKey{}, identity)))
 	})
 	return nil
+}
+
+// Preserve the account response cache policy across SDK protocol families.
+type mcpPrivateResponseWriter struct{ http.ResponseWriter }
+
+func (writer mcpPrivateResponseWriter) WriteHeader(status int) {
+	writer.Header().Set(headerCacheControl, cacheControlNoStore)
+	writer.ResponseWriter.WriteHeader(status)
+}
+
+func (writer mcpPrivateResponseWriter) Write(body []byte) (int, error) {
+	writer.Header().Set(headerCacheControl, cacheControlNoStore)
+	return writer.ResponseWriter.Write(body)
 }
 
 // Read the upload before SDK dispatch so its deadline cannot cancel generation.
@@ -176,7 +194,10 @@ func mcpCurrentProtocol(next mcp.MethodHandler) mcp.MethodHandler {
 			return mcpToolFailure(string(managedUsageOutcomeInvalidRequest)), nil
 		}
 		if discovery, ok := result.(*mcp.DiscoverResult); ok {
-			discovery.SupportedVersions = []string{mcpProtocolVersion}
+			discovery.SupportedVersions = slices.Clone(mcpProtocolVersions)
+		}
+		if initialized, ok := result.(*mcp.InitializeResult); ok && !slices.Contains(mcpProtocolVersions, initialized.ProtocolVersion) {
+			initialized.ProtocolVersion = mcpHandshakeVersion
 		}
 		return result, err
 	}

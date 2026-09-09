@@ -357,7 +357,7 @@ func TestMCPHTTPContract(t *testing.T) {
 		status                   int
 	}{
 		{"discovery", "/mcp", "POST", `{"jsonrpc":"2.0","id":1,"method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{},"io.modelcontextprotocol/clientInfo":{"name":"http-test","version":"1.0.0"}}}}`, nil, 200},
-		{"old version header", "/mcp", "POST", `{}`, map[string]string{"MCP-Protocol-Version": "2025-11-25"}, 400},
+		{"unsupported version header", "/mcp", "POST", `{}`, map[string]string{"MCP-Protocol-Version": "2099-01-01"}, 400},
 		{"session", "/mcp", "POST", `{}`, map[string]string{"Mcp-Session-Id": "obsolete"}, 400},
 		{"query secret", "/mcp?key=fixture", "POST", `{}`, nil, 400},
 		{"foreign origin", "/mcp", "POST", `{}`, map[string]string{"Origin": "https://foreign.example"}, 403},
@@ -390,7 +390,7 @@ func TestMCPHTTPContract(t *testing.T) {
 			if response.StatusCode != test.status {
 				t.Fatalf("status=%d want=%d body=%s", response.StatusCode, test.status, body)
 			}
-			if test.name == "discovery" && (!strings.Contains(string(body), `"supportedVersions":["2026-07-28"]`) || response.Header.Get("Mcp-Session-Id") != "") {
+			if test.name == "discovery" && (!strings.Contains(string(body), `"supportedVersions":["2026-07-28","2025-11-25","2025-06-18","2025-03-26"]`) || response.Header.Get("Mcp-Session-Id") != "") {
 				t.Fatalf("unexpected discovery: %s", body)
 			}
 		})

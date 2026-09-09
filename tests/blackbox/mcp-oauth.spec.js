@@ -6,6 +6,7 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
+import { createInterface } from "node:readline";
 import { localManagementProfile, startLocalManagementStack } from "./localManagementStack.mjs";
 
 test("MCP OAuth login, consent, generation, refresh, and revocation", async ({ page, context }) => {
@@ -43,6 +44,7 @@ test("MCP OAuth login, consent, generation, refresh, and revocation", async ({ p
     expect(provider.status()).toBe(200);
     await officialClient({ endpoint: `${stack.llmProxyOrigin}/mcp`, token: tokens.access_token, tenant_id: tenantID });
     await inspectorClient(`${stack.llmProxyOrigin}/mcp`, tokens.access_token, tenantID);
+    if (process.env.MCP_CODEX_BINARY) await codexClient(`${stack.llmProxyOrigin}/mcp`, tokens.access_token, tenantID);
     const refreshResponse = await context.request.post(`${stack.tAuthOrigin}/oauth/token`, { form: { grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: "local-mcp-client", resource: stack.llmProxyOrigin } });
     expect(refreshResponse.status()).toBe(200);
     const refreshed = await refreshResponse.json();
@@ -87,9 +89,7 @@ async function inspectorClient(endpoint, token, tenantID) {
     child.stderr.on("data", chunk => { output += chunk.toString(); });
     const status = await new Promise((resolve, reject) => { child.once("error", reject); child.once("exit", resolve); });
     expect(status, output.replaceAll(token, "[redacted]")).toBe(0);
-    // OpenCode 1.18.28 uses earlier MCP transports. Keep this qualification explicit.
-    expect(stripVTControlCharacters(output).replaceAll(token, "[redacted]")).toContain("local failed");
-    expect(stripVTControlCharacters(output).replaceAll(token, "[redacted]")).toContain("SSE error: Non-200 status code (405)");
+    expect(stripVTControlCharacters(output).replaceAll(token, "[redacted]")).toContain("local connected");
   } finally { await rm(directory, {recursive: true, force: true}); }
 }
 
@@ -106,4 +106,62 @@ async function officialClient(input) {
   });
   expect(status, output).toBe(0);
   expect(output).toContain("MCP OAuth discovery and generation passed");
+}
+
+/** @param {string} endpoint @param {string} token @param {string} tenantID */
+async function codexClient(endpoint, token, tenantID) {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "llm-proxy-codex-"));
+  const config = `mcp_servers={local={url=${JSON.stringify(endpoint)},bearer_token_env_var="MCP_ACCEPTANCE_TOKEN"}}`;
+  const child = spawn(process.env.MCP_CODEX_BINARY, ["-c", config, "app-server", "--stdio"], {
+    cwd: directory, env: { ...process.env, MCP_ACCEPTANCE_TOKEN: token }, stdio: ["pipe", "pipe", "pipe"],
+  });
+  const lines = createInterface({ input: child.stdout });
+  let diagnostics = "";
+  child.stderr.on("data", (chunk) => { diagnostics += chunk.toString(); });
+  const pending = new Map();
+  let sequence = 0;
+  lines.on("line", (line) => {
+    const message = JSON.parse(line);
+    const request = pending.get(message.id);
+    if (request) {
+      pending.delete(message.id);
+      if (message.error) request.reject(new Error(JSON.stringify(message.error).replaceAll(token, "[redacted]")));
+      else request.resolve(message.result);
+    }
+  });
+  const rejectPending = (error) => { for (const request of pending.values()) request.reject(error); pending.clear(); };
+  child.once("error", rejectPending);
+  const exited = new Promise((resolve) => child.once("exit", (status) => {
+    rejectPending(new Error(`Codex exited ${status}: ${diagnostics.replaceAll(token, "[redacted]")}`));
+    resolve(status);
+  }));
+  const rpc = (method, params) => new Promise((resolve, reject) => {
+    const id = ++sequence;
+    pending.set(id, { resolve, reject });
+    child.stdin.write(`${JSON.stringify({ id, method, params })}\n`);
+  });
+  try {
+    await rpc("initialize", { clientInfo: { name: "llm-proxy-acceptance", version: "1" }, capabilities: { experimentalApi: true } });
+    child.stdin.write(`${JSON.stringify({ method: "initialized", params: {} })}\n`);
+    const session = await rpc("thread/start", { ephemeral: true, cwd: directory });
+    const threadId = session.thread.id;
+    const inventory = await rpc("mcpServerStatus/list", { threadId, limit: 100 });
+    const local = inventory.data.find((server) => server.name === "local");
+    expect(local?.runtimeStatus, diagnostics.replaceAll(token, "[redacted]")).toBe("connected");
+    const call = (tool, args) => rpc("mcpServer/tool/call", { threadId, server: "local", tool, arguments: args });
+    const tenants = await call("llm_proxy.list_tenants", {});
+    expect(tenants.isError).not.toBe(true);
+    expect(tenants.structuredContent.tenants.map((tenant) => tenant.id)).toContain(tenantID);
+    const routes = await rpc("mcpServer/resource/read", { threadId, server: "local", uri: `llm-proxy://tenants/${tenantID}/routes` });
+    expect(JSON.stringify(routes)).toContain("openai");
+    const generated = await call("llm_proxy.generate_text", { tenant_id: tenantID, messages: [{role: "user", content: "Codex acceptance"}] });
+    expect(generated.isError).not.toBe(true);
+    expect(generated.structuredContent.text).toBe("Local MCP answer");
+    expect(generated.structuredContent.request_id).toBeTruthy();
+  } finally {
+    child.kill("SIGTERM");
+    await exited;
+    lines.close();
+    await rm(directory, { recursive: true, force: true });
+  }
 }

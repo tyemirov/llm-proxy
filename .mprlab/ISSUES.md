@@ -2380,11 +2380,12 @@ retain satisfied historical dependencies.
   - The deployment manifest declares the protected API origin and the
     `llm-proxy:use` scope.
   Requirements:
-  - Serve MCP protocol version `2026-07-28` at the exact resource URL
-    `https://llm-proxy-api.mprlab.com/mcp`.
-  - Use the official Go MCP SDK in stateless Streamable HTTP mode. Return JSON
-    responses and reject every unsupported protocol version.
-  - Do not create an MCP session or implement an earlier MCP transport.
+  - Serve MCP revisions `2026-07-28`, `2025-11-25`, `2025-06-18`, and `2025-03-26` at the exact resource URL `https://llm-proxy-api.mprlab.com/mcp`.
+  - Accept the Codex `2025-06-18` initialization flow and use SDK protocol negotiation.
+  - Maintain a dated agent protocol map with client versions, evidence types, and source links.
+  - Use the official Go MCP SDK in stateless Streamable HTTP mode. Return JSON responses.
+  - Reject unsupported explicit protocol headers. Negotiate unsupported handshake offers with a supported revision.
+  - Keep the endpoint stateless across both protocol families. Use Streamable HTTP without a standalone SSE endpoint.
   - Use `https://llm-proxy-api.mprlab.com` as the OAuth protected-resource
     identifier and access-token audience.
   - Publish path-specific OAuth Protected Resource Metadata at
@@ -2481,6 +2482,35 @@ retain satisfied historical dependencies.
     acceptance. Record live-host acceptance as a separate deployment result.
   - Obey `.mprlab/POLICY.md` for focused validation and the final `make ci` checkpoint.
   Scope update: 2026-09-07 — Tenant discovery uses one account connection and explicit tenant selection for each operation.
+  Scope update: 2026-09-08 — The operator authorized multiple MCP revisions, including Codex support for `2025-06-18`.
+  This requirement replaces the previous single-version restriction for this endpoint.
+  A live retry after TAuth B077 completed Google login and OAuth authorization.
+  Codex 0.153.4 then received HTTP `400` on its `initialize` request.
+  A local capture confirmed its `2025-06-18` offer without a protocol header.
+  The new handshake tests first failed with `initialize version="": HTTP 400 want 200` for all three supported handshake revisions.
+  The SDK then replaced `no-store` with `no-cache`, which failed the response-policy assertion.
+  The response writer now preserves `no-store` across both protocol families.
+  An initial Codex harness assertion expected `ready`. The actual successful client state is `connected`.
+  The corrected harness passed tenant discovery, route reads, and generation with a local TAuth-issued token.
+  OpenCode 1.18.28 now passes local connection and tool discovery.
+  The agent protocol map distinguishes measured offers, installed SDK declarations, and vendor documentation.
+  Documentation update: 2026-09-08 — Expanded the client map with Antigravity, Grok, Z.AI, and other researched clients.
+  Added the server support table, source links, result limits, and required capture procedure.
+  Current March 2025 client demand remains unverified. The documented server implementation still includes that revision.
+  Documentation validation: Governor checks, local Markdown links, and whitespace checks passed.
+  Reviewed the changed prose. The two MCP documents have no mechanical language findings.
+  The 79 findings in unchanged tracker text remain outside this documentation update.
+  The first full CI run reported one uncovered block at `mcp.go:155` in an unused response-writer method.
+  Removed that method. Protocol and cache behavior remain covered through HTTP requests.
+  Final validation for expanded support: `make ci` passed all 12 gates in 339 seconds with 100% Go coverage.
+  The browser suite passed 114 tests. Both local TAuth black-box tests passed.
+  The separate `make test-mcp-codex` run passed after the final source change.
+  Governor normalization passed. Changed prose has no mechanical findings. The 318 findings in unchanged text remain outside this change.
+  CI correction: 2026-09-08 — GitHub run 34286668186 rejected four uncovered completion-client error paths.
+  Added public-client cases for structured requests, missing model profiles, missing resolved models, and duplicate token headers.
+  The focused completion tests passed. Final `make ci` passed all 12 gates in 309 seconds with no uncovered blocks.
+  The browser suite passed 114 tests. Both TAuth black-box tests passed.
+  Production deployment and live acceptance of this expanded protocol support remain pending.
   Implementation: 2026-09-08 — Added the account MCP endpoint, tenant discovery,
   generation tool, route resource, OAuth validation, and shared text service.
   Added the account copy action, local TAuth configuration, and API documentation.
@@ -2490,13 +2520,11 @@ retain satisfied historical dependencies.
   Public tests passed tenant isolation, concurrent selection, media, queue rejection,
   provider rate limits, timeout, cancellation, body limits, and sanitized failures.
   Go coverage reached 100% with no uncovered blocks.
-  Final validation: `make ci` passed all 12 gates in 282 seconds.
+  Earlier validation before the protocol scope update: `make ci` passed all 12 gates in 282 seconds.
   The browser suite passed 114 tests. Local OAuth and Inspector checks passed.
-  Remaining acceptance: Complete manual local acceptance with a supported remote client.
-  OpenCode 1.18.28 could not connect. It reported `SSE error: Non-200 status code (405)`.
-  The server retains the required MCP version and rejects the earlier transport.
-  Production deployment and live-host acceptance remain separate and were not run.
-  F021 remains open for the remaining manual acceptance.
+  Earlier acceptance before the scope update: OpenCode 1.18.28 reported `SSE error: Non-200 status code (405)`.
+  The expanded protocol support passed local OpenCode and Codex acceptance.
+  F021 remains open for deployment and live acceptance of the expanded support.
   I254 resolved the issue-format drift. The changed prose has no mechanical findings.
   Dependency handoff: 2026-08-15 — gateway F001 and both application manifests
   passed local contract validation. Production activation remains separate.
