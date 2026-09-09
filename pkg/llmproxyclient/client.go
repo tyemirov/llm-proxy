@@ -19,6 +19,7 @@ import (
 
 const (
 	formatQueryValueTextPlain = "text/plain"
+	formatQueryValueJSON      = "application/json"
 	headerAccept              = "Accept"
 	headerContentType         = "Content-Type"
 	jsonContentType           = "application/json; charset=utf-8"
@@ -65,8 +66,20 @@ type HTTPDoer interface {
 	Do(request *http.Request) (*http.Response, error)
 }
 
+// Protocol selects the wire contract for message completion calls.
+type Protocol string
+
+const (
+	// ProtocolNative selects the native v2 messages contract.
+	ProtocolNative Protocol = "native"
+	// ProtocolOpenAIResponses selects the OpenAI Responses contract.
+	ProtocolOpenAIResponses Protocol = "openai_responses"
+)
+
 // ConfigInput is the unvalidated external configuration for an llm-proxy client.
 type ConfigInput struct {
+	// Protocol defaults to ProtocolNative. Set ProtocolOpenAIResponses for the standard Responses API.
+	Protocol           Protocol
 	BaseURL            string
 	Secret             string
 	Provider           string
@@ -76,6 +89,7 @@ type ConfigInput struct {
 
 // Config is validated llm-proxy client configuration.
 type Config struct {
+	protocol           Protocol
 	baseURL            *url.URL
 	secret             string
 	provider           string
@@ -98,6 +112,16 @@ func NewConfig(input ConfigInput) (Config, error) {
 	}
 	if parsedBaseURL.Host == "" {
 		return Config{}, fmt.Errorf("%w: base_url must include host", ErrInvalidClientConfig)
+	}
+	protocol := input.Protocol
+	if protocol == "" {
+		protocol = ProtocolNative
+	}
+	if protocol != ProtocolNative && protocol != ProtocolOpenAIResponses {
+		return Config{}, fmt.Errorf("%w: unsupported protocol", ErrInvalidClientConfig)
+	}
+	if protocol == ProtocolOpenAIResponses && (parsedBaseURL.RawQuery != "" || parsedBaseURL.User != nil || parsedBaseURL.Fragment != "") {
+		return Config{}, fmt.Errorf("%w: Responses base_url must not contain credentials, query, or fragment", ErrInvalidClientConfig)
 	}
 	trimmedProvider := strings.TrimSpace(input.Provider)
 	trimmedModelProfilePath := strings.TrimSpace(input.ModelProfilePath)
@@ -124,6 +148,7 @@ func NewConfig(input ConfigInput) (Config, error) {
 		return Config{}, fmt.Errorf("%w: missing secret", ErrInvalidClientConfig)
 	}
 	return Config{
+		protocol:           protocol,
 		baseURL:            parsedBaseURL,
 		secret:             trimmedSecret,
 		provider:           trimmedProvider,
@@ -132,7 +157,7 @@ func NewConfig(input ConfigInput) (Config, error) {
 	}, nil
 }
 
-// MessagesPostURL builds the authenticated v2 JSON POST URL for this config.
+// MessagesPostURL builds the selected message endpoint URL. Responses uses Bearer authentication.
 func (config Config) MessagesPostURL() (string, error) {
 	requestURL, requestError := config.messagesPostURL()
 	if requestError != nil {
@@ -142,6 +167,9 @@ func (config Config) MessagesPostURL() (string, error) {
 }
 
 func (config Config) messagesPostURL() (url.URL, error) {
+	if config.protocol == ProtocolOpenAIResponses {
+		return config.responsesPostURL(), nil
+	}
 	provider := config.provider
 	if config.modelProfilePath != "" {
 		modelProfile, profileError := config.currentModelProfile()
@@ -455,9 +483,13 @@ func NewClient(config Config, httpClient HTTPDoer) (Client, error) {
 	return Client{config: config, httpClient: httpClient}, nil
 }
 
-// PostMessages sends a v2 JSON POST messages request and returns the response text.
+// PostMessages uses the selected protocol and returns response text.
 // An accepted pending request returns StructuredRequestPendingError.
 func (client Client) PostMessages(contextValue context.Context, request MessagesRequest) (string, error) {
+	if client.config.protocol == ProtocolOpenAIResponses {
+		result, err := client.PostMessagesCompletion(contextValue, request)
+		return result.Text(), err
+	}
 	requestURL, requestBody, requestError := client.messagesPostRequest(request)
 	if requestError != nil {
 		return "", requestError
@@ -484,11 +516,11 @@ func (client Client) messagesPostRequest(request MessagesRequest) (url.URL, []by
 }
 
 func (client Client) postPayload(contextValue context.Context, requestURL url.URL, requestBody []byte, requestTimeoutSeconds *int, idempotencyKey string) (string, error) {
-	result, err := client.postCompletionPayload(contextValue, requestURL, requestBody, requestTimeoutSeconds, idempotencyKey)
-	return result.Text(), err
+	body, err := client.postResponsePayload(contextValue, requestURL, requestBody, requestTimeoutSeconds, idempotencyKey, formatQueryValueTextPlain)
+	return string(body), err
 }
 
-func (client Client) postCompletionPayload(contextValue context.Context, requestURL url.URL, requestBody []byte, requestTimeoutSeconds *int, idempotencyKey string) (CompletionResult, error) {
+func (client Client) postResponsePayload(contextValue context.Context, requestURL url.URL, requestBody []byte, requestTimeoutSeconds *int, idempotencyKey string, representation string) ([]byte, error) {
 	httpRequest := (&http.Request{
 		Method:        http.MethodPost,
 		URL:           &requestURL,
@@ -496,7 +528,7 @@ func (client Client) postCompletionPayload(contextValue context.Context, request
 		Body:          io.NopCloser(bytes.NewReader(requestBody)),
 		ContentLength: int64(len(requestBody)),
 	}).WithContext(contextValue)
-	httpRequest.Header.Set(headerAccept, formatQueryValueTextPlain)
+	httpRequest.Header.Set(headerAccept, representation)
 	httpRequest.Header.Set(headerContentType, jsonContentType)
 	if requestTimeoutSeconds != nil {
 		httpRequest.Header.Set(llmproxycontract.HeaderRequestTimeoutSeconds, strconv.Itoa(*requestTimeoutSeconds))
@@ -505,29 +537,28 @@ func (client Client) postCompletionPayload(contextValue context.Context, request
 		httpRequest.Header.Set(llmproxycontract.HeaderIdempotencyKey, idempotencyKey)
 	}
 
+	return client.readCompletionResponse(httpRequest)
+}
+
+func (client Client) readCompletionResponse(httpRequest *http.Request) ([]byte, error) {
 	httpResponse, httpError := client.httpClient.Do(httpRequest)
 	if httpError != nil {
-		return CompletionResult{}, fmt.Errorf("%w: post request: %v", ErrClientHTTPFailure, httpError)
+		return nil, fmt.Errorf("%w: post request: %v", ErrClientHTTPFailure, httpError)
 	}
-	result, metadataError := completionMetadata(httpResponse.Header)
 	responseBody, readError := io.ReadAll(httpResponse.Body)
 	_ = httpResponse.Body.Close()
-	if metadataError != nil {
-		return CompletionResult{}, metadataError
-	}
 	if readError != nil {
-		return result, fmt.Errorf("%w: read response body: %v", ErrClientHTTPFailure, readError)
+		return nil, fmt.Errorf("%w: read response body: %v", ErrClientHTTPFailure, readError)
 	}
 	if httpResponse.StatusCode == http.StatusAccepted {
 		pendingResult, pendingError := decodeStructuredRequestPending(responseBody)
 		if pendingError != nil {
-			return CompletionResult{}, pendingError
+			return nil, pendingError
 		}
-		return CompletionResult{}, &StructuredRequestPendingError{snapshot: pendingResult}
+		return nil, &StructuredRequestPendingError{snapshot: pendingResult}
 	}
 	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
-		return result, newHTTPFailure(httpResponse.StatusCode, responseBody)
+		return nil, newHTTPFailure(httpResponse.StatusCode, responseBody)
 	}
-	result.text = string(responseBody)
-	return result, nil
+	return responseBody, nil
 }
