@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Self-service LLM key management for internal teams</title>
+    <meta name="description" content="Log in to LLM Proxy, create a tenant client key, and manage provider credentials from catalog-owned Usage Overview cards.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/">
+    <meta property="og:title" content="Self-service LLM key management for internal teams">
+    <meta property="og:description" content="Log in to LLM Proxy, create a tenant client key, and manage provider credentials from catalog-owned Usage Overview cards.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@5.4.1/dist/browser/js-yaml.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"></script>
+    <script
+      id="mpr-ui-bundle"
+      type="application/json"
+      data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
+    ></script>
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Self-service LLM key management for internal teams","description":"Log in to LLM Proxy, create a tenant client key, and manage provider credentials from catalog-owned Usage Overview cards.","url":"https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/","datePublished":"2026-07-06","dateModified":"2026-08-08","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/","about":["LLM Proxy","Management UI","self-service LLM key management"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Self-service LLM key management for internal teams","item":"https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How does first-run LLM Proxy setup begin?","acceptedAnswer":{"@type":"Answer","text":"After MPR UI reports an authenticated session, the account and selected tenant profile load. The app automatically creates a client key when that tenant has none."}},{"@type":"Question","name":"What lets a user leave Settings?","acceptedAnswer":{"@type":"Answer","text":"The loaded tenant profile must report a client key. Provider keys are managed separately from the provider cards in Usage Overview."}},{"@type":"Question","name":"Where does a user enter a provider key?","acceptedAnswer":{"@type":"Answer","text":"The user opens Set API key or API key settings on the provider's Usage Overview card and selects an exact tenant for account-wide usage."}},{"@type":"Question","name":"Does onboarding change provider or model defaults?","acceptedAnswer":{"@type":"Answer","text":"No. Automatic client-key creation and provider-key validation leave the user's existing provider and model defaults unchanged."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Bring-your-own provider key portal for AI access, which covers bring your own provider key portal."}}]}</script>
+    <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440"></script>
+  </head>
+  <body class="resource-page">
+
+    <mpr-header
+      class="public-site-header"
+      data-config-url="https://llm-proxy-api.mprlab.com/config-ui.yaml"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      logout-url="/"
+      settings="false"
+      sign-in-label="Log In"
+      sign-in-redirect-url="/app/"
+      size="small"
+      sticky="true"
+      auth-transition='{"title":"Opening LLM Proxy","message":"Loading your app."}'
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"}]}'
+    >
+      <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
+        <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
+        <span>LLM Proxy</span>
+      </a>
+    </mpr-header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>Self-service LLM key management for internal teams</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Management UI</p>
+            <h1>Self-service LLM key management for internal teams</h1>
+            <p class="resource-deck">Log in to LLM Proxy, create a tenant client key, and manage provider credentials from catalog-owned Usage Overview cards.</p>
+            <p class="resource-audience">Teams that want user-owned AI access without asking operators to edit YAML for every change.</p>
+            <p class="resource-byline">Reviewed 2026-08-08 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <aside class="resource-verdict" aria-label="Quick verdict">
+              <strong>Quick verdict</strong>
+              <p>Use this flow when authenticated users need separate client-key onboarding and tenant-bound provider credential management.</p>
+            </aside>
+            <div class="resource-actions">
+              <a class="resource-button" href="/docs/">Open API reference</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>Operator-provisioned AI access does not scale when each user or team needs provider keys, defaults, generated secrets, and examples updated separately.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy includes a TAuth-protected management UI that creates a missing client key after authentication and gives every catalog provider one tenant-bound Usage Overview card for key and profile settings.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Configure TAuth, the management database, and provider-key encryption.</li>
+<li>Publish the static Pages UI and serve runtime config from the API backend.</li>
+<li>Users sign in; the UI creates and presents a missing client key once.</li>
+<li>Users open a provider card, select the exact tenant, and paste a provider key for verification and atomic save.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+
+                        <tr>
+                          <td>TAuth-gated UI</td>
+                          <td>Management controls appear only after login.</td>
+                          <td>Unauthenticated users see the sign-in state, not tenant controls.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Client-key onboarding</td>
+                          <td>Settings stays open only until the selected tenant has its generated client key.</td>
+                          <td>Provider credentials remain a separate tenant-owned concern.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Catalog provider cards</td>
+                          <td>Every provider card combines interval activity with a tenant-bound key, text model, and system prompt editor.</td>
+                          <td>Key presence never adds or removes a provider card.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Copyable examples</td>
+                          <td>Default and provider-specific curl examples use the current proxy origin and generated-secret placeholder.</td>
+                          <td>Users can start with the exact request shape shown in Settings.</td>
+                        </tr>
+
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+
+                    <section class="resource-card">
+                      <h3>New team onboarding</h3>
+                      <p>A user signs in, copies the automatically created client key, closes Settings, and opens the OpenAI card to set its key.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Provider update</h3>
+                      <p>A user opens the DeepSeek card and its changed model autosaves for the selected tenant.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Usage review</h3>
+                      <p>The user returns to the dashboard and selects all-time, 30-day, 7-day, or 1-day request and token summaries.</p>
+                    </section>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>Management requires configured TAuth, CORS origins, database settings, and a provider-key encryption key.</li>
+<li>The backend serves management APIs and runtime config; the static Pages app is only the shell.</li>
+<li>The card shows only a generic saved-key mask and never retrieves the stored raw credential.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>Repository evidence</h2>
+            <pre class="usage-snippet"><code>if (this.settingsRequired) {
+  this.openSettings();
+}
+if (!this.hasSecret) {
+  await this.requestAndApplyGeneratedSecret();
+}</code></pre>
+            <p>Verified 2026-08-08 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>site/assets/llm-proxy/js/ui/authenticationLifecycle.js</code>.</p>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+
+                    <details>
+                      <summary>How does first-run LLM Proxy setup begin?</summary>
+                      <p>After MPR UI reports an authenticated session, the account and selected tenant profile load. The app automatically creates a client key when that tenant has none.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>What lets a user leave Settings?</summary>
+                      <p>The loaded tenant profile must report a client key. Provider keys are managed separately from the provider cards in Usage Overview.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Where does a user enter a provider key?</summary>
+                      <p>The user opens Set API key or API key settings on the provider's Usage Overview card and selects an exact tenant for account-wide usage.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Does onboarding change provider or model defaults?</summary>
+                      <p>No. Automatic client-key creation and provider-key validation leave the user's existing provider and model defaults unchanged.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is Bring-your-own provider key portal for AI access, which covers bring your own provider key portal.</p>
+                    </details>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+
+                    <a class="resource-related" href="/resources/bring-your-own-provider-key-portal/">
+                      <span>Management UI</span>
+                      <strong>Bring-your-own provider key portal for AI access</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/tauth-protected-management-api/">
+                      <span>Management UI</span>
+                      <strong>TAuth-protected management API for LLM Proxy</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/tenant-secret-ai-gateway/">
+                      <span>Security</span>
+                      <strong>Tenant-secret AI gateway for internal applications</strong>
+                    </a>
+
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Use this pattern in LLM Proxy</h2>
+            <p>Start from the canonical API reference, then use the management surface when the workflow needs tenant or provider configuration.</p>
+            <a class="resource-button" href="/docs/">Open API reference</a>
+          </section>
+        </article>
+      </main>
+    <mpr-footer
+      class="public-site-footer"
+      size="small"
+      sticky="true"
+      wrapper-class="public-site-footer-layout"
+      privacy-link-label="Privacy"
+      privacy-link-href="/privacy/"
+      theme-switcher="square"
+      theme-config='{"attribute":"data-mpr-theme","targets":["document","body"],"initialMode":"default-dark","modes":[{"value":"default-light","attributeValue":"light","dataset":{"data-llm-proxy-palette":"default"}},{"value":"sunrise-light","attributeValue":"light","dataset":{"data-llm-proxy-palette":"sunrise"}},{"value":"default-dark","attributeValue":"dark","dataset":{"data-llm-proxy-palette":"default"}},{"value":"forest-dark","attributeValue":"dark","dataset":{"data-llm-proxy-palette":"forest"}}]}'
+      horizontal-links='{"alignment":"left","links":[{"label":"Terms","href":"/terms/"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+      links-collection='{"style":"drop-up","text":"Built by Marco Polo Research Lab","links":[{"label":"Marco Polo Research Lab","url":"https://mprlab.com"},{"label":"Gravity Notes","url":"https://gravity.mprlab.com"},{"label":"LoopAware","url":"https://loopaware.mprlab.com"},{"label":"Allergy Wheel","url":"https://allergy.mprlab.com"},{"label":"Social Threader","url":"https://threader.mprlab.com"},{"label":"RSVP","url":"https://rsvp.mprlab.com"},{"label":"Countdown Calendar","url":"https://countdown.mprlab.com"},{"label":"LLM Crossword","url":"https://llm-crossword.mprlab.com"},{"label":"Prompt Bubbles","url":"https://prompts.mprlab.com"},{"label":"Wallpapers","url":"https://wallpapers.mprlab.com"}]}'
+    >
+      <footer class="public-site-footer-fallback" role="contentinfo">
+        <nav class="public-site-footer-fallback__nav" aria-label="Footer">
+          <a href="/privacy/">Privacy</a>
+          <a href="/terms/">Terms</a>
+          <a href="/resources/">Resources</a>
+          <a href="https://github.com/tyemirov/llm-proxy">GitHub</a>
+        </nav>
+        <details class="public-site-footer-fallback__projects">
+          <summary>Built by Marco Polo Research Lab</summary>
+          <ul>
+            <li><a href="https://mprlab.com">Marco Polo Research Lab</a></li>
+            <li><a href="https://gravity.mprlab.com">Gravity Notes</a></li>
+            <li><a href="https://loopaware.mprlab.com">LoopAware</a></li>
+            <li><a href="https://allergy.mprlab.com">Allergy Wheel</a></li>
+            <li><a href="https://threader.mprlab.com">Social Threader</a></li>
+            <li><a href="https://rsvp.mprlab.com">RSVP</a></li>
+            <li><a href="https://countdown.mprlab.com">Countdown Calendar</a></li>
+            <li><a href="https://llm-crossword.mprlab.com">LLM Crossword</a></li>
+            <li><a href="https://prompts.mprlab.com">Prompt Bubbles</a></li>
+            <li><a href="https://wallpapers.mprlab.com">Wallpapers</a></li>
+          </ul>
+        </details>
+      </footer>
+    </mpr-footer>
+
+  </body>
+</html>
