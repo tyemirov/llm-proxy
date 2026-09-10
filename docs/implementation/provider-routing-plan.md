@@ -1,6 +1,10 @@
 # Provider Routing Implementation Plan
 
-Status: implemented provider-routing contract notes retained from the retired provider-routing backlog.
+Status: historical design record from the retired provider-routing backlog.
+
+The [OpenAPI contract](../openapi.yaml) defines the current HTTP interface.
+The [tenant connection guide](../tenant-connections.md) defines the current dashboard, ownership, and migration contract.
+P001 and F063 replace the management design recorded here.
 
 ## Goal
 
