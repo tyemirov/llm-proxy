@@ -2349,12 +2349,12 @@ func TestOperationalLiveHarnessVerifiesEachKeyBeforeItsSmokeRequest(testingInsta
 		testingInstance.Fatalf("read live operation capture: %v", readError)
 	}
 	capture := string(captureBytes)
-	verificationOffset := strings.Index(capture, "verify PUT ")
+	verificationOffset := strings.Index(capture, "verify POST ")
 	smokeOffset := strings.Index(capture, "smoke POST ")
 	if verificationOffset < 0 || smokeOffset <= verificationOffset {
 		testingInstance.Fatalf("live operations were not verification then smoke: %s", capture)
 	}
-	expectedPayload := `payload {"fields":{"api_key":"` + providerKey + `"},"text_model":"gpt-4.1","system_prompt":""}`
+	expectedPayload := `payload {"name":"openai","provider":"openai","version":0,"fields":{"api_key":"` + providerKey + `"}}`
 	if !strings.Contains(capture, expectedPayload) {
 		testingInstance.Fatalf("live verification payload mismatch: %s", capture)
 	}
@@ -2463,7 +2463,7 @@ func TestOperationalLiveHarnessRoutesThroughExistingLocalOriginWithoutStartingPr
 	if readError != nil {
 		testingInstance.Fatalf("read existing local-origin operation capture: %v", readError)
 	}
-	if !strings.Contains(string(captureBytes), localOrigin+"/api/management/tenants/tenant-live/provider-connections/openai") ||
+	if !strings.Contains(string(captureBytes), localOrigin+"/api/management/tenants/tenant-live/connections/openai") ||
 		!strings.Contains(string(captureBytes), localOrigin+"/v2?provider=openai") {
 		testingInstance.Fatalf("existing local-origin requests did not use %s: %s", localOrigin, captureBytes)
 	}
@@ -2540,8 +2540,8 @@ func TestOperationalLiveHarnessDiscoversCatalogOnlyProviderFields(testingInstanc
 		testingInstance.Fatalf("read catalog-only live provider capture: %v", readError)
 	}
 	capture := string(captureBytes)
-	expectedPayload := `payload {"fields":{"access_token":"` + providerKey + `","gateway_url":"` + providerURL + `"},"text_model":"` + modelID + `","system_prompt":""}`
-	if !strings.Contains(capture, "provider-connections/"+providerID) || !strings.Contains(capture, expectedPayload) {
+	expectedPayload := `payload {"name":"` + providerID + `","provider":"` + providerID + `","version":0,"fields":{"access_token":"` + providerKey + `","gateway_url":"` + providerURL + `"}}`
+	if !strings.Contains(capture, "/connections/"+providerID) || !strings.Contains(capture, expectedPayload) {
 		testingInstance.Fatalf("catalog-only live provider did not use discovered fields: %s", capture)
 	}
 	assertOperationalProxyChildStopped(testingInstance, fixture.proxyPIDPath)
@@ -2607,7 +2607,7 @@ func TestOperationalLiveHarnessDiscoversEverySelectedProviderTextModel(testingIn
 		testingInstance.Fatalf("read live all-model capture: %v", readError)
 	}
 	capture := string(captureBytes)
-	if strings.Count(capture, "verify PUT ") != len(models) || strings.Count(capture, "smoke POST ") != len(models) {
+	if strings.Count(capture, "verify POST ") != len(models) || strings.Count(capture, "smoke POST ") != len(models) {
 		testingInstance.Fatalf("live all-model operation count mismatch: %s", capture)
 	}
 	for _, route := range models {
@@ -2672,9 +2672,9 @@ func TestOperationalLiveHarnessRunsCatalogSelectedImageMatrixAfterVerification(t
 		testingInstance.Fatalf("read live image operation capture: %v", readError)
 	}
 	capture := string(captureBytes)
-	lastVerificationOffset := strings.LastIndex(capture, "verify PUT ")
+	lastVerificationOffset := strings.LastIndex(capture, "verify POST ")
 	firstImageOffset := strings.Index(capture, "image POST ")
-	if strings.Count(capture, "verify PUT ") != 8 || strings.Count(capture, "image POST ") != 8 || firstImageOffset <= lastVerificationOffset {
+	if strings.Count(capture, "verify POST ") != 8 || strings.Count(capture, "image POST ") != 8 || firstImageOffset <= lastVerificationOffset {
 		testingInstance.Fatalf("live image operations were not eight verifications followed by eight images: %s", capture)
 	}
 	imagePayloadLines := []string{}
@@ -2933,7 +2933,12 @@ case "${request_url}" in
     builtin printf '%s' '{"secret":"live-generated-secret","profile":{"providers":[{"id":"openai","text_default_model":"gpt-4.1"},{"id":"anthropic","text_default_model":"claude-sonnet-4-6"},{"id":"gemini","text_default_model":"gemini-3.5-flash"},{"id":"moonshot","text_default_model":"kimi-k2.6"},{"id":"minimax","text_default_model":"minimax-m2.7"},{"id":"xai","text_default_model":"grok-4.3"},{"id":"deepseek","text_default_model":"deepseek-v4-flash"}]}}' >"${output_path}"
     builtin printf '%s' 200
     ;;
-  */api/management/tenants/tenant-live/provider-connections/*)
+  */api/management/connections)
+    if [[ "${request_method}" != "POST" ]]; then
+      builtin printf '%s' '{"connections":[],"next_cursor":""}' >"${output_path}"
+      builtin printf '%s' 200
+      exit 0
+    fi
     if [[ -n "${PREFLIGHT_PROVIDER_URL:-}" ]]; then
       if [[ -n "${CURL_PREFLIGHT_BLOCK_PATH:-}" ]]; then
         builtin printf '%s\n' ready >"${CURL_PREFLIGHT_BLOCK_PATH}"
@@ -2948,7 +2953,7 @@ import urllib.request
 
 candidate = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
 payload = json.dumps({
-    "model": candidate["text_model"],
+    "model": "gpt-4.1",
     "input": "Verify this provider credential.",
     "max_output_tokens": 16,
 }).encode("utf-8")
@@ -2968,6 +2973,15 @@ with urllib.request.urlopen(request, timeout=5) as response:
     if [[ -n "${LIVE_OPERATION_CAPTURE:-}" ]]; then
       builtin printf 'verify %s %s\n' "${request_method}" "${request_url}" >>"${LIVE_OPERATION_CAPTURE}"
       builtin printf 'payload ' >>"${LIVE_OPERATION_CAPTURE}"
+      command cat "${request_body_path}" >>"${LIVE_OPERATION_CAPTURE}"
+      builtin printf '\n' >>"${LIVE_OPERATION_CAPTURE}"
+    fi
+    builtin printf '%s' '{"id":"connection-live"}' >"${output_path}"
+    builtin printf '%s' 201
+    ;;
+  */api/management/tenants/tenant-live/connections/*|*/api/management/tenants/tenant-live/provider-profiles/*)
+    if [[ -n "${LIVE_OPERATION_CAPTURE:-}" ]]; then
+      builtin printf 'assign %s %s\n' "${request_method}" "${request_url}" >>"${LIVE_OPERATION_CAPTURE}"
       command cat "${request_body_path}" >>"${LIVE_OPERATION_CAPTURE}"
       builtin printf '\n' >>"${LIVE_OPERATION_CAPTURE}"
     fi
