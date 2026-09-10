@@ -226,13 +226,8 @@ func TestManagedGeminiModelSelectionMigrationsStartFromSchemaEight(t *testing.T)
 				t.Fatal("schema-eight Gemini provider table was retained")
 			}
 
-			var connection managedProviderConnectionRecord
-			if queryError := fixture.database.Where(&managedProviderConnectionRecord{
-				TenantID: fixture.predecessor.TenantID, ProviderID: ProviderNameGemini, FieldID: CatalogCredentialAPIKey,
-			}).First(&connection).Error; queryError != nil {
-				t.Fatalf("load migrated Gemini connection: %v", queryError)
-			}
-			apiKey, decryptError := fixture.providerKeyCipher.decryptConnection(connection)
+			connection := assignedConnectionFieldForTest(t, fixture.database, fixture.predecessor.TenantID, ProviderNameGemini, CatalogCredentialAPIKey)
+			apiKey, decryptError := fixture.providerKeyCipher.decryptConnectionValue(connection.ConnectionID, ProviderNameGemini, CatalogCredentialAPIKey, connection.Value)
 			if decryptError != nil || apiKey != "sk-provider" || !connection.CreatedAt.Equal(fixture.predecessor.CreatedAt) || !connection.UpdatedAt.Equal(fixture.predecessor.UpdatedAt) {
 				t.Fatalf("migrated Gemini connection=%+v key=%q error=%v", connection, apiKey, decryptError)
 			}

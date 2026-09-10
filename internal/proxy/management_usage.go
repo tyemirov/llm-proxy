@@ -518,7 +518,7 @@ func (store *managedTenantStore) usageSummaryByTenantIDs(tenantIDs []string, int
 		earliestUsageEvent, recordsError = store.database.earliestUsageEventByTenantIDsThrough(tenantIDs, timestamp)
 	}
 	if recordsError != nil {
-		return managedUsageSummary{}, fmt.Errorf("%w: %s: %v", errManagedTenantStorePersist, subject, recordsError)
+		return managedUsageSummary{}, fmt.Errorf("%w: %s: %w", errManagedTenantStorePersist, subject, recordsError)
 	}
 	accumulator := newManagedUsageSummaryAccumulator(interval, timestamp, earliestUsageEvent)
 	if finite {
@@ -527,7 +527,7 @@ func (store *managedTenantStore) usageSummaryByTenantIDs(tenantIDs []string, int
 		recordsError = store.database.streamUsageEventsByTenantIDsThrough(tenantIDs, timestamp, accumulator.apply)
 	}
 	if recordsError != nil {
-		return managedUsageSummary{}, fmt.Errorf("%w: %s: %v", errManagedTenantStorePersist, subject, recordsError)
+		return managedUsageSummary{}, fmt.Errorf("%w: %s: %w", errManagedTenantStorePersist, subject, recordsError)
 	}
 	return accumulator.summary(), nil
 }
@@ -642,7 +642,7 @@ func (store *managedTenantStore) adminUsersSummary() ([]managedAdminUserSnapshot
 	}
 	usageRecords, usageRecordsError := store.database.usageEventsSince(periodStart)
 	if usageRecordsError != nil {
-		return nil, fmt.Errorf("%w: admin_usage: %v", errManagedTenantStorePersist, usageRecordsError)
+		return nil, fmt.Errorf("%w: admin_usage: %w", errManagedTenantStorePersist, usageRecordsError)
 	}
 	usageRecordsByTenantID := make(map[string][]managedUsageEventRecord)
 	for _, usageRecord := range usageRecords {
@@ -654,7 +654,7 @@ func (store *managedTenantStore) adminUsersSummary() ([]managedAdminUserSnapshot
 		for _, tenantRecord := range userRecord.Tenants {
 			usageSummary, usageError := summarizeManagedAdminUsage(usageRecordsByTenantID[tenantRecord.TenantID], timestamp)
 			if usageError != nil {
-				return nil, fmt.Errorf("%w: admin_usage tenant_id=%s: %v", errManagedTenantStorePersist, tenantRecord.TenantID, usageError)
+				return nil, fmt.Errorf("%w: admin_usage tenant_id=%s: %w", errManagedTenantStorePersist, tenantRecord.TenantID, usageError)
 			}
 			tenantSnapshots = append(tenantSnapshots, managedAdminTenantSnapshot{
 				tenantID:  tenantRecord.TenantID,

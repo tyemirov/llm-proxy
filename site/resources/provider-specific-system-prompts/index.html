@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Provider-specific system prompts in LLM Proxy Settings</title>
+    <title>Provider-specific system prompts in the tenant dashboard</title>
     <meta name="description" content="Store each provider's text model and system prompt with its managed provider configuration.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/provider-specific-system-prompts/">
-    <meta property="og:title" content="Provider-specific system prompts in LLM Proxy Settings">
+    <meta property="og:title" content="Provider-specific system prompts in the tenant dashboard">
     <meta property="og:description" content="Store each provider's text model and system prompt with its managed provider configuration.">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/provider-specific-system-prompts/">
@@ -27,8 +27,8 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Provider-specific system prompts in LLM Proxy Settings","description":"Store each provider's text model and system prompt with its managed provider configuration.","url":"https://llm-proxy.mprlab.com/resources/provider-specific-system-prompts/","datePublished":"2026-07-06","dateModified":"2026-08-08","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/provider-specific-system-prompts/","about":["LLM Proxy","Management UI","provider-specific system prompts"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Provider-specific system prompts in LLM Proxy Settings","item":"https://llm-proxy.mprlab.com/resources/provider-specific-system-prompts/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Provider-specific system prompts in the tenant dashboard","description":"Store each provider's text model and system prompt with its managed provider configuration.","url":"https://llm-proxy.mprlab.com/resources/provider-specific-system-prompts/","datePublished":"2026-07-06","dateModified":"2026-09-10","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/provider-specific-system-prompts/","about":["LLM Proxy","Management UI","provider-specific system prompts"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Provider-specific system prompts in the tenant dashboard","item":"https://llm-proxy.mprlab.com/resources/provider-specific-system-prompts/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of provider-specific system prompts?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy stores text model and provider-specific system prompt settings with each managed provider profile."}},{"@type":"Question","name":"Who should read this management ui resource?","acceptedAnswer":{"@type":"Answer","text":"Users who need different instructions for different upstream providers."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Self-service LLM key management for internal teams, which covers self-service LLM key management."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440"></script>
   </head>
@@ -59,15 +59,15 @@
           <span>/</span>
           <a href="/resources/">Resources</a>
           <span>/</span>
-          <span>Provider-specific system prompts in LLM Proxy Settings</span>
+          <span>Provider-specific system prompts in the tenant dashboard</span>
         </nav>
         <article>
           <header class="resource-hero">
             <p class="eyebrow">Management UI</p>
-            <h1>Provider-specific system prompts in LLM Proxy Settings</h1>
+            <h1>Provider-specific system prompts in the tenant dashboard</h1>
             <p class="resource-deck">Store each provider's text model and system prompt with its managed provider configuration.</p>
             <p class="resource-audience">Users who need different instructions for different upstream providers.</p>
-            <p class="resource-byline">Reviewed 2026-08-08 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <p class="resource-byline">Reviewed 2026-09-10 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
             <div class="resource-actions">
               <a class="resource-button" href="/docs/">Open API reference</a>
               <a class="resource-link" href="/resources/">Browse all resources</a>
@@ -87,10 +87,10 @@
           <section>
             <h2>How it works</h2>
             <ol class="resource-steps">
-              <li>Open the selected-provider editor in Settings.</li>
-<li>Choose the provider to configure.</li>
-<li>Set the provider text model and provider system prompt.</li>
-<li>Leave the changed field or switch providers; the selected provider settings autosave without a separate save action.</li>
+              <li>Select a tenant and one of its connected providers.</li>
+<li>Open the connection details below the map.</li>
+<li>Enter the tenant provider prompt.</li>
+<li>Select Save provider prompt. Save a default model through its separate action.</li>
             </ol>
           </section>
 
@@ -108,9 +108,9 @@
                 <tbody>
 
                         <tr>
-                          <td>Provider-owned settings</td>
-                          <td>Model and prompt live with the selected provider record.</td>
-                          <td>Provider-specific routing context is explicit.</td>
+                          <td>Tenant provider profiles</td>
+                          <td>The model and prompt belong to the tenant provider profile.</td>
+                          <td>Sharing credentials preserves separate tenant prompts.</td>
                         </tr>
 
 
@@ -122,9 +122,9 @@
 
 
                         <tr>
-                          <td>Clear removal</td>
-                          <td>Removing a provider key also removes provider settings.</td>
-                          <td>The destructive boundary is explicit.</td>
+                          <td>Preserved profiles</td>
+                          <td>Detaching a connection preserves the tenant provider prompt and model.</td>
+                          <td>Dependent default routes require explicit clearing during detachment.</td>
                         </tr>
 
                 </tbody>
@@ -150,7 +150,7 @@
 
                     <section class="resource-card">
                       <h3>Provider cleanup</h3>
-                      <p>A user removes a provider key and settings after a trial ends.</p>
+                      <p>A user detaches a trial connection. Its other tenant assignments remain intact.</p>
                     </section>
 
             </div>
@@ -161,7 +161,7 @@
             <ul class="resource-list">
               <li>Request-level system instructions take precedence over server-injected defaults.</li>
 <li>Provider settings are scoped to the selected tenant owned by the authenticated TAuth subject.</li>
-<li>Autosave responses return masked key status; raw retrieval requires the separate owner-authenticated reveal action.</li>
+<li>Connection responses contain masked credentials. The provider prompt remains a tenant property.</li>
             </ul>
           </section>
 

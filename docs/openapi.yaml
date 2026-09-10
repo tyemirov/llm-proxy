@@ -1140,6 +1140,12 @@ paths:
         '200':
           description: Current public capability catalog.
           headers:
+            Access-Control-Allow-Origin:
+              description: Permits browser reads of this public resource without credentials.
+              schema:
+                type: string
+                const: '*'
+              x-required: true
             Cache-Control:
               description: Allows short-lived caching of the public catalog.
               schema:
@@ -1431,43 +1437,142 @@ paths:
           $ref: '#/components/responses/ManagementNotFound'
         '500':
           $ref: '#/components/responses/ManagementInternalError'
-  /api/management/tenants/{tenant_id}/provider-connections/{provider}:
-    put:
-      operationId: putManagementProviderConnection
-      summary: Verify and save catalog-defined provider connection fields
-      description: >-
-        The fields object must contain the exact fields for the path provider.
-        A blank saved secret retains its existing value. A nonempty secret
-        replaces it. The service verifies new credentials, changed settings,
-        and changed models through the selected provider transport. Pollable
-        transports complete their observable resource lifecycle before the
-        atomic persistence operation. Rejection and unconfirmed outcomes do not
-        mutate provider state or managed usage. The operation returns 409 when
-        a retained secret changes before persistence.
+  /api/management/connections:
+    get:
+      operationId: listManagementConnections
+      summary: List account connections and provider definitions
+      description: Connections use ascending ID order. Continue with next_cursor. An empty next_cursor indicates the last page.
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/OptionalOrigin'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: cursor
+          in: query
+          description: The next_cursor from the previous page. The cursor remains valid after connection deletion.
+          schema:
+            type: string
+            pattern: '^connection-[0-9a-f]{32}$'
+      responses:
+        '200':
+          description: Operation completed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountConnections'
+        '400':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '403':
+          $ref: '#/components/responses/ManagementForbidden'
+        '404':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+        '409':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+        '500':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+    post:
+      operationId: createManagementConnection
+      summary: Verify credentials and create an account connection
       tags:
         - Management
       security:
         - TAuthSession: []
       x-llm-proxy-required-request-content-type: application/json
       parameters:
-        - $ref: '#/components/parameters/TenantID'
-        - $ref: '#/components/parameters/ProviderPath'
         - $ref: '#/components/parameters/OptionalOrigin'
+        - $ref: '#/components/parameters/ConnectionCreationKey'
       requestBody:
-        $ref: '#/components/requestBodies/ProviderConnectionRequest'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountConnectionWrite'
       responses:
-        '200':
-          $ref: '#/components/responses/TenantProfileSuccess'
+        '201':
+          description: Operation completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountConnection'
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Location:
+              description: The created connection resource.
+              schema:
+                type: string
         '400':
-          $ref: '#/components/responses/ManagementBadRequest'
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
         '401':
           $ref: '#/components/responses/ManagementUnauthorized'
         '403':
           $ref: '#/components/responses/ManagementForbidden'
         '404':
-          $ref: '#/components/responses/ManagementNotFound'
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
         '409':
-          $ref: '#/components/responses/ManagementConflict'
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
         '415':
           $ref: '#/components/responses/ManagementUnsupportedMediaType'
         '422':
@@ -1475,19 +1580,234 @@ paths:
         '429':
           $ref: '#/components/responses/ProviderKeyVerificationRateLimited'
         '500':
-          $ref: '#/components/responses/ManagementInternalError'
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+        '503':
+          $ref: '#/components/responses/ProviderKeyVerificationUnavailable'
+        '504':
+          $ref: '#/components/responses/ProviderKeyVerificationTimedOut'
+  /api/management/connections/{connection_id}:
+    get:
+      operationId: getManagementConnection
+      summary: Read a connection with masked credentials
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      parameters:
+        - name: connection_id
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - $ref: '#/components/parameters/OptionalOrigin'
+      responses:
+        '200':
+          description: Operation completed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountConnection'
+        '400':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '403':
+          $ref: '#/components/responses/ManagementForbidden'
+        '404':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+        '409':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+        '500':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+    put:
+      operationId: replaceManagementConnection
+      summary: Update a connection at its expected version
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - name: connection_id
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - $ref: '#/components/parameters/OptionalOrigin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountConnectionWrite'
+      responses:
+        '200':
+          description: Operation completed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountConnection'
+        '400':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '403':
+          $ref: '#/components/responses/ManagementForbidden'
+        '404':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+        '409':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+        '415':
+          $ref: '#/components/responses/ManagementUnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ProviderKeyRejected'
+        '429':
+          $ref: '#/components/responses/ProviderKeyVerificationRateLimited'
+        '500':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
         '503':
           $ref: '#/components/responses/ProviderKeyVerificationUnavailable'
         '504':
           $ref: '#/components/responses/ProviderKeyVerificationTimedOut'
     delete:
-      operationId: deleteManagementProviderConnection
-      summary: Delete saved credential fields for one provider
-      description: >-
-        Deletes only the provider's encrypted credential fields. The provider
-        definition, non-secret connection fields, selected text model,
-        provider system prompt, historical usage, and every still-valid tenant
-        routing default remain unchanged.
+      operationId: deleteManagementConnection
+      summary: Delete an unassigned connection
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - name: connection_id
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - $ref: '#/components/parameters/OptionalOrigin'
+      responses:
+        '204':
+          description: Operation completed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+        '400':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '403':
+          $ref: '#/components/responses/ManagementForbidden'
+        '404':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+        '409':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+        '415':
+          $ref: '#/components/responses/ManagementUnsupportedMediaType'
+        '500':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+  /api/management/tenants/{tenant_id}/connections/{provider}:
+    put:
+      operationId: assignManagementConnection
+      summary: Assign one connection to the tenant provider
       tags:
         - Management
       security:
@@ -1497,28 +1817,67 @@ paths:
         - $ref: '#/components/parameters/TenantID'
         - $ref: '#/components/parameters/ProviderPath'
         - $ref: '#/components/parameters/OptionalOrigin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantConnectionAssignment'
       responses:
         '200':
-          $ref: '#/components/responses/TenantProfileSuccess'
+          description: Operation completed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantProfile'
         '400':
-          $ref: '#/components/responses/ManagementBadRequest'
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
         '401':
           $ref: '#/components/responses/ManagementUnauthorized'
         '403':
           $ref: '#/components/responses/ManagementForbidden'
         '404':
-          $ref: '#/components/responses/ManagementNotFound'
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+        '409':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
         '415':
           $ref: '#/components/responses/ManagementUnsupportedMediaType'
         '500':
-          $ref: '#/components/responses/ManagementInternalError'
-  /api/management/tenants/{tenant_id}/provider-connections/{provider}/fields/{field}/reveal:
-    post:
-      operationId: revealManagementProviderConnectionField
-      summary: Reveal one saved secret provider field
-      description: >-
-        The provider definition must declare the path field as secret. This
-        credentialed action also requires the exact configured public Origin.
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+    delete:
+      operationId: detachManagementConnection
+      summary: Detach a connection and optionally clear dependent defaults
       tags:
         - Management
       security:
@@ -1527,25 +1886,134 @@ paths:
       parameters:
         - $ref: '#/components/parameters/TenantID'
         - $ref: '#/components/parameters/ProviderPath'
-        - $ref: '#/components/parameters/ProviderFieldPath'
-        - $ref: '#/components/parameters/RequiredOrigin'
-      requestBody:
-        $ref: '#/components/requestBodies/EmptyJSONRequest'
+        - name: clear_defaults
+          in: query
+          schema:
+            type: string
+            enum:
+              - 'true'
+              - 'false'
+          description: Use true to confirm removal of dependent default routes.
+        - $ref: '#/components/parameters/OptionalOrigin'
       responses:
-        '200':
-          $ref: '#/components/responses/ProviderFieldRevealSuccess'
+        '204':
+          description: Operation completed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
         '400':
-          $ref: '#/components/responses/ManagementBadRequest'
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
         '401':
           $ref: '#/components/responses/ManagementUnauthorized'
         '403':
           $ref: '#/components/responses/ManagementForbidden'
         '404':
-          $ref: '#/components/responses/ManagementNotFound'
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+        '409':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
         '415':
           $ref: '#/components/responses/ManagementUnsupportedMediaType'
         '500':
-          $ref: '#/components/responses/ManagementInternalError'
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+  /api/management/tenants/{tenant_id}/provider-profiles/{provider}:
+    put:
+      operationId: updateManagementProviderProfile
+      summary: Save the tenant provider model and system prompt
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: '#/components/parameters/TenantID'
+        - $ref: '#/components/parameters/ProviderPath'
+        - $ref: '#/components/parameters/OptionalOrigin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantProviderProfileWrite'
+      responses:
+        '200':
+          description: Operation completed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantProfile'
+        '400':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '403':
+          $ref: '#/components/responses/ManagementForbidden'
+        '404':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+        '409':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+        '415':
+          $ref: '#/components/responses/ManagementUnsupportedMediaType'
+        '500':
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
   /api/management/tenants/{tenant_id}/defaults:
     put:
       operationId: putManagementTenantDefaults
@@ -1724,6 +2192,18 @@ components:
       schema:
         type: string
         pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+    ConnectionCreationKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >-
+        Account-scoped key for one connection creation request. Repeat the same
+        key and request to receive the original 201 response and Location.
+        A changed request returns 409. Receipts survive connection deletion.
+        Read the connection resource for its current state.
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -1864,12 +2344,6 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/TenantNameRequest'
-    ProviderConnectionRequest:
-      required: true
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ProviderConnectionRequest'
     DefaultsRequest:
       required: true
       content:
@@ -2276,15 +2750,6 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/AdminUsersSummary'
-    ProviderFieldRevealSuccess:
-      description: The saved secret provider field. Never persist or log this response.
-      headers:
-        Cache-Control:
-          $ref: '#/components/headers/NoStore'
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ProviderFieldReveal'
     TenantSecretSuccess:
       description: The newly generated tenant client secret and current profile. The secret is returned only by this response.
       headers:
@@ -2404,6 +2869,118 @@ components:
           - failed
           - uncertain
   schemas:
+    AccountConnectionWrite:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - provider
+        - fields
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        provider:
+          type: string
+        fields:
+          type: object
+          additionalProperties:
+            type: string
+        version:
+          type: integer
+          minimum: 0
+          description: Use zero or omit on creation. Updates require the current connection version.
+    AccountConnection:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - provider
+        - version
+        - fields
+        - tenant_ids
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        provider:
+          type: string
+        version:
+          type: integer
+          minimum: 1
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderField'
+        tenant_ids:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AccountConnections:
+      type: object
+      additionalProperties: false
+      required:
+        - connections
+        - providers
+        - next_cursor
+      properties:
+        next_cursor:
+          type: string
+          description: The last returned connection ID when another page exists. An empty string indicates the last page.
+        connections:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountConnection'
+        providers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderProfile'
+    TenantConnectionAssignment:
+      type: object
+      additionalProperties: false
+      required:
+        - connection_id
+      properties:
+        connection_id:
+          type: string
+          minLength: 1
+    TenantProviderProfileWrite:
+      type: object
+      additionalProperties: false
+      required:
+        - text_model
+        - system_prompt
+      properties:
+        text_model:
+          type: string
+          minLength: 1
+        system_prompt:
+          type: string
+    ConnectionError:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required:
+            - code
+          properties:
+            code:
+              type: string
     MCPRequest:
       type: object
       additionalProperties: false
@@ -4442,28 +5019,6 @@ components:
         name:
           type: string
           minLength: 1
-    ProviderConnectionRequest:
-      type: object
-      additionalProperties: false
-      required:
-        - fields
-        - text_model
-        - system_prompt
-      properties:
-        fields:
-          type: object
-          minProperties: 1
-          properties: {}
-          additionalProperties:
-            type: string
-          description: >-
-            Exact map of catalog field identifiers to submitted values. Blank
-            saved secret values retain their encrypted current values.
-        text_model:
-          type: string
-          minLength: 1
-        system_prompt:
-          type: string
     DefaultsRequest:
       type: object
       additionalProperties: false
@@ -4611,7 +5166,7 @@ components:
       properties:
         provider:
           type: string
-          description: Canonical configured text provider, or empty when no provider connection exists.
+          description: Canonical configured text provider, or empty for an unset selection.
         model:
           type: string
           description: Canonical text model paired with provider, or empty when provider is empty.
@@ -4874,19 +5429,6 @@ components:
           minLength: 1
         profile:
           $ref: '#/components/schemas/TenantProfile'
-    ProviderFieldReveal:
-      type: object
-      additionalProperties: false
-      required:
-        - field_id
-        - value
-      properties:
-        field_id:
-          type: string
-          minLength: 1
-        value:
-          type: string
-          minLength: 1
     UsageAggregate:
       type: object
       additionalProperties: false

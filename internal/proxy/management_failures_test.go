@@ -306,14 +306,7 @@ func TestProviderCompletionSignalsHonorTransportContinuationPolicyAtPublicV2Boun
 	tenantIdentifier := managementDefaultTenantTestID(testingInstance, router, ownerCookie)
 	saveProviderKey := func(providerIdentifier string, apiKey string, modelIdentifier string) {
 		testingInstance.Helper()
-		request := authenticatedJSONRequest(
-			http.MethodPut,
-			managementTenantTestPath(tenantIdentifier, "/provider-connections/"+providerIdentifier),
-			managementProviderKeyRequestBody(testingInstance, apiKey, modelIdentifier, ""),
-			ownerCookie,
-		)
-		response := httptest.NewRecorder()
-		router.ServeHTTP(response, request)
+		response := putManagementProviderKey(testingInstance, router, ownerCookie, tenantIdentifier, providerIdentifier, apiKey, modelIdentifier, "", context.Background())
 		if response.Code != http.StatusOK {
 			testingInstance.Fatalf("save provider=%s status=%d body=%q", providerIdentifier, response.Code, response.Body.String())
 		}
@@ -612,14 +605,7 @@ func TestCompletionCoordinatorDeadlineRecordsAccumulatedUsageAsOneTimeout(testin
 	router := newManagementRouterWithDatabasePath(testingInstance, proxy.Configuration{Endpoints: providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek)}, databasePath)
 	ownerCookie := managementSessionCookie(testingInstance, "completion-timeout-owner")
 	tenantIdentifier := managementDefaultTenantTestID(testingInstance, router, ownerCookie)
-	saveProviderRequest := authenticatedJSONRequest(
-		http.MethodPut,
-		managementTenantTestPath(tenantIdentifier, "/provider-connections/"+proxy.ProviderNameDeepSeek),
-		managementProviderKeyRequestBody(testingInstance, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, ""),
-		ownerCookie,
-	)
-	saveProviderResponse := httptest.NewRecorder()
-	router.ServeHTTP(saveProviderResponse, saveProviderRequest)
+	saveProviderResponse := putManagementProviderKey(testingInstance, router, ownerCookie, tenantIdentifier, proxy.ProviderNameDeepSeek, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, "", context.Background())
 	if saveProviderResponse.Code != http.StatusOK {
 		testingInstance.Fatalf("save DeepSeek provider status=%d body=%q", saveProviderResponse.Code, saveProviderResponse.Body.String())
 	}
@@ -893,25 +879,11 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 	ownerCookie := managementSessionCookie(t, "failure-pagination-owner")
 	tenantPath := managementDefaultTenantTestPath(t, router, ownerCookie, "")
 
-	saveKeyRequest := authenticatedJSONRequest(
-		http.MethodPut,
-		tenantPath+"/provider-connections/deepseek",
-		managementProviderKeyRequestBody(t, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, ""),
-		ownerCookie,
-	)
-	saveKeyResponse := httptest.NewRecorder()
-	router.ServeHTTP(saveKeyResponse, saveKeyRequest)
+	saveKeyResponse := putManagementProviderKey(t, router, ownerCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), "deepseek", testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, "", context.Background())
 	if saveKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save key status=%d body=%q", saveKeyResponse.Code, saveKeyResponse.Body.String())
 	}
-	saveDictationKeyRequest := authenticatedJSONRequest(
-		http.MethodPut,
-		tenantPath+"/provider-connections/openai",
-		managementProviderKeyRequestBody(t, testManagementOpenAIKey, proxy.ModelNameGPT41, ""),
-		ownerCookie,
-	)
-	saveDictationKeyResponse := httptest.NewRecorder()
-	router.ServeHTTP(saveDictationKeyResponse, saveDictationKeyRequest)
+	saveDictationKeyResponse := putManagementProviderKey(t, router, ownerCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), "openai", testManagementOpenAIKey, proxy.ModelNameGPT41, "", context.Background())
 	if saveDictationKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save dictation key status=%d body=%q", saveDictationKeyResponse.Code, saveDictationKeyResponse.Body.String())
 	}

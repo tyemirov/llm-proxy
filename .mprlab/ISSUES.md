@@ -27,6 +27,37 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B208] (P1) Keep database error details out of management responses.
+  Goal: Return a stable error code when a management database operation fails.
+  Observed: F063 failure tests reproduced database details in tenant deletion responses.
+  Requirements:
+  - Return a stable code for unexpected management store failures.
+  - Keep database details and credentials out of HTTP responses.
+  - Preserve the saved tenant and connection state after a failed transaction.
+  Validation:
+  - Use HTTP tests with injected database failures.
+  - Complete repository validation after the correction.
+  Resolution: Management responses return stable error codes without database details.
+  HTTP failure tests verify transaction rollback and retry behavior.
+  Validation: `make ci` passed all 12 gates with 100.0 percent Go coverage.
+
+
+- [!] [B207] (P1) {I260} Restore production login with matching shared UI assets.
+  Goal: Restore Google login on the production website.
+  Observed: On September 10, 2026, the live API supplies `auth.providers.google.clientId` with a nonempty Google client ID.
+  The published `mpr-ui@latest/mpr-ui-config.js` response identifies version `3.11.11` and requires `auth.googleClientId`.
+  Its public `MPRUI.loadYamlConfig` entry point rejects the live YAML with `config-ui.yaml missing auth.googleClientId`.
+  The website release marker identifies `v1.9.1` at `60068442d823af78d07bb0de5405485da263c99c`.
+  Requirements:
+  - Complete the shared publication and cache procedure in mpr-ui I009.
+  - Verify that the published loader accepts the live provider map.
+  - Verify Google login, session restoration, protected requests, and logout in the production browser.
+  Validation:
+  - The published loader reproduced the reported config error through its public entry point with the live API response.
+  - `make test-shared-ui-config` passed for the current repository config producers.
+  - The CDN response declares `max-age=604800, s-maxage=43200`.
+  Blocked: The operator must publish the qualified shared UI assets and complete cache convergence under mpr-ui I009.
+
 - [x] [B206] (P1) Clear the application transition after session recovery.
   Goal:
   Keep the authenticated application usable after shared session recovery.
@@ -1111,6 +1142,25 @@ retain satisfied historical dependencies.
 
 
 ## Features
+
+- [x] [F063] (P1) Implement the tenant, connection, and model dashboard from P001.
+  Resolution: Implemented account connections, tenant assignments, explicit dashboard controls, and the approved bounded migration.
+  Connection creation supports durable retries. Tenant usage, access keys, routes, and prompts remain separate.
+  Validation: `make ci` passed all 12 gates, including 100.0 percent Go coverage, 117 frontend tests, and seven authenticated browser tests.
+  Goal: Implement the full P001 design approved by the user on September 10, 2026.
+  Requirements:
+  - Implement all P001 requirements and its approved routing and migration decisions.
+  - Keep one connection per provider per tenant and permit connection reuse within the account.
+  - Preserve tenant access, default routes, prompts, and usage during the bounded migration.
+  - Require explicit detach operations before connection deletion.
+  - Clear dependent defaults atomically when the user confirms a detach operation.
+  - Preserve the existing last-tenant deletion constraint.
+  - Provide searchable lists and scrollable columns for large dashboard inventories.
+  Deliverables:
+  - Implement connection storage, management APIs, the dashboard, migration, and current contract documentation.
+  Validation:
+  - Verify all P001 acceptance scenarios through management API and browser tests.
+  - Complete the current repository validation sequence after the last application change.
 
 - [!] [F061] (P1) Add GPT-6 Astra through the existing OpenAI provider.
   Goal:
@@ -3126,71 +3176,131 @@ retain satisfied historical dependencies.
   - Qwen, SAM, and GPU residency work are not blanket prerequisites for F042 or cloud media operations.
   - Reuse F022 operation storage and F042 speech resource contracts instead of defining competing public lifecycles.
   - Require measured evidence before making a controller change a prerequisite for a retained Dictator capability.
-- [ ] [P001] (P1) Design a tenant-scoped provider, model, and key-acquisition onboarding flow.
+- [x] [P001] (P1) Design the tenant, connection, and model dashboard.
+  Resolution: F063 implemented the approved design and routing and migration decisions.
+  The current contract is in `docs/tenant-connections.md` and `docs/openapi.yaml`.
+  Validation: The full repository CI passed all 12 gates.
   Goal:
-  Let a signed-in managed user complete one clear text-routing setup: select a
-  supported provider, select one of that provider's supported text models, and
-  either paste an existing provider API key or open that provider's official
-  key-acquisition page in a new window before returning to paste it. A completed
-  setup must make the chosen provider/model the Settings tenant's usable text
-  route without asking the user to reconcile separate provider, default, and
-  client-secret forms.
+  Give account owners one dashboard to create tenants, connect providers, select models, and examine tenant usage.
+  The user approved the revised visual direction on September 10, 2026.
+  This planning issue records that design and the decisions required before implementation.
+  It replaces the earlier Settings-only setup proposal in P001.
+  Context:
+  Tenant management is in Settings, while provider configuration uses separate cards.
+  The user cannot easily discover how to connect a tenant to an existing provider configuration.
+  FamilyHome can use existing provider credentials while its proxy access, token totals, and usage remain separate.
+  Proposed resource model:
+  An account owns multiple tenants and named provider connections.
+  In this design, a provider connection contains a provider identity, credentials, and required provider settings.
+  A tenant can reference one connection per provider. A provider can remain unconfigured for a tenant.
+  Multiple tenants in the same account can reference one connection.
+  Tenant identity, proxy access keys, default routes, system prompts, and usage remain tenant properties.
+  This proposal changes the current tenant-owned definition of `provider connection` when implementation occurs.
   Requirements:
-  - Build the flow inside the current editor-only `Settings tenant` context.
-    It must read and write only that selected tenant and must not change the
-    independent `Usage tenant` filter. Another tenant or user must never
-    inherit a provider key, model choice, in-progress form value, or completion
-    state.
-  - Serve provider labels, text-model choices, capabilities, and the verified
-    official credential-acquisition URL from one validated provider catalog.
-    Do not hard-code provider/model lists or provider registration URLs in the
-    browser. The public/management catalog build must reject a self-service
-    provider without a canonical HTTPS credential URL rather than render a
-    guessed link.
-  - Make provider selection the first step and expose only that provider's text
-    models in the next step. Explain whether the provider already has a saved
-    key, but never show the raw key or make a model from another provider
-    selectable.
-  - When the user has no key, render a descriptive provider-specific anchor
-    that opens the official acquisition page with `target="_blank"` and
-    `rel="noopener noreferrer"`. Do not send tenant IDs, TAuth data, proxy
-    secrets, provider keys, or tracking query values to the external site, and
-    do not attempt to detect registration completion.
-  - Keep selection local while the external page is open. On return, require a
-    manually pasted key and make one atomic authenticated operation that saves
-    the encrypted provider key, the selected provider text model, and the
-    tenant's text defaults. A failure leaves no partial routing state and shows
-    an explicit error; it must not reuse a prior model or key as a fallback.
-  - Preserve existing security boundaries: public proxy requests still reject
-    upstream provider keys; management responses and generated examples never
-    return them; saved keys remain encrypted at rest and masked after save.
-  - Keep the generated client-secret step visibly separate but adjacent to
-    completion, including one-time secret display and copyable route examples.
-    Do not create a second client-authentication or provider-key storage path.
+  - Keep the name `tenant` for the tenant resource.
+  - Use `connection` for the named provider resource.
+  - Present the dashboard in this order: tenants, connections, models.
+  - Make tenant creation and connection management available directly from the dashboard.
+  - Let a new tenant use existing connections, create a connection, or complete configuration later.
+  - Keep the dashboard available when a tenant has no provider credentials.
+  - Show connection names, provider identities, and the number of assigned tenants on connection cards.
+  - Calculate `Used by N tenants` from current assignments, independently of recent request traffic.
+  - Show an unassigned state when the assignment count is zero.
+  - Treat shared and dedicated as descriptions of assignment counts, rather than selectable connection types.
+  - Keep tenant usage separate when multiple tenants use the same connection.
+  Dashboard layout:
+  - Preserve the current compact dark surfaces, thin borders, typography, and provider and model logos.
+  - Place the tenant, connection, and model columns in one central relationship map.
+  - Use explicit `Create tenant` and `Create connection` actions.
+  - Keep one visible tenant context for configuration, model defaults, and tenant usage.
+  - Provide a clearly labeled account usage view.
+  - Preserve Requests, Tokens, Success rate, and Providers metrics, plus request and token charts.
+  - Keep rejected requests distinct from failed executions.
+  - Show the selected tenant's relationships by default to reduce crossed lines.
+  - Use solid teal lines for saved assignments and dashed amber lines for proposed model changes.
+  - Mark saved default models with a star and a text label.
+  - Distinguish a selected card from a saved relationship through text and visual state.
+  - Keep the map usable with a keyboard and on narrow screens.
+  Connection interaction:
+  - When a tenant is selected, show a visible `Connect` button on each available connection card.
+  - After a successful connection, replace the button with `Connected` and show the saved relationship line.
+  - Update the tenant connection count and the connection assignment count from the saved result.
+  - Show available models after the tenant connects to the selected connection.
+  - Require a separate action to save a default model.
+  - For a tenant without connections, show `Connect to choose models` in the model column.
+  - Keep connection selection empty when the selected tenant has no connections.
+  - When a user examines an unattached connection, show `Not connected` beside the tenant context.
+  - Show a route in the footer only when the corresponding relationship exists.
+  - Show explicit progress and error states for connection changes.
+  - If a change fails, preserve the previous saved assignment and show the error.
+  Detail controls:
+  - Open connection details below the map when the user selects a connection.
+  - Show its name, provider, masked credentials, required settings, and assigned tenants.
+  - Provide connection edit and tenant detach actions in the same detail area.
+  - Before a shared connection changes, identify each affected tenant beside the save action.
+  - When a tenant detaches, preserve the connection and its other tenant assignments.
+  - Show affected default routes before a detach operation.
+  - Require explicit resolution of affected defaults without selecting another route automatically.
+  - Show models and capabilities from the provider catalog for the selected connection.
+  - Provide Text and Dictation controls with explicit actions to save tenant defaults.
+  - Keep reasoning controls and system prompts with the applicable tenant configuration.
+  - Keep model previews separate from saved defaults.
+  - Provide adjacent tenant access controls with one-time secret display and copyable route examples.
+  Credential setup:
+  - Let the user name a new connection and select its provider before entering required credentials and settings.
+  - Offer attachment to the selected tenant during connection creation.
+  - Use the provider catalog for field definitions, capabilities, model choices, and verified official credential URLs.
+  - Open official credential pages with `target="_blank"` and `rel="noopener noreferrer"`.
+  - Keep account data, tenant identifiers, and credentials out of external links.
+  - Preserve the form while the user obtains credentials in another window.
+  - Validate credentials and settings through the canonical management contract before reporting successful configuration.
+  - Keep stored credentials encrypted and saved values masked.
+  - Keep upstream credentials out of management responses, generated examples, and public proxy requests.
+  - Enforce account ownership for connection access and tenant assignments.
+  Approved routing and migration decisions:
+  The user approved these decisions on September 10, 2026.
+  - Limit each tenant to one assigned connection per provider.
+  - Use that connection for the tenant's requests to the provider.
+  - Permit the same connection to serve multiple tenants in its account.
+  - Create one account-owned connection for each existing provider configuration during the bounded migration.
+  - Attach each migrated connection to the configuration's current tenant.
+  - Keep migrated connections separate even when their credential values are equal.
+  - Preserve tenant access keys, default routes, system prompts, and usage history during migration.
+  Implementation decisions:
+  - Require all tenant assignments to be detached before connection deletion.
+  - Clear dependent defaults atomically after explicit detach confirmation.
+  - Preserve the existing last-tenant deletion constraint.
+  - Use searchable lists and scrollable columns when inventories exceed the visible map.
+  Implementation owner: F063 implements the full approved P001 scope under the user's September 10 instruction.
   Deliverables:
-  - Add a validated, sanitized provider catalog projection containing the
-    provider identity, label, text models, capability metadata, and official
-    credential-acquisition URL; use it for the management API and browser UI.
-  - Replace the disconnected Settings controls with a tenant-scoped onboarding
-    surface and one canonical management mutation for completed provider/model/
-    key setup.
-  - Update typed frontend contracts, management API documentation, examples,
-    and accessibility copy to describe the exact sequence and no-key path.
-  - Do not add provider aliases, hidden default selection, a browser-maintained
-    catalog, a compatibility endpoint, a key-import shortcut, or a best-effort
-    retry/fallback path.
+  - Complete the open decisions with one resource, ownership, and route-selection contract.
+  - Specify management API operations for connection creation, edits, assignments, detach operations, and deletion.
+  - Record the final dashboard states, responsive layout, keyboard behavior, and accessible labels.
+  - Specify the bounded migration and the removal of obsolete tenant credential paths.
+  - Define implementation work for storage, management APIs, the dashboard, and public-entrypoint acceptance.
+  - Include updates to OpenAPI, typed frontend contracts, examples, and repository terminology in the implementation scope.
+  - Retain P012 as the provider-specific access decision owner and P001 as the shared interface design owner.
   Validation:
-  - Add black-box configuration and management API coverage for invalid/missing
-    credential URLs, provider/model mismatches, atomic rollback, tenant/user
-    isolation, masked responses, and the absence of provider keys in profile,
-    example, and public-proxy payloads.
-  - Add Playwright coverage for a first-time user choosing a provider, seeing
-    only its models, opening the correctly protected official link in a new
-    page, returning to save a key, receiving the selected default route, and
-    generating/copying a client secret. Cover keyboard, screen-reader labels,
-    narrow layouts, saved-key updates, and explicit failure states.
-  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
-    pair for the implementation, with the final run after the last code edit.
+  - Walk through Social Threader with no connections and no selected connection.
+  - Verify that the Production card presents an obvious `Connect` action.
+  - Connect Production and verify `Connected`, the new line, assignment counts, and available models.
+  - Verify that connection creation or attachment does not silently select a default model.
+  - Walk through FamilyHome creation with existing credentials and with a new connection.
+  - Verify that tenant creation can finish before provider configuration.
+  - Walk through model previews, explicit default saves, tenant switches, connection edits, detach operations, and failures.
+  - Specify browser acceptance for keyboard use, narrow layouts, masked secrets, and consistent tenant context.
+  - Specify management API acceptance for account isolation, assignment persistence, migration, and atomic changes to dependent defaults.
+  - Verify separate tenant usage when two tenants use the same connection.
+  - Verify that a tenant cannot have two assigned connections for the same provider.
+  - Verify that provider requests use the tenant's assigned connection.
+  - Verify one migrated connection per existing provider configuration and attachment to its original tenant.
+  - Verify that equal credentials in separate configurations produce separate migrated connections.
+  - Verify that migration preserves tenant access keys, default routes, system prompts, and usage history.
+  - Apply the current repository validation policy when the implementation issues execute.
+  Design reference:
+  The accepted local prototype is `dashboard-connections-design.html`, revised with explicit Connect buttons and Social Threader selected.
+  Local path: `/Users/tyemirov/.codex/visualizations/2026/09/10/01a08a31-cc66-7da2-a881-ed1babc4fcfe/dashboard-connections-design.html`.
+  This prototype uses sample data and illustrative credentials. The requirements above are the durable design record.
 - [ ] [P006] (P2) Define provider lifecycle, model onboarding, and hosted service SLA terms.
   Goal:
   Turn the proposed long-term provider support, model-addition timing, and

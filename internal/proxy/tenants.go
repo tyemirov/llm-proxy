@@ -64,21 +64,14 @@ func normalizedTenantDefaults(rawDefaults TenantDefaults) tenantDefaults {
 }
 
 type managedProviderSettings struct {
-	connectionValues   map[string]string
-	connectionVersions map[string]managedProviderConnectionVersion
-	configuredFields   map[string]bool
-	textModel          string
-	systemPrompt       string
+	connectionValues map[string]string
+	configuredFields map[string]bool
+	textModel        string
+	systemPrompt     string
 }
-
-type managedProviderConnectionVersion [sha256.Size]byte
 
 func (settings managedProviderSettings) connectionValue(fieldIdentifier string) string {
 	return strings.TrimSpace(settings.connectionValues[fieldIdentifier])
-}
-
-func (settings managedProviderSettings) connectionVersion(fieldIdentifier string) managedProviderConnectionVersion {
-	return settings.connectionVersions[fieldIdentifier]
 }
 
 func (settings managedProviderSettings) fieldConfigured(fieldIdentifier string) bool {

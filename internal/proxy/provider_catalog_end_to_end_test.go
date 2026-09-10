@@ -204,74 +204,43 @@ func TestCatalogDefinedProviderFlowsThroughEveryGenericConsumer(testingInstance 
 		}
 	}
 
-	connectionBody, marshalError := json.Marshal(map[string]any{
-		"fields": map[string]string{
-			testCatalogCredentialField: testCatalogProviderCredential,
-			testCatalogSettingField:    upstreamServer.URL,
-		},
-		"text_model":    testCatalogModelID,
-		"system_prompt": testCatalogProviderSystem,
-	})
-	if marshalError != nil {
-		testingInstance.Fatalf("marshal catalog provider connection: %v", marshalError)
-	}
-	connectionRequest := authenticatedJSONRequest(http.MethodPut, tenantPath+"/provider-connections/"+testCatalogProviderAlias, string(connectionBody), sessionCookie)
-	connectionResponse := httptest.NewRecorder()
-	router.ServeHTTP(connectionResponse, connectionRequest)
-	if connectionResponse.Code != http.StatusOK {
-		testingInstance.Fatalf("save catalog provider connection status=%d body=%s", connectionResponse.Code, connectionResponse.Body.String())
-	}
-	if strings.Contains(connectionResponse.Body.String(), testCatalogProviderCredential) {
-		testingInstance.Fatalf("save response exposed catalog credential: %s", connectionResponse.Body.String())
-	}
-	assertTestCatalogManagementSchema(testingInstance, connectionResponse.Body.Bytes(), true, upstreamServer.URL)
-
+	connection := accountConnectionExchange(testingInstance, router, sessionCookie, http.MethodPost, "/connections", map[string]any{
+		"name": "Catalog connection", "provider": testCatalogProviderAlias,
+		"fields": map[string]string{testCatalogCredentialField: testCatalogProviderCredential, testCatalogSettingField: upstreamServer.URL},
+	}, http.StatusCreated)
+	connectionID := connection["id"].(string)
 	tenantID := managementDefaultTenantTestID(testingInstance, router, sessionCookie)
+	accountConnectionExchange(testingInstance, router, sessionCookie, http.MethodPut, "/tenants/"+tenantID+"/connections/"+testCatalogProviderID, map[string]string{"connection_id": connectionID}, http.StatusOK)
+	profile := accountConnectionExchange(testingInstance, router, sessionCookie, http.MethodPut, "/tenants/"+tenantID+"/provider-profiles/"+testCatalogProviderID, map[string]string{"text_model": testCatalogModelID, "system_prompt": testCatalogProviderSystem}, http.StatusOK)
+	profileBytes, marshalError := json.Marshal(profile)
+	if marshalError != nil {
+		testingInstance.Fatal(marshalError)
+	}
+	assertTestCatalogManagementSchema(testingInstance, profileBytes, true, upstreamServer.URL)
+	if strings.Contains(string(profileBytes), testCatalogProviderCredential) {
+		testingInstance.Fatal("management response exposed credential")
+	}
+	accountConnectionExchange(testingInstance, router, sessionCookie, http.MethodPut, "/tenants/"+tenantID+"/defaults", map[string]string{"provider": testCatalogProviderID, "model": testCatalogModelID, "dictation_provider": "", "dictation_model": "", "system_prompt": "", "reasoning_effort": ""}, http.StatusOK)
 	fixtureDatabase := openManagedFixtureDatabase(testingInstance, databasePath)
-	var credentialRecord managedProviderConnectionFixture
-	credentialQuery := fixtureDatabase.Where(
-		"tenant_id = ? AND provider_id = ? AND field_id = ?",
-		tenantID,
-		testCatalogProviderID,
-		testCatalogCredentialField,
-	).First(&credentialRecord)
-	if credentialQuery.Error != nil {
-		testingInstance.Fatalf("load catalog credential record: %v", credentialQuery.Error)
+	var credentialRecord struct{ Value string }
+	if err := fixtureDatabase.Table("managed_connection_field_records").Where("connection_id = ? AND field_id = ?", connectionID, testCatalogCredentialField).Take(&credentialRecord).Error; err != nil {
+		testingInstance.Fatal(err)
 	}
-	if credentialRecord.Value == testCatalogProviderCredential || strings.Contains(credentialRecord.Value, testCatalogProviderCredential) {
-		testingInstance.Fatalf("catalog credential was not encrypted: %q", credentialRecord.Value)
+	if strings.Contains(credentialRecord.Value, testCatalogProviderCredential) {
+		testingInstance.Fatal("catalog credential was not encrypted")
 	}
-	var settingRecord managedProviderConnectionFixture
-	settingQuery := fixtureDatabase.Where(
-		"tenant_id = ? AND provider_id = ? AND field_id = ?",
-		tenantID,
-		testCatalogProviderID,
-		testCatalogSettingField,
-	).First(&settingRecord)
-	if settingQuery.Error != nil {
-		testingInstance.Fatalf("load catalog setting record: %v", settingQuery.Error)
+	var settingRecord struct{ Value string }
+	if err := fixtureDatabase.Table("managed_connection_field_records").Where("connection_id = ? AND field_id = ?", connectionID, testCatalogSettingField).Take(&settingRecord).Error; err != nil {
+		testingInstance.Fatal(err)
 	}
 	if settingRecord.Value != upstreamServer.URL {
-		testingInstance.Fatalf("catalog setting value=%q want=%q", settingRecord.Value, upstreamServer.URL)
+		testingInstance.Fatalf("catalog setting=%q", settingRecord.Value)
 	}
-
-	revealRequest := authenticatedProviderKeyRevealRequest(
-		http.MethodPost,
-		tenantPath+"/provider-connections/"+testCatalogProviderID+"/fields/"+testCatalogCredentialField+"/reveal",
-		sessionCookie,
-		"http://localhost:8080",
-	)
+	revealRequest := authenticatedProviderKeyRevealRequest(http.MethodPost, tenantPath+"/provider-connections/"+testCatalogProviderID+"/fields/"+testCatalogCredentialField+"/reveal", sessionCookie, "http://localhost:8080")
 	revealResponse := httptest.NewRecorder()
 	router.ServeHTTP(revealResponse, revealRequest)
-	if revealResponse.Code != http.StatusOK {
-		testingInstance.Fatalf("reveal catalog credential status=%d body=%s", revealResponse.Code, revealResponse.Body.String())
-	}
-	var revealPayload map[string]string
-	if decodeError := json.Unmarshal(revealResponse.Body.Bytes(), &revealPayload); decodeError != nil {
-		testingInstance.Fatalf("decode catalog credential reveal: %v", decodeError)
-	}
-	if revealPayload["field_id"] != testCatalogCredentialField || revealPayload["value"] != testCatalogProviderCredential {
-		testingInstance.Fatalf("catalog credential reveal=%v", revealPayload)
+	if revealResponse.Code != http.StatusNotFound {
+		testingInstance.Fatalf("retired reveal status=%d", revealResponse.Code)
 	}
 
 	secretRequest := authenticatedJSONRequest(http.MethodPost, tenantPath+"/secrets", `{}`, sessionCookie)
@@ -334,12 +303,14 @@ func TestCatalogDefinedProviderFlowsThroughEveryGenericConsumer(testingInstance 
 		}
 	}
 
-	deleteRequest := authenticatedJSONRequest(http.MethodDelete, tenantPath+"/provider-connections/"+testCatalogProviderID, `{}`, sessionCookie)
+	accountConnectionExchange(testingInstance, reloadedRouter, sessionCookie, http.MethodDelete, "/tenants/"+tenantID+"/connections/"+testCatalogProviderID+"?clear_defaults=true", nil, http.StatusNoContent)
+	accountConnectionExchange(testingInstance, reloadedRouter, sessionCookie, http.MethodDelete, "/connections/"+connectionID, nil, http.StatusNoContent)
 	deleteResponse := httptest.NewRecorder()
-	reloadedRouter.ServeHTTP(deleteResponse, deleteRequest)
+	reloadedRouter.ServeHTTP(deleteResponse, authenticatedJSONRequest(http.MethodGet, tenantPath, "", sessionCookie))
 	if deleteResponse.Code != http.StatusOK {
-		testingInstance.Fatalf("delete catalog credential status=%d body=%s", deleteResponse.Code, deleteResponse.Body.String())
+		testingInstance.Fatalf("read detached profile status=%d", deleteResponse.Code)
 	}
+
 	var deletedProfile struct {
 		Providers []struct {
 			ID           string `json:"id"`
@@ -360,8 +331,8 @@ func TestCatalogDefinedProviderFlowsThroughEveryGenericConsumer(testingInstance 
 	if deletedProvider.ID != testCatalogProviderID || deletedProvider.Configured || deletedProvider.TextModel != testCatalogModelID || deletedProvider.SystemPrompt != testCatalogProviderSystem {
 		testingInstance.Fatalf("credential-deleted provider profile=%+v", deletedProvider)
 	}
-	if deletedProvider.Fields[0].Configured || deletedProvider.Fields[1].Value == nil || *deletedProvider.Fields[1].Value != upstreamServer.URL {
-		testingInstance.Fatalf("credential deletion changed provider fields=%+v", deletedProvider.Fields)
+	if deletedProvider.Fields[0].Configured || deletedProvider.Fields[1].Value == nil || *deletedProvider.Fields[1].Value != "" {
+		testingInstance.Fatalf("detached tenant retained connection fields=%+v", deletedProvider.Fields)
 	}
 }
 

@@ -91,6 +91,12 @@ func validatePersistedManagedRoutingDefaults(providers *providerRegistry, provid
 		return managedRoutingDefaults{}, reconciliationError
 	}
 	currentValue, reconciledValue := defaults.value(), reconciled.value()
+	// Connection assignment does not select a tenant default route.
+	if currentValue.Provider == constants.EmptyString {
+		reconciledValue.Provider = constants.EmptyString
+		reconciledValue.Model = constants.EmptyString
+		reconciledValue.ReasoningEffort = constants.EmptyString
+	}
 	// An unset dictation pair stays valid when the catalog adds a new capability.
 	if currentValue.DictationProvider == constants.EmptyString {
 		reconciledValue.DictationProvider = constants.EmptyString
@@ -125,20 +131,6 @@ func newManagedRoutingProviders(providers *providerRegistry, providerSettings ma
 		})
 	}
 	return routingProviders, nil
-}
-
-func managedRoutingProvidersFromValidatedSettings(providers *providerRegistry, providerSettings map[providerID]managedProviderSettings) []managedRoutingProvider {
-	providerIdentifiers := managedKeyedProviderIdentifiers(providers, providerSettings)
-	routingProviders := make([]managedRoutingProvider, 0, len(providerIdentifiers))
-	for _, providerIdentifier := range providerIdentifiers {
-		definition := providers.definitions[providerIdentifier]
-		settings := providerSettings[providerIdentifier]
-		routingProviders = append(routingProviders, managedRoutingProvider{
-			definition: definition,
-			textModel:  definition.textModels[strings.ToLower(strings.TrimSpace(settings.textModel))],
-		})
-	}
-	return routingProviders
 }
 
 func reconcileManagedRoutingDefaultsWithProviders(current managedRoutingDefaults, routingProviders []managedRoutingProvider) managedRoutingDefaults {
@@ -177,23 +169,6 @@ func reconcileManagedRoutingDefaultsWithProviders(current managedRoutingDefaults
 		}
 	}
 	return managedRoutingDefaults{tenantDefaults: reconciled}
-}
-
-func reconcileManagedRoutingDefaultsAfterProviderTextModelChange(reconciled managedRoutingDefaults, routingProviders []managedRoutingProvider, changedProviderIdentifier providerID) managedRoutingDefaults {
-	if newProviderID(reconciled.tenantDefaults.Provider) != changedProviderIdentifier {
-		return reconciled
-	}
-	routingProvidersByIdentifier := make(map[providerID]managedRoutingProvider, len(routingProviders))
-	for _, routingProvider := range routingProviders {
-		routingProvidersByIdentifier[routingProvider.definition.identifier] = routingProvider
-	}
-	changedProvider := routingProvidersByIdentifier[changedProviderIdentifier]
-	updated := reconciled.value()
-	updated.Model = changedProvider.textModel.string()
-	if reasoningEffortError := validateReasoningEffortForResolvedTextRoute(changedProvider.definition, changedProvider.textModel, updated.ReasoningEffort); reasoningEffortError != nil {
-		updated.ReasoningEffort = constants.EmptyString
-	}
-	return managedRoutingDefaults{tenantDefaults: updated}
 }
 
 func managedKeyedProviderIdentifiers(providers *providerRegistry, providerSettings map[providerID]managedProviderSettings) []providerID {

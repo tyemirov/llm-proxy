@@ -182,13 +182,20 @@ func TestOpenAITranscriptionRetirementStartup(t *testing.T) {
 				if err := database.First(&profile, "tenant_id = ?", expected.TenantID).Error; err != nil {
 					t.Fatal(err)
 				}
-				if err := database.First(&connection, "tenant_id = ?", expected.TenantID).Error; err != nil {
-					t.Fatal(err)
+				if scenario == "success" {
+					assertMigratedConnectionField(t, database, cipher, connections[index])
+				} else {
+					if err := database.First(&connection, "tenant_id = ?", expected.TenantID).Error; err != nil {
+						t.Fatal(err)
+					}
+					if !reflect.DeepEqual(connection, connections[index]) {
+						t.Fatal("failed migration changed the predecessor credential")
+					}
 				}
 				if err := database.First(&event, index+1).Error; err != nil {
 					t.Fatal(err)
 				}
-				if !reflect.DeepEqual(profile, profiles[index]) || !reflect.DeepEqual(connection, connections[index]) || !reflect.DeepEqual(event, usage[index]) {
+				if !reflect.DeepEqual(profile, profiles[index]) || !reflect.DeepEqual(event, usage[index]) {
 					t.Fatal("migration changed a profile, credential, or historical usage record")
 				}
 				if scenario == "success" {

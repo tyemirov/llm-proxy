@@ -40,9 +40,11 @@ The implementation issues remain open.
 - Optional exact inline or tenant-asset-backed image and audio attachments on canonical `POST /v2` user messages
 - Provider-enforced JSON Schema output and durable request reconciliation for supported canonical `POST /v2` routes
 - Optional logging at `debug` or `info` levels
-- Forwards requests with tenant-managed provider API keys loaded from the management database
-- TAuth-protected self-service UI where signed-in users automatically receive an llm-proxy client key and their provider settings plus routing defaults autosave
+- Forwards requests through account-owned provider connections assigned to the authenticated tenant
+- TAuth-protected dashboard for tenants, reusable provider connections, explicit model defaults, and tenant API access
 - Supports plain text, JSON, XML, or CSV responses
+
+See [tenant connections](docs/tenant-connections.md) for the dashboard, ownership rules, and schema migration.
 
 ## OpenCode and OpenAI clients
 
@@ -581,22 +583,25 @@ Provider-specific details:
 
 See the [xAI Responses contract and live acceptance procedure](docs/xai-responses.md).
 
-All client keys, provider API keys, and tenant defaults are tenant-owned
-management state. An explicit request for a provider without a saved tenant
-credential returns `409 provider_not_configured` before provider dispatch. An
-omitted provider resolves through the authenticated tenant's saved default and
-requires a saved credential for that route. Static provider base URLs and paths belong to
-`providers.yml`. DashScope and Baidu reference a tenant-owned `base_url` provider field.
-Baidu supplies the international Qianfan URL as its catalog default. The provider catalog must contain every supported provider and route.
-The `management` configuration is mandatory. Provider blocks in `config.yml`
-are unknown YAML keys and fail startup.
+Tenant access keys, defaults, prompts, and usage belong to the tenant.
+Provider credentials and provider fields belong to named account connections.
+A tenant can use one connection per provider.
+Multiple tenants in the same account can use the same connection.
+A provider request requires an assigned connection with its required fields.
+Otherwise, the proxy returns `409 provider_not_configured` before dispatch.
+
+Static provider URLs and paths belong to `providers.yml`.
+DashScope and Baidu also use a `base_url` connection field.
+Baidu supplies the international Qianfan URL as its catalog default.
+The `management` configuration is mandatory.
+Provider blocks in `config.yml` are unknown YAML keys and fail startup.
 
 ### Account MCP access
 
 Use `https://llm-proxy-api.mprlab.com/mcp` with an OAuth Streamable HTTP client.
 Supported MCP revisions are `2026-07-28`, `2025-11-25`, `2025-06-18`, and `2025-03-26`.
 See the [agent protocol map](docs/mcp-clients.md) for client-specific evidence.
-In Settings, select **Copy MCP URL**.
+On the dashboard, select **Copy MCP URL**.
 TAuth authorizes one account grant for all currently owned tenants.
 Call `llm_proxy.list_tenants`, then select an explicit `tenant_id` for generation or route discovery.
 Discovery works before provider setup and creates no account or tenant.
@@ -727,7 +732,7 @@ Required hosted values are profile-specific:
 | `management.session_cookie_name` | Exact app/environment TAuth session cookie name. |
 | `management.database_path` | Required SQLite location for provider connections, provider profiles, defaults, generated-secret digests, and usage events. |
 | `management.usage_queue_size` | Positive capacity of the process-local FIFO for asynchronous managed usage persistence. Defaults to `1024`; this queue is independent from `server.queue_size`. |
-| `management.provider_key_encryption_key` | Required base64-encoded 32-byte key used for AES-GCM encryption of tenant-owned provider API keys at rest. Generate with `openssl rand -base64 32` and store it with backend deployment secrets. |
+| `management.provider_key_encryption_key` | Required base64-encoded 32-byte key used for AES-GCM encryption of account connection credentials at rest. Generate with `openssl rand -base64 32` and store it with backend deployment secrets. |
 | `management.management_api_origin` | Browser-facing management API origin served from `/config-ui.yaml` under `llmProxy.managementApiOrigin`. |
 | `management.proxy_origin` | Browser-facing public proxy origin served from `/config-ui.yaml` under `llmProxy.proxyOrigin` for generated examples. |
 
@@ -739,183 +744,66 @@ operational at the same time: each generated secret independently selects that
 tenant's credentials, defaults, and usage owner. The browser has no global
 active-tenant state, activation flag, or tenant URL parameter.
 
-Tenant lifecycle and configuration live in Settings. One compact `Tenant
-access` row contains the `Tenant` selector, modal Rename, client-key state and
-one-time reveal/copy controls, confirmed Replace key, confirmed Delete tenant,
-and Create tenant. The selected tenant is only the current Settings editor
-context; it is not an activation state. Switching it while the current editor
-contains unsaved input requires an explicit discard confirmation and clears
-one-time generated secrets and revealed provider credentials from browser
-state. It does not change the independent `Usage tenant` filter. If the
-selected tenant has no llm-proxy client key, the frontend creates one through
-`POST /api/management/tenants/:tenant_id/secrets` and presents the one-time
-value masked in the read-only Key field with explicit Show and Copy actions.
-Settings opens automatically and cannot be dismissed until the profile has both
-that client key and at least one configured provider connection. Only
-`tenant.has_secret` and `providers[].configured` satisfy this setup gate. A
-typed credential draft or a static environment value does not satisfy it.
-The four active DashScope text routes use synchronous Responses requests.
-The private catalog also contains five disabled [Qwen 3.8 candidates](docs/qwen-current-models.md).
-They add explicit reasoning controls and verified model limits. See the
-[DashScope Responses contract](docs/dashscope-responses.md) for request limits
-and provider acceptance requirements.
+The dashboard presents tenants, connections, and models in three columns.
+Select **Create tenant** to add a tenant.
+The next step can use an existing connection, create a connection, or defer configuration.
+Select **Connect** on a connection card to attach it to the selected tenant.
+Creating or attaching a connection leaves tenant defaults unset until the user saves them.
+See [tenant connections](docs/tenant-connections.md) for the resource and interaction contracts.
 
-DashScope also requires the tenant's exact Singapore Model Studio workspace
-URL. Pasting into a credential provider field immediately starts one server-side
-operational verification. The operation uses the exact provider, text model,
-and submitted provider fields. It does not wait for blur, provider
-switching, Settings close, or a separate action. While the attempt is active,
-Settings announces `Verifying key` and keeps the key input available. It locks
-tenant, provider, model, reveal, remove, routing, and close actions. A newer paste or a
-tenant, provider, model, editor, or authentication context change cancels or
-invalidates the prior request. Other provider field edits still autosave through
-the same verify-before-persist operation when the user leaves the field,
-switches providers, or closes Settings.
+Connection forms use the provider catalog for credential fields, settings, and key acquisition links.
+Saving a new connection verifies its credentials through the provider's catalog default text model.
+Changing connection fields repeats verification before persistence.
+The verifier uses a fixed probe and the selected route's declared lifecycle.
+Synchronous routes make one provider request.
+Pollable Gemini routes create, observe, and delete a stored interaction before accepting the credential.
+Verification uses the shared worker, queue, rate limits, and request timeout.
+It records no tenant usage.
 
-The verifier uses the selected route's exact lifecycle for one fixed,
-non-user-content probe. Synchronous routes make one provider request. A
-pollable Gemini route creates one stored background interaction and observes it
-through the shared `pollable_resource` lifecycle. The verifier cancels an
-active interaction and deletes every stored interaction before it accepts the
-credential. Every request uses the shared upstream worker, queue,
-origin-rate-limit, and management request boundaries. The verifier applies the
-selected transport's catalog-owned visibility policy after creation. It does
-not retry a create, an undeclared response, cancel, or delete. It does not start
-a continuation or record managed usage.
-Only an accepted provider connection and model enter the provider connection
-transaction. That transaction encrypts each secret field and saves each setting
-field. It also saves the provider profile, reconciles routing defaults, and
-returns the complete tenant profile. When the
-saved provider text model changes, that transaction can update the active text
-route. It does this only when the same provider owns that route. It also clears
-a reasoning effort when the new model does not support it. A different active
-provider remains unchanged. The browser then clears the raw draft and returns
-to the masked presentation. A successful first key unlocks mandatory Settings.
+A failed verification preserves the saved connection and its assignments.
+The form retains the submitted draft for correction or retry.
+Successful responses contain masked credentials.
+Connection edits require the current version and show all affected tenants.
+Assignment changes invalidate an earlier edit version.
+A connection must have no tenant assignments before deletion.
 
-Credential/model rejection returns `422 provider_key_rejected`; an unconfirmed
-provider rate limit, timeout/cancellation, or outage/malformed response returns
-the documented `429`, `504`, or `503` provider-neutral verification error.
-None saves the candidate. A first failure leaves the provider unkeyed, while a
-failed replacement leaves the previously verified encrypted key, provider
-settings, and routing defaults active. The current editor retains only the
-rejected draft for correction or explicit retry and states which of those two
-outcomes applies. An empty saved secret field retains its existing value. A
-DashScope workspace URL change verifies the retained key
-against the new URL before persistence. Settings remains open until the user
-closes it explicitly.
-Text and dictation provider/model defaults plus reasoning effort autosave on
-selection, while the tenant system prompt autosaves when the user leaves the
-changed field. Settings serializes every mutation that returns a complete
-management profile, including provider and routing-default autosaves, provider
-removal, and client-key creation or replacement. A close request
-locks the controls and waits for the mutations already in progress. If a client
-key is created or replaced during that wait, Settings stays open so the one-time
-value can be copied before a second explicit close. A failed save retains the
-edited values for retry. Feedback caused by Settings activity appears in the
-Settings title row; page-level activity feedback remains in the MPR header.
-Removing the last configured provider connection makes Settings
-mandatory again, while a failed automatic client-key request remains retryable
-through Create key.
+Tenant details provide rename, deletion, and API access controls.
+API-key creation requires an explicit action.
+Replacement requires confirmation because the previous key stops working immediately.
+The new value appears once, with a copy control.
+Request examples use the `<generated-secret>` placeholder.
+A client key cannot be deleted independently.
+Deleting a non-final tenant removes its access key and usage while preserving account connections.
 
-Signed-in users also choose each provider's text model and provider-specific
-system prompt, choose routing defaults, and replace llm-proxy client keys after
-confirming that the prior value stops working immediately. A client key cannot
-be deleted independently; access is rotated through replacement or removed
-with the owning non-final tenant. Management requires
-`management.database_path` so signups, enabled
-providers, defaults, generated secret digests, and committed usage events
-survive restarts in a GORM-managed SQLite database at the configured location.
-SQLite is the sole runtime source of truth; there is no application
-authentication cache, replica, dual read, or invalidation path. Runtime
-connections use WAL journaling and a five-second busy timeout. Managed
-authentication uses the caller context and one read-only GORM transaction to
-load the tenant, provider connection, and provider profile records from one
-consistent SQLite snapshot.
-Authentication and single usage-event inserts do not acquire the process-wide
-management mutation lock; management flows retain that lock where they
-coordinate state transitions, while their existing GORM transactions own
-multi-statement database atomicity.
-The packaged management config uses
-strict expandable placeholders for the hosted profile values; define every
-`LLM_PROXY_MANAGEMENT_*` key in the API runtime environment. Local `make up`
-projects those values from `configs/.env.local` into the ignored, API-scoped
-`configs/.env.api.local`. Both files are ignored; tracked environment examples
-are documentation only and never participate in runtime configuration.
-Placeholders without matching values fail startup.
-The runtime config file is never mutated for user signup, provider enablement,
-or usage tracking, and database access must stay on GORM model APIs without raw
-SQL. Generated secrets continue to authenticate the public proxy endpoints with the same
-`key=<tenant secret>` query parameter. Provider API keys are accepted only
-through authenticated management endpoints. Every nonempty new or replacement
-key is operationally verified for its exact provider and selected text model
-before it is encrypted at rest with AES-GCM and persisted. Normal save,
-profile, and administrator responses return only masked key status. The sole
-raw-key response is the explicit
-owner-authenticated
-`POST /api/management/tenants/:tenant_id/provider-connections/:provider/fields/:field/reveal`
-management action, which requires the configured management origin and returns
-`Cache-Control: no-store`. Provider connection records store catalog field
-values. Separate provider profile records store the selected text model and
-provider-specific system prompt. Managed text requests that
-select a provider and omit `model` use the saved provider text model; when
-request-level system instructions are omitted, the provider-specific system
-prompt is injected before routing upstream. The F014 ownership migration accepts
-only already-encrypted legacy provider-key rows, decrypts them with their prior
-user binding, and re-encrypts them with the preserved opaque tenant id as
-AES-GCM associated data. Plaintext, corrupt, orphaned, or non-canonical rows
-fail startup before the migration transaction begins. The backend decrypts
-secret provider fields only in the provider request path and the explicit owner
-reveal action. This protects database dumps, backups, and direct storage access.
-It is not a user-only decryption or zero-knowledge guarantee. Generated tenant
-secrets are returned once and the
-database retains only their SHA-256 digest. Replacing a generated secret
-immediately makes future public proxy requests with the prior value return
-`403`. Deleting a non-final tenant removes its secret digest with the rest of
-the tenant-owned state.
+SQLite stores account connections, tenant assignments, provider profiles, default routes, secret digests, and usage.
+Runtime authentication loads the tenant and its assigned connections from one database snapshot.
+Provider secret fields use AES-GCM encryption bound to the connection identity, provider, and field.
+Management responses keep these credentials masked.
+Tenant API keys are returned once, and the database retains their SHA-256 digests.
+The bounded connection migration preserves each existing provider configuration as a separate account connection.
+It attaches that connection to the original tenant and preserves tenant access, defaults, prompts, timestamps, and usage.
 
-Managed routing defaults contain complete canonical provider/model pairs plus a
-route-bound `reasoning_effort`. A provider is eligible only while that tenant
-has all required provider connection fields. A provider default text model applies when a request
-names that provider and omits a model. The tenant text routing pair applies when
-a request omits both provider and model. Settings explains both scopes through
-help tooltips. Choosing a text routing provider initializes its routing model
-from that provider's saved default, after which the routing model can be changed
-independently. The text pair is both empty only when no provider connection exists.
-An empty dictation pair is a valid unset selection.
-A catalog update preserves that selection when it adds a dictation capability.
-Settings disables dictation controls when no keyed provider supports dictation.
-No default dictation example appears without a selected pair. Saving provider settings preserves an
-eligible current provider, while a changed provider text model also updates the
-active same-provider text default and clears an incompatible reasoning effort.
-A different active provider remains unchanged. Removing a provider connection
-preserves an eligible current default and otherwise selects the first eligible
-provider by canonical provider id, using that provider's saved text model or
-configured dictation default model. The provider mutation and both reconciled
-routing pairs are one database transaction, so a profile never exposes a
-default whose key was removed or an active provider-model change that was not
-applied.
+The packaged configuration requires every `LLM_PROXY_MANAGEMENT_*` placeholder to have a value.
+Local `make up` projects these values from `configs/.env.local` into `configs/.env.api.local`.
+Both files are ignored.
+Runtime configuration files remain unchanged by tenant creation, connection edits, and usage recording.
 
-`PUT /api/management/tenants/:tenant_id/defaults` accepts only these eligible
-complete pairs and resolves the supplied text pair before validating the
-effort. Empty is the explicit unset effort value; a nonempty value must be in
-that exact route's declared list. A partial pair, unkeyed or unknown provider,
-unsupported dictation provider, cross-provider model, or incompatible effort
-returns `400 managed_routing_defaults_invalid` before any default is persisted.
+Tenant text and dictation defaults are independent provider/model pairs.
+Both pairs can remain empty after a connection is attached.
+Selecting a model previews the route.
+**Save text default** or **Save dictation default** persists the selection.
+Text defaults can include a route-supported reasoning effort and the tenant system prompt.
+Provider prompts belong to each tenant's provider profile.
+Editing a connection preserves these tenant choices.
+Detaching a connection requires confirmation before dependent defaults are cleared atomically.
+The provider profile remains available for later attachment.
 
-The profile exposes connection eligibility through `providers[].configured`.
-It exposes capability data only through
-`providers[].text_models[].reasoning_effort`. It has no global option list or
-provider-level reasoning capability. The Settings routing selectors contain
-only configured providers. Dictation also requires declared dictation support.
-The form keeps Text provider, Text model, and Reasoning effort in one desktop
-row. It clears an incompatible value after a model change. It reports `Not
-supported` for a route without a declaration. It autosaves each routing-default
-change without a separate action. The browser rejects malformed profile data.
-It does not repair that data. Public `GET /` accepts the optional
-`reasoning_effort` query. JSON `POST /` and `POST /v2` accept the same optional
-body field. When omitted, the saved tenant default remains authoritative. An
-explicit value must match the resolved provider offering. Otherwise, the proxy
-returns `400` before an upstream call.
+`PUT /api/management/tenants/:tenant_id/defaults` accepts complete, eligible provider/model pairs.
+The selected tenant must have the provider's connection.
+A nonempty reasoning effort must belong to the exact model's declared list.
+Invalid pairs or efforts return `400` before persistence.
+Public requests can override the model and reasoning effort under the same route validation rules.
+The backend rejects malformed persisted profiles instead of repairing them during reads.
 
 Management startup requires every persisted routing field to be canonical and
 catalog-valid and every nonempty provider default to have the tenant's saved
@@ -930,18 +818,13 @@ tenant timestamps and verify their result before recording the version.
 Invalid keys, models, or routing data stop startup with
 the owner, tenant, endpoint, provider, and model context.
 
-Configured authenticated users land on Usage Overview. An independent `Usage
-tenant` selector sits immediately before the ordered `ALL`, `30 days`, `7
-days`, and `1 day` controls. It defaults to `All tenants`, while the interval
-independently defaults to `30 days`. The account-wide selection aggregates
-requests, tokens, success rate, buckets, status codes, providers, and models
-across every owned tenant. These execution metrics include only succeeded and
-failed requests. The separate `rejected_requests` count identifies requests
-that could not reach provider dispatch. Choosing one tenant narrows the same dashboard
-surfaces to that tenant. `Refresh` and interval changes retain the Usage tenant
-selection, and changes to the Tenant control in Settings do not affect it. Users whose
-client setup is incomplete enter the mandatory Settings modal instead.
-After setup, the modal remains available from the avatar dropdown. The
+Authenticated users land on the tenant dashboard and usage overview.
+Selecting a tenant in the map also selects its usage.
+**Account usage** shows totals across all owned tenants.
+The usage selector can narrow the charts independently.
+The interval defaults to `30 days` and retains the selected usage scope during refresh.
+Execution metrics include succeeded and failed requests.
+The separate `rejected_requests` count identifies requests rejected before provider dispatch. The
 success-rate metric renders an **N failed requests** action only when the selected
 snapshot contains failures. It opens a keyboard- and focus-managed dialog with
 the current failed-execution status breakdown and newest-first safe failure metadata.
@@ -972,48 +855,11 @@ visible X axes use the summary's UTC hour or date buckets. Their zero-based,
 integer Y axes identify requests or tokens per hour or day. Exact bucket starts
 and values remain available to assistive technology.
 
-These charts are a client-side presentation of existing aggregate request
-data. They are not billing, provider-performance, provider-key, token-share,
-exact-event-time, or new management-API features. Usage Overview also renders
-every provider in catalog order. Each card names the provider API with its
-catalog-owned API service label. Separate groups identify model families and
-capabilities. Each provider card shows its exact
-selected-scope request and token totals. A tenant-filtered view also shows the
-tenant's selected provider model and marks only its default text route as
-`active`. Account-wide usage does not synthesize one model across tenants. A
-provider request count shows its activity in the selected interval.
-
-Each card includes a request volume bar. The highest provider request count in
-the current Usage scope sets the full scale. Other cards use the same scale, and
-a zero-request card shows an empty track. The graph uses the existing provider
-aggregates and does not make another request.
-
-The settings gear opens one tenant-bound card back. Its accessible name is
-`Set API key` or `API key settings`, based on the key state. The card back
-starts with the Default tenant and keeps its tenant selector available. This
-Settings tenant remains independent from the Usage tenant. The selector is the
-only tenant name in the card. A tenant change loads only the open card. It does
-not change the Settings modal tenant, Usage tenant, or dashboard. The official
-key link shares one row with the catalog API service label. A saved key appears
-only as a generic mask. A paste into that field verifies and saves the new key
-without a replacement action. The icon-only `Delete key` action stays on the
-key input row. The app does not retrieve or render the saved raw value. Key
-deletion preserves non-secret provider fields, the provider profile, historical
-usage, and valid routing defaults.
-
-Provider model changes autosave immediately. The provider system prompt starts
-collapsed and autosaves when the user leaves the changed field. The prompt
-collapses again when the card or its Settings tenant changes. The card has no
-manual completion action. Its close control waits for pending provider saves.
-
-The Settings modal contains client access, generated secret, routing defaults,
-the tenant prompt, and copyable request examples. It has no duplicate provider
-editor. The routing-default form exposes Reasoning effort only for the exact
-selected text route. It clears an incompatible value when that route changes.
-It shows `Not supported` when the route has no declaration. Its
-provider/model/effort selections autosave immediately. Its system prompt
-autosaves on field exit. Default examples omit `provider`. Selected-provider
-examples include the current provider selector and text model.
+Usage charts show the existing request aggregates.
+Connection configuration remains in the tenant, connection, and model map above the charts.
+Connection cards show provider identities and assignment counts.
+Model cards use their canonical model family logos.
+The map distinguishes saved assignments, a selected connection, and an unsaved model preview.
 
 Administrators are configured only through `management.admin_emails`; use the
 plural `${LLM_PROXY_MANAGEMENT_ADMIN_EMAILS}` placeholder in public config files
@@ -1155,7 +1001,7 @@ The bounded schema-version-4 migration removes every stored `qwencloud` key,
 selected model, and provider system prompt. Affected text defaults move to the
 first remaining keyed provider by canonical identifier. The default uses that
 provider's stored text model. If no key remains, the migration clears the text
-route and reasoning effort. Settings becomes mandatory. Tenant timestamps and
+route and reasoning effort. Tenant timestamps and
 historical usage provider/model identifiers remain unchanged. The transaction
 verifies deleted settings, reconciled defaults, decrypted remaining keys,
 timestamps, and usage rows before recording version 4. Current-version startup
@@ -1218,7 +1064,7 @@ changes to an invalid pair after startup.
 
 Server settings and browser-facing MPR UI/TAuth bootstrap settings remain in
 `config.yml`. Provider definitions and static endpoints remain in
-`providers.yml`. Each managed DashScope workspace URL is tenant-owned and is
+`providers.yml`. Each managed DashScope workspace URL belongs to an account connection and is
 stored as a provider connection value. The selected model and system prompt use
 a provider profile record. The GitHub Pages artifact is only the static shell.
 API-served browser config
@@ -1295,8 +1141,7 @@ public **Log In** control is owned by MPR UI, proves an anonymous direct
 `/app/` visit returns to `/`, and proves the anonymous/authorized behavior of
 `/api/management/account`. The browser makes no protected account or tenant
 request before MPR UI authentication, restores the real TAuth session on
-`/app/`, then hydrates the initial tenant selected in Settings and account-wide
-Usage view. It
+`/app/`, then loads the selected dashboard tenant and its usage. It
 creates two tenants for one real TAuth subject, proves both secrets remain
 independently routable, proves the default account-wide usage and safe
 tenant-attributed failure page include both, and signs in a second real subject
@@ -1379,9 +1224,8 @@ live provider smoke-test credentials are not injected into auxiliary
 containers. The API image is built from the current source and runs the
 canonical `configs/config.yml` configuration.
 
-Local and production orchestration do not bind a DashScope URL. Each tenant
-supplies its Singapore Model Studio workspace URL with its DashScope API key in
-Settings.
+Local and production orchestration do not bind a DashScope URL. Each DashScope connection
+stores its Singapore Model Studio workspace URL and API key.
 The stack has these explicit browser-facing endpoints:
 
 - Public landing: `http://localhost:4179/`, served by ghttp from the rendered
@@ -1435,17 +1279,14 @@ module graph. LLM Proxy does not try another CDN or a bundled fallback; the
 failure screen completes the shared MPR transition without making a protected
 management request.
 
-Use the **API connections** cards in **Usage Overview** to save each provider
-API key. Each card separates the provider API, model families, and capabilities.
-Use the card back to select the Settings tenant, set its default text model,
-and set its provider prompt. Use **Settings** to select the Default tenant's text and
-dictation routes. Supported routes can save a `reasoning_effort` default. A
-supported per-request value overrides that saved default for one request. The
-proxy rejects a default that the selected provider/model route does not declare.
+Select **Create connection** on the dashboard to save provider credentials.
+Select a tenant and use **Connect** to attach an existing connection.
+Select a model and save its text or dictation default.
+Supported text routes also expose reasoning effort controls.
+A supported request value overrides the saved effort for that request.
 
-Create or replace the tenant's client key separately in **Settings**. That
-generated client key is the value that applications store as
-`LLM_PROXY_DEFAULT_TENANT_KEY`. It is not an upstream provider credential.
+Use **API access** in tenant details to create or replace the tenant client key.
+Applications store this value as `LLM_PROXY_DEFAULT_TENANT_KEY`.
 
 ## Local Automation
 
@@ -1984,7 +1825,7 @@ potentially shorter cancellation deadline.
 Every bundled client deliberately leaves `model` out of a request when the
 caller does not set it. This is the correct integration when LLM Proxy owns
 model selection: a managed-tenant owner can change that tenant's routing
-default in the LLM Proxy Settings UI, and the next model-omitting request uses
+default in the LLM Proxy dashboard, and the next model-omitting request uses
 the saved default without an application code or deployment change. An explicit
 `--model` or request `model` pins that one request and does not follow a tenant
 default.
@@ -2705,7 +2546,7 @@ validated `provider_error_codes`. Public responses do not include these codes.
 * All requests must include a configured tenant secret via `key=...`.
 * Client requests must not include upstream provider API keys; public proxy endpoints reject provider-key-like query, JSON, and multipart form fields.
 * Request logs record only the query-free path plus method, status, latency, client IP, proxy request ID, and tenant metadata; they do not record query strings, request bodies, cookies, or authorization headers.
-* Self-service provider API keys are accepted only through TAuth-protected management endpoints. Autosave responses return masked status; raw retrieval requires the explicit owner-authenticated reveal action.
+* Provider credentials are accepted through TAuth-protected connection operations. Management responses show masked values.
 * Public static pages load Google Analytics and LoopAware page-view scripts. The canonical `/privacy/` policy discloses those integrations without making unsupported collection, retention, consent, or opt-out claims. Do not put tenant secrets or other sensitive values in public-page URLs.
 * Do not expose this service to the public internet without appropriate network controls.
 

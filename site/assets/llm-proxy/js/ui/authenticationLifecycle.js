@@ -12,12 +12,9 @@ import {
 } from "../constants.js?v=20260903f037";
 import {
   fetchAccount,
-  fetchTenant,
   loadFrontendRuntimeConfig,
 } from "../core/backendClient.js?v=20260903f037";
 import {
-  assertManagementAccount,
-  assertManagementTenantProfile,
   emptyDefaults,
   isAbortError,
   profileFailureMessage,
@@ -33,23 +30,12 @@ const EMPTY_STRING = "";
 
 /** @typedef {ReturnType<typeof import("./managementApplicationState.js").createManagementApplicationState>} ManagementApplicationState */
 /** @typedef {ManagementApplicationState & {
- *   settingsRequired: boolean,
- *   hasSecret: boolean,
  *   applyProfile: (profile: import("../types.d.js").ManagementTenantProfile, preserveProviderEditor?: boolean, preserveRoutingDefaults?: boolean) => void,
- *   clearGeneratedSecret: () => void,
  *   clearNotice: () => void,
  *   clearUsageState: () => void,
- *   collapseSystemPromptEditors: () => void,
  *   resetUsageBreakdownViews: () => void,
- *   dismissClientKeyReplacementConfirmation: () => void,
- *   dismissProviderKeyRemovalConfirmation: () => void,
  *   handleUserMenuItem: (event: Event) => void,
  *   loadUsageSummary: (showSuccessNotice: boolean) => Promise<void>,
- *   openSettings: () => void,
- *   replaceProviderEditorSession: (providerID: string) => void,
- *   replaceTenantLifetimeController: () => void,
- *   resetProviderCard: () => void,
- *   requestAndApplyGeneratedSecret: (successMessage?: string) => Promise<boolean>,
  *   setNotice: (kind: string, message: string, surface: string) => void,
  *   setPageNotice: (kind: string, message: string) => void
  * }} AuthenticationLifecycleHost */
@@ -141,13 +127,10 @@ export function createAuthenticationLifecycleResponsibility() {
         if (!this.canApplyAuthenticatedApp(appVersion)) {
           return;
         }
-        assertManagementAccount(loadedAccount);
         this.account = loadedAccount;
         this.tenants = loadedAccount.tenants;
         applyUserMenuItems(Boolean(loadedAccount.user.is_admin));
-        this.settingsTenantID = this.tenants[0].id;
-        this.replaceTenantLifetimeController();
-        await this.hydrateSettingsTenant(null, appVersion, NOTICE_SURFACES.HEADER);
+        this.authState = AUTH_STATES.AUTHENTICATED;
         if (this.authState === AUTH_STATES.AUTHENTICATED) {
           await this.loadUsageSummary(false);
         }
@@ -163,49 +146,6 @@ export function createAuthenticationLifecycleResponsibility() {
         }
         this.busy = false;
         dispatchManagementReady();
-      }
-    },
-
-    /**
-     * @param {import("../types.d.js").ManagementTenantProfile | null} prefetchedProfile
-     * @param {number} appVersion
-     * @param {string} noticeSurface
-     */
-    async hydrateSettingsTenant(prefetchedProfile, appVersion, noticeSurface) {
-      const tenantID = this.settingsTenantID;
-      if (this.tenantRequestController) {
-        this.tenantRequestController.abort();
-      }
-      const tenantRequestController = new AbortController();
-      this.tenantRequestController = tenantRequestController;
-      this.clearSettingsTenantState();
-      try {
-        const loadedProfile = prefetchedProfile || await fetchTenant(tenantID, tenantRequestController.signal);
-        if (!this.canApplySettingsTenant(appVersion, tenantID)) {
-          return;
-        }
-        assertManagementTenantProfile(loadedProfile, tenantID);
-        this.applyProfile(loadedProfile);
-        this.authState = AUTH_STATES.AUTHENTICATED;
-        this.setNotice(NOTICE_KINDS.SUCCESS, COPY.profileLoaded, noticeSurface);
-        if (this.settingsRequired) {
-          this.openSettings();
-        }
-        if (!this.hasSecret) {
-          await this.requestAndApplyGeneratedSecret();
-        }
-      } catch (requestError) {
-        if (!isAbortError(requestError) && this.canApplySettingsTenant(appVersion, tenantID)) {
-          this.clearSettingsTenantState();
-          if (this.authState !== AUTH_STATES.AUTHENTICATED) {
-            this.authState = AUTH_STATES.ERROR;
-          }
-          this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError), noticeSurface);
-        }
-      } finally {
-        if (this.tenantRequestController === tenantRequestController) {
-          this.tenantRequestController = null;
-        }
       }
     },
 
@@ -238,39 +178,8 @@ export function createAuthenticationLifecycleResponsibility() {
       window.location.replace(PUBLIC_SITE_PATH);
     },
 
-    clearSettingsTenantState() {
-      this.profileApplicationVersion += 1;
-      this.providerAutosavePromise = null;
-      this.providerAutosavePending = false;
-      this.routingDefaultsAutosavePromise = null;
-      this.routingDefaultsAutosavePending = false;
-      this.routingDefaultsDirty = false;
-      this.routingDefaultsEditVersion += 1;
-      this.routingProviderSelectionPending = false;
-      this.routingProviderSelectionVersion += 1;
-      this.clientKeyMutationPromise = null;
-      this.profileMutationTail = Promise.resolve();
-      this.profileMutationFailureVersion = 0;
-      this.settingsClosePending = false;
-      this.dismissProviderKeyRemovalConfirmation();
-      this.dismissClientKeyReplacementConfirmation();
-      this.clientKeyReplacementPending = false;
-      this.profile = null;
-      this.providers = [];
-      this.replaceProviderEditorSession(EMPTY_STRING);
-      this.defaults = emptyDefaults();
-      this.clearGeneratedSecret();
-      this.tenantNameDraft = EMPTY_STRING;
-      this.tenantRenameDialogOpen = false;
-      this.tenantNameDirty = false;
-      this.tenantNameError = EMPTY_STRING;
-      this.usageExamplesOpen = false;
-      this.collapseSystemPromptEditors();
-    },
-
     clearAuthenticatedState() {
       this.appVersion += 1;
-      this.resetProviderCard();
       if (this.accountRequestController) {
         this.accountRequestController.abort();
         this.accountRequestController = null;
@@ -295,21 +204,14 @@ export function createAuthenticationLifecycleResponsibility() {
       this.selectedUsageTenantID = EMPTY_STRING;
       this.resetUsageBreakdownViews();
       this.clearNotice();
-      this.clearSettingsTenantState();
+      this.profile = null;
+      this.providers = [];
+      this.defaults = emptyDefaults();
       this.clearUsageState();
       this.account = null;
       this.tenants = [];
       this.settingsTenantID = EMPTY_STRING;
       this.adminUsers = [];
-      this.settingsOpen = false;
-      this.createTenantDialogOpen = false;
-      this.createTenantName = EMPTY_STRING;
-      this.createTenantError = EMPTY_STRING;
-      this.createTenantPending = false;
-      this.deleteTenantConfirmationOpen = false;
-      this.deleteTenantPending = false;
-      this.discardTenantChangesOpen = false;
-      this.pendingTenantID = EMPTY_STRING;
       this.dashboardView = DASHBOARD_VIEWS.USAGE;
       applyUserMenuItems(false);
     },

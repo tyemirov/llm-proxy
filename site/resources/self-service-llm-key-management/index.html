@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Self-service LLM key management for internal teams</title>
-    <meta name="description" content="Log in to LLM Proxy, create a tenant client key, and manage provider credentials from catalog-owned Usage Overview cards.">
+    <meta name="description" content="Sign in to create tenants, reuse provider connections, and select models from one dashboard.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/">
     <meta property="og:title" content="Self-service LLM key management for internal teams">
-    <meta property="og:description" content="Log in to LLM Proxy, create a tenant client key, and manage provider credentials from catalog-owned Usage Overview cards.">
+    <meta property="og:description" content="Sign in to create tenants, reuse provider connections, and select models from one dashboard.">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/">
     <meta name="twitter:card" content="summary">
@@ -27,9 +27,9 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Self-service LLM key management for internal teams","description":"Log in to LLM Proxy, create a tenant client key, and manage provider credentials from catalog-owned Usage Overview cards.","url":"https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/","datePublished":"2026-07-06","dateModified":"2026-08-08","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/","about":["LLM Proxy","Management UI","self-service LLM key management"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Self-service LLM key management for internal teams","description":"Sign in to create tenants, reuse provider connections, and select models from one dashboard.","url":"https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/","datePublished":"2026-07-06","dateModified":"2026-09-10","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/","about":["LLM Proxy","Management UI","self-service LLM key management"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Self-service LLM key management for internal teams","item":"https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/"}]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How does first-run LLM Proxy setup begin?","acceptedAnswer":{"@type":"Answer","text":"After MPR UI reports an authenticated session, the account and selected tenant profile load. The app automatically creates a client key when that tenant has none."}},{"@type":"Question","name":"What lets a user leave Settings?","acceptedAnswer":{"@type":"Answer","text":"The loaded tenant profile must report a client key. Provider keys are managed separately from the provider cards in Usage Overview."}},{"@type":"Question","name":"Where does a user enter a provider key?","acceptedAnswer":{"@type":"Answer","text":"The user opens Set API key or API key settings on the provider's Usage Overview card and selects an exact tenant for account-wide usage."}},{"@type":"Question","name":"Does onboarding change provider or model defaults?","acceptedAnswer":{"@type":"Answer","text":"No. Automatic client-key creation and provider-key validation leave the user's existing provider and model defaults unchanged."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Bring-your-own provider key portal for AI access, which covers bring your own provider key portal."}}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How does first-run LLM Proxy setup begin?","acceptedAnswer":{"@type":"Answer","text":"After authentication, the dashboard opens with the selected tenant. The user can connect providers and create a tenant API key."}},{"@type":"Question","name":"Can tenant setup continue later?","acceptedAnswer":{"@type":"Answer","text":"Yes. The dashboard remains available when the tenant has no API key or provider connections."}},{"@type":"Question","name":"Where does a user enter a provider key?","acceptedAnswer":{"@type":"Answer","text":"Select Create connection, name the connection, choose its provider, and enter the required fields."}},{"@type":"Question","name":"Does onboarding change provider or model defaults?","acceptedAnswer":{"@type":"Answer","text":"Creating an API key or connecting a provider preserves existing defaults. Saving a model default requires a separate action."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Bring-your-own provider key portal for AI access, which covers bring your own provider key portal."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440"></script>
   </head>
   <body class="resource-page">
@@ -65,12 +65,12 @@
           <header class="resource-hero">
             <p class="eyebrow">Management UI</p>
             <h1>Self-service LLM key management for internal teams</h1>
-            <p class="resource-deck">Log in to LLM Proxy, create a tenant client key, and manage provider credentials from catalog-owned Usage Overview cards.</p>
+            <p class="resource-deck">Sign in to create tenants, reuse provider connections, and select models from one dashboard.</p>
             <p class="resource-audience">Teams that want user-owned AI access without asking operators to edit YAML for every change.</p>
-            <p class="resource-byline">Reviewed 2026-08-08 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <p class="resource-byline">Reviewed 2026-09-10 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
             <aside class="resource-verdict" aria-label="Quick verdict">
               <strong>Quick verdict</strong>
-              <p>Use this flow when authenticated users need separate client-key onboarding and tenant-bound provider credential management.</p>
+              <p>Use this dashboard to manage tenant access and reusable provider connections.</p>
             </aside>
             <div class="resource-actions">
               <a class="resource-button" href="/docs/">Open API reference</a>
@@ -85,7 +85,7 @@
 
           <section>
             <h2>How LLM Proxy helps</h2>
-            <p>LLM Proxy includes a TAuth-protected management UI that creates a missing client key after authentication and gives every catalog provider one tenant-bound Usage Overview card for key and profile settings.</p>
+            <p>The authenticated dashboard presents tenants, connections, and models. An account owns connections, while each tenant retains its access key, defaults, prompts, and usage.</p>
           </section>
 
           <section>
@@ -93,8 +93,8 @@
             <ol class="resource-steps">
               <li>Configure TAuth, the management database, and provider-key encryption.</li>
 <li>Publish the static Pages UI and serve runtime config from the API backend.</li>
-<li>Users sign in; the UI creates and presents a missing client key once.</li>
-<li>Users open a provider card, select the exact tenant, and paste a provider key for verification and atomic save.</li>
+<li>Sign in and select or create a tenant.</li>
+<li>Connect an existing provider connection or create one with verified credentials.</li>
             </ol>
           </section>
 
@@ -119,23 +119,23 @@
 
 
                         <tr>
-                          <td>Client-key onboarding</td>
-                          <td>Settings stays open only until the selected tenant has its generated client key.</td>
-                          <td>Provider credentials remain a separate tenant-owned concern.</td>
+                          <td>Explicit client access</td>
+                          <td>Create an API key from the selected tenant details.</td>
+                          <td>Tenant setup can continue later.</td>
                         </tr>
 
 
                         <tr>
-                          <td>Catalog provider cards</td>
-                          <td>Every provider card combines interval activity with a tenant-bound key, text model, and system prompt editor.</td>
-                          <td>Key presence never adds or removes a provider card.</td>
+                          <td>Reusable connections</td>
+                          <td>Connection cards show the provider, connection name, and assigned tenant count.</td>
+                          <td>Connect assigns one connection per provider to the selected tenant.</td>
                         </tr>
 
 
                         <tr>
                           <td>Copyable examples</td>
-                          <td>Default and provider-specific curl examples use the current proxy origin and generated-secret placeholder.</td>
-                          <td>Users can start with the exact request shape shown in Settings.</td>
+                          <td>The text request example uses the saved default route and the generated-secret placeholder.</td>
+                          <td>Tenant access keeps the one-time key separate.</td>
                         </tr>
 
                 </tbody>
@@ -149,13 +149,13 @@
 
                     <section class="resource-card">
                       <h3>New team onboarding</h3>
-                      <p>A user signs in, copies the automatically created client key, closes Settings, and opens the OpenAI card to set its key.</p>
+                      <p>A user creates FamilyHome, connects an existing OpenAI connection, and saves a text default.</p>
                     </section>
 
 
                     <section class="resource-card">
                       <h3>Provider update</h3>
-                      <p>A user opens the DeepSeek card and its changed model autosaves for the selected tenant.</p>
+                      <p>A user selects a DeepSeek model and explicitly saves the tenant default.</p>
                     </section>
 
 
@@ -178,13 +178,10 @@
 
           <section>
             <h2>Repository evidence</h2>
-            <pre class="usage-snippet"><code>if (this.settingsRequired) {
-  this.openSettings();
-}
-if (!this.hasSecret) {
-  await this.requestAndApplyGeneratedSecret();
-}</code></pre>
-            <p>Verified 2026-08-08 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>site/assets/llm-proxy/js/ui/authenticationLifecycle.js</code>.</p>
+            <pre class="usage-snippet"><code>POST /api/management/connections
+PUT /api/management/tenants/:tenant_id/connections/:provider
+PUT /api/management/tenants/:tenant_id/defaults</code></pre>
+            <p>Verified 2026-09-10 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>docs/tenant-connections.md</code>.</p>
           </section>
 
           <section>
@@ -193,25 +190,25 @@ if (!this.hasSecret) {
 
                     <details>
                       <summary>How does first-run LLM Proxy setup begin?</summary>
-                      <p>After MPR UI reports an authenticated session, the account and selected tenant profile load. The app automatically creates a client key when that tenant has none.</p>
+                      <p>After authentication, the dashboard opens with the selected tenant. The user can connect providers and create a tenant API key.</p>
                     </details>
 
 
                     <details>
-                      <summary>What lets a user leave Settings?</summary>
-                      <p>The loaded tenant profile must report a client key. Provider keys are managed separately from the provider cards in Usage Overview.</p>
+                      <summary>Can tenant setup continue later?</summary>
+                      <p>Yes. The dashboard remains available when the tenant has no API key or provider connections.</p>
                     </details>
 
 
                     <details>
                       <summary>Where does a user enter a provider key?</summary>
-                      <p>The user opens Set API key or API key settings on the provider's Usage Overview card and selects an exact tenant for account-wide usage.</p>
+                      <p>Select Create connection, name the connection, choose its provider, and enter the required fields.</p>
                     </details>
 
 
                     <details>
                       <summary>Does onboarding change provider or model defaults?</summary>
-                      <p>No. Automatic client-key creation and provider-key validation leave the user's existing provider and model defaults unchanged.</p>
+                      <p>Creating an API key or connecting a provider preserves existing defaults. Saving a model default requires a separate action.</p>
                     </details>
 
 

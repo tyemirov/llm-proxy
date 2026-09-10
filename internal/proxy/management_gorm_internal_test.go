@@ -86,7 +86,7 @@ func TestManagedTenantGORMInitializationEdges(t *testing.T) {
 		t.Fatalf("migrate missing-index schema: %v", migrateError)
 	}
 	if createError := missingUsageIndexDatabase.Create(&managedSchemaMigrationRecord{
-		Version: managedTenantSchemaVersion,
+		Version: managedOpenAITranscriptionSchemaVersion,
 	}).Error; createError != nil {
 		t.Fatalf("seed missing-index version: %v", createError)
 	}
@@ -250,7 +250,7 @@ func TestManagedTenantGORMLowLevelMutationEdges(t *testing.T) {
 			subTest.Fatalf("missing tenant by id error=%v", queryError)
 		}
 		var connectionCount int64
-		if providerError := database.database.Model(&managedProviderConnectionRecord{}).Count(&connectionCount).Error; providerError != nil || connectionCount != 0 {
+		if providerError := database.database.Model(&managedAccountConnectionRecord{}).Count(&connectionCount).Error; providerError != nil || connectionCount != 0 {
 			subTest.Fatalf("provider connection count=%d error=%v", connectionCount, providerError)
 		}
 		if saveError := database.saveUser(managedUserRecord{UserID: "missing", UpdatedAt: now}); !errors.Is(saveError, gorm.ErrRecordNotFound) {
@@ -308,15 +308,15 @@ func TestManagedTenantGORMLowLevelMutationEdges(t *testing.T) {
 		}); callbackError != nil {
 			subTest.Fatalf("register count callback: %v", callbackError)
 		}
-		if deleteError := database.deleteTenant("owner", "managed-first"); !errors.Is(deleteError, errInternalTestDatabase) {
+		if deleteError := database.deleteTenant("owner", "managed-first", now); !errors.Is(deleteError, errInternalTestDatabase) {
 			subTest.Fatalf("count error=%v", deleteError)
 		}
 	})
-	for _, tableName := range []string{managedProviderConnectionTable, managedProviderProfileTable, managedUsageEventTable, managedTenantTable} {
+	for _, tableName := range []string{"managed_tenant_connection_records", managedProviderProfileTable, managedUsageEventTable, managedTenantTable} {
 		t.Run("delete error "+tableName, func(subTest *testing.T) {
 			database := newCanonicalGORMFixture(subTest, now)
 			registerManagedGORMError(subTest, database.database, "delete_"+tableName, "delete", tableName, errInternalTestDatabase)
-			if deleteError := database.deleteTenant("owner", "managed-first"); !errors.Is(deleteError, errInternalTestDatabase) {
+			if deleteError := database.deleteTenant("owner", "managed-first", now); !errors.Is(deleteError, errInternalTestDatabase) {
 				subTest.Fatalf("table=%s delete error=%v", tableName, deleteError)
 			}
 		})
@@ -330,59 +330,11 @@ func TestManagedTenantGORMLowLevelMutationEdges(t *testing.T) {
 		}); callbackError != nil {
 			subTest.Fatalf("register rows callback: %v", callbackError)
 		}
-		if deleteError := database.deleteTenant("owner", "managed-first"); !errors.Is(deleteError, gorm.ErrRecordNotFound) {
+		if deleteError := database.deleteTenant("owner", "managed-first", now); !errors.Is(deleteError, gorm.ErrRecordNotFound) {
 			subTest.Fatalf("zero-row delete error=%v", deleteError)
 		}
 	})
 
-	t.Run("save provider ownership query", func(subTest *testing.T) {
-		database := newCanonicalGORMFixture(subTest, now)
-		if saveError := database.saveProviderConnections(context.Background(), "other", []managedProviderConnectionRecord{{
-			TenantID: "managed-first", ProviderID: ProviderNameOpenAI, FieldID: CatalogCredentialAPIKey, Value: "cipher",
-		}}, managedProviderProfileRecord{TenantID: "managed-first", ProviderID: ProviderNameOpenAI, TextModel: ModelNameGPT41}, defaultManagedRoutingDefaults(), now); !errors.Is(saveError, gorm.ErrRecordNotFound) {
-			subTest.Fatalf("provider ownership error=%v", saveError)
-		}
-	})
-	t.Run("save provider record", func(subTest *testing.T) {
-		database := newCanonicalGORMFixture(subTest, now)
-		registerManagedGORMError(subTest, database.database, "create_provider", "create", managedProviderConnectionTable, errInternalTestDatabase)
-		if saveError := database.saveProviderConnections(context.Background(), "owner", []managedProviderConnectionRecord{{
-			TenantID: "managed-first", ProviderID: ProviderNameOpenAI, FieldID: CatalogCredentialAPIKey, Value: "cipher",
-		}}, managedProviderProfileRecord{TenantID: "managed-first", ProviderID: ProviderNameOpenAI, TextModel: ModelNameGPT41}, defaultManagedRoutingDefaults(), now); !errors.Is(saveError, errInternalTestDatabase) {
-			subTest.Fatalf("provider record error=%v", saveError)
-		}
-	})
-	t.Run("save provider delete", func(subTest *testing.T) {
-		database := newCanonicalGORMFixture(subTest, now)
-		registerManagedGORMError(subTest, database.database, "delete_existing_provider_connections", "delete", managedProviderConnectionTable, errInternalTestDatabase)
-		if saveError := database.saveProviderConnections(context.Background(), "owner", nil, managedProviderProfileRecord{
-			TenantID: "managed-first", ProviderID: ProviderNameOpenAI, TextModel: ModelNameGPT41,
-		}, defaultManagedRoutingDefaults(), now); !errors.Is(saveError, errInternalTestDatabase) {
-			subTest.Fatalf("provider delete error=%v", saveError)
-		}
-	})
-	t.Run("save provider profile", func(subTest *testing.T) {
-		database := newCanonicalGORMFixture(subTest, now)
-		registerManagedGORMError(subTest, database.database, "save_provider_profile", "create", managedProviderProfileTable, errInternalTestDatabase)
-		if saveError := database.saveProviderConnections(context.Background(), "owner", nil, managedProviderProfileRecord{
-			TenantID: "managed-first", ProviderID: ProviderNameOpenAI, TextModel: ModelNameGPT41,
-		}, defaultManagedRoutingDefaults(), now); !errors.Is(saveError, errInternalTestDatabase) {
-			subTest.Fatalf("provider profile error=%v", saveError)
-		}
-	})
-	t.Run("delete provider ownership query", func(subTest *testing.T) {
-		database := newCanonicalGORMFixture(subTest, now)
-		if deleteError := database.deleteProviderConnections("other", "managed-first", ProviderNameOpenAI, []string{CatalogCredentialAPIKey}, defaultManagedRoutingDefaults(), now); !errors.Is(deleteError, gorm.ErrRecordNotFound) {
-			subTest.Fatalf("provider ownership delete error=%v", deleteError)
-		}
-	})
-	t.Run("delete provider record", func(subTest *testing.T) {
-		database := newCanonicalGORMFixture(subTest, now)
-		registerManagedGORMError(subTest, database.database, "delete_provider", "delete", managedProviderConnectionTable, errInternalTestDatabase)
-		if deleteError := database.deleteProviderConnections("owner", "managed-first", ProviderNameOpenAI, []string{CatalogCredentialAPIKey}, defaultManagedRoutingDefaults(), now); !errors.Is(deleteError, errInternalTestDatabase) {
-			subTest.Fatalf("provider record delete error=%v", deleteError)
-		}
-	})
 }
 
 func newCanonicalGORMFixture(t *testing.T, now time.Time) *gormManagedTenantDatabase {

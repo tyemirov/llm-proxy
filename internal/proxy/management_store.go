@@ -59,7 +59,7 @@ const (
 	managedDeepSeekRetirementSchemaVersion  = 14
 	managedClaudeRetirementSchemaVersion    = 15
 	managedOpenAITranscriptionSchemaVersion = 16
-	managedTenantSchemaVersion              = managedOpenAITranscriptionSchemaVersion
+	managedTenantSchemaVersion              = managedAccountConnectionsSchemaVersion
 	managedSQLiteRuntimeQuery               = "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)"
 	retiredQwenCloudProviderIdentifier      = "qwencloud"
 	retiredGrokProviderIdentifier           = "grok"
@@ -107,7 +107,6 @@ var (
 	errManagedProviderBaseURLInvalid = errors.New("managed_provider_base_url_invalid")
 	errManagedProviderKeyEncryption  = errors.New("managed_provider_key_encryption_failed")
 	errManagedProviderKeyDecryption  = errors.New("managed_provider_key_decryption_failed")
-	errManagedProviderKeyNotFound    = errors.New("managed_provider_key_not_found")
 	errManagedProviderKeyConflict    = errors.New("managed_provider_key_conflict")
 	errManagedSecretGeneration       = errors.New("managed_secret_generation_failed")
 	errManagedSecretCollision        = errors.New("managed_secret_collision")
@@ -224,6 +223,15 @@ func newManagedTenantName(value string) (managedTenantName, error) {
 type managedUsageEventVisitor func(managedUsageEventRecord) error
 
 type managedTenantDatabase interface {
+	saveTenantProviderProfile(context.Context, string, managedProviderProfileRecord) error
+	accountConnections(context.Context, string, managedConnectionPage) ([]managedAccountConnectionRecord, error)
+	accountConnection(context.Context, string, string) (managedAccountConnectionRecord, error)
+	connectionCreation(context.Context, string, string) (managedConnectionCreationRecord, error)
+	createAccountConnection(context.Context, managedAccountConnectionRecord, managedConnectionCreationRecord) (managedConnectionCreationRecord, error)
+	saveAccountConnection(context.Context, managedAccountConnectionRecord, uint64) error
+	deleteAccountConnection(context.Context, string, string) error
+	assignAccountConnection(context.Context, string, string, string, string, string, time.Time) error
+	detachAccountConnection(context.Context, string, string, string, bool, time.Time) error
 	checkHealth(context.Context) error
 	userByID(userID string) (managedUserRecord, error)
 	users() ([]managedUserRecord, error)
@@ -236,9 +244,7 @@ type managedTenantDatabase interface {
 	tenantNameExists(ownerUserID string, nameKey string, excludedTenantID string) (bool, error)
 	createTenant(record managedTenantRecord) error
 	saveTenant(record managedTenantRecord) error
-	deleteTenant(ownerUserID string, tenantID string) error
-	saveProviderConnections(requestContext context.Context, ownerUserID string, records []managedProviderConnectionRecord, profile managedProviderProfileRecord, defaults managedRoutingDefaults, updatedAt time.Time) error
-	deleteProviderConnections(ownerUserID string, tenantID string, providerID string, credentialFieldIDs []string, defaults managedRoutingDefaults, updatedAt time.Time) error
+	deleteTenant(ownerUserID string, tenantID string, now time.Time) error
 	createUsageEvent(requestContext context.Context, record managedUsageEventRecord) error
 	earliestUsageEventByTenantIDsThrough(tenantIDs []string, periodEnd time.Time) (time.Time, error)
 	streamUsageEventsByTenantIDsBetween(tenantIDs []string, periodStart time.Time, periodEnd time.Time, visit managedUsageEventVisitor) error
@@ -280,12 +286,13 @@ type managedTenantRecord struct {
 	DefaultSystemPrompt      string
 	DefaultReasoningEffort   string
 	// ProviderAPIKeys is populated only by bounded predecessor-schema migrations.
-	ProviderAPIKeys     []managedProviderAPIKeyRecord     `gorm:"-"`
-	ProviderConnections []managedProviderConnectionRecord `gorm:"foreignKey:TenantID;references:TenantID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
-	ProviderProfiles    []managedProviderProfileRecord    `gorm:"foreignKey:TenantID;references:TenantID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
-	UsageEvents         []managedUsageEventRecord         `gorm:"foreignKey:TenantID;references:TenantID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
-	CreatedAt           time.Time                         `gorm:"index:idx_managed_tenant_owner_created,priority:2"`
-	UpdatedAt           time.Time
+	ProviderAPIKeys       []managedProviderAPIKeyRecord     `gorm:"-"`
+	ConnectionAssignments []managedTenantConnectionRecord   `gorm:"foreignKey:TenantID;references:TenantID;constraint:OnDelete:CASCADE"`
+	ProviderConnections   []managedProviderConnectionRecord `gorm:"foreignKey:TenantID;references:TenantID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	ProviderProfiles      []managedProviderProfileRecord    `gorm:"foreignKey:TenantID;references:TenantID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	UsageEvents           []managedUsageEventRecord         `gorm:"foreignKey:TenantID;references:TenantID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	CreatedAt             time.Time                         `gorm:"index:idx_managed_tenant_owner_created,priority:2"`
+	UpdatedAt             time.Time
 }
 
 type managedProviderAPIKeyRecord struct {
@@ -547,19 +554,23 @@ func (providerKeyCipher managedProviderKeyCipher) encryptConnection(randomReader
 }
 
 func (providerKeyCipher managedProviderKeyCipher) decryptConnection(record managedProviderConnectionRecord) (string, error) {
-	encryptedValue := strings.TrimSpace(record.Value)
+	return providerKeyCipher.decryptConnectionValue(record.TenantID, record.ProviderID, record.FieldID, record.Value)
+}
+
+func (providerKeyCipher managedProviderKeyCipher) decryptConnectionValue(connectionID, providerID, fieldID, rawValue string) (string, error) {
+	encryptedValue := strings.TrimSpace(rawValue)
 	if encryptedValue == constants.EmptyString || !strings.HasPrefix(encryptedValue, managedProviderKeyCiphertextPrefix) {
-		return constants.EmptyString, fmt.Errorf("%w: provider=%s field=%s", errManagedProviderKeyDecryption, record.ProviderID, record.FieldID)
+		return constants.EmptyString, fmt.Errorf("%w: provider=%s field=%s", errManagedProviderKeyDecryption, providerID, fieldID)
 	}
 	sealedPayload, decodeError := base64.StdEncoding.DecodeString(strings.TrimPrefix(encryptedValue, managedProviderKeyCiphertextPrefix))
 	if decodeError != nil || len(sealedPayload) <= providerKeyCipher.aeadCipher.NonceSize() {
-		return constants.EmptyString, fmt.Errorf("%w: provider=%s field=%s", errManagedProviderKeyDecryption, record.ProviderID, record.FieldID)
+		return constants.EmptyString, fmt.Errorf("%w: provider=%s field=%s", errManagedProviderKeyDecryption, providerID, fieldID)
 	}
 	nonce := sealedPayload[:providerKeyCipher.aeadCipher.NonceSize()]
 	ciphertext := sealedPayload[providerKeyCipher.aeadCipher.NonceSize():]
-	value, decryptError := providerKeyCipher.aeadCipher.Open(nil, nonce, ciphertext, managedProviderConnectionAssociatedData(record.TenantID, record.ProviderID, record.FieldID))
+	value, decryptError := providerKeyCipher.aeadCipher.Open(nil, nonce, ciphertext, managedProviderConnectionAssociatedData(connectionID, providerID, fieldID))
 	if decryptError != nil {
-		return constants.EmptyString, fmt.Errorf("%w: provider=%s field=%s: %v", errManagedProviderKeyDecryption, record.ProviderID, record.FieldID, decryptError)
+		return constants.EmptyString, fmt.Errorf("%w: provider=%s field=%s: %v", errManagedProviderKeyDecryption, providerID, fieldID, decryptError)
 	}
 	return strings.TrimSpace(string(value)), nil
 }
@@ -626,8 +637,26 @@ func migrateCurrentManagedSchema(database *gorm.DB) error {
 
 func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry) error {
 	return database.Transaction(func(transaction *gorm.DB) error {
-		if migrationError := initializeManagedTenantSchemaRecords(transaction.Session(&gorm.Session{DisableNestedTransaction: true}), providerKeyCipher, providers); migrationError != nil {
-			return migrationError
+		var version managedSchemaMigrationRecord
+		if transaction.Migrator().HasTable(&managedSchemaMigrationRecord{}) {
+			err := transaction.Order("version DESC").First(&version).Error
+			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+		}
+		if version.Version > managedTenantSchemaVersion {
+			return fmt.Errorf("%w: operation=validate_version version=%d", errManagedTenantSchemaMigration, version.Version)
+		}
+		if version.Version < managedAccountConnectionsSchemaVersion {
+			if err := initializeManagedTenantSchemaRecords(transaction.Session(&gorm.Session{DisableNestedTransaction: true}), providerKeyCipher, providers); err != nil {
+				return err
+			}
+			if err := migrateAccountConnections(transaction, providerKeyCipher, providers); err != nil {
+				return err
+			}
+		}
+		if err := validateAccountConnectionSchema(transaction, providerKeyCipher, providers); err != nil {
+			return err
 		}
 		if recordError := transaction.Clauses(clause.OnConflict{DoNothing: true}).Create(&managedSchemaMigrationRecord{Version: managedTenantSchemaVersion, AppliedAt: time.Now().UTC()}).Error; recordError != nil {
 			return fmt.Errorf("%w: operation=record_version version=%d: %v", errManagedTenantSchemaMigration, managedTenantSchemaVersion, recordError)
@@ -646,7 +675,7 @@ func initializeManagedTenantSchemaRecords(database *gorm.DB, providerKeyCipher m
 			if dropError := transaction.Migrator().DropTable(&managedProviderAPIKeyRecord{}); dropError != nil {
 				return fmt.Errorf("%w: operation=drop_predecessor table=%s: %v", errManagedTenantSchemaMigration, managedProviderKeyTable, dropError)
 			}
-			return transaction.Create(&managedSchemaMigrationRecord{Version: managedTenantSchemaVersion, AppliedAt: time.Now().UTC()}).Error
+			return transaction.Create(&managedSchemaMigrationRecord{Version: managedOpenAITranscriptionSchemaVersion, AppliedAt: time.Now().UTC()}).Error
 		})
 	}
 	if managedTableHasColumn(migrator, managedTenantTable, "user_id") {
@@ -664,12 +693,12 @@ func initializeManagedTenantSchemaRecords(database *gorm.DB, providerKeyCipher m
 			return migrationError
 		}
 	}
-	if migration.Version >= managedProviderConnectionsSchemaVersion && migration.Version <= managedTenantSchemaVersion {
+	if migration.Version >= managedProviderConnectionsSchemaVersion && migration.Version <= managedOpenAITranscriptionSchemaVersion {
 		if migrator.HasTable(managedProviderKeyTable) || !migrator.HasTable(managedProviderConnectionTable) || !migrator.HasTable(managedProviderProfileTable) {
 			return fmt.Errorf("%w: operation=validate_current_schema table=%s", errManagedTenantSchemaMigration, managedProviderConnectionTable)
 		}
 	}
-	if migration.Version >= managedProviderConnectionsSchemaVersion && migration.Version < managedTenantSchemaVersion {
+	if migration.Version >= managedProviderConnectionsSchemaVersion && migration.Version < managedOpenAITranscriptionSchemaVersion {
 		for _, schemaVersion := range managedModelSelectionSchemaVersions {
 			if schemaVersion <= migration.Version || schemaVersion < managedDeepSeekRetirementSchemaVersion {
 				continue
@@ -789,7 +818,7 @@ func initializeManagedTenantSchemaRecords(database *gorm.DB, providerKeyCipher m
 		}
 		return validateManagedUsageDispositionSchema(database)
 	default:
-		return fmt.Errorf("%w: operation=validate_version version=%d expected=%d", errManagedTenantSchemaMigration, migration.Version, managedTenantSchemaVersion)
+		return fmt.Errorf("%w: operation=validate_version version=%d expected=%d", errManagedTenantSchemaMigration, migration.Version, managedOpenAITranscriptionSchemaVersion)
 	}
 	if requiresQwenCloudRetirement {
 		if migrationError := migrateManagedQwenCloudRetirement(database, providerKeyCipher, providers); migrationError != nil {
@@ -2840,7 +2869,7 @@ func (database *gormManagedTenantDatabase) userByID(userID string) (managedUserR
 	var record managedUserRecord
 	queryError := database.database.
 		Preload("Tenants", func(query *gorm.DB) *gorm.DB { return query.Order("created_at, tenant_id") }).
-		Preload("Tenants.ProviderConnections").
+		Preload("Tenants.ConnectionAssignments.Connection.Fields").
 		Preload("Tenants.ProviderProfiles").
 		Where(&managedUserRecord{UserID: userID}).
 		First(&record).
@@ -2888,7 +2917,7 @@ func (database *gormManagedTenantDatabase) createUserAndTenant(user managedUserR
 func (database *gormManagedTenantDatabase) tenantByOwnerAndID(ownerUserID string, tenantID string) (managedTenantRecord, error) {
 	var record managedTenantRecord
 	queryError := database.database.
-		Preload("ProviderConnections").
+		Preload("ConnectionAssignments.Connection.Fields").
 		Preload("ProviderProfiles").
 		Where(&managedTenantRecord{OwnerUserID: ownerUserID, TenantID: tenantID}).
 		First(&record).
@@ -2910,7 +2939,7 @@ func (database *gormManagedTenantDatabase) tenantBySecretDigest(requestContext c
 	transactionError := database.database.WithContext(requestContext).Transaction(
 		func(transaction *gorm.DB) error {
 			return transaction.
-				Preload("ProviderConnections").
+				Preload("ConnectionAssignments.Connection.Fields").
 				Preload("ProviderProfiles").
 				Where("secret_digest = ?", secretDigest).
 				First(&record).
@@ -2965,7 +2994,7 @@ func (database *gormManagedTenantDatabase) saveTenant(record managedTenantRecord
 	return nil
 }
 
-func (database *gormManagedTenantDatabase) deleteTenant(ownerUserID string, tenantID string) error {
+func (database *gormManagedTenantDatabase) deleteTenant(ownerUserID string, tenantID string, now time.Time) error {
 	return database.database.Transaction(func(transaction *gorm.DB) error {
 		var tenantRecord managedTenantRecord
 		if queryError := transaction.Where(&managedTenantRecord{OwnerUserID: ownerUserID, TenantID: tenantID}).First(&tenantRecord).Error; queryError != nil {
@@ -2978,7 +3007,12 @@ func (database *gormManagedTenantDatabase) deleteTenant(ownerUserID string, tena
 		if tenantCount <= 1 {
 			return errManagedFinalTenantDeletion
 		}
-		if deleteError := transaction.Where(&managedProviderConnectionRecord{TenantID: tenantID}).Delete(&managedProviderConnectionRecord{}).Error; deleteError != nil {
+		assignments := transaction.Model(&managedTenantConnectionRecord{}).Select("connection_id").Where("tenant_id = ?", tenantID)
+		if updateError := transaction.Model(&managedAccountConnectionRecord{}).Where("id IN (?)", assignments).
+			Updates(map[string]any{"version": gorm.Expr("version + 1"), "updated_at": now}).Error; updateError != nil {
+			return updateError
+		}
+		if deleteError := transaction.Where(&managedTenantConnectionRecord{TenantID: tenantID}).Delete(&managedTenantConnectionRecord{}).Error; deleteError != nil {
 			return deleteError
 		}
 		if deleteError := transaction.Where(&managedProviderProfileRecord{TenantID: tenantID}).Delete(&managedProviderProfileRecord{}).Error; deleteError != nil {
@@ -2995,49 +3029,6 @@ func (database *gormManagedTenantDatabase) deleteTenant(ownerUserID string, tena
 			return gorm.ErrRecordNotFound
 		}
 		return nil
-	})
-}
-
-func (database *gormManagedTenantDatabase) saveProviderConnections(requestContext context.Context, ownerUserID string, records []managedProviderConnectionRecord, profile managedProviderProfileRecord, defaults managedRoutingDefaults, updatedAt time.Time) error {
-	return database.database.WithContext(requestContext).Transaction(func(transaction *gorm.DB) error {
-		var tenantRecord managedTenantRecord
-		if queryError := transaction.Where(&managedTenantRecord{OwnerUserID: ownerUserID, TenantID: profile.TenantID}).First(&tenantRecord).Error; queryError != nil {
-			return queryError
-		}
-		if deleteError := transaction.Where(&managedProviderConnectionRecord{TenantID: profile.TenantID, ProviderID: profile.ProviderID}).Delete(&managedProviderConnectionRecord{}).Error; deleteError != nil {
-			return deleteError
-		}
-		if len(records) != 0 {
-			if createError := transaction.Create(&records).Error; createError != nil {
-				return createError
-			}
-		}
-		if saveError := transaction.Save(&profile).Error; saveError != nil {
-			return saveError
-		}
-		return transaction.Model(&managedTenantRecord{}).
-			Where(&managedTenantRecord{OwnerUserID: ownerUserID, TenantID: profile.TenantID}).
-			Updates(managedRoutingDefaultsDatabaseUpdates(defaults, updatedAt)).
-			Error
-	})
-}
-
-func (database *gormManagedTenantDatabase) deleteProviderConnections(ownerUserID string, tenantID string, providerID string, credentialFieldIDs []string, defaults managedRoutingDefaults, updatedAt time.Time) error {
-	return database.database.Transaction(func(transaction *gorm.DB) error {
-		var tenantRecord managedTenantRecord
-		if queryError := transaction.Where(&managedTenantRecord{OwnerUserID: ownerUserID, TenantID: tenantID}).First(&tenantRecord).Error; queryError != nil {
-			return queryError
-		}
-		if deleteError := transaction.
-			Where(&managedProviderConnectionRecord{TenantID: tenantID, ProviderID: providerID}).
-			Where("field_id IN ?", credentialFieldIDs).
-			Delete(&managedProviderConnectionRecord{}).Error; deleteError != nil {
-			return deleteError
-		}
-		return transaction.Model(&managedTenantRecord{}).
-			Where(&managedTenantRecord{OwnerUserID: ownerUserID, TenantID: tenantID}).
-			Updates(managedRoutingDefaultsDatabaseUpdates(defaults, updatedAt)).
-			Error
 	})
 }
 
@@ -3207,7 +3198,7 @@ func usageDetailsByTenantIDsInTransaction(transaction *gorm.DB, tenantIDs []stri
 	for _, record := range usageRecords {
 		outcomeCode, outcomeError := newManagedUsageOutcomeCode(string(record.OutcomeCode))
 		if outcomeError != nil {
-			return nil, 0, fmt.Errorf("%w: table=%s id=%d: %v", errManagedTenantStorePersist, managedUsageEventTable, record.ID, outcomeError)
+			return nil, 0, fmt.Errorf("%w: table=%s id=%d: %w", errManagedTenantStorePersist, managedUsageEventTable, record.ID, outcomeError)
 		}
 		records = append(records, managedUsageDetailRecord{
 			recordID: record.ID,
@@ -3316,106 +3307,13 @@ func (store *managedTenantStore) renameTenant(principal managementPrincipal, ten
 func (store *managedTenantStore) deleteTenant(principal managementPrincipal, tenantIdentifier managedTenantIdentifier) error {
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
-	if persistError := store.database.deleteTenant(principal.userID, tenantIdentifier.string()); persistError != nil {
+	if persistError := store.database.deleteTenant(principal.userID, tenantIdentifier.string(), store.now()); persistError != nil {
 		if errors.Is(persistError, errManagedFinalTenantDeletion) {
 			return persistError
 		}
 		return managedTenantMutationError(principal.userID, tenantIdentifier.string(), persistError)
 	}
 	return nil
-}
-
-func (store *managedTenantStore) saveProviderConnections(requestContext context.Context, principal managementPrincipal, tenantIdentifier managedTenantIdentifier, providerIdentifier providerID, rawFields map[string]string, textModel string, systemPrompt string, verifiedVersions map[string]managedProviderConnectionVersion) (managedTenantSnapshot, error) {
-	normalizedTextModel := strings.TrimSpace(textModel)
-	if lockError := store.mutex.LockContext(requestContext); lockError != nil {
-		return managedTenantSnapshot{}, managedTenantMutationError(principal.userID, tenantIdentifier.string(), lockError)
-	}
-	defer store.mutex.Unlock()
-	record, recordError := store.database.tenantByOwnerAndID(principal.userID, tenantIdentifier.string())
-	if recordError != nil {
-		return managedTenantSnapshot{}, managedTenantQueryError(principal.userID, tenantIdentifier.string(), recordError)
-	}
-	definition := store.routingDefaults.definitions[providerIdentifier]
-	providerSettings, providerSettingsError := store.providerSettingsMap(record.ProviderConnections, record.ProviderProfiles)
-	if providerSettingsError != nil {
-		return managedTenantSnapshot{}, providerSettingsError
-	}
-	existingSettings, configured := providerSettings[providerIdentifier]
-	connectionValues, valuesError := validatedManagedProviderConnectionValues(definition, rawFields, existingSettings, configured)
-	if valuesError != nil {
-		return managedTenantSnapshot{}, valuesError
-	}
-	for fieldIdentifier, verifiedVersion := range verifiedVersions {
-		if !configured || existingSettings.connectionVersion(fieldIdentifier) != verifiedVersion {
-			return managedTenantSnapshot{}, fmt.Errorf("%w: provider=%s field=%s", errManagedProviderKeyConflict, providerIdentifier.string(), fieldIdentifier)
-		}
-	}
-	providerTextModelChanged := configured && existingSettings.textModel != normalizedTextModel
-	timestamp := store.now()
-	existingRecords := managedProviderConnectionRecordsForProvider(record.ProviderConnections, providerIdentifier)
-	connectionRecords := make([]managedProviderConnectionRecord, 0, len(connectionValues))
-	connectionVersions := make(map[string]managedProviderConnectionVersion, len(connectionValues))
-	for fieldIdentifier, value := range connectionValues {
-		field := definition.fields[fieldIdentifier]
-		if value == *field.Default && !field.Secret {
-			continue
-		}
-		storedValue := value
-		createdAt := timestamp
-		if existingRecord, exists := existingRecords[fieldIdentifier]; exists {
-			createdAt = existingRecord.CreatedAt
-			if field.Secret && rawFields[fieldIdentifier] == constants.EmptyString {
-				storedValue = existingRecord.Value
-			}
-		}
-		if field.Secret && storedValue == value {
-			encryptedValue, encryptionError := store.providerKeyCipher.encryptConnection(store.randomReader, record.TenantID, providerIdentifier.string(), fieldIdentifier, value)
-			if encryptionError != nil {
-				return managedTenantSnapshot{}, encryptionError
-			}
-			storedValue = encryptedValue
-		}
-		connectionRecord := managedProviderConnectionRecord{
-			TenantID: record.TenantID, ProviderID: providerIdentifier.string(), FieldID: fieldIdentifier,
-			Value: storedValue, CreatedAt: createdAt, UpdatedAt: timestamp,
-		}
-		connectionRecords = append(connectionRecords, connectionRecord)
-		if field.Secret {
-			connectionVersions[fieldIdentifier] = managedProviderConnectionVersionForRecord(connectionRecord)
-		}
-	}
-	sort.Slice(connectionRecords, func(first int, second int) bool {
-		return connectionRecords[first].FieldID < connectionRecords[second].FieldID
-	})
-	profileCreatedAt := timestamp
-	if existingProfile, exists := managedProviderProfileRecordForProvider(record.ProviderProfiles, providerIdentifier); exists {
-		profileCreatedAt = existingProfile.CreatedAt
-	}
-	profile := managedProviderProfileRecord{
-		TenantID: record.TenantID, ProviderID: providerIdentifier.string(), TextModel: normalizedTextModel,
-		SystemPrompt: systemPrompt, CreatedAt: profileCreatedAt, UpdatedAt: timestamp,
-	}
-	providerSettings[providerIdentifier] = managedProviderSettings{
-		connectionValues: connectionValues, connectionVersions: connectionVersions,
-		configuredFields: map[string]bool{},
-		textModel:        normalizedTextModel, systemPrompt: systemPrompt,
-	}
-	for _, connectionRecord := range connectionRecords {
-		providerSettings[providerIdentifier].configuredFields[connectionRecord.FieldID] = true
-	}
-	currentDefaults, defaultsError := validateCanonicalManagedRoutingDefaults(store.routingDefaults, record.defaults())
-	if defaultsError != nil {
-		return managedTenantSnapshot{}, managedRoutingDefaultsTenantError(record.TenantID, defaultsError)
-	}
-	routingProviders := managedRoutingProvidersFromValidatedSettings(store.routingDefaults, providerSettings)
-	reconciledDefaults := reconcileManagedRoutingDefaultsWithProviders(currentDefaults, routingProviders)
-	if providerTextModelChanged {
-		reconciledDefaults = reconcileManagedRoutingDefaultsAfterProviderTextModelChange(reconciledDefaults, routingProviders, providerIdentifier)
-	}
-	if persistError := store.database.saveProviderConnections(requestContext, principal.userID, connectionRecords, profile, reconciledDefaults, timestamp); persistError != nil {
-		return managedTenantSnapshot{}, managedTenantMutationError(principal.userID, tenantIdentifier.string(), persistError)
-	}
-	return store.snapshotByOwnerAndIDLocked(principal.userID, tenantIdentifier.string())
 }
 
 func validatedManagedProviderConnectionValues(definition providerDefinition, rawFields map[string]string, existing managedProviderSettings, configured bool) (map[string]string, error) {
@@ -3451,31 +3349,6 @@ func validatedManagedProviderConnectionValues(definition providerDefinition, raw
 	return values, nil
 }
 
-func (store *managedTenantStore) revealProviderConnectionField(principal managementPrincipal, tenantIdentifier managedTenantIdentifier, providerIdentifier providerID, fieldIdentifier string) (string, error) {
-	store.mutex.Lock()
-	defer store.mutex.Unlock()
-	record, recordError := store.database.tenantByOwnerAndID(principal.userID, tenantIdentifier.string())
-	if recordError != nil {
-		return constants.EmptyString, managedTenantQueryError(principal.userID, tenantIdentifier.string(), recordError)
-	}
-	for _, connectionRecord := range record.ProviderConnections {
-		if connectionRecord.ProviderID == providerIdentifier.string() && connectionRecord.FieldID == fieldIdentifier {
-			return store.providerKeyCipher.decryptConnection(connectionRecord)
-		}
-	}
-	return constants.EmptyString, fmt.Errorf("%w: provider=%s field=%s", errManagedProviderKeyNotFound, providerIdentifier.string(), fieldIdentifier)
-}
-
-func managedProviderConnectionRecordsForProvider(connectionRecords []managedProviderConnectionRecord, providerIdentifier providerID) map[string]managedProviderConnectionRecord {
-	providerRecords := map[string]managedProviderConnectionRecord{}
-	for _, record := range connectionRecords {
-		if record.ProviderID == providerIdentifier.string() {
-			providerRecords[record.FieldID] = record
-		}
-	}
-	return providerRecords
-}
-
 func managedProviderProfileRecordForProvider(profileRecords []managedProviderProfileRecord, providerIdentifier providerID) (managedProviderProfileRecord, bool) {
 	for _, record := range profileRecords {
 		if record.ProviderID == providerIdentifier.string() {
@@ -3485,54 +3358,19 @@ func managedProviderProfileRecordForProvider(profileRecords []managedProviderPro
 	return managedProviderProfileRecord{}, false
 }
 
-func (store *managedTenantStore) removeProviderConnections(principal managementPrincipal, tenantIdentifier managedTenantIdentifier, providerIdentifier providerID) (managedTenantSnapshot, error) {
-	store.mutex.Lock()
-	defer store.mutex.Unlock()
-	record, recordError := store.database.tenantByOwnerAndID(principal.userID, tenantIdentifier.string())
-	if recordError != nil {
-		return managedTenantSnapshot{}, managedTenantQueryError(principal.userID, tenantIdentifier.string(), recordError)
-	}
-	providerSettings, providerSettingsError := store.providerSettingsMap(record.ProviderConnections, record.ProviderProfiles)
-	if providerSettingsError != nil {
-		return managedTenantSnapshot{}, providerSettingsError
-	}
-	definition := store.routingDefaults.definitions[providerIdentifier]
-	settings, configured := providerSettings[providerIdentifier]
-	credentialFieldIDs := make([]string, 0, len(definition.fields))
-	if configured {
-		for _, fieldIdentifier := range definition.fieldOrder {
-			field := definition.fields[fieldIdentifier]
-			if field.Kind != CatalogProviderFieldKindCredential {
-				continue
-			}
-			credentialFieldIDs = append(credentialFieldIDs, fieldIdentifier)
-			settings.connectionValues[fieldIdentifier] = *field.Default
-			delete(settings.connectionVersions, fieldIdentifier)
-			delete(settings.configuredFields, fieldIdentifier)
-		}
-		providerSettings[providerIdentifier] = settings
-	}
-	currentDefaults, defaultsError := validateCanonicalManagedRoutingDefaults(store.routingDefaults, record.defaults())
-	if defaultsError != nil {
-		return managedTenantSnapshot{}, managedRoutingDefaultsTenantError(record.TenantID, defaultsError)
-	}
-	reconciledDefaults := reconcileManagedRoutingDefaultsWithProviders(
-		currentDefaults,
-		managedRoutingProvidersFromValidatedSettings(store.routingDefaults, providerSettings),
-	)
-	timestamp := store.now()
-	if persistError := store.database.deleteProviderConnections(principal.userID, tenantIdentifier.string(), providerIdentifier.string(), credentialFieldIDs, reconciledDefaults, timestamp); persistError != nil {
-		return managedTenantSnapshot{}, managedTenantMutationError(principal.userID, tenantIdentifier.string(), persistError)
-	}
-	return store.snapshotByOwnerAndIDLocked(principal.userID, tenantIdentifier.string())
-}
-
 func (store *managedTenantStore) updateDefaults(principal managementPrincipal, tenantIdentifier managedTenantIdentifier, defaults managedRoutingDefaults) (managedTenantSnapshot, error) {
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
 	record, recordError := store.database.tenantByOwnerAndID(principal.userID, tenantIdentifier.string())
 	if recordError != nil {
 		return managedTenantSnapshot{}, managedTenantQueryError(principal.userID, tenantIdentifier.string(), recordError)
+	}
+	providerSettings, settingsError := store.assignedProviderSettings(record)
+	if settingsError != nil {
+		return managedTenantSnapshot{}, settingsError
+	}
+	if _, validationError := validatePersistedManagedRoutingDefaults(store.routingDefaults, providerSettings, defaults.value()); validationError != nil {
+		return managedTenantSnapshot{}, fmt.Errorf("%w: tenant=%s: %w", errManagementDefaults, tenantIdentifier.string(), validationError)
 	}
 	record.applyRoutingDefaults(defaults)
 	record.UpdatedAt = store.now()
@@ -3705,7 +3543,7 @@ func (record *managedTenantRecord) applyRoutingDefaults(defaults managedRoutingD
 }
 
 func (store *managedTenantStore) snapshot(record managedTenantRecord) (managedTenantSnapshot, error) {
-	providerSettings, providerKeyError := store.providerSettingsMap(record.ProviderConnections, record.ProviderProfiles)
+	providerSettings, providerKeyError := store.assignedProviderSettings(record)
 	if providerKeyError != nil {
 		return managedTenantSnapshot{}, providerKeyError
 	}
@@ -3763,7 +3601,7 @@ func (record managedTenantRecord) defaults() TenantDefaults {
 }
 
 func (store *managedTenantStore) tenant(record managedTenantRecord, secretDigest [sha256.Size]byte) (tenant, error) {
-	providerSettings, providerKeyError := store.providerSettingsMap(record.ProviderConnections, record.ProviderProfiles)
+	providerSettings, providerKeyError := store.assignedProviderSettings(record)
 	if providerKeyError != nil {
 		return tenant{}, providerKeyError
 	}
@@ -3782,10 +3620,6 @@ func (store *managedTenantStore) tenant(record managedTenantRecord, secretDigest
 		defaults:         newTenantDefaults(defaults),
 		providerSettings: providerSettings,
 	}, nil
-}
-
-func (store *managedTenantStore) providerSettingsMap(connectionRecords []managedProviderConnectionRecord, profileRecords []managedProviderProfileRecord) (map[providerID]managedProviderSettings, error) {
-	return managedProviderSettingsFromConnectionRecords(store.providerKeyCipher, store.routingDefaults, connectionRecords, profileRecords)
 }
 
 func managedProviderSettingsFromConnectionRecords(providerKeyCipher managedProviderKeyCipher, providers *providerRegistry, connectionRecords []managedProviderConnectionRecord, profileRecords []managedProviderProfileRecord) (map[providerID]managedProviderSettings, error) {
@@ -3820,11 +3654,10 @@ func managedProviderSettingsFromConnectionRecords(providerKeyCipher managedProvi
 			values[fieldIdentifier] = *field.Default
 		}
 		settingsByProvider[providerIdentifier] = managedProviderSettings{
-			connectionValues:   values,
-			connectionVersions: map[string]managedProviderConnectionVersion{},
-			configuredFields:   map[string]bool{},
-			textModel:          strings.TrimSpace(profile.TextModel),
-			systemPrompt:       profile.SystemPrompt,
+			connectionValues: values,
+			configuredFields: map[string]bool{},
+			textModel:        strings.TrimSpace(profile.TextModel),
+			systemPrompt:     profile.SystemPrompt,
 		}
 	}
 	for _, record := range connectionRecords {
@@ -3842,7 +3675,6 @@ func managedProviderSettingsFromConnectionRecords(providerKeyCipher managedProvi
 			if decryptError != nil {
 				return nil, decryptError
 			}
-			settings.connectionVersions[record.FieldID] = managedProviderConnectionVersionForRecord(record)
 		}
 		validatedValue, valueError := validatedProviderFieldValue(field, value)
 		if valueError != nil {
@@ -3892,9 +3724,6 @@ func managedProviderSettingsFromRecordsForSchema(providerKeyCipher managedProvid
 					CatalogCredentialAPIKey: apiKey,
 					"base_url":              baseURL,
 				},
-				connectionVersions: map[string]managedProviderConnectionVersion{
-					CatalogCredentialAPIKey: managedProviderConnectionVersionForCiphertext(providerKeyRecord.EncryptedAPIKey),
-				},
 				configuredFields: map[string]bool{CatalogCredentialAPIKey: true},
 				textModel:        strings.TrimSpace(providerKeyRecord.TextModel),
 				systemPrompt:     providerKeyRecord.SystemPrompt,
@@ -3902,14 +3731,6 @@ func managedProviderSettingsFromRecordsForSchema(providerKeyCipher managedProvid
 		}
 	}
 	return providerSettings, nil
-}
-
-func managedProviderConnectionVersionForRecord(record managedProviderConnectionRecord) managedProviderConnectionVersion {
-	return managedProviderConnectionVersionForCiphertext(record.Value)
-}
-
-func managedProviderConnectionVersionForCiphertext(encryptedValue string) managedProviderConnectionVersion {
-	return sha256.Sum256([]byte(encryptedValue))
 }
 
 func managedProviderSettingsFromPredecessorRecords(providerKeyCipher managedProviderKeyCipher, providers *providerRegistry, providerKeyRecords []managedProviderAPIKeyRecord) (map[providerID]managedProviderSettings, error) {
@@ -3933,11 +3754,10 @@ func managedProviderSettingsFromPredecessorRecords(providerKeyCipher managedProv
 		}
 		settings.textModel = strings.TrimSpace(textModel)
 		providerSettings[canonicalProviderIdentifier] = managedProviderSettings{
-			connectionValues:   cloneStringMap(settings.connectionValues),
-			connectionVersions: map[string]managedProviderConnectionVersion{},
-			configuredFields:   map[string]bool{CatalogCredentialAPIKey: true},
-			textModel:          settings.textModel,
-			systemPrompt:       settings.systemPrompt,
+			connectionValues: cloneStringMap(settings.connectionValues),
+			configuredFields: map[string]bool{CatalogCredentialAPIKey: true},
+			textModel:        settings.textModel,
+			systemPrompt:     settings.systemPrompt,
 		}
 	}
 	return providerSettings, nil

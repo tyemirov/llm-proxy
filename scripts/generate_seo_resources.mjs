@@ -16,7 +16,8 @@ const RESOURCE_ROOT = "site/resources";
 const REPORT_PATH = "docs/marketing/seo-resource-cluster-report.md";
 const RESOURCE_PUBLISHED_DATE = "2026-07-06";
 const RESOURCE_DEFAULT_MODIFIED_DATE = "2026-07-11";
-const RESOURCE_INDEX_MODIFIED_DATE = "2026-09-01";
+const RESOURCE_INDEX_MODIFIED_DATE = "2026-09-10";
+const CONNECTION_DASHBOARD_MODIFIED_DATE = "2026-09-10";
 const CURRENT_PUBLIC_CONTENT_MODIFIED_DATE = "2026-08-08";
 const PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE = "2026-08-22";
 const REQUEST_DISPOSITION_MODIFIED_DATE = "2026-09-03";
@@ -116,6 +117,7 @@ const pages = Object.freeze([
   }),
   page({
     slug: "server-side-provider-api-keys",
+    modifiedDate: CONNECTION_DASHBOARD_MODIFIED_DATE,
     category: "Security",
     relatedSlugs: [CLIENT_AUTHENTICATION_RESOURCE_SLUG],
     primaryKeyword: "server-side provider API keys",
@@ -133,7 +135,7 @@ const pages = Object.freeze([
     features: [
       ["Tenant secret authentication", "Clients authenticate to the proxy, not directly to provider APIs.", "A browser app can call the proxy without handling an OpenAI key."],
       ["Provider-key rejection", "Public endpoints reject provider key fields in query, JSON, and multipart input.", "A mistaken api_key field fails before the upstream call."],
-      ["Managed provider storage", "Signed-in users can persist provider keys through authenticated management endpoints.", "Mutation responses return masked status; raw retrieval is a separate owner-authenticated reveal action."],
+      ["Managed provider storage", "Signed-in users can persist provider keys through authenticated management endpoints.", "Management responses contain masked credentials. Stored raw credentials remain on the server."],
     ],
     examples: [
       ["Browser dashboard", "A static Pages app can show copyable proxy examples without embedding upstream keys."],
@@ -181,28 +183,28 @@ const pages = Object.freeze([
   evidencedPage({
     slug: "self-service-llm-key-management",
     category: "Management UI",
-    modifiedDate: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE,
+    modifiedDate: CONNECTION_DASHBOARD_MODIFIED_DATE,
     primaryKeyword: "self-service LLM key management",
     title: "Self-service LLM key management for internal teams",
-    description: "Log in to LLM Proxy, create a tenant client key, and manage provider credentials from catalog-owned Usage Overview cards.",
+    description: "Sign in to create tenants, reuse provider connections, and select models from one dashboard.",
     audience: "Teams that want user-owned AI access without asking operators to edit YAML for every change.",
     problem: "Operator-provisioned AI access does not scale when each user or team needs provider keys, defaults, generated secrets, and examples updated separately.",
-    solution: "LLM Proxy includes a TAuth-protected management UI that creates a missing client key after authentication and gives every catalog provider one tenant-bound Usage Overview card for key and profile settings.",
+    solution: "The authenticated dashboard presents tenants, connections, and models. An account owns connections, while each tenant retains its access key, defaults, prompts, and usage.",
     steps: [
       "Configure TAuth, the management database, and provider-key encryption.",
       "Publish the static Pages UI and serve runtime config from the API backend.",
-      "Users sign in; the UI creates and presents a missing client key once.",
-      "Users open a provider card, select the exact tenant, and paste a provider key for verification and atomic save.",
+      "Sign in and select or create a tenant.",
+      "Connect an existing provider connection or create one with verified credentials.",
     ],
     features: [
       ["TAuth-gated UI", "Management controls appear only after login.", "Unauthenticated users see the sign-in state, not tenant controls."],
-      ["Client-key onboarding", "Settings stays open only until the selected tenant has its generated client key.", "Provider credentials remain a separate tenant-owned concern."],
-      ["Catalog provider cards", "Every provider card combines interval activity with a tenant-bound key, text model, and system prompt editor.", "Key presence never adds or removes a provider card."],
-      ["Copyable examples", "Default and provider-specific curl examples use the current proxy origin and generated-secret placeholder.", "Users can start with the exact request shape shown in Settings."],
+      ["Explicit client access", "Create an API key from the selected tenant details.", "Tenant setup can continue later."],
+      ["Reusable connections", "Connection cards show the provider, connection name, and assigned tenant count.", "Connect assigns one connection per provider to the selected tenant."],
+      ["Copyable examples", "The text request example uses the saved default route and the generated-secret placeholder.", "Tenant access keeps the one-time key separate."],
     ],
     examples: [
-      ["New team onboarding", "A user signs in, copies the automatically created client key, closes Settings, and opens the OpenAI card to set its key."],
-      ["Provider update", "A user opens the DeepSeek card and its changed model autosaves for the selected tenant."],
+      ["New team onboarding", "A user creates FamilyHome, connects an existing OpenAI connection, and saves a text default."],
+      ["Provider update", "A user selects a DeepSeek model and explicitly saves the tenant default."],
       ["Usage review", "The user returns to the dashboard and selects all-time, 30-day, 7-day, or 1-day request and token summaries."],
     ],
     limitations: [
@@ -211,59 +213,57 @@ const pages = Object.freeze([
       "The card shows only a generic saved-key mask and never retrieves the stored raw credential.",
     ],
     repoExample: {
-      source: "site/assets/llm-proxy/js/ui/authenticationLifecycle.js",
-      verifiedOn: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE,
-      code: `if (this.settingsRequired) {
-  this.openSettings();
-}
-if (!this.hasSecret) {
-  await this.requestAndApplyGeneratedSecret();
-}`,
+      source: "docs/tenant-connections.md",
+      verifiedOn: CONNECTION_DASHBOARD_MODIFIED_DATE,
+      code: `POST /api/management/connections
+PUT /api/management/tenants/:tenant_id/connections/:provider
+PUT /api/management/tenants/:tenant_id/defaults`,
     },
-    quickVerdict: "Use this flow when authenticated users need separate client-key onboarding and tenant-bound provider credential management.",
+    quickVerdict: "Use this dashboard to manage tenant access and reusable provider connections.",
     faq: [
       {
         question: "How does first-run LLM Proxy setup begin?",
-        answer: "After MPR UI reports an authenticated session, the account and selected tenant profile load. The app automatically creates a client key when that tenant has none.",
+        answer: "After authentication, the dashboard opens with the selected tenant. The user can connect providers and create a tenant API key.",
       },
       {
-        question: "What lets a user leave Settings?",
-        answer: "The loaded tenant profile must report a client key. Provider keys are managed separately from the provider cards in Usage Overview.",
+        question: "Can tenant setup continue later?",
+        answer: "Yes. The dashboard remains available when the tenant has no API key or provider connections.",
       },
       {
         question: "Where does a user enter a provider key?",
-        answer: "The user opens Set API key or API key settings on the provider's Usage Overview card and selects an exact tenant for account-wide usage.",
+        answer: "Select Create connection, name the connection, choose its provider, and enter the required fields.",
       },
       {
         question: "Does onboarding change provider or model defaults?",
-        answer: "No. Automatic client-key creation and provider-key validation leave the user's existing provider and model defaults unchanged.",
+        answer: "Creating an API key or connecting a provider preserves existing defaults. Saving a model default requires a separate action.",
       },
     ],
   }),
   page({
     slug: "bring-your-own-provider-key-portal",
+    modifiedDate: CONNECTION_DASHBOARD_MODIFIED_DATE,
     category: "Management UI",
     primaryKeyword: "bring your own provider key portal",
     title: "Bring-your-own provider key portal for AI access",
-    description: "Use tenant-bound provider cards to save provider keys while public proxy calls remain free of upstream credentials.",
+    description: "Use account connections to manage provider credentials and tenant assignments.",
     audience: "Organizations where users or teams own their upstream provider accounts.",
     problem: "BYO provider keys can become risky when users paste keys into product apps, scripts, or support messages instead of a controlled backend surface.",
     solution: "The management UI accepts provider API keys only through authenticated management endpoints and keeps public proxy requests on the tenant-secret contract.",
     steps: [
       "Sign in through the configured MPR/TAuth shell.",
-      "Open the provider's Usage Overview card and select the exact tenant.",
-      "Paste the provider API key for verification with the selected text model and provider system prompt.",
+      "Select the tenant and create or choose a provider connection.",
+      "Enter the required credentials and settings. Verification uses the catalog default text model.",
       "Use generated proxy examples that never include upstream provider credentials.",
     ],
     features: [
-      ["Catalog provider cards", "Every supported provider remains visible in deterministic catalog order.", "Credential presence and historical activity do not define membership."],
-      ["Generic saved-key mask", "The card exposes Replace key and Delete key without retrieving the stored raw credential.", "Users can manage a key without placing it on the card front."],
-      ["Provider-specific examples", "Examples include provider selection when users need a provider route.", "The copy action stays separate for default and selected-provider examples."],
+      ["Catalog provider choices", "Connection creation lists the supported providers from the catalog.", "The catalog defines each required credential and setting."],
+      ["Masked credentials", "Connection details show saved credential masks and permit replacement.", "A shared connection edit identifies each affected tenant."],
+      ["Tenant route example", "The text example identifies the saved provider and model.", "The tenant API key remains separate from the command placeholder."],
     ],
     examples: [
       ["Team-owned OpenAI account", "A team saves its own OpenAI key and uses the generated tenant secret in internal tools."],
       ["Specialized provider trial", "A user adds a Gemini key for one workflow while leaving default examples available."],
-      ["Key deletion", "The user deletes only a provider credential while its model, prompt, non-secret settings, card, and usage history remain."],
+      ["Connection detachment", "A tenant can detach a connection while its usage and provider prompt remain. Other tenant assignments remain intact."],
     ],
     limitations: [
       "Users need an authenticated management session before saving provider keys.",
@@ -545,7 +545,7 @@ done`,
   page({
     slug: "provider-default-model-selection",
     category: "Configuration",
-    modifiedDate: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
+    modifiedDate: CONNECTION_DASHBOARD_MODIFIED_DATE,
     primaryKeyword: "provider default model selection",
     title: "Provider default model selection for omitted models",
     description: "Let omitted model fields resolve through tenant defaults or selected-provider configured defaults.",
@@ -566,7 +566,7 @@ done`,
     examples: [
       ["Provider trial", "A caller sets provider=gemini and omits model to use gemini-3.5-flash from config."],
       ["Default route", "A client omits provider and model to use the tenant default OpenAI route."],
-      ["Managed provider settings", "A user saves a provider-specific text model in Settings for generated-secret traffic."],
+      ["Managed provider settings", "A user explicitly saves a text default in the tenant dashboard."],
     ],
     limitations: [
       "Omitted model behavior depends on current config and management state.",
@@ -641,7 +641,7 @@ done`,
   evidencedPage({
     slug: "managed-tenant-usage-dashboard",
     category: "Usage",
-    modifiedDate: REQUEST_DISPOSITION_MODIFIED_DATE,
+    modifiedDate: CONNECTION_DASHBOARD_MODIFIED_DATE,
     primaryKeyword: "managed tenant usage dashboard",
     title: "Account-wide managed tenant usage dashboard for LLMs",
     description: "See execution usage across owned tenants and inspect failed and rejected requests separately without exposing secrets or request content.",
@@ -653,7 +653,7 @@ done`,
       "Create managed tenants and their generated client keys.",
       "Send proxy requests through any owned tenant's generated secret; each tenant remains operational independently.",
       "Record one rejected, succeeded, or failed disposition with canonical outcome metadata and no request or provider-error content.",
-      "Open Usage Overview on All tenants and 30 days, or use the Usage tenant selector immediately before ALL to narrow the report.",
+      "Select a tenant for its usage or select Account usage for combined totals.",
       "Use each breakdown card's icon button to switch that card between ranked bars and a count-and-percentage donut.",
       "Read Requests and Tokens against their visible UTC and zero-based per-hour or per-day axes.",
       "Read account-wide totals from GET /api/management/usage or one tenant from GET /api/management/tenants/:tenant_id/usage.",
@@ -661,8 +661,8 @@ done`,
       "When rejections exist, open N rejected requests to inspect requests that did not reach provider dispatch.",
     ],
     features: [
-      ["All-tenant default", "The default All tenants and 30 days selections populate requests, tokens, success rate, providers, models, statuses, and buckets together.", "The first dashboard snapshot represents every owned tenant rather than the oldest one."],
-      ["Independent selectors", "The Tenant control in Settings chooses only the editor; Usage tenant chooses only the report.", "Changing provider settings for one tenant cannot silently narrow the usage dashboard."],
+      ["Explicit account usage", "Account usage shows combined requests, tokens, success rate, providers, models, statuses, and time buckets.", "The selected tenant has its own usage view."],
+      ["One tenant context", "The selected tenant controls configuration, model defaults, and tenant usage.", "Account usage is a separate, labeled view."],
       ["Independent request breakdowns", "Each card has one keyboard-operable icon button that switches only that card between bars and a donut.", "Both views derive from the same ordered aggregate request counts without another management request."],
       ["Explicit time-series axes", "Requests and Tokens each show UTC X ticks and a zero-based integer Y scale for the canonical hour or day bucket.", "The charts do not imply one shared numeric scale or an exact event time."],
       ["Separate dispositions", "Execution metrics contain only succeeded and failed requests, while rejected_requests reports requests that could not dispatch.", "Invalid input or missing provider configuration does not reduce the proxy success rate."],
@@ -671,7 +671,7 @@ done`,
     ],
     examples: [
       ["Portfolio overview", "A user sees the combined request and token totals for every owned tenant without making one browser request per tenant."],
-      ["Tenant investigation", "Selecting Research narrows every usage surface and failure row to that tenant while Settings can remain on Default."],
+      ["Tenant investigation", "Selecting Research shows its connections, defaults, usage, and request details."],
       ["Scope-safe failure review", "Changing from All tenants to one tenant invalidates the old dialog request so stale rows and cursors cannot cross scopes."],
       ["Impossible request review", "A request for a recognized provider without a saved tenant credential appears as provider_not_configured in the rejection report and never reaches provider dispatch."],
     ],
@@ -689,24 +689,24 @@ done`,
 GET /api/management/tenants/:tenant_id/usage?interval=30d
 GET /api/management/usage/failures?interval=30d
 GET /api/management/usage/rejections?interval=30d`,
-      verifiedOn: "2026-09-03",
+      verifiedOn: CONNECTION_DASHBOARD_MODIFIED_DATE,
     },
     faq: [
       {
         question: "Does selecting a tenant activate or deactivate it?",
-        answer: "No. Every owned tenant remains independently routable through its own generated secret; the Settings and Usage selectors only choose an editor or report scope.",
+        answer: "Each tenant remains routable through its API key. Dashboard selection changes the visible context.",
       },
       {
         question: "What does Usage Overview show by default?",
-        answer: "It selects All tenants and the 30-day interval, then aggregates the owned tenants at the server's database boundary.",
+        answer: "It shows the selected tenant and the 30-day interval. Account usage combines all owned tenants.",
       },
       {
         question: "Does changing a breakdown chart request new usage data?",
         answer: "No. Each independent chart toggle changes one local presentation of the same request aggregates.",
       },
       {
-        question: "Does changing the Tenant control in Settings change Usage Overview?",
-        answer: "No. The Tenant control in Settings and the Usage tenant control are independent; changing one does not change the other.",
+        question: "Does tenant selection change the usage view?",
+        answer: "Yes. Selecting a tenant shows its configuration and usage. Select Account usage to examine combined totals.",
       },
       {
         question: "What tenant data appears in account-wide failure rows?",
@@ -794,7 +794,7 @@ GET /api/management/usage/rejections?interval=30d`,
   page({
     slug: "tauth-protected-management-api",
     category: "Management UI",
-    modifiedDate: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE,
+    modifiedDate: CONNECTION_DASHBOARD_MODIFIED_DATE,
     primaryKeyword: "TAuth protected management API",
     title: "TAuth-protected management API for LLM Proxy",
     description: "Gate account, tenant, provider key, defaults, usage, and admin APIs behind validated TAuth sessions.",
@@ -814,7 +814,7 @@ GET /api/management/usage/rejections?interval=30d`,
     ],
     examples: [
       ["Account load", "The static app calls /api/management/account after TAuth reports authentication, then loads /api/management/tenants/:tenant_id for the selected tenant."],
-      ["Settings mutation", "Provider key saves and secret generation require JSON content and the public origin."],
+      ["Management mutation", "Provider key saves and secret generation require JSON content and the public origin."],
       ["Admin dashboard", "A configured admin receives an Admin menu item after profile load."],
     ],
     limitations: [
@@ -825,16 +825,17 @@ GET /api/management/usage/rejections?interval=30d`,
   }),
   evidencedPage({
     slug: "generated-secret-rotation",
+    modifiedDate: CONNECTION_DASHBOARD_MODIFIED_DATE,
     category: "Security",
     primaryKeyword: "generated LLM proxy secret rotation",
     title: "Rotate generated LLM Proxy client keys with confidence",
-    description: "Automatically create a missing LLM Proxy client key, show it once, store only its digest, and replace it through an explicit confirmed rotation.",
+    description: "Create a tenant API key explicitly, copy its one-time value, and confirm replacement when access must change.",
     audience: "Teams that want self-service client access without permanent retrievable secrets.",
     problem: "Long-lived client secrets become harder to control when users can retrieve old raw values or when rotation requires operator edits.",
     solution: "LLM Proxy generates tenant secrets, returns them once, stores only SHA-256 digests, and replaces a current value through one authenticated management operation.",
     steps: [
-      "Open Settings after signing in.",
-      "Copy the one-time client key created automatically for a profile that does not have one.",
+      "Select a tenant and open API access in its details.",
+      "Select Create API key and copy the one-time value.",
       "Use the generated secret in public proxy request examples.",
       "Confirm Replace key when access should change, then copy the one-time replacement.",
     ],
@@ -844,7 +845,7 @@ GET /api/management/usage/rejections?interval=30d`,
       ["Secret-safe examples", "Request examples retain the <generated-secret> placeholder after creation.", "Raw client keys remain confined to the one-time Key field."],
     ],
     examples: [
-      ["New app secret", "A developer copies the automatically created client key and substitutes it for the /v2 example placeholder."],
+      ["New app secret", "A developer creates a tenant API key and substitutes its value for the /v2 example placeholder."],
       ["Compromised client", "A user confirms replacement, copies the new secret once, and updates the authorized client."],
       ["Provider key unchanged", "Rotating the tenant secret does not require changing the saved provider API key."],
     ],
@@ -855,20 +856,18 @@ GET /api/management/usage/rejections?interval=30d`,
     ],
     repoExample: {
       source: "site/assets/llm-proxy/js/core/backendClient.js",
-      verifiedOn: "2026-07-26",
-      code: `export function generateSecret() {
-  return requestJSON(\`\${MANAGEMENT_BASE_PATH}/secrets\`, { method: "POST" });
-}`,
+      verifiedOn: CONNECTION_DASHBOARD_MODIFIED_DATE,
+      code: `POST /api/management/tenants/:tenant_id/secrets`,
     },
-    quickVerdict: "Use the automatically created client key once, then confirm replacement when access changes without rotating the separate upstream provider credentials.",
+    quickVerdict: "Create a tenant API key explicitly. Confirm replacement when access changes.",
     faq: [
       {
         question: "When does LLM Proxy create a client key?",
-        answer: "The management UI creates one after authentication when the current profile reports that no client key exists. A configured profile does not trigger another creation request.",
+        answer: "Select Create API key in tenant API access. Signing in does not create a key.",
       },
       {
         question: "Can the raw generated client key be retrieved later?",
-        answer: "No. The raw value is presented once in a masked, read-only field, while the backend stores only the digest used to authenticate proxy requests.",
+        answer: "The raw value appears once in a read-only field. The backend stores its authentication digest.",
       },
       {
         question: "What does replacing the client key affect?",
@@ -882,12 +881,13 @@ GET /api/management/usage/rejections?interval=30d`,
   }),
   page({
     slug: "encrypted-provider-key-storage",
+    modifiedDate: CONNECTION_DASHBOARD_MODIFIED_DATE,
     category: "Security",
     primaryKeyword: "encrypted provider key storage",
     title: "Encrypted provider key storage for managed tenants",
-    description: "Store tenant-owned provider API keys with AES-GCM encryption at rest and honest security wording.",
-    audience: "Teams evaluating how LLM Proxy stores tenant-owned provider credentials.",
-    problem: "Provider API keys are high-value secrets. A management database should not store raw upstream credentials as plaintext rows.",
+    description: "Store account-owned provider API keys with AES-GCM encryption at rest and honest security wording.",
+    audience: "Teams evaluating how LLM Proxy stores account-owned provider credentials.",
+    problem: "Provider API keys are high-value secrets. The management database must store encrypted provider credentials.",
     solution: "LLM Proxy requires a base64 32-byte provider-key encryption key and encrypts managed provider API keys at rest with AES-GCM and row-bound associated data.",
     steps: [
       "Generate a base64 32-byte management.provider_key_encryption_key.",
@@ -977,6 +977,7 @@ GET /api/management/usage/rejections?interval=30d`,
   }),
   evidencedPage({
     slug: "multi-tenant-ownership-migration",
+    modifiedDate: CONNECTION_DASHBOARD_MODIFIED_DATE,
     category: "Configuration",
     primaryKeyword: "multi-tenant ownership migration",
     title: "Transactional multi-tenant account ownership migration",
@@ -994,7 +995,7 @@ GET /api/management/usage/rejections?interval=30d`,
       ["Fail-closed preflight", "Missing tables, static owners, duplicates, malformed secrets, orphan rows, plaintext keys, corrupt ciphertext, and invalid routing data stop startup before mutation.", "Invalid data never becomes a partial migration."],
       ["SQLite index continuity", "Colliding legacy GORM index names move inside the same transaction before current tables are created.", "Preserved volumes migrate without deleting tenant or usage data."],
       ["Tenant and usage continuity", "Opaque tenant ids, secret digests, routing defaults, timestamps, and every usage event are preserved.", "Existing client secrets continue to identify the same tenant."],
-      ["Provider key re-encryption", "Provider ciphertext is decrypted under the prior user binding and re-encrypted with the preserved tenant id as AES-GCM associated data.", "Each key becomes tenant-bound."],
+      ["Provider key re-encryption", "Provider ciphertext is decrypted under the prior user binding and re-encrypted with the preserved tenant id as AES-GCM associated data.", "The current migration then encrypts each key with its new connection identity."],
     ],
     examples: [
       ["SQLite verification", "A disposable legacy database migrates and reopens with explicit user and tenant tables."],
@@ -1008,7 +1009,7 @@ GET /api/management/usage/rejections?interval=30d`,
     ],
     repoExample: {
       source: "internal/proxy/management_store.go",
-      verifiedOn: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
+      verifiedOn: CONNECTION_DASHBOARD_MODIFIED_DATE,
       code: `dataset, preflightError := preflightLegacyManagedTenantSchema(database, providerKeyCipher, providers)
 if preflightError != nil {
 \treturn preflightError
@@ -1041,7 +1042,7 @@ return database.Transaction(func(transaction *gorm.DB) error {`,
       href: "https://github.com/tyemirov/llm-proxy#self-service-management-ui",
     },
     publicationBrief: {
-      allowedClaims: "Bounded preflight, atomic migration, preserved tenant ids and usage, and tenant-bound provider-key re-encryption.",
+      allowedClaims: "Bounded preflight, atomic migration, preserved tenant ids and usage, and connection-bound provider-key re-encryption.",
       forbiddenClaims: "Performance, pricing, compliance, benchmark, and zero-downtime claims.",
       differentiation: "Operator runbook for the one-tenant-per-user ownership upgrade, distinct from general GORM persistence guidance.",
     },
@@ -1079,6 +1080,7 @@ return database.Transaction(func(transaction *gorm.DB) error {`,
   }),
   evidencedPage({
     slug: CLIENT_AUTHENTICATION_RESOURCE_SLUG,
+    modifiedDate: CONNECTION_DASHBOARD_MODIFIED_DATE,
     category: "Clients",
     publishedDate: CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE,
     relatedSlugs: [
@@ -1101,7 +1103,7 @@ return database.Transaction(func(transaction *gorm.DB) error {`,
     ],
     features: [
       ["One public client credential", "The client authenticates to LLM Proxy with a tenant secret instead of an upstream provider key.", "A script sends key=mysecret to /v2 while OpenAI, Gemini, or other provider credentials remain on the server."],
-      ["Separate management authentication", "TAuth/MPR UI sessions authorize management APIs and Settings, not a direct text request.", "A signed-in user can create or replace a client key, then the application uses that key on its own proxy calls."],
+      ["Separate management authentication", "TAuth/MPR UI sessions authorize management APIs. Public proxy requests use the tenant API key.", "A signed-in user can create or replace a client key, then the application uses that key on its own proxy calls."],
       ["Explicit client configuration", "The installable CLI reads flags or environment values; it has no user-level or system-level YAML lookup.", "An application can use the optional JSON model profile only when it owns per-user provider/model selection."],
     ],
     examples: [
@@ -1116,7 +1118,7 @@ return database.Transaction(func(transaction *gorm.DB) error {`,
     ],
     repoExample: {
       source: "README.md",
-      verifiedOn: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
+      verifiedOn: CONNECTION_DASHBOARD_MODIFIED_DATE,
       code: `curl -X POST \\
   -H "Content-Type: application/json" \\
   --data '{"messages":[{"role":"user","content":"Summarize this","order":2},{"role":"system","content":"Be concise.","order":1}],"model":"deepseek-v4-flash","max_tokens":4096}' \\
@@ -1133,7 +1135,7 @@ return database.Transaction(func(transaction *gorm.DB) error {`,
         answer: "GET, POST, and POST /v2 requests authenticate with the tenant secret in the key query parameter. The bundled text clients add that parameter while sending the request body to canonical /v2.",
       },
       {
-        question: "What authenticates management Settings operations?",
+        question: "What authenticates management operations?",
         answer: "The management UI relies on the configured MPR UI and TAuth session for management APIs. That browser session is separate from the tenant secret used by public proxy requests.",
       },
       {
@@ -1409,7 +1411,7 @@ text = client.post_messages(
   page({
     slug: "openai-compatible-provider-gateway",
     category: "Provider routing",
-    modifiedDate: REQUEST_DISPOSITION_MODIFIED_DATE,
+    modifiedDate: CONNECTION_DASHBOARD_MODIFIED_DATE,
     primaryKeyword: "OpenAI-compatible provider gateway",
     title: "OpenAI-compatible provider gateway",
     description: "Route Meta Muse Spark, DeepSeek, DashScope Qwen, Kimi, MiniMax, SiliconFlow, Z.AI, and Grok text calls through one compatible adapter.",
@@ -1417,7 +1419,7 @@ text = client.post_messages(
     problem: "OpenAI-compatible providers share a broad shape but still need different base URLs, keys, defaults, and availability rules.",
     solution: "LLM Proxy uses one compatible chat adapter. Provider transports and offerings stay in providers.yml, while tenant values stay in management storage.",
     steps: [
-      "Declare provider transports and normalized offerings in providers.yml, then save tenant connection values in Settings.",
+      "Declare provider transports and offerings in providers.yml. Save credentials in an account connection and connect the tenant.",
       "Use provider selectors such as meta, deepseek, dashscope, moonshot, minimax, siliconflow, zai, or xai.",
       "Send GET, compatibility POST, or canonical /v2 requests.",
       "Let omitted model use the selected provider's configured default.",
@@ -1442,7 +1444,7 @@ text = client.post_messages(
   evidencedPage({
     slug: "gemini-interactions-proxy",
     category: "Provider routing",
-    modifiedDate: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
+    modifiedDate: CONNECTION_DASHBOARD_MODIFIED_DATE,
     primaryKeyword: "Gemini Interactions proxy",
     title: "Gemini Interactions proxy for stored 3.x model calls",
     description: "Route two registered Gemini 3.x models through stored Interactions with provider-configured visibility retries, cleanup, and one blocking proxy request.",
@@ -1450,7 +1452,7 @@ text = client.post_messages(
     problem: "Stored Gemini Interactions require polling and cleanup, which shared proxy callers must not have to coordinate.",
     solution: "LLM Proxy polls and cleans up registered Gemini 3.x resources while callers keep one blocking request.",
     steps: [
-      "Keep the Gemini transport and offerings in providers.yml, then save the Gemini API key in tenant settings.",
+      "Keep the Gemini transport and offerings in providers.yml. Create a Gemini connection and connect the tenant.",
       "Select provider=gemini or set Gemini as a tenant default.",
       "Send canonical messages through /v2 or compatibility text requests.",
       "Keep max_tokens within configured Gemini output limits.",
@@ -1474,7 +1476,7 @@ text = client.post_messages(
     ],
     repoExample: {
       source: "configs/providers.yml",
-      verifiedOn: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
+      verifiedOn: CONNECTION_DASHBOARD_MODIFIED_DATE,
       code: `resource_visibility:
   retry_interval_milliseconds: 5000
   retry_limit: 6
@@ -1506,7 +1508,7 @@ text = client.post_messages(
   page({
     slug: "anthropic-claude-messages-proxy",
     category: "Provider routing",
-    modifiedDate: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
+    modifiedDate: CONNECTION_DASHBOARD_MODIFIED_DATE,
     primaryKeyword: "Anthropic Claude Messages proxy",
     title: "Anthropic Claude Messages proxy for /v2 callers",
     description: "Route shared messages to Anthropic's native Messages API without changing client contracts.",
@@ -1514,7 +1516,7 @@ text = client.post_messages(
     problem: "Anthropic Messages has native system and max_tokens requirements that differ from OpenAI-compatible chat routes.",
     solution: "LLM Proxy maps shared messages into Anthropic's native Messages API, translates system messages to the top-level system field, and sends configured output limits when needed.",
     steps: [
-      "Keep the Anthropic transport and Claude offerings in providers.yml, then save the Anthropic API key in tenant settings.",
+      "Keep the Anthropic transport and Claude offerings in providers.yml. Create an Anthropic connection and connect the tenant.",
       "Select provider=anthropic or use the claude alias.",
       "Send messages through /v2 with user and optional system messages.",
       "Let omitted max_tokens use the selected Claude model's configured output limit.",
@@ -1662,6 +1664,7 @@ text = client.post_messages(
   }),
   evidencedPage({
     slug: "copyable-llm-curl-examples",
+    modifiedDate: CONNECTION_DASHBOARD_MODIFIED_DATE,
     category: "Management UI",
     relatedSlugs: [CLIENT_AUTHENTICATION_RESOURCE_SLUG],
     primaryKeyword: "copyable LLM curl examples",
@@ -1669,22 +1672,22 @@ text = client.post_messages(
     description: "Render copyable LLM curl examples from live profile data while keeping the one-time raw client key out of page markup and copied commands.",
     audience: "Users onboarding themselves to LLM Proxy through the management UI.",
     problem: "Docs and examples drift when they hardcode hosts, provider choices, or secret placeholders that do not match the signed-in user's state.",
-    solution: "LLM Proxy Settings renders copyable examples from profile data while keeping raw client keys out of example markup and clipboard actions.",
+    solution: "Tenant API access provides a text request example from the saved default route. The example contains a key placeholder.",
     steps: [
-      "Open Settings after signing in.",
-      "Expand Usage / Request examples.",
-      "Copy default text, default /v2, or default dictation examples.",
-      "Select a provider to copy provider-specific text, /v2, and dictation examples when supported.",
+      "Select a tenant and save its text default.",
+      "Open API access in the tenant details.",
+      "Create a tenant API key and copy its one-time value.",
+      "Copy the text request example and replace its key placeholder outside the dashboard.",
     ],
     features: [
-      ["Generated-secret placeholder", "Examples always use <generated-secret>, including after automatic client-key creation.", "Raw client keys never enter example markup."],
-      ["Separate one-time key", "The newly created key appears masked in a read-only field with Show and Copy actions.", "Users substitute it for the placeholder outside the page."],
-      ["Provider-specific variants", "Selected-provider examples include provider and model context.", "Dictation examples appear only for dictation-capable providers."],
+      ["Generated-secret placeholder", "Examples use <generated-secret>, including after explicit API key creation.", "Raw client keys never enter example markup."],
+      ["Separate one-time key", "The newly created key appears in a read-only field with a copy action.", "Users substitute it for the placeholder outside the page."],
+      ["Saved route context", "The text example includes the saved provider and model.", "The API reference documents other request forms."],
     ],
     examples: [
-      ["First run", "A new user copies the automatically created client key, saves a provider key, and then copies the default /v2 example."],
+      ["First run", "A user connects a provider, saves a text default, creates a tenant API key, and copies the request example."],
       ["After creation", "The example still contains <generated-secret> so the raw client key is not copied implicitly."],
-      ["Provider switch", "Selecting DeepSeek updates provider-specific examples and hides dictation when unsupported."],
+      ["Default change", "Saving a DeepSeek text default changes the provider and model in the next request example."],
     ],
     limitations: [
       "Examples are for proxy calls, not direct provider API calls.",
@@ -1692,11 +1695,9 @@ text = client.post_messages(
       "Examples depend on the API-served profile and config payloads.",
     ],
     repoExample: {
-      source: "site/assets/llm-proxy/js/ui/requestExamples.js",
-      verifiedOn: "2026-07-22",
-      code: `get exampleSecret() {
-  return EMPTY_SECRET_PLACEHOLDER;
-}`,
+      source: "docs/tenant-connections.md",
+      verifiedOn: CONNECTION_DASHBOARD_MODIFIED_DATE,
+      code: `Examples use the <generated-secret> placeholder.`,
     },
     quickVerdict: "Copy the request shape with its placeholder, then supply the one-time client key separately so raw access material never enters example markup.",
     faq: [
@@ -1706,48 +1707,48 @@ text = client.post_messages(
       },
       {
         question: "Where do example hosts and provider choices come from?",
-        answer: "The Settings UI builds examples from the API-served runtime configuration and the current authenticated management profile instead of hardcoding deployment-specific values.",
+        answer: "The dashboard uses the runtime configuration for the proxy origin and the tenant profile for the saved default route.",
       },
       {
         question: "Can copying an example expose the raw generated key?",
         answer: "No. The generated value stays in its dedicated read-only field, while example markup and clipboard actions use only the placeholder.",
       },
       {
-        question: "When does a provider-specific dictation example appear?",
-        answer: "It appears only when the selected provider supports dictation; text and /v2 examples remain available for configured text providers.",
+        question: "Where are dictation request examples documented?",
+        answer: "The API reference documents dictation requests. Tenant API access shows the saved text route example.",
       },
     ],
   }),
   page({
     slug: "provider-specific-system-prompts",
     category: "Management UI",
-    modifiedDate: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE,
+    modifiedDate: CONNECTION_DASHBOARD_MODIFIED_DATE,
     primaryKeyword: "provider-specific system prompts",
-    title: "Provider-specific system prompts in LLM Proxy Settings",
+    title: "Provider-specific system prompts in the tenant dashboard",
     description: "Store each provider's text model and system prompt with its managed provider configuration.",
     audience: "Users who need different instructions for different upstream providers.",
     problem: "A single global system prompt can be too blunt when different providers are used for different jobs or when provider-selected requests need their own context.",
     solution: "LLM Proxy stores text model and provider-specific system prompt settings with each managed provider profile.",
     steps: [
-      "Open the selected-provider editor in Settings.",
-      "Choose the provider to configure.",
-      "Set the provider text model and provider system prompt.",
-      "Leave the changed field or switch providers; the selected provider settings autosave without a separate save action.",
+      "Select a tenant and one of its connected providers.",
+      "Open the connection details below the map.",
+      "Enter the tenant provider prompt.",
+      "Select Save provider prompt. Save a default model through its separate action.",
     ],
     features: [
-      ["Provider-owned settings", "Model and prompt live with the selected provider record.", "Provider-specific routing context is explicit."],
+      ["Tenant provider profiles", "The model and prompt belong to the tenant provider profile.", "Sharing credentials preserves separate tenant prompts."],
       ["Runtime injection", "Managed provider-selected requests can use the saved model and prompt when request fields are omitted.", "Callers can stay concise."],
-      ["Clear removal", "Removing a provider key also removes provider settings.", "The destructive boundary is explicit."],
+      ["Preserved profiles", "Detaching a connection preserves the tenant provider prompt and model.", "Dependent default routes require explicit clearing during detachment."],
     ],
     examples: [
       ["Concise OpenAI answers", "A user stores an OpenAI system prompt that asks for concise responses."],
       ["DeepSeek default model", "A user saves a DeepSeek model for provider-selected requests."],
-      ["Provider cleanup", "A user removes a provider key and settings after a trial ends."],
+      ["Provider cleanup", "A user detaches a trial connection. Its other tenant assignments remain intact."],
     ],
     limitations: [
       "Request-level system instructions take precedence over server-injected defaults.",
       "Provider settings are scoped to the selected tenant owned by the authenticated TAuth subject.",
-      "Autosave responses return masked key status; raw retrieval requires the separate owner-authenticated reveal action.",
+      "Connection responses contain masked credentials. The provider prompt remains a tenant property.",
     ],
   }),
   page({
@@ -2659,7 +2660,7 @@ Generated: ${currentResourceModifiedDate}
 - It routes text to OpenAI, both Meta Muse Spark models, and other supported providers as documented in the provider matrix.
 - It routes dictation through /dictate for OpenAI, SiliconFlow, Z.AI, and Grok/xAI as documented.
 - It keeps upstream provider API keys server-side and rejects provider-key-like fields on public proxy requests.
-- It can run a TAuth-protected self-service management UI that automatically creates a missing client key, autosaves selected-provider settings, and requires one persisted provider key before Settings can close.
+- Its authenticated dashboard manages tenants, reusable provider connections, explicit model defaults, and tenant API keys.
 - Managed provider keys are encrypted at rest with AES-GCM; this protects storage/backups/dumps and is not a zero-knowledge guarantee.
 - Browser runtime config is served by the backend /config-ui.yaml endpoint.
 

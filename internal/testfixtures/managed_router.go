@@ -198,19 +198,42 @@ func saveManagedProviderKey(router http.Handler, sessionCookie *http.Cookie, ten
 		}
 		break
 	}
-	body := map[string]any{"fields": fields, "text_model": managedProviderModel(provider)}
-	encodedBody, encodeError := json.Marshal(body)
-	if encodeError != nil {
-		return encodeError
+	exchange := func(method, path string, body any, status int) (*httptest.ResponseRecorder, error) {
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return nil, err
+		}
+		request := httptest.NewRequest(method, path, bytes.NewReader(encoded))
+		request.Header.Set("Content-Type", "application/json")
+		if method == http.MethodPost && path == "/api/management/connections" {
+			request.Header.Set("Idempotency-Key", rand.Text())
+		}
+		request.AddCookie(sessionCookie)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != status {
+			return nil, fmt.Errorf("managed router provider=%s path=%s status=%d body=%s", provider, path, response.Code, response.Body.String())
+		}
+		return response, nil
 	}
-	request := httptest.NewRequest(http.MethodPut, "/api/management/tenants/"+tenantID+"/provider-connections/"+provider, bytes.NewReader(encodedBody))
-	request.Header.Set("Content-Type", "application/json")
-	request.AddCookie(sessionCookie)
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
-	if response.Code != http.StatusOK {
-		return fmt.Errorf("managed router provider=%s status=%d body=%s", provider, response.Code, response.Body.String())
+	created, err := exchange(http.MethodPost, "/api/management/connections", map[string]any{"name": provider, "provider": provider, "fields": fields}, http.StatusCreated)
+	if err != nil {
+		return err
 	}
+	var connection struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(created.Body.Bytes(), &connection); err != nil {
+		return err
+	}
+	path := "/api/management/tenants/" + tenantID
+	if _, err := exchange(http.MethodPut, path+"/connections/"+provider, map[string]string{"connection_id": connection.ID}, http.StatusOK); err != nil {
+		return err
+	}
+	if _, err := exchange(http.MethodPut, path+"/provider-profiles/"+provider, map[string]string{"text_model": managedProviderModel(provider), "system_prompt": ""}, http.StatusOK); err != nil {
+		return err
+	}
+
 	return nil
 }
 
