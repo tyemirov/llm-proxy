@@ -6,7 +6,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/</loc>
-    <lastmod>2026-09-01</lastmod>
+    <lastmod>2026-09-10</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/docs/</loc>
@@ -26,7 +26,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/server-side-provider-api-keys/</loc>
-    <lastmod>2026-07-11</lastmod>
+    <lastmod>2026-09-10</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/tenant-secret-ai-gateway/</loc>
@@ -34,11 +34,11 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/</loc>
-    <lastmod>2026-08-08</lastmod>
+    <lastmod>2026-09-10</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/</loc>
-    <lastmod>2026-07-11</lastmod>
+    <lastmod>2026-09-10</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/canonical-v2-chat-messages-api/</loc>
@@ -70,7 +70,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/provider-default-model-selection/</loc>
-    <lastmod>2026-08-22</lastmod>
+    <lastmod>2026-09-10</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/openai-web-search-guardrails/</loc>
@@ -82,7 +82,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/</loc>
-    <lastmod>2026-09-03</lastmod>
+    <lastmod>2026-09-10</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/admin-usage-visibility-without-secrets/</loc>
@@ -94,15 +94,15 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/tauth-protected-management-api/</loc>
-    <lastmod>2026-08-08</lastmod>
+    <lastmod>2026-09-10</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/generated-secret-rotation/</loc>
-    <lastmod>2026-07-26</lastmod>
+    <lastmod>2026-09-10</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/encrypted-provider-key-storage/</loc>
-    <lastmod>2026-07-11</lastmod>
+    <lastmod>2026-09-10</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/reject-client-provider-key-leaks/</loc>
@@ -114,7 +114,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/multi-tenant-ownership-migration/</loc>
-    <lastmod>2026-08-22</lastmod>
+    <lastmod>2026-09-10</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/gorm-managed-tenant-persistence/</loc>
@@ -122,7 +122,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/llm-proxy-client-authentication/</loc>
-    <lastmod>2026-08-22</lastmod>
+    <lastmod>2026-09-10</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/go-client-v2-only-llm-proxy/</loc>
@@ -150,15 +150,15 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/openai-compatible-provider-gateway/</loc>
-    <lastmod>2026-09-03</lastmod>
+    <lastmod>2026-09-10</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/</loc>
-    <lastmod>2026-08-22</lastmod>
+    <lastmod>2026-09-10</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/anthropic-claude-messages-proxy/</loc>
-    <lastmod>2026-08-22</lastmod>
+    <lastmod>2026-09-10</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/per-request-provider-model-selection/</loc>
@@ -178,11 +178,11 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/copyable-llm-curl-examples/</loc>
-    <lastmod>2026-07-22</lastmod>
+    <lastmod>2026-09-10</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/provider-specific-system-prompts/</loc>
-    <lastmod>2026-08-08</lastmod>
+    <lastmod>2026-09-10</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/local-and-hosted-llm-proxy-config-profiles/</loc>

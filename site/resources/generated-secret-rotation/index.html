@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Rotate generated LLM Proxy client keys with confidence</title>
-    <meta name="description" content="Automatically create a missing LLM Proxy client key, show it once, store only its digest, and replace it through an explicit confirmed rotation.">
+    <meta name="description" content="Create a tenant API key explicitly, copy its one-time value, and confirm replacement when access must change.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/generated-secret-rotation/">
     <meta property="og:title" content="Rotate generated LLM Proxy client keys with confidence">
-    <meta property="og:description" content="Automatically create a missing LLM Proxy client key, show it once, store only its digest, and replace it through an explicit confirmed rotation.">
+    <meta property="og:description" content="Create a tenant API key explicitly, copy its one-time value, and confirm replacement when access must change.">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/generated-secret-rotation/">
     <meta name="twitter:card" content="summary">
@@ -27,9 +27,9 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Rotate generated LLM Proxy client keys with confidence","description":"Automatically create a missing LLM Proxy client key, show it once, store only its digest, and replace it through an explicit confirmed rotation.","url":"https://llm-proxy.mprlab.com/resources/generated-secret-rotation/","datePublished":"2026-07-06","dateModified":"2026-07-26","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/generated-secret-rotation/","about":["LLM Proxy","Security","generated LLM proxy secret rotation"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Rotate generated LLM Proxy client keys with confidence","description":"Create a tenant API key explicitly, copy its one-time value, and confirm replacement when access must change.","url":"https://llm-proxy.mprlab.com/resources/generated-secret-rotation/","datePublished":"2026-07-06","dateModified":"2026-09-10","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/generated-secret-rotation/","about":["LLM Proxy","Security","generated LLM proxy secret rotation"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Rotate generated LLM Proxy client keys with confidence","item":"https://llm-proxy.mprlab.com/resources/generated-secret-rotation/"}]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"When does LLM Proxy create a client key?","acceptedAnswer":{"@type":"Answer","text":"The management UI creates one after authentication when the current profile reports that no client key exists. A configured profile does not trigger another creation request."}},{"@type":"Question","name":"Can the raw generated client key be retrieved later?","acceptedAnswer":{"@type":"Answer","text":"No. The raw value is presented once in a masked, read-only field, while the backend stores only the digest used to authenticate proxy requests."}},{"@type":"Question","name":"What does replacing the client key affect?","acceptedAnswer":{"@type":"Answer","text":"Replacement immediately stops the prior client key from authenticating public proxy requests. It does not remove or rotate separately stored upstream provider credentials."}},{"@type":"Question","name":"Do request examples embed the generated key?","acceptedAnswer":{"@type":"Answer","text":"No. Examples retain the <generated-secret> placeholder so the one-time raw value does not enter page markup or copied example commands."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Keep provider API keys server-side for LLM apps, which covers server-side provider API keys."}}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"When does LLM Proxy create a client key?","acceptedAnswer":{"@type":"Answer","text":"Select Create API key in tenant API access. Signing in does not create a key."}},{"@type":"Question","name":"Can the raw generated client key be retrieved later?","acceptedAnswer":{"@type":"Answer","text":"The raw value appears once in a read-only field. The backend stores its authentication digest."}},{"@type":"Question","name":"What does replacing the client key affect?","acceptedAnswer":{"@type":"Answer","text":"Replacement immediately stops the prior client key from authenticating public proxy requests. It does not remove or rotate separately stored upstream provider credentials."}},{"@type":"Question","name":"Do request examples embed the generated key?","acceptedAnswer":{"@type":"Answer","text":"No. Examples retain the <generated-secret> placeholder so the one-time raw value does not enter page markup or copied example commands."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Keep provider API keys server-side for LLM apps, which covers server-side provider API keys."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440"></script>
   </head>
   <body class="resource-page">
@@ -65,12 +65,12 @@
           <header class="resource-hero">
             <p class="eyebrow">Security</p>
             <h1>Rotate generated LLM Proxy client keys with confidence</h1>
-            <p class="resource-deck">Automatically create a missing LLM Proxy client key, show it once, store only its digest, and replace it through an explicit confirmed rotation.</p>
+            <p class="resource-deck">Create a tenant API key explicitly, copy its one-time value, and confirm replacement when access must change.</p>
             <p class="resource-audience">Teams that want self-service client access without permanent retrievable secrets.</p>
-            <p class="resource-byline">Reviewed 2026-07-26 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <p class="resource-byline">Reviewed 2026-09-10 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
             <aside class="resource-verdict" aria-label="Quick verdict">
               <strong>Quick verdict</strong>
-              <p>Use the automatically created client key once, then confirm replacement when access changes without rotating the separate upstream provider credentials.</p>
+              <p>Create a tenant API key explicitly. Confirm replacement when access changes.</p>
             </aside>
             <div class="resource-actions">
               <a class="resource-button" href="/docs/">Open API reference</a>
@@ -91,8 +91,8 @@
           <section>
             <h2>How it works</h2>
             <ol class="resource-steps">
-              <li>Open Settings after signing in.</li>
-<li>Copy the one-time client key created automatically for a profile that does not have one.</li>
+              <li>Select a tenant and open API access in its details.</li>
+<li>Select Create API key and copy the one-time value.</li>
 <li>Use the generated secret in public proxy request examples.</li>
 <li>Confirm Replace key when access should change, then copy the one-time replacement.</li>
             </ol>
@@ -142,7 +142,7 @@
 
                     <section class="resource-card">
                       <h3>New app secret</h3>
-                      <p>A developer copies the automatically created client key and substitutes it for the /v2 example placeholder.</p>
+                      <p>A developer creates a tenant API key and substitutes its value for the /v2 example placeholder.</p>
                     </section>
 
 
@@ -171,10 +171,8 @@
 
           <section>
             <h2>Repository evidence</h2>
-            <pre class="usage-snippet"><code>export function generateSecret() {
-  return requestJSON(`${MANAGEMENT_BASE_PATH}/secrets`, { method: &quot;POST&quot; });
-}</code></pre>
-            <p>Verified 2026-07-26 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>site/assets/llm-proxy/js/core/backendClient.js</code>.</p>
+            <pre class="usage-snippet"><code>POST /api/management/tenants/:tenant_id/secrets</code></pre>
+            <p>Verified 2026-09-10 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>site/assets/llm-proxy/js/core/backendClient.js</code>.</p>
           </section>
 
           <section>
@@ -183,13 +181,13 @@
 
                     <details>
                       <summary>When does LLM Proxy create a client key?</summary>
-                      <p>The management UI creates one after authentication when the current profile reports that no client key exists. A configured profile does not trigger another creation request.</p>
+                      <p>Select Create API key in tenant API access. Signing in does not create a key.</p>
                     </details>
 
 
                     <details>
                       <summary>Can the raw generated client key be retrieved later?</summary>
-                      <p>No. The raw value is presented once in a masked, read-only field, while the backend stores only the digest used to authenticate proxy requests.</p>
+                      <p>The raw value appears once in a read-only field. The backend stores its authentication digest.</p>
                     </details>
 
 

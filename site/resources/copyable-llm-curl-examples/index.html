@@ -27,9 +27,9 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Copyable LLM curl examples from current profile data","description":"Render copyable LLM curl examples from live profile data while keeping the one-time raw client key out of page markup and copied commands.","url":"https://llm-proxy.mprlab.com/resources/copyable-llm-curl-examples/","datePublished":"2026-07-06","dateModified":"2026-07-22","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/copyable-llm-curl-examples/","about":["LLM Proxy","Management UI","copyable LLM curl examples"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Copyable LLM curl examples from current profile data","description":"Render copyable LLM curl examples from live profile data while keeping the one-time raw client key out of page markup and copied commands.","url":"https://llm-proxy.mprlab.com/resources/copyable-llm-curl-examples/","datePublished":"2026-07-06","dateModified":"2026-09-10","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/copyable-llm-curl-examples/","about":["LLM Proxy","Management UI","copyable LLM curl examples"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Copyable LLM curl examples from current profile data","item":"https://llm-proxy.mprlab.com/resources/copyable-llm-curl-examples/"}]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What do copied curl examples use for the client key?","acceptedAnswer":{"@type":"Answer","text":"Every example uses the <generated-secret> placeholder. The user supplies the separately copied one-time client key when preparing the real request."}},{"@type":"Question","name":"Where do example hosts and provider choices come from?","acceptedAnswer":{"@type":"Answer","text":"The Settings UI builds examples from the API-served runtime configuration and the current authenticated management profile instead of hardcoding deployment-specific values."}},{"@type":"Question","name":"Can copying an example expose the raw generated key?","acceptedAnswer":{"@type":"Answer","text":"No. The generated value stays in its dedicated read-only field, while example markup and clipboard actions use only the placeholder."}},{"@type":"Question","name":"When does a provider-specific dictation example appear?","acceptedAnswer":{"@type":"Answer","text":"It appears only when the selected provider supports dictation; text and /v2 examples remain available for configured text providers."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Authenticate an LLM Proxy client with a tenant secret, which covers LLM Proxy client authentication."}}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What do copied curl examples use for the client key?","acceptedAnswer":{"@type":"Answer","text":"Every example uses the <generated-secret> placeholder. The user supplies the separately copied one-time client key when preparing the real request."}},{"@type":"Question","name":"Where do example hosts and provider choices come from?","acceptedAnswer":{"@type":"Answer","text":"The dashboard uses the runtime configuration for the proxy origin and the tenant profile for the saved default route."}},{"@type":"Question","name":"Can copying an example expose the raw generated key?","acceptedAnswer":{"@type":"Answer","text":"No. The generated value stays in its dedicated read-only field, while example markup and clipboard actions use only the placeholder."}},{"@type":"Question","name":"Where are dictation request examples documented?","acceptedAnswer":{"@type":"Answer","text":"The API reference documents dictation requests. Tenant API access shows the saved text route example."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Authenticate an LLM Proxy client with a tenant secret, which covers LLM Proxy client authentication."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440"></script>
   </head>
   <body class="resource-page">
@@ -67,7 +67,7 @@
             <h1>Copyable LLM curl examples from current profile data</h1>
             <p class="resource-deck">Render copyable LLM curl examples from live profile data while keeping the one-time raw client key out of page markup and copied commands.</p>
             <p class="resource-audience">Users onboarding themselves to LLM Proxy through the management UI.</p>
-            <p class="resource-byline">Reviewed 2026-07-22 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <p class="resource-byline">Reviewed 2026-09-10 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
             <aside class="resource-verdict" aria-label="Quick verdict">
               <strong>Quick verdict</strong>
               <p>Copy the request shape with its placeholder, then supply the one-time client key separately so raw access material never enters example markup.</p>
@@ -85,16 +85,16 @@
 
           <section>
             <h2>How LLM Proxy helps</h2>
-            <p>LLM Proxy Settings renders copyable examples from profile data while keeping raw client keys out of example markup and clipboard actions.</p>
+            <p>Tenant API access provides a text request example from the saved default route. The example contains a key placeholder.</p>
           </section>
 
           <section>
             <h2>How it works</h2>
             <ol class="resource-steps">
-              <li>Open Settings after signing in.</li>
-<li>Expand Usage / Request examples.</li>
-<li>Copy default text, default /v2, or default dictation examples.</li>
-<li>Select a provider to copy provider-specific text, /v2, and dictation examples when supported.</li>
+              <li>Select a tenant and save its text default.</li>
+<li>Open API access in the tenant details.</li>
+<li>Create a tenant API key and copy its one-time value.</li>
+<li>Copy the text request example and replace its key placeholder outside the dashboard.</li>
             </ol>
           </section>
 
@@ -113,22 +113,22 @@
 
                         <tr>
                           <td>Generated-secret placeholder</td>
-                          <td>Examples always use &lt;generated-secret&gt;, including after automatic client-key creation.</td>
+                          <td>Examples use &lt;generated-secret&gt;, including after explicit API key creation.</td>
                           <td>Raw client keys never enter example markup.</td>
                         </tr>
 
 
                         <tr>
                           <td>Separate one-time key</td>
-                          <td>The newly created key appears masked in a read-only field with Show and Copy actions.</td>
+                          <td>The newly created key appears in a read-only field with a copy action.</td>
                           <td>Users substitute it for the placeholder outside the page.</td>
                         </tr>
 
 
                         <tr>
-                          <td>Provider-specific variants</td>
-                          <td>Selected-provider examples include provider and model context.</td>
-                          <td>Dictation examples appear only for dictation-capable providers.</td>
+                          <td>Saved route context</td>
+                          <td>The text example includes the saved provider and model.</td>
+                          <td>The API reference documents other request forms.</td>
                         </tr>
 
                 </tbody>
@@ -142,7 +142,7 @@
 
                     <section class="resource-card">
                       <h3>First run</h3>
-                      <p>A new user copies the automatically created client key, saves a provider key, and then copies the default /v2 example.</p>
+                      <p>A user connects a provider, saves a text default, creates a tenant API key, and copies the request example.</p>
                     </section>
 
 
@@ -153,8 +153,8 @@
 
 
                     <section class="resource-card">
-                      <h3>Provider switch</h3>
-                      <p>Selecting DeepSeek updates provider-specific examples and hides dictation when unsupported.</p>
+                      <h3>Default change</h3>
+                      <p>Saving a DeepSeek text default changes the provider and model in the next request example.</p>
                     </section>
 
             </div>
@@ -171,10 +171,8 @@
 
           <section>
             <h2>Repository evidence</h2>
-            <pre class="usage-snippet"><code>get exampleSecret() {
-  return EMPTY_SECRET_PLACEHOLDER;
-}</code></pre>
-            <p>Verified 2026-07-22 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>site/assets/llm-proxy/js/ui/requestExamples.js</code>.</p>
+            <pre class="usage-snippet"><code>Examples use the &lt;generated-secret&gt; placeholder.</code></pre>
+            <p>Verified 2026-09-10 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>docs/tenant-connections.md</code>.</p>
           </section>
 
           <section>
@@ -189,7 +187,7 @@
 
                     <details>
                       <summary>Where do example hosts and provider choices come from?</summary>
-                      <p>The Settings UI builds examples from the API-served runtime configuration and the current authenticated management profile instead of hardcoding deployment-specific values.</p>
+                      <p>The dashboard uses the runtime configuration for the proxy origin and the tenant profile for the saved default route.</p>
                     </details>
 
 
@@ -200,8 +198,8 @@
 
 
                     <details>
-                      <summary>When does a provider-specific dictation example appear?</summary>
-                      <p>It appears only when the selected provider supports dictation; text and /v2 examples remain available for configured text providers.</p>
+                      <summary>Where are dictation request examples documented?</summary>
+                      <p>The API reference documents dictation requests. Tenant API access shows the saved text route example.</p>
                     </details>
 
 
@@ -237,7 +235,7 @@
 
                     <a class="resource-related" href="/resources/provider-specific-system-prompts/">
                       <span>Management UI</span>
-                      <strong>Provider-specific system prompts in LLM Proxy Settings</strong>
+                      <strong>Provider-specific system prompts in the tenant dashboard</strong>
                     </a>
 
             </div>

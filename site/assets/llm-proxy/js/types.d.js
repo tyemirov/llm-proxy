@@ -406,3 +406,21 @@
  */
 
 export {};
+
+/**
+ * @typedef {object} AccountConnection
+ * @property {string} id
+ * @property {string} name
+ * @property {string} provider
+ * @property {number} version
+ * @property {ProviderFieldProfile[]} fields
+ * @property {string[]} tenant_ids
+ * @property {string} created_at
+ * @property {string} updated_at
+ */
+
+/**
+ * @typedef {object} AccountConnections
+ * @property {AccountConnection[]} connections
+ * @property {ProviderProfile[]} providers
+ */

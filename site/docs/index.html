@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="9a97f22a15fd4b0e003bf0de9c5fe1aaf8f1fedf79a18b8ca7f55178be7ae2c0">
+    <meta name="openapi-source-sha256" content="4a013acffe0030f4faa09a8c9a72af5391e97d19ab584cd82dea87a9aec178cb">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="9a97f22a15fd4b0e003bf0de9c5fe1aaf8f1fedf79a18b8ca7f55178be7ae2c0">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="4a013acffe0030f4faa09a8c9a72af5391e97d19ab584cd82dea87a9aec178cb">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>9a97f22a15fd4b0e003bf0de9c5fe1aaf8f1fedf79a18b8ca7f55178be7ae2c0</code></span>
+          <span>Source SHA-256 <code>4a013acffe0030f4faa09a8c9a72af5391e97d19ab584cd82dea87a9aec178cb</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -1203,6 +1203,12 @@ paths:
         &#39;200&#39;:
           description: Current public capability catalog.
           headers:
+            Access-Control-Allow-Origin:
+              description: Permits browser reads of this public resource without credentials.
+              schema:
+                type: string
+                const: &#39;*&#39;
+              x-required: true
             Cache-Control:
               description: Allows short-lived caching of the public catalog.
               schema:
@@ -1494,43 +1500,142 @@ paths:
           $ref: &#39;#/components/responses/ManagementNotFound&#39;
         &#39;500&#39;:
           $ref: &#39;#/components/responses/ManagementInternalError&#39;
-  /api/management/tenants/{tenant_id}/provider-connections/{provider}:
-    put:
-      operationId: putManagementProviderConnection
-      summary: Verify and save catalog-defined provider connection fields
-      description: &gt;-
-        The fields object must contain the exact fields for the path provider.
-        A blank saved secret retains its existing value. A nonempty secret
-        replaces it. The service verifies new credentials, changed settings,
-        and changed models through the selected provider transport. Pollable
-        transports complete their observable resource lifecycle before the
-        atomic persistence operation. Rejection and unconfirmed outcomes do not
-        mutate provider state or managed usage. The operation returns 409 when
-        a retained secret changes before persistence.
+  /api/management/connections:
+    get:
+      operationId: listManagementConnections
+      summary: List account connections and provider definitions
+      description: Connections use ascending ID order. Continue with next_cursor. An empty next_cursor indicates the last page.
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: cursor
+          in: query
+          description: The next_cursor from the previous page. The cursor remains valid after connection deletion.
+          schema:
+            type: string
+            pattern: &#39;^connection-[0-9a-f]{32}$&#39;
+      responses:
+        &#39;200&#39;:
+          description: Operation completed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/AccountConnections&#39;
+        &#39;400&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;404&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+        &#39;409&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+        &#39;500&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+    post:
+      operationId: createManagementConnection
+      summary: Verify credentials and create an account connection
       tags:
         - Management
       security:
         - TAuthSession: []
       x-llm-proxy-required-request-content-type: application/json
       parameters:
-        - $ref: &#39;#/components/parameters/TenantID&#39;
-        - $ref: &#39;#/components/parameters/ProviderPath&#39;
         - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+        - $ref: &#39;#/components/parameters/ConnectionCreationKey&#39;
       requestBody:
-        $ref: &#39;#/components/requestBodies/ProviderConnectionRequest&#39;
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: &#39;#/components/schemas/AccountConnectionWrite&#39;
       responses:
-        &#39;200&#39;:
-          $ref: &#39;#/components/responses/TenantProfileSuccess&#39;
+        &#39;201&#39;:
+          description: Operation completed.
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/AccountConnection&#39;
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+            Location:
+              description: The created connection resource.
+              schema:
+                type: string
         &#39;400&#39;:
-          $ref: &#39;#/components/responses/ManagementBadRequest&#39;
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
         &#39;401&#39;:
           $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
         &#39;403&#39;:
           $ref: &#39;#/components/responses/ManagementForbidden&#39;
         &#39;404&#39;:
-          $ref: &#39;#/components/responses/ManagementNotFound&#39;
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
         &#39;409&#39;:
-          $ref: &#39;#/components/responses/ManagementConflict&#39;
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
         &#39;415&#39;:
           $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
         &#39;422&#39;:
@@ -1538,19 +1643,234 @@ paths:
         &#39;429&#39;:
           $ref: &#39;#/components/responses/ProviderKeyVerificationRateLimited&#39;
         &#39;500&#39;:
-          $ref: &#39;#/components/responses/ManagementInternalError&#39;
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+        &#39;503&#39;:
+          $ref: &#39;#/components/responses/ProviderKeyVerificationUnavailable&#39;
+        &#39;504&#39;:
+          $ref: &#39;#/components/responses/ProviderKeyVerificationTimedOut&#39;
+  /api/management/connections/{connection_id}:
+    get:
+      operationId: getManagementConnection
+      summary: Read a connection with masked credentials
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      parameters:
+        - name: connection_id
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+      responses:
+        &#39;200&#39;:
+          description: Operation completed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/AccountConnection&#39;
+        &#39;400&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;404&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+        &#39;409&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+        &#39;500&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+    put:
+      operationId: replaceManagementConnection
+      summary: Update a connection at its expected version
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - name: connection_id
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: &#39;#/components/schemas/AccountConnectionWrite&#39;
+      responses:
+        &#39;200&#39;:
+          description: Operation completed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/AccountConnection&#39;
+        &#39;400&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;404&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+        &#39;409&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
+        &#39;422&#39;:
+          $ref: &#39;#/components/responses/ProviderKeyRejected&#39;
+        &#39;429&#39;:
+          $ref: &#39;#/components/responses/ProviderKeyVerificationRateLimited&#39;
+        &#39;500&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
         &#39;503&#39;:
           $ref: &#39;#/components/responses/ProviderKeyVerificationUnavailable&#39;
         &#39;504&#39;:
           $ref: &#39;#/components/responses/ProviderKeyVerificationTimedOut&#39;
     delete:
-      operationId: deleteManagementProviderConnection
-      summary: Delete saved credential fields for one provider
-      description: &gt;-
-        Deletes only the provider&#39;s encrypted credential fields. The provider
-        definition, non-secret connection fields, selected text model,
-        provider system prompt, historical usage, and every still-valid tenant
-        routing default remain unchanged.
+      operationId: deleteManagementConnection
+      summary: Delete an unassigned connection
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - name: connection_id
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+      responses:
+        &#39;204&#39;:
+          description: Operation completed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+        &#39;400&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;404&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+        &#39;409&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
+        &#39;500&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+  /api/management/tenants/{tenant_id}/connections/{provider}:
+    put:
+      operationId: assignManagementConnection
+      summary: Assign one connection to the tenant provider
       tags:
         - Management
       security:
@@ -1560,28 +1880,67 @@ paths:
         - $ref: &#39;#/components/parameters/TenantID&#39;
         - $ref: &#39;#/components/parameters/ProviderPath&#39;
         - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: &#39;#/components/schemas/TenantConnectionAssignment&#39;
       responses:
         &#39;200&#39;:
-          $ref: &#39;#/components/responses/TenantProfileSuccess&#39;
+          description: Operation completed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/TenantProfile&#39;
         &#39;400&#39;:
-          $ref: &#39;#/components/responses/ManagementBadRequest&#39;
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
         &#39;401&#39;:
           $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
         &#39;403&#39;:
           $ref: &#39;#/components/responses/ManagementForbidden&#39;
         &#39;404&#39;:
-          $ref: &#39;#/components/responses/ManagementNotFound&#39;
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+        &#39;409&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
         &#39;415&#39;:
           $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
         &#39;500&#39;:
-          $ref: &#39;#/components/responses/ManagementInternalError&#39;
-  /api/management/tenants/{tenant_id}/provider-connections/{provider}/fields/{field}/reveal:
-    post:
-      operationId: revealManagementProviderConnectionField
-      summary: Reveal one saved secret provider field
-      description: &gt;-
-        The provider definition must declare the path field as secret. This
-        credentialed action also requires the exact configured public Origin.
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+    delete:
+      operationId: detachManagementConnection
+      summary: Detach a connection and optionally clear dependent defaults
       tags:
         - Management
       security:
@@ -1590,25 +1949,134 @@ paths:
       parameters:
         - $ref: &#39;#/components/parameters/TenantID&#39;
         - $ref: &#39;#/components/parameters/ProviderPath&#39;
-        - $ref: &#39;#/components/parameters/ProviderFieldPath&#39;
-        - $ref: &#39;#/components/parameters/RequiredOrigin&#39;
-      requestBody:
-        $ref: &#39;#/components/requestBodies/EmptyJSONRequest&#39;
+        - name: clear_defaults
+          in: query
+          schema:
+            type: string
+            enum:
+              - &#39;true&#39;
+              - &#39;false&#39;
+          description: Use true to confirm removal of dependent default routes.
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
       responses:
-        &#39;200&#39;:
-          $ref: &#39;#/components/responses/ProviderFieldRevealSuccess&#39;
+        &#39;204&#39;:
+          description: Operation completed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
         &#39;400&#39;:
-          $ref: &#39;#/components/responses/ManagementBadRequest&#39;
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
         &#39;401&#39;:
           $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
         &#39;403&#39;:
           $ref: &#39;#/components/responses/ManagementForbidden&#39;
         &#39;404&#39;:
-          $ref: &#39;#/components/responses/ManagementNotFound&#39;
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+        &#39;409&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
         &#39;415&#39;:
           $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
         &#39;500&#39;:
-          $ref: &#39;#/components/responses/ManagementInternalError&#39;
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+  /api/management/tenants/{tenant_id}/provider-profiles/{provider}:
+    put:
+      operationId: updateManagementProviderProfile
+      summary: Save the tenant provider model and system prompt
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: &#39;#/components/parameters/TenantID&#39;
+        - $ref: &#39;#/components/parameters/ProviderPath&#39;
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: &#39;#/components/schemas/TenantProviderProfileWrite&#39;
+      responses:
+        &#39;200&#39;:
+          description: Operation completed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/TenantProfile&#39;
+        &#39;400&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;404&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+        &#39;409&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
+        &#39;500&#39;:
+          description: The connection operation failed.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
   /api/management/tenants/{tenant_id}/defaults:
     put:
       operationId: putManagementTenantDefaults
@@ -1787,6 +2255,18 @@ components:
       schema:
         type: string
         pattern: &#39;^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$&#39;
+    ConnectionCreationKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: &gt;-
+        Account-scoped key for one connection creation request. Repeat the same
+        key and request to receive the original 201 response and Location.
+        A changed request returns 409. Receipts survive connection deletion.
+        Read the connection resource for its current state.
+      schema:
+        type: string
+        pattern: &#39;^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$&#39;
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -1927,12 +2407,6 @@ components:
         application/json:
           schema:
             $ref: &#39;#/components/schemas/TenantNameRequest&#39;
-    ProviderConnectionRequest:
-      required: true
-      content:
-        application/json:
-          schema:
-            $ref: &#39;#/components/schemas/ProviderConnectionRequest&#39;
     DefaultsRequest:
       required: true
       content:
@@ -2339,15 +2813,6 @@ components:
         application/json:
           schema:
             $ref: &#39;#/components/schemas/AdminUsersSummary&#39;
-    ProviderFieldRevealSuccess:
-      description: The saved secret provider field. Never persist or log this response.
-      headers:
-        Cache-Control:
-          $ref: &#39;#/components/headers/NoStore&#39;
-      content:
-        application/json:
-          schema:
-            $ref: &#39;#/components/schemas/ProviderFieldReveal&#39;
     TenantSecretSuccess:
       description: The newly generated tenant client secret and current profile. The secret is returned only by this response.
       headers:
@@ -2467,6 +2932,118 @@ components:
           - failed
           - uncertain
   schemas:
+    AccountConnectionWrite:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - provider
+        - fields
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        provider:
+          type: string
+        fields:
+          type: object
+          additionalProperties:
+            type: string
+        version:
+          type: integer
+          minimum: 0
+          description: Use zero or omit on creation. Updates require the current connection version.
+    AccountConnection:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - provider
+        - version
+        - fields
+        - tenant_ids
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        provider:
+          type: string
+        version:
+          type: integer
+          minimum: 1
+        fields:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/ProviderField&#39;
+        tenant_ids:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AccountConnections:
+      type: object
+      additionalProperties: false
+      required:
+        - connections
+        - providers
+        - next_cursor
+      properties:
+        next_cursor:
+          type: string
+          description: The last returned connection ID when another page exists. An empty string indicates the last page.
+        connections:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/AccountConnection&#39;
+        providers:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/ProviderProfile&#39;
+    TenantConnectionAssignment:
+      type: object
+      additionalProperties: false
+      required:
+        - connection_id
+      properties:
+        connection_id:
+          type: string
+          minLength: 1
+    TenantProviderProfileWrite:
+      type: object
+      additionalProperties: false
+      required:
+        - text_model
+        - system_prompt
+      properties:
+        text_model:
+          type: string
+          minLength: 1
+        system_prompt:
+          type: string
+    ConnectionError:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required:
+            - code
+          properties:
+            code:
+              type: string
     MCPRequest:
       type: object
       additionalProperties: false
@@ -4505,28 +5082,6 @@ components:
         name:
           type: string
           minLength: 1
-    ProviderConnectionRequest:
-      type: object
-      additionalProperties: false
-      required:
-        - fields
-        - text_model
-        - system_prompt
-      properties:
-        fields:
-          type: object
-          minProperties: 1
-          properties: {}
-          additionalProperties:
-            type: string
-          description: &gt;-
-            Exact map of catalog field identifiers to submitted values. Blank
-            saved secret values retain their encrypted current values.
-        text_model:
-          type: string
-          minLength: 1
-        system_prompt:
-          type: string
     DefaultsRequest:
       type: object
       additionalProperties: false
@@ -4674,7 +5229,7 @@ components:
       properties:
         provider:
           type: string
-          description: Canonical configured text provider, or empty when no provider connection exists.
+          description: Canonical configured text provider, or empty for an unset selection.
         model:
           type: string
           description: Canonical text model paired with provider, or empty when provider is empty.
@@ -4937,19 +5492,6 @@ components:
           minLength: 1
         profile:
           $ref: &#39;#/components/schemas/TenantProfile&#39;
-    ProviderFieldReveal:
-      type: object
-      additionalProperties: false
-      required:
-        - field_id
-        - value
-      properties:
-        field_id:
-          type: string
-          minLength: 1
-        value:
-          type: string
-          minLength: 1
     UsageAggregate:
       type: object
       additionalProperties: false
@@ -5898,14 +6440,19 @@ components:
 <a href="#operation-getMCPResourceMetadata"><span class="api-method api-method-get">GET</span><code>/.well-known/oauth-protected-resource/mcp</code><span>Read OAuth metadata for the MCP resource.</span></a>
 <a href="#operation-getManagementAccount"><span class="api-method api-method-get">GET</span><code>/api/management/account</code><span>Read the authenticated user and owned tenant summaries</span></a>
 <a href="#operation-getManagementAdminUsers"><span class="api-method api-method-get">GET</span><code>/api/management/admin/users</code><span>Read the administrative user and tenant usage summary</span></a>
+<a href="#operation-listManagementConnections"><span class="api-method api-method-get">GET</span><code>/api/management/connections</code><span>List account connections and provider definitions</span></a>
+<a href="#operation-createManagementConnection"><span class="api-method api-method-post">POST</span><code>/api/management/connections</code><span>Verify credentials and create an account connection</span></a>
+<a href="#operation-deleteManagementConnection"><span class="api-method api-method-delete">DELETE</span><code>/api/management/connections/{connection_id}</code><span>Delete an unassigned connection</span></a>
+<a href="#operation-getManagementConnection"><span class="api-method api-method-get">GET</span><code>/api/management/connections/{connection_id}</code><span>Read a connection with masked credentials</span></a>
+<a href="#operation-replaceManagementConnection"><span class="api-method api-method-put">PUT</span><code>/api/management/connections/{connection_id}</code><span>Update a connection at its expected version</span></a>
 <a href="#operation-createManagementTenant"><span class="api-method api-method-post">POST</span><code>/api/management/tenants</code><span>Create an owned tenant</span></a>
 <a href="#operation-deleteManagementTenant"><span class="api-method api-method-delete">DELETE</span><code>/api/management/tenants/{tenant_id}</code><span>Delete an owned non-final tenant</span></a>
 <a href="#operation-getManagementTenant"><span class="api-method api-method-get">GET</span><code>/api/management/tenants/{tenant_id}</code><span>Read an owned tenant profile</span></a>
 <a href="#operation-renameManagementTenant"><span class="api-method api-method-put">PUT</span><code>/api/management/tenants/{tenant_id}</code><span>Rename an owned tenant</span></a>
+<a href="#operation-detachManagementConnection"><span class="api-method api-method-delete">DELETE</span><code>/api/management/tenants/{tenant_id}/connections/{provider}</code><span>Detach a connection and optionally clear dependent defaults</span></a>
+<a href="#operation-assignManagementConnection"><span class="api-method api-method-put">PUT</span><code>/api/management/tenants/{tenant_id}/connections/{provider}</code><span>Assign one connection to the tenant provider</span></a>
 <a href="#operation-putManagementTenantDefaults"><span class="api-method api-method-put">PUT</span><code>/api/management/tenants/{tenant_id}/defaults</code><span>Replace the tenant routing defaults</span></a>
-<a href="#operation-deleteManagementProviderConnection"><span class="api-method api-method-delete">DELETE</span><code>/api/management/tenants/{tenant_id}/provider-connections/{provider}</code><span>Delete saved credential fields for one provider</span></a>
-<a href="#operation-putManagementProviderConnection"><span class="api-method api-method-put">PUT</span><code>/api/management/tenants/{tenant_id}/provider-connections/{provider}</code><span>Verify and save catalog-defined provider connection fields</span></a>
-<a href="#operation-revealManagementProviderConnectionField"><span class="api-method api-method-post">POST</span><code>/api/management/tenants/{tenant_id}/provider-connections/{provider}/fields/{field}/reveal</code><span>Reveal one saved secret provider field</span></a>
+<a href="#operation-updateManagementProviderProfile"><span class="api-method api-method-put">PUT</span><code>/api/management/tenants/{tenant_id}/provider-profiles/{provider}</code><span>Save the tenant provider model and system prompt</span></a>
 <a href="#operation-postManagementTenantSecret"><span class="api-method api-method-post">POST</span><code>/api/management/tenants/{tenant_id}/secrets</code><span>Generate and replace the tenant client secret</span></a>
 <a href="#operation-getManagementTenantUsage"><span class="api-method api-method-get">GET</span><code>/api/management/tenants/{tenant_id}/usage</code><span>Read interval-scoped usage for an owned tenant</span></a>
 <a href="#operation-getManagementTenantUsageFailures"><span class="api-method api-method-get">GET</span><code>/api/management/tenants/{tenant_id}/usage/failures</code><span>Read safe failure details for an owned tenant and interval</span></a>
@@ -6132,6 +6679,243 @@ components:
           </div>
         </div>
       </section>
+<section class="api-operation" id="operation-listManagementConnections">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/connections</code>
+          <span class="api-operation-id">listManagementConnections</span>
+        </header>
+        <h2>List account connections and provider definitions</h2>
+        <p>Connections use ascending ID order. Continue with next_cursor. An empty next_cursor indicates the last page.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+<tr><td><code>limit</code></td><td>query</td><td>No</td><td>integer</td><td></td></tr>
+<tr><td><code>cursor</code></td><td>query</td><td>No</td><td>string</td><td>The next_cursor from the previous page. The cursor remains valid after connection deletion.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Operation completed.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-createManagementConnection">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-post">POST</span>
+          <code>/api/management/connections</code>
+          <span class="api-operation-id">createManagementConnection</span>
+        </header>
+        <h2>Verify credentials and create an account connection</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>Yes</td><td>string</td><td>Account-scoped key for one connection creation request. Repeat the same key and request to receive the original 201 response and Location. A changed request returns 409. Receipts survive connection deletion. Read the connection resource for its current state.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>name</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>provider</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>fields</code></td><td>Yes</td><td>object</td><td></td></tr>
+<tr><td><code>version</code></td><td>No</td><td>integer</td><td>Use zero or omit on creation. Updates require the current connection version.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>201</code></td><td>application/json</td><td>Cache-Control, Location</td><td>Operation completed.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>422</code></td><td>text/plain</td><td>none</td><td>The candidate credential was rejected or cannot access the selected text model. Nothing was saved.</td></tr>
+<tr><td><code>429</code></td><td>text/plain</td><td>none</td><td>The provider rate-limited the single verification operation. The credential remains unconfirmed and nothing was saved.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>503</code></td><td>text/plain</td><td>none</td><td>The provider was unavailable or returned a malformed success envelope. The credential remains unconfirmed and nothing was saved.</td></tr>
+<tr><td><code>504</code></td><td>text/plain</td><td>none</td><td>The single verification operation timed out or was canceled. The credential remains unconfirmed and nothing was saved.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-deleteManagementConnection">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-delete">DELETE</span>
+          <code>/api/management/connections/{connection_id}</code>
+          <span class="api-operation-id">deleteManagementConnection</span>
+        </header>
+        <h2>Delete an unassigned connection</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>connection_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>204</code></td><td>none</td><td>Cache-Control</td><td>Operation completed.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getManagementConnection">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/connections/{connection_id}</code>
+          <span class="api-operation-id">getManagementConnection</span>
+        </header>
+        <h2>Read a connection with masked credentials</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>connection_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Operation completed.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-replaceManagementConnection">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-put">PUT</span>
+          <code>/api/management/connections/{connection_id}</code>
+          <span class="api-operation-id">replaceManagementConnection</span>
+        </header>
+        <h2>Update a connection at its expected version</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>connection_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>name</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>provider</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>fields</code></td><td>Yes</td><td>object</td><td></td></tr>
+<tr><td><code>version</code></td><td>No</td><td>integer</td><td>Use zero or omit on creation. Updates require the current connection version.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Operation completed.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>422</code></td><td>text/plain</td><td>none</td><td>The candidate credential was rejected or cannot access the selected text model. Nothing was saved.</td></tr>
+<tr><td><code>429</code></td><td>text/plain</td><td>none</td><td>The provider rate-limited the single verification operation. The credential remains unconfirmed and nothing was saved.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>503</code></td><td>text/plain</td><td>none</td><td>The provider was unavailable or returned a malformed success envelope. The credential remains unconfirmed and nothing was saved.</td></tr>
+<tr><td><code>504</code></td><td>text/plain</td><td>none</td><td>The single verification operation timed out or was canceled. The credential remains unconfirmed and nothing was saved.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 <section class="api-operation" id="operation-createManagementTenant">
         <header class="api-operation-heading">
           <span class="api-method api-method-post">POST</span>
@@ -6308,6 +7092,101 @@ components:
           </div>
         </div>
       </section>
+<section class="api-operation" id="operation-detachManagementConnection">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-delete">DELETE</span>
+          <code>/api/management/tenants/{tenant_id}/connections/{provider}</code>
+          <span class="api-operation-id">detachManagementConnection</span>
+        </header>
+        <h2>Detach a connection and optionally clear dependent defaults</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>tenant_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant identifier from the authenticated account response.</td></tr>
+<tr><td><code>provider</code></td><td>path</td><td>Yes</td><td>string</td><td>Canonical provider identifier from the public capability catalog, such as zai. Retired zhipu and glm values are invalid.</td></tr>
+<tr><td><code>clear_defaults</code></td><td>query</td><td>No</td><td>string</td><td>Use true to confirm removal of dependent default routes.</td></tr>
+<tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>204</code></td><td>none</td><td>Cache-Control</td><td>Operation completed.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-assignManagementConnection">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-put">PUT</span>
+          <code>/api/management/tenants/{tenant_id}/connections/{provider}</code>
+          <span class="api-operation-id">assignManagementConnection</span>
+        </header>
+        <h2>Assign one connection to the tenant provider</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>tenant_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant identifier from the authenticated account response.</td></tr>
+<tr><td><code>provider</code></td><td>path</td><td>Yes</td><td>string</td><td>Canonical provider identifier from the public capability catalog, such as zai. Retired zhipu and glm values are invalid.</td></tr>
+<tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>connection_id</code></td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Operation completed.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 <section class="api-operation" id="operation-putManagementTenantDefaults">
         <header class="api-operation-heading">
           <span class="api-method api-method-put">PUT</span>
@@ -6364,56 +7243,13 @@ components:
           </div>
         </div>
       </section>
-<section class="api-operation" id="operation-deleteManagementProviderConnection">
-        <header class="api-operation-heading">
-          <span class="api-method api-method-delete">DELETE</span>
-          <code>/api/management/tenants/{tenant_id}/provider-connections/{provider}</code>
-          <span class="api-operation-id">deleteManagementProviderConnection</span>
-        </header>
-        <h2>Delete saved credential fields for one provider</h2>
-        <p>Deletes only the provider&#39;s encrypted credential fields. The provider definition, non-secret connection fields, selected text model, provider system prompt, historical usage, and every still-valid tenant routing default remain unchanged.</p>
-        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
-        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
-        <div class="api-contract-block">
-          <h3>Parameters</h3>
-          <div class="resource-table-wrap">
-            <table>
-              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
-              <tbody>
-                <tr><td><code>tenant_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant identifier from the authenticated account response.</td></tr>
-<tr><td><code>provider</code></td><td>path</td><td>Yes</td><td>string</td><td>Canonical provider identifier from the public capability catalog, such as zai. Retired zhipu and glm values are invalid.</td></tr>
-<tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
-        <div class="api-contract-block">
-          <h3>Responses</h3>
-          <div class="resource-table-wrap">
-            <table>
-              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
-              <tbody>
-                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Current tenant profile.</td></tr>
-<tr><td><code>400</code></td><td>text/plain</td><td>none</td><td>Malformed or invalid management input.</td></tr>
-<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
-<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
-<tr><td><code>404</code></td><td>none</td><td>none</td><td>The tenant or provider credential does not exist within the authenticated ownership boundary.</td></tr>
-<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
-<tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-<section class="api-operation" id="operation-putManagementProviderConnection">
+<section class="api-operation" id="operation-updateManagementProviderProfile">
         <header class="api-operation-heading">
           <span class="api-method api-method-put">PUT</span>
-          <code>/api/management/tenants/{tenant_id}/provider-connections/{provider}</code>
-          <span class="api-operation-id">putManagementProviderConnection</span>
+          <code>/api/management/tenants/{tenant_id}/provider-profiles/{provider}</code>
+          <span class="api-operation-id">updateManagementProviderProfile</span>
         </header>
-        <h2>Verify and save catalog-defined provider connection fields</h2>
-        <p>The fields object must contain the exact fields for the path provider. A blank saved secret retains its existing value. A nonempty secret replaces it. The service verifies new credentials, changed settings, and changed models through the selected provider transport. Pollable transports complete their observable resource lifecycle before the atomic persistence operation. Rejection and unconfirmed outcomes do not mutate provider state or managed usage. The operation returns 409 when a retained secret changes before persistence.</p>
+        <h2>Save the tenant provider model and system prompt</h2>
         <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
         <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
         <div class="api-contract-block">
@@ -6435,8 +7271,7 @@ components:
             <table>
               <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>fields</code></td><td>Yes</td><td>object</td><td>Exact map of catalog field identifiers to submitted values. Blank saved secret values retain their encrypted current values.</td></tr>
-<tr><td><code>text_model</code></td><td>Yes</td><td>string</td><td></td></tr>
+                <tr><td><code>text_model</code></td><td>Yes</td><td>string</td><td></td></tr>
 <tr><td><code>system_prompt</code></td><td>Yes</td><td>string</td><td></td></tr>
               </tbody>
             </table>
@@ -6448,61 +7283,14 @@ components:
             <table>
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Current tenant profile.</td></tr>
-<tr><td><code>400</code></td><td>text/plain</td><td>none</td><td>Malformed or invalid management input.</td></tr>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Operation completed.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
 <tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
 <tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
-<tr><td><code>404</code></td><td>none</td><td>none</td><td>The tenant or provider credential does not exist within the authenticated ownership boundary.</td></tr>
-<tr><td><code>409</code></td><td>text/plain</td><td>none</td><td>The requested tenant name conflicts, the final owned tenant cannot be deleted, or a retained provider credential changed after verification began.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
 <tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
-<tr><td><code>422</code></td><td>text/plain</td><td>none</td><td>The candidate credential was rejected or cannot access the selected text model. Nothing was saved.</td></tr>
-<tr><td><code>429</code></td><td>text/plain</td><td>none</td><td>The provider rate-limited the single verification operation. The credential remains unconfirmed and nothing was saved.</td></tr>
-<tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
-<tr><td><code>503</code></td><td>text/plain</td><td>none</td><td>The provider was unavailable or returned a malformed success envelope. The credential remains unconfirmed and nothing was saved.</td></tr>
-<tr><td><code>504</code></td><td>text/plain</td><td>none</td><td>The single verification operation timed out or was canceled. The credential remains unconfirmed and nothing was saved.</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-<section class="api-operation" id="operation-revealManagementProviderConnectionField">
-        <header class="api-operation-heading">
-          <span class="api-method api-method-post">POST</span>
-          <code>/api/management/tenants/{tenant_id}/provider-connections/{provider}/fields/{field}/reveal</code>
-          <span class="api-operation-id">revealManagementProviderConnectionField</span>
-        </header>
-        <h2>Reveal one saved secret provider field</h2>
-        <p>The provider definition must declare the path field as secret. This credentialed action also requires the exact configured public Origin.</p>
-        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
-        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
-        <div class="api-contract-block">
-          <h3>Parameters</h3>
-          <div class="resource-table-wrap">
-            <table>
-              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
-              <tbody>
-                <tr><td><code>tenant_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant identifier from the authenticated account response.</td></tr>
-<tr><td><code>provider</code></td><td>path</td><td>Yes</td><td>string</td><td>Canonical provider identifier from the public capability catalog, such as zai. Retired zhipu and glm values are invalid.</td></tr>
-<tr><td><code>field</code></td><td>path</td><td>Yes</td><td>string</td><td>Canonical secret field identifier from the selected provider definition.</td></tr>
-<tr><td><code>Origin</code></td><td>header</td><td>Yes</td><td>string</td><td>Must exactly match the configured public origin.</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
-        <div class="api-contract-block">
-          <h3>Responses</h3>
-          <div class="resource-table-wrap">
-            <table>
-              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
-              <tbody>
-                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The saved secret provider field. Never persist or log this response.</td></tr>
-<tr><td><code>400</code></td><td>text/plain</td><td>none</td><td>Malformed or invalid management input.</td></tr>
-<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
-<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
-<tr><td><code>404</code></td><td>none</td><td>none</td><td>The tenant or provider credential does not exist within the authenticated ownership boundary.</td></tr>
-<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
-<tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The connection operation failed.</td></tr>
               </tbody>
             </table>
           </div>
@@ -6798,7 +7586,7 @@ components:
             <table>
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Current public capability catalog.</td></tr>
+                <tr><td><code>200</code></td><td>application/json</td><td>Access-Control-Allow-Origin, Cache-Control</td><td>Current public capability catalog.</td></tr>
               </tbody>
             </table>
           </div>

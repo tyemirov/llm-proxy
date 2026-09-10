@@ -129,7 +129,7 @@ export const PROVIDER_CAPABILITY_LABELS = Object.freeze({
 
 export const USER_MENU_ITEMS = Object.freeze([
   Object.freeze({
-    label: "Settings",
+    label: "Manage tenants",
     action: MENU_ACTIONS.OPEN_SETTINGS,
   }),
 ]);

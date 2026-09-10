@@ -27,9 +27,9 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Account-wide managed tenant usage dashboard for LLMs","description":"See execution usage across owned tenants and inspect failed and rejected requests separately without exposing secrets or request content.","url":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/","datePublished":"2026-07-06","dateModified":"2026-09-03","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/","about":["LLM Proxy","Usage","managed tenant usage dashboard"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Account-wide managed tenant usage dashboard for LLMs","description":"See execution usage across owned tenants and inspect failed and rejected requests separately without exposing secrets or request content.","url":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/","datePublished":"2026-07-06","dateModified":"2026-09-10","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/","about":["LLM Proxy","Usage","managed tenant usage dashboard"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Account-wide managed tenant usage dashboard for LLMs","item":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/"}]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Does selecting a tenant activate or deactivate it?","acceptedAnswer":{"@type":"Answer","text":"No. Every owned tenant remains independently routable through its own generated secret; the Settings and Usage selectors only choose an editor or report scope."}},{"@type":"Question","name":"What does Usage Overview show by default?","acceptedAnswer":{"@type":"Answer","text":"It selects All tenants and the 30-day interval, then aggregates the owned tenants at the server's database boundary."}},{"@type":"Question","name":"Does changing a breakdown chart request new usage data?","acceptedAnswer":{"@type":"Answer","text":"No. Each independent chart toggle changes one local presentation of the same request aggregates."}},{"@type":"Question","name":"Does changing the Tenant control in Settings change Usage Overview?","acceptedAnswer":{"@type":"Answer","text":"No. The Tenant control in Settings and the Usage tenant control are independent; changing one does not change the other."}},{"@type":"Question","name":"What tenant data appears in account-wide failure rows?","acceptedAnswer":{"@type":"Answer","text":"Only the safe opaque tenant ID and current display name are added. Credentials, prompts, responses, provider bodies, and free-form errors remain excluded."}},{"@type":"Question","name":"Does an unconfigured provider count as a proxy failure?","acceptedAnswer":{"@type":"Answer","text":"No. The proxy rejects the request before provider dispatch, increments rejected_requests, and exposes provider_not_configured only in the rejection report."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Normalized token usage metadata across providers, which covers normalized token usage metadata."}}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Does selecting a tenant activate or deactivate it?","acceptedAnswer":{"@type":"Answer","text":"Each tenant remains routable through its API key. Dashboard selection changes the visible context."}},{"@type":"Question","name":"What does Usage Overview show by default?","acceptedAnswer":{"@type":"Answer","text":"It shows the selected tenant and the 30-day interval. Account usage combines all owned tenants."}},{"@type":"Question","name":"Does changing a breakdown chart request new usage data?","acceptedAnswer":{"@type":"Answer","text":"No. Each independent chart toggle changes one local presentation of the same request aggregates."}},{"@type":"Question","name":"Does tenant selection change the usage view?","acceptedAnswer":{"@type":"Answer","text":"Yes. Selecting a tenant shows its configuration and usage. Select Account usage to examine combined totals."}},{"@type":"Question","name":"What tenant data appears in account-wide failure rows?","acceptedAnswer":{"@type":"Answer","text":"Only the safe opaque tenant ID and current display name are added. Credentials, prompts, responses, provider bodies, and free-form errors remain excluded."}},{"@type":"Question","name":"Does an unconfigured provider count as a proxy failure?","acceptedAnswer":{"@type":"Answer","text":"No. The proxy rejects the request before provider dispatch, increments rejected_requests, and exposes provider_not_configured only in the rejection report."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Normalized token usage metadata across providers, which covers normalized token usage metadata."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440"></script>
   </head>
   <body class="resource-page">
@@ -67,7 +67,7 @@
             <h1>Account-wide managed tenant usage dashboard for LLMs</h1>
             <p class="resource-deck">See execution usage across owned tenants and inspect failed and rejected requests separately without exposing secrets or request content.</p>
             <p class="resource-audience">Teams giving users self-service AI access while keeping usage visible.</p>
-            <p class="resource-byline">Reviewed 2026-09-03 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <p class="resource-byline">Reviewed 2026-09-10 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
             <aside class="resource-verdict" aria-label="Quick verdict">
               <strong>Quick verdict</strong>
               <p>Usage keeps impossible requests visible as rejections without counting them as executions or proxy failures. Every tenant remains independently routable, and local chart choices change no request or persisted setting.</p>
@@ -94,7 +94,7 @@
               <li>Create managed tenants and their generated client keys.</li>
 <li>Send proxy requests through any owned tenant's generated secret; each tenant remains operational independently.</li>
 <li>Record one rejected, succeeded, or failed disposition with canonical outcome metadata and no request or provider-error content.</li>
-<li>Open Usage Overview on All tenants and 30 days, or use the Usage tenant selector immediately before ALL to narrow the report.</li>
+<li>Select a tenant for its usage or select Account usage for combined totals.</li>
 <li>Use each breakdown card's icon button to switch that card between ranked bars and a count-and-percentage donut.</li>
 <li>Read Requests and Tokens against their visible UTC and zero-based per-hour or per-day axes.</li>
 <li>Read account-wide totals from GET /api/management/usage or one tenant from GET /api/management/tenants/:tenant_id/usage.</li>
@@ -117,16 +117,16 @@
                 <tbody>
 
                         <tr>
-                          <td>All-tenant default</td>
-                          <td>The default All tenants and 30 days selections populate requests, tokens, success rate, providers, models, statuses, and buckets together.</td>
-                          <td>The first dashboard snapshot represents every owned tenant rather than the oldest one.</td>
+                          <td>Explicit account usage</td>
+                          <td>Account usage shows combined requests, tokens, success rate, providers, models, statuses, and time buckets.</td>
+                          <td>The selected tenant has its own usage view.</td>
                         </tr>
 
 
                         <tr>
-                          <td>Independent selectors</td>
-                          <td>The Tenant control in Settings chooses only the editor; Usage tenant chooses only the report.</td>
-                          <td>Changing provider settings for one tenant cannot silently narrow the usage dashboard.</td>
+                          <td>One tenant context</td>
+                          <td>The selected tenant controls configuration, model defaults, and tenant usage.</td>
+                          <td>Account usage is a separate, labeled view.</td>
                         </tr>
 
 
@@ -181,7 +181,7 @@
 
                     <section class="resource-card">
                       <h3>Tenant investigation</h3>
-                      <p>Selecting Research narrows every usage surface and failure row to that tenant while Settings can remain on Default.</p>
+                      <p>Selecting Research shows its connections, defaults, usage, and request details.</p>
                     </section>
 
 
@@ -217,7 +217,7 @@
 GET /api/management/tenants/:tenant_id/usage?interval=30d
 GET /api/management/usage/failures?interval=30d
 GET /api/management/usage/rejections?interval=30d</code></pre>
-            <p>Verified 2026-09-03 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
+            <p>Verified 2026-09-10 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
           </section>
 
           <section>
@@ -226,13 +226,13 @@ GET /api/management/usage/rejections?interval=30d</code></pre>
 
                     <details>
                       <summary>Does selecting a tenant activate or deactivate it?</summary>
-                      <p>No. Every owned tenant remains independently routable through its own generated secret; the Settings and Usage selectors only choose an editor or report scope.</p>
+                      <p>Each tenant remains routable through its API key. Dashboard selection changes the visible context.</p>
                     </details>
 
 
                     <details>
                       <summary>What does Usage Overview show by default?</summary>
-                      <p>It selects All tenants and the 30-day interval, then aggregates the owned tenants at the server's database boundary.</p>
+                      <p>It shows the selected tenant and the 30-day interval. Account usage combines all owned tenants.</p>
                     </details>
 
 
@@ -243,8 +243,8 @@ GET /api/management/usage/rejections?interval=30d</code></pre>
 
 
                     <details>
-                      <summary>Does changing the Tenant control in Settings change Usage Overview?</summary>
-                      <p>No. The Tenant control in Settings and the Usage tenant control are independent; changing one does not change the other.</p>
+                      <summary>Does tenant selection change the usage view?</summary>
+                      <p>Yes. Selecting a tenant shows its configuration and usage. Select Account usage to examine combined totals.</p>
                     </details>
 
 

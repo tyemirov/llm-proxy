@@ -27,7 +27,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Gemini Interactions proxy for stored 3.x model calls","description":"Route two registered Gemini 3.x models through stored Interactions with provider-configured visibility retries, cleanup, and one blocking proxy request.","url":"https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/","datePublished":"2026-07-06","dateModified":"2026-08-22","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/","about":["LLM Proxy","Provider routing","Gemini Interactions proxy"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Gemini Interactions proxy for stored 3.x model calls","description":"Route two registered Gemini 3.x models through stored Interactions with provider-configured visibility retries, cleanup, and one blocking proxy request.","url":"https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/","datePublished":"2026-07-06","dateModified":"2026-09-10","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/","about":["LLM Proxy","Provider routing","Gemini Interactions proxy"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Gemini Interactions proxy for stored 3.x model calls","item":"https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Which Gemini models does this route register?","acceptedAnswer":{"@type":"Answer","text":"The catalog registers Gemini 3.5 Flash and Gemini 3 Flash Preview."}},{"@type":"Question","name":"Can a Gemini request contain assistant history?","acceptedAnswer":{"@type":"Answer","text":"No. Each Gemini Interactions route rejects an assistant message before it sends an upstream request."}},{"@type":"Question","name":"What happens when Gemini returns an incomplete interaction?","acceptedAnswer":{"@type":"Answer","text":"The proxy cleans up the stored interaction and returns a provider error. It does not replay the partial output."}},{"@type":"Question","name":"How does the proxy handle delayed Gemini resource visibility?","acceptedAnswer":{"@type":"Answer","text":"The Gemini transport declares six retries at five-second intervals for HTTP 400, 403, and 404 responses after creation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Integrate once through one multi-provider LLM proxy, which covers multi-provider LLM proxy."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440"></script>
@@ -67,7 +67,7 @@
             <h1>Gemini Interactions proxy for stored 3.x model calls</h1>
             <p class="resource-deck">Route two registered Gemini 3.x models through stored Interactions with provider-configured visibility retries, cleanup, and one blocking proxy request.</p>
             <p class="resource-audience">Developers adding Gemini as a provider without bringing Gemini-specific payloads into every app.</p>
-            <p class="resource-byline">Reviewed 2026-08-22 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <p class="resource-byline">Reviewed 2026-09-10 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
             <aside class="resource-verdict" aria-label="Quick verdict">
               <strong>Quick verdict</strong>
               <p>Use this route for two registered Gemini 3.x models when the proxy must own stored-resource polling, visibility retries, and cleanup.</p>
@@ -91,7 +91,7 @@
           <section>
             <h2>How it works</h2>
             <ol class="resource-steps">
-              <li>Keep the Gemini transport and offerings in providers.yml, then save the Gemini API key in tenant settings.</li>
+              <li>Keep the Gemini transport and offerings in providers.yml. Create a Gemini connection and connect the tenant.</li>
 <li>Select provider=gemini or set Gemini as a tenant default.</li>
 <li>Send canonical messages through /v2 or compatibility text requests.</li>
 <li>Keep max_tokens within configured Gemini output limits.</li>
@@ -186,7 +186,7 @@
     - 400
     - 403
     - 404</code></pre>
-            <p>Verified 2026-08-22 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>configs/providers.yml</code>.</p>
+            <p>Verified 2026-09-10 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>configs/providers.yml</code>.</p>
           </section>
 
           <section>

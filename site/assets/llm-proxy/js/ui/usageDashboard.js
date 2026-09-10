@@ -18,7 +18,7 @@ import {
   fetchUsageRejections,
   fetchUsageSummary,
 } from "../core/backendClient.js?v=20260903f037";
-import { assertManagementTenantProfile, isAbortError } from "../core/managementProfile.js?v=20260903f037";
+import { isAbortError } from "../core/managementProfile.js?v=20260903f037";
 import { trapDialogFocus } from "./dialogFocus.js?v=20260903f037";
 import {
   formatNumber,
@@ -46,7 +46,6 @@ const HTTP_ERROR_STATUS_MINIMUM = 400;
  *   hasUsageFailures: boolean,
  *   hasLoadedUsageDetails: boolean,
  *   refreshAdminUsers: () => Promise<void>,
- *   resetProviderCard: () => void,
  *   setPageNotice: (kind: string, message: string) => void
  * }} UsageDashboardHost */
 
@@ -260,7 +259,6 @@ export function createUsageDashboardResponsibility() {
       if (!this.usageIntervals.some((candidate) => candidate.id === interval)) {
         throw new Error(`usage_interval_invalid:${interval}`);
       }
-      this.resetProviderCard();
       this.clearUsageDetails(false);
       this.selectedUsageInterval = interval;
       this.usage = emptyUsageSummary(interval);
@@ -280,12 +278,12 @@ export function createUsageDashboardResponsibility() {
       if (tenantID === this.selectedUsageTenantID) {
         return;
       }
-      this.resetProviderCard();
-      this.clearUsageDetails(false);
-      this.selectedUsageTenantID = tenantID;
-      this.usage = emptyUsageSummary(this.selectedUsageInterval);
-      this.usageProfile = null;
-      await this.loadUsageSummary(false);
+      const dashboard = document.querySelector('connection-dashboard');
+      if (dashboard instanceof HTMLElement) {
+        const controller = /** @type {import('./connectionDashboard.js').ConnectionDashboard} */ (dashboard);
+        await controller.run(() => controller.selectTenant(tenantID));
+      }
+
     },
 
     openUsageFailures() {
@@ -417,7 +415,6 @@ export function createUsageDashboardResponsibility() {
         if (usage.interval !== interval || !Number.isInteger(usage.rejected_requests) || usage.rejected_requests < 0) {
           throw new Error(APP_INTEGRITY_ERROR);
         }
-        if (usageProfile) assertManagementTenantProfile(usageProfile, tenantID);
         this.usage = usage;
         this.usageProfile = usageProfile;
         this.usageLoadState = "available";
