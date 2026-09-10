@@ -208,10 +208,20 @@ func TestDeepSeekRetirementStartup(t *testing.T) {
 				for _, query := range []struct {
 					record any
 					where  any
-				}{{&tenant, &managedTenantRecord{TenantID: original.TenantID}}, {&profile, &managedProviderProfileRecord{TenantID: original.TenantID, ProviderID: original.DefaultProvider}}, {&connection, &managedProviderConnectionRecord{TenantID: original.TenantID, ProviderID: original.DefaultProvider}}, {&event, &managedUsageEventRecord{ID: usage[index].ID}}} {
+				}{{&tenant, &managedTenantRecord{TenantID: original.TenantID}}, {&profile, &managedProviderProfileRecord{TenantID: original.TenantID, ProviderID: original.DefaultProvider}}, {&event, &managedUsageEventRecord{ID: usage[index].ID}}} {
 					if err = database.Where(query.where).First(query.record).Error; err != nil {
 						t.Fatal(err)
 					}
+				}
+				if failRecord {
+					if err = database.Where(&managedProviderConnectionRecord{TenantID: original.TenantID, ProviderID: original.DefaultProvider}).First(&connection).Error; err != nil {
+						t.Fatal(err)
+					}
+					if connection != connections[index] {
+						t.Fatal("failed migration changed the predecessor credential")
+					}
+				} else {
+					assertMigratedConnectionField(t, database, cipher, connections[index])
 				}
 				expectedProfile := profiles[index]
 				if !failRecord && index < 2 {
@@ -219,7 +229,7 @@ func TestDeepSeekRetirementStartup(t *testing.T) {
 					original.DefaultReasoningEffort = []string{"none", "high"}[index]
 					expectedProfile.TextModel = ModelNameDeepSeekV4Flash
 				}
-				if !reflect.DeepEqual(tenant, original) || profile != expectedProfile || connection != connections[index] || event != usage[index] {
+				if !reflect.DeepEqual(tenant, original) || profile != expectedProfile || event != usage[index] {
 					t.Fatalf("state mismatch index=%d tenant=%+v expected=%+v profile=%+v usage=%+v", index, tenant, original, profile, event)
 				}
 			}

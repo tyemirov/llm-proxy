@@ -2,6 +2,8 @@ package proxy_test
 
 import (
 	"bytes"
+	"context"
+	"crypto/rand"
 	"encoding/json"
 	"io"
 	"mime/multipart"
@@ -83,27 +85,6 @@ func (httpDoer managementProviderKeyVerificationHTTPDoer) Do(request *http.Reque
 		Body:       io.NopCloser(strings.NewReader(responseBody)),
 		Request:    request,
 	}, nil
-}
-
-func managementProviderKeyRequestBody(t *testing.T, apiKey string, textModel string, systemPrompt string) string {
-	return managementProviderKeyRequestBodyWithBaseURL(t, apiKey, "", textModel, systemPrompt)
-}
-
-func managementProviderKeyRequestBodyWithBaseURL(t *testing.T, apiKey string, baseURL string, textModel string, systemPrompt string) string {
-	t.Helper()
-	fields := map[string]string{"api_key": apiKey}
-	if baseURL != "" {
-		fields["base_url"] = baseURL
-	}
-	requestBody, marshalError := json.Marshal(map[string]any{
-		"fields":        fields,
-		"text_model":    textModel,
-		"system_prompt": systemPrompt,
-	})
-	if marshalError != nil {
-		t.Fatalf("marshal provider key request: %v", marshalError)
-	}
-	return string(requestBody)
 }
 
 func managementDefaultsRequestBody(t *testing.T, provider string, model string, dictationProvider string, dictationModel string, systemPrompt string) string {
@@ -387,13 +368,13 @@ func TestManagementRejectsInvalidSessionsAndRequests(t *testing.T) {
 		body   string
 		status int
 	}{
-		{method: http.MethodPut, path: tenantPath + "/provider-connections/unknown", body: managementProviderKeyRequestBody(t, "sk", proxy.ModelNameGPT41, ""), status: http.StatusBadRequest},
-		{method: http.MethodPut, path: tenantPath + "/provider-connections/qwencloud", body: managementProviderKeyRequestBody(t, "sk", "qwen3.8-max-preview", "retired"), status: http.StatusBadRequest},
-		{method: http.MethodPut, path: tenantPath + "/provider-connections/openai", body: managementProviderKeyRequestBody(t, "", proxy.ModelNameGPT41, ""), status: http.StatusBadRequest},
-		{method: http.MethodPut, path: tenantPath + "/provider-connections/openai", body: `{"api_key":"sk","text_model":"gpt-4.1","system_prompt":"","extra":true}`, status: http.StatusBadRequest},
-		{method: http.MethodPut, path: tenantPath + "/provider-connections/openai", body: `{"api_key":"sk","system_prompt":""}`, status: http.StatusBadRequest},
-		{method: http.MethodPut, path: tenantPath + "/provider-connections/openai", body: managementProviderKeyRequestBody(t, "sk", "missing-model", ""), status: http.StatusBadRequest},
-		{method: http.MethodDelete, path: tenantPath + "/provider-connections/unknown", body: `{}`, status: http.StatusBadRequest},
+		{method: http.MethodPost, path: "/api/management/connections", body: `{"name":"Unknown","provider":"unknown","fields":{"api_key":"sk"}}`, status: http.StatusBadRequest},
+		{method: http.MethodPost, path: "/api/management/connections", body: `{"name":"Retired","provider":"qwencloud","fields":{"api_key":"sk"}}`, status: http.StatusBadRequest},
+		{method: http.MethodPost, path: "/api/management/connections", body: `{"name":"Empty","provider":"openai","fields":{"api_key":""}}`, status: http.StatusBadRequest},
+		{method: http.MethodPost, path: "/api/management/connections", body: `{"name":"Extra","provider":"openai","fields":{"api_key":"sk"},"extra":true}`, status: http.StatusBadRequest},
+		{method: http.MethodPost, path: "/api/management/connections", body: `{"name":"Missing fields","provider":"openai"}`, status: http.StatusBadRequest},
+		{method: http.MethodPut, path: tenantPath + "/provider-profiles/openai", body: `{"text_model":"missing-model","system_prompt":""}`, status: http.StatusBadRequest},
+		{method: http.MethodDelete, path: tenantPath + "/connections/unknown", body: `{}`, status: http.StatusBadRequest},
 		{method: http.MethodPut, path: tenantPath + "/defaults", body: managementDefaultsRequestBody(t, "qwencloud", "qwen3.8-max-preview", "", "", ""), status: http.StatusBadRequest},
 		{method: http.MethodPut, path: tenantPath + "/defaults", body: `{"provider":"openai","model":"gpt-4.1","extra":true}`, status: http.StatusBadRequest},
 		{method: http.MethodPut, path: tenantPath + "/defaults", body: `{"provider":"openai","model":"gpt-4.1","dictation_provider":"","dictation_model":"","system_prompt":"","reasoning_effort":""}`, status: http.StatusBadRequest},
@@ -407,9 +388,7 @@ func TestManagementRejectsInvalidSessionsAndRequests(t *testing.T) {
 		}
 	}
 
-	saveRequest := authenticatedJSONRequest(http.MethodPut, tenantPath+"/provider-connections/openai", managementProviderKeyRequestBody(t, "skhort", proxy.ModelNameGPT41, ""), sessionCookie)
-	saveResponse := httptest.NewRecorder()
-	router.ServeHTTP(saveResponse, saveRequest)
+	saveResponse := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), "openai", "skhort", proxy.ModelNameGPT41, "", context.Background())
 	if saveResponse.Code != http.StatusOK || !strings.Contains(saveResponse.Body.String(), `"masked_value":"saved"`) {
 		t.Fatalf("save short key status=%d body=%s", saveResponse.Code, saveResponse.Body.String())
 	}
@@ -424,9 +403,7 @@ func TestManagementRejectsInvalidSessionsAndRequests(t *testing.T) {
 
 	deepSeekOnlyCookie := managementSessionCookie(t, "tauth-deepseek-only")
 	deepSeekTenantPath := managementDefaultTenantTestPath(t, router, deepSeekOnlyCookie, "")
-	saveDeepSeekRequest := authenticatedJSONRequest(http.MethodPut, deepSeekTenantPath+"/provider-connections/deepseek", managementProviderKeyRequestBody(t, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, ""), deepSeekOnlyCookie)
-	saveDeepSeekResponse := httptest.NewRecorder()
-	router.ServeHTTP(saveDeepSeekResponse, saveDeepSeekRequest)
+	saveDeepSeekResponse := putManagementProviderKey(t, router, deepSeekOnlyCookie, strings.TrimPrefix(deepSeekTenantPath, "/api/management/tenants/"), "deepseek", testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, "", context.Background())
 	if saveDeepSeekResponse.Code != http.StatusOK {
 		t.Fatalf("save deepseek key status=%d body=%s", saveDeepSeekResponse.Code, saveDeepSeekResponse.Body.String())
 	}
@@ -439,131 +416,49 @@ func TestManagementRejectsInvalidSessionsAndRequests(t *testing.T) {
 		t.Fatalf("blank dictation defaults status=%d want=%d body=%s", blankDictationDefaultsResponse.Code, http.StatusOK, blankDictationDefaultsResponse.Body.String())
 	}
 
-	removeRequest := authenticatedJSONRequest(http.MethodDelete, tenantPath+"/provider-connections/openai", `{}`, sessionCookie)
+	removeRequest := authenticatedJSONRequest(http.MethodDelete, tenantPath+"/connections/openai", `{}`, sessionCookie)
 	removeResponse := httptest.NewRecorder()
 	router.ServeHTTP(removeResponse, removeRequest)
-	if removeResponse.Code != http.StatusOK || strings.Contains(removeResponse.Body.String(), `"has_key":true`) {
+	if removeResponse.Code != http.StatusNoContent {
 		t.Fatalf("remove status=%d body=%s", removeResponse.Code, removeResponse.Body.String())
 	}
 }
 
-func TestManagementProviderKeyRevealIsOwnerScoped(t *testing.T) {
+func TestManagementConnectionCredentialsRemainMaskedAndOwnerScoped(t *testing.T) {
 	router := newManagementRouter(t, proxy.Configuration{})
-	ownerCookie := managementSessionCookie(t, "tauth-reveal-owner")
-	otherCookie := managementSessionCookie(t, "tauth-reveal-other")
-	adminCookie := managementSessionCookieWithEmail(t, "tauth-reveal-admin", testManagementAdminEmail)
-	ownerTenantPath := managementDefaultTenantTestPath(t, router, ownerCookie, "")
-
-	saveRequest := authenticatedJSONRequest(http.MethodPut, ownerTenantPath+"/provider-connections/openai", managementProviderKeyRequestBody(t, testManagementOpenAIKey, proxy.ModelNameGPT41, ""), ownerCookie)
-	saveResponse := httptest.NewRecorder()
-	router.ServeHTTP(saveResponse, saveRequest)
-	if saveResponse.Code != http.StatusOK {
-		t.Fatalf("save provider key status=%d body=%s", saveResponse.Code, saveResponse.Body.String())
-	}
-	if strings.Contains(saveResponse.Body.String(), testManagementOpenAIKey) {
-		t.Fatalf("save provider key response leaked raw key: %s", saveResponse.Body.String())
-	}
-
-	unauthenticatedRevealRequest := httptest.NewRequest(http.MethodPost, ownerTenantPath+"/provider-connections/openai/fields/api_key/reveal", strings.NewReader(`{}`))
-	unauthenticatedRevealRequest.Header.Set("Content-Type", "application/json")
-	unauthenticatedRevealRequest.Header.Set("Origin", "http://localhost:8080")
-	unauthenticatedRevealResponse := httptest.NewRecorder()
-	router.ServeHTTP(unauthenticatedRevealResponse, unauthenticatedRevealRequest)
-	if unauthenticatedRevealResponse.Code != http.StatusUnauthorized {
-		t.Fatalf("unauthenticated reveal status=%d want=%d body=%s", unauthenticatedRevealResponse.Code, http.StatusUnauthorized, unauthenticatedRevealResponse.Body.String())
-	}
-
-	for _, rejectedReveal := range []struct {
-		name       string
-		request    *http.Request
-		statusCode int
+	owner := managementSessionCookie(t, "masked-connection-owner")
+	other := managementSessionCookie(t, "masked-connection-other")
+	admin := managementSessionCookieWithEmail(t, "masked-connection-admin", testManagementAdminEmail)
+	created := accountConnectionExchange(t, router, owner, http.MethodPost, "/connections", map[string]any{"name": "Production", "provider": "openai", "fields": map[string]string{"api_key": testManagementOpenAIKey}}, http.StatusCreated)
+	path := "/api/management/connections/" + created["id"].(string)
+	for _, scenario := range []struct {
+		name   string
+		cookie *http.Cookie
+		status int
 	}{
-		{
-			name:       "missing origin",
-			request:    authenticatedJSONRequest(http.MethodPost, ownerTenantPath+"/provider-connections/openai/fields/api_key/reveal", `{}`, ownerCookie),
-			statusCode: http.StatusForbidden,
-		},
-		{
-			name:       "wrong origin",
-			request:    authenticatedProviderKeyRevealRequest(http.MethodPost, ownerTenantPath+"/provider-connections/openai/fields/api_key/reveal", ownerCookie, "https://other.example"),
-			statusCode: http.StatusForbidden,
-		},
-		{
-			name:       "missing content type",
-			request:    providerKeyRevealRequestWithoutContentType(http.MethodPost, ownerTenantPath+"/provider-connections/openai/fields/api_key/reveal", ownerCookie, "http://localhost:8080"),
-			statusCode: http.StatusUnsupportedMediaType,
-		},
+		{"owner", owner, http.StatusOK},
+		{"other account", other, http.StatusNotFound},
+		{"administrator", admin, http.StatusNotFound},
+		{"no session", nil, http.StatusUnauthorized},
 	} {
-		t.Run(rejectedReveal.name, func(subTest *testing.T) {
-			rejectedRevealResponse := httptest.NewRecorder()
-			router.ServeHTTP(rejectedRevealResponse, rejectedReveal.request)
-			if rejectedRevealResponse.Code != rejectedReveal.statusCode {
-				subTest.Fatalf("reveal status=%d want=%d body=%s", rejectedRevealResponse.Code, rejectedReveal.statusCode, rejectedRevealResponse.Body.String())
+		t.Run(scenario.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, path, nil)
+			if scenario.cookie != nil {
+				request.AddCookie(scenario.cookie)
 			}
-			if strings.Contains(rejectedRevealResponse.Body.String(), testManagementOpenAIKey) {
-				subTest.Fatalf("rejected reveal leaked raw key: %s", rejectedRevealResponse.Body.String())
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+			if response.Code != scenario.status || strings.Contains(response.Body.String(), testManagementOpenAIKey) {
+				t.Fatalf("connection status=%d want=%d body=%s", response.Code, scenario.status, response.Body.String())
+			}
+			if scenario.status == http.StatusOK && (response.Header().Get("Cache-Control") != "no-store" || !strings.Contains(response.Body.String(), "masked_value")) {
+				t.Fatal("connection read omitted credential masking or cache policy")
 			}
 		})
-	}
-
-	ownerRevealRequest := authenticatedProviderKeyRevealRequest(http.MethodPost, ownerTenantPath+"/provider-connections/openai/fields/api_key/reveal", ownerCookie, "http://localhost:8080")
-	ownerRevealResponse := httptest.NewRecorder()
-	router.ServeHTTP(ownerRevealResponse, ownerRevealRequest)
-	if ownerRevealResponse.Code != http.StatusOK {
-		t.Fatalf("owner reveal status=%d want=%d body=%s", ownerRevealResponse.Code, http.StatusOK, ownerRevealResponse.Body.String())
-	}
-	if ownerRevealResponse.Header().Get("Cache-Control") != "no-store" {
-		t.Fatalf("owner reveal cache-control=%q want=no-store", ownerRevealResponse.Header().Get("Cache-Control"))
-	}
-	var ownerRevealPayload map[string]string
-	if decodeError := json.Unmarshal(ownerRevealResponse.Body.Bytes(), &ownerRevealPayload); decodeError != nil {
-		t.Fatalf("decode owner reveal: %v", decodeError)
-	}
-	if len(ownerRevealPayload) != 2 || ownerRevealPayload["field_id"] != "api_key" || ownerRevealPayload["value"] != testManagementOpenAIKey {
-		t.Fatalf("owner reveal payload=%+v", ownerRevealPayload)
-	}
-
-	for _, unavailableReveal := range []struct {
-		name       string
-		path       string
-		cookie     *http.Cookie
-		statusCode int
-	}{
-		{name: "different owner", path: ownerTenantPath + "/provider-connections/openai/fields/api_key/reveal", cookie: otherCookie, statusCode: http.StatusNotFound},
-		{name: "missing provider key", path: ownerTenantPath + "/provider-connections/deepseek/fields/api_key/reveal", cookie: ownerCookie, statusCode: http.StatusNotFound},
-		{name: "unknown provider", path: ownerTenantPath + "/provider-connections/unknown/fields/api_key/reveal", cookie: ownerCookie, statusCode: http.StatusBadRequest},
-	} {
-		t.Run(unavailableReveal.name, func(subTest *testing.T) {
-			unavailableRevealRequest := authenticatedProviderKeyRevealRequest(http.MethodPost, unavailableReveal.path, unavailableReveal.cookie, "http://localhost:8080")
-			unavailableRevealResponse := httptest.NewRecorder()
-			router.ServeHTTP(unavailableRevealResponse, unavailableRevealRequest)
-			if unavailableRevealResponse.Code != unavailableReveal.statusCode {
-				subTest.Fatalf("reveal status=%d want=%d body=%s", unavailableRevealResponse.Code, unavailableReveal.statusCode, unavailableRevealResponse.Body.String())
-			}
-			if strings.Contains(unavailableRevealResponse.Body.String(), testManagementOpenAIKey) {
-				subTest.Fatalf("unavailable reveal leaked raw key: %s", unavailableRevealResponse.Body.String())
-			}
-		})
-	}
-
-	profileRequest := httptest.NewRequest(http.MethodGet, ownerTenantPath, nil)
-	profileRequest.AddCookie(ownerCookie)
-	profileResponse := httptest.NewRecorder()
-	router.ServeHTTP(profileResponse, profileRequest)
-	if profileResponse.Code != http.StatusOK || strings.Contains(profileResponse.Body.String(), testManagementOpenAIKey) {
-		t.Fatalf("profile status=%d body=%s", profileResponse.Code, profileResponse.Body.String())
-	}
-
-	adminRequest := httptest.NewRequest(http.MethodGet, "/api/management/admin/users", nil)
-	adminRequest.AddCookie(adminCookie)
-	adminResponse := httptest.NewRecorder()
-	router.ServeHTTP(adminResponse, adminRequest)
-	if adminResponse.Code != http.StatusOK || strings.Contains(adminResponse.Body.String(), testManagementOpenAIKey) {
-		t.Fatalf("admin status=%d body=%s", adminResponse.Code, adminResponse.Body.String())
 	}
 }
 
-func TestManagementProviderKeyRevealPersistsUpdatedKey(t *testing.T) {
+func TestManagementConnectionPersistsUpdatedCredential(t *testing.T) {
 	databasePath := filepath.Join(t.TempDir(), "managed-tenants.db")
 	updatedProviderKey := "sk-user-deepseek-updated"
 	capturedAuthorizations := []string{}
@@ -578,9 +473,7 @@ func TestManagementProviderKeyRevealPersistsUpdatedKey(t *testing.T) {
 	ownerCookie := managementSessionCookie(t, "tauth-reveal-persistence-owner")
 	ownerTenantID := managementDefaultTenantTestID(t, router, ownerCookie)
 	ownerTenantPath := "/api/management/tenants/" + url.PathEscape(ownerTenantID)
-	saveOriginalRequest := authenticatedJSONRequest(http.MethodPut, ownerTenantPath+"/provider-connections/deepseek", managementProviderKeyRequestBody(t, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, ""), ownerCookie)
-	saveOriginalResponse := httptest.NewRecorder()
-	router.ServeHTTP(saveOriginalResponse, saveOriginalRequest)
+	saveOriginalResponse := putManagementProviderKey(t, router, ownerCookie, strings.TrimPrefix(ownerTenantPath, "/api/management/tenants/"), "deepseek", testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, "", context.Background())
 	if saveOriginalResponse.Code != http.StatusOK {
 		t.Fatalf("save original key status=%d body=%s", saveOriginalResponse.Code, saveOriginalResponse.Body.String())
 	}
@@ -594,16 +487,14 @@ func TestManagementProviderKeyRevealPersistsUpdatedKey(t *testing.T) {
 		t.Fatalf("original provider key record=%+v", originalProviderKeyRecord)
 	}
 
-	originalRevealRequest := authenticatedProviderKeyRevealRequest(http.MethodPost, ownerTenantPath+"/provider-connections/deepseek/fields/api_key/reveal", ownerCookie, "http://localhost:8080")
+	originalRevealRequest := authenticatedJSONRequest(http.MethodGet, "/api/management/connections/"+originalProviderKeyRecord.ConnectionID, "", ownerCookie)
 	originalRevealResponse := httptest.NewRecorder()
 	router.ServeHTTP(originalRevealResponse, originalRevealRequest)
-	if originalRevealResponse.Code != http.StatusOK || !strings.Contains(originalRevealResponse.Body.String(), testManagementDeepSeekKey) {
+	if originalRevealResponse.Code != http.StatusOK || strings.Contains(originalRevealResponse.Body.String(), testManagementDeepSeekKey) || !strings.Contains(originalRevealResponse.Body.String(), "masked_value") {
 		t.Fatalf("original reveal status=%d body=%s", originalRevealResponse.Code, originalRevealResponse.Body.String())
 	}
 
-	saveUpdatedRequest := authenticatedJSONRequest(http.MethodPut, ownerTenantPath+"/provider-connections/deepseek", managementProviderKeyRequestBody(t, updatedProviderKey, proxy.ModelNameDeepSeekV4Flash, ""), ownerCookie)
-	saveUpdatedResponse := httptest.NewRecorder()
-	router.ServeHTTP(saveUpdatedResponse, saveUpdatedRequest)
+	saveUpdatedResponse := putManagementProviderKey(t, router, ownerCookie, strings.TrimPrefix(ownerTenantPath, "/api/management/tenants/"), "deepseek", updatedProviderKey, proxy.ModelNameDeepSeekV4Flash, "", context.Background())
 	if saveUpdatedResponse.Code != http.StatusOK || strings.Contains(saveUpdatedResponse.Body.String(), updatedProviderKey) {
 		t.Fatalf("save updated key status=%d body=%s", saveUpdatedResponse.Code, saveUpdatedResponse.Body.String())
 	}
@@ -616,10 +507,10 @@ func TestManagementProviderKeyRevealPersistsUpdatedKey(t *testing.T) {
 		t.Fatalf("updated provider key record=%+v", updatedProviderKeyRecord)
 	}
 
-	updatedRevealRequest := authenticatedProviderKeyRevealRequest(http.MethodPost, ownerTenantPath+"/provider-connections/deepseek/fields/api_key/reveal", ownerCookie, "http://localhost:8080")
+	updatedRevealRequest := authenticatedJSONRequest(http.MethodGet, "/api/management/connections/"+originalProviderKeyRecord.ConnectionID, "", ownerCookie)
 	updatedRevealResponse := httptest.NewRecorder()
 	router.ServeHTTP(updatedRevealResponse, updatedRevealRequest)
-	if updatedRevealResponse.Code != http.StatusOK || !strings.Contains(updatedRevealResponse.Body.String(), updatedProviderKey) {
+	if updatedRevealResponse.Code != http.StatusOK || strings.Contains(updatedRevealResponse.Body.String(), updatedProviderKey) || !strings.Contains(updatedRevealResponse.Body.String(), "masked_value") {
 		t.Fatalf("updated reveal status=%d body=%s", updatedRevealResponse.Code, updatedRevealResponse.Body.String())
 	}
 
@@ -655,10 +546,10 @@ func TestManagementProviderKeyRevealPersistsUpdatedKey(t *testing.T) {
 	if len(capturedAuthorizations) != 2 || capturedAuthorizations[0] != "Bearer "+updatedProviderKey || capturedAuthorizations[1] != "Bearer "+updatedProviderKey {
 		t.Fatalf("updated key authorizations=%v", capturedAuthorizations)
 	}
-	if updateError := database.Model(&managedProviderConnectionFixture{}).Where("tenant_id = ? AND provider_id = ? AND field_id = ?", ownerTenantID, proxy.ProviderNameDeepSeek, proxy.CatalogCredentialAPIKey).Update("value", "invalid").Error; updateError != nil {
+	if updateError := database.Table("managed_connection_field_records").Where("connection_id = ? AND field_id = ?", originalProviderKeyRecord.ConnectionID, proxy.CatalogCredentialAPIKey).Update("value", "invalid").Error; updateError != nil {
 		t.Fatalf("corrupt updated provider key record: %v", updateError)
 	}
-	corruptRevealRequest := authenticatedProviderKeyRevealRequest(http.MethodPost, ownerTenantPath+"/provider-connections/deepseek/fields/api_key/reveal", ownerCookie, "http://localhost:8080")
+	corruptRevealRequest := authenticatedJSONRequest(http.MethodGet, "/api/management/connections/"+originalProviderKeyRecord.ConnectionID, "", ownerCookie)
 	corruptRevealResponse := httptest.NewRecorder()
 	router.ServeHTTP(corruptRevealResponse, corruptRevealRequest)
 	if corruptRevealResponse.Code != http.StatusInternalServerError || strings.Contains(corruptRevealResponse.Body.String(), updatedProviderKey) {
@@ -679,9 +570,7 @@ func TestManagementRoutingDefaultsRequireCompleteCanonicalPairs(t *testing.T) {
 		{provider: proxy.ProviderNameOpenAI, apiKey: testManagementOpenAIKey, model: proxy.ModelNameGPT41},
 	}
 	for _, providerKeyRequest := range providerKeyRequests {
-		request := authenticatedJSONRequest(http.MethodPut, tenantPath+"/provider-connections/"+providerKeyRequest.provider, managementProviderKeyRequestBody(t, providerKeyRequest.apiKey, providerKeyRequest.model, ""), sessionCookie)
-		response := httptest.NewRecorder()
-		router.ServeHTTP(response, request)
+		response := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), providerKeyRequest.provider, providerKeyRequest.apiKey, providerKeyRequest.model, "", context.Background())
 		if response.Code != http.StatusOK {
 			t.Fatalf("save provider=%s status=%d body=%s", providerKeyRequest.provider, response.Code, response.Body.String())
 		}
@@ -758,7 +647,7 @@ func TestManagementRoutingDefaultsRequireCompleteCanonicalPairs(t *testing.T) {
 	}
 }
 
-func TestManagementRoutingDefaultsFollowSavedProviderKeys(t *testing.T) {
+func TestManagementRoutingDefaultsRequireExplicitConnectionChoices(t *testing.T) {
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		if authorizationHeader := request.Header.Get("Authorization"); authorizationHeader != "Bearer "+testManagementDeepSeekKey {
 			t.Fatalf("authorization=%q", authorizationHeader)
@@ -774,15 +663,7 @@ func TestManagementRoutingDefaultsFollowSavedProviderKeys(t *testing.T) {
 	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{})
 
 	saveProviderKey := func(provider string, apiKey string, model string) *httptest.ResponseRecorder {
-		request := authenticatedJSONRequest(
-			http.MethodPut,
-			tenantPath+"/provider-connections/"+provider,
-			managementProviderKeyRequestBody(t, apiKey, model, ""),
-			sessionCookie,
-		)
-		response := httptest.NewRecorder()
-		router.ServeHTTP(response, request)
-		return response
+		return putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), provider, apiKey, model, "", context.Background())
 	}
 	if response := saveProviderKey(proxy.ProviderNameDeepSeek, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash); response.Code != http.StatusOK {
 		t.Fatalf("save text-only provider status=%d body=%s", response.Code, response.Body.String())
@@ -790,6 +671,12 @@ func TestManagementRoutingDefaultsFollowSavedProviderKeys(t *testing.T) {
 	textOnlyDefaults := managementTenantDefaultsTestResponse{
 		Provider: proxy.ProviderNameDeepSeek,
 		Model:    proxy.ModelNameDeepSeekV4Flash,
+	}
+	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{})
+	selected := httptest.NewRecorder()
+	router.ServeHTTP(selected, authenticatedJSONRequest(http.MethodPut, tenantPath+"/defaults", managementDefaultsRequestBody(t, textOnlyDefaults.Provider, textOnlyDefaults.Model, "", "", ""), sessionCookie))
+	if selected.Code != http.StatusOK {
+		t.Fatalf("explicit text default status=%d body=%s", selected.Code, selected.Body.String())
 	}
 	assertManagementProfileDefaults(t, router, sessionCookie, textOnlyDefaults)
 
@@ -846,21 +733,11 @@ func TestManagementRoutingDefaultsFollowSavedProviderKeys(t *testing.T) {
 	if response := saveProviderKey(proxy.ProviderNameOpenAI, testManagementOpenAIKey, proxy.ModelNameGPT55); response.Code != http.StatusOK {
 		t.Fatalf("save dictation provider status=%d body=%s", response.Code, response.Body.String())
 	}
-	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{
-		Provider:          proxy.ProviderNameDeepSeek,
-		Model:             proxy.ModelNameDeepSeekV4Flash,
-		DictationProvider: proxy.ProviderNameOpenAI,
-		DictationModel:    proxy.DefaultDictationModel,
-	})
+	assertManagementProfileDefaults(t, router, sessionCookie, textOnlyDefaults)
 	if response := saveProviderKey(proxy.ProviderNameOpenAI, "", proxy.ModelNameGPT4oMini); response.Code != http.StatusOK {
 		t.Fatalf("update inactive provider model status=%d body=%s", response.Code, response.Body.String())
 	}
-	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{
-		Provider:          proxy.ProviderNameDeepSeek,
-		Model:             proxy.ModelNameDeepSeekV4Flash,
-		DictationProvider: proxy.ProviderNameOpenAI,
-		DictationModel:    proxy.DefaultDictationModel,
-	})
+	assertManagementProfileDefaults(t, router, sessionCookie, textOnlyDefaults)
 
 	openAIDefaultsRequest := authenticatedJSONRequest(
 		http.MethodPut,
@@ -878,7 +755,7 @@ func TestManagementRoutingDefaultsFollowSavedProviderKeys(t *testing.T) {
 	}
 	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{
 		Provider:          proxy.ProviderNameOpenAI,
-		Model:             proxy.ModelNameGPT55,
+		Model:             proxy.ModelNameGPT41,
 		DictationProvider: proxy.ProviderNameOpenAI,
 		DictationModel:    proxy.DefaultDictationModel,
 	})
@@ -898,7 +775,7 @@ func TestManagementRoutingDefaultsFollowSavedProviderKeys(t *testing.T) {
 	}
 	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{
 		Provider:          proxy.ProviderNameOpenAI,
-		Model:             proxy.ModelNameGPT5Mini,
+		Model:             proxy.ModelNameGPT5,
 		DictationProvider: proxy.ProviderNameOpenAI,
 		DictationModel:    proxy.DefaultDictationModel,
 		ReasoningEffort:   "high",
@@ -908,9 +785,10 @@ func TestManagementRoutingDefaultsFollowSavedProviderKeys(t *testing.T) {
 	}
 	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{
 		Provider:          proxy.ProviderNameOpenAI,
-		Model:             proxy.ModelNameGPT41,
+		Model:             proxy.ModelNameGPT5,
 		DictationProvider: proxy.ProviderNameOpenAI,
 		DictationModel:    proxy.DefaultDictationModel,
+		ReasoningEffort:   "high",
 	})
 	overriddenDefaultsRequest := authenticatedJSONRequest(
 		http.MethodPut,
@@ -923,14 +801,7 @@ func TestManagementRoutingDefaultsFollowSavedProviderKeys(t *testing.T) {
 	if overriddenDefaultsResponse.Code != http.StatusOK {
 		t.Fatalf("override synchronized routing model status=%d body=%s", overriddenDefaultsResponse.Code, overriddenDefaultsResponse.Body.String())
 	}
-	unchangedProviderModelRequest := authenticatedJSONRequest(
-		http.MethodPut,
-		tenantPath+"/provider-connections/openai",
-		managementProviderKeyRequestBody(t, "", proxy.ModelNameGPT41, "Use provider guidance."),
-		sessionCookie,
-	)
-	unchangedProviderModelResponse := httptest.NewRecorder()
-	router.ServeHTTP(unchangedProviderModelResponse, unchangedProviderModelRequest)
+	unchangedProviderModelResponse := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), proxy.ProviderNameOpenAI, "", proxy.ModelNameGPT41, "Use provider guidance.", context.Background())
 	if unchangedProviderModelResponse.Code != http.StatusOK {
 		t.Fatalf("save provider prompt with unchanged model status=%d body=%s", unchangedProviderModelResponse.Code, unchangedProviderModelResponse.Body.String())
 	}
@@ -940,18 +811,18 @@ func TestManagementRoutingDefaultsFollowSavedProviderKeys(t *testing.T) {
 		DictationProvider: proxy.ProviderNameOpenAI,
 		DictationModel:    proxy.DefaultDictationModel,
 	})
-	removeOpenAIRequest := authenticatedJSONRequest(http.MethodDelete, tenantPath+"/provider-connections/openai", `{}`, sessionCookie)
+	removeOpenAIRequest := authenticatedJSONRequest(http.MethodDelete, tenantPath+"/connections/openai?clear_defaults=true", `{}`, sessionCookie)
 	removeOpenAIResponse := httptest.NewRecorder()
 	router.ServeHTTP(removeOpenAIResponse, removeOpenAIRequest)
-	if removeOpenAIResponse.Code != http.StatusOK {
+	if removeOpenAIResponse.Code != http.StatusNoContent {
 		t.Fatalf("remove default provider status=%d body=%s", removeOpenAIResponse.Code, removeOpenAIResponse.Body.String())
 	}
-	assertManagementProfileDefaults(t, router, sessionCookie, textOnlyDefaults)
+	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{})
 
-	removeDeepSeekRequest := authenticatedJSONRequest(http.MethodDelete, tenantPath+"/provider-connections/deepseek", `{}`, sessionCookie)
+	removeDeepSeekRequest := authenticatedJSONRequest(http.MethodDelete, tenantPath+"/connections/deepseek", `{}`, sessionCookie)
 	removeDeepSeekResponse := httptest.NewRecorder()
 	router.ServeHTTP(removeDeepSeekResponse, removeDeepSeekRequest)
-	if removeDeepSeekResponse.Code != http.StatusOK {
+	if removeDeepSeekResponse.Code != http.StatusNoContent {
 		t.Fatalf("remove final provider status=%d body=%s", removeDeepSeekResponse.Code, removeDeepSeekResponse.Body.String())
 	}
 	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{})
@@ -971,9 +842,7 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 		{provider: proxy.ProviderNameDeepSeek, apiKey: testManagementDeepSeekKey, model: proxy.ModelNameDeepSeekV4Flash},
 		{provider: proxy.ProviderNameMoonshot, apiKey: "sk-moonshot", model: proxy.ModelNameMoonshotKimiK3},
 	} {
-		request := authenticatedJSONRequest(http.MethodPut, tenantPath+"/provider-connections/"+providerKeyRequest.provider, managementProviderKeyRequestBody(t, providerKeyRequest.apiKey, providerKeyRequest.model, ""), sessionCookie)
-		response := httptest.NewRecorder()
-		router.ServeHTTP(response, request)
+		response := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), providerKeyRequest.provider, providerKeyRequest.apiKey, providerKeyRequest.model, "", context.Background())
 		if response.Code != http.StatusOK {
 			t.Fatalf("save provider=%s status=%d body=%s", providerKeyRequest.provider, response.Code, response.Body.String())
 		}
@@ -1168,9 +1037,7 @@ func TestManagementRoutingDefaultsRequireSavedProviderKeys(t *testing.T) {
 
 	textOnlyCookie := managementSessionCookie(t, "tauth-routing-defaults-text-only")
 	textOnlyTenantPath := managementDefaultTenantTestPath(t, router, textOnlyCookie, "")
-	saveDeepSeekKeyRequest := authenticatedJSONRequest(http.MethodPut, textOnlyTenantPath+"/provider-connections/deepseek", managementProviderKeyRequestBody(t, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, ""), textOnlyCookie)
-	saveDeepSeekKeyResponse := httptest.NewRecorder()
-	router.ServeHTTP(saveDeepSeekKeyResponse, saveDeepSeekKeyRequest)
+	saveDeepSeekKeyResponse := putManagementProviderKey(t, router, textOnlyCookie, strings.TrimPrefix(textOnlyTenantPath, "/api/management/tenants/"), "deepseek", testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, "", context.Background())
 	if saveDeepSeekKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save deepseek key status=%d body=%s", saveDeepSeekKeyResponse.Code, saveDeepSeekKeyResponse.Body.String())
 	}
@@ -1218,15 +1085,11 @@ func TestManagementDatabasePersistenceAndOpenFailures(t *testing.T) {
 	router := newManagementRouterWithDatabasePath(t, proxy.Configuration{Endpoints: providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek)}, databasePath)
 	sessionCookie := managementSessionCookie(t, "tauth-persisted-user")
 	tenantPath := managementDefaultTenantTestPath(t, router, sessionCookie, "")
-	saveKeyRequest := authenticatedJSONRequest(http.MethodPut, tenantPath+"/provider-connections/deepseek", managementProviderKeyRequestBody(t, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, ""), sessionCookie)
-	saveKeyResponse := httptest.NewRecorder()
-	router.ServeHTTP(saveKeyResponse, saveKeyRequest)
+	saveKeyResponse := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), "deepseek", testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, "", context.Background())
 	if saveKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save key status=%d body=%s", saveKeyResponse.Code, saveKeyResponse.Body.String())
 	}
-	saveOpenAIKeyRequest := authenticatedJSONRequest(http.MethodPut, tenantPath+"/provider-connections/openai", managementProviderKeyRequestBody(t, testManagementOpenAIKey, proxy.ModelNameGPT41, ""), sessionCookie)
-	saveOpenAIKeyResponse := httptest.NewRecorder()
-	router.ServeHTTP(saveOpenAIKeyResponse, saveOpenAIKeyRequest)
+	saveOpenAIKeyResponse := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), "openai", testManagementOpenAIKey, proxy.ModelNameGPT41, "", context.Background())
 	if saveOpenAIKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save openai key status=%d body=%s", saveOpenAIKeyResponse.Code, saveOpenAIKeyResponse.Body.String())
 	}
@@ -1279,14 +1142,7 @@ func TestManagementStartupRejectsInvalidPersistedRoutingDefaults(t *testing.T) {
 	router := newManagementRouterWithDatabasePath(t, proxy.Configuration{}, databasePath)
 	sessionCookie := managementSessionCookie(t, "tauth-invalid-persisted-defaults")
 	tenantID := managementDefaultTenantTestID(t, router, sessionCookie)
-	saveKeyRequest := authenticatedJSONRequest(
-		http.MethodPut,
-		"/api/management/tenants/"+url.PathEscape(tenantID)+"/provider-connections/openai",
-		managementProviderKeyRequestBody(t, testManagementOpenAIKey, proxy.ModelNameGPT41, ""),
-		sessionCookie,
-	)
-	saveKeyResponse := httptest.NewRecorder()
-	router.ServeHTTP(saveKeyResponse, saveKeyRequest)
+	saveKeyResponse := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix("/api/management/tenants/"+url.PathEscape(tenantID), "/api/management/tenants/"), "openai", testManagementOpenAIKey, proxy.ModelNameGPT41, "", context.Background())
 	if saveKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save provider key status=%d body=%s", saveKeyResponse.Code, saveKeyResponse.Body.String())
 	}
@@ -1652,11 +1508,14 @@ func TestManagementGeneratedSecretSupportsDictationAndRejectsMultipartProviderKe
 	})
 	sessionCookie := managementSessionCookie(t, "tauth-dictation-user")
 	tenantPath := managementDefaultTenantTestPath(t, router, sessionCookie, "")
-	saveKeyRequest := authenticatedJSONRequest(http.MethodPut, tenantPath+"/provider-connections/openai", managementProviderKeyRequestBody(t, "sk-user-openai", proxy.ModelNameGPT41, ""), sessionCookie)
-	saveKeyResponse := httptest.NewRecorder()
-	router.ServeHTTP(saveKeyResponse, saveKeyRequest)
+	saveKeyResponse := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), "openai", "sk-user-openai", proxy.ModelNameGPT41, "", context.Background())
 	if saveKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save key status=%d body=%s", saveKeyResponse.Code, saveKeyResponse.Body.String())
+	}
+	defaultsResponse := httptest.NewRecorder()
+	router.ServeHTTP(defaultsResponse, authenticatedJSONRequest(http.MethodPut, tenantPath+"/defaults", managementDefaultsRequestBody(t, proxy.ProviderNameOpenAI, proxy.ModelNameGPT41, proxy.ProviderNameOpenAI, proxy.DefaultDictationModel, ""), sessionCookie))
+	if defaultsResponse.Code != http.StatusOK {
+		t.Fatalf("save dictation default status=%d body=%s", defaultsResponse.Code, defaultsResponse.Body.String())
 	}
 	secretRequest := authenticatedJSONRequest(http.MethodPost, tenantPath+"/secrets", `{}`, sessionCookie)
 	secretResponse := httptest.NewRecorder()
@@ -1740,15 +1599,11 @@ func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
 		t.Fatalf("empty usage=%+v buckets=%d", emptyUsage, len(emptyUsage.Buckets))
 	}
 
-	saveDeepSeekKeyRequest := authenticatedJSONRequest(http.MethodPut, userOneTenantPath+"/provider-connections/deepseek", managementProviderKeyRequestBody(t, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, ""), userOneCookie)
-	saveDeepSeekKeyResponse := httptest.NewRecorder()
-	router.ServeHTTP(saveDeepSeekKeyResponse, saveDeepSeekKeyRequest)
+	saveDeepSeekKeyResponse := putManagementProviderKey(t, router, userOneCookie, strings.TrimPrefix(userOneTenantPath, "/api/management/tenants/"), "deepseek", testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, "", context.Background())
 	if saveDeepSeekKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save deepseek key status=%d body=%s", saveDeepSeekKeyResponse.Code, saveDeepSeekKeyResponse.Body.String())
 	}
-	saveOpenAIKeyRequest := authenticatedJSONRequest(http.MethodPut, userOneTenantPath+"/provider-connections/openai", managementProviderKeyRequestBody(t, testManagementOpenAIKey, proxy.ModelNameGPT41, ""), userOneCookie)
-	saveOpenAIKeyResponse := httptest.NewRecorder()
-	router.ServeHTTP(saveOpenAIKeyResponse, saveOpenAIKeyRequest)
+	saveOpenAIKeyResponse := putManagementProviderKey(t, router, userOneCookie, strings.TrimPrefix(userOneTenantPath, "/api/management/tenants/"), "openai", testManagementOpenAIKey, proxy.ModelNameGPT41, "", context.Background())
 	if saveOpenAIKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save openai key status=%d body=%s", saveOpenAIKeyResponse.Code, saveOpenAIKeyResponse.Body.String())
 	}
@@ -1962,14 +1817,7 @@ func TestManagementUnconfiguredProviderRequestsAreRejectedWithCanonicalRoutes(t 
 	sessionCookie := managementSessionCookie(t, "usage-catalog-default-user")
 	tenantPath := managementDefaultTenantTestPath(t, router, sessionCookie, "")
 
-	providerRequest := authenticatedJSONRequest(
-		http.MethodPut,
-		tenantPath+"/provider-connections/"+proxy.ProviderNameOpenAI,
-		managementProviderKeyRequestBody(t, testManagementOpenAIKey, proxy.ModelNameGPT41, ""),
-		sessionCookie,
-	)
-	providerResponse := httptest.NewRecorder()
-	router.ServeHTTP(providerResponse, providerRequest)
+	providerResponse := putManagementProviderKey(t, router, sessionCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), proxy.ProviderNameOpenAI, testManagementOpenAIKey, proxy.ModelNameGPT41, "", context.Background())
 	if providerResponse.Code != http.StatusOK {
 		t.Fatalf("save provider status=%d body=%s", providerResponse.Code, providerResponse.Body.String())
 	}
@@ -2060,15 +1908,11 @@ func TestManagementAdminUsersDashboard(t *testing.T) {
 	adminCookie := managementSessionCookieWithEmail(t, "admin-user", testManagementAdminEmail)
 	userOneTenantPath := managementDefaultTenantTestPath(t, router, userOneCookie, "")
 
-	saveKeyRequest := authenticatedJSONRequest(http.MethodPut, userOneTenantPath+"/provider-connections/deepseek", managementProviderKeyRequestBody(t, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, ""), userOneCookie)
-	saveKeyResponse := httptest.NewRecorder()
-	router.ServeHTTP(saveKeyResponse, saveKeyRequest)
+	saveKeyResponse := putManagementProviderKey(t, router, userOneCookie, strings.TrimPrefix(userOneTenantPath, "/api/management/tenants/"), "deepseek", testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, "", context.Background())
 	if saveKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save key status=%d body=%s", saveKeyResponse.Code, saveKeyResponse.Body.String())
 	}
-	saveOpenAIKeyRequest := authenticatedJSONRequest(http.MethodPut, userOneTenantPath+"/provider-connections/openai", managementProviderKeyRequestBody(t, testManagementOpenAIKey, proxy.ModelNameGPT41, ""), userOneCookie)
-	saveOpenAIKeyResponse := httptest.NewRecorder()
-	router.ServeHTTP(saveOpenAIKeyResponse, saveOpenAIKeyRequest)
+	saveOpenAIKeyResponse := putManagementProviderKey(t, router, userOneCookie, strings.TrimPrefix(userOneTenantPath, "/api/management/tenants/"), "openai", testManagementOpenAIKey, proxy.ModelNameGPT41, "", context.Background())
 	if saveOpenAIKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save openai key status=%d body=%s", saveOpenAIKeyResponse.Code, saveOpenAIKeyResponse.Body.String())
 	}
@@ -2202,9 +2046,7 @@ func TestManagementMetaProviderRoutesWithEncryptedTenantKey(t *testing.T) {
 	userTwoCookie := managementSessionCookie(t, "tauth-user-two")
 	userOneTenantPath := managementDefaultTenantTestPath(t, router, userOneCookie, "")
 
-	saveKeyRequest := authenticatedJSONRequest(http.MethodPut, userOneTenantPath+"/provider-connections/meta", managementProviderKeyRequestBody(t, testManagementMetaKey, proxy.ModelNameMuseSpark12, "meta managed system"), userOneCookie)
-	saveKeyResponse := httptest.NewRecorder()
-	router.ServeHTTP(saveKeyResponse, saveKeyRequest)
+	saveKeyResponse := putManagementProviderKey(t, router, userOneCookie, strings.TrimPrefix(userOneTenantPath, "/api/management/tenants/"), "meta", testManagementMetaKey, proxy.ModelNameMuseSpark12, "meta managed system", context.Background())
 	if saveKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save key status=%d body=%s", saveKeyResponse.Code, saveKeyResponse.Body.String())
 	}
@@ -2224,9 +2066,7 @@ func TestManagementMetaProviderRoutesWithEncryptedTenantKey(t *testing.T) {
 		}
 	}
 
-	saveOpenAIKeyRequest := authenticatedJSONRequest(http.MethodPut, userOneTenantPath+"/provider-connections/openai", managementProviderKeyRequestBody(t, testManagementOpenAIKey, proxy.ModelNameGPT41, ""), userOneCookie)
-	saveOpenAIKeyResponse := httptest.NewRecorder()
-	router.ServeHTTP(saveOpenAIKeyResponse, saveOpenAIKeyRequest)
+	saveOpenAIKeyResponse := putManagementProviderKey(t, router, userOneCookie, strings.TrimPrefix(userOneTenantPath, "/api/management/tenants/"), "openai", testManagementOpenAIKey, proxy.ModelNameGPT41, "", context.Background())
 	if saveOpenAIKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save openai key status=%d body=%s", saveOpenAIKeyResponse.Code, saveOpenAIKeyResponse.Body.String())
 	}
@@ -2350,9 +2190,7 @@ func TestManagementGeneratedSecretOmittedProviderUsesTenantDefaults(t *testing.T
 	})
 	userCookie := managementSessionCookie(t, "tauth-openai-defaults-user")
 	tenantPath := managementDefaultTenantTestPath(t, router, userCookie, "")
-	saveKeyRequest := authenticatedJSONRequest(http.MethodPut, tenantPath+"/provider-connections/openai", managementProviderKeyRequestBody(t, testManagementOpenAIKey, proxy.ModelNameGPT55, "provider-owned system"), userCookie)
-	saveKeyResponse := httptest.NewRecorder()
-	router.ServeHTTP(saveKeyResponse, saveKeyRequest)
+	saveKeyResponse := putManagementProviderKey(t, router, userCookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), "openai", testManagementOpenAIKey, proxy.ModelNameGPT55, "provider-owned system", context.Background())
 	if saveKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save key status=%d body=%s", saveKeyResponse.Code, saveKeyResponse.Body.String())
 	}
@@ -2577,6 +2415,9 @@ func signedManagementSessionCookie(t *testing.T, claims jwt.Claims) *http.Cookie
 func authenticatedJSONRequest(method string, path string, body string, sessionCookie *http.Cookie) *http.Request {
 	request := httptest.NewRequest(method, path, bytes.NewBufferString(body))
 	request.Header.Set("Content-Type", "application/json")
+	if method == http.MethodPost && path == "/api/management/connections" {
+		request.Header.Set("Idempotency-Key", rand.Text())
+	}
 	request.AddCookie(sessionCookie)
 	return request
 }
@@ -2584,13 +2425,6 @@ func authenticatedJSONRequest(method string, path string, body string, sessionCo
 func authenticatedProviderKeyRevealRequest(method string, path string, sessionCookie *http.Cookie, origin string) *http.Request {
 	request := httptest.NewRequest(method, path, strings.NewReader(`{}`))
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Origin", origin)
-	request.AddCookie(sessionCookie)
-	return request
-}
-
-func providerKeyRevealRequestWithoutContentType(method string, path string, sessionCookie *http.Cookie, origin string) *http.Request {
-	request := httptest.NewRequest(method, path, strings.NewReader(`{}`))
 	request.Header.Set("Origin", origin)
 	request.AddCookie(sessionCookie)
 	return request
@@ -2754,6 +2588,7 @@ func managementDefaultTenantTestPath(t *testing.T, router http.Handler, sessionC
 }
 
 type managedProviderKeyFixture struct {
+	ConnectionID    string
 	TenantID        string
 	ProviderID      string
 	EncryptedAPIKey string
@@ -2761,19 +2596,6 @@ type managedProviderKeyFixture struct {
 	SystemPrompt    string
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
-}
-
-type managedProviderConnectionFixture struct {
-	TenantID   string `gorm:"primaryKey"`
-	ProviderID string `gorm:"primaryKey"`
-	FieldID    string `gorm:"primaryKey"`
-	Value      string
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
-}
-
-func (managedProviderConnectionFixture) TableName() string {
-	return "managed_provider_connection_records"
 }
 
 type managedProviderProfileFixture struct {
@@ -2790,8 +2612,17 @@ func (managedProviderProfileFixture) TableName() string {
 }
 
 func loadManagedProviderKeyFixture(database *gorm.DB, tenantID string, providerID string) (managedProviderKeyFixture, error) {
-	var connection managedProviderConnectionFixture
-	if queryError := database.Where("tenant_id = ? AND provider_id = ? AND field_id = ?", tenantID, providerID, proxy.CatalogCredentialAPIKey).First(&connection).Error; queryError != nil {
+	var connection struct {
+		ConnectionID string
+		Value        string
+		CreatedAt    time.Time
+		UpdatedAt    time.Time
+	}
+	if queryError := database.Table("managed_connection_field_records AS fields").
+		Select("fields.connection_id, fields.value, fields.created_at, fields.updated_at").
+		Joins("JOIN managed_tenant_connection_records AS assignments ON assignments.connection_id = fields.connection_id").
+		Where("assignments.tenant_id = ? AND assignments.provider_id = ? AND fields.field_id = ?", tenantID, providerID, proxy.CatalogCredentialAPIKey).
+		Take(&connection).Error; queryError != nil {
 		return managedProviderKeyFixture{}, queryError
 	}
 	var profile managedProviderProfileFixture
@@ -2799,7 +2630,7 @@ func loadManagedProviderKeyFixture(database *gorm.DB, tenantID string, providerI
 		return managedProviderKeyFixture{}, queryError
 	}
 	return managedProviderKeyFixture{
-		TenantID: tenantID, ProviderID: providerID, EncryptedAPIKey: connection.Value,
+		ConnectionID: connection.ConnectionID, TenantID: tenantID, ProviderID: providerID, EncryptedAPIKey: connection.Value,
 		TextModel: profile.TextModel, SystemPrompt: profile.SystemPrompt,
 		CreatedAt: connection.CreatedAt, UpdatedAt: connection.UpdatedAt,
 	}, nil

@@ -133,15 +133,15 @@ func TestManagedDashScopeSettingsMigrationRemovesIncompleteSettingsAndPreservesU
 		t.Fatal("predecessor provider table remains after connection migration")
 	}
 	var tenantRecord managedTenantRecord
-	if queryError := fixture.database.Preload("ProviderConnections").Preload("ProviderProfiles").Where(&managedTenantRecord{TenantID: fixture.tenant.TenantID}).First(&tenantRecord).Error; queryError != nil {
+	if queryError := fixture.database.Preload("ConnectionAssignments.Connection.Fields").Preload("ProviderProfiles").Where(&managedTenantRecord{TenantID: fixture.tenant.TenantID}).First(&tenantRecord).Error; queryError != nil {
 		t.Fatalf("load migrated DashScope tenant: %v", queryError)
 	}
 	expectedDefaults := TenantDefaults{
 		Provider: ProviderNameDeepSeek, Model: ModelNameDeepSeekV4Flash,
 		SystemPrompt: fixture.tenant.DefaultSystemPrompt,
 	}
-	if tenantRecord.defaults() != expectedDefaults || !tenantRecord.UpdatedAt.Equal(fixture.tenant.UpdatedAt) || len(tenantRecord.ProviderConnections) != 1 || len(tenantRecord.ProviderProfiles) != 1 || tenantRecord.ProviderConnections[0].ProviderID != ProviderNameDeepSeek || tenantRecord.ProviderProfiles[0].ProviderID != ProviderNameDeepSeek {
-		t.Fatalf("migrated DashScope tenant=%+v connections=%+v profiles=%+v", tenantRecord, tenantRecord.ProviderConnections, tenantRecord.ProviderProfiles)
+	if tenantRecord.defaults() != expectedDefaults || !tenantRecord.UpdatedAt.Equal(fixture.tenant.UpdatedAt) || len(tenantRecord.ConnectionAssignments) != 1 || len(tenantRecord.ProviderProfiles) != 1 || tenantRecord.ConnectionAssignments[0].ProviderID != ProviderNameDeepSeek || tenantRecord.ProviderProfiles[0].ProviderID != ProviderNameDeepSeek {
+		t.Fatalf("migrated DashScope tenant=%+v connections=%+v profiles=%+v", tenantRecord, tenantRecord.ConnectionAssignments, tenantRecord.ProviderProfiles)
 	}
 	var historicalUsage []managedUsageEventRecord
 	if queryError := fixture.database.Where(&managedUsageEventRecord{ProviderID: ProviderNameDashScope}).Order("id").Find(&historicalUsage).Error; queryError != nil || !slices.Equal(historicalUsage, []managedUsageEventRecord{fixture.usage}) {
@@ -321,17 +321,17 @@ func TestManagedDashScopeSettingsSchemaValidationRejectsIncompleteCurrentState(t
 	t.Run("schema seven base URL column", func(t *testing.T) {
 		fixture := newManagedDashScopeSettingsMigrationFixture(t)
 		fixture.dropBaseURLColumn(t)
-		if createError := fixture.database.Create(&managedSchemaMigrationRecord{Version: managedTenantSchemaVersion, AppliedAt: fixture.tenant.CreatedAt}).Error; createError != nil {
+		if createError := fixture.database.Create(&managedSchemaMigrationRecord{Version: managedDashScopeSettingsSchemaVersion, AppliedAt: fixture.tenant.CreatedAt}).Error; createError != nil {
 			t.Fatalf("seed schema version: %v", createError)
 		}
 		assertManagedDashScopeMigrationError(t, initializeManagedTenantSchema(fixture.database, fixture.providerKeyCipher, fixture.providers), "operation=validate_current_schema")
 	})
 	t.Run("schema seven incomplete DashScope setting", func(t *testing.T) {
 		fixture := newManagedDashScopeSettingsMigrationFixture(t)
-		if createError := fixture.database.Create(&managedSchemaMigrationRecord{Version: managedTenantSchemaVersion, AppliedAt: fixture.tenant.CreatedAt}).Error; createError != nil {
+		if createError := fixture.database.Create(&managedSchemaMigrationRecord{Version: managedDashScopeSettingsSchemaVersion, AppliedAt: fixture.tenant.CreatedAt}).Error; createError != nil {
 			t.Fatalf("seed schema version: %v", createError)
 		}
-		assertManagedDashScopeMigrationError(t, initializeManagedTenantSchema(fixture.database, fixture.providerKeyCipher, fixture.providers), "operation=validate")
+		assertManagedDashScopeMigrationError(t, initializeManagedTenantSchema(fixture.database, fixture.providerKeyCipher, fixture.providers), "operation=preflight")
 	})
 }
 

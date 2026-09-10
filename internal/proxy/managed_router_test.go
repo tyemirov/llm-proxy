@@ -144,7 +144,8 @@ func newManagedRouterTestStore(configuration Configuration, providers *providerR
 				return nil, providerError
 			}
 			definition := providers.definitions[providerIDValue]
-			connections := make([]managedProviderConnectionRecord, 0, len(definition.fields))
+			connectionID := "test-connection-" + identifier + "-" + providerIDValue.string()
+			connections := make([]managedConnectionFieldRecord, 0, len(definition.fields))
 			connectionComplete := true
 			for fieldIdentifier, field := range definition.fields {
 				value := *field.Default
@@ -159,14 +160,14 @@ func newManagedRouterTestStore(configuration Configuration, providers *providerR
 				}
 				storedValue := value
 				if field.Secret {
-					encryptedValue, encryptionError := providerKeyCipher.encryptConnection(rand.Reader, identifier, providerIDValue.string(), fieldIdentifier, value)
+					encryptedValue, encryptionError := providerKeyCipher.encryptConnection(rand.Reader, connectionID, providerIDValue.string(), fieldIdentifier, value)
 					if encryptionError != nil {
 						return nil, encryptionError
 					}
 					storedValue = encryptedValue
 				}
-				connections = append(connections, managedProviderConnectionRecord{
-					TenantID: identifier, ProviderID: providerIDValue.string(), FieldID: fieldIdentifier,
+				connections = append(connections, managedConnectionFieldRecord{
+					ConnectionID: connectionID, FieldID: fieldIdentifier,
 					Value: storedValue, CreatedAt: now, UpdatedAt: now,
 				})
 			}
@@ -177,7 +178,10 @@ func newManagedRouterTestStore(configuration Configuration, providers *providerR
 			if textModel == "" {
 				textModel = definition.defaultTextModel.string()
 			}
-			record.ProviderConnections = append(record.ProviderConnections, connections...)
+			record.ConnectionAssignments = append(record.ConnectionAssignments, managedTenantConnectionRecord{
+				TenantID: identifier, ProviderID: providerIDValue.string(), ConnectionID: connectionID,
+				Connection: managedAccountConnectionRecord{ID: connectionID, OwnerUserID: ownerUserID, ProviderID: providerIDValue.string(), Name: providerIDValue.string(), Version: 1, Fields: connections},
+			})
 			record.ProviderProfiles = append(record.ProviderProfiles, managedProviderProfileRecord{
 				TenantID: identifier, ProviderID: providerIDValue.string(), TextModel: textModel,
 				SystemPrompt: tenantConfiguration.ProviderSystemPrompts[providerIDValue.string()], CreatedAt: now, UpdatedAt: now,

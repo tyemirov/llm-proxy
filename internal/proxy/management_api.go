@@ -18,8 +18,6 @@ const (
 	managementAccountPath               = "/account"
 	managementTenantsPath               = "/tenants"
 	managementTenantPath                = managementTenantsPath + "/:tenant_id"
-	managementProviderConnectionsPath   = "/provider-connections/:provider"
-	managementProviderFieldRevealPath   = managementProviderConnectionsPath + "/fields/:field/reveal"
 	managementDefaultsPath              = "/defaults"
 	managementSecretsPath               = "/secrets"
 	managementUsagePath                 = "/usage"
@@ -162,11 +160,6 @@ type managementSecretResponse struct {
 	Profile managementTenantProfileResponse `json:"profile"`
 }
 
-type managementProviderFieldRevealResponse struct {
-	FieldID string `json:"field_id"`
-	Value   string `json:"value"`
-}
-
 type managementUsageSummaryResponse struct {
 	Interval         string                            `json:"interval"`
 	BucketUnit       string                            `json:"bucket_unit"`
@@ -290,12 +283,6 @@ type managementTenantNameRequest struct {
 	Name string `json:"name"`
 }
 
-type managementProviderConnectionRequest struct {
-	Fields       map[string]string `json:"fields"`
-	TextModel    string            `json:"text_model"`
-	SystemPrompt string            `json:"system_prompt"`
-}
-
 type managementDefaultsRequest struct {
 	Provider          string  `json:"provider"`
 	Model             string  `json:"model"`
@@ -330,6 +317,11 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	managementGroup.GET(managementUsageFailuresPath, service.accountUsageDetailsHandler(managedUsageDispositionFailed))
 	managementGroup.GET(managementUsageRejectionsPath, service.accountUsageDetailsHandler(managedUsageDispositionRejected))
 	managementGroup.POST(managementTenantsPath, service.createTenantHandler())
+	managementGroup.GET(managementConnectionsPath, service.listConnectionsHandler())
+	managementGroup.POST(managementConnectionsPath, service.saveConnectionHandler(true))
+	managementGroup.GET(managementConnectionPath, service.getConnectionHandler())
+	managementGroup.PUT(managementConnectionPath, service.saveConnectionHandler(false))
+	managementGroup.DELETE(managementConnectionPath, service.deleteConnectionHandler())
 	managementGroup.GET(managementAdminUsersPath, service.adminUsersHandler())
 
 	tenantGroup := managementGroup.Group(managementTenantPath)
@@ -339,9 +331,9 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	tenantGroup.GET(managementUsagePath, service.usageHandler())
 	tenantGroup.GET(managementUsageFailuresPath, service.usageDetailsHandler(managedUsageDispositionFailed))
 	tenantGroup.GET(managementUsageRejectionsPath, service.usageDetailsHandler(managedUsageDispositionRejected))
-	tenantGroup.PUT(managementProviderConnectionsPath, service.saveProviderConnectionsHandler())
-	tenantGroup.DELETE(managementProviderConnectionsPath, service.removeProviderConnectionsHandler())
-	tenantGroup.POST(managementProviderFieldRevealPath, service.managementCredentialedActionMiddleware(), service.revealProviderFieldHandler())
+	tenantGroup.PUT("/provider-profiles/:provider", service.saveTenantProviderProfileHandler())
+	tenantGroup.PUT(managementTenantConnectionPath, service.assignConnectionHandler())
+	tenantGroup.DELETE(managementTenantConnectionPath, service.detachConnectionHandler())
 	tenantGroup.PUT(managementDefaultsPath, service.updateDefaultsHandler())
 	tenantGroup.POST(managementSecretsPath, service.generateSecretHandler())
 }
@@ -368,6 +360,7 @@ func (service *managementService) configUIHandler() gin.HandlerFunc {
 
 func (service *managementService) corsMiddleware() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
+		ginContext.Header(headerCacheControl, cacheControlNoStore)
 		service.applyCORSHeaders(ginContext)
 		ginContext.Next()
 	}
@@ -392,16 +385,6 @@ func (service *managementService) managementMutationMiddleware() gin.HandlerFunc
 	}
 }
 
-func (service *managementService) managementCredentialedActionMiddleware() gin.HandlerFunc {
-	return func(ginContext *gin.Context) {
-		if strings.TrimSpace(ginContext.GetHeader(headerOrigin)) != service.configuration.PublicOrigin {
-			ginContext.AbortWithStatus(http.StatusForbidden)
-			return
-		}
-		ginContext.Next()
-	}
-}
-
 func (service *managementService) corsPreflightHandler() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		if strings.TrimSpace(ginContext.GetHeader(headerOrigin)) != service.configuration.PublicOrigin {
@@ -419,7 +402,7 @@ func (service *managementService) applyCORSHeaders(ginContext *gin.Context) {
 	}
 	ginContext.Header(headerAccessControlAllowOrigin, requestOrigin)
 	ginContext.Header(headerAccessControlAllowCredentials, "true")
-	ginContext.Header(headerAccessControlAllowHeaders, headerContentType)
+	ginContext.Header(headerAccessControlAllowHeaders, headerContentType+", "+managementIdempotencyHeader)
 	ginContext.Header(headerAccessControlAllowMethods, "GET, PUT, POST, DELETE, OPTIONS")
 	ginContext.Header(headerVary, headerOrigin)
 }
@@ -650,108 +633,6 @@ func (service *managementService) adminUsersHandler() gin.HandlerFunc {
 	}
 }
 
-func (service *managementService) saveProviderConnectionsHandler() gin.HandlerFunc {
-	return func(ginContext *gin.Context) {
-		tenantIdentifier, identifierValid := managementTenantIdentifierFromContext(ginContext)
-		if !identifierValid {
-			return
-		}
-		principal := managementPrincipalFromContext(ginContext)
-		providerIdentifier, providerError := service.providers.canonicalProviderID(ginContext.Param("provider"))
-		if providerError != nil {
-			ginContext.String(http.StatusBadRequest, providerError.Error())
-			return
-		}
-		var request managementProviderConnectionRequest
-		if decodeError := decodeManagementJSON(ginContext, &request); decodeError != nil {
-			ginContext.String(http.StatusBadRequest, decodeError.Error())
-			return
-		}
-		currentSnapshot, storeError := service.store.tenantProfile(principal, tenantIdentifier)
-		if storeError != nil {
-			writeManagementStoreError(ginContext, storeError)
-			return
-		}
-		currentSettings, configured := currentSnapshot.providerSettings[providerIdentifier]
-		provider, textModel, connectionValues, verifyConnection, providerSettingsError := service.resolveManagedProviderConnectionSettings(providerIdentifier, request, currentSettings, configured)
-		if providerSettingsError != nil {
-			ginContext.String(http.StatusBadRequest, providerSettingsError.Error())
-			return
-		}
-		verifiedVersions := map[string]managedProviderConnectionVersion{}
-		if verifyConnection {
-			credentialField := provider.activeTransport.authentication.Field
-			credential := connectionValues[credentialField]
-			if verificationError := service.keyVerifier.verify(ginContext.Request.Context(), provider, textModel, credential); verificationError != nil {
-				writeProviderKeyVerificationError(ginContext, verificationError)
-				return
-			}
-			if configured && request.Fields[credentialField] == constants.EmptyString {
-				verifiedVersions[credentialField] = currentSettings.connectionVersion(credentialField)
-			}
-		}
-		snapshot, storeError := service.store.saveProviderConnections(ginContext.Request.Context(), principal, tenantIdentifier, providerIdentifier, request.Fields, request.TextModel, request.SystemPrompt, verifiedVersions)
-		if storeError != nil {
-			writeManagementStoreError(ginContext, storeError)
-			return
-		}
-		service.writeTenantProfileResponse(ginContext, snapshot, http.StatusOK)
-	}
-}
-
-func (service *managementService) removeProviderConnectionsHandler() gin.HandlerFunc {
-	return func(ginContext *gin.Context) {
-		tenantIdentifier, identifierValid := managementTenantIdentifierFromContext(ginContext)
-		if !identifierValid {
-			return
-		}
-		principal := managementPrincipalFromContext(ginContext)
-		providerIdentifier, providerError := service.providers.canonicalProviderID(ginContext.Param("provider"))
-		if providerError != nil {
-			ginContext.String(http.StatusBadRequest, providerError.Error())
-			return
-		}
-		snapshot, storeError := service.store.removeProviderConnections(principal, tenantIdentifier, providerIdentifier)
-		if storeError != nil {
-			writeManagementStoreError(ginContext, storeError)
-			return
-		}
-		service.writeTenantProfileResponse(ginContext, snapshot, http.StatusOK)
-	}
-}
-
-func (service *managementService) revealProviderFieldHandler() gin.HandlerFunc {
-	return func(ginContext *gin.Context) {
-		ginContext.Header(headerCacheControl, cacheControlNoStore)
-		tenantIdentifier, identifierValid := managementTenantIdentifierFromContext(ginContext)
-		if !identifierValid {
-			return
-		}
-		providerIdentifier, providerError := service.providers.canonicalProviderID(ginContext.Param("provider"))
-		if providerError != nil {
-			ginContext.String(http.StatusBadRequest, providerError.Error())
-			return
-		}
-		fieldIdentifier := strings.TrimSpace(ginContext.Param("field"))
-		definition := service.providers.definitions[providerIdentifier]
-		field, knownField := definition.fields[fieldIdentifier]
-		if fieldIdentifier == constants.EmptyString || !knownField || !field.Secret {
-			ginContext.String(http.StatusBadRequest, errManagementBadRequest.Error())
-			return
-		}
-		value, revealError := service.store.revealProviderConnectionField(managementPrincipalFromContext(ginContext), tenantIdentifier, providerIdentifier, fieldIdentifier)
-		if revealError != nil {
-			if errors.Is(revealError, errManagedProviderKeyNotFound) || errors.Is(revealError, errManagedTenantNotFound) {
-				ginContext.AbortWithStatus(http.StatusNotFound)
-				return
-			}
-			ginContext.AbortWithStatus(http.StatusInternalServerError)
-			return
-		}
-		ginContext.JSON(http.StatusOK, managementProviderFieldRevealResponse{FieldID: fieldIdentifier, Value: value})
-	}
-}
-
 func (service *managementService) updateDefaultsHandler() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		tenantIdentifier, identifierValid := managementTenantIdentifierFromContext(ginContext)
@@ -772,15 +653,6 @@ func (service *managementService) updateDefaultsHandler() gin.HandlerFunc {
 		defaults, defaultsConstructionError := newManagedRoutingDefaults(service.providers, rawDefaults)
 		if defaultsConstructionError != nil {
 			ginContext.String(http.StatusBadRequest, defaultsConstructionError.Error())
-			return
-		}
-		currentSnapshot, snapshotError := service.store.tenantProfile(principal, tenantIdentifier)
-		if snapshotError != nil {
-			writeManagementStoreError(ginContext, snapshotError)
-			return
-		}
-		if defaultsError := service.validateManagedRoutingDefaults(currentSnapshot.providerSettings, defaults); defaultsError != nil {
-			ginContext.String(http.StatusBadRequest, defaultsError.Error())
 			return
 		}
 		snapshot, storeError := service.store.updateDefaults(principal, tenantIdentifier, defaults)
@@ -865,10 +737,14 @@ func writeManagementStoreError(ginContext *gin.Context, storeError error) {
 		ginContext.AbortWithStatus(http.StatusNotFound)
 	case errors.Is(storeError, errManagedTenantNameConflict), errors.Is(storeError, errManagedFinalTenantDeletion), errors.Is(storeError, errManagedProviderKeyConflict):
 		ginContext.String(http.StatusConflict, storeError.Error())
-	case errors.Is(storeError, errManagedTenantNameInvalid), errors.Is(storeError, errManagedProviderKeyInvalid), errors.Is(storeError, errManagedProviderBaseURLInvalid):
+	case errors.Is(storeError, errManagedTenantNameInvalid), errors.Is(storeError, errManagedProviderKeyInvalid), errors.Is(storeError, errManagedProviderBaseURLInvalid), errors.Is(storeError, errManagementDefaults):
 		ginContext.String(http.StatusBadRequest, storeError.Error())
+	case errors.Is(storeError, errManagedUsageOutcomeInvalid):
+		ginContext.String(http.StatusInternalServerError, errManagedUsageOutcomeInvalid.Error())
+	case errors.Is(storeError, errManagedUsageDispositionInvalid):
+		ginContext.String(http.StatusInternalServerError, errManagedUsageDispositionInvalid.Error())
 	default:
-		ginContext.String(http.StatusInternalServerError, storeError.Error())
+		ginContext.String(http.StatusInternalServerError, errManagedTenantStorePersist.Error())
 	}
 }
 
@@ -977,40 +853,6 @@ func managementReasoningEffortCapabilityResponseFor(capability *reasoningEffortC
 		Adapter: string(capability.adapter),
 		Efforts: append([]string(nil), capability.efforts...),
 	}
-}
-
-func (service *managementService) resolveManagedProviderConnectionSettings(providerIdentifier providerID, request managementProviderConnectionRequest, currentSettings managedProviderSettings, configured bool) (providerDefinition, textModelDefinition, map[string]string, bool, error) {
-	definition := service.providers.definitions[providerIdentifier]
-	connectionValues, valuesError := validatedManagedProviderConnectionValues(definition, request.Fields, currentSettings, configured)
-	if valuesError != nil {
-		return providerDefinition{}, textModelDefinition{}, nil, false, fmt.Errorf("%w: provider=%s", errManagementBadRequest, providerIdentifier.string())
-	}
-	textModel := strings.TrimSpace(request.TextModel)
-	if textModel == constants.EmptyString {
-		return providerDefinition{}, textModelDefinition{}, nil, false, fmt.Errorf("%w: provider=%s field=text_model", errManagementBadRequest, providerIdentifier.string())
-	}
-	provider, resolvedTextModel, validationError := service.providers.resolveTextModel(providerIdentifier.string(), textModel, providerIdentifier.string(), textModel, false)
-	if validationError != nil {
-		return providerDefinition{}, textModelDefinition{}, nil, false, fmt.Errorf("%w: %v", errManagementDefaults, validationError)
-	}
-	provider.connectionValues = cloneStringMap(connectionValues)
-	provider, _ = provider.resolvedTransport(resolvedTextModel.transportIdentifier)
-	verifyConnection := !configured || currentSettings.textModel != textModel
-	for fieldIdentifier, field := range definition.fields {
-		if field.Secret {
-			verifyConnection = verifyConnection || request.Fields[fieldIdentifier] != constants.EmptyString
-			continue
-		}
-		verifyConnection = verifyConnection || !configured || currentSettings.connectionValue(fieldIdentifier) != connectionValues[fieldIdentifier]
-	}
-	return provider, resolvedTextModel, connectionValues, verifyConnection, nil
-}
-
-func (service *managementService) validateManagedRoutingDefaults(providerSettings map[providerID]managedProviderSettings, defaults managedRoutingDefaults) error {
-	if _, validationError := validatePersistedManagedRoutingDefaults(service.providers, providerSettings, defaults.value()); validationError != nil {
-		return fmt.Errorf("%w: %v", errManagementDefaults, validationError)
-	}
-	return nil
 }
 
 func managementMethodUnsafe(method string) bool {

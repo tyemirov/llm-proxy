@@ -134,19 +134,16 @@ func TestManagedZAIProviderMigrationCanonicalizesCurrentRoutesAndPreservesUsage(
 	if fixture.database.Migrator().HasTable(managedProviderKeyTable) {
 		t.Fatal("predecessor provider table remains after Z.AI connection migration")
 	}
-	var connection managedProviderConnectionRecord
-	if queryError := fixture.database.Where(&managedProviderConnectionRecord{TenantID: fixture.tenant.TenantID, ProviderID: ProviderNameZAI, FieldID: CatalogCredentialAPIKey}).First(&connection).Error; queryError != nil {
-		t.Fatalf("load Z.AI provider connection: %v", queryError)
-	}
+	connection := assignedConnectionFieldForTest(t, fixture.database, fixture.tenant.TenantID, ProviderNameZAI, CatalogCredentialAPIKey)
 	var profile managedProviderProfileRecord
 	if queryError := fixture.database.Where(&managedProviderProfileRecord{TenantID: fixture.tenant.TenantID, ProviderID: ProviderNameZAI}).First(&profile).Error; queryError != nil {
 		t.Fatalf("load Z.AI provider profile: %v", queryError)
 	}
-	apiKey, decryptError := fixture.providerKeyCipher.decryptConnection(connection)
+	apiKey, decryptError := fixture.providerKeyCipher.decryptConnectionValue(connection.ConnectionID, ProviderNameZAI, CatalogCredentialAPIKey, connection.Value)
 	if decryptError != nil || apiKey != "sk-zhipu" || profile.TextModel != fixture.providerKey.TextModel || profile.SystemPrompt != fixture.providerKey.SystemPrompt || !connection.CreatedAt.Equal(fixture.providerKey.CreatedAt) || !connection.UpdatedAt.Equal(fixture.providerKey.UpdatedAt) || !profile.CreatedAt.Equal(fixture.providerKey.CreatedAt) || !profile.UpdatedAt.Equal(fixture.providerKey.UpdatedAt) {
 		t.Fatalf("migrated connection=%+v profile=%+v api_key=%q error=%v", connection, profile, apiKey, decryptError)
 	}
-	if _, oldDecryptError := fixture.providerKeyCipher.decryptValue(connection.Value, connection.TenantID, retiredZhipuProviderIdentifier); oldDecryptError == nil {
+	if _, oldDecryptError := fixture.providerKeyCipher.decryptValue(connection.Value, fixture.tenant.TenantID, retiredZhipuProviderIdentifier); oldDecryptError == nil {
 		t.Fatal("migrated provider key still decrypts with retired associated data")
 	}
 	var tenantRecord managedTenantRecord

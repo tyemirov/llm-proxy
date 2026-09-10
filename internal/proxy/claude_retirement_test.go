@@ -1,7 +1,6 @@
 package proxy_test
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -55,7 +54,8 @@ func TestClaudeRetirementManagedSelection(t *testing.T) {
 	cookie := managementSessionCookie(t, "claude-retirement-selection")
 	tenant := managementDefaultTenantTestID(t, router, cookie)
 	for _, model := range []string{"claude-opus-4-1", "claude-opus-4-1-20250805"} {
-		response := putManagementProviderKey(t, router, cookie, tenant, "anthropic", "retirement-fixture-key", model, "", context.Background())
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, authenticatedJSONRequest(http.MethodPut, "/api/management/tenants/"+tenant+"/provider-profiles/anthropic", `{"text_model":"`+model+`","system_prompt":""}`, cookie))
 		if response.Code != http.StatusBadRequest || calls != 0 {
 			t.Fatalf("retired selection model=%s status=%d calls=%d body=%s", model, response.Code, calls, response.Body.String())
 		}

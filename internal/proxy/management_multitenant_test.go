@@ -374,20 +374,48 @@ func createManagementTenant(t *testing.T, router http.Handler, sessionCookie *ht
 
 func saveManagementProviderKey(t *testing.T, router http.Handler, sessionCookie *http.Cookie, tenantID string, apiKey string, model string, systemPrompt string) {
 	t.Helper()
-	request := authenticatedJSONRequest(
-		http.MethodPut,
-		managementTenantTestPath(tenantID, "/provider-connections/openai"),
-		managementProviderKeyRequestBody(t, apiKey, model, systemPrompt),
-		sessionCookie,
-	)
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
-	if response.Code != http.StatusOK {
-		t.Fatalf("save provider key tenant=%s status=%d body=%q", tenantID, response.Code, response.Body.String())
+	exchange := func(method, path string, body any, status int) map[string]any {
+		t.Helper()
+		payload, err := json.Marshal(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, authenticatedJSONRequest(method, path, string(payload), sessionCookie))
+		if response.Code != status {
+			t.Fatalf("configure connection: %s %s status=%d body=%s", method, path, response.Code, response.Body.String())
+		}
+		if apiKey != "" && strings.Contains(response.Body.String(), apiKey) {
+			t.Fatal("response exposes credential")
+		}
+		var result map[string]any
+		if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		return result
 	}
-	if strings.Contains(response.Body.String(), apiKey) {
-		t.Fatalf("save provider key leaked raw key: %q", response.Body.String())
+	connections := exchange(http.MethodGet, "/api/management/connections", nil, http.StatusOK)
+	id := ""
+	version := float64(0)
+	for _, raw := range connections["connections"].([]any) {
+		c := raw.(map[string]any)
+		for _, assigned := range c["tenant_ids"].([]any) {
+			if assigned == tenantID && c["provider"] == "openai" {
+				id = c["id"].(string)
+				version = c["version"].(float64)
+			}
+		}
 	}
+	body := map[string]any{"name": "OpenAI", "provider": "openai", "fields": map[string]string{"api_key": apiKey}, "version": version}
+	if id == "" {
+		c := exchange(http.MethodPost, "/api/management/connections", body, http.StatusCreated)
+		id = c["id"].(string)
+		exchange(http.MethodPut, managementTenantTestPath(tenantID, "/connections/openai"), map[string]string{"connection_id": id}, http.StatusOK)
+	} else {
+		exchange(http.MethodPut, "/api/management/connections/"+id, body, http.StatusOK)
+	}
+	exchange(http.MethodPut, managementTenantTestPath(tenantID, "/provider-profiles/openai"), map[string]string{"text_model": model, "system_prompt": systemPrompt}, http.StatusOK)
+	exchange(http.MethodPut, managementTenantTestPath(tenantID, "/defaults"), map[string]string{"provider": "openai", "model": model, "dictation_provider": "openai", "dictation_model": proxy.DefaultDictationModel, "system_prompt": "", "reasoning_effort": ""}, http.StatusOK)
 }
 
 func saveManagementDefaults(t *testing.T, router http.Handler, sessionCookie *http.Cookie, tenantID string, model string, systemPrompt string) {

@@ -273,6 +273,7 @@ func sortedPublicCapabilities(capabilities map[string]struct{}) []string {
 func registerPublicCapabilityRoutes(router *gin.Engine, capabilityCatalog PublicCapabilityCatalog) {
 	router.GET(PublicCapabilitiesPath, func(ginContext *gin.Context) {
 		ginContext.Header("Cache-Control", "public, max-age=300")
+		ginContext.Header("Access-Control-Allow-Origin", "*")
 		ginContext.JSON(http.StatusOK, capabilityCatalog)
 	})
 }
