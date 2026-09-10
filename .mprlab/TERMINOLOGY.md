@@ -40,7 +40,7 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `protocol family`: A reusable request and response representation shared by provider offerings.
 - `protocol variation`: A declared, typed difference within one protocol family.
 - `provider catalog`: The canonical YAML file that defines all supported models, providers, provider offerings, controls, limits, and prices.
-- `provider connection`: Tenant values for the credential fields and setting fields in one provider definition.
+- `provider connection`: An account-owned named resource with credentials and settings for one provider definition.
 - `provider definition`: One provider record in the provider catalog.
 - `provider field`: One credential input or setting input in a provider definition.
 - `provider gateway`: The service that authorizes tenant requests and owns shared provider access.
@@ -85,3 +85,5 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `reconcile`: Compare retained records with provider evidence and record the established outcome. Approved forms: reconcile, reconciles, reconciled, reconciled.
 
 - `Google credential profile`: An operator declaration that binds a Google identity, credential file, project, and location to one tenant.
+
+- `tenant assignment`: The saved relation between a tenant and one provider connection.
