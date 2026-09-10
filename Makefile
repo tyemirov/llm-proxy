@@ -81,7 +81,19 @@ test-management-auth-blackbox: frontend-dependencies prepare-shared-ui
 
 .PHONY: test-management-persistence
 test-management-persistence: frontend-dependencies
-	$(GO) test ./internal/proxy -run '^TestManagement(ProviderKeyRevealPersistsUpdatedKey|DatabasePersistenceAndOpenFailures|StartupRejectsInvalidPersistedRoutingDefaults)$$' -count=1
+	$(GO) test ./internal/proxy -run '^TestManagement(ConnectionPersistsUpdatedCredential|DatabasePersistenceAndOpenFailures|StartupRejectsInvalidPersistedRoutingDefaults)$$' -count=1
+
+.PHONY: test-account-connections
+test-account-connections:
+	$(GO) test ./internal/proxy -run '^TestAccountConnection' -count=1
+
+.PHONY: test-management-contracts
+test-management-contracts:
+	$(GO) test ./internal/proxy -run '$(if $(MANAGEMENT_TEST_PATTERN),$(MANAGEMENT_TEST_PATTERN),^TestManagement)' -timeout=2m -count=1
+
+.PHONY: test-operational-live-contracts
+test-operational-live-contracts:
+	$(GO) test ./tests -run '^TestOperational.*Live' -count=1
 
 test-live-provider-harness:
 	@GO="$(GO)" ./scripts/test_live_providers.sh --preflight
