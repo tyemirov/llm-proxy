@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Reduced provider catalog transports to one protocol reference and typed variation.
+  Codec definitions now own fixed request, response, finish, error, and usage facts.
+  Schema version 2 rejects the removed protocol fields and obsolete parameter blocks.
+
 - Added shared local acceptance for each current text and dictation protocol adapter.
   The tests use disposable provider definitions, the real service, and the official Go client.
   Added negative controls for endpoint, field, result, credential, and usage drift.

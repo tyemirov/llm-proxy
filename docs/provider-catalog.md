@@ -8,7 +8,7 @@ model migrations, controls, limits, and prices.
 
 The loader reads `providers.yml` from the directory of the selected
 `config.yml`. It parses the provider catalog before it validates service
-configuration. The loader accepts only schema version 1.
+configuration. The loader accepts only schema version 2.
 
 The current provider catalog has these records:
 
@@ -40,7 +40,7 @@ bytes. It compiles one immutable registry from the validated snapshot.
 The provider catalog contains definitions only. It never contains a credential
 value, a tenant setting value, a system prompt, or a routing default.
 
-The [Baidu Qianfan integration](baidu-qianfan.md) adds four text offerings and a catalog response policy.
+The [Baidu Qianfan integration](baidu-qianfan.md) adds four text offerings and a typed protocol variation.
 The two DeepSeek V4 offerings share exact model records with the direct provider.
 
 ## Image formats and dimensions
@@ -188,24 +188,12 @@ Each item in `providers[].transports` is one provider transport.
 | Authentication header | `transports[].authentication.header` | Selects the exact HTTP header. |
 | Authentication prefix | `transports[].authentication.prefix` | Supplies the value prefix for that header. |
 | Static headers | `transports[].headers` | Supplies exact nonsecret headers. |
-| Request adapter | `transports[].request_protocol` | Selects the request protocol adapter. |
-| Response adapter | `transports[].response_protocol` | Selects the response protocol adapter. |
-| Usage adapter | `transports[].usage_mapping` | Selects the usage protocol adapter. |
+| Protocol definition | `transports[].protocol.id` | Selects one request, response, error, and usage codec. |
+| Protocol variation | `transports[].protocol.variation` | Selects one typed difference in the codec. |
 | Lifecycle | `transports[].lifecycle` | Selects synchronous completion or a pollable resource. |
 | Visibility retry interval | `transports[].resource_visibility.retry_interval_milliseconds` | Declares the wait between created-resource visibility reads. |
 | Visibility retry limit | `transports[].resource_visibility.retry_limit` | Bounds created-resource visibility retries. |
 | Visibility retry statuses | `transports[].resource_visibility.retry_status_codes` | Declares the provider HTTP statuses that mean the created resource is not visible yet. |
-| Upstream model field | `protocol_parameters.model_field` | Declares the upstream model field. |
-| Upstream token field | `protocol_parameters.token_field` | Declares the upstream output-token field. |
-| Response policy | `protocol_parameters.response_policy` | Selects the `qianfan` response checks on the shared Chat Completions adapter. Omission uses the standard protocol policy. |
-| Output fields | `protocol_parameters.output_fields` | Declares the visible output locations. |
-| Complete rules | `protocol_parameters.finish_rules.complete` | Declares successful terminal signals. |
-| Continue rules | `protocol_parameters.finish_rules.continue` | Declares output-limit signals. |
-| Continuation rules | `protocol_parameters.continuation_rules` | Declares the canonical continuation actions. |
-| Error rules | `protocol_parameters.error_rules` | Declares provider failure signals. |
-| Input usage field | `protocol_parameters.usage_fields.input` | Maps the provider input count. |
-| Output usage field | `protocol_parameters.usage_fields.output` | Maps the provider output count. |
-| Total usage field | `protocol_parameters.usage_fields.total` | Maps or derives the provider total count. |
 
 An endpoint must use one base source. It must use either
 `default_base_url` or `setting_field`.
@@ -239,15 +227,25 @@ The OpenAI transport allows one retry after two seconds for `403` or `404`.
 The Gemini transport allows six retries at five-second intervals for `400`,
 `403`, or `404`.
 
-The schema records each adapter contract in `protocol_parameters`. Startup
-compares those values with the selected protocol adapter. A mismatch stops
-startup.
+Each codec definition owns its request fields, output fields, finish rules,
+continuation rules, error rules, and usage mapping. The catalog does not repeat
+these fixed values. Startup rejects an unknown protocol, an unknown variation,
+or a variation that does not apply to the selected protocol.
 
-The completion coordinator starts a new request only when the transport
-declares continuation actions. An empty `continuation_rules` list makes an
-output-limit signal a provider error. The Gemini Interactions transport uses
-this empty list because the public request cannot carry provider interaction
-state or thought signatures.
+Chat Completions requires one of these variations:
+
+- `max_tokens`
+- `max_completion_tokens`
+- `qianfan_max_tokens`
+
+Multipart transcription requires `model` or `model_omitted`. Other current
+protocols do not accept a variation.
+
+The completion coordinator starts a new request only when the codec definition
+includes continuation actions. A codec without these actions returns an
+output-limit signal as a provider error. Gemini Interactions has no continuation
+actions because the public request cannot carry provider interaction state or
+thought signatures.
 
 ## Provider offering mapping
 
@@ -394,7 +392,7 @@ Startup rejects these conditions:
 - A missing provider field, transport, offering, operation, publisher, family, model, or price reference.
 - An invalid field type, requirement, default, secrecy rule, validation rule, or environment name.
 - An invalid endpoint source, URL, method, authentication rule, or static header.
-- An unsupported protocol, lifecycle, request profile, or adapter contract.
+- An unsupported protocol, protocol variation, lifecycle, request profile, or adapter contract.
 - An invalid operation, default operation, capability, control, limit, or media declaration.
 - A missing or duplicate provider-operation default.
 - A missing, duplicate, invalid, or nonfinite price value.
@@ -409,13 +407,15 @@ provider contract:
 3. Add one provider definition to the root `providers` list.
 4. Define every credential field and setting field in `fields`.
 5. Add an environment name only when static or live-test input is necessary.
-6. Define each provider transport with one supported protocol adapter.
-7. Add each provider offering and reference one exact model and one transport.
-8. Add one default offering for every supported provider operation.
-9. Add one valid price for every offering operation.
-10. Keep all credential values and tenant setting values outside the file.
-11. Run `make ci` after the catalog change.
-12. Run the authorized paid live gate separately when the issue requires it.
+6. Define each provider transport with one supported protocol definition.
+7. Select a protocol variation only when the protocol requires it.
+8. Add each provider offering and reference one exact model and one transport.
+9. Add one default offering for every supported provider operation.
+10. Add one valid price for every offering operation.
+11. Keep all credential values and tenant setting values outside the file.
+12. Run `make test-protocol-acceptance` after the catalog change.
+13. Run `make ci` after the local qualification passes.
+14. Run the authorized paid live gate separately when the issue requires it.
 
 Do not change provider-specific production source for this case. The generic
 consumers receive the new provider from the compiled registry.

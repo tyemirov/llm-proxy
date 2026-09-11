@@ -24,26 +24,29 @@ const protocolFixtureProviderSecret = "provider-fixture-secret"
 func TestClientProtocolsSharedAdapterCatalog(t *testing.T) {
 	catalog, fixtures := testfixtures.ProviderCatalogWithProtocolFixtures(t)
 	expected := map[string]bool{
-		protocolFixtureKey(proxy.CatalogProtocolOpenAIResponses, "pollable_resource", proxy.ModelOperationText):                  true,
-		protocolFixtureKey(proxy.CatalogProtocolDashScopeResponses, "synchronous_completion", proxy.ModelOperationText):          true,
-		protocolFixtureKey(proxy.CatalogProtocolXAIResponses, "synchronous_completion", proxy.ModelOperationText):                true,
-		protocolFixtureKey(proxy.CatalogProtocolOpenAIChatCompletions, "synchronous_completion", proxy.ModelOperationText):       true,
-		protocolFixtureKey(proxy.CatalogProtocolGeminiInteractions, "pollable_resource", proxy.ModelOperationText):               true,
-		protocolFixtureKey(proxy.CatalogProtocolGeminiInteractions, "synchronous_completion", proxy.ModelOperationText):          true,
-		protocolFixtureKey(proxy.CatalogProtocolAnthropicMessages, "synchronous_completion", proxy.ModelOperationText):           true,
-		protocolFixtureKey(proxy.CatalogProtocolVertexGenerateContent, "synchronous_completion", proxy.ModelOperationText):       true,
-		protocolFixtureKey(proxy.CatalogProtocolMultipartTranscription, "synchronous_completion", proxy.ModelOperationDictation): true,
-		protocolFixtureKey(proxy.CatalogProtocolMetaTranscription, "synchronous_completion", proxy.ModelOperationDictation):      true,
-		protocolFixtureKey(proxy.CatalogProtocolGeminiInteractions, "synchronous_completion", proxy.ModelOperationDictation):     true,
-		protocolFixtureKey(proxy.CatalogProtocolVertexGenerateContent, "synchronous_completion", proxy.ModelOperationDictation):  true,
+		protocolFixtureKey(proxy.CatalogProtocolOpenAIResponses, "", "pollable_resource", proxy.ModelOperationText):                                                                       true,
+		protocolFixtureKey(proxy.CatalogProtocolDashScopeResponses, "", "synchronous_completion", proxy.ModelOperationText):                                                               true,
+		protocolFixtureKey(proxy.CatalogProtocolXAIResponses, "", "synchronous_completion", proxy.ModelOperationText):                                                                     true,
+		protocolFixtureKey(proxy.CatalogProtocolOpenAIChatCompletions, proxy.CatalogProtocolVariationMaxTokens, "synchronous_completion", proxy.ModelOperationText):                       true,
+		protocolFixtureKey(proxy.CatalogProtocolOpenAIChatCompletions, proxy.CatalogProtocolVariationMaxCompletionTokens, "synchronous_completion", proxy.ModelOperationText):             true,
+		protocolFixtureKey(proxy.CatalogProtocolOpenAIChatCompletions, proxy.CatalogProtocolVariationQianfanMaxTokens, "synchronous_completion", proxy.ModelOperationText):                true,
+		protocolFixtureKey(proxy.CatalogProtocolGeminiInteractions, "", "pollable_resource", proxy.ModelOperationText):                                                                    true,
+		protocolFixtureKey(proxy.CatalogProtocolGeminiInteractions, "", "synchronous_completion", proxy.ModelOperationText):                                                               true,
+		protocolFixtureKey(proxy.CatalogProtocolAnthropicMessages, "", "synchronous_completion", proxy.ModelOperationText):                                                                true,
+		protocolFixtureKey(proxy.CatalogProtocolVertexGenerateContent, "", "synchronous_completion", proxy.ModelOperationText):                                                            true,
+		protocolFixtureKey(proxy.CatalogProtocolMultipartTranscription, proxy.CatalogProtocolVariationTranscriptionModel, "synchronous_completion", proxy.ModelOperationDictation):        true,
+		protocolFixtureKey(proxy.CatalogProtocolMultipartTranscription, proxy.CatalogProtocolVariationTranscriptionModelOmitted, "synchronous_completion", proxy.ModelOperationDictation): true,
+		protocolFixtureKey(proxy.CatalogProtocolMetaTranscription, "", "synchronous_completion", proxy.ModelOperationDictation):                                                           true,
+		protocolFixtureKey(proxy.CatalogProtocolGeminiInteractions, "", "synchronous_completion", proxy.ModelOperationDictation):                                                          true,
+		protocolFixtureKey(proxy.CatalogProtocolVertexGenerateContent, "", "synchronous_completion", proxy.ModelOperationDictation):                                                       true,
 	}
 	providersByProtocol := map[string]map[string]bool{}
 	for _, provider := range catalog.Schema().Providers {
 		for _, transport := range provider.Transports {
-			if providersByProtocol[transport.RequestProtocol] == nil {
-				providersByProtocol[transport.RequestProtocol] = map[string]bool{}
+			if providersByProtocol[transport.Protocol.ID] == nil {
+				providersByProtocol[transport.Protocol.ID] = map[string]bool{}
 			}
-			providersByProtocol[transport.RequestProtocol][provider.ID] = true
+			providersByProtocol[transport.Protocol.ID][provider.ID] = true
 		}
 	}
 	for _, fixture := range fixtures {
@@ -55,7 +58,7 @@ func TestClientProtocolsSharedAdapterCatalog(t *testing.T) {
 		if len(providers) < 2 || !providers[fixture.Provider] {
 			t.Fatalf("protocol=%s providers=%v fixture=%s", fixture.Protocol, providers, fixture.Provider)
 		}
-		key := protocolFixtureKey(fixture.Protocol, fixture.Lifecycle, fixture.Operation)
+		key := protocolFixtureKey(fixture.Protocol, fixture.Variation, fixture.Lifecycle, fixture.Operation)
 		if !expected[key] {
 			t.Fatalf("unexpected executable adapter fixture: %+v", fixture)
 		}
@@ -66,15 +69,15 @@ func TestClientProtocolsSharedAdapterCatalog(t *testing.T) {
 	}
 }
 
-func protocolFixtureKey(protocol string, lifecycle string, operation string) string {
-	return strings.Join([]string{protocol, lifecycle, operation}, "/")
+func protocolFixtureKey(protocol string, variation string, lifecycle string, operation string) string {
+	return strings.Join([]string{protocol, variation, lifecycle, operation}, "/")
 }
 
 func TestClientProtocolsSharedAdapterExecution(t *testing.T) {
 	catalog, fixtures := testfixtures.ProviderCatalogWithProtocolFixtures(t)
 	for _, fixture := range fixtures {
 		fixture := fixture
-		t.Run(strings.Join([]string{fixture.Protocol, fixture.Lifecycle, fixture.Operation}, "/"), func(t *testing.T) {
+		t.Run(protocolFixtureKey(fixture.Protocol, fixture.Variation, fixture.Lifecycle, fixture.Operation), func(t *testing.T) {
 			var calls atomic.Int32
 			upstream := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 				calls.Add(1)

@@ -29,12 +29,42 @@ func TestProviderCatalogParserRejectsTrailingDocuments(t *testing.T) {
 	}
 }
 
+func TestProviderCatalogParserAcceptsOneProtocolReferencePerTransport(t *testing.T) {
+	document, marshalError := yaml.Marshal(internalCanonicalProviderCatalog().Schema())
+	if marshalError != nil {
+		t.Fatalf("marshal canonical provider catalog: %v", marshalError)
+	}
+	if _, catalogError := ParseProviderCatalog(document); catalogError != nil {
+		t.Fatalf("parse protocol-reference provider catalog: %v", catalogError)
+	}
+}
+
+func TestProviderCatalogParserRejectsObsoleteProtocolFields(t *testing.T) {
+	document, marshalError := yaml.Marshal(internalCanonicalProviderCatalog().Schema())
+	if marshalError != nil {
+		t.Fatalf("marshal canonical provider catalog: %v", marshalError)
+	}
+	for _, field := range []string{"request_protocol", "response_protocol", "usage_mapping", "protocol_parameters"} {
+		t.Run(field, func(t *testing.T) {
+			value := "openai_responses"
+			if field == "protocol_parameters" {
+				value = "{}"
+			}
+			protocol := "          protocol:\n            id: openai_responses\n"
+			obsolete := strings.Replace(string(document), protocol, protocol+"          "+field+": "+value+"\n", 1)
+			_, catalogError := ParseProviderCatalog([]byte(obsolete))
+			assertInvalidProviderCatalogError(t, catalogError, "field "+field+" not found")
+		})
+	}
+}
+
 func TestProviderCatalogSchemaRejectsEveryStructuralBoundary(t *testing.T) {
 	testCases := []struct {
 		name     string
 		mutate   func(*ProviderCatalogSchema)
 		expected string
 	}{
+		{name: "obsolete schema version", mutate: func(schema *ProviderCatalogSchema) { schema.SchemaVersion = 1 }, expected: "field=schema_version value=1"},
 		{name: "providers missing", mutate: func(schema *ProviderCatalogSchema) { schema.Providers = nil }, expected: "field=providers"},
 		{name: "provider identifier", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].ID = "OpenAI" }, expected: "reason=not_canonical"},
 		{name: "provider identifier collides with prior alias", mutate: func(schema *ProviderCatalogSchema) {
@@ -254,11 +284,11 @@ func TestProviderCatalogTransportValidationRejectsEveryInvalidShape(t *testing.T
 			(*transports)[0].Headers = []ProviderCatalogHeader{{Name: "", Value: "value"}}
 		}, expected: ".headers"},
 		{name: "protocol", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].RequestProtocol = "future"
+			(*transports)[0].Protocol.ID = "future"
 		}, expected: "unsupported_protocol"},
-		{name: "protocol mismatch", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].ResponseProtocol = CatalogProtocolAnthropicMessages
-		}, expected: "protocol_mismatch"},
+		{name: "protocol variation", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
+			(*transports)[0].Protocol.Variation = "future"
+		}, expected: "unsupported_protocol_variation"},
 		{name: "lifecycle", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
 			(*transports)[0].Lifecycle = "future"
 		}, expected: ".lifecycle"},
@@ -280,12 +310,10 @@ func TestProviderCatalogTransportValidationRejectsEveryInvalidShape(t *testing.T
 		{name: "resource visibility on synchronous transport", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
 			(*transports)[1].ResourceVisibility = (*transports)[0].ResourceVisibility
 		}, expected: "unexpected_resource_visibility"},
-		{name: "parameters", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].ProtocolParameters.OutputFields = nil
-		}, expected: ".protocol_parameters"},
-		{name: "adapter", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].ProtocolParameters.ModelField = "future"
-		}, expected: "adapter_contract_mismatch"},
+		{name: "missing required variation", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
+			transportsWithChat := *transports
+			transportsWithChat[1].Protocol = ProviderCatalogProtocolReference{ID: CatalogProtocolOpenAIChatCompletions}
+		}, expected: "unsupported_protocol_variation"},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -355,31 +383,15 @@ func TestProviderCatalogEndpointAndProtocolEdges(t *testing.T) {
 		t.Fatal("duplicate catalog header was accepted")
 	}
 
-	parameters := internalCanonicalProviderCatalog().Schema().Providers[0].Transports[0].ProtocolParameters
-	parameters.ModelField = " model"
-	if parameterError := validateProviderCatalogProtocolParameters(parameters, "parameters"); parameterError == nil {
-		t.Fatal("noncanonical protocol model field was accepted")
-	}
-	parameters = internalCanonicalProviderCatalog().Schema().Providers[0].Transports[0].ProtocolParameters
-	parameters.OutputFields[0] = " "
-	if parameterError := validateProviderCatalogProtocolParameters(parameters, "parameters"); parameterError == nil {
-		t.Fatal("blank protocol value was accepted")
-	}
-	parameters = internalCanonicalProviderCatalog().Schema().Providers[0].Transports[0].ProtocolParameters
-	parameters.OutputFields = append(parameters.OutputFields, parameters.OutputFields[0])
-	if parameterError := validateProviderCatalogProtocolParameters(parameters, "parameters"); parameterError == nil {
-		t.Fatal("duplicate protocol value was accepted")
-	}
-
 	chatTransport := internalProtocolTransport(t, CatalogProtocolOpenAIChatCompletions)
-	chatTransport.ProtocolParameters.TokenField = "future"
-	assertInvalidProviderCatalogError(t, validateProviderCatalogAdapterContract(chatTransport, "transport"), "adapter_contract_mismatch")
+	chatTransport.Protocol.Variation = CatalogProtocolVariationTranscriptionModel
+	assertInvalidProviderCatalogError(t, validateProviderCatalogAdapterContract(chatTransport, "transport"), "unsupported_protocol_variation")
 	transcriptionTransport := internalProtocolTransport(t, CatalogProtocolMultipartTranscription)
-	transcriptionTransport.ProtocolParameters.ModelField = "future"
-	assertInvalidProviderCatalogError(t, validateProviderCatalogAdapterContract(transcriptionTransport, "transport"), "adapter_contract_mismatch")
+	transcriptionTransport.Protocol.Variation = CatalogProtocolVariationMaxTokens
+	assertInvalidProviderCatalogError(t, validateProviderCatalogAdapterContract(transcriptionTransport, "transport"), "unsupported_protocol_variation")
 	unknownTransport := chatTransport
-	unknownTransport.RequestProtocol = "future"
-	assertInvalidProviderCatalogError(t, validateProviderCatalogAdapterContract(unknownTransport, "transport"), "adapter_contract_mismatch")
+	unknownTransport.Protocol = ProviderCatalogProtocolReference{ID: "future"}
+	assertInvalidProviderCatalogError(t, validateProviderCatalogAdapterContract(unknownTransport, "transport"), "unsupported_protocol")
 }
 
 func TestProviderCatalogConnectionValueBoundaries(t *testing.T) {
@@ -439,7 +451,7 @@ func internalProtocolTransport(t *testing.T, protocol string) ProviderCatalogTra
 	t.Helper()
 	for _, provider := range internalCanonicalProviderCatalog().Schema().Providers {
 		for _, transport := range provider.Transports {
-			if transport.RequestProtocol == protocol {
+			if transport.Protocol.ID == protocol {
 				return transport
 			}
 		}
