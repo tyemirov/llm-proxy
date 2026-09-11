@@ -148,7 +148,7 @@ ci:
 		PYTHON_PROJECT_DIR="$(PYTHON_PROJECT_DIR)" ./scripts/run_ci.sh
 
 .PHONY: ci-backend ci-frontend
-ci-backend: test-release-policy check-format go-lint python-lint go-test python-test test-live-provider-harness
+ci-backend: test-release-policy check-format go-lint python-lint test-protocol-acceptance go-test python-test test-live-provider-harness
 
 ci-frontend: frontend-lint frontend-test test-openapi-pages-artifact test-management-auth-blackbox
 
@@ -165,7 +165,7 @@ release publish deploy:
 	$(MAKE) --no-print-directory -C "$${gateway_root}" "app-$@" \
 		MPRLAB_APP_ROOT="$${application_root}"
 
-.PHONY: test-client-protocols
+.PHONY: test-client-protocols test-protocol-acceptance
 .PHONY: test-mcp-versions
 test-mcp-versions:
 	$(GO) test ./internal/proxy -run '^TestMCPHandshakeVersions$$' -count=1
@@ -185,6 +185,9 @@ test-mcp-oauth: frontend-dependencies
 
 test-client-protocols: frontend-dependencies
 	$(GO) test ./internal/proxy -run '^TestClientProtocols' -count=1
+
+test-protocol-acceptance: frontend-dependencies
+	$(GO) test ./internal/proxy -run '^Test(ClientProtocols.*|AccountConnection(Lifecycle|SharedRoutingAndTenantUsage)|Management(ConnectionCredentialsRemainMaskedAndOwnerScoped|DatabasePersistenceAndOpenFailures)|V2(RoutesExactOrderedImageAndAudioAttachmentsThroughGemini|RoutesExactOrderedImagesThroughProviderAdapters|RejectsInvalidOrUnsupportedMediaBeforeUpstreamWork))$$' -count=1
 
 .PHONY: test-client-contracts generate-api-docs
 test-client-contracts: frontend-dependencies
