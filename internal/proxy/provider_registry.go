@@ -71,6 +71,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			transports:          make(map[string]providerTransportDefinition, len(provider.Transports)),
 			textModels:          map[string]textModelDefinition{},
 			transcriptionModels: map[string]dictationModelDefinition{},
+			mediaModels:         map[string]struct{}{},
 		}
 		familyIDs := map[string]struct{}{}
 		for _, field := range provider.Fields {
@@ -105,6 +106,9 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 				if !slices.Contains(definition.capabilities, operation) {
 					definition.capabilities = append(definition.capabilities, operation)
 				}
+			}
+			if slices.Contains(offering.Operations, ModelOperationVideoGeneration) {
+				definition.mediaModels[offering.Model] = struct{}{}
 			}
 			for _, mediaInput := range offering.MediaInputs {
 				capability := mediaInputCapability(mediaInput)

@@ -31,6 +31,7 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `inference node`: A host that runs local model containers and the node controller.
 - `local offering`: A provider offering that runs on an inference node.
 - `media operation`: Accepted tenant work with durable execution state and media input or output resources.
+- `media operation adapter`: Code that validates and executes one catalog-selected media operation route.
 - `model family`: A group of exact models from one model publisher.
 - `model publisher`: An organization or community that creates or releases a model.
 - `model residency`: The state in which a model uses GPU memory.

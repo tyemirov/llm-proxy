@@ -1073,6 +1073,9 @@ func managedUsageRouteIsCurrent(record managedUsageEventRecord, providers *provi
 	case usageEndpointDictation:
 		model, modelExists := definition.transcriptionModels[strings.ToLower(record.ModelID)]
 		return modelExists && model.identifier.string() == record.ModelID
+	case usageEndpointMedia:
+		_, modelExists := definition.mediaModels[record.ModelID]
+		return modelExists
 	default:
 		return false
 	}

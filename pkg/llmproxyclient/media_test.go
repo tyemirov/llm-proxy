@@ -164,6 +164,9 @@ func TestClientUploadsAssetAndSerializesImageAndAudioAssetReferences(testingInst
 	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
 		case llmproxycontract.AssetPath:
+			if request.Header.Get("Authorization") != "Bearer sekret" || request.URL.RawQuery != "" {
+				testingInstance.Errorf("asset authentication=%q query=%q", request.Header.Get("Authorization"), request.URL.RawQuery)
+			}
 			body, _ := io.ReadAll(request.Body)
 			if !bytes.Equal(body, imageBytes) || request.Header.Get("Content-Type") != "image/png" {
 				testingInstance.Errorf("asset upload body=%q content-type=%q", body, request.Header.Get("Content-Type"))
@@ -185,7 +188,7 @@ func TestClientUploadsAssetAndSerializesImageAndAudioAssetReferences(testingInst
 	if configError != nil {
 		testingInstance.Fatalf("config: %v", configError)
 	}
-	if assetURL := config.AssetUploadURL(); !strings.Contains(assetURL, llmproxycontract.AssetPath+"?key=sekret") {
+	if assetURL := config.AssetUploadURL(); assetURL != server.URL+llmproxycontract.AssetPath {
 		testingInstance.Fatalf("asset URL=%q", assetURL)
 	}
 	client, clientError := llmproxyclient.NewClient(config, server.Client())
@@ -230,7 +233,7 @@ func TestClientAssetUploadRejectsInvalidInputsAndResponses(testingInstance *test
 	if configError != nil {
 		testingInstance.Fatalf("config: %v", configError)
 	}
-	if assetURL := config.AssetUploadURL(); !strings.Contains(assetURL, "/review"+llmproxycontract.AssetPath+"?key=sekret") {
+	if assetURL := config.AssetUploadURL(); assetURL != "https://proxy.example/review"+llmproxycontract.AssetPath {
 		testingInstance.Fatalf("asset URL=%q", assetURL)
 	}
 	clientFor := func(roundTripper assetRoundTripper) llmproxyclient.Client {

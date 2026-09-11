@@ -1,6 +1,7 @@
 # LLM Proxy
 
-LLM Proxy is an HTTP service for text generation and audio transcription.
+LLM Proxy is an HTTP service for text generation, audio transcription, and
+durable media execution.
 It supports OpenAI, compatible chat providers, Anthropic Messages, Gemini Interactions, and Vertex AI.
 It exposes protected HTTP endpoints that require a tenant secret and simplify
 integrating provider capabilities without embedding API credentials in each
@@ -22,11 +23,12 @@ The application document title is always `LLM Proxy`.
 
 ## Approved Media Gateway Strategy
 
-LLM Proxy will own the shared media provider gateway, including private Dictator access.
-The migration extends the existing tenant API and official clients.
+LLM Proxy owns the shared media operation gateway. F022 added the durable
+tenant API, operation store, asset delivery, and official Go client. Provider
+capability issues add adapters to this common service. Private Dictator access
+remains in F042.
 MediaOps retains production workflows and YouTube channel management.
 See the [consolidation strategy](docs/media-gateway-consolidation.md) for issue ownership, delivery order, and acceptance requirements.
-The implementation issues remain open.
 
 ## Features
 
@@ -60,6 +62,38 @@ llm-proxy exposes a blocking REST contract for text generation. Canonical
 `POST /v2` also accepts optional media evidence and structured requests. An
 ordinary request returns its final formatted answer in the same HTTP response.
 The structured request contract also provides durable reconciliation.
+
+The authenticated `/model/v1` contract provides durable media operations.
+`GET /model/v1/capabilities` returns routes that have a catalog offering and a
+configured media operation adapter. `POST /model/v1/operations` requires one
+tenant-bound `Idempotency-Key`. The caller reads status, requests explicit
+cancellation, and downloads result assets through separate authenticated
+resources. A disconnected creation or status request does not cancel accepted
+work.
+
+The service stores the accepted request, selected route, catalog revision, and
+private credential-version reference before dispatch. The public operation
+states are `queued`, `running`, `succeeded`, `failed`, `cancelled`, and
+`uncertain`. A repeated key with the same intent returns the retained operation.
+A changed intent returns `409` before provider dispatch. Terminal detail and
+output bytes expire together. A tenant-lifetime tombstone keeps the key bound
+after detail expiry.
+
+The [official Go media example](examples/media-operations/main.go) exercises
+capability discovery, operation creation, waiting, metadata reads, and verified
+byte download against a running service. The canonical request and response
+schemas remain in [OpenAPI](docs/openapi.yaml).
+
+The media worker settings are explicit under `server`:
+
+| Setting | Default | Meaning |
+| --- | ---: | --- |
+| `media_operation_workers` | `2` | In-process workers that claim accepted operations. |
+| `media_operation_capacity` | `32` | Maximum active accepted operations for the service. |
+| `tenant_media_operation_capacity` | `4` | Maximum active accepted operations for one tenant. |
+| `media_operation_lifetime_seconds` | `900` | Execution authority from acceptance. |
+| `media_operation_claim_seconds` | `60` | Worker claim lifetime. |
+| `media_operation_claim_renewal_seconds` | `20` | Claim renewal and maintenance interval. |
 
 ### Canonical OpenAPI ownership
 

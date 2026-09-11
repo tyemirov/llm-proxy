@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 var errAssetEdge = errors.New("asset edge failure")
@@ -709,6 +710,25 @@ func TestMediaLimitAndMessageMediaEdgeContracts(t *testing.T) {
 	if configError := validateConfig(Configuration{AssetStorePath: "relative"}); configError == nil {
 		t.Fatal("relative asset store path accepted")
 	}
+	validConfiguration, configError := NewConfiguration(Configuration{ProviderCatalog: internalCanonicalProviderCatalog(), AssetStorePath: t.TempDir(), Management: ManagedRouterTestManagementConfiguration()})
+	if configError != nil {
+		t.Fatal(configError)
+	}
+	invalidCapacity := validConfiguration
+	invalidCapacity.MediaOperationWorkers = 0
+	if configError := validateConfig(invalidCapacity); configError == nil {
+		t.Fatal("invalid media operation capacity accepted")
+	}
+	invalidTiming := validConfiguration
+	invalidTiming.MediaOperationClaimRenewalSeconds = invalidTiming.MediaOperationClaimSeconds
+	if configError := validateConfig(invalidTiming); configError == nil {
+		t.Fatal("invalid media operation timing accepted")
+	}
+	invalidAdapter := validConfiguration
+	invalidAdapter.MediaOperationAdapters = map[string]MediaOperationAdapter{"invalid": nil}
+	if configError := validateConfig(invalidAdapter); configError == nil {
+		t.Fatal("invalid media operation adapter accepted")
+	}
 	value := int64(1)
 	validSource := "https://example.com/limits"
 	validDate := "2026-08-11"
@@ -784,6 +804,101 @@ func TestMediaLimitAndMessageMediaEdgeContracts(t *testing.T) {
 	media = messageMedia{asset: &tenantAssetReader{file: shortFile}, sizeBytes: 1}
 	if _, bytesError := media.bytes(); bytesError == nil {
 		t.Fatal("expected short asset byte rejection")
+	}
+}
+
+func TestTenantAssetMetadataAndReferenceFailureContracts(t *testing.T) {
+	requestTenant := managedTenantForInternalTest("asset-metadata-edge", "secret")
+	store := newTenantAssetStore(t.TempDir(), 1024, 60)
+	store.activeReference = func(string, string) (bool, error) { return false, errAssetEdge }
+	if deleteError := store.delete(requestTenant, "ast_00000000000000000000000000000000"); !errors.Is(deleteError, errAssetStore) {
+		t.Fatalf("reference error=%v", deleteError)
+	}
+	store.activeReference = nil
+	if _, metadataError := store.metadata(requestTenant, "invalid"); !errors.Is(metadataError, errAssetNotFound) {
+		t.Fatalf("invalid metadata error=%v", metadataError)
+	}
+	if _, metadataError := store.metadataLocked(requestTenant, "invalid"); !errors.Is(metadataError, errAssetNotFound) {
+		t.Fatalf("invalid locked metadata error=%v", metadataError)
+	}
+	failedStore := newTenantAssetStore(t.TempDir(), 1024, 60)
+	failedStore.cleanupError = errAssetEdge
+	if _, metadataError := failedStore.metadata(requestTenant, "ast_00000000000000000000000000000000"); !errors.Is(metadataError, errAssetEdge) {
+		t.Fatalf("initialization metadata error=%v", metadataError)
+	}
+	metadata, uploadError := store.upload(requestTenant, "image/png", bytes.NewReader([]byte("asset")))
+	if uploadError != nil {
+		t.Fatal(uploadError)
+	}
+	foreignTenant := managedTenantForInternalTest("asset-metadata-foreign", "secret")
+	if _, metadataError := store.metadata(foreignTenant, metadata.AssetID); !errors.Is(metadataError, errAssetNotFound) {
+		t.Fatalf("foreign metadata error=%v", metadataError)
+	}
+	deleted := metadata
+	deletedAt := metadata.CreatedAt
+	deleted.State = assetStateDeleted
+	deleted.DeletedAt = &deletedAt
+	if metadataError := store.writeMetadata(deleted); metadataError != nil {
+		t.Fatal(metadataError)
+	}
+	if _, metadataError := store.metadata(requestTenant, metadata.AssetID); !errors.Is(metadataError, errAssetDeleted) {
+		t.Fatalf("deleted metadata error=%v", metadataError)
+	}
+	if metadataError := store.writeMetadata(metadata); metadataError != nil {
+		t.Fatal(metadataError)
+	}
+	store.now = func() time.Time { return metadata.ExpiresAt.Add(time.Second) }
+	if _, metadataError := store.metadata(requestTenant, metadata.AssetID); !errors.Is(metadataError, errAssetExpired) {
+		t.Fatalf("expired metadata error=%v", metadataError)
+	}
+
+	for _, handler := range []gin.HandlerFunc{tenantAssetMetadataHandler(store), tenantAssetContentHandler(store)} {
+		response := httptest.NewRecorder()
+		ginContext, _ := gin.CreateTestContext(response)
+		ginContext.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+		ginContext.Set(contextKeyTenant, requestTenant)
+		ginContext.Params = gin.Params{{Key: "asset_id", Value: "invalid"}}
+		handler(ginContext)
+		if response.Code != http.StatusNotFound {
+			t.Fatalf("metadata handler status=%d", response.Code)
+		}
+	}
+	contentStore := newTenantAssetStore(t.TempDir(), 1024, 60)
+	content, uploadError := contentStore.upload(requestTenant, "image/png", bytes.NewReader([]byte("asset")))
+	if uploadError != nil {
+		t.Fatal(uploadError)
+	}
+	if removeError := os.Remove(contentStore.dataPath(content.AssetID)); removeError != nil {
+		t.Fatal(removeError)
+	}
+	response := httptest.NewRecorder()
+	ginContext, _ := gin.CreateTestContext(response)
+	ginContext.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	ginContext.Set(contextKeyTenant, requestTenant)
+	ginContext.Params = gin.Params{{Key: "asset_id", Value: content.AssetID}}
+	tenantAssetContentHandler(contentStore)(ginContext)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("content handler status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestMediaTenantAuthenticationReportsCancelledLookup(t *testing.T) {
+	database := newFakeManagedTenantDatabase()
+	database.tenantBySecretDigestErrors = []error{context.Canceled}
+	managedTenants := newManagedTenantStoreWithDatabase(database)
+	authenticator := newTenantAuthenticator(managedTenants)
+	request := httptest.NewRequest(http.MethodGet, "/model/v1/assets", nil)
+	request.Header.Set("Authorization", "Bearer missing")
+	requestContext, cancelRequest := context.WithCancel(request.Context())
+	cancelRequest()
+	request = request.WithContext(requestContext)
+	response := httptest.NewRecorder()
+	ginContext, _ := gin.CreateTestContext(response)
+	ginContext.Request = request
+	ginContext.Set(contextKeyRequestID, "cancelled-authentication")
+	mediaTenantAuthenticatedHandler(authenticator, zap.NewNop().Sugar(), func(ginContext *gin.Context) { ginContext.Status(http.StatusOK) })(ginContext)
+	if ginContext.Writer.Status() != statusClientClosedRequest {
+		t.Fatalf("status=%d", ginContext.Writer.Status())
 	}
 }
 

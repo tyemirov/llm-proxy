@@ -165,7 +165,7 @@ release publish deploy:
 	$(MAKE) --no-print-directory -C "$${gateway_root}" "app-$@" \
 		MPRLAB_APP_ROOT="$${application_root}"
 
-.PHONY: test-client-protocols test-protocol-acceptance
+.PHONY: test-client-protocols test-protocol-acceptance test-media-operations
 .PHONY: test-mcp-versions
 test-mcp-versions:
 	$(GO) test ./internal/proxy -run '^TestMCPHandshakeVersions$$' -count=1
@@ -188,6 +188,9 @@ test-client-protocols: frontend-dependencies
 
 test-protocol-acceptance: frontend-dependencies
 	$(GO) test ./internal/proxy -run '^Test(ClientProtocols.*|AccountConnection(Lifecycle|SharedRoutingAndTenantUsage)|Management(ConnectionCredentialsRemainMaskedAndOwnerScoped|DatabasePersistenceAndOpenFailures)|V2(RoutesExactOrderedImageAndAudioAttachmentsThroughGemini|RoutesExactOrderedImagesThroughProviderAdapters|RejectsInvalidOrUnsupportedMediaBeforeUpstreamWork))$$' -count=1
+
+test-media-operations: frontend-dependencies
+	$(GO) test ./internal/proxy -run '^TestMediaOperation' -count=1
 
 .PHONY: test-client-contracts generate-api-docs
 test-client-contracts: frontend-dependencies

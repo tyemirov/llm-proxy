@@ -356,6 +356,7 @@ type providerDefinition struct {
 	transcriptionModelField   string
 	textModels                map[string]textModelDefinition
 	transcriptionModels       map[string]dictationModelDefinition
+	mediaModels               map[string]struct{}
 	supportsDictation         bool
 	chatTokenLimitParameter   chatCompletionTokenLimitParameter
 }

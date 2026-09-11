@@ -72,7 +72,15 @@ func recognizedProxyErrorCode(responseBody []byte) string {
 		llmproxycontract.ErrorCodeStructuredRequestInvalid,
 		llmproxycontract.ErrorCodeStructuredRequestNotFound,
 		llmproxycontract.ErrorCodeStructuredRequestOutcomeUnknown,
-		llmproxycontract.ErrorCodeStructuredRequestStore:
+		llmproxycontract.ErrorCodeStructuredRequestStore,
+		llmproxycontract.ErrorCodeMediaOperationInvalid,
+		llmproxycontract.ErrorCodeMediaOperationUnavailable,
+		llmproxycontract.ErrorCodeMediaOperationNotFound,
+		llmproxycontract.ErrorCodeMediaOperationIntentConflict,
+		llmproxycontract.ErrorCodeMediaOperationCapacity,
+		llmproxycontract.ErrorCodeMediaOperationStore,
+		llmproxycontract.ErrorCodeMediaOperationExpired,
+		llmproxycontract.ErrorCodeAssetInUse:
 		return envelope.Error.Code
 	default:
 		return ""

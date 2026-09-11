@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="4a013acffe0030f4faa09a8c9a72af5391e97d19ab584cd82dea87a9aec178cb">
+    <meta name="openapi-source-sha256" content="ce06ff5552191fd0d253691918ccbef12a7d2ad083f37e4ca06f0afd64163bbe">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="4a013acffe0030f4faa09a8c9a72af5391e97d19ab584cd82dea87a9aec178cb">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="ce06ff5552191fd0d253691918ccbef12a7d2ad083f37e4ca06f0afd64163bbe">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>4a013acffe0030f4faa09a8c9a72af5391e97d19ab584cd82dea87a9aec178cb</code></span>
+          <span>Source SHA-256 <code>ce06ff5552191fd0d253691918ccbef12a7d2ad083f37e4ca06f0afd64163bbe</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -1073,19 +1073,108 @@ paths:
           $ref: &#39;#/components/responses/StructuredRequestFailed&#39;
         &#39;504&#39;:
           $ref: &#39;#/components/responses/StructuredRequestFailed&#39;
+  /model/v1/capabilities:
+    get:
+      operationId: getTenantMediaCapabilities
+      summary: Read tenant-available durable media routes
+      tags:
+        - Proxy
+      security:
+        - TenantBearerKey: []
+      responses:
+        &#39;200&#39;:
+          description: Tenant-available media capability routes.
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/MediaCapabilities&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ProxyForbidden&#39;
+  /model/v1/operations:
+    post:
+      operationId: createTenantMediaOperation
+      summary: Accept one durable tenant media operation
+      tags:
+        - Proxy
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - $ref: &#39;#/components/parameters/MediaOperationIdempotencyKey&#39;
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: &#39;#/components/schemas/MediaOperationRequest&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/MediaOperation&#39;
+        &#39;202&#39;:
+          $ref: &#39;#/components/responses/MediaOperation&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/MediaOperationFailure&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ProxyForbidden&#39;
+        &#39;409&#39;:
+          $ref: &#39;#/components/responses/MediaOperationFailure&#39;
+        &#39;410&#39;:
+          $ref: &#39;#/components/responses/MediaOperationExpired&#39;
+        &#39;422&#39;:
+          $ref: &#39;#/components/responses/MediaOperationFailure&#39;
+        &#39;429&#39;:
+          $ref: &#39;#/components/responses/MediaOperationFailure&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/MediaOperationFailure&#39;
+  /model/v1/operations/{operation_id}:
+    get:
+      operationId: getTenantMediaOperation
+      summary: Read one durable tenant media operation
+      tags:
+        - Proxy
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - $ref: &#39;#/components/parameters/MediaOperationID&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/MediaOperation&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ProxyForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/MediaOperationFailure&#39;
+        &#39;410&#39;:
+          $ref: &#39;#/components/responses/MediaOperationExpired&#39;
+  /model/v1/operations/{operation_id}/cancellation:
+    put:
+      operationId: cancelTenantMediaOperation
+      summary: Request cancellation of one durable tenant media operation
+      tags:
+        - Proxy
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - $ref: &#39;#/components/parameters/MediaOperationID&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/MediaOperation&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ProxyForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/MediaOperationFailure&#39;
+        &#39;422&#39;:
+          $ref: &#39;#/components/responses/MediaOperationFailure&#39;
   /model/v1/assets:
     post:
       operationId: uploadTenantAsset
       summary: Upload exact tenant media bytes
       description: &gt;-
-        Stores one image or audio asset for the configured retention
+        Stores one media asset for the configured retention
         period. The authenticated tenant owns the returned opaque asset id.
       tags:
         - Proxy
       security:
-        - TenantClientKey: []
+        - TenantBearerKey: []
       parameters:
-        - $ref: &#39;#/components/parameters/TenantClientKey&#39;
         - $ref: &#39;#/components/parameters/RequestTimeout&#39;
       requestBody:
         $ref: &#39;#/components/requestBodies/AssetUpload&#39;
@@ -1105,19 +1194,104 @@ paths:
         &#39;500&#39;:
           $ref: &#39;#/components/responses/AssetFailure&#39;
   /model/v1/assets/{asset_id}:
+    get:
+      operationId: getTenantAsset
+      summary: Read one tenant asset metadata record
+      tags:
+        - Proxy
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - $ref: &#39;#/components/parameters/AssetID&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/AssetCreated&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ProxyForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/AssetFailure&#39;
+        &#39;410&#39;:
+          $ref: &#39;#/components/responses/AssetFailure&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/AssetFailure&#39;
     delete:
       operationId: deleteTenantAsset
       summary: Delete one tenant asset
       tags:
         - Proxy
       security:
-        - TenantClientKey: []
+        - TenantBearerKey: []
       parameters:
-        - $ref: &#39;#/components/parameters/TenantClientKey&#39;
         - $ref: &#39;#/components/parameters/AssetID&#39;
       responses:
         &#39;204&#39;:
           description: The asset is deleted.
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ProxyForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/AssetFailure&#39;
+        &#39;410&#39;:
+          $ref: &#39;#/components/responses/AssetFailure&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/AssetFailure&#39;
+  /model/v1/assets/{asset_id}/content:
+    get:
+      operationId: downloadTenantAsset
+      summary: Download exact tenant asset bytes
+      tags:
+        - Proxy
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - $ref: &#39;#/components/parameters/AssetID&#39;
+      responses:
+        &#39;200&#39;:
+          description: Exact authenticated asset bytes.
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            audio/m4a:
+              schema:
+                type: string
+                format: binary
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            audio/wav:
+              schema:
+                type: string
+                format: binary
+            audio/flac:
+              schema:
+                type: string
+                format: binary
+            audio/ogg:
+              schema:
+                type: string
+                format: binary
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+            video/webm:
+              schema:
+                type: string
+                format: binary
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
         &#39;403&#39;:
           $ref: &#39;#/components/responses/ProxyForbidden&#39;
         &#39;404&#39;:
@@ -2275,6 +2449,14 @@ components:
       schema:
         type: string
         pattern: &#39;^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$&#39;
+    MediaOperationIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Tenant-bound key for one durable media operation intent. Exact repeats converge to the retained operation or tombstone. Changed intent returns 409 before dispatch.
+      schema:
+        type: string
+        pattern: &#39;^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$&#39;
     AssetID:
       name: asset_id
       in: path
@@ -2283,6 +2465,14 @@ components:
       schema:
         type: string
         pattern: ^ast_[0-9a-f]{32}$
+    MediaOperationID:
+      name: operation_id
+      in: path
+      required: true
+      description: Opaque durable media operation identifier.
+      schema:
+        type: string
+        pattern: ^mop_[0-9a-f]{32}$
     TenantID:
       name: tenant_id
       in: path
@@ -2398,6 +2588,22 @@ components:
             type: string
             format: binary
         audio/wav:
+          schema:
+            type: string
+            format: binary
+        audio/flac:
+          schema:
+            type: string
+            format: binary
+        audio/ogg:
+          schema:
+            type: string
+            format: binary
+        video/mp4:
+          schema:
+            type: string
+            format: binary
+        video/webm:
           schema:
             type: string
             format: binary
@@ -2607,6 +2813,24 @@ components:
         application/json:
           schema:
             $ref: &#39;#/components/schemas/AssetErrorEnvelope&#39;
+    MediaOperation:
+      description: Current durable media operation state.
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/MediaOperation&#39;
+    MediaOperationFailure:
+      description: The media operation request failed with a stable caller-safe code.
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/MediaOperationErrorEnvelope&#39;
+    MediaOperationExpired:
+      description: Terminal operation detail expired. The tenant idempotency tombstone remains.
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/MediaOperationExpired&#39;
     StructuredRequestSucceeded:
       description: Exact provider output that passed the caller JSON Schema and was durably committed before this response.
       headers:
@@ -4612,6 +4836,160 @@ components:
         asset_id:
           type: string
           pattern: ^ast_[0-9a-f]{32}$
+    MediaCapabilities:
+      type: object
+      additionalProperties: false
+      required: [catalog_revision, routes]
+      properties:
+        catalog_revision:
+          type: string
+          minLength: 1
+        routes:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [capability, provider, model, controls, limits]
+            properties:
+              capability:
+                type: string
+                minLength: 1
+              provider:
+                type: string
+                minLength: 1
+              model:
+                type: string
+                minLength: 1
+              controls:
+                type: array
+                items:
+                  type: object
+              limits:
+                type: array
+                items:
+                  type: object
+    MediaOperationRequest:
+      type: object
+      additionalProperties: false
+      required: [capability, provider, model, input, controls]
+      properties:
+        capability:
+          type: string
+          minLength: 1
+        provider:
+          type: string
+          minLength: 1
+        model:
+          type: string
+          minLength: 1
+        input:
+          type: object
+        controls:
+          type: object
+    MediaOperation:
+      type: object
+      additionalProperties: false
+      required: [operation_id, capability, provider, model, catalog_revision, state, cancellation_state, outputs, cost, accepted_at, updated_at, deadline_at]
+      properties:
+        operation_id:
+          type: string
+          pattern: ^mop_[0-9a-f]{32}$
+        capability:
+          type: string
+          minLength: 1
+        provider:
+          type: string
+          minLength: 1
+        model:
+          type: string
+          minLength: 1
+        catalog_revision:
+          type: string
+          minLength: 1
+        state:
+          type: string
+          enum: [queued, running, succeeded, failed, cancelled, uncertain]
+        cancellation_state:
+          type: string
+          enum: [not_requested, requested, confirmed, unsupported]
+        outputs:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [asset_id, mime_type, size_bytes, ordinal]
+            properties:
+              asset_id:
+                type: string
+                pattern: ^ast_[0-9a-f]{32}$
+              mime_type:
+                type: string
+                minLength: 1
+              size_bytes:
+                type: integer
+                format: int64
+                minimum: 1
+              ordinal:
+                type: integer
+                minimum: 0
+        error:
+          type: object
+          additionalProperties: false
+          required: [code]
+          properties:
+            code:
+              type: string
+              enum: [provider_error, provider_rate_limited, operation_deadline_exceeded, provider_outcome_unknown, worker_claim_lost, asset_publication_failed, provider_result_invalid, media_operation_unavailable]
+        cost:
+          type: object
+          additionalProperties: false
+          required: [available]
+          properties:
+            available:
+              type: boolean
+            reason:
+              type: string
+              minLength: 1
+        accepted_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deadline_at:
+          type: string
+          format: date-time
+    MediaOperationErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code]
+          properties:
+            code:
+              type: string
+              enum: [media_operation_invalid, media_operation_unavailable, media_operation_not_found, media_operation_intent_conflict, media_operation_capacity_exceeded, media_operation_store_error]
+    MediaOperationExpired:
+      type: object
+      additionalProperties: false
+      required: [operation_id, state, error]
+      properties:
+        operation_id:
+          type: string
+          pattern: ^mop_[0-9a-f]{32}$
+        state:
+          type: string
+          enum: [succeeded, failed, cancelled]
+        error:
+          type: object
+          additionalProperties: false
+          required: [code]
+          properties:
+            code:
+              const: media_operation_expired
     TenantAsset:
       type: object
       additionalProperties: false
@@ -4635,6 +5013,10 @@ components:
             - audio/m4a
             - audio/mpeg
             - audio/wav
+            - audio/flac
+            - audio/ogg
+            - video/mp4
+            - video/webm
         size_bytes:
           type: integer
           format: int64
@@ -4667,6 +5049,7 @@ components:
                 - asset_not_found
                 - asset_expired
                 - asset_deleted
+                - asset_in_use
                 - asset_mime_mismatch
                 - asset_too_large
                 - asset_store_error
@@ -6467,6 +6850,12 @@ components:
 <a href="#operation-postMCPRequest"><span class="api-method api-method-post">POST</span><code>/mcp</code><span>Use an owned tenant through MCP.</span></a>
 <a href="#operation-uploadTenantAsset"><span class="api-method api-method-post">POST</span><code>/model/v1/assets</code><span>Upload exact tenant media bytes</span></a>
 <a href="#operation-deleteTenantAsset"><span class="api-method api-method-delete">DELETE</span><code>/model/v1/assets/{asset_id}</code><span>Delete one tenant asset</span></a>
+<a href="#operation-getTenantAsset"><span class="api-method api-method-get">GET</span><code>/model/v1/assets/{asset_id}</code><span>Read one tenant asset metadata record</span></a>
+<a href="#operation-downloadTenantAsset"><span class="api-method api-method-get">GET</span><code>/model/v1/assets/{asset_id}/content</code><span>Download exact tenant asset bytes</span></a>
+<a href="#operation-getTenantMediaCapabilities"><span class="api-method api-method-get">GET</span><code>/model/v1/capabilities</code><span>Read tenant-available durable media routes</span></a>
+<a href="#operation-createTenantMediaOperation"><span class="api-method api-method-post">POST</span><code>/model/v1/operations</code><span>Accept one durable tenant media operation</span></a>
+<a href="#operation-getTenantMediaOperation"><span class="api-method api-method-get">GET</span><code>/model/v1/operations/{operation_id}</code><span>Read one durable tenant media operation</span></a>
+<a href="#operation-cancelTenantMediaOperation"><span class="api-method api-method-put">PUT</span><code>/model/v1/operations/{operation_id}/cancellation</code><span>Request cancellation of one durable tenant media operation</span></a>
 <a href="#operation-createTranscription"><span class="api-method api-method-post">POST</span><code>/v1/audio/transcriptions</code><span>createTranscription</span></a>
 <a href="#operation-createChatCompletion"><span class="api-method api-method-post">POST</span><code>/v1/chat/completions</code><span>createChatCompletion</span></a>
 <a href="#operation-listClientModels"><span class="api-method api-method-get">GET</span><code>/v1/models</code><span>listClientModels</span></a>
@@ -7766,16 +8155,15 @@ components:
           <span class="api-operation-id">uploadTenantAsset</span>
         </header>
         <h2>Upload exact tenant media bytes</h2>
-        <p>Stores one image or audio asset for the configured retention period. The authenticated tenant owns the returned opaque asset id.</p>
-        <p class="api-security"><strong>Authentication:</strong> TenantClientKey (query key)</p>
+        <p>Stores one media asset for the configured retention period. The authenticated tenant owns the returned opaque asset id.</p>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
         <div class="api-contract-block">
           <h3>Parameters</h3>
           <div class="resource-table-wrap">
             <table>
               <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>key</code></td><td>query</td><td>Yes</td><td>string</td><td>Tenant client secret.</td></tr>
-<tr><td><code>X-LLM-Proxy-Request-Timeout-Seconds</code></td><td>header</td><td>No</td><td>integer</td><td>A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.</td></tr>
+                <tr><td><code>X-LLM-Proxy-Request-Timeout-Seconds</code></td><td>header</td><td>No</td><td>integer</td><td>A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.</td></tr>
               </tbody>
             </table>
           </div>
@@ -7806,15 +8194,14 @@ components:
           <span class="api-operation-id">deleteTenantAsset</span>
         </header>
         <h2>Delete one tenant asset</h2>
-        <p class="api-security"><strong>Authentication:</strong> TenantClientKey (query key)</p>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
         <div class="api-contract-block">
           <h3>Parameters</h3>
           <div class="resource-table-wrap">
             <table>
               <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>key</code></td><td>query</td><td>Yes</td><td>string</td><td>Tenant client secret.</td></tr>
-<tr><td><code>asset_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant asset identifier.</td></tr>
+                <tr><td><code>asset_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant asset identifier.</td></tr>
               </tbody>
             </table>
           </div>
@@ -7831,6 +8218,225 @@ components:
 <tr><td><code>404</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
 <tr><td><code>410</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
 <tr><td><code>500</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getTenantAsset">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/model/v1/assets/{asset_id}</code>
+          <span class="api-operation-id">getTenantAsset</span>
+        </header>
+        <h2>Read one tenant asset metadata record</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>asset_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant asset identifier.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset is available to its authenticated tenant.</td></tr>
+<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
+<tr><td><code>410</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-downloadTenantAsset">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/model/v1/assets/{asset_id}/content</code>
+          <span class="api-operation-id">downloadTenantAsset</span>
+        </header>
+        <h2>Download exact tenant asset bytes</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>asset_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant asset identifier.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>image/jpeg, image/png, image/webp, audio/m4a, audio/mpeg, audio/wav, audio/flac, audio/ogg, video/mp4, video/webm, application/octet-stream</td><td>none</td><td>Exact authenticated asset bytes.</td></tr>
+<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
+<tr><td><code>410</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getTenantMediaCapabilities">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/model/v1/capabilities</code>
+          <span class="api-operation-id">getTenantMediaCapabilities</span>
+        </header>
+        <h2>Read tenant-available durable media routes</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
+        <div class="api-contract-block"><h3>Parameters</h3><p>None.</p></div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>none</td><td>Tenant-available media capability routes.</td></tr>
+<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-createTenantMediaOperation">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-post">POST</span>
+          <code>/model/v1/operations</code>
+          <span class="api-operation-id">createTenantMediaOperation</span>
+        </header>
+        <h2>Accept one durable tenant media operation</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>Idempotency-Key</code></td><td>header</td><td>Yes</td><td>string</td><td>Tenant-bound key for one durable media operation intent. Exact repeats converge to the retained operation or tombstone. Changed intent returns 409 before dispatch.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>capability</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>provider</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>model</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>input</code></td><td>Yes</td><td>object</td><td></td></tr>
+<tr><td><code>controls</code></td><td>Yes</td><td>object</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>none</td><td>Current durable media operation state.</td></tr>
+<tr><td><code>202</code></td><td>application/json</td><td>none</td><td>Current durable media operation state.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
+<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
+<tr><td><code>410</code></td><td>application/json</td><td>none</td><td>Terminal operation detail expired. The tenant idempotency tombstone remains.</td></tr>
+<tr><td><code>422</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
+<tr><td><code>429</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getTenantMediaOperation">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/model/v1/operations/{operation_id}</code>
+          <span class="api-operation-id">getTenantMediaOperation</span>
+        </header>
+        <h2>Read one durable tenant media operation</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>operation_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque durable media operation identifier.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>none</td><td>Current durable media operation state.</td></tr>
+<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
+<tr><td><code>410</code></td><td>application/json</td><td>none</td><td>Terminal operation detail expired. The tenant idempotency tombstone remains.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-cancelTenantMediaOperation">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-put">PUT</span>
+          <code>/model/v1/operations/{operation_id}/cancellation</code>
+          <span class="api-operation-id">cancelTenantMediaOperation</span>
+        </header>
+        <h2>Request cancellation of one durable tenant media operation</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>operation_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque durable media operation identifier.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>none</td><td>Current durable media operation state.</td></tr>
+<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
+<tr><td><code>422</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
               </tbody>
             </table>
           </div>

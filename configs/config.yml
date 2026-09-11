@@ -8,6 +8,12 @@ server:
   max_prompt_bytes: 4194304
   max_asset_bytes: 2000000000
   asset_retention_seconds: 172800
+  media_operation_workers: 2
+  media_operation_capacity: 32
+  tenant_media_operation_capacity: 4
+  media_operation_lifetime_seconds: 900
+  media_operation_claim_seconds: 60
+  media_operation_claim_renewal_seconds: 20
   asset_store_path: /data/assets
   max_input_audio_bytes: 26214400
   upstream_rate_limits: []

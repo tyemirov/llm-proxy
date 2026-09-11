@@ -125,6 +125,10 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	}
 	tenantAuthenticator := newTenantAuthenticator(managedTenants)
 	assetStore := newTenantAssetStore(configuration.AssetStorePath, configuration.MaxAssetBytes, configuration.AssetRetentionSeconds)
+	mediaOperations, mediaOperationError := newMediaOperationService(configuration, managedTenants, assetStore, providers)
+	if mediaOperationError != nil {
+		return nil, mediaOperationError
+	}
 	structuredRequests, structuredStoreError := newStructuredRequestStore(configuration.AssetStorePath, configuration.AssetRetentionSeconds)
 	if structuredStoreError != nil {
 		return nil, structuredStoreError
@@ -145,8 +149,13 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	}
 	router.GET(llmproxycontract.TenantIdentityPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, tenantIdentityHandler()))
 	router.GET(llmproxycontract.StructuredRequestPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, structuredRequestStatusHandler(structuredRequests)))
-	router.POST(llmproxycontract.AssetPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, tenantAssetUploadHandler(assetStore))))
-	router.DELETE(llmproxycontract.AssetPath+"/:asset_id", tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, tenantAssetDeleteHandler(assetStore)))
+	router.POST(llmproxycontract.AssetPath, mediaTenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, tenantAssetUploadHandler(assetStore))))
+	router.GET(llmproxycontract.AssetPath+"/:asset_id", mediaTenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, tenantAssetMetadataHandler(assetStore)))
+	router.GET(llmproxycontract.AssetPath+"/:asset_id/content", mediaTenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, tenantAssetContentHandler(assetStore)))
+	router.DELETE(llmproxycontract.AssetPath+"/:asset_id", mediaTenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, tenantAssetDeleteHandler(assetStore)))
+	if mediaOperations != nil {
+		registerMediaOperationRoutes(router, tenantAuthenticator, structuredLogger, mediaOperations)
+	}
 	adapters := []ClientProtocolAdapter{{
 		Name: "native",
 		Routes: []ClientProtocolRoute{
