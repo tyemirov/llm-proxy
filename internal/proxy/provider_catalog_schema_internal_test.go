@@ -301,6 +301,9 @@ func TestProviderCatalogTransportValidationRejectsEveryInvalidShape(t *testing.T
 		{name: "lifecycle", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
 			(*transports)[0].Components.Execution.ID = "future"
 		}, expected: "unsupported_execution_lifecycle"},
+		{name: "codec lifecycle", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
+			(*transports)[0].Components.Execution.ID = string(textExecutionLifecycleSynchronousCompletion)
+		}, expected: "unsupported_component_combination"},
 		{name: "resource visibility missing", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
 			(*transports)[0].Components.Execution.ResourceVisibility = ProviderCatalogResourceVisibility{}
 		}, expected: ".resource_visibility"},
@@ -340,6 +343,9 @@ func TestProviderCatalogTransportValidationRejectsEveryInvalidShape(t *testing.T
 }
 
 func TestProviderCatalogEndpointAndProtocolEdges(t *testing.T) {
+	if requestCodecSupportsLifecycle("future", textExecutionLifecycleSynchronousCompletion) {
+		t.Fatal("unknown request codec accepted a lifecycle")
+	}
 	fields := map[string]ProviderCatalogField{
 		"api_key":  internalValidCredentialField(),
 		"base_url": internalValidSettingField(),

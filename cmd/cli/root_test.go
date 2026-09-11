@@ -900,7 +900,7 @@ func TestRootCommandRejectsInvalidProviderCatalog(t *testing.T) {
 			mutate: func(document string) string {
 				return strings.Replace(document, "            id: openai_responses", "            id: future_protocol", 1)
 			},
-			expectedError: "reason=unsupported_protocol",
+			expectedError: "reason=unsupported_codec",
 		},
 		{
 			name: "dangling authentication field",
