@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 model_migrations:
     - managed_schema_version: 4
       provider: qwencloud
@@ -970,9 +970,8 @@ providers:
             field: api_key
             header: Authorization
             prefix: 'Bearer '
-          request_protocol: openai_responses
-          response_protocol: openai_responses
-          usage_mapping: openai_responses
+          protocol:
+            id: openai_responses
           lifecycle: pollable_resource
           resource_visibility:
             retry_interval_milliseconds: 2000
@@ -980,33 +979,6 @@ providers:
             retry_status_codes:
                 - 403
                 - 404
-          protocol_parameters:
-            media_execution_lifecycle: pollable_resource
-            model_field: model
-            token_field: max_output_tokens
-            output_fields:
-                - output[].content[].text
-                - output[].type
-                - output[].call_id
-                - output[].name
-                - output[].arguments
-            finish_rules:
-                complete:
-                    - completed
-                continue:
-                    - incomplete:max_output_tokens
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - cancelled
-                - failed
-                - refusal
-                - unknown_status
-            usage_fields:
-                input: usage.input_tokens
-                output: usage.output_tokens
-                total: usage.total_tokens
         - id: dictation
           endpoint:
             method: POST
@@ -1017,27 +989,10 @@ providers:
             field: api_key
             header: Authorization
             prefix: 'Bearer '
-          request_protocol: multipart_transcription
-          response_protocol: multipart_transcription
-          usage_mapping: multipart_transcription
+          protocol:
+            id: multipart_transcription
+            variation: model
           lifecycle: synchronous_completion
-          protocol_parameters:
-            model_field: model
-            token_field: ""
-            output_fields:
-                - text
-            finish_rules:
-                complete:
-                    - http_2xx
-                continue: []
-            continuation_rules: []
-            error_rules:
-                - malformed_response
-                - provider_error
-            usage_fields:
-                input: ""
-                output: ""
-                total: ""
       offerings:
         - model: gpt-6-astra
           created: 1787853604
@@ -1756,33 +1711,10 @@ providers:
             field: api_key
             header: Authorization
             prefix: 'Bearer '
-          request_protocol: openai_chat_completions
-          response_protocol: openai_chat_completions
-          usage_mapping: openai_chat_completions
+          protocol:
+            id: openai_chat_completions
+            variation: max_tokens
           lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: max_tokens
-            output_fields:
-                - choices[].message.content
-                - choices[].message.tool_calls
-            finish_rules:
-                complete:
-                    - stop
-                    - tool_calls
-                continue:
-                    - length
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - content_filter
-                - unknown_finish_reason
-            usage_fields:
-                input: usage.prompt_tokens
-                output: usage.completion_tokens
-                total: usage.total_tokens
       offerings:
         - model: deepseek-v4-flash
           created: 1787276456
@@ -1856,32 +1788,9 @@ providers:
             field: api_key
             header: Authorization
             prefix: 'Bearer '
-          request_protocol: dashscope_responses
-          response_protocol: dashscope_responses
-          usage_mapping: dashscope_responses
+          protocol:
+            id: dashscope_responses
           lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: max_output_tokens
-            output_fields:
-                - output[].content[].text
-            finish_rules:
-                complete:
-                    - completed
-                continue:
-                    - incomplete
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - cancelled
-                - failed
-                - unknown_status
-            usage_fields:
-                input: usage.input_tokens
-                output: usage.output_tokens
-                total: usage.total_tokens
       offerings:
         - model: qwen-plus
           created: 1787276456
@@ -2422,33 +2331,10 @@ providers:
             field: api_key
             header: Authorization
             prefix: 'Bearer '
-          request_protocol: openai_chat_completions
-          response_protocol: openai_chat_completions
-          usage_mapping: openai_chat_completions
+          protocol:
+            id: openai_chat_completions
+            variation: max_completion_tokens
           lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: max_completion_tokens
-            output_fields:
-                - choices[].message.content
-                - choices[].message.tool_calls
-            finish_rules:
-                complete:
-                    - stop
-                    - tool_calls
-                continue:
-                    - length
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - content_filter
-                - unknown_finish_reason
-            usage_fields:
-                input: usage.prompt_tokens
-                output: usage.completion_tokens
-                total: usage.total_tokens
       offerings:
         - model: kimi-k2.6
           created: 1787276456
@@ -2644,33 +2530,10 @@ providers:
             field: api_key
             header: Authorization
             prefix: 'Bearer '
-          request_protocol: openai_chat_completions
-          response_protocol: openai_chat_completions
-          usage_mapping: openai_chat_completions
+          protocol:
+            id: openai_chat_completions
+            variation: max_completion_tokens
           lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: max_completion_tokens
-            output_fields:
-                - choices[].message.content
-                - choices[].message.tool_calls
-            finish_rules:
-                complete:
-                    - stop
-                    - tool_calls
-                continue:
-                    - length
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - content_filter
-                - unknown_finish_reason
-            usage_fields:
-                input: usage.prompt_tokens
-                output: usage.completion_tokens
-                total: usage.total_tokens
       offerings:
         - model: minimax-m3
           created: 1788644880
@@ -3123,33 +2986,10 @@ providers:
             field: api_key
             header: Authorization
             prefix: 'Bearer '
-          request_protocol: openai_chat_completions
-          response_protocol: openai_chat_completions
-          usage_mapping: openai_chat_completions
+          protocol:
+            id: openai_chat_completions
+            variation: max_tokens
           lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: max_tokens
-            output_fields:
-                - choices[].message.content
-                - choices[].message.tool_calls
-            finish_rules:
-                complete:
-                    - stop
-                    - tool_calls
-                continue:
-                    - length
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - content_filter
-                - unknown_finish_reason
-            usage_fields:
-                input: usage.prompt_tokens
-                output: usage.completion_tokens
-                total: usage.total_tokens
         - id: dictation
           endpoint:
             method: POST
@@ -3160,27 +3000,10 @@ providers:
             field: api_key
             header: Authorization
             prefix: 'Bearer '
-          request_protocol: multipart_transcription
-          response_protocol: multipart_transcription
-          usage_mapping: multipart_transcription
+          protocol:
+            id: multipart_transcription
+            variation: model
           lifecycle: synchronous_completion
-          protocol_parameters:
-            model_field: model
-            token_field: ""
-            output_fields:
-                - text
-            finish_rules:
-                complete:
-                    - http_2xx
-                continue: []
-            continuation_rules: []
-            error_rules:
-                - malformed_response
-                - provider_error
-            usage_fields:
-                input: ""
-                output: ""
-                total: ""
       offerings:
         - model: deepseek-reasoner
           created: 1787276456
@@ -3236,33 +3059,10 @@ providers:
             field: api_key
             header: Authorization
             prefix: 'Bearer '
-          request_protocol: openai_chat_completions
-          response_protocol: openai_chat_completions
-          usage_mapping: openai_chat_completions
+          protocol:
+            id: openai_chat_completions
+            variation: max_tokens
           lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: max_tokens
-            output_fields:
-                - choices[].message.content
-                - choices[].message.tool_calls
-            finish_rules:
-                complete:
-                    - stop
-                    - tool_calls
-                continue:
-                    - length
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - content_filter
-                - unknown_finish_reason
-            usage_fields:
-                input: usage.prompt_tokens
-                output: usage.completion_tokens
-                total: usage.total_tokens
         - id: dictation
           endpoint:
             method: POST
@@ -3273,27 +3073,10 @@ providers:
             field: api_key
             header: Authorization
             prefix: 'Bearer '
-          request_protocol: multipart_transcription
-          response_protocol: multipart_transcription
-          usage_mapping: multipart_transcription
+          protocol:
+            id: multipart_transcription
+            variation: model
           lifecycle: synchronous_completion
-          protocol_parameters:
-            model_field: model
-            token_field: ""
-            output_fields:
-                - text
-            finish_rules:
-                complete:
-                    - http_2xx
-                continue: []
-            continuation_rules: []
-            error_rules:
-                - malformed_response
-                - provider_error
-            usage_fields:
-                input: ""
-                output: ""
-                total: ""
       offerings:
         - model: glm-5.3
           created: 1787011200
@@ -3513,9 +3296,8 @@ providers:
           headers:
             - name: Api-Revision
               value: "2026-05-20"
-          request_protocol: gemini_interactions
-          response_protocol: gemini_interactions
-          usage_mapping: gemini_interactions
+          protocol:
+            id: gemini_interactions
           lifecycle: pollable_resource
           resource_visibility:
             retry_interval_milliseconds: 5000
@@ -3524,27 +3306,6 @@ providers:
                 - 400
                 - 403
                 - 404
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: generation_config.max_output_tokens
-            output_fields:
-                - outputs[].text
-            finish_rules:
-                complete:
-                    - completed
-                continue:
-                    - incomplete
-            continuation_rules: []
-            error_rules:
-                - blocked
-                - cancelled
-                - failed
-                - unknown_status
-            usage_fields:
-                input: usage.input_tokens
-                output: usage.output_tokens
-                total: usage.total_tokens
         - id: text_synchronous
           endpoint:
             method: POST
@@ -3558,31 +3319,9 @@ providers:
           headers:
             - name: Api-Revision
               value: "2026-05-20"
-          request_protocol: gemini_interactions
-          response_protocol: gemini_interactions
-          usage_mapping: gemini_interactions
+          protocol:
+            id: gemini_interactions
           lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: generation_config.max_output_tokens
-            output_fields:
-                - outputs[].text
-            finish_rules:
-                complete:
-                    - completed
-                continue:
-                    - incomplete
-            continuation_rules: []
-            error_rules:
-                - blocked
-                - cancelled
-                - failed
-                - unknown_status
-            usage_fields:
-                input: usage.input_tokens
-                output: usage.output_tokens
-                total: usage.total_tokens
         - id: dictation
           endpoint:
             method: POST
@@ -3596,31 +3335,9 @@ providers:
           headers:
             - name: Api-Revision
               value: "2026-05-20"
-          request_protocol: gemini_interactions
-          response_protocol: gemini_interactions
-          usage_mapping: gemini_interactions
+          protocol:
+            id: gemini_interactions
           lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: generation_config.max_output_tokens
-            output_fields:
-                - outputs[].text
-            finish_rules:
-                complete:
-                    - completed
-                continue:
-                    - incomplete
-            continuation_rules: []
-            error_rules:
-                - blocked
-                - cancelled
-                - failed
-                - unknown_status
-            usage_fields:
-                input: usage.input_tokens
-                output: usage.output_tokens
-                total: usage.total_tokens
       offerings:
         - model: gemini-3.6-flash
           created: 1788566400
@@ -4187,34 +3904,9 @@ providers:
           headers:
             - name: anthropic-version
               value: "2023-06-01"
-          request_protocol: anthropic_messages
-          response_protocol: anthropic_messages
-          usage_mapping: anthropic_messages
+          protocol:
+            id: anthropic_messages
           lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: max_tokens
-            output_fields:
-                - content[].text
-            finish_rules:
-                complete:
-                    - end_turn
-                    - stop_sequence
-                continue:
-                    - max_tokens
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - pause_turn
-                - refusal
-                - tool_use
-                - unknown_stop_reason
-            usage_fields:
-                input: usage.input_tokens
-                output: usage.output_tokens
-                total: derived_input_plus_output
       offerings:
         - model: claude-fable-5-1
           created: 1787875200
@@ -4772,33 +4464,10 @@ providers:
             field: api_key
             header: Authorization
             prefix: 'Bearer '
-          request_protocol: openai_chat_completions
-          response_protocol: openai_chat_completions
-          usage_mapping: openai_chat_completions
+          protocol:
+            id: openai_chat_completions
+            variation: max_completion_tokens
           lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: max_completion_tokens
-            output_fields:
-                - choices[].message.content
-                - choices[].message.tool_calls
-            finish_rules:
-                complete:
-                    - stop
-                    - tool_calls
-                continue:
-                    - length
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - content_filter
-                - unknown_finish_reason
-            usage_fields:
-                input: usage.prompt_tokens
-                output: usage.completion_tokens
-                total: usage.total_tokens
         - id: dictation
           endpoint:
             method: POST
@@ -4809,20 +4478,9 @@ providers:
             field: api_key
             header: Authorization
             prefix: 'Bearer '
-          request_protocol: meta_transcription
-          response_protocol: meta_transcription
-          usage_mapping: meta_transcription
+          protocol:
+            id: meta_transcription
           lifecycle: synchronous_completion
-          protocol_parameters:
-            model_field: request.model
-            output_fields:
-              - transcript
-            finish_rules:
-              complete:
-                - http_2xx
-            error_rules:
-              - malformed_response
-              - provider_error
       offerings:
         - model: muse-voice-transcribe-1.0
           created: 1788652800
@@ -4939,37 +4597,9 @@ providers:
             field: api_key
             header: Authorization
             prefix: 'Bearer '
-          request_protocol: xai_responses
-          response_protocol: xai_responses
-          usage_mapping: xai_responses
+          protocol:
+            id: xai_responses
           lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: max_output_tokens
-            output_fields:
-                - output[].content[].text
-                - output[].type
-                - output[].call_id
-                - output[].name
-                - output[].arguments
-            finish_rules:
-                complete:
-                    - completed
-                continue:
-                    - incomplete:max_output_tokens
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - cancelled
-                - failed
-                - refusal
-                - unknown_status
-            usage_fields:
-                input: usage.input_tokens
-                output: usage.output_tokens
-                total: usage.total_tokens
         - id: video_generation
           endpoint:
             method: POST
@@ -4980,28 +4610,9 @@ providers:
             field: api_key
             header: Authorization
             prefix: 'Bearer '
-          request_protocol: xai_videos_generations
-          response_protocol: xai_videos_generations
-          usage_mapping: xai_videos_generations
+          protocol:
+            id: xai_videos_generations
           lifecycle: pollable_resource
-          protocol_parameters:
-            model_field: model
-            token_field: ""
-            output_fields:
-                - data[].url
-            finish_rules:
-                complete:
-                    - completed
-                continue:
-                    - pending
-            continuation_rules: []
-            error_rules:
-                - failed
-                - unknown_status
-            usage_fields:
-                input: ""
-                output: ""
-                total: ""
         - id: dictation
           endpoint:
             method: POST
@@ -5012,27 +4623,10 @@ providers:
             field: api_key
             header: Authorization
             prefix: 'Bearer '
-          request_protocol: multipart_transcription
-          response_protocol: multipart_transcription
-          usage_mapping: multipart_transcription
+          protocol:
+            id: multipart_transcription
+            variation: model_omitted
           lifecycle: synchronous_completion
-          protocol_parameters:
-            model_field: ""
-            token_field: ""
-            output_fields:
-                - text
-            finish_rules:
-                complete:
-                    - http_2xx
-                continue: []
-            continuation_rules: []
-            error_rules:
-                - malformed_response
-                - provider_error
-            usage_fields:
-                input: ""
-                output: ""
-                total: ""
       offerings:
         - model: grok-4.3
           created: 1787276456
@@ -5396,32 +4990,10 @@ providers:
             field: api_key
             header: Authorization
             prefix: 'Bearer '
-          request_protocol: openai_chat_completions
-          response_protocol: openai_chat_completions
-          usage_mapping: openai_chat_completions
+          protocol:
+            id: openai_chat_completions
+            variation: qianfan_max_tokens
           lifecycle: synchronous_completion
-          protocol_parameters:
-            response_policy: qianfan
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: max_tokens
-            output_fields:
-                - choices[].message.content
-            finish_rules:
-                complete: [stop]
-                continue: [length]
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - content_filter
-                - tool_calls
-                - unknown_finish_reason
-                - blocked_flag
-            usage_fields:
-                input: usage.prompt_tokens
-                output: usage.completion_tokens
-                total: usage.total_tokens
       offerings:
         - model: ernie-5.0
           created: 1788566400
@@ -5565,28 +5137,9 @@ providers:
             field: api_key
             header: x-goog-api-key
             prefix: ''
-          request_protocol: vertex_generate_content
-          response_protocol: vertex_generate_content
-          usage_mapping: vertex_generate_content
+          protocol:
+            id: vertex_generate_content
           lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: path.model
-            token_field: generationConfig.maxOutputTokens
-            output_fields:
-              - candidates[].content.parts[].text
-            finish_rules:
-              complete:
-                - STOP
-            continuation_rules: []
-            error_rules:
-              - MAX_TOKENS
-              - blocked
-              - unknown_finish_reason
-            usage_fields:
-              input: usageMetadata.promptTokenCount
-              output: usageMetadata.candidatesTokenCount+thoughtsTokenCount
-              total: usageMetadata.totalTokenCount
       offerings:
         - model: gemini-3.8-flash
           created: 1788307200

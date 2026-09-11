@@ -371,12 +371,10 @@ type providerTransportDefinition struct {
 	endpoint            ProviderCatalogEndpoint
 	authentication      ProviderCatalogAuthentication
 	headers             []ProviderCatalogHeader
-	requestProtocol     string
-	responseProtocol    string
-	usageMapping        string
+	protocol            string
 	lifecycle           textExecutionLifecycle
 	resourceVisibility  pollableResourceVisibilityPolicy
-	protocolParameters  ProviderCatalogProtocolParameters
+	protocolParameters  providerProtocolParameters
 	endpointURLOverride string
 }
 

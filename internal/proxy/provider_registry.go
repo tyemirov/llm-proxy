@@ -82,17 +82,16 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			definition.connectionValues[fieldIdentifier] = value
 		}
 		for _, transport := range provider.Transports {
+			protocolDefinition, _ := providerProtocolDefinitionFor(transport.Protocol, "")
 			definition.transports[transport.ID] = providerTransportDefinition{
 				identifier:         transport.ID,
 				endpoint:           transport.Endpoint,
 				authentication:     transport.Authentication,
 				headers:            append([]ProviderCatalogHeader(nil), transport.Headers...),
-				requestProtocol:    transport.RequestProtocol,
-				responseProtocol:   transport.ResponseProtocol,
-				usageMapping:       transport.UsageMapping,
+				protocol:           transport.Protocol.ID,
 				lifecycle:          textExecutionLifecycle(transport.Lifecycle),
 				resourceVisibility: pollableResourceVisibilityPolicyFromCatalog(transport.ResourceVisibility),
-				protocolParameters: transport.ProtocolParameters,
+				protocolParameters: protocolDefinition.parameters,
 			}
 		}
 		for _, offering := range provider.Offerings {
@@ -115,7 +114,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			transport := definition.transports[offering.Transport]
 			if slices.Contains(offering.Operations, ModelOperationText) {
 				routeCapabilities := textRouteCapabilities{
-					wireContract:       textWireContract(transport.requestProtocol),
+					wireContract:       textWireContract(transport.protocol),
 					executionLifecycle: transport.lifecycle,
 				}
 				definition.textModels[strings.ToLower(offering.Model)] = textModelDefinition{

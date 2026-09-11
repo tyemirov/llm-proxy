@@ -870,14 +870,14 @@ func TestRootCommandRejectsInvalidProviderCatalog(t *testing.T) {
 		{
 			name: "unsupported schema version",
 			mutate: func(document string) string {
-				return strings.Replace(document, "schema_version: 1", "schema_version: 2", 1)
+				return strings.Replace(document, "schema_version: 2", "schema_version: 3", 1)
 			},
-			expectedError: "field=schema_version value=2",
+			expectedError: "field=schema_version value=3",
 		},
 		{
 			name: "unknown field",
 			mutate: func(document string) string {
-				return strings.Replace(document, "schema_version: 1", "schema_version: 1\nfuture_option: true", 1)
+				return strings.Replace(document, "schema_version: 2", "schema_version: 2\nfuture_option: true", 1)
 			},
 			expectedError: "field future_option not found",
 		},
@@ -898,7 +898,7 @@ func TestRootCommandRejectsInvalidProviderCatalog(t *testing.T) {
 		{
 			name: "unknown protocol",
 			mutate: func(document string) string {
-				return strings.Replace(document, "request_protocol: openai_responses", "request_protocol: future_protocol", 1)
+				return strings.Replace(document, "            id: openai_responses", "            id: future_protocol", 1)
 			},
 			expectedError: "reason=unsupported_protocol",
 		},

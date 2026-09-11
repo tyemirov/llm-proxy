@@ -69,17 +69,17 @@ func TestProviderCatalogDeclaresProviderSpecificResourceVisibilityPolicies(testi
 	}
 }
 
-func TestProviderCatalogDeclaresGeminiInteractionsWithoutReplayContinuation(testingInstance *testing.T) {
+func TestProviderCatalogDeclaresGeminiInteractionsProtocolReference(testingInstance *testing.T) {
 	for _, provider := range testfixtures.ProviderCatalog(testingInstance).Schema().Providers {
 		if provider.ID != proxy.ProviderNameGemini {
 			continue
 		}
 		for _, transport := range provider.Transports {
-			if transport.RequestProtocol != proxy.CatalogProtocolGeminiInteractions {
+			if transport.Protocol.ID != proxy.CatalogProtocolGeminiInteractions {
 				continue
 			}
-			if len(transport.ProtocolParameters.ContinuationRules) != 0 {
-				testingInstance.Fatalf("Gemini Interactions continuation rules=%v want=[]", transport.ProtocolParameters.ContinuationRules)
+			if transport.Protocol.Variation != "" {
+				testingInstance.Fatalf("Gemini Interactions variation=%q want empty", transport.Protocol.Variation)
 			}
 			return
 		}
@@ -378,11 +378,11 @@ func TestProviderCatalogRejectsStructuralAndAdapterContractViolations(testingIns
 			expectedError: "lifecycle=future_lifecycle",
 		},
 		{
-			name: "adapter parameter mismatch",
+			name: "adapter variation mismatch",
 			mutate: func(schema *proxy.ProviderCatalogSchema) {
-				schema.Providers[0].Transports[0].ProtocolParameters.ModelField = "future_model_field"
+				schema.Providers[0].Transports[0].Protocol.Variation = "future"
 			},
-			expectedError: "reason=adapter_contract_mismatch",
+			expectedError: "reason=unsupported_protocol_variation",
 		},
 		{
 			name: "negative output token limit",
@@ -554,22 +554,10 @@ func catalogWithTestProvider(testingInstance *testing.T) *proxy.ProviderCatalog 
 				Kind: proxy.CatalogAuthenticationBearer, Field: testCatalogCredentialField,
 				Header: "Authorization", Prefix: "Bearer ",
 			},
-			RequestProtocol:  proxy.CatalogProtocolOpenAIChatCompletions,
-			ResponseProtocol: proxy.CatalogProtocolOpenAIChatCompletions,
-			UsageMapping:     proxy.CatalogProtocolOpenAIChatCompletions,
-			Lifecycle:        "synchronous_completion",
-			ProtocolParameters: proxy.ProviderCatalogProtocolParameters{
-				ModelField: "model", TokenField: "max_tokens", MediaExecutionLifecycle: "synchronous_completion",
-				OutputFields: []string{"choices[].message.content", "choices[].message.tool_calls"},
-				FinishRules: proxy.ProviderCatalogFinishRules{
-					Complete: []string{"stop", "tool_calls"}, Continue: []string{"length"},
-				},
-				ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
-				ErrorRules:        []string{"content_filter", "unknown_finish_reason"},
-				UsageFields: proxy.ProviderCatalogUsageFields{
-					Input: "usage.prompt_tokens", Output: "usage.completion_tokens", Total: "usage.total_tokens",
-				},
+			Protocol: proxy.ProviderCatalogProtocolReference{
+				ID: proxy.CatalogProtocolOpenAIChatCompletions, Variation: proxy.CatalogProtocolVariationMaxTokens,
 			},
+			Lifecycle: "synchronous_completion",
 		}},
 		Offerings: []proxy.ProviderCatalogOffering{{
 			Created: 1700000000, Model: testCatalogModelID, UpstreamModel: testCatalogUpstreamModelID,

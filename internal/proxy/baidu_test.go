@@ -280,7 +280,7 @@ func TestBaiduCatalog(t *testing.T) {
 		schema := catalog.Schema()
 		for i := range schema.Providers {
 			if schema.Providers[i].ID == "baidu" {
-				schema.Providers[i].Transports[0].ProtocolParameters.ResponsePolicy = policy
+				schema.Providers[i].Transports[0].Protocol.Variation = policy
 			}
 		}
 		if _, err := proxy.NewProviderCatalog(schema); err == nil {

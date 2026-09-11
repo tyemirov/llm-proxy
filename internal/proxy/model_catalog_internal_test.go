@@ -172,7 +172,7 @@ func internalTestProviderTransport(identifier string, offering ProviderOffering)
 	protocol := offering.WireContract
 	for _, provider := range internalCanonicalProviderCatalog().schema.Providers {
 		for _, template := range provider.Transports {
-			if template.RequestProtocol != protocol || template.Lifecycle != offering.ExecutionLifecycle {
+			if template.Protocol.ID != protocol || template.Lifecycle != offering.ExecutionLifecycle {
 				continue
 			}
 			template.ID = identifier
@@ -183,7 +183,7 @@ func internalTestProviderTransport(identifier string, offering ProviderOffering)
 			return template
 		}
 	}
-	return ProviderCatalogTransport{ID: identifier, RequestProtocol: protocol}
+	return ProviderCatalogTransport{ID: identifier, Protocol: ProviderCatalogProtocolReference{ID: protocol}}
 }
 
 func internalTestProviderProtocolPath(protocol string) string {

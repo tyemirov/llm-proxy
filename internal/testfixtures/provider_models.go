@@ -15,6 +15,7 @@ import (
 // ProtocolFixture identifies one disposable provider route for an executable protocol adapter.
 type ProtocolFixture struct {
 	Protocol             string
+	Variation            string
 	Provider             string
 	Model                string
 	Operation            string
@@ -64,7 +65,7 @@ func ProviderCatalogWithProtocolFixtures(testingInstance testing.TB) (*proxy.Pro
 					if operation != proxy.ModelOperationText && operation != proxy.ModelOperationDictation {
 						continue
 					}
-					fixtureKey := strings.Join([]string{transport.RequestProtocol, transport.Lifecycle, operation}, "-")
+					fixtureKey := strings.Join([]string{transport.Protocol.ID, transport.Protocol.Variation, transport.Lifecycle, operation}, "-")
 					if selected[fixtureKey] {
 						continue
 					}
@@ -120,7 +121,7 @@ func ProviderCatalogWithProtocolFixtures(testingInstance testing.TB) (*proxy.Pro
 						controls = append(controls, control.ID)
 					}
 					fixtures = append(fixtures, ProtocolFixture{
-						Protocol: transport.RequestProtocol, Provider: fixtureProvider.ID,
+						Protocol: transport.Protocol.ID, Variation: transport.Protocol.Variation, Provider: fixtureProvider.ID,
 						Model: fixtureOffering.Model, Operation: operation, Lifecycle: transport.Lifecycle,
 						RequestProfile: offering.RequestProfile, EndpointPath: transport.Endpoint.Path,
 						AuthenticationHeader: transport.Authentication.Header, AuthenticationPrefix: transport.Authentication.Prefix,
@@ -278,14 +279,18 @@ func NewProviderCatalogFromModelCatalog(modelCatalog proxy.ModelCatalog) (*proxy
 }
 
 func testProviderTransport(identifier string, offering proxy.ProviderOffering) proxy.ProviderCatalogTransport {
-	parameters := testProviderProtocolParameters(offering)
+	protocol := proxy.ProviderCatalogProtocolReference{ID: offering.WireContract}
+	switch offering.WireContract {
+	case proxy.CatalogProtocolOpenAIChatCompletions:
+		protocol.Variation = proxy.CatalogProtocolVariationMaxTokens
+	case proxy.CatalogProtocolMultipartTranscription:
+		protocol.Variation = proxy.CatalogProtocolVariationTranscriptionModel
+	}
 	transport := proxy.ProviderCatalogTransport{
-		ID:              identifier,
-		Endpoint:        proxy.ProviderCatalogEndpoint{Method: proxy.CatalogEndpointMethodPost, DefaultBaseURL: "https://provider.example", Path: testProviderProtocolPath(offering.WireContract)},
-		Authentication:  proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationBearer, Field: proxy.CatalogCredentialAPIKey, Header: "Authorization", Prefix: "Bearer "},
-		RequestProtocol: offering.WireContract, ResponseProtocol: offering.WireContract,
-		UsageMapping: offering.WireContract, Lifecycle: offering.ExecutionLifecycle,
-		ProtocolParameters: parameters,
+		ID:             identifier,
+		Endpoint:       proxy.ProviderCatalogEndpoint{Method: proxy.CatalogEndpointMethodPost, DefaultBaseURL: "https://provider.example", Path: testProviderProtocolPath(offering.WireContract)},
+		Authentication: proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationBearer, Field: proxy.CatalogCredentialAPIKey, Header: "Authorization", Prefix: "Bearer "},
+		Protocol:       protocol, Lifecycle: offering.ExecutionLifecycle,
 	}
 	if offering.ExecutionLifecycle == "pollable_resource" {
 		switch offering.Provider {
@@ -315,78 +320,6 @@ func testProviderTransport(identifier string, offering proxy.ProviderOffering) p
 		transport.Headers = []proxy.ProviderCatalogHeader{{Name: "anthropic-version", Value: "2023-06-01"}}
 	}
 	return transport
-}
-
-func testProviderProtocolParameters(offering proxy.ProviderOffering) proxy.ProviderCatalogProtocolParameters {
-	switch offering.WireContract {
-	case proxy.CatalogProtocolVertexGenerateContent:
-		return proxy.ProviderCatalogProtocolParameters{
-			ModelField: "path.model", TokenField: "generationConfig.maxOutputTokens", MediaExecutionLifecycle: "synchronous_completion",
-			OutputFields: []string{"candidates[].content.parts[].text"}, FinishRules: proxy.ProviderCatalogFinishRules{Complete: []string{"STOP"}},
-			ContinuationRules: []string{}, ErrorRules: []string{"MAX_TOKENS", "blocked", "unknown_finish_reason"},
-			UsageFields: proxy.ProviderCatalogUsageFields{Input: "usageMetadata.promptTokenCount", Output: "usageMetadata.candidatesTokenCount+thoughtsTokenCount", Total: "usageMetadata.totalTokenCount"},
-		}
-
-	case proxy.CatalogProtocolDashScopeResponses:
-		return proxy.ProviderCatalogProtocolParameters{
-			ModelField: "model", TokenField: "max_output_tokens", MediaExecutionLifecycle: offering.ExecutionLifecycle,
-			OutputFields:      []string{"output[].content[].text"},
-			FinishRules:       proxy.ProviderCatalogFinishRules{Complete: []string{"completed"}, Continue: []string{"incomplete"}},
-			ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
-			ErrorRules:        []string{"cancelled", "failed", "unknown_status"},
-			UsageFields:       proxy.ProviderCatalogUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens"},
-		}
-	case proxy.CatalogProtocolOpenAIResponses, proxy.CatalogProtocolXAIResponses:
-		return proxy.ProviderCatalogProtocolParameters{
-			ModelField: "model", TokenField: "max_output_tokens", MediaExecutionLifecycle: offering.ExecutionLifecycle,
-			OutputFields:      []string{"output[].content[].text", "output[].type", "output[].call_id", "output[].name", "output[].arguments"},
-			FinishRules:       proxy.ProviderCatalogFinishRules{Complete: []string{"completed"}, Continue: []string{"incomplete:max_output_tokens"}},
-			ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
-			ErrorRules:        []string{"cancelled", "failed", "refusal", "unknown_status"},
-			UsageFields:       proxy.ProviderCatalogUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens"},
-		}
-	case proxy.CatalogProtocolOpenAIChatCompletions:
-		return proxy.ProviderCatalogProtocolParameters{
-			ModelField: "model", TokenField: "max_tokens", MediaExecutionLifecycle: "synchronous_completion",
-			OutputFields:      []string{"choices[].message.content", "choices[].message.tool_calls"},
-			FinishRules:       proxy.ProviderCatalogFinishRules{Complete: []string{"stop", "tool_calls"}, Continue: []string{"length"}},
-			ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
-			ErrorRules:        []string{"content_filter", "unknown_finish_reason"},
-			UsageFields:       proxy.ProviderCatalogUsageFields{Input: "usage.prompt_tokens", Output: "usage.completion_tokens", Total: "usage.total_tokens"},
-		}
-	case proxy.CatalogProtocolAnthropicMessages:
-		return proxy.ProviderCatalogProtocolParameters{
-			ModelField: "model", TokenField: "max_tokens", MediaExecutionLifecycle: "synchronous_completion",
-			OutputFields:      []string{"content[].text"},
-			FinishRules:       proxy.ProviderCatalogFinishRules{Complete: []string{"end_turn", "stop_sequence"}, Continue: []string{"max_tokens"}},
-			ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
-			ErrorRules:        []string{"pause_turn", "refusal", "tool_use", "unknown_stop_reason"},
-			UsageFields:       proxy.ProviderCatalogUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "derived_input_plus_output"},
-		}
-	case proxy.CatalogProtocolGeminiInteractions:
-		return proxy.ProviderCatalogProtocolParameters{
-			ModelField: "model", TokenField: "generation_config.max_output_tokens", MediaExecutionLifecycle: "synchronous_completion",
-			OutputFields:      []string{"outputs[].text"},
-			FinishRules:       proxy.ProviderCatalogFinishRules{Complete: []string{"completed"}, Continue: []string{"incomplete"}},
-			ContinuationRules: []string{},
-			ErrorRules:        []string{"blocked", "cancelled", "failed", "unknown_status"},
-			UsageFields:       proxy.ProviderCatalogUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens"},
-		}
-	case proxy.CatalogProtocolMultipartTranscription:
-		return proxy.ProviderCatalogProtocolParameters{
-			ModelField: "model", OutputFields: []string{"text"},
-			FinishRules:       proxy.ProviderCatalogFinishRules{Complete: []string{"http_2xx"}, Continue: []string{}},
-			ContinuationRules: []string{}, ErrorRules: []string{"malformed_response", "provider_error"},
-		}
-	case proxy.CatalogProtocolXAIVideosGenerations:
-		return proxy.ProviderCatalogProtocolParameters{
-			ModelField: "model", OutputFields: []string{"data[].url"},
-			FinishRules:       proxy.ProviderCatalogFinishRules{Complete: []string{"completed"}, Continue: []string{"pending"}},
-			ContinuationRules: []string{}, ErrorRules: []string{"failed", "unknown_status"},
-		}
-	default:
-		return proxy.ProviderCatalogProtocolParameters{}
-	}
 }
 
 func testProviderProtocolPath(protocol string) string {

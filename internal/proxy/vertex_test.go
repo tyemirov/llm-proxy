@@ -155,18 +155,9 @@ func vertexCatalog(t *testing.T) *proxy.ProviderCatalog {
 			transport.Authentication.Header = "x-goog-api-key"
 			transport.Authentication.Prefix = ""
 			transport.Headers = nil
-			transport.RequestProtocol = "vertex_generate_content"
-			transport.ResponseProtocol = "vertex_generate_content"
-			transport.UsageMapping = "vertex_generate_content"
+			transport.Protocol = proxy.ProviderCatalogProtocolReference{ID: proxy.CatalogProtocolVertexGenerateContent}
 			transport.Lifecycle = "synchronous_completion"
 			transport.ResourceVisibility = proxy.ProviderCatalogResourceVisibility{}
-			transport.ProtocolParameters = proxy.ProviderCatalogProtocolParameters{
-				ModelField: "path.model", TokenField: "generationConfig.maxOutputTokens", MediaExecutionLifecycle: "synchronous_completion",
-				OutputFields: []string{"candidates[].content.parts[].text"},
-				FinishRules:  proxy.ProviderCatalogFinishRules{Complete: []string{"STOP"}},
-				ErrorRules:   []string{"MAX_TOKENS", "blocked", "unknown_finish_reason"},
-				UsageFields:  proxy.ProviderCatalogUsageFields{Input: "usageMetadata.promptTokenCount", Output: "usageMetadata.candidatesTokenCount+thoughtsTokenCount", Total: "usageMetadata.totalTokenCount"},
-			}
 		}
 		for j := range provider.Offerings {
 			for _, media := range provider.Offerings[j].MediaInputs {

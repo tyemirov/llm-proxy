@@ -175,7 +175,7 @@ retain satisfied historical dependencies.
   - Documented the catalog-only provider qualification procedure.
   Validation: `make test-protocol-acceptance` passed. `make ci` passed all 13 gates in 312 seconds with 100.0 percent Go statement coverage.
 
-- [ ] [I257] (P1) {I256} Remove duplicated protocol facts from provider catalog records.
+- [x] [I257] (P1) {I256} Remove duplicated protocol facts from provider catalog records.
   Goal:
   Give each protocol invariant one authoritative definition and reduce provider additions to their required data.
   The catalog currently repeats adapter constants that `validateProviderCatalogAdapterContract` compares with Go definitions.
@@ -199,6 +199,13 @@ retain satisfied historical dependencies.
   - Prove rejection of obsolete shapes, unknown variations, missing references, and invalid combinations.
   - Prove equivalent public discovery, credentials, requests, responses, and usage for every active route.
   - Run the focused catalog target and applicable repository checks.
+  Resolution:
+  - Replaced request, response, usage, and parameter copies with one protocol reference.
+  - Added typed variations for Chat Completions and multipart transcription.
+  - Moved fixed request, response, finish, continuation, error, and usage facts into codec definitions.
+  - Converted the production catalog, test catalogs, registry, router, CLI tests, and provider tests to schema version 2.
+  - Extended shared acceptance to all 15 retained protocol variations and lifecycles.
+  Validation: `make test-provider-catalog` and `make test-protocol-acceptance` passed.
 
 - [ ] [I258] (P1) {I257} Separate protocol codecs, authentication, and execution lifecycles.
   Goal:
