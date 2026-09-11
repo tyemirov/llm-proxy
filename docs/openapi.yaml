@@ -1010,19 +1010,108 @@ paths:
           $ref: '#/components/responses/StructuredRequestFailed'
         '504':
           $ref: '#/components/responses/StructuredRequestFailed'
+  /model/v1/capabilities:
+    get:
+      operationId: getTenantMediaCapabilities
+      summary: Read tenant-available durable media routes
+      tags:
+        - Proxy
+      security:
+        - TenantBearerKey: []
+      responses:
+        '200':
+          description: Tenant-available media capability routes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaCapabilities'
+        '403':
+          $ref: '#/components/responses/ProxyForbidden'
+  /model/v1/operations:
+    post:
+      operationId: createTenantMediaOperation
+      summary: Accept one durable tenant media operation
+      tags:
+        - Proxy
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - $ref: '#/components/parameters/MediaOperationIdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MediaOperationRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/MediaOperation'
+        '202':
+          $ref: '#/components/responses/MediaOperation'
+        '400':
+          $ref: '#/components/responses/MediaOperationFailure'
+        '403':
+          $ref: '#/components/responses/ProxyForbidden'
+        '409':
+          $ref: '#/components/responses/MediaOperationFailure'
+        '410':
+          $ref: '#/components/responses/MediaOperationExpired'
+        '422':
+          $ref: '#/components/responses/MediaOperationFailure'
+        '429':
+          $ref: '#/components/responses/MediaOperationFailure'
+        '500':
+          $ref: '#/components/responses/MediaOperationFailure'
+  /model/v1/operations/{operation_id}:
+    get:
+      operationId: getTenantMediaOperation
+      summary: Read one durable tenant media operation
+      tags:
+        - Proxy
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - $ref: '#/components/parameters/MediaOperationID'
+      responses:
+        '200':
+          $ref: '#/components/responses/MediaOperation'
+        '403':
+          $ref: '#/components/responses/ProxyForbidden'
+        '404':
+          $ref: '#/components/responses/MediaOperationFailure'
+        '410':
+          $ref: '#/components/responses/MediaOperationExpired'
+  /model/v1/operations/{operation_id}/cancellation:
+    put:
+      operationId: cancelTenantMediaOperation
+      summary: Request cancellation of one durable tenant media operation
+      tags:
+        - Proxy
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - $ref: '#/components/parameters/MediaOperationID'
+      responses:
+        '200':
+          $ref: '#/components/responses/MediaOperation'
+        '403':
+          $ref: '#/components/responses/ProxyForbidden'
+        '404':
+          $ref: '#/components/responses/MediaOperationFailure'
+        '422':
+          $ref: '#/components/responses/MediaOperationFailure'
   /model/v1/assets:
     post:
       operationId: uploadTenantAsset
       summary: Upload exact tenant media bytes
       description: >-
-        Stores one image or audio asset for the configured retention
+        Stores one media asset for the configured retention
         period. The authenticated tenant owns the returned opaque asset id.
       tags:
         - Proxy
       security:
-        - TenantClientKey: []
+        - TenantBearerKey: []
       parameters:
-        - $ref: '#/components/parameters/TenantClientKey'
         - $ref: '#/components/parameters/RequestTimeout'
       requestBody:
         $ref: '#/components/requestBodies/AssetUpload'
@@ -1042,19 +1131,104 @@ paths:
         '500':
           $ref: '#/components/responses/AssetFailure'
   /model/v1/assets/{asset_id}:
+    get:
+      operationId: getTenantAsset
+      summary: Read one tenant asset metadata record
+      tags:
+        - Proxy
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - $ref: '#/components/parameters/AssetID'
+      responses:
+        '200':
+          $ref: '#/components/responses/AssetCreated'
+        '403':
+          $ref: '#/components/responses/ProxyForbidden'
+        '404':
+          $ref: '#/components/responses/AssetFailure'
+        '410':
+          $ref: '#/components/responses/AssetFailure'
+        '500':
+          $ref: '#/components/responses/AssetFailure'
     delete:
       operationId: deleteTenantAsset
       summary: Delete one tenant asset
       tags:
         - Proxy
       security:
-        - TenantClientKey: []
+        - TenantBearerKey: []
       parameters:
-        - $ref: '#/components/parameters/TenantClientKey'
         - $ref: '#/components/parameters/AssetID'
       responses:
         '204':
           description: The asset is deleted.
+        '403':
+          $ref: '#/components/responses/ProxyForbidden'
+        '404':
+          $ref: '#/components/responses/AssetFailure'
+        '410':
+          $ref: '#/components/responses/AssetFailure'
+        '500':
+          $ref: '#/components/responses/AssetFailure'
+  /model/v1/assets/{asset_id}/content:
+    get:
+      operationId: downloadTenantAsset
+      summary: Download exact tenant asset bytes
+      tags:
+        - Proxy
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - $ref: '#/components/parameters/AssetID'
+      responses:
+        '200':
+          description: Exact authenticated asset bytes.
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            audio/m4a:
+              schema:
+                type: string
+                format: binary
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            audio/wav:
+              schema:
+                type: string
+                format: binary
+            audio/flac:
+              schema:
+                type: string
+                format: binary
+            audio/ogg:
+              schema:
+                type: string
+                format: binary
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+            video/webm:
+              schema:
+                type: string
+                format: binary
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
         '403':
           $ref: '#/components/responses/ProxyForbidden'
         '404':
@@ -2212,6 +2386,14 @@ components:
       schema:
         type: string
         pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+    MediaOperationIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Tenant-bound key for one durable media operation intent. Exact repeats converge to the retained operation or tombstone. Changed intent returns 409 before dispatch.
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
     AssetID:
       name: asset_id
       in: path
@@ -2220,6 +2402,14 @@ components:
       schema:
         type: string
         pattern: ^ast_[0-9a-f]{32}$
+    MediaOperationID:
+      name: operation_id
+      in: path
+      required: true
+      description: Opaque durable media operation identifier.
+      schema:
+        type: string
+        pattern: ^mop_[0-9a-f]{32}$
     TenantID:
       name: tenant_id
       in: path
@@ -2335,6 +2525,22 @@ components:
             type: string
             format: binary
         audio/wav:
+          schema:
+            type: string
+            format: binary
+        audio/flac:
+          schema:
+            type: string
+            format: binary
+        audio/ogg:
+          schema:
+            type: string
+            format: binary
+        video/mp4:
+          schema:
+            type: string
+            format: binary
+        video/webm:
           schema:
             type: string
             format: binary
@@ -2544,6 +2750,24 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/AssetErrorEnvelope'
+    MediaOperation:
+      description: Current durable media operation state.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/MediaOperation'
+    MediaOperationFailure:
+      description: The media operation request failed with a stable caller-safe code.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/MediaOperationErrorEnvelope'
+    MediaOperationExpired:
+      description: Terminal operation detail expired. The tenant idempotency tombstone remains.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/MediaOperationExpired'
     StructuredRequestSucceeded:
       description: Exact provider output that passed the caller JSON Schema and was durably committed before this response.
       headers:
@@ -4549,6 +4773,160 @@ components:
         asset_id:
           type: string
           pattern: ^ast_[0-9a-f]{32}$
+    MediaCapabilities:
+      type: object
+      additionalProperties: false
+      required: [catalog_revision, routes]
+      properties:
+        catalog_revision:
+          type: string
+          minLength: 1
+        routes:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [capability, provider, model, controls, limits]
+            properties:
+              capability:
+                type: string
+                minLength: 1
+              provider:
+                type: string
+                minLength: 1
+              model:
+                type: string
+                minLength: 1
+              controls:
+                type: array
+                items:
+                  type: object
+              limits:
+                type: array
+                items:
+                  type: object
+    MediaOperationRequest:
+      type: object
+      additionalProperties: false
+      required: [capability, provider, model, input, controls]
+      properties:
+        capability:
+          type: string
+          minLength: 1
+        provider:
+          type: string
+          minLength: 1
+        model:
+          type: string
+          minLength: 1
+        input:
+          type: object
+        controls:
+          type: object
+    MediaOperation:
+      type: object
+      additionalProperties: false
+      required: [operation_id, capability, provider, model, catalog_revision, state, cancellation_state, outputs, cost, accepted_at, updated_at, deadline_at]
+      properties:
+        operation_id:
+          type: string
+          pattern: ^mop_[0-9a-f]{32}$
+        capability:
+          type: string
+          minLength: 1
+        provider:
+          type: string
+          minLength: 1
+        model:
+          type: string
+          minLength: 1
+        catalog_revision:
+          type: string
+          minLength: 1
+        state:
+          type: string
+          enum: [queued, running, succeeded, failed, cancelled, uncertain]
+        cancellation_state:
+          type: string
+          enum: [not_requested, requested, confirmed, unsupported]
+        outputs:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [asset_id, mime_type, size_bytes, ordinal]
+            properties:
+              asset_id:
+                type: string
+                pattern: ^ast_[0-9a-f]{32}$
+              mime_type:
+                type: string
+                minLength: 1
+              size_bytes:
+                type: integer
+                format: int64
+                minimum: 1
+              ordinal:
+                type: integer
+                minimum: 0
+        error:
+          type: object
+          additionalProperties: false
+          required: [code]
+          properties:
+            code:
+              type: string
+              enum: [provider_error, provider_rate_limited, operation_deadline_exceeded, provider_outcome_unknown, worker_claim_lost, asset_publication_failed, provider_result_invalid, media_operation_unavailable]
+        cost:
+          type: object
+          additionalProperties: false
+          required: [available]
+          properties:
+            available:
+              type: boolean
+            reason:
+              type: string
+              minLength: 1
+        accepted_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deadline_at:
+          type: string
+          format: date-time
+    MediaOperationErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code]
+          properties:
+            code:
+              type: string
+              enum: [media_operation_invalid, media_operation_unavailable, media_operation_not_found, media_operation_intent_conflict, media_operation_capacity_exceeded, media_operation_store_error]
+    MediaOperationExpired:
+      type: object
+      additionalProperties: false
+      required: [operation_id, state, error]
+      properties:
+        operation_id:
+          type: string
+          pattern: ^mop_[0-9a-f]{32}$
+        state:
+          type: string
+          enum: [succeeded, failed, cancelled]
+        error:
+          type: object
+          additionalProperties: false
+          required: [code]
+          properties:
+            code:
+              const: media_operation_expired
     TenantAsset:
       type: object
       additionalProperties: false
@@ -4572,6 +4950,10 @@ components:
             - audio/m4a
             - audio/mpeg
             - audio/wav
+            - audio/flac
+            - audio/ogg
+            - video/mp4
+            - video/webm
         size_bytes:
           type: integer
           format: int64
@@ -4604,6 +4986,7 @@ components:
                 - asset_not_found
                 - asset_expired
                 - asset_deleted
+                - asset_in_use
                 - asset_mime_mismatch
                 - asset_too_large
                 - asset_store_error

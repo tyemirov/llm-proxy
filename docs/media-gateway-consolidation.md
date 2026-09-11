@@ -10,8 +10,9 @@ Dictator remains a private runtime behind the gateway.
 P011 records this implementation plan on 2026-09-06.
 The 2026-09-08 revision adds provider catalog, protocol adapter, and second-provider acceptance requirements.
 MediaOps P006 records the corresponding consumer plan.
-The implementation issues remain open.
-This plan changes the delivery contract. It does not establish runtime acceptance.
+F022 delivered the common durable media service through controlled provider
+protocols. It establishes local runtime acceptance for the shared lifecycle.
+Live provider acceptance remains with each provider capability issue.
 
 The product has one gateway API, tenant model, credential lifecycle, provider catalog, and usage view.
 The gateway can contain separate adapters and workers within the same repository.
@@ -46,7 +47,8 @@ MediaOps uses its own gateway tenant.
 The parent does not configure provider services.
 
 Reuse the existing bearer authentication adapter for the new media routes.
-Update asset upload, deletion, and all official asset clients to that same authentication contract in the F022 release.
+Asset upload, metadata, content, deletion, and official client calls use that
+same authentication contract.
 Use the same managed key identity and replacement behavior as existing gateway clients.
 Authorize every operation, asset, voice, and history read against that tenant.
 Return `404` for a resource owned by another tenant.
@@ -78,11 +80,13 @@ The following paths define the existing foundation or the source to move.
 | MediaOps `internal/mediajobs/api` | Preserve product jobs and replace their direct provider dependencies. |
 | MediaOps `internal/timelineexport` | Keep composition and local export under MediaOps ownership. |
 
-The current asset store provides uploads and deletion. It needs authenticated output reads and durable active references.
+The asset store provides authenticated upload, metadata, content, and deletion.
+Durable active references prevent deletion while an operation owns an input or
+output.
 Its metadata uses files. Managed tenant data already uses SQLite.
 The structured text store also uses files and a process-local mutex.
-Its terminal cleanup and failed-request retry behavior are insufficient for paid media operations.
-F022 adds a media operation store instead of adopting those retry rules.
+Its terminal cleanup and failed-request retry behavior remain separate from paid
+media operations. The media operation store owns paid-operation recovery.
 
 ## Provider Catalog And Protocol Adapters
 
@@ -126,7 +130,7 @@ Add new behavior through typed code and its schema contract, rather than executa
 
 ### Acceptance Through A Second Provider
 
-F022 owns the reusable acceptance harness and the shared service boundary.
+F022 provides the reusable acceptance harness and the shared service boundary.
 Each capability issue owns this acceptance for every transport component that it adds or extends.
 F024 supplies the first image proof. F039 through F043 and F025 through F027 apply the same requirement to their slices.
 
@@ -159,7 +163,7 @@ Exact price estimates are optional catalog evidence, independent from acceptance
 
 All new media resources use the existing `/model/v1` namespace.
 The table specifies planned additions and the asset authorization change.
-F022 updates the server, OpenAPI, contract types, and official client together.
+F022 updated the server, OpenAPI, contract types, and official client together.
 
 | Method and resource | Result |
 | --- | --- |
@@ -193,9 +197,12 @@ An explicit cancellation request controls cancellation.
 
 ## Persistence And Execution Decisions
 
-F022 uses new operation tables in the existing managed SQLite database.
+F022 uses operation, claim, asset-reference, usage-delivery, and tombstone tables
+in the existing managed SQLite database.
 The first deployment has one API process with bounded in-process workers and the existing persistent asset volume.
-A worker restart reads its outstanding operations from SQLite.
+The service periodically reads outstanding operations from SQLite. It queues
+undispatched work without a live claim. It recovers dispatched work through the
+media operation adapter after an expired claim.
 Additional process replicas require their own qualification before activation.
 
 Create tables for operations, worker claims, input references, output references, and usage delivery records.

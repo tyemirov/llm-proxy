@@ -1638,15 +1638,21 @@ test("site publishes the exact canonical OpenAPI artifact and its derived refere
   );
   expect(documentationHTML).toContain('id="operation-postV2Messages"');
   expect(documentationHTML).toContain('id="operation-getV2StructuredRequest"');
+  expect(documentationHTML).toContain('id="operation-getTenantMediaCapabilities"');
+  expect(documentationHTML).toContain('id="operation-createTenantMediaOperation"');
+  expect(documentationHTML).toContain('id="operation-getTenantMediaOperation"');
+  expect(documentationHTML).toContain('id="operation-cancelTenantMediaOperation"');
   expect(documentationHTML).toContain('id="operation-uploadTenantAsset"');
+  expect(documentationHTML).toContain('id="operation-getTenantAsset"');
   expect(documentationHTML).toContain('id="operation-deleteTenantAsset"');
+  expect(documentationHTML).toContain('id="operation-downloadTenantAsset"');
   expect(documentationHTML).not.toContain('id="operation-deleteManagementTenantSecret"');
   expect(documentationHTML).toContain("<code>reasoning_effort</code>");
   expect(documentationHTML).toContain(`href="${openAPIPath}"`);
   expect(documentationHTML).toContain('id="operation-getHealth"');
   expect(documentationHTML).toContain('id="operation-postMCPRequest"');
   expect(documentationHTML).toContain('id="operation-getMCPResourceMetadata"');
-  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(39);
+  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(45);
 });
 
 test("OpenCode integration opens the bearer-authenticated client API reference", async ({ page }) => {

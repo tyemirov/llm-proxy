@@ -2027,7 +2027,7 @@ retain satisfied historical dependencies.
   - Prove reduced motion removes nonessential chart movement.
   - Prove the price review command classifies each freshness state.
   - Run `make ci` after the last application change.
-- [ ] [F022] (P1) {I258} Add durable tenant-owned media operations to the existing gateway.
+- [x] [F022] (P1) {I258} Add durable tenant-owned media operations to the existing gateway.
   Goal:
   Extend the existing tenant API with durable media execution and result artifacts.
   Use P011 and `docs/media-gateway-consolidation.md` as the current implementation contract.
@@ -2075,6 +2075,10 @@ retain satisfied historical dependencies.
   - Prove active references, interrupted downloads, output expiry, tombstones, and deduplicated usage after restart.
   - Preserve current text behavior through integration tests before shared-code extraction.
   - Run the current repository checks. Record provider and hosted acceptance separately.
+  Resolution:
+  - Added the durable operation service, SQLite records, worker claims, asset resources, OpenAPI contract, and official Go client.
+  - Added controlled-provider tests for tenant isolation, idempotency, cancellation, restart recovery, retention, usage delivery, and invalid results.
+  - Added a real-service client example. Live-provider acceptance remains with each provider capability issue.
 - [ ] [F024] (P1) {F022,I046} Deliver the first OpenAI image-generation capability.
   Goal:
   Let a backend tenant generate an image and retrieve verified bytes through the official LLM Proxy client.

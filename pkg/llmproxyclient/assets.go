@@ -45,7 +45,6 @@ func (config Config) assetUploadURL() url.URL {
 	}
 	queryValues.Del(queryFormat)
 	queryValues.Del(queryProvider)
-	queryValues.Set(queryKey, config.secret)
 	requestURL.RawQuery = queryValues.Encode()
 	return requestURL
 }
@@ -77,6 +76,7 @@ func (client Client) UploadAsset(contextValue context.Context, input AssetUpload
 		ContentLength: int64(len(input.Data)),
 	}).WithContext(contextValue)
 	request.Header.Set(headerContentType, mimeType)
+	request.Header.Set("Authorization", "Bearer "+client.config.secret)
 	response, requestError := client.httpClient.Do(request)
 	if requestError != nil {
 		return Asset{}, fmt.Errorf("%w: upload asset", ErrClientHTTPFailure)
@@ -106,7 +106,7 @@ func (client Client) UploadAsset(contextValue context.Context, input AssetUpload
 
 func supportedClientMediaMIME(mimeType string) bool {
 	switch mimeType {
-	case audioMIMEM4A, audioMIMEMPEG, audioMIMEWAV, imageMIMEJPEG, imageMIMEPNG, imageMIMEWebP:
+	case audioMIMEM4A, audioMIMEMPEG, audioMIMEWAV, "audio/flac", "audio/ogg", imageMIMEJPEG, imageMIMEPNG, imageMIMEWebP, "video/mp4", "video/webm":
 		return true
 	default:
 		return false

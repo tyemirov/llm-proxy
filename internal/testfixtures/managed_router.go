@@ -65,6 +65,15 @@ func StandardManagedTenant(secret string) ManagedTenant {
 
 // BuildManagedRouter builds and provisions a router through the mandatory management API.
 func BuildManagedRouter(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger, tenant ManagedTenant) (*gin.Engine, error) {
+	configured, provisionError := ProvisionManagedRouter(testingInstance, configuration, structuredLogger, tenant)
+	if provisionError != nil {
+		return nil, provisionError
+	}
+	return proxy.BuildRouter(configured, structuredLogger)
+}
+
+// ProvisionManagedRouter provisions one tenant and returns the reusable persistent router configuration.
+func ProvisionManagedRouter(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger, tenant ManagedTenant) (proxy.Configuration, error) {
 	testingInstance.Helper()
 	databasePath := "file:managed-router-" + rand.Text() + "?mode=memory&cache=shared"
 	configuration.Management = managedRouterConfiguration(databasePath)
@@ -77,22 +86,22 @@ func BuildManagedRouter(testingInstance testing.TB, configuration proxy.Configur
 	bootstrapRouter, buildError := proxy.BuildRouter(bootstrapConfiguration, structuredLogger)
 	if buildError != nil {
 		proxy.HTTPClient = originalHTTPClient
-		return nil, buildError
+		return proxy.Configuration{}, buildError
 	}
 	sessionCookie, cookieError := managedRouterSessionCookie()
 	if cookieError != nil {
-		return nil, cookieError
+		return proxy.Configuration{}, cookieError
 	}
 	tenantID, accountError := managedRouterTenantID(bootstrapRouter, sessionCookie)
 	if accountError != nil {
 		proxy.HTTPClient = originalHTTPClient
-		return nil, accountError
+		return proxy.Configuration{}, accountError
 	}
 	for provider, apiKey := range tenant.ProviderKeys {
 		providerError := saveManagedProviderKey(bootstrapRouter, sessionCookie, tenantID, configuration.ProviderCatalog, provider, apiKey, tenant.ProviderFields[provider])
 		if providerError != nil {
 			proxy.HTTPClient = originalHTTPClient
-			return nil, providerError
+			return proxy.Configuration{}, providerError
 		}
 	}
 	defaults := tenant.Defaults
@@ -101,22 +110,18 @@ func BuildManagedRouter(testingInstance testing.TB, configuration proxy.Configur
 	}
 	if defaultsError := saveManagedDefaults(bootstrapRouter, sessionCookie, tenantID, defaults); defaultsError != nil {
 		proxy.HTTPClient = originalHTTPClient
-		return nil, defaultsError
+		return proxy.Configuration{}, defaultsError
 	}
 	if strings.TrimSpace(tenant.Secret) == "" {
 		proxy.HTTPClient = originalHTTPClient
-		return nil, fmt.Errorf("managed router fixture secret must be set")
+		return proxy.Configuration{}, fmt.Errorf("managed router fixture secret must be set")
 	}
 	if secretError := setManagedSecret(databasePath, tenantID, tenant.Secret); secretError != nil {
 		proxy.HTTPClient = originalHTTPClient
-		return nil, secretError
+		return proxy.Configuration{}, secretError
 	}
-	router, buildError := proxy.BuildRouter(configuration, structuredLogger)
 	proxy.HTTPClient = originalHTTPClient
-	if buildError != nil {
-		return nil, buildError
-	}
-	return router, nil
+	return configuration, nil
 }
 
 func managedRouterConfiguration(databasePath string) proxy.ManagementConfiguration {

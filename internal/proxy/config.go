@@ -39,10 +39,22 @@ const (
 	// DefaultAssetRetentionSeconds keeps uploaded tenant assets for 48 hours.
 	DefaultAssetRetentionSeconds = 48 * 60 * 60
 	// DefaultAssetStorePath is the persistent filesystem location for tenant assets.
-	DefaultAssetStorePath      = "/data/assets"
-	DefaultDictationModel      = "gpt-transcribe"
-	DefaultMaxInputAudioBytes  = 25 * 1024 * 1024
-	DefaultManagementJWTIssuer = "tauth"
+	DefaultAssetStorePath = "/data/assets"
+	// DefaultMediaOperationLifetimeSeconds is the execution authority granted to one accepted media operation.
+	DefaultMediaOperationLifetimeSeconds = 15 * 60
+	// DefaultMediaOperationClaimSeconds is the lifetime of one worker claim.
+	DefaultMediaOperationClaimSeconds = 60
+	// DefaultMediaOperationClaimRenewalSeconds is the worker claim renewal interval.
+	DefaultMediaOperationClaimRenewalSeconds = 20
+	// DefaultMediaOperationCapacity is the global accepted-operation capacity.
+	DefaultMediaOperationCapacity = 32
+	// DefaultTenantMediaOperationCapacity is the accepted-operation capacity for one tenant.
+	DefaultTenantMediaOperationCapacity = 4
+	// DefaultMediaOperationWorkers is the bounded media worker count.
+	DefaultMediaOperationWorkers = 2
+	DefaultDictationModel        = "gpt-transcribe"
+	DefaultMaxInputAudioBytes    = 25 * 1024 * 1024
+	DefaultManagementJWTIssuer   = "tauth"
 	// DefaultManagementUsageQueueSize is the number of managed usage events retained for asynchronous persistence.
 	DefaultManagementUsageQueueSize = 1024
 	managedProviderKeyBytes         = 32
@@ -50,27 +62,34 @@ const (
 
 // Configuration holds runtime settings.
 type Configuration struct {
-	Management                 ManagementConfiguration
-	Port                       int
-	LogLevel                   string
-	WorkerCount                int
-	QueueSize                  int
-	RequestTimeoutSeconds      int
-	MaxRequestTimeoutSeconds   int
-	MaxPromptBytes             int64
-	MaxAssetBytes              int64
-	AssetRetentionSeconds      int
-	AssetStorePath             string
-	MaxInputAudioBytes         int64
-	UpstreamRateLimits         []UpstreamRateLimitConfiguration
-	Endpoints                  *Endpoints
-	ProviderCatalog            *ProviderCatalog
-	ProviderConnectionValues   map[string]map[string]string
-	ModelCatalog               ModelCatalog
-	upstreamRateLimits         upstreamRateLimits
-	managementSessionValidator *managementSessionValidator
-	requestTimeoutPolicy       requestTimeoutPolicy
-	validated                  bool
+	Management                        ManagementConfiguration
+	Port                              int
+	LogLevel                          string
+	WorkerCount                       int
+	QueueSize                         int
+	RequestTimeoutSeconds             int
+	MaxRequestTimeoutSeconds          int
+	MaxPromptBytes                    int64
+	MaxAssetBytes                     int64
+	AssetRetentionSeconds             int
+	AssetStorePath                    string
+	MaxInputAudioBytes                int64
+	UpstreamRateLimits                []UpstreamRateLimitConfiguration
+	Endpoints                         *Endpoints
+	ProviderCatalog                   *ProviderCatalog
+	ProviderConnectionValues          map[string]map[string]string
+	ModelCatalog                      ModelCatalog
+	MediaOperationAdapters            map[string]MediaOperationAdapter
+	MediaOperationWorkers             int
+	MediaOperationCapacity            int
+	TenantMediaOperationCapacity      int
+	MediaOperationLifetimeSeconds     int
+	MediaOperationClaimSeconds        int
+	MediaOperationClaimRenewalSeconds int
+	upstreamRateLimits                upstreamRateLimits
+	managementSessionValidator        *managementSessionValidator
+	requestTimeoutPolicy              requestTimeoutPolicy
+	validated                         bool
 }
 
 // ManagementConfiguration holds authenticated browser UI and self-service tenant settings.
@@ -147,6 +166,18 @@ func validateConfig(configuration Configuration) error {
 	if configuration.ProviderCatalog == nil {
 		return fmt.Errorf("%w: field=provider_catalog", ErrInvalidModelCatalog)
 	}
+	if configuration.MediaOperationWorkers <= 0 || configuration.MediaOperationCapacity <= 0 || configuration.TenantMediaOperationCapacity <= 0 || configuration.TenantMediaOperationCapacity > configuration.MediaOperationCapacity {
+		return fmt.Errorf("invalid media operation capacity")
+	}
+	if configuration.MediaOperationLifetimeSeconds <= 0 || configuration.MediaOperationClaimSeconds <= 0 || configuration.MediaOperationClaimRenewalSeconds <= 0 || configuration.MediaOperationClaimRenewalSeconds >= configuration.MediaOperationClaimSeconds {
+		return fmt.Errorf("invalid media operation timing")
+	}
+	for adapterKey, adapter := range configuration.MediaOperationAdapters {
+		parts := strings.Split(adapterKey, "|")
+		if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" || adapter == nil || adapterKey != mediaOperationAdapterKey(strings.TrimSpace(parts[0]), strings.ToLower(strings.TrimSpace(parts[1])), strings.TrimSpace(parts[2])) {
+			return fmt.Errorf("invalid media operation adapter: %s", adapterKey)
+		}
+	}
 	return nil
 }
 
@@ -183,6 +214,24 @@ func (configuration *Configuration) ApplyTunables() {
 	}
 	if configuration.MaxInputAudioBytes <= 0 {
 		configuration.MaxInputAudioBytes = DefaultMaxInputAudioBytes
+	}
+	if configuration.MediaOperationWorkers <= 0 {
+		configuration.MediaOperationWorkers = DefaultMediaOperationWorkers
+	}
+	if configuration.MediaOperationCapacity <= 0 {
+		configuration.MediaOperationCapacity = DefaultMediaOperationCapacity
+	}
+	if configuration.TenantMediaOperationCapacity <= 0 {
+		configuration.TenantMediaOperationCapacity = DefaultTenantMediaOperationCapacity
+	}
+	if configuration.MediaOperationLifetimeSeconds <= 0 {
+		configuration.MediaOperationLifetimeSeconds = DefaultMediaOperationLifetimeSeconds
+	}
+	if configuration.MediaOperationClaimSeconds <= 0 {
+		configuration.MediaOperationClaimSeconds = DefaultMediaOperationClaimSeconds
+	}
+	if configuration.MediaOperationClaimRenewalSeconds <= 0 {
+		configuration.MediaOperationClaimRenewalSeconds = DefaultMediaOperationClaimRenewalSeconds
 	}
 }
 

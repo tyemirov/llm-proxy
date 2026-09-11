@@ -4,6 +4,32 @@ package llmproxycontract
 const (
 	// AssetPath is the authenticated tenant asset upload endpoint.
 	AssetPath = "/model/v1/assets"
+	// MediaCapabilitiesPath is the authenticated tenant media capability resource.
+	MediaCapabilitiesPath = "/model/v1/capabilities"
+	// MediaOperationsPath is the authenticated tenant media operation collection.
+	MediaOperationsPath = "/model/v1/operations"
+	// MediaCapabilityVideoGenerate identifies durable video generation.
+	MediaCapabilityVideoGenerate = "video.generate"
+	// MediaOperationStateQueued identifies accepted work awaiting a worker.
+	MediaOperationStateQueued = "queued"
+	// MediaOperationStateRunning identifies claimed work with current execution authority.
+	MediaOperationStateRunning = "running"
+	// MediaOperationStateSucceeded identifies a terminal operation with published outputs.
+	MediaOperationStateSucceeded = "succeeded"
+	// MediaOperationStateFailed identifies a terminal operation with caller-safe error evidence.
+	MediaOperationStateFailed = "failed"
+	// MediaOperationStateCancelled identifies provider-confirmed or pre-dispatch cancellation.
+	MediaOperationStateCancelled = "cancelled"
+	// MediaOperationStateUncertain identifies a provider outcome that cannot be proved.
+	MediaOperationStateUncertain = "uncertain"
+	// MediaCancellationNotRequested identifies an operation without a cancellation request.
+	MediaCancellationNotRequested = "not_requested"
+	// MediaCancellationRequested identifies a persisted cancellation request awaiting observation.
+	MediaCancellationRequested = "requested"
+	// MediaCancellationConfirmed identifies proved cancellation.
+	MediaCancellationConfirmed = "confirmed"
+	// MediaCancellationUnsupported identifies a provider that cannot confirm cancellation.
+	MediaCancellationUnsupported = "unsupported"
 	// HeaderRequestID carries the proxy-owned identifier used to correlate one public request with structured logs.
 	HeaderRequestID = "X-LLM-Proxy-Request-ID"
 	// HeaderIdempotencyKey binds one structured request intent to one durable provider submission.
@@ -40,4 +66,20 @@ const (
 	ErrorCodeStructuredRequestInvalid = "structured_request_invalid"
 	// ErrorCodeStructuredRequestStore identifies a durable request-store failure.
 	ErrorCodeStructuredRequestStore = "structured_request_store_error"
+	// ErrorCodeMediaOperationInvalid identifies an invalid media operation request.
+	ErrorCodeMediaOperationInvalid = "media_operation_invalid"
+	// ErrorCodeMediaOperationUnavailable identifies a route without an available execution adapter or credential.
+	ErrorCodeMediaOperationUnavailable = "media_operation_unavailable"
+	// ErrorCodeMediaOperationNotFound identifies a missing tenant-owned operation.
+	ErrorCodeMediaOperationNotFound = "media_operation_not_found"
+	// ErrorCodeMediaOperationIntentConflict identifies changed intent under an accepted key.
+	ErrorCodeMediaOperationIntentConflict = "media_operation_intent_conflict"
+	// ErrorCodeMediaOperationCapacity identifies exhausted accepted-operation capacity.
+	ErrorCodeMediaOperationCapacity = "media_operation_capacity_exceeded"
+	// ErrorCodeMediaOperationStore identifies a durable media store failure.
+	ErrorCodeMediaOperationStore = "media_operation_store_error"
+	// ErrorCodeMediaOperationExpired identifies a retained idempotency tombstone after operation detail expiry.
+	ErrorCodeMediaOperationExpired = "media_operation_expired"
+	// ErrorCodeAssetInUse identifies an asset protected by an active durable operation reference.
+	ErrorCodeAssetInUse = "asset_in_use"
 )

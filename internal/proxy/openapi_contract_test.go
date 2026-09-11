@@ -105,9 +105,9 @@ func TestOpenAPIContractDocumentsActualAuthenticationBoundaries(t *testing.T) {
 			expectedSecurity = [][]string{{"MCPAccessToken"}}
 		case "/.well-known/oauth-protected-resource/mcp":
 			expectedSecurity = [][]string{}
-		case "/", "/v2", llmproxycontract.TenantIdentityPath, "/v2/requests", "/dictate", "/model/v1/assets", "/model/v1/assets/{asset_id}":
+		case "/", "/v2", llmproxycontract.TenantIdentityPath, "/v2/requests", "/dictate":
 			expectedSecurity = [][]string{{"TenantClientKey"}}
-		case "/v1/chat/completions", "/v1/responses", "/v1/models", "/v1/audio/transcriptions":
+		case "/v1/chat/completions", "/v1/responses", "/v1/models", "/v1/audio/transcriptions", llmproxycontract.AssetPath, "/model/v1/assets/{asset_id}", "/model/v1/assets/{asset_id}/content", llmproxycontract.MediaCapabilitiesPath, llmproxycontract.MediaOperationsPath, "/model/v1/operations/{operation_id}", "/model/v1/operations/{operation_id}/cancellation":
 			expectedSecurity = [][]string{{"TenantBearerKey"}}
 		case "/healthz", proxy.ManagementConfigUIPath, proxy.PublicCapabilitiesPath:
 			expectedSecurity = [][]string{}
@@ -311,7 +311,8 @@ func TestOpenAPIContractValidatesTenantAssetUploadAndDeleteExchanges(t *testing.
 		t.Fatalf("BuildRouter error: %v", buildError)
 	}
 	assetBytes := []byte("openapi-asset")
-	uploadRequest := httptest.NewRequest(http.MethodPost, "/model/v1/assets?key="+TestSecret, bytes.NewReader(assetBytes))
+	uploadRequest := httptest.NewRequest(http.MethodPost, "/model/v1/assets", bytes.NewReader(assetBytes))
+	uploadRequest.Header.Set("Authorization", "Bearer "+TestSecret)
 	uploadRequest.Header.Set("Content-Type", "image/png")
 	assertOpenAPIRequest(t, contract, "/model/v1/assets", uploadRequest, assetBytes)
 	uploadResponse := httptest.NewRecorder()
@@ -324,7 +325,8 @@ func TestOpenAPIContractValidatesTenantAssetUploadAndDeleteExchanges(t *testing.
 		t.Fatalf("asset response=%s error=%v", uploadResponse.Body.String(), decodeError)
 	}
 	deletePath := "/model/v1/assets/" + asset.AssetID
-	deleteRequest := httptest.NewRequest(http.MethodDelete, deletePath+"?key="+TestSecret, nil)
+	deleteRequest := httptest.NewRequest(http.MethodDelete, deletePath, nil)
+	deleteRequest.Header.Set("Authorization", "Bearer "+TestSecret)
 	assertOpenAPIRequest(t, contract, "/model/v1/assets/{asset_id}", deleteRequest, nil)
 	deleteResponse := httptest.NewRecorder()
 	router.ServeHTTP(deleteResponse, deleteRequest)

@@ -443,7 +443,13 @@ func TestGeminiCurrentModelsMediaRequestBound(t *testing.T) {
 				}
 				server := httptest.NewServer(router)
 				defer server.Close()
-				assetResponse, err := http.Post(server.URL+llmproxycontract.AssetPath+"?key="+TestSecret, mime, bytes.NewReader(mediaBytes))
+				assetRequest, err := http.NewRequest(http.MethodPost, server.URL+llmproxycontract.AssetPath, bytes.NewReader(mediaBytes))
+				if err != nil {
+					t.Fatal(err)
+				}
+				assetRequest.Header.Set("Authorization", "Bearer "+TestSecret)
+				assetRequest.Header.Set("Content-Type", mime)
+				assetResponse, err := server.Client().Do(assetRequest)
 				if err != nil {
 					t.Fatal(err)
 				}

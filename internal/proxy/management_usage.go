@@ -22,6 +22,7 @@ const (
 	usageEndpointV2        = "v2"
 	usageEndpointMCP       = "mcp"
 	usageEndpointDictation = "dictation"
+	usageEndpointMedia     = "media"
 	usageDateFormat        = "2006-01-02"
 	usageIntervalAll       = usageInterval("all")
 	usageIntervalThirtyDay = usageInterval("30d")

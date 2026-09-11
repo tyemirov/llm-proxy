@@ -42,18 +42,24 @@ type fileConfiguration struct {
 }
 
 type serverConfiguration struct {
-	Port                     int                              `mapstructure:"port"`
-	LogLevel                 string                           `mapstructure:"log_level"`
-	Workers                  int                              `mapstructure:"workers"`
-	QueueSize                int                              `mapstructure:"queue_size"`
-	RequestTimeoutSeconds    *int                             `mapstructure:"request_timeout_seconds"`
-	MaxRequestTimeoutSeconds *int                             `mapstructure:"max_request_timeout_seconds"`
-	MaxPromptBytes           int64                            `mapstructure:"max_prompt_bytes"`
-	MaxAssetBytes            int64                            `mapstructure:"max_asset_bytes"`
-	AssetRetentionSeconds    int                              `mapstructure:"asset_retention_seconds"`
-	AssetStorePath           string                           `mapstructure:"asset_store_path"`
-	MaxInputAudioBytes       int64                            `mapstructure:"max_input_audio_bytes"`
-	UpstreamRateLimits       []upstreamRateLimitConfiguration `mapstructure:"upstream_rate_limits"`
+	Port                              int                              `mapstructure:"port"`
+	LogLevel                          string                           `mapstructure:"log_level"`
+	Workers                           int                              `mapstructure:"workers"`
+	QueueSize                         int                              `mapstructure:"queue_size"`
+	RequestTimeoutSeconds             *int                             `mapstructure:"request_timeout_seconds"`
+	MaxRequestTimeoutSeconds          *int                             `mapstructure:"max_request_timeout_seconds"`
+	MaxPromptBytes                    int64                            `mapstructure:"max_prompt_bytes"`
+	MaxAssetBytes                     int64                            `mapstructure:"max_asset_bytes"`
+	AssetRetentionSeconds             int                              `mapstructure:"asset_retention_seconds"`
+	AssetStorePath                    string                           `mapstructure:"asset_store_path"`
+	MaxInputAudioBytes                int64                            `mapstructure:"max_input_audio_bytes"`
+	MediaOperationWorkers             *int                             `mapstructure:"media_operation_workers"`
+	MediaOperationCapacity            *int                             `mapstructure:"media_operation_capacity"`
+	TenantMediaOperationCapacity      *int                             `mapstructure:"tenant_media_operation_capacity"`
+	MediaOperationLifetimeSeconds     *int                             `mapstructure:"media_operation_lifetime_seconds"`
+	MediaOperationClaimSeconds        *int                             `mapstructure:"media_operation_claim_seconds"`
+	MediaOperationClaimRenewalSeconds *int                             `mapstructure:"media_operation_claim_renewal_seconds"`
+	UpstreamRateLimits                []upstreamRateLimitConfiguration `mapstructure:"upstream_rate_limits"`
 }
 
 type upstreamRateLimitConfiguration struct {
@@ -223,22 +229,52 @@ func (configuration fileConfiguration) toProxyConfiguration(providerCatalog *pro
 	if usageQueueError != nil {
 		return proxy.Configuration{}, usageQueueError
 	}
+	mediaOperationWorkers, mediaOperationWorkersError := configuredPositiveInteger(configuration.Server.MediaOperationWorkers, proxy.DefaultMediaOperationWorkers, "server.media_operation_workers")
+	if mediaOperationWorkersError != nil {
+		return proxy.Configuration{}, mediaOperationWorkersError
+	}
+	mediaOperationCapacity, mediaOperationCapacityError := configuredPositiveInteger(configuration.Server.MediaOperationCapacity, proxy.DefaultMediaOperationCapacity, "server.media_operation_capacity")
+	if mediaOperationCapacityError != nil {
+		return proxy.Configuration{}, mediaOperationCapacityError
+	}
+	tenantMediaOperationCapacity, tenantMediaOperationCapacityError := configuredPositiveInteger(configuration.Server.TenantMediaOperationCapacity, proxy.DefaultTenantMediaOperationCapacity, "server.tenant_media_operation_capacity")
+	if tenantMediaOperationCapacityError != nil {
+		return proxy.Configuration{}, tenantMediaOperationCapacityError
+	}
+	mediaOperationLifetimeSeconds, mediaOperationLifetimeError := configuredPositiveInteger(configuration.Server.MediaOperationLifetimeSeconds, proxy.DefaultMediaOperationLifetimeSeconds, "server.media_operation_lifetime_seconds")
+	if mediaOperationLifetimeError != nil {
+		return proxy.Configuration{}, mediaOperationLifetimeError
+	}
+	mediaOperationClaimSeconds, mediaOperationClaimError := configuredPositiveInteger(configuration.Server.MediaOperationClaimSeconds, proxy.DefaultMediaOperationClaimSeconds, "server.media_operation_claim_seconds")
+	if mediaOperationClaimError != nil {
+		return proxy.Configuration{}, mediaOperationClaimError
+	}
+	mediaOperationClaimRenewalSeconds, mediaOperationClaimRenewalError := configuredPositiveInteger(configuration.Server.MediaOperationClaimRenewalSeconds, proxy.DefaultMediaOperationClaimRenewalSeconds, "server.media_operation_claim_renewal_seconds")
+	if mediaOperationClaimRenewalError != nil {
+		return proxy.Configuration{}, mediaOperationClaimRenewalError
+	}
 	return proxy.NewConfiguration(proxy.Configuration{
-		Management:               managementProxyConfiguration(configuration.Management, usageQueueSize),
-		ProviderCatalog:          providerCatalog,
-		ProviderConnectionValues: providerConnectionValues,
-		Port:                     configuration.Server.Port,
-		LogLevel:                 configuration.Server.LogLevel,
-		WorkerCount:              configuration.Server.Workers,
-		QueueSize:                configuration.Server.QueueSize,
-		RequestTimeoutSeconds:    requestTimeoutSeconds,
-		MaxRequestTimeoutSeconds: maxRequestTimeoutSeconds,
-		MaxPromptBytes:           configuration.Server.MaxPromptBytes,
-		MaxAssetBytes:            configuration.Server.MaxAssetBytes,
-		AssetRetentionSeconds:    configuration.Server.AssetRetentionSeconds,
-		AssetStorePath:           configuration.Server.AssetStorePath,
-		MaxInputAudioBytes:       configuration.Server.MaxInputAudioBytes,
-		UpstreamRateLimits:       proxyUpstreamRateLimitConfigurations(configuration.Server.UpstreamRateLimits),
+		Management:                        managementProxyConfiguration(configuration.Management, usageQueueSize),
+		ProviderCatalog:                   providerCatalog,
+		ProviderConnectionValues:          providerConnectionValues,
+		Port:                              configuration.Server.Port,
+		LogLevel:                          configuration.Server.LogLevel,
+		WorkerCount:                       configuration.Server.Workers,
+		QueueSize:                         configuration.Server.QueueSize,
+		RequestTimeoutSeconds:             requestTimeoutSeconds,
+		MaxRequestTimeoutSeconds:          maxRequestTimeoutSeconds,
+		MaxPromptBytes:                    configuration.Server.MaxPromptBytes,
+		MaxAssetBytes:                     configuration.Server.MaxAssetBytes,
+		AssetRetentionSeconds:             configuration.Server.AssetRetentionSeconds,
+		AssetStorePath:                    configuration.Server.AssetStorePath,
+		MaxInputAudioBytes:                configuration.Server.MaxInputAudioBytes,
+		MediaOperationWorkers:             mediaOperationWorkers,
+		MediaOperationCapacity:            mediaOperationCapacity,
+		TenantMediaOperationCapacity:      tenantMediaOperationCapacity,
+		MediaOperationLifetimeSeconds:     mediaOperationLifetimeSeconds,
+		MediaOperationClaimSeconds:        mediaOperationClaimSeconds,
+		MediaOperationClaimRenewalSeconds: mediaOperationClaimRenewalSeconds,
+		UpstreamRateLimits:                proxyUpstreamRateLimitConfigurations(configuration.Server.UpstreamRateLimits),
 	})
 }
 

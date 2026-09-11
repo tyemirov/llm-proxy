@@ -492,7 +492,8 @@ func TestInvalidTimeoutHeadersAppearOnlyAsAuthenticatedProxyRejections(t *testin
 		t.Fatalf("unauthenticated status=%d body=%q", unauthenticatedResponse.Code, unauthenticatedResponse.Body.String())
 	}
 
-	assetRequest := httptest.NewRequest(http.MethodPost, llmproxycontract.AssetPath+"?key="+url.QueryEscape(secret), strings.NewReader("asset"))
+	assetRequest := httptest.NewRequest(http.MethodPost, llmproxycontract.AssetPath, strings.NewReader("asset"))
+	assetRequest.Header.Set("Authorization", "Bearer "+secret)
 	assetRequest.Header.Set("Content-Type", "image/png")
 	assetRequest.Header.Set(llmproxycontract.HeaderRequestTimeoutSeconds, "0")
 	assetResponse := httptest.NewRecorder()
