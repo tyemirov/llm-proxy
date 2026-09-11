@@ -246,16 +246,16 @@ func continuationMaxTokens(currentMaxTokens *int, model textModelDefinition, lat
 }
 
 func (router *providerRouter) transcribeAudio(requestContext context.Context, request dictationRequestParameters, structuredLogger *zap.SugaredLogger) (string, error) {
-	if request.provider.activeTransport.protocol == CatalogProtocolVertexGenerateContent {
+	if request.provider.activeTransport.requestCodec == CatalogProtocolVertexGenerateContent {
 		return transcribeVertexAudio(requestContext, router.openAIClient.httpClient, request)
 	}
 	providerModel := request.provider.transcriptionModels[strings.ToLower(request.model.string())].providerIdentifier
 	httpClient := newProviderTransportHTTPDoer(router.openAIClient.httpClient, request.provider, request.provider.credentialFor(endpointKindDictation))
-	if request.provider.activeTransport.protocol == CatalogProtocolGeminiInteractions {
+	if request.provider.activeTransport.requestCodec == CatalogProtocolGeminiInteractions {
 		return newGeminiInteractionsClient(httpClient).transcribeAudio(requestContext, "", request.provider.textBaseURL, providerModel.string(), request.fileName, request.audioReader, structuredLogger)
 	}
 	client := NewOpenAIClient(httpClient, router.openAIClient.endpoints)
-	if request.provider.activeTransport.protocol == CatalogProtocolMetaTranscription {
+	if request.provider.activeTransport.requestCodec == CatalogProtocolMetaTranscription {
 		return client.transcribeMetaAudio(requestContext, request.provider.transcriptionsURL, providerModel.string(), request.audioReader, structuredLogger)
 	}
 	return client.transcribeAudioWithURL(

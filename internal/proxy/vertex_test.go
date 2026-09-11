@@ -151,13 +151,13 @@ func vertexCatalog(t *testing.T) *proxy.ProviderCatalog {
 			transport := &provider.Transports[j]
 			transport.Endpoint.DefaultBaseURL = "https://aiplatform.googleapis.com/v1"
 			transport.Endpoint.Path = "/publishers/google/models"
-			transport.Authentication.Kind = "header"
-			transport.Authentication.Header = "x-goog-api-key"
-			transport.Authentication.Prefix = ""
+			transport.Components.Authentication.Kind = "header"
+			transport.Components.Authentication.Header = "x-goog-api-key"
+			transport.Components.Authentication.Prefix = ""
 			transport.Headers = nil
-			transport.Protocol = proxy.ProviderCatalogProtocolReference{ID: proxy.CatalogProtocolVertexGenerateContent}
-			transport.Lifecycle = "synchronous_completion"
-			transport.ResourceVisibility = proxy.ProviderCatalogResourceVisibility{}
+			transport.Components.RequestCodec = proxy.ProviderCatalogCodecReference{ID: proxy.CatalogProtocolVertexGenerateContent}
+			transport.Components.ResponseCodec = proxy.ProviderCatalogCodecReference{ID: proxy.CatalogProtocolVertexGenerateContent}
+			transport.Components.Execution = proxy.ProviderCatalogExecutionReference{ID: "synchronous_completion"}
 		}
 		for j := range provider.Offerings {
 			for _, media := range provider.Offerings[j].MediaInputs {

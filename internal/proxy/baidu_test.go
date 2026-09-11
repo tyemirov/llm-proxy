@@ -276,11 +276,11 @@ func TestBaiduCatalog(t *testing.T) {
 			}
 		}
 	}
-	for _, policy := range []string{"unknown", ""} {
+	for _, policy := range []string{"unknown", proxy.CatalogProtocolVariationMaxTokens} {
 		schema := catalog.Schema()
 		for i := range schema.Providers {
 			if schema.Providers[i].ID == "baidu" {
-				schema.Providers[i].Transports[0].Protocol.Variation = policy
+				schema.Providers[i].Transports[0].Components.ResponseCodec.Variation = policy
 			}
 		}
 		if _, err := proxy.NewProviderCatalog(schema); err == nil {

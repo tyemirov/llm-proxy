@@ -53,8 +53,9 @@ func TestProviderCatalogDeclaresProviderSpecificResourceVisibilityPolicies(testi
 			continue
 		}
 		for _, transport := range provider.Transports {
-			if transport.ResourceVisibility.RetryLimit != 0 {
-				observedPolicies[provider.ID] = transport.ResourceVisibility
+			visibility := transport.Components.Execution.ResourceVisibility
+			if visibility.RetryLimit != 0 {
+				observedPolicies[provider.ID] = visibility
 			}
 		}
 	}
@@ -75,11 +76,11 @@ func TestProviderCatalogDeclaresGeminiInteractionsProtocolReference(testingInsta
 			continue
 		}
 		for _, transport := range provider.Transports {
-			if transport.Protocol.ID != proxy.CatalogProtocolGeminiInteractions {
+			if transport.Components.RequestCodec.ID != proxy.CatalogProtocolGeminiInteractions {
 				continue
 			}
-			if transport.Protocol.Variation != "" {
-				testingInstance.Fatalf("Gemini Interactions variation=%q want empty", transport.Protocol.Variation)
+			if transport.Components.RequestCodec.Variation != "" || transport.Components.ResponseCodec.Variation != "" {
+				testingInstance.Fatalf("Gemini Interactions components=%+v", transport.Components)
 			}
 			return
 		}
@@ -336,7 +337,7 @@ func TestCatalogDefinedProviderFlowsThroughEveryGenericConsumer(testingInstance 
 	}
 }
 
-func TestProviderCatalogRejectsStructuralAndAdapterContractViolations(testingInstance *testing.T) {
+func TestProviderCatalogRejectsStructuralAndComponentContractViolations(testingInstance *testing.T) {
 	testCases := []struct {
 		name          string
 		mutate        func(*proxy.ProviderCatalogSchema)
@@ -373,16 +374,16 @@ func TestProviderCatalogRejectsStructuralAndAdapterContractViolations(testingIns
 		{
 			name: "unsupported lifecycle",
 			mutate: func(schema *proxy.ProviderCatalogSchema) {
-				schema.Providers[0].Transports[0].Lifecycle = "future_lifecycle"
+				schema.Providers[0].Transports[0].Components.Execution.ID = "future_lifecycle"
 			},
 			expectedError: "lifecycle=future_lifecycle",
 		},
 		{
 			name: "adapter variation mismatch",
 			mutate: func(schema *proxy.ProviderCatalogSchema) {
-				schema.Providers[0].Transports[0].Protocol.Variation = "future"
+				schema.Providers[0].Transports[0].Components.RequestCodec.Variation = "future"
 			},
-			expectedError: "reason=unsupported_protocol_variation",
+			expectedError: "reason=unsupported_codec_variation",
 		},
 		{
 			name: "negative output token limit",
@@ -550,14 +551,15 @@ func catalogWithTestProvider(testingInstance *testing.T) *proxy.ProviderCatalog 
 			Endpoint: proxy.ProviderCatalogEndpoint{
 				Method: proxy.CatalogEndpointMethodPost, SettingField: testCatalogSettingField, Path: "/chat/completions",
 			},
-			Authentication: proxy.ProviderCatalogAuthentication{
-				Kind: proxy.CatalogAuthenticationBearer, Field: testCatalogCredentialField,
-				Header: "Authorization", Prefix: "Bearer ",
+			Components: proxy.ProviderCatalogTransportComponents{
+				RequestCodec:  proxy.ProviderCatalogCodecReference{ID: proxy.CatalogProtocolOpenAIChatCompletions, Variation: proxy.CatalogProtocolVariationMaxTokens},
+				ResponseCodec: proxy.ProviderCatalogCodecReference{ID: proxy.CatalogProtocolOpenAIChatCompletions},
+				Authentication: proxy.ProviderCatalogAuthentication{
+					Kind: proxy.CatalogAuthenticationBearer, Field: testCatalogCredentialField,
+					Header: "Authorization", Prefix: "Bearer ",
+				},
+				Execution: proxy.ProviderCatalogExecutionReference{ID: "synchronous_completion"},
 			},
-			Protocol: proxy.ProviderCatalogProtocolReference{
-				ID: proxy.CatalogProtocolOpenAIChatCompletions, Variation: proxy.CatalogProtocolVariationMaxTokens,
-			},
-			Lifecycle: "synchronous_completion",
 		}},
 		Offerings: []proxy.ProviderCatalogOffering{{
 			Created: 1700000000, Model: testCatalogModelID, UpstreamModel: testCatalogUpstreamModelID,

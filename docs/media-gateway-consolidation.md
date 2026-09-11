@@ -89,48 +89,54 @@ F022 adds a media operation store instead of adopting those retry rules.
 This contract applies to every migrated capability and each later provider addition.
 The [provider catalog contract](provider-catalog.md) defines the current provider data and the procedure for a compatible provider addition.
 The media migration extends that same catalog and registry.
-The schema validates provider definitions. Executable protocol adapters implement the supported API behavior.
+The schema validates provider definitions and transport-component composition.
+Executable components implement the supported API behavior.
 
 | Layer | Owner and responsibility |
 | --- | --- |
-| Provider catalog | `configs/providers.yml` owns provider fields, transports, offerings, operations, controls, limits, prices, and protocol adapter selection. |
-| Protocol adapters | Reusable code owns native requests, authentication, responses, errors, usage translation, submission, observation, cancellation, and recovery. |
+| Provider catalog | `configs/providers.yml` owns provider fields, transports, offerings, operations, controls, limits, prices, and transport-component selection. |
+| Request and response codecs | Reusable code owns native request serialization, response parsing, errors, continuation, and usage translation. |
+| Authentication components | Reusable code owns credential injection. Credential values remain in managed connection or private runtime storage. |
+| Execution components | Reusable code owns synchronous completion, submission, observation, cancellation, and provider recovery. |
 | Shared media service | F022 owns tenant authorization, operation storage, worker claims, duplicate prevention, assets, retention, and usage delivery. I046 owns network capacity. |
 | Consumer services | MediaOps and other backends own product workflows and use the official gateway clients. |
 
 Keep credential values and tenant settings in their existing stores outside the catalog.
 Use catalog projections for provider discovery, connection forms, capability validation, routing, and price metadata.
-Select executable adapters through the declared protocol and lifecycle.
+Compose executable routes from the declared request codec, response codec,
+authentication, and execution lifecycle.
 Keep provider identity as route data in the shared service.
-Keep native API behavior inside protocol adapters.
+Keep native API behavior inside reusable transport components.
 
-Before each capability slice, record its provider offering, protocol adapter, lifecycle, supported controls, and required assets.
+Before each capability slice, record its provider offering, component
+composition, supported controls, and required assets.
 Classify each addition with the following table.
 
 | Condition | Required change |
 | --- | --- |
-| An existing adapter implements the complete contract. | Add catalog data and connection values. Keep production code unchanged. Complete the second-provider acceptance procedure below. |
-| The provider needs an unsupported protocol variation. | Add or extend a reusable protocol adapter and its strict schema contract. Then add the provider definition. |
-| The provider needs a new capability or lifecycle. | Add the typed capability or shared lifecycle first. Then add its protocol adapter and catalog records. |
+| Existing components implement the complete contract. | Add catalog data and connection values. Keep production code unchanged. Complete the second-provider acceptance procedure below. |
+| The provider needs an unsupported codec variation. | Add or extend the reusable request or response codec and its strict schema contract. Then add the provider definition. |
+| The provider needs a new capability or lifecycle. | Add the typed capability or shared execution lifecycle first. Then add its codec and catalog records. |
 
 Compare authentication, request fields, response fields, controls, errors, usage, and execution lifecycle before selecting an adapter.
 A shared endpoint name or an OpenAI compatibility claim does not establish that complete match.
-Current catalog mappings must match implemented adapter contracts.
-Reject unsupported protocol declarations and incompatible controls at the applicable startup or request boundary.
+Current catalog mappings must match implemented component contracts.
+Reject unsupported component declarations and incompatible controls at the applicable startup or request boundary.
 Add new behavior through typed code and its schema contract, rather than executable expressions in provider data.
 
 ### Acceptance Through A Second Provider
 
 F022 owns the reusable acceptance harness and the shared service boundary.
-Each capability issue owns this acceptance for every protocol adapter that it adds or extends.
+Each capability issue owns this acceptance for every transport component that it adds or extends.
 F024 supplies the first image proof. F039 through F043 and F025 through F027 apply the same requirement to their slices.
 
 1. Start the real service with its YAML loader, SQLite database, filesystem, and official client.
 2. Exercise one provider through a controlled implementation of the selected external protocol.
-3. Add a second provider identity through a disposable `providers.yml` fixture with that same protocol adapter and lifecycle.
+3. Add a second provider identity with the same codecs and lifecycle.
+   Use a different supported authentication configuration.
 4. Give the second definition distinct connection fields, endpoint values, and upstream model identifiers where the protocol permits them.
 5. Supply test credentials through the existing connection contract.
-6. Reload the catalog through normal service startup. Use the same service executable, clients, and protocol adapter for both definitions.
+6. Reload the catalog through normal service startup. Use the same service executable, clients, and component implementations for both definitions.
 7. Use public HTTP and browser assertions for provider discovery, generated connection forms, and capability metadata.
 8. Use public assertions for routing, accepted controls, tenant isolation, artifact downloads, and one execution usage event per operation.
 9. Exercise duplicate requests, process restart, cancellation, and result recovery according to the declared protocol contract.
@@ -138,7 +144,7 @@ F024 supplies the first image proof. F039 through F043 and F025 through F027 app
 11. Make sure an invalid adapter declaration stops startup. Make sure an unsupported request causes zero provider dispatch.
 12. Record the catalog changes, test configuration, unchanged executable, and public test results in the slice's acceptance evidence.
 
-The second provider requires only catalog data, connection values, and controlled test infrastructure after the adapter exists.
+The second provider requires only catalog data, connection values, and controlled test infrastructure after the components exist.
 If that addition requires production changes, complete the missing shared contract before accepting the slice.
 Keep fictional provider definitions in test fixtures only.
 This procedure proves architectural reuse. Qualify each actual provider separately through authorized live acceptance.

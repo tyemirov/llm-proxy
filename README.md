@@ -417,8 +417,9 @@ The application compiles one immutable registry from this snapshot.
 Its response policy checks finish reasons and Qianfan flags before text or key verification succeeds.
 
 Each provider offering references one exact model and one provider transport.
-The transport selects one reusable protocol adapter. Provider identifiers do
-not select protocol code.
+The transport selects reusable request and response codecs, authentication,
+and an execution lifecycle. Provider identifiers remain route data and do not
+select shared execution code.
 
 Public resources omit credential fields, setting fields, authentication data,
 environment names, and upstream model identifiers. Management resources return

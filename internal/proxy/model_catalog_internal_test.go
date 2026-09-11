@@ -172,18 +172,22 @@ func internalTestProviderTransport(identifier string, offering ProviderOffering)
 	protocol := offering.WireContract
 	for _, provider := range internalCanonicalProviderCatalog().schema.Providers {
 		for _, template := range provider.Transports {
-			if template.Protocol.ID != protocol || template.Lifecycle != offering.ExecutionLifecycle {
+			if template.Components.RequestCodec.ID != protocol || template.Components.Execution.ID != offering.ExecutionLifecycle {
 				continue
 			}
 			template.ID = identifier
-			template.Authentication.Field = CatalogCredentialAPIKey
+			template.Components.Authentication.Field = CatalogCredentialAPIKey
 			template.Endpoint = ProviderCatalogEndpoint{
 				Method: CatalogEndpointMethodPost, DefaultBaseURL: "https://provider.example", Path: internalTestProviderProtocolPath(protocol),
 			}
 			return template
 		}
 	}
-	return ProviderCatalogTransport{ID: identifier, Protocol: ProviderCatalogProtocolReference{ID: protocol}}
+	return ProviderCatalogTransport{ID: identifier, Components: ProviderCatalogTransportComponents{
+		RequestCodec: ProviderCatalogCodecReference{ID: protocol}, ResponseCodec: ProviderCatalogCodecReference{ID: protocol},
+		Authentication: ProviderCatalogAuthentication{Field: CatalogCredentialAPIKey},
+		Execution:      ProviderCatalogExecutionReference{ID: offering.ExecutionLifecycle},
+	}}
 }
 
 func internalTestProviderProtocolPath(protocol string) string {

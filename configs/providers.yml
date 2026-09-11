@@ -1,4 +1,4 @@
-schema_version: 2
+schema_version: 3
 model_migrations:
     - managed_schema_version: 4
       provider: qwencloud
@@ -965,34 +965,42 @@ providers:
             method: POST
             default_base_url: https://api.openai.com/v1
             path: /responses
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          protocol:
-            id: openai_responses
-          lifecycle: pollable_resource
-          resource_visibility:
-            retry_interval_milliseconds: 2000
-            retry_limit: 1
-            retry_status_codes:
-                - 403
-                - 404
+          components:
+            request_codec:
+              id: openai_responses
+            response_codec:
+              id: openai_responses
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: pollable_resource
+              resource_visibility:
+                retry_interval_milliseconds: 2000
+                retry_limit: 1
+                retry_status_codes:
+                    - 403
+                    - 404
         - id: dictation
           endpoint:
             method: POST
             default_base_url: https://api.openai.com/v1
             path: /audio/transcriptions
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          protocol:
-            id: multipart_transcription
-            variation: model
-          lifecycle: synchronous_completion
+          components:
+            request_codec:
+              id: multipart_transcription
+              variation: model
+            response_codec:
+              id: multipart_transcription
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
       offerings:
         - model: gpt-6-astra
           created: 1787853604
@@ -1706,15 +1714,19 @@ providers:
             method: POST
             default_base_url: https://api.deepseek.com
             path: /chat/completions
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          protocol:
-            id: openai_chat_completions
-            variation: max_tokens
-          lifecycle: synchronous_completion
+          components:
+            request_codec:
+              id: openai_chat_completions
+              variation: max_tokens
+            response_codec:
+              id: openai_chat_completions
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
       offerings:
         - model: deepseek-v4-flash
           created: 1787276456
@@ -1783,14 +1795,18 @@ providers:
             method: POST
             setting_field: base_url
             path: /responses
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          protocol:
-            id: dashscope_responses
-          lifecycle: synchronous_completion
+          components:
+            request_codec:
+              id: dashscope_responses
+            response_codec:
+              id: dashscope_responses
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
       offerings:
         - model: qwen-plus
           created: 1787276456
@@ -2326,15 +2342,19 @@ providers:
             method: POST
             default_base_url: https://api.moonshot.ai/v1
             path: /chat/completions
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          protocol:
-            id: openai_chat_completions
-            variation: max_completion_tokens
-          lifecycle: synchronous_completion
+          components:
+            request_codec:
+              id: openai_chat_completions
+              variation: max_completion_tokens
+            response_codec:
+              id: openai_chat_completions
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
       offerings:
         - model: kimi-k2.6
           created: 1787276456
@@ -2525,15 +2545,19 @@ providers:
             method: POST
             default_base_url: https://api.minimax.io/v1
             path: /chat/completions
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          protocol:
-            id: openai_chat_completions
-            variation: max_completion_tokens
-          lifecycle: synchronous_completion
+          components:
+            request_codec:
+              id: openai_chat_completions
+              variation: max_completion_tokens
+            response_codec:
+              id: openai_chat_completions
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
       offerings:
         - model: minimax-m3
           created: 1788644880
@@ -2981,29 +3005,37 @@ providers:
             method: POST
             default_base_url: https://api.siliconflow.com/v1
             path: /chat/completions
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          protocol:
-            id: openai_chat_completions
-            variation: max_tokens
-          lifecycle: synchronous_completion
+          components:
+            request_codec:
+              id: openai_chat_completions
+              variation: max_tokens
+            response_codec:
+              id: openai_chat_completions
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
         - id: dictation
           endpoint:
             method: POST
             default_base_url: https://api.siliconflow.com/v1
             path: /audio/transcriptions
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          protocol:
-            id: multipart_transcription
-            variation: model
-          lifecycle: synchronous_completion
+          components:
+            request_codec:
+              id: multipart_transcription
+              variation: model
+            response_codec:
+              id: multipart_transcription
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
       offerings:
         - model: deepseek-reasoner
           created: 1787276456
@@ -3054,29 +3086,37 @@ providers:
             method: POST
             default_base_url: https://api.z.ai/api/paas/v4
             path: /chat/completions
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          protocol:
-            id: openai_chat_completions
-            variation: max_tokens
-          lifecycle: synchronous_completion
+          components:
+            request_codec:
+              id: openai_chat_completions
+              variation: max_tokens
+            response_codec:
+              id: openai_chat_completions
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
         - id: dictation
           endpoint:
             method: POST
             default_base_url: https://api.z.ai/api/paas/v4
             path: /audio/transcriptions
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          protocol:
-            id: multipart_transcription
-            variation: model
-          lifecycle: synchronous_completion
+          components:
+            request_codec:
+              id: multipart_transcription
+              variation: model
+            response_codec:
+              id: multipart_transcription
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
       offerings:
         - model: glm-5.3
           created: 1787011200
@@ -3288,56 +3328,68 @@ providers:
             method: POST
             default_base_url: https://generativelanguage.googleapis.com/v1beta
             path: /interactions
-          authentication:
-            kind: header
-            field: api_key
-            header: x-goog-api-key
-            prefix: ""
           headers:
             - name: Api-Revision
               value: "2026-05-20"
-          protocol:
-            id: gemini_interactions
-          lifecycle: pollable_resource
-          resource_visibility:
-            retry_interval_milliseconds: 5000
-            retry_limit: 6
-            retry_status_codes:
-                - 400
-                - 403
-                - 404
+          components:
+            request_codec:
+              id: gemini_interactions
+            response_codec:
+              id: gemini_interactions
+            authentication:
+              kind: header
+              field: api_key
+              header: x-goog-api-key
+              prefix: ""
+            execution:
+              id: pollable_resource
+              resource_visibility:
+                retry_interval_milliseconds: 5000
+                retry_limit: 6
+                retry_status_codes:
+                    - 400
+                    - 403
+                    - 404
         - id: text_synchronous
           endpoint:
             method: POST
             default_base_url: https://generativelanguage.googleapis.com/v1beta
             path: /interactions
-          authentication:
-            kind: header
-            field: api_key
-            header: x-goog-api-key
-            prefix: ""
           headers:
             - name: Api-Revision
               value: "2026-05-20"
-          protocol:
-            id: gemini_interactions
-          lifecycle: synchronous_completion
+          components:
+            request_codec:
+              id: gemini_interactions
+            response_codec:
+              id: gemini_interactions
+            authentication:
+              kind: header
+              field: api_key
+              header: x-goog-api-key
+              prefix: ""
+            execution:
+              id: synchronous_completion
         - id: dictation
           endpoint:
             method: POST
             default_base_url: https://generativelanguage.googleapis.com/v1beta
             path: /interactions
-          authentication:
-            kind: header
-            field: api_key
-            header: x-goog-api-key
-            prefix: ""
           headers:
             - name: Api-Revision
               value: "2026-05-20"
-          protocol:
-            id: gemini_interactions
-          lifecycle: synchronous_completion
+          components:
+            request_codec:
+              id: gemini_interactions
+            response_codec:
+              id: gemini_interactions
+            authentication:
+              kind: header
+              field: api_key
+              header: x-goog-api-key
+              prefix: ""
+            execution:
+              id: synchronous_completion
       offerings:
         - model: gemini-3.6-flash
           created: 1788566400
@@ -3896,17 +3948,21 @@ providers:
             method: POST
             default_base_url: https://api.anthropic.com
             path: /v1/messages
-          authentication:
-            kind: header
-            field: api_key
-            header: x-api-key
-            prefix: ""
           headers:
             - name: anthropic-version
               value: "2023-06-01"
-          protocol:
-            id: anthropic_messages
-          lifecycle: synchronous_completion
+          components:
+            request_codec:
+              id: anthropic_messages
+            response_codec:
+              id: anthropic_messages
+            authentication:
+              kind: header
+              field: api_key
+              header: x-api-key
+              prefix: ""
+            execution:
+              id: synchronous_completion
       offerings:
         - model: claude-fable-5-1
           created: 1787875200
@@ -4459,28 +4515,36 @@ providers:
             method: POST
             default_base_url: https://api.meta.ai/v1
             path: /chat/completions
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          protocol:
-            id: openai_chat_completions
-            variation: max_completion_tokens
-          lifecycle: synchronous_completion
+          components:
+            request_codec:
+              id: openai_chat_completions
+              variation: max_completion_tokens
+            response_codec:
+              id: openai_chat_completions
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
         - id: dictation
           endpoint:
             method: POST
             default_base_url: https://api.meta.ai/v1
             path: /asr/transcribe
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          protocol:
-            id: meta_transcription
-          lifecycle: synchronous_completion
+          components:
+            request_codec:
+              id: meta_transcription
+            response_codec:
+              id: meta_transcription
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
       offerings:
         - model: muse-voice-transcribe-1.0
           created: 1788652800
@@ -4592,41 +4656,53 @@ providers:
             method: POST
             default_base_url: https://api.x.ai/v1
             path: /responses
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          protocol:
-            id: xai_responses
-          lifecycle: synchronous_completion
+          components:
+            request_codec:
+              id: xai_responses
+            response_codec:
+              id: xai_responses
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
         - id: video_generation
           endpoint:
             method: POST
             default_base_url: https://api.x.ai/v1
             path: /videos/generations
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          protocol:
-            id: xai_videos_generations
-          lifecycle: pollable_resource
+          components:
+            request_codec:
+              id: xai_videos_generations
+            response_codec:
+              id: xai_videos_generations
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: pollable_resource
         - id: dictation
           endpoint:
             method: POST
             default_base_url: https://api.x.ai/v1
             path: /stt
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          protocol:
-            id: multipart_transcription
-            variation: model_omitted
-          lifecycle: synchronous_completion
+          components:
+            request_codec:
+              id: multipart_transcription
+              variation: model_omitted
+            response_codec:
+              id: multipart_transcription
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
       offerings:
         - model: grok-4.3
           created: 1787276456
@@ -4985,15 +5061,20 @@ providers:
             method: POST
             setting_field: base_url
             path: /chat/completions
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          protocol:
-            id: openai_chat_completions
-            variation: qianfan_max_tokens
-          lifecycle: synchronous_completion
+          components:
+            request_codec:
+              id: openai_chat_completions
+              variation: max_tokens
+            response_codec:
+              id: openai_chat_completions
+              variation: qianfan
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
       offerings:
         - model: ernie-5.0
           created: 1788566400
@@ -5132,14 +5213,18 @@ providers:
             method: POST
             default_base_url: https://aiplatform.googleapis.com/v1
             path: /publishers/google/models
-          authentication:
-            kind: header
-            field: api_key
-            header: x-goog-api-key
-            prefix: ''
-          protocol:
-            id: vertex_generate_content
-          lifecycle: synchronous_completion
+          components:
+            request_codec:
+              id: vertex_generate_content
+            response_codec:
+              id: vertex_generate_content
+            authentication:
+              kind: header
+              field: api_key
+              header: x-goog-api-key
+              prefix: ''
+            execution:
+              id: synchronous_completion
       offerings:
         - model: gemini-3.8-flash
           created: 1788307200

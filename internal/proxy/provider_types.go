@@ -371,7 +371,8 @@ type providerTransportDefinition struct {
 	endpoint            ProviderCatalogEndpoint
 	authentication      ProviderCatalogAuthentication
 	headers             []ProviderCatalogHeader
-	protocol            string
+	requestCodec        string
+	responseCodec       string
 	lifecycle           textExecutionLifecycle
 	resourceVisibility  pollableResourceVisibilityPolicy
 	protocolParameters  providerProtocolParameters

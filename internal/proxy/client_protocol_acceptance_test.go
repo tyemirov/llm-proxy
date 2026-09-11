@@ -24,41 +24,47 @@ const protocolFixtureProviderSecret = "provider-fixture-secret"
 func TestClientProtocolsSharedAdapterCatalog(t *testing.T) {
 	catalog, fixtures := testfixtures.ProviderCatalogWithProtocolFixtures(t)
 	expected := map[string]bool{
-		protocolFixtureKey(proxy.CatalogProtocolOpenAIResponses, "", "pollable_resource", proxy.ModelOperationText):                                                                       true,
-		protocolFixtureKey(proxy.CatalogProtocolDashScopeResponses, "", "synchronous_completion", proxy.ModelOperationText):                                                               true,
-		protocolFixtureKey(proxy.CatalogProtocolXAIResponses, "", "synchronous_completion", proxy.ModelOperationText):                                                                     true,
-		protocolFixtureKey(proxy.CatalogProtocolOpenAIChatCompletions, proxy.CatalogProtocolVariationMaxTokens, "synchronous_completion", proxy.ModelOperationText):                       true,
-		protocolFixtureKey(proxy.CatalogProtocolOpenAIChatCompletions, proxy.CatalogProtocolVariationMaxCompletionTokens, "synchronous_completion", proxy.ModelOperationText):             true,
-		protocolFixtureKey(proxy.CatalogProtocolOpenAIChatCompletions, proxy.CatalogProtocolVariationQianfanMaxTokens, "synchronous_completion", proxy.ModelOperationText):                true,
-		protocolFixtureKey(proxy.CatalogProtocolGeminiInteractions, "", "pollable_resource", proxy.ModelOperationText):                                                                    true,
-		protocolFixtureKey(proxy.CatalogProtocolGeminiInteractions, "", "synchronous_completion", proxy.ModelOperationText):                                                               true,
-		protocolFixtureKey(proxy.CatalogProtocolAnthropicMessages, "", "synchronous_completion", proxy.ModelOperationText):                                                                true,
-		protocolFixtureKey(proxy.CatalogProtocolVertexGenerateContent, "", "synchronous_completion", proxy.ModelOperationText):                                                            true,
-		protocolFixtureKey(proxy.CatalogProtocolMultipartTranscription, proxy.CatalogProtocolVariationTranscriptionModel, "synchronous_completion", proxy.ModelOperationDictation):        true,
-		protocolFixtureKey(proxy.CatalogProtocolMultipartTranscription, proxy.CatalogProtocolVariationTranscriptionModelOmitted, "synchronous_completion", proxy.ModelOperationDictation): true,
-		protocolFixtureKey(proxy.CatalogProtocolMetaTranscription, "", "synchronous_completion", proxy.ModelOperationDictation):                                                           true,
-		protocolFixtureKey(proxy.CatalogProtocolGeminiInteractions, "", "synchronous_completion", proxy.ModelOperationDictation):                                                          true,
-		protocolFixtureKey(proxy.CatalogProtocolVertexGenerateContent, "", "synchronous_completion", proxy.ModelOperationDictation):                                                       true,
+		protocolFixtureKey(proxy.CatalogProtocolOpenAIResponses, "", "", "pollable_resource", proxy.ModelOperationText):                                                                                    true,
+		protocolFixtureKey(proxy.CatalogProtocolDashScopeResponses, "", "", "synchronous_completion", proxy.ModelOperationText):                                                                            true,
+		protocolFixtureKey(proxy.CatalogProtocolXAIResponses, "", "", "synchronous_completion", proxy.ModelOperationText):                                                                                  true,
+		protocolFixtureKey(proxy.CatalogProtocolOpenAIChatCompletions, proxy.CatalogProtocolVariationMaxTokens, "", "synchronous_completion", proxy.ModelOperationText):                                    true,
+		protocolFixtureKey(proxy.CatalogProtocolOpenAIChatCompletions, proxy.CatalogProtocolVariationMaxCompletionTokens, "", "synchronous_completion", proxy.ModelOperationText):                          true,
+		protocolFixtureKey(proxy.CatalogProtocolOpenAIChatCompletions, proxy.CatalogProtocolVariationMaxTokens, proxy.CatalogProtocolVariationQianfan, "synchronous_completion", proxy.ModelOperationText): true,
+		protocolFixtureKey(proxy.CatalogProtocolGeminiInteractions, "", "", "pollable_resource", proxy.ModelOperationText):                                                                                 true,
+		protocolFixtureKey(proxy.CatalogProtocolGeminiInteractions, "", "", "synchronous_completion", proxy.ModelOperationText):                                                                            true,
+		protocolFixtureKey(proxy.CatalogProtocolAnthropicMessages, "", "", "synchronous_completion", proxy.ModelOperationText):                                                                             true,
+		protocolFixtureKey(proxy.CatalogProtocolVertexGenerateContent, "", "", "synchronous_completion", proxy.ModelOperationText):                                                                         true,
+		protocolFixtureKey(proxy.CatalogProtocolMultipartTranscription, proxy.CatalogProtocolVariationTranscriptionModel, "", "synchronous_completion", proxy.ModelOperationDictation):                     true,
+		protocolFixtureKey(proxy.CatalogProtocolMultipartTranscription, proxy.CatalogProtocolVariationTranscriptionModelOmitted, "", "synchronous_completion", proxy.ModelOperationDictation):              true,
+		protocolFixtureKey(proxy.CatalogProtocolMetaTranscription, "", "", "synchronous_completion", proxy.ModelOperationDictation):                                                                        true,
+		protocolFixtureKey(proxy.CatalogProtocolGeminiInteractions, "", "", "synchronous_completion", proxy.ModelOperationDictation):                                                                       true,
+		protocolFixtureKey(proxy.CatalogProtocolVertexGenerateContent, "", "", "synchronous_completion", proxy.ModelOperationDictation):                                                                    true,
 	}
 	providersByProtocol := map[string]map[string]bool{}
+	authenticationKindsByProtocol := map[string]map[string]bool{}
 	for _, provider := range catalog.Schema().Providers {
 		for _, transport := range provider.Transports {
-			if providersByProtocol[transport.Protocol.ID] == nil {
-				providersByProtocol[transport.Protocol.ID] = map[string]bool{}
+			if providersByProtocol[transport.Components.RequestCodec.ID] == nil {
+				providersByProtocol[transport.Components.RequestCodec.ID] = map[string]bool{}
+				authenticationKindsByProtocol[transport.Components.RequestCodec.ID] = map[string]bool{}
 			}
-			providersByProtocol[transport.Protocol.ID][provider.ID] = true
+			providersByProtocol[transport.Components.RequestCodec.ID][provider.ID] = true
+			authenticationKindsByProtocol[transport.Components.RequestCodec.ID][transport.Components.Authentication.Kind] = true
 		}
 	}
 	for _, fixture := range fixtures {
-		if fixture.Protocol == "" || fixture.Provider == "" || fixture.Model == "" || fixture.Operation == "" ||
+		if fixture.RequestCodec == "" || fixture.Provider == "" || fixture.Model == "" || fixture.Operation == "" ||
 			fixture.Lifecycle == "" || fixture.EndpointPath == "" || fixture.AuthenticationHeader == "" {
 			t.Fatalf("incomplete protocol fixture: %+v", fixture)
 		}
-		providers := providersByProtocol[fixture.Protocol]
+		providers := providersByProtocol[fixture.RequestCodec]
 		if len(providers) < 2 || !providers[fixture.Provider] {
-			t.Fatalf("protocol=%s providers=%v fixture=%s", fixture.Protocol, providers, fixture.Provider)
+			t.Fatalf("protocol=%s providers=%v fixture=%s", fixture.RequestCodec, providers, fixture.Provider)
 		}
-		key := protocolFixtureKey(fixture.Protocol, fixture.Variation, fixture.Lifecycle, fixture.Operation)
+		if len(authenticationKindsByProtocol[fixture.RequestCodec]) < 2 {
+			t.Fatalf("request codec=%s authentication kinds=%v", fixture.RequestCodec, authenticationKindsByProtocol[fixture.RequestCodec])
+		}
+		key := protocolFixtureKey(fixture.RequestCodec, fixture.RequestVariation, fixture.ResponseVariation, fixture.Lifecycle, fixture.Operation)
 		if !expected[key] {
 			t.Fatalf("unexpected executable adapter fixture: %+v", fixture)
 		}
@@ -69,15 +75,15 @@ func TestClientProtocolsSharedAdapterCatalog(t *testing.T) {
 	}
 }
 
-func protocolFixtureKey(protocol string, variation string, lifecycle string, operation string) string {
-	return strings.Join([]string{protocol, variation, lifecycle, operation}, "/")
+func protocolFixtureKey(requestCodec string, requestVariation string, responseVariation string, lifecycle string, operation string) string {
+	return strings.Join([]string{requestCodec, requestVariation, responseVariation, lifecycle, operation}, "/")
 }
 
 func TestClientProtocolsSharedAdapterExecution(t *testing.T) {
 	catalog, fixtures := testfixtures.ProviderCatalogWithProtocolFixtures(t)
 	for _, fixture := range fixtures {
 		fixture := fixture
-		t.Run(protocolFixtureKey(fixture.Protocol, fixture.Variation, fixture.Lifecycle, fixture.Operation), func(t *testing.T) {
+		t.Run(protocolFixtureKey(fixture.RequestCodec, fixture.RequestVariation, fixture.ResponseVariation, fixture.Lifecycle, fixture.Operation), func(t *testing.T) {
 			var calls atomic.Int32
 			upstream := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 				calls.Add(1)
@@ -147,7 +153,7 @@ func TestClientProtocolsSharedAdapterExecution(t *testing.T) {
 				exerciseProtocolFixtureDictation(t, server, tenantSecret, fixture)
 			}
 			expectedCalls := int32(1)
-			if fixture.Protocol == proxy.CatalogProtocolGeminiInteractions && fixture.Lifecycle == "pollable_resource" {
+			if fixture.RequestCodec == proxy.CatalogProtocolGeminiInteractions && fixture.Lifecycle == "pollable_resource" {
 				expectedCalls = 2
 			}
 			if calls.Load() != expectedCalls {
@@ -243,7 +249,7 @@ func TestClientProtocolsQualificationFaults(t *testing.T) {
 func findProtocolFixture(t *testing.T, fixtures []testfixtures.ProtocolFixture, protocol string, operation string) testfixtures.ProtocolFixture {
 	t.Helper()
 	for _, fixture := range fixtures {
-		if fixture.Protocol == protocol && fixture.Operation == operation {
+		if fixture.RequestCodec == protocol && fixture.Operation == operation {
 			return fixture
 		}
 	}
@@ -290,7 +296,7 @@ func protocolFixtureTenantSecret(fixture testfixtures.ProtocolFixture) string {
 func writeProtocolFixtureResponse(t *testing.T, responseWriter http.ResponseWriter, fixture testfixtures.ProtocolFixture) {
 	t.Helper()
 	responseWriter.Header().Set("Content-Type", "application/json")
-	switch fixture.Protocol {
+	switch fixture.RequestCodec {
 	case proxy.CatalogProtocolOpenAIResponses, proxy.CatalogProtocolDashScopeResponses, proxy.CatalogProtocolXAIResponses:
 		_, _ = io.WriteString(responseWriter, `{"id":"private-response","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"fixture result"}]}],"usage":{"input_tokens":2,"output_tokens":3,"total_tokens":5}}`)
 	case proxy.CatalogProtocolOpenAIChatCompletions:
@@ -306,7 +312,7 @@ func writeProtocolFixtureResponse(t *testing.T, responseWriter http.ResponseWrit
 	case proxy.CatalogProtocolMetaTranscription:
 		_, _ = io.WriteString(responseWriter, `{"transcript":"fixture result","sessionId":"private-transcription"}`)
 	default:
-		t.Fatalf("missing protocol response fixture: %s", fixture.Protocol)
+		t.Fatalf("missing protocol response fixture: %s", fixture.RequestCodec)
 	}
 }
 
@@ -314,7 +320,7 @@ func assertProtocolFixtureDiscovered(t *testing.T, catalog llmproxyclient.Public
 	t.Helper()
 	for _, offering := range catalog.Offerings {
 		if offering.Provider == fixture.Provider && offering.Model == fixture.Model &&
-			offering.WireContract == fixture.Protocol && offering.ExecutionLifecycle == fixture.Lifecycle {
+			offering.WireContract == fixture.RequestCodec && offering.ExecutionLifecycle == fixture.Lifecycle {
 			return
 		}
 	}
