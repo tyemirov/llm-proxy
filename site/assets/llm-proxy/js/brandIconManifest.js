@@ -1,7 +1,7 @@
 // @ts-check
 
 /** @typedef {{file: string, sha256: string, surface: "light" | "dark" | "plain", source: string}} BrandAsset */
-/** @typedef {{assets: Record<string, BrandAsset>, providers: Record<string, string>, families: Record<string, string | null>}} BrandIconManifest */
+/** @typedef {{assets: Record<string, BrandAsset>, providers: Record<string, string | null>, families: Record<string, string | null>}} BrandIconManifest */
 
 /** @type {BrandIconManifest} */
 export const brandIconManifest = {
@@ -128,7 +128,8 @@ export const brandIconManifest = {
     "meta": "meta-color",
     "xai": "xai",
     "baidu": "baiducloud-color",
-    "vertex": "vertexai-color"
+    "vertex": "vertexai-color",
+    "dictator": null
   },
   "families": {
     "gpt-6": "openai",
@@ -159,6 +160,7 @@ export const brandIconManifest = {
     "grok-build": "grok",
     "grok-code": "grok",
     "grok-imagine": "grok",
-    "xai-stt": "xai"
+    "xai-stt": "xai",
+    "dictator-speech": null
   }
 };

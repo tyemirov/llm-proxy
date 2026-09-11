@@ -61,6 +61,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 		order = append(order, identifier)
 		definition := providerDefinition{
 			identifier:          identifier,
+			connectionOwnership: provider.ConnectionOwnership,
 			label:               provider.Label,
 			apiServiceLabel:     provider.APIServiceLabel,
 			keyAcquisitionURL:   provider.KeyAcquisitionURL,
@@ -230,7 +231,7 @@ func (registry *providerRegistry) forTenant(requestTenant tenant) *providerRegis
 	definitions := make(map[providerID]providerDefinition, len(registry.definitions))
 	for identifier, definition := range registry.definitions {
 		definition.connectionValues = cloneStringMap(definition.connectionValues)
-		if providerSettings, configured := requestTenant.providerSettings[identifier]; configured {
+		if providerSettings, configured := requestTenant.providerSettings[identifier]; configured && definition.connectionOwnership == CatalogProviderConnectionTenant {
 			for fieldIdentifier, value := range providerSettings.connectionValues {
 				definition.connectionValues[fieldIdentifier] = value
 			}

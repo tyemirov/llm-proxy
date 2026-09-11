@@ -7,6 +7,7 @@ import (
 	"net/mail"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/tyemirov/llm-proxy/internal/constants"
 	"gorm.io/gorm"
@@ -52,9 +53,11 @@ const (
 	DefaultTenantMediaOperationCapacity = 4
 	// DefaultMediaOperationWorkers is the bounded media worker count.
 	DefaultMediaOperationWorkers = 2
-	DefaultDictationModel        = "gpt-transcribe"
-	DefaultMaxInputAudioBytes    = 25 * 1024 * 1024
-	DefaultManagementJWTIssuer   = "tauth"
+	// DefaultDictatorMediaOperationWorkers is the isolated Dictator worker count.
+	DefaultDictatorMediaOperationWorkers = 1
+	DefaultDictationModel                = "gpt-transcribe"
+	DefaultMaxInputAudioBytes            = 25 * 1024 * 1024
+	DefaultManagementJWTIssuer           = "tauth"
 	// DefaultManagementUsageQueueSize is the number of managed usage events retained for asynchronous persistence.
 	DefaultManagementUsageQueueSize = 1024
 	managedProviderKeyBytes         = 32
@@ -80,12 +83,16 @@ type Configuration struct {
 	ProviderConnectionValues          map[string]map[string]string
 	ModelCatalog                      ModelCatalog
 	MediaOperationAdapters            map[string]MediaOperationAdapter
+	MediaVoiceProviders               map[string]MediaVoiceProvider
 	MediaOperationWorkers             int
+	DictatorMediaOperationWorkers     int
 	MediaOperationCapacity            int
 	TenantMediaOperationCapacity      int
 	MediaOperationLifetimeSeconds     int
 	MediaOperationClaimSeconds        int
 	MediaOperationClaimRenewalSeconds int
+	dictatorProtocol                  dictatorProtocol
+	dictatorPollInterval              time.Duration
 	upstreamRateLimits                upstreamRateLimits
 	managementSessionValidator        *managementSessionValidator
 	requestTimeoutPolicy              requestTimeoutPolicy
@@ -166,7 +173,7 @@ func validateConfig(configuration Configuration) error {
 	if configuration.ProviderCatalog == nil {
 		return fmt.Errorf("%w: field=provider_catalog", ErrInvalidModelCatalog)
 	}
-	if configuration.MediaOperationWorkers <= 0 || configuration.MediaOperationCapacity <= 0 || configuration.TenantMediaOperationCapacity <= 0 || configuration.TenantMediaOperationCapacity > configuration.MediaOperationCapacity {
+	if configuration.MediaOperationWorkers <= 0 || configuration.DictatorMediaOperationWorkers <= 0 || configuration.MediaOperationCapacity <= 0 || configuration.TenantMediaOperationCapacity <= 0 || configuration.TenantMediaOperationCapacity > configuration.MediaOperationCapacity {
 		return fmt.Errorf("invalid media operation capacity")
 	}
 	if configuration.MediaOperationLifetimeSeconds <= 0 || configuration.MediaOperationClaimSeconds <= 0 || configuration.MediaOperationClaimRenewalSeconds <= 0 || configuration.MediaOperationClaimRenewalSeconds >= configuration.MediaOperationClaimSeconds {
@@ -176,6 +183,17 @@ func validateConfig(configuration Configuration) error {
 		parts := strings.Split(adapterKey, "|")
 		if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" || adapter == nil || adapterKey != mediaOperationAdapterKey(strings.TrimSpace(parts[0]), strings.ToLower(strings.TrimSpace(parts[1])), strings.TrimSpace(parts[2])) {
 			return fmt.Errorf("invalid media operation adapter: %s", adapterKey)
+		}
+		if credential, deploymentOwned := adapter.(MediaOperationDeploymentCredential); deploymentOwned {
+			reference := credential.MediaOperationCredentialReference()
+			if strings.TrimSpace(reference) == "" || reference != strings.TrimSpace(reference) {
+				return fmt.Errorf("invalid media operation deployment credential: %s", adapterKey)
+			}
+		}
+	}
+	for provider, voiceProvider := range configuration.MediaVoiceProviders {
+		if provider == "" || provider != strings.ToLower(strings.TrimSpace(provider)) || voiceProvider == nil {
+			return fmt.Errorf("invalid media voice provider: %s", provider)
 		}
 	}
 	return nil
@@ -217,6 +235,9 @@ func (configuration *Configuration) ApplyTunables() {
 	}
 	if configuration.MediaOperationWorkers <= 0 {
 		configuration.MediaOperationWorkers = DefaultMediaOperationWorkers
+	}
+	if configuration.DictatorMediaOperationWorkers <= 0 {
+		configuration.DictatorMediaOperationWorkers = DefaultDictatorMediaOperationWorkers
 	}
 	if configuration.MediaOperationCapacity <= 0 {
 		configuration.MediaOperationCapacity = DefaultMediaOperationCapacity

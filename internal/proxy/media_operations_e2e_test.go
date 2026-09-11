@@ -102,6 +102,17 @@ func (*controlledMediaOperationAdapter) Cancel(context.Context, proxy.MediaOpera
 
 type invalidSuccessMediaOperationAdapter struct{}
 
+type controlledMediaVoiceProvider struct{}
+
+func (*controlledMediaVoiceProvider) DiscoverMediaVoices(context.Context) ([]proxy.MediaVoiceProviderRecord, error) {
+	return []proxy.MediaVoiceProviderRecord{{
+		Provider: "xai", Model: "private-model", Mode: proxy.MediaVoiceModePreset,
+		Language: "en-US", DisplayName: "Narrator", Default: true,
+		SampleRates: []int{24000, 48000}, DefaultSampleRate: 24000,
+		ProviderVoiceReference: "native-voice-id",
+	}}, nil
+}
+
 func (*invalidSuccessMediaOperationAdapter) Validate(request proxy.MediaOperationAdapterRequest) (proxy.MediaOperationValidatedRequest, error) {
 	return proxy.MediaOperationValidatedRequest{Input: request.Input, Controls: request.Controls}, nil
 }
@@ -187,6 +198,56 @@ func TestMediaOperationLifecycleUsesDurableTenantResources(testingInstance *test
 	router.ServeHTTP(foreignResponse, foreignRequest)
 	if foreignResponse.Code != http.StatusForbidden {
 		testingInstance.Fatalf("foreign status=%d", foreignResponse.Code)
+	}
+}
+
+func TestMediaVoiceResourcesAreTenantOwnedAndProviderPrivate(testingInstance *testing.T) {
+	tenantSecret := "media-voice-tenant-secret"
+	configuration, provisionError := testfixtures.ProvisionManagedRouter(testingInstance, proxy.Configuration{
+		ProviderCatalog: testfixtures.ProviderCatalog(testingInstance), AssetStorePath: testingInstance.TempDir(),
+		MediaVoiceProviders: map[string]proxy.MediaVoiceProvider{"xai": &controlledMediaVoiceProvider{}},
+	}, zap.NewNop().Sugar(), testfixtures.StandardManagedTenant(tenantSecret))
+	if provisionError != nil {
+		testingInstance.Fatal(provisionError)
+	}
+	router, routerError := proxy.BuildRouter(configuration, zap.NewNop().Sugar())
+	if routerError != nil {
+		testingInstance.Fatal(routerError)
+	}
+	server := httptest.NewServer(router)
+	defer server.Close()
+	clientConfiguration, _ := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{BaseURL: server.URL, Secret: tenantSecret})
+	client, _ := llmproxyclient.NewClient(clientConfiguration, server.Client())
+
+	voices, voicesError := client.GetMediaVoices(context.Background(), "xai")
+	if voicesError != nil || len(voices) != 1 || voices[0].Provider != "xai" || voices[0].Mode != proxy.MediaVoiceModePreset || voices[0].DisplayName != "Narrator" || voices[0].DefaultSampleRate != 24000 {
+		testingInstance.Fatalf("voices=%+v error=%v", voices, voicesError)
+	}
+	voiceID := voices[0].VoiceID
+	if !strings.HasPrefix(voiceID, "voi_") {
+		testingInstance.Fatalf("voice id=%q", voiceID)
+	}
+
+	configuration.MediaVoiceProviders = nil
+	restartedRouter, restartError := proxy.BuildRouter(configuration, zap.NewNop().Sugar())
+	if restartError != nil {
+		testingInstance.Fatal(restartError)
+	}
+	restartedServer := httptest.NewServer(restartedRouter)
+	defer restartedServer.Close()
+	restartedConfiguration, _ := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{BaseURL: restartedServer.URL, Secret: tenantSecret})
+	restartedClient, _ := llmproxyclient.NewClient(restartedConfiguration, restartedServer.Client())
+	voice, voiceError := restartedClient.GetMediaVoice(context.Background(), voiceID)
+	if voiceError != nil || voice.VoiceID != voiceID || voice.Provider != "xai" {
+		testingInstance.Fatalf("voice=%+v error=%v", voice, voiceError)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, llmproxycontract.MediaVoicesPath+"/"+voiceID, nil)
+	request.Header.Set("Authorization", "Bearer wrong-tenant-secret")
+	response := httptest.NewRecorder()
+	restartedRouter.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden || strings.Contains(response.Body.String(), "native-voice-id") || strings.Contains(response.Body.String(), "private-model") {
+		testingInstance.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 

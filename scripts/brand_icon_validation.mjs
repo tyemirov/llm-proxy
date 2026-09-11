@@ -20,7 +20,7 @@ export function validateBrandMappings(catalog, manifest = brandIconManifest) {
       throw new Error(`brand_icon_catalog_mismatch: ${kind}`);
     }
     for (const [identifier, assetID] of Object.entries(mappings)) {
-      if (kind === "families" && assetID === null) continue;
+      if (assetID === null) continue;
       if (typeof assetID !== "string" || !Object.hasOwn(manifest.assets, assetID)) {
         throw new Error(`brand_icon_asset_reference_invalid: ${kind}=${identifier}`);
       }

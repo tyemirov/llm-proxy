@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="ce06ff5552191fd0d253691918ccbef12a7d2ad083f37e4ca06f0afd64163bbe">
+    <meta name="openapi-source-sha256" content="932f9e4356caa7f0820cb560ad8f73492eac64c60b15fb9d537ab50f1a21b28e">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="ce06ff5552191fd0d253691918ccbef12a7d2ad083f37e4ca06f0afd64163bbe">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="932f9e4356caa7f0820cb560ad8f73492eac64c60b15fb9d537ab50f1a21b28e">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>ce06ff5552191fd0d253691918ccbef12a7d2ad083f37e4ca06f0afd64163bbe</code></span>
+          <span>Source SHA-256 <code>932f9e4356caa7f0820cb560ad8f73492eac64c60b15fb9d537ab50f1a21b28e</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -1163,6 +1163,52 @@ paths:
           $ref: &#39;#/components/responses/MediaOperationFailure&#39;
         &#39;422&#39;:
           $ref: &#39;#/components/responses/MediaOperationFailure&#39;
+  /model/v1/voices:
+    get:
+      operationId: listTenantMediaVoices
+      summary: Discover and list tenant-owned provider voices
+      tags:
+        - Proxy
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - name: provider
+          in: query
+          required: true
+          description: Canonical provider identifier.
+          schema:
+            type: string
+            pattern: ^[a-z][a-z0-9_-]*$
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/MediaVoiceCollection&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/MediaVoiceFailure&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ProxyForbidden&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/MediaVoiceFailure&#39;
+        &#39;502&#39;:
+          $ref: &#39;#/components/responses/MediaVoiceFailure&#39;
+  /model/v1/voices/{voice_id}:
+    get:
+      operationId: getTenantMediaVoice
+      summary: Read one tenant-owned voice
+      tags:
+        - Proxy
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - $ref: &#39;#/components/parameters/MediaVoiceID&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/MediaVoice&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ProxyForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/MediaVoiceFailure&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/MediaVoiceFailure&#39;
   /model/v1/assets:
     post:
       operationId: uploadTenantAsset
@@ -2473,6 +2519,14 @@ components:
       schema:
         type: string
         pattern: ^mop_[0-9a-f]{32}$
+    MediaVoiceID:
+      name: voice_id
+      in: path
+      required: true
+      description: Opaque tenant voice identifier.
+      schema:
+        type: string
+        pattern: ^voi_[0-9a-f]{32}$
     TenantID:
       name: tenant_id
       in: path
@@ -2831,6 +2885,24 @@ components:
         application/json:
           schema:
             $ref: &#39;#/components/schemas/MediaOperationExpired&#39;
+    MediaVoice:
+      description: One tenant-owned voice without native provider identifiers.
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/MediaVoice&#39;
+    MediaVoiceCollection:
+      description: Tenant-owned voices discovered from the selected provider.
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/MediaVoiceCollection&#39;
+    MediaVoiceFailure:
+      description: The voice request failed with a stable caller-safe code.
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/MediaVoiceErrorEnvelope&#39;
     StructuredRequestSucceeded:
       description: Exact provider output that passed the caller JSON Schema and was durably committed before this response.
       headers:
@@ -4232,6 +4304,7 @@ components:
             type: string
             enum:
               - api_key
+              - deployment
     PublicModelOperation:
       type: object
       additionalProperties: false
@@ -4246,6 +4319,12 @@ components:
             - text
             - dictation
             - video_generation
+            - audio_transcription
+            - audio_diarization
+            - audio_alignment
+            - subtitle_creation
+            - speech_generation
+            - voice_extraction
         input_artifacts:
           type: array
           minItems: 1
@@ -4340,6 +4419,12 @@ components:
               - text
               - dictation
               - video_generation
+              - audio_transcription
+              - audio_diarization
+              - audio_alignment
+              - subtitle_creation
+              - speech_generation
+              - voice_extraction
         media_inputs:
           type: array
           uniqueItems: true
@@ -4363,6 +4448,12 @@ components:
               - audio_input
               - reasoning
               - video_generation
+              - audio_transcription
+              - audio_diarization
+              - audio_alignment
+              - subtitle_creation
+              - speech_generation
+              - voice_extraction
         provider_offerings:
           type: array
           minItems: 1
@@ -4433,6 +4524,12 @@ components:
               - audio_input
               - reasoning
               - video_generation
+              - audio_transcription
+              - audio_diarization
+              - audio_alignment
+              - subtitle_creation
+              - speech_generation
+              - voice_extraction
         wire_contract:
           type: string
           minLength: 1
@@ -4441,11 +4538,13 @@ components:
           enum:
             - synchronous_completion
             - pollable_resource
+            - asynchronous_job
         media_execution_lifecycle:
           type: string
           enum:
             - synchronous_completion
             - pollable_resource
+            - asynchronous_job
         output_token_limit:
           type: integer
           minimum: 0
@@ -4614,6 +4713,12 @@ components:
             - text
             - dictation
             - video_generation
+            - audio_transcription
+            - audio_diarization
+            - audio_alignment
+            - subtitle_creation
+            - speech_generation
+            - voice_extraction
         available:
           type: boolean
         rates:
@@ -4869,6 +4974,17 @@ components:
                 items:
                   type: object
     MediaOperationRequest:
+      oneOf:
+        - $ref: &#39;#/components/schemas/VideoGenerationOperationRequest&#39;
+        - $ref: &#39;#/components/schemas/DictatorTranscriptionOperationRequest&#39;
+        - $ref: &#39;#/components/schemas/DictatorDiarizationOperationRequest&#39;
+        - $ref: &#39;#/components/schemas/DictatorAlignmentOperationRequest&#39;
+        - $ref: &#39;#/components/schemas/DictatorSubtitleOperationRequest&#39;
+        - $ref: &#39;#/components/schemas/DictatorSpeechGenerationOperationRequest&#39;
+        - $ref: &#39;#/components/schemas/DictatorVoiceExtractionOperationRequest&#39;
+      discriminator:
+        propertyName: capability
+    MediaOperationRequestBase:
       type: object
       additionalProperties: false
       required: [capability, provider, model, input, controls]
@@ -4886,6 +5002,242 @@ components:
           type: object
         controls:
           type: object
+    VideoGenerationOperationRequest:
+      allOf:
+        - $ref: &#39;#/components/schemas/MediaOperationRequestBase&#39;
+        - type: object
+          properties:
+            capability:
+              const: video.generate
+    DictatorTranscriptionOperationRequest:
+      allOf:
+        - $ref: &#39;#/components/schemas/MediaOperationRequestBase&#39;
+        - type: object
+          properties:
+            capability:
+              const: audio.transcribe
+            provider:
+              const: dictator
+            model:
+              const: dictator-speech-v1
+            input:
+              $ref: &#39;#/components/schemas/DictatorAudioInput&#39;
+            controls:
+              $ref: &#39;#/components/schemas/DictatorLanguageControls&#39;
+    DictatorDiarizationOperationRequest:
+      allOf:
+        - $ref: &#39;#/components/schemas/MediaOperationRequestBase&#39;
+        - type: object
+          properties:
+            capability:
+              const: audio.diarize
+            provider:
+              const: dictator
+            model:
+              const: dictator-speech-v1
+            input:
+              $ref: &#39;#/components/schemas/DictatorAudioInput&#39;
+            controls:
+              type: object
+              additionalProperties: false
+              required: [model_size]
+              properties:
+                language:
+                  type: string
+                  minLength: 1
+                detect_language:
+                  const: true
+                model_size:
+                  type: string
+                  minLength: 1
+                utterance_gap_seconds:
+                  type: number
+                  minimum: 0
+              oneOf:
+                - required: [language]
+                  not:
+                    required: [detect_language]
+                - required: [detect_language]
+                  not:
+                    required: [language]
+    DictatorAlignmentOperationRequest:
+      allOf:
+        - $ref: &#39;#/components/schemas/MediaOperationRequestBase&#39;
+        - type: object
+          properties:
+            capability:
+              const: audio.align
+            provider:
+              const: dictator
+            model:
+              const: dictator-speech-v1
+            input:
+              type: object
+              additionalProperties: false
+              required: [audio_asset_id, transcript]
+              properties:
+                audio_asset_id:
+                  type: string
+                  pattern: ^ast_[0-9a-f]{32}$
+                transcript:
+                  type: string
+                  minLength: 1
+            controls:
+              type: object
+              additionalProperties: false
+              required: [language]
+              properties:
+                language:
+                  type: string
+                  minLength: 1
+                remove_punctuation:
+                  type: boolean
+    DictatorSubtitleOperationRequest:
+      allOf:
+        - $ref: &#39;#/components/schemas/MediaOperationRequestBase&#39;
+        - type: object
+          properties:
+            capability:
+              const: subtitles.create
+            provider:
+              const: dictator
+            model:
+              const: dictator-speech-v1
+            input:
+              type: object
+              additionalProperties: false
+              required: [audio_asset_id]
+              properties:
+                audio_asset_id:
+                  type: string
+                  pattern: ^ast_[0-9a-f]{32}$
+                transcript:
+                  type: string
+                  minLength: 1
+            controls:
+              type: object
+              additionalProperties: false
+              required: [granularity, group_size]
+              properties:
+                language:
+                  type: string
+                  minLength: 1
+                detect_language:
+                  const: true
+                granularity:
+                  type: string
+                  enum: [word, sentence]
+                group_size:
+                  type: integer
+                  minimum: 1
+              oneOf:
+                - required: [language]
+                  not:
+                    required: [detect_language]
+                - required: [detect_language]
+                  not:
+                    required: [language]
+    DictatorSpeechGenerationOperationRequest:
+      allOf:
+        - $ref: &#39;#/components/schemas/MediaOperationRequestBase&#39;
+        - type: object
+          properties:
+            capability:
+              const: audio.speech.generate
+            provider:
+              const: dictator
+            model:
+              const: dictator-speech-v1
+            input:
+              type: object
+              additionalProperties: false
+              required: [text, voice_id]
+              properties:
+                text:
+                  type: string
+                  minLength: 1
+                voice_id:
+                  type: string
+                  pattern: ^voi_[0-9a-f]{32}$
+            controls:
+              type: object
+              additionalProperties: false
+              required: [language, text_format, sample_rate_hz]
+              properties:
+                language:
+                  type: string
+                  minLength: 1
+                text_format:
+                  type: string
+                  enum: [plain, ssml]
+                sample_rate_hz:
+                  type: integer
+                  enum: [24000, 48000]
+                max_duration_seconds:
+                  type: number
+                  minimum: 0
+                include_timeline:
+                  type: boolean
+    DictatorVoiceExtractionOperationRequest:
+      allOf:
+        - $ref: &#39;#/components/schemas/MediaOperationRequestBase&#39;
+        - type: object
+          properties:
+            capability:
+              const: audio.voice.extract
+            provider:
+              const: dictator
+            model:
+              const: dictator-speech-v1
+            input:
+              type: object
+              additionalProperties: false
+              required: [audio_asset_id, transcript, display_name, language]
+              properties:
+                audio_asset_id:
+                  type: string
+                  pattern: ^ast_[0-9a-f]{32}$
+                transcript:
+                  type: string
+                  minLength: 1
+                display_name:
+                  type: string
+                  minLength: 1
+                language:
+                  type: string
+                  minLength: 1
+            controls:
+              type: object
+              additionalProperties: false
+              required: [model_size]
+              properties:
+                model_size:
+                  type: string
+                  minLength: 1
+    DictatorAudioInput:
+      type: object
+      additionalProperties: false
+      required: [audio_asset_id]
+      properties:
+        audio_asset_id:
+          type: string
+          pattern: ^ast_[0-9a-f]{32}$
+    DictatorLanguageControls:
+      type: object
+      additionalProperties: false
+      properties:
+        language:
+          type: string
+          minLength: 1
+        detect_language:
+          const: true
+      oneOf:
+        - required: [language]
+          not:
+            required: [detect_language]
+        - required: [detect_language]
+          not:
+            required: [language]
     MediaOperation:
       type: object
       additionalProperties: false
@@ -4990,6 +5342,60 @@ components:
           properties:
             code:
               const: media_operation_expired
+    MediaVoice:
+      type: object
+      additionalProperties: false
+      required: [voice_id, provider, mode, language, display_name, default, sample_rates, default_sample_rate]
+      properties:
+        voice_id:
+          type: string
+          pattern: ^voi_[0-9a-f]{32}$
+        provider:
+          type: string
+          minLength: 1
+        mode:
+          type: string
+          enum: [preset, extracted]
+        language:
+          type: string
+          minLength: 1
+        display_name:
+          type: string
+          minLength: 1
+        default:
+          type: boolean
+        sample_rates:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
+        default_sample_rate:
+          type: integer
+          minimum: 1
+    MediaVoiceCollection:
+      type: object
+      additionalProperties: false
+      required: [voices]
+      properties:
+        voices:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/MediaVoice&#39;
+    MediaVoiceErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code]
+          properties:
+            code:
+              type: string
+              enum: [media_voice_invalid, media_voice_not_found, media_voice_provider_error, media_voice_store_error]
     TenantAsset:
       type: object
       additionalProperties: false
@@ -6856,6 +7262,8 @@ components:
 <a href="#operation-createTenantMediaOperation"><span class="api-method api-method-post">POST</span><code>/model/v1/operations</code><span>Accept one durable tenant media operation</span></a>
 <a href="#operation-getTenantMediaOperation"><span class="api-method api-method-get">GET</span><code>/model/v1/operations/{operation_id}</code><span>Read one durable tenant media operation</span></a>
 <a href="#operation-cancelTenantMediaOperation"><span class="api-method api-method-put">PUT</span><code>/model/v1/operations/{operation_id}/cancellation</code><span>Request cancellation of one durable tenant media operation</span></a>
+<a href="#operation-listTenantMediaVoices"><span class="api-method api-method-get">GET</span><code>/model/v1/voices</code><span>Discover and list tenant-owned provider voices</span></a>
+<a href="#operation-getTenantMediaVoice"><span class="api-method api-method-get">GET</span><code>/model/v1/voices/{voice_id}</code><span>Read one tenant-owned voice</span></a>
 <a href="#operation-createTranscription"><span class="api-method api-method-post">POST</span><code>/v1/audio/transcriptions</code><span>createTranscription</span></a>
 <a href="#operation-createChatCompletion"><span class="api-method api-method-post">POST</span><code>/v1/chat/completions</code><span>createChatCompletion</span></a>
 <a href="#operation-listClientModels"><span class="api-method api-method-get">GET</span><code>/v1/models</code><span>listClientModels</span></a>
@@ -8337,21 +8745,7 @@ components:
             </table>
           </div>
         </div>
-        <div class="api-contract-block">
-          <h3>Request fields</h3>
-          <div class="resource-table-wrap">
-            <table>
-              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
-              <tbody>
-                <tr><td><code>capability</code></td><td>Yes</td><td>string</td><td></td></tr>
-<tr><td><code>provider</code></td><td>Yes</td><td>string</td><td></td></tr>
-<tr><td><code>model</code></td><td>Yes</td><td>string</td><td></td></tr>
-<tr><td><code>input</code></td><td>Yes</td><td>object</td><td></td></tr>
-<tr><td><code>controls</code></td><td>Yes</td><td>object</td><td></td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
         <div class="api-contract-block">
           <h3>Responses</h3>
           <div class="resource-table-wrap">
@@ -8437,6 +8831,77 @@ components:
 <tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
 <tr><td><code>404</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
 <tr><td><code>422</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-listTenantMediaVoices">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/model/v1/voices</code>
+          <span class="api-operation-id">listTenantMediaVoices</span>
+        </header>
+        <h2>Discover and list tenant-owned provider voices</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>provider</code></td><td>query</td><td>Yes</td><td>string</td><td>Canonical provider identifier.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>none</td><td>Tenant-owned voices discovered from the selected provider.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>none</td><td>The voice request failed with a stable caller-safe code.</td></tr>
+<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>none</td><td>The voice request failed with a stable caller-safe code.</td></tr>
+<tr><td><code>502</code></td><td>application/json</td><td>none</td><td>The voice request failed with a stable caller-safe code.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getTenantMediaVoice">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/model/v1/voices/{voice_id}</code>
+          <span class="api-operation-id">getTenantMediaVoice</span>
+        </header>
+        <h2>Read one tenant-owned voice</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>voice_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant voice identifier.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>none</td><td>One tenant-owned voice without native provider identifiers.</td></tr>
+<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>none</td><td>The voice request failed with a stable caller-safe code.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>none</td><td>The voice request failed with a stable caller-safe code.</td></tr>
               </tbody>
             </table>
           </div>

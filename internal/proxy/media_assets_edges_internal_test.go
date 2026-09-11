@@ -729,6 +729,18 @@ func TestMediaLimitAndMessageMediaEdgeContracts(t *testing.T) {
 	if configError := validateConfig(invalidAdapter); configError == nil {
 		t.Fatal("invalid media operation adapter accepted")
 	}
+	invalidDeploymentCredential := validConfiguration
+	invalidDeploymentCredential.MediaOperationAdapters = map[string]MediaOperationAdapter{
+		"video.generate|xai|model": &deploymentMediaOperationAdapter{mediaOperationInternalAdapter: &mediaOperationInternalAdapter{}, credentialReference: " deployment-reference "},
+	}
+	if configError := validateConfig(invalidDeploymentCredential); configError == nil {
+		t.Fatal("invalid deployment credential reference accepted")
+	}
+	invalidVoiceProvider := validConfiguration
+	invalidVoiceProvider.MediaVoiceProviders = map[string]MediaVoiceProvider{" XAI ": nil}
+	if configError := validateConfig(invalidVoiceProvider); configError == nil {
+		t.Fatal("invalid media voice provider accepted")
+	}
 	value := int64(1)
 	validSource := "https://example.com/limits"
 	validDate := "2026-08-11"

@@ -107,7 +107,7 @@ func TestOpenAPIContractDocumentsActualAuthenticationBoundaries(t *testing.T) {
 			expectedSecurity = [][]string{}
 		case "/", "/v2", llmproxycontract.TenantIdentityPath, "/v2/requests", "/dictate":
 			expectedSecurity = [][]string{{"TenantClientKey"}}
-		case "/v1/chat/completions", "/v1/responses", "/v1/models", "/v1/audio/transcriptions", llmproxycontract.AssetPath, "/model/v1/assets/{asset_id}", "/model/v1/assets/{asset_id}/content", llmproxycontract.MediaCapabilitiesPath, llmproxycontract.MediaOperationsPath, "/model/v1/operations/{operation_id}", "/model/v1/operations/{operation_id}/cancellation":
+		case "/v1/chat/completions", "/v1/responses", "/v1/models", "/v1/audio/transcriptions", llmproxycontract.AssetPath, "/model/v1/assets/{asset_id}", "/model/v1/assets/{asset_id}/content", llmproxycontract.MediaCapabilitiesPath, llmproxycontract.MediaOperationsPath, "/model/v1/operations/{operation_id}", "/model/v1/operations/{operation_id}/cancellation", llmproxycontract.MediaVoicesPath, "/model/v1/voices/{voice_id}":
 			expectedSecurity = [][]string{{"TenantBearerKey"}}
 		case "/healthz", proxy.ManagementConfigUIPath, proxy.PublicCapabilitiesPath:
 			expectedSecurity = [][]string{}
@@ -211,6 +211,45 @@ func TestOpenAPIContractEnforcesV2MediaRelationships(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "/v2?key=contract-test-key", bytes.NewReader(body))
 			request.Header.Set("Content-Type", "application/json")
 			validationError := contract.ValidateRequest("/v2", request.Method, request, body)
+			if testCase.wantValid && validationError != nil {
+				t.Fatalf("valid request rejected: %v", validationError)
+			}
+			if !testCase.wantValid && validationError == nil {
+				t.Fatal("invalid request accepted")
+			}
+		})
+	}
+}
+
+func TestOpenAPIContractEnforcesExactDictatorMediaOperations(t *testing.T) {
+	contract, loadError := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	if loadError != nil {
+		t.Fatalf("load canonical OpenAPI contract: %v", loadError)
+	}
+	assetID := "ast_0123456789abcdef0123456789abcdef"
+	voiceID := "voi_0123456789abcdef0123456789abcdef"
+	testCases := []struct {
+		name      string
+		body      string
+		wantValid bool
+	}{
+		{name: "transcription", body: `{"capability":"audio.transcribe","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `"},"controls":{"detect_language":true}}`, wantValid: true},
+		{name: "diarization", body: `{"capability":"audio.diarize","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `"},"controls":{"language":"en-US","model_size":"large","utterance_gap_seconds":0.4}}`, wantValid: true},
+		{name: "alignment", body: `{"capability":"audio.align","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `","transcript":"Aligned words."},"controls":{"language":"en-US","remove_punctuation":true}}`, wantValid: true},
+		{name: "subtitles", body: `{"capability":"subtitles.create","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `","transcript":"Subtitle words."},"controls":{"language":"en-US","granularity":"sentence","group_size":2}}`, wantValid: true},
+		{name: "speech", body: `{"capability":"audio.speech.generate","provider":"dictator","model":"dictator-speech-v1","input":{"text":"Speak this.","voice_id":"` + voiceID + `"},"controls":{"language":"en-US","text_format":"plain","sample_rate_hz":48000,"include_timeline":true,"max_duration_seconds":30}}`, wantValid: true},
+		{name: "voice extraction", body: `{"capability":"audio.voice.extract","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `","transcript":"Reference words.","display_name":"Narrator","language":"en-US"},"controls":{"model_size":"large"}}`, wantValid: true},
+		{name: "missing language selector", body: `{"capability":"audio.transcribe","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `"},"controls":{}}`},
+		{name: "irrelevant speech control", body: `{"capability":"audio.speech.generate","provider":"dictator","model":"dictator-speech-v1","input":{"text":"Speak this.","voice_id":"` + voiceID + `"},"controls":{"language":"en-US","text_format":"plain","sample_rate_hz":48000,"model_size":"large"}}`},
+		{name: "non Dictator provider", body: `{"capability":"audio.align","provider":"xai","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `","transcript":"Aligned words."},"controls":{"language":"en-US"}}`},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			body := []byte(testCase.body)
+			request := httptest.NewRequest(http.MethodPost, llmproxycontract.MediaOperationsPath, bytes.NewReader(body))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Idempotency-Key", "openapi-dictator-"+strings.ReplaceAll(testCase.name, " ", "-"))
+			validationError := contract.ValidateRequest(llmproxycontract.MediaOperationsPath, request.Method, request, body)
 			if testCase.wantValid && validationError != nil {
 				t.Fatalf("valid request rejected: %v", validationError)
 			}
@@ -358,8 +397,8 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 	if decodeError := json.Unmarshal(capabilitiesResponse.Body.Bytes(), &capabilityCatalog); decodeError != nil {
 		t.Fatalf("decode public capability catalog: %v", decodeError)
 	}
-	if len(capabilityCatalog.Providers) != 13 {
-		t.Fatalf("public capability providers=%d want=13", len(capabilityCatalog.Providers))
+	if len(capabilityCatalog.Providers) != 14 {
+		t.Fatalf("public capability providers=%d want=14", len(capabilityCatalog.Providers))
 	}
 
 	configRequest := httptest.NewRequest(http.MethodGet, proxy.ManagementConfigUIPath, nil)

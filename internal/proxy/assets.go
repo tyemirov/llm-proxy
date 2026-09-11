@@ -444,7 +444,7 @@ func supportedTenantAssetMIME(mimeType string) bool {
 		return true
 	}
 	switch mimeType {
-	case "audio/flac", "audio/ogg", "video/mp4", "video/webm":
+	case "application/json", "application/x-subrip", "audio/flac", "audio/ogg", "video/mp4", "video/webm":
 		return true
 	default:
 		return false

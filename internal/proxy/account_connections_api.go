@@ -221,6 +221,10 @@ func (service *managementService) saveConnectionHandler(create bool) gin.Handler
 			return
 		}
 		definition := service.providers.definitions[providerID]
+		if definition.connectionOwnership != CatalogProviderConnectionTenant {
+			writeConnectionError(ctx, errManagedConnectionInvalid)
+			return
+		}
 		values, err := validatedManagedProviderConnectionValues(definition, request.Fields, existingSettings, !create)
 		if err != nil {
 			writeConnectionError(ctx, err)

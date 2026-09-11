@@ -5,7 +5,7 @@ The source review date is September 7, 2026.
 
 ## Scope and placement
 
-The provider catalog defines 13 API providers and 29 model families, including disabled candidates.
+The provider catalog defines 14 API providers and 30 model families, including disabled candidates.
 I237 separates API connection identities from model family identities.
 The icons keep that separation.
 
@@ -39,6 +39,7 @@ They identify the installed artwork. The collection is not an official asset pac
 | `xai` | xAI API | xAI symbol | `xai.svg` |
 | `baidu` | Qianfan API | Baidu Cloud symbol | `baiducloud-color.svg` |
 | `vertex` | Google Cloud Vertex AI | Vertex AI product symbol | `vertexai-color.svg` |
+| `dictator` | Dictator API | Explicit text-only presentation | No verified small logo |
 
 Alibaba Cloud identifies the service behind the [DashScope connection][model-studio].
 Baidu Cloud identifies the service organization behind the [Qianfan connection][baidu-cloud].
@@ -64,8 +65,9 @@ Versions, reasoning levels, and capabilities do not receive separate brand artwo
 | `muse-spark`, `muse-voice` | Meta infinity symbol | `meta-color.svg` |
 | `grok`, `grok-build`, `grok-code`, `grok-imagine` | Grok symbol | `grok.svg` |
 | `xai-stt` | xAI symbol | `xai.svg` |
+| `dictator-speech` | Explicit text-only presentation | No verified small logo |
 
-The set contains 18 distinct SVG assets and one explicit text-only family.
+The set contains 18 distinct SVG assets, one explicit text-only provider, and two explicit text-only families.
 The Meta and Z.AI choices represent the model publishers.
 They do not assert separate Muse or GLM product logos.
 
@@ -111,6 +113,7 @@ An asset collection license is not a claim of brand endorsement.
 ## Implementation
 
 `site/assets/llm-proxy/js/brandIconManifest.js` owns asset definitions and exact provider and family mappings.
+An explicit `null` mapping selects text-only presentation when no reviewed small logo exists.
 `site/assets/llm-proxy/img/brands/` contains the 18 SVG files and their license.
 The shared stylesheet declares dimensions and background treatments.
 

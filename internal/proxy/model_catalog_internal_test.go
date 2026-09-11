@@ -96,8 +96,10 @@ func internalTestModelCatalog(offerings ...ProviderOffering) ModelCatalog {
 
 func internalTestProviderCatalog(modelCatalog ModelCatalog) *ProviderCatalog {
 	providerLabels := map[string]string{}
+	providerDefinitions := map[string]CatalogProvider{}
 	for _, provider := range modelCatalog.Providers {
 		providerLabels[provider.ID] = provider.Label
+		providerDefinitions[provider.ID] = provider
 	}
 	prices := map[string][]ProviderCatalogPrice{}
 	for _, price := range modelCatalog.Prices {
@@ -128,14 +130,24 @@ func internalTestProviderCatalog(modelCatalog ModelCatalog) *ProviderCatalog {
 		if !found {
 			providerIndex = len(schema.Providers)
 			providerIndexes[offering.Provider] = providerIndex
-			schema.Providers = append(schema.Providers, ProviderCatalogProvider{
-				ID: offering.Provider, Label: providerLabels[offering.Provider], APIServiceLabel: providerLabels[offering.Provider] + " API", KeyAcquisitionURL: "https://provider.example/keys",
+			provider := ProviderCatalogProvider{
+				ID: offering.Provider, Label: providerLabels[offering.Provider], APIServiceLabel: providerLabels[offering.Provider] + " API", ConnectionOwnership: CatalogProviderConnectionTenant, KeyAcquisitionURL: "https://provider.example/keys",
 				Fields: []ProviderCatalogField{{
 					ID: CatalogCredentialAPIKey, Label: "Test API key", Kind: CatalogProviderFieldKindCredential,
 					Type: CatalogProviderFieldTypeOpaque, Required: true, Default: &empty, Secret: true,
 					Validation: ProviderCatalogFieldValidation{MinimumLength: 1},
 				}},
-			})
+			}
+			if slices.Contains(providerDefinitions[offering.Provider].CredentialKinds, CatalogCredentialDeployment) {
+				provider.ConnectionOwnership = CatalogProviderConnectionDeployment
+				provider.KeyAcquisitionURL = ""
+				provider.Fields = []ProviderCatalogField{
+					{ID: "grpc_address", Label: "Test gRPC address", Kind: CatalogProviderFieldKindSetting, Type: CatalogProviderFieldTypeGRPCTarget, Required: true, Default: &empty, Validation: ProviderCatalogFieldValidation{MinimumLength: 1}, Environment: "DICTATOR_GRPC_ADDR"},
+					{ID: "grpc_auth_token", Label: "Test gRPC token", Kind: CatalogProviderFieldKindCredential, Type: CatalogProviderFieldTypeOpaque, Required: true, Default: &empty, Secret: true, Validation: ProviderCatalogFieldValidation{MinimumLength: 1}, Environment: "DICTATOR_GRPC_AUTH_TOKEN"},
+					{ID: "grpc_tls", Label: "Test gRPC TLS", Kind: CatalogProviderFieldKindSetting, Type: CatalogProviderFieldTypeBoolean, Required: true, Default: &empty, Validation: ProviderCatalogFieldValidation{MinimumLength: 1}, Environment: "DICTATOR_GRPC_TLS"},
+				}
+			}
+			schema.Providers = append(schema.Providers, provider)
 		}
 		provider := &schema.Providers[providerIndex]
 		transportKey := offering.Provider + "\x00" + offering.WireContract + "\x00" + offering.ExecutionLifecycle
@@ -176,9 +188,12 @@ func internalTestProviderTransport(identifier string, offering ProviderOffering)
 				continue
 			}
 			template.ID = identifier
+			if protocol == CatalogProtocolDictatorSpeechV1 {
+				return template
+			}
 			template.Components.Authentication.Field = CatalogCredentialAPIKey
 			template.Endpoint = ProviderCatalogEndpoint{
-				Method: CatalogEndpointMethodPost, DefaultBaseURL: "https://provider.example", Path: internalTestProviderProtocolPath(protocol),
+				Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodPost, DefaultBaseURL: "https://provider.example", Path: internalTestProviderProtocolPath(protocol),
 			}
 			return template
 		}

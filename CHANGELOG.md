@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Added the private Dictator media-provider boundary for transcription,
+  diarization, alignment, subtitles, speech generation, and voice extraction.
+  The gateway validates exact operation inputs, retains native jobs and voice
+  references privately, publishes results as tenant assets, and assigns opaque
+  tenant voice identifiers. Dictator uses deployment-owned gRPC configuration
+  and an isolated worker pool. The production transport remains gated on the
+  released Dictator SDK contract.
+- Extended provider catalog schema version 4 with deployment-owned providers,
+  gRPC targets, Boolean deployment settings, gRPC bearer authentication, and
+  asynchronous jobs. Added the Dictator speech offering and updated the public
+  capability contract, OpenAPI schema, Go client, and Python client.
+
 - Added durable tenant-owned media operations under `/model/v1`. The service
   persists accepted intent, route, catalog revision, claim generations, asset
   references, cancellation evidence, idempotency tombstones, and deduplicated

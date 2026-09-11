@@ -8,8 +8,22 @@ const (
 	MediaCapabilitiesPath = "/model/v1/capabilities"
 	// MediaOperationsPath is the authenticated tenant media operation collection.
 	MediaOperationsPath = "/model/v1/operations"
+	// MediaVoicesPath is the authenticated tenant voice collection.
+	MediaVoicesPath = "/model/v1/voices"
 	// MediaCapabilityVideoGenerate identifies durable video generation.
 	MediaCapabilityVideoGenerate = "video.generate"
+	// MediaCapabilityAudioTranscribe identifies durable speech transcription.
+	MediaCapabilityAudioTranscribe = "audio.transcribe"
+	// MediaCapabilityAudioDiarize identifies durable speaker diarization.
+	MediaCapabilityAudioDiarize = "audio.diarize"
+	// MediaCapabilityAudioAlign identifies durable transcript alignment.
+	MediaCapabilityAudioAlign = "audio.align"
+	// MediaCapabilitySubtitlesCreate identifies durable subtitle creation.
+	MediaCapabilitySubtitlesCreate = "subtitles.create"
+	// MediaCapabilityAudioSpeechGenerate identifies durable speech synthesis.
+	MediaCapabilityAudioSpeechGenerate = "audio.speech.generate"
+	// MediaCapabilityAudioVoiceExtract identifies durable voice extraction.
+	MediaCapabilityAudioVoiceExtract = "audio.voice.extract"
 	// MediaOperationStateQueued identifies accepted work awaiting a worker.
 	MediaOperationStateQueued = "queued"
 	// MediaOperationStateRunning identifies claimed work with current execution authority.
@@ -80,6 +94,14 @@ const (
 	ErrorCodeMediaOperationStore = "media_operation_store_error"
 	// ErrorCodeMediaOperationExpired identifies a retained idempotency tombstone after operation detail expiry.
 	ErrorCodeMediaOperationExpired = "media_operation_expired"
+	// ErrorCodeMediaVoiceInvalid identifies an invalid voice-resource request.
+	ErrorCodeMediaVoiceInvalid = "media_voice_invalid"
+	// ErrorCodeMediaVoiceNotFound identifies a missing tenant-owned voice.
+	ErrorCodeMediaVoiceNotFound = "media_voice_not_found"
+	// ErrorCodeMediaVoiceProvider identifies a sanitized voice-provider failure.
+	ErrorCodeMediaVoiceProvider = "media_voice_provider_error"
+	// ErrorCodeMediaVoiceStore identifies a durable voice-store failure.
+	ErrorCodeMediaVoiceStore = "media_voice_store_error"
 	// ErrorCodeAssetInUse identifies an asset protected by an active durable operation reference.
 	ErrorCodeAssetInUse = "asset_in_use"
 )

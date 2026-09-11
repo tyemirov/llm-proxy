@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/tyemirov/llm-proxy/internal/constants"
@@ -19,15 +20,23 @@ import (
 
 const (
 	// ProviderCatalogSchemaVersion is the only accepted providers.yml schema.
-	ProviderCatalogSchemaVersion = 3
+	ProviderCatalogSchemaVersion = 4
 
 	CatalogProviderFieldKindCredential = "credential"
 	CatalogProviderFieldKindSetting    = "setting"
 	CatalogProviderFieldTypeOpaque     = "opaque"
 	CatalogProviderFieldTypeURL        = "url"
+	CatalogProviderFieldTypeGRPCTarget = "grpc_target"
+	CatalogProviderFieldTypeBoolean    = "boolean"
+
+	CatalogProviderConnectionTenant     = "tenant"
+	CatalogProviderConnectionDeployment = "deployment"
 
 	CatalogAuthenticationBearer           = "bearer"
 	CatalogAuthenticationHeader           = "header"
+	CatalogAuthenticationGRPCBearer       = "grpc_bearer"
+	CatalogEndpointProtocolHTTP           = "http"
+	CatalogEndpointProtocolGRPC           = "grpc"
 	CatalogEndpointMethodPost             = "POST"
 	CatalogProtocolOpenAIResponses        = "openai_responses"
 	CatalogProtocolDashScopeResponses     = "dashscope_responses"
@@ -38,6 +47,8 @@ const (
 	CatalogProtocolGeminiInteractions     = "gemini_interactions"
 	CatalogProtocolMultipartTranscription = "multipart_transcription"
 	CatalogProtocolMetaTranscription      = "meta_transcription"
+	CatalogProtocolDictatorSpeechV1       = "dictator_speech_v1"
+	CatalogExecutionAsynchronousJob       = "asynchronous_job"
 
 	CatalogProtocolVariationMaxTokens                 = "max_tokens"
 	CatalogProtocolVariationMaxCompletionTokens       = "max_completion_tokens"
@@ -110,15 +121,16 @@ type ProviderCatalogModelMigration struct {
 // ProviderCatalogProvider defines one provider and all provider-owned routes.
 type ProviderCatalogProvider struct {
 	// Enabled defaults to enabled when omitted. Candidate providers set false explicitly.
-	Enabled           ModelActivation            `yaml:"enabled,omitempty"`
-	ID                string                     `yaml:"id"`
-	Label             string                     `yaml:"label"`
-	APIServiceLabel   string                     `yaml:"api_service_label"`
-	KeyAcquisitionURL string                     `yaml:"key_acquisition_url"`
-	Aliases           []string                   `yaml:"aliases,omitempty"`
-	Fields            []ProviderCatalogField     `yaml:"fields"`
-	Transports        []ProviderCatalogTransport `yaml:"transports"`
-	Offerings         []ProviderCatalogOffering  `yaml:"offerings"`
+	Enabled             ModelActivation            `yaml:"enabled,omitempty"`
+	ID                  string                     `yaml:"id"`
+	Label               string                     `yaml:"label"`
+	APIServiceLabel     string                     `yaml:"api_service_label"`
+	ConnectionOwnership string                     `yaml:"connection_ownership"`
+	KeyAcquisitionURL   string                     `yaml:"key_acquisition_url,omitempty"`
+	Aliases             []string                   `yaml:"aliases,omitempty"`
+	Fields              []ProviderCatalogField     `yaml:"fields"`
+	Transports          []ProviderCatalogTransport `yaml:"transports"`
+	Offerings           []ProviderCatalogOffering  `yaml:"offerings"`
 }
 
 // ProviderCatalogField defines one tenant connection input.
@@ -178,6 +190,7 @@ type ProviderCatalogResourceVisibility struct {
 
 // ProviderCatalogEndpoint defines a transport collection URL.
 type ProviderCatalogEndpoint struct {
+	Protocol       string `yaml:"protocol"`
 	Method         string `yaml:"method"`
 	DefaultBaseURL string `yaml:"default_base_url,omitempty"`
 	SettingField   string `yaml:"setting_field,omitempty"`
@@ -497,8 +510,17 @@ func validateProviderCatalogSchema(schema ProviderCatalogSchema) error {
 		if strings.TrimSpace(provider.APIServiceLabel) == constants.EmptyString || provider.APIServiceLabel != strings.TrimSpace(provider.APIServiceLabel) {
 			return fmt.Errorf("%w: field=%s.api_service_label", ErrInvalidModelCatalog, fieldPrefix)
 		}
-		if !validProviderKeyAcquisitionURL(provider.KeyAcquisitionURL) {
-			return fmt.Errorf("%w: field=%s.key_acquisition_url", ErrInvalidModelCatalog, fieldPrefix)
+		switch provider.ConnectionOwnership {
+		case CatalogProviderConnectionTenant:
+			if !validProviderKeyAcquisitionURL(provider.KeyAcquisitionURL) {
+				return fmt.Errorf("%w: field=%s.key_acquisition_url", ErrInvalidModelCatalog, fieldPrefix)
+			}
+		case CatalogProviderConnectionDeployment:
+			if provider.KeyAcquisitionURL != constants.EmptyString {
+				return fmt.Errorf("%w: field=%s.key_acquisition_url reason=deployment_owned", ErrInvalidModelCatalog, fieldPrefix)
+			}
+		default:
+			return fmt.Errorf("%w: field=%s.connection_ownership ownership=%s", ErrInvalidModelCatalog, fieldPrefix, provider.ConnectionOwnership)
 		}
 		for aliasIndex, rawAlias := range provider.Aliases {
 			alias, aliasError := canonicalCatalogIdentifier(rawAlias, fmt.Sprintf("%s.aliases[%d]", fieldPrefix, aliasIndex))
@@ -513,6 +535,13 @@ func validateProviderCatalogSchema(schema ProviderCatalogSchema) error {
 		fields, fieldError := validateProviderCatalogFields(provider.Fields, fieldPrefix+".fields")
 		if fieldError != nil {
 			return fieldError
+		}
+		if provider.ConnectionOwnership == CatalogProviderConnectionDeployment {
+			for fieldIdentifier, definition := range fields {
+				if definition.Environment == constants.EmptyString || !definition.Required {
+					return fmt.Errorf("%w: field=%s.fields field_id=%s reason=deployment_binding_required", ErrInvalidModelCatalog, fieldPrefix, fieldIdentifier)
+				}
+			}
 		}
 		for fieldIdentifier, definition := range fields {
 			if definition.Environment == constants.EmptyString {
@@ -596,7 +625,9 @@ func validateProviderCatalogFields(rawFields []ProviderCatalogField, field strin
 				return nil, fmt.Errorf("%w: field=%s reason=invalid_credential_field", ErrInvalidModelCatalog, fieldPrefix)
 			}
 		case CatalogProviderFieldKindSetting:
-			if definition.Type != CatalogProviderFieldTypeURL || definition.Secret || definition.Validation.MinimumLength < 0 || len(definition.Validation.AllowedSchemes) == 0 {
+			validSettingType := definition.Type == CatalogProviderFieldTypeURL || definition.Type == CatalogProviderFieldTypeGRPCTarget || definition.Type == CatalogProviderFieldTypeBoolean
+			validSchemes := (definition.Type == CatalogProviderFieldTypeURL && len(definition.Validation.AllowedSchemes) > 0) || (definition.Type != CatalogProviderFieldTypeURL && len(definition.Validation.AllowedSchemes) == 0)
+			if !validSettingType || !validSchemes || definition.Secret || definition.Validation.MinimumLength < 0 {
 				return nil, fmt.Errorf("%w: field=%s reason=invalid_setting_field", ErrInvalidModelCatalog, fieldPrefix)
 			}
 		default:
@@ -631,7 +662,21 @@ func validatedProviderFieldValue(definition ProviderCatalogField, rawValue strin
 	if definition.Validation.Pattern != constants.EmptyString && !regexp.MustCompile(definition.Validation.Pattern).MatchString(value) {
 		return constants.EmptyString, fmt.Errorf("provider_field_invalid: field=%s", definition.ID)
 	}
-	if definition.Type != CatalogProviderFieldTypeURL {
+	if definition.Type == CatalogProviderFieldTypeOpaque {
+		return value, nil
+	}
+	if definition.Type == CatalogProviderFieldTypeGRPCTarget {
+		host, portValue, splitError := net.SplitHostPort(value)
+		port, portError := strconv.Atoi(portValue)
+		if splitError != nil || strings.TrimSpace(host) == constants.EmptyString || portError != nil || port <= 0 || port > 65535 {
+			return constants.EmptyString, fmt.Errorf("provider_field_invalid: field=%s", definition.ID)
+		}
+		return value, nil
+	}
+	if definition.Type == CatalogProviderFieldTypeBoolean {
+		if value != "true" && value != "false" {
+			return constants.EmptyString, fmt.Errorf("provider_field_invalid: field=%s", definition.ID)
+		}
 		return value, nil
 	}
 	parsedURL, parseError := url.Parse(value)
@@ -706,7 +751,17 @@ func validatedProviderCatalogResourceVisibility(execution ProviderCatalogExecuti
 }
 
 func validateProviderCatalogEndpoint(endpoint ProviderCatalogEndpoint, fields map[string]ProviderCatalogField, field string) error {
-	if endpoint.Method != CatalogEndpointMethodPost || !strings.HasPrefix(endpoint.Path, "/") || endpoint.Path != strings.TrimSpace(endpoint.Path) {
+	if endpoint.Protocol == CatalogEndpointProtocolGRPC {
+		if endpoint.Method != constants.EmptyString || endpoint.Path != constants.EmptyString || endpoint.DefaultBaseURL != constants.EmptyString || endpoint.SettingField == constants.EmptyString {
+			return fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
+		}
+		definition, found := fields[endpoint.SettingField]
+		if !found || definition.Kind != CatalogProviderFieldKindSetting || definition.Type != CatalogProviderFieldTypeGRPCTarget {
+			return fmt.Errorf("%w: field=%s.setting_field field_id=%s reason=dangling_reference", ErrInvalidModelCatalog, field, endpoint.SettingField)
+		}
+		return nil
+	}
+	if endpoint.Protocol != CatalogEndpointProtocolHTTP || endpoint.Method != CatalogEndpointMethodPost || !strings.HasPrefix(endpoint.Path, "/") || endpoint.Path != strings.TrimSpace(endpoint.Path) {
 		return fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
 	}
 	if (endpoint.DefaultBaseURL == constants.EmptyString) == (endpoint.SettingField == constants.EmptyString) {
@@ -748,6 +803,10 @@ func validateProviderCatalogAuthentication(authentication ProviderCatalogAuthent
 		if strings.TrimSpace(authentication.Header) == constants.EmptyString || authentication.Header != strings.TrimSpace(authentication.Header) || authentication.Prefix != constants.EmptyString {
 			return fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
 		}
+	case CatalogAuthenticationGRPCBearer:
+		if authentication.Header != constants.EmptyString || authentication.Prefix != constants.EmptyString {
+			return fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
+		}
 	default:
 		return fmt.Errorf("%w: field=%s.kind kind=%s", ErrInvalidModelCatalog, field, authentication.Kind)
 	}
@@ -786,8 +845,12 @@ func compileProviderCatalogSchema(schema ProviderCatalogSchema, revision string)
 		modelCatalog.Models = append(modelCatalog.Models, model.ExactModel)
 	}
 	for _, provider := range schema.Providers {
+		credentialKind := CatalogCredentialAPIKey
+		if provider.ConnectionOwnership == CatalogProviderConnectionDeployment {
+			credentialKind = CatalogCredentialDeployment
+		}
 		modelCatalog.Providers = append(modelCatalog.Providers, CatalogProvider{
-			ID: provider.ID, Label: provider.Label, CredentialKinds: []string{CatalogCredentialAPIKey},
+			ID: provider.ID, Label: provider.Label, CredentialKinds: []string{credentialKind},
 		})
 		transports := make(map[string]ProviderCatalogTransport, len(provider.Transports))
 		for _, transport := range provider.Transports {

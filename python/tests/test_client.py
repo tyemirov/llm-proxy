@@ -22,6 +22,7 @@ from llm_proxy_client import (
     ClientConfig,
     ClientMessage,
     ClientMessagesRequest,
+    ClientMediaOperationInput,
     ClientStructuredOutput,
     LLMProxyClientError,
     LLMProxyHTTPError,
@@ -113,6 +114,154 @@ def test_client_upload_asset_validates_exact_response_without_exposing_bytes() -
     asset = client.upload_asset(data, " IMAGE/PNG ")
     assert asset.asset_id == "ast_0123456789abcdef0123456789abcdef"
     assert image_asset_attachment(asset.asset_id, asset.mime_type).body()["asset_id"] == asset.asset_id
+
+
+def test_client_uses_typed_durable_media_and_voice_resources() -> None:
+    """The Python client uses authenticated canonical media resources."""
+
+    responses = iter(
+        (
+            json.dumps(
+                {
+                    "operation_id": "mop_0123456789abcdef0123456789abcdef",
+                    "capability": "audio.transcribe",
+                    "provider": "dictator",
+                    "model": "dictator-speech-v1",
+                    "catalog_revision": "sha256-revision",
+                    "state": "queued",
+                    "cancellation_state": "not_requested",
+                    "outputs": [],
+                    "cost": {"available": False, "reason": "exact_price_unavailable"},
+                    "accepted_at": "2026-09-10T20:00:00Z",
+                    "updated_at": "2026-09-10T20:00:00Z",
+                    "deadline_at": "2026-09-10T20:15:00Z",
+                }
+            ),
+            json.dumps(
+                {
+                    "voices": [
+                        {
+                            "voice_id": "voi_0123456789abcdef0123456789abcdef",
+                            "provider": "dictator",
+                            "mode": "preset",
+                            "language": "ru",
+                            "display_name": "Baya",
+                            "default": True,
+                            "sample_rates": [24000],
+                            "default_sample_rate": 24000,
+                        }
+                    ]
+                }
+            ),
+            json.dumps(
+                {
+                    "voice_id": "voi_0123456789abcdef0123456789abcdef",
+                    "provider": "dictator",
+                    "mode": "preset",
+                    "language": "ru",
+                    "display_name": "Baya",
+                    "default": True,
+                    "sample_rates": [24000],
+                    "default_sample_rate": 24000,
+                }
+            ),
+        )
+    )
+    requests: list[urllib.request.Request] = []
+
+    def opener(request: urllib.request.Request) -> str:
+        requests.append(request)
+        return next(responses)
+
+    client = Client(ClientConfig(base_url="https://proxy.example/v2", secret="sekret"), opener=opener)
+    operation = client.create_media_operation(
+        "transcribe-1",
+        ClientMediaOperationInput(
+            capability="audio.transcribe",
+            provider="dictator",
+            model="dictator-speech-v1",
+            input={"asset_id": "ast_0123456789abcdef0123456789abcdef"},
+            controls={"language": "ru"},
+        ),
+    )
+    voices = client.get_media_voices("dictator")
+    voice = client.get_media_voice(voices[0].voice_id)
+
+    assert operation.state == "queued"
+    assert voice.display_name == "Baya"
+    assert [request.get_method() for request in requests] == ["POST", "GET", "GET"]
+    assert requests[0].full_url == "https://proxy.example/model/v1/operations"
+    assert requests[0].headers["Authorization"] == "Bearer sekret"
+    assert requests[0].headers["Idempotency-key"] == "transcribe-1"
+    assert json.loads(requests[0].data or b"") == {
+        "capability": "audio.transcribe",
+        "provider": "dictator",
+        "model": "dictator-speech-v1",
+        "input": {"asset_id": "ast_0123456789abcdef0123456789abcdef"},
+        "controls": {"language": "ru"},
+    }
+    assert requests[1].full_url == "https://proxy.example/model/v1/voices?provider=dictator"
+    assert requests[2].full_url.endswith("/model/v1/voices/voi_0123456789abcdef0123456789abcdef")
+
+
+def test_client_reads_media_capabilities_and_waits_for_terminal_operation() -> None:
+    """Capability discovery and operation waiting use the canonical authenticated resources."""
+
+    operation = {
+        "operation_id": "mop_0123456789abcdef0123456789abcdef",
+        "capability": "audio.transcribe",
+        "provider": "dictator",
+        "model": "dictator-speech-v1",
+        "catalog_revision": "sha256-revision",
+        "state": "queued",
+        "cancellation_state": "not_requested",
+        "outputs": [],
+        "cost": {"available": False, "reason": "exact_price_unavailable"},
+        "accepted_at": "2026-09-10T20:00:00Z",
+        "updated_at": "2026-09-10T20:00:00Z",
+        "deadline_at": "2026-09-10T20:15:00Z",
+    }
+    terminal_operation = dict(operation, state="succeeded", updated_at="2026-09-10T20:01:00Z")
+    responses = iter(
+        (
+            json.dumps(
+                {
+                    "catalog_revision": "sha256-revision",
+                    "routes": [
+                        {
+                            "capability": "audio.transcribe",
+                            "provider": "dictator",
+                            "model": "dictator-speech-v1",
+                            "controls": [{"name": "language"}],
+                            "limits": [],
+                        }
+                    ],
+                }
+            ),
+            json.dumps(operation),
+            json.dumps(terminal_operation),
+        )
+    )
+    requests: list[urllib.request.Request] = []
+
+    def opener(request: urllib.request.Request) -> str:
+        requests.append(request)
+        return next(responses)
+
+    client = Client(ClientConfig(base_url="https://proxy.example/v2", secret="sekret"), opener=opener)
+    capabilities = client.get_media_capabilities()
+    completed = client.wait_media_operation(
+        operation["operation_id"], poll_interval_seconds=0.0001, timeout_seconds=1
+    )
+
+    assert capabilities.routes[0].capability == "audio.transcribe"
+    assert completed.state == "succeeded"
+    assert [request.full_url for request in requests] == [
+        "https://proxy.example/model/v1/media-capabilities",
+        "https://proxy.example/model/v1/operations/mop_0123456789abcdef0123456789abcdef",
+        "https://proxy.example/model/v1/operations/mop_0123456789abcdef0123456789abcdef",
+    ]
+    assert all(request.headers["Authorization"] == "Bearer sekret" for request in requests)
 
 
 @dataclass

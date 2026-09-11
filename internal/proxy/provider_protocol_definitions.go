@@ -69,11 +69,17 @@ func composeProviderTransport(transport ProviderCatalogTransport, field string) 
 	if authenticationError := validateProviderCatalogAuthentication(transport.Components.Authentication, field+".components.authentication"); authenticationError != nil {
 		return providerTransportComposition{}, authenticationError
 	}
+	grpcTransport := transport.Endpoint.Protocol == CatalogEndpointProtocolGRPC
+	grpcAuthentication := transport.Components.Authentication.Kind == CatalogAuthenticationGRPCBearer
+	grpcCodec := transport.Components.RequestCodec.ID == CatalogProtocolDictatorSpeechV1
+	if grpcTransport != grpcAuthentication || grpcTransport != grpcCodec {
+		return providerTransportComposition{}, unsupportedTransportComponentCombination(transport, field, "transport_protocol")
+	}
 	if !providerCatalogHeadersEqual(transport.Headers, request.requiredHeaders) {
 		return providerTransportComposition{}, unsupportedTransportComponentCombination(transport, field, "required_headers")
 	}
 	lifecycle := textExecutionLifecycle(transport.Components.Execution.ID)
-	if !knownTextExecutionLifecycle(lifecycle) {
+	if !knownTextExecutionLifecycle(lifecycle) && lifecycle != textExecutionLifecycle(CatalogExecutionAsynchronousJob) {
 		return providerTransportComposition{}, fmt.Errorf("%w: field=%s.components.execution.id reason=unsupported_execution_lifecycle lifecycle=%s", ErrInvalidModelCatalog, field, transport.Components.Execution.ID)
 	}
 	if !requestCodecSupportsLifecycle(transport.Components.RequestCodec.ID, lifecycle) {
@@ -156,6 +162,8 @@ func providerRequestCodecDefinitionFor(reference ProviderCatalogCodecReference, 
 		return definition, nil
 	case CatalogProtocolXAIVideosGenerations:
 		definition.modelField = "model"
+	case CatalogProtocolDictatorSpeechV1:
+		definition.mediaExecutionLifecycle = textExecutionLifecycle(CatalogExecutionAsynchronousJob)
 	default:
 		return providerRequestCodecDefinition{}, unsupportedProviderCodec(reference, field)
 	}
@@ -224,6 +232,10 @@ func providerResponseCodecDefinitionFor(reference ProviderCatalogCodecReference,
 		definition.finishRules = providerProtocolFinishRules{Complete: []string{"completed"}, Continue: []string{"pending"}}
 		definition.continuationRules = []string{}
 		definition.errorRules = []string{"failed", "unknown_status"}
+	case CatalogProtocolDictatorSpeechV1:
+		definition.outputFields = []string{"tenant_assets"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"succeeded"}, Continue: []string{"queued", "running"}}
+		definition.errorRules = []string{"failed", "cancelled", "uncertain"}
 	default:
 		return providerResponseCodecDefinition{}, unsupportedProviderCodec(reference, field)
 	}
@@ -239,6 +251,8 @@ func requestCodecSupportsLifecycle(codec string, lifecycle textExecutionLifecycl
 		return lifecycle == textExecutionLifecyclePollableResource
 	case CatalogProtocolGeminiInteractions:
 		return lifecycle == textExecutionLifecyclePollableResource || lifecycle == textExecutionLifecycleSynchronousCompletion
+	case CatalogProtocolDictatorSpeechV1:
+		return lifecycle == textExecutionLifecycle(CatalogExecutionAsynchronousJob)
 	case CatalogProtocolDashScopeResponses, CatalogProtocolXAIResponses, CatalogProtocolOpenAIChatCompletions,
 		CatalogProtocolAnthropicMessages, CatalogProtocolVertexGenerateContent,
 		CatalogProtocolMetaTranscription, CatalogProtocolMultipartTranscription:

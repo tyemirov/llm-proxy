@@ -39,6 +39,37 @@ func TestProviderCatalogParserAcceptsTransportComponents(t *testing.T) {
 	}
 }
 
+func TestProviderCatalogAcceptsDeploymentOwnedGRPCTransport(t *testing.T) {
+	schema := internalCanonicalProviderCatalog().Schema()
+	var provider *ProviderCatalogProvider
+	for providerIndex := range schema.Providers {
+		if schema.Providers[providerIndex].ID == "dictator" {
+			provider = &schema.Providers[providerIndex]
+			break
+		}
+	}
+	if provider == nil {
+		t.Fatal("Dictator provider missing")
+	}
+
+	catalog, catalogError := NewProviderCatalog(schema)
+	if catalogError != nil {
+		t.Fatalf("compile deployment gRPC provider: %v", catalogError)
+	}
+	compiled := catalog.Schema().Providers[len(schema.Providers)-1]
+	if compiled.ConnectionOwnership != CatalogProviderConnectionDeployment || compiled.KeyAcquisitionURL != "" {
+		t.Fatalf("deployment provider=%+v", compiled)
+	}
+	bindings, bindingError := catalog.ResolveEnvironmentBindings(map[string]string{
+		"DICTATOR_GRPC_ADDR":       "dictator.internal:50051",
+		"DICTATOR_GRPC_AUTH_TOKEN": "token",
+		"DICTATOR_GRPC_TLS":        "true",
+	})
+	if bindingError != nil || bindings[provider.ID]["grpc_address"] != "dictator.internal:50051" || bindings[provider.ID]["grpc_tls"] != "true" {
+		t.Fatalf("deployment bindings=%v error=%v", bindings, bindingError)
+	}
+}
+
 func TestProviderCatalogParserRejectsObsoleteProtocolFields(t *testing.T) {
 	document, marshalError := yaml.Marshal(internalCanonicalProviderCatalog().Schema())
 	if marshalError != nil {
@@ -72,6 +103,8 @@ func TestProviderCatalogSchemaRejectsEveryStructuralBoundary(t *testing.T) {
 		}, expected: "alias_collision=deepseek"},
 		{name: "provider label", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].Label = " OpenAI" }, expected: ".label"},
 		{name: "provider API service label", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].APIServiceLabel = " OpenAI API" }, expected: ".api_service_label"},
+		{name: "provider connection ownership missing", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].ConnectionOwnership = "" }, expected: ".connection_ownership"},
+		{name: "provider connection ownership unknown", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].ConnectionOwnership = "future" }, expected: "ownership=future"},
 		{name: "provider key acquisition URL missing", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].KeyAcquisitionURL = "" }, expected: ".key_acquisition_url"},
 		{name: "provider key acquisition URL insecure", mutate: func(schema *ProviderCatalogSchema) {
 			schema.Providers[0].KeyAcquisitionURL = "http://provider.example/keys"
@@ -79,6 +112,15 @@ func TestProviderCatalogSchemaRejectsEveryStructuralBoundary(t *testing.T) {
 		{name: "provider key acquisition URL carries query", mutate: func(schema *ProviderCatalogSchema) {
 			schema.Providers[0].KeyAcquisitionURL = "https://provider.example/keys?tenant=unsafe"
 		}, expected: ".key_acquisition_url"},
+		{name: "deployment provider key acquisition URL", mutate: func(schema *ProviderCatalogSchema) {
+			schema.Providers[len(schema.Providers)-1].KeyAcquisitionURL = "https://provider.example/keys"
+		}, expected: "reason=deployment_owned"},
+		{name: "deployment provider environment binding", mutate: func(schema *ProviderCatalogSchema) {
+			schema.Providers[len(schema.Providers)-1].Fields[0].Environment = ""
+		}, expected: "reason=deployment_binding_required"},
+		{name: "deployment provider required field", mutate: func(schema *ProviderCatalogSchema) {
+			schema.Providers[len(schema.Providers)-1].Fields[0].Required = false
+		}, expected: "reason=deployment_binding_required"},
 		{name: "provider alias", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].Aliases = []string{"Future Alias"} }, expected: "reason=not_canonical"},
 		{name: "provider fields", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].Fields = nil }, expected: ".fields"},
 		{name: "duplicate environment binding", mutate: func(schema *ProviderCatalogSchema) {
@@ -237,6 +279,9 @@ func TestProviderCatalogFieldValidationRejectsEveryInvalidShape(t *testing.T) {
 		{name: "pattern mismatch", definition: patternField, value: "token-invalid", expected: "provider_field_invalid"},
 		{name: "URL structure", definition: internalValidSettingField(), value: "https://user@provider.example", expected: "provider_field_invalid"},
 		{name: "URL scheme", definition: internalValidSettingField(), value: "ftp://provider.example", expected: "provider_field_invalid"},
+		{name: "gRPC target", definition: internalValidGRPCTargetField(), value: "provider.example", expected: "provider_field_invalid"},
+		{name: "gRPC port", definition: internalValidGRPCTargetField(), value: "provider.example:70000", expected: "provider_field_invalid"},
+		{name: "boolean", definition: internalValidBooleanField(), value: "TRUE", expected: "provider_field_invalid"},
 	} {
 		t.Run("value "+testCase.name, func(t *testing.T) {
 			_, valueError := validatedProviderFieldValue(testCase.definition, testCase.value)
@@ -250,6 +295,12 @@ func TestProviderCatalogFieldValidationRejectsEveryInvalidShape(t *testing.T) {
 	}
 	if value, valueError := validatedProviderFieldValue(internalValidSettingField(), "https://provider.example"); valueError != nil || value != "https://provider.example" {
 		t.Fatalf("valid setting value=%q error=%v", value, valueError)
+	}
+	if value, valueError := validatedProviderFieldValue(internalValidGRPCTargetField(), "provider.example:50051"); valueError != nil || value != "provider.example:50051" {
+		t.Fatalf("valid gRPC target=%q error=%v", value, valueError)
+	}
+	if value, valueError := validatedProviderFieldValue(internalValidBooleanField(), "false"); valueError != nil || value != "false" {
+		t.Fatalf("valid boolean=%q error=%v", value, valueError)
 	}
 }
 
@@ -350,17 +401,20 @@ func TestProviderCatalogEndpointAndProtocolEdges(t *testing.T) {
 		"api_key":  internalValidCredentialField(),
 		"base_url": internalValidSettingField(),
 	}
-	validEndpoint := ProviderCatalogEndpoint{Method: CatalogEndpointMethodPost, DefaultBaseURL: "https://provider.example", Path: "/responses"}
+	validEndpoint := ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodPost, DefaultBaseURL: "https://provider.example", Path: "/responses"}
 	endpointCases := []struct {
 		name     string
 		endpoint ProviderCatalogEndpoint
 		expected string
 	}{
-		{name: "method", endpoint: ProviderCatalogEndpoint{Method: "GET", DefaultBaseURL: "https://provider.example", Path: "/responses"}, expected: "field=endpoint"},
-		{name: "source count", endpoint: ProviderCatalogEndpoint{Method: CatalogEndpointMethodPost, Path: "/responses"}, expected: "endpoint_source_count"},
-		{name: "setting field", endpoint: ProviderCatalogEndpoint{Method: CatalogEndpointMethodPost, SettingField: "missing", Path: "/responses"}, expected: "dangling_reference"},
-		{name: "URL parse", endpoint: ProviderCatalogEndpoint{Method: CatalogEndpointMethodPost, DefaultBaseURL: "%", Path: "/responses"}, expected: ".default_base_url"},
-		{name: "URL security", endpoint: ProviderCatalogEndpoint{Method: CatalogEndpointMethodPost, DefaultBaseURL: "http://192.0.2.1", Path: "/responses"}, expected: ".default_base_url"},
+		{name: "method", endpoint: ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolHTTP, Method: "GET", DefaultBaseURL: "https://provider.example", Path: "/responses"}, expected: "field=endpoint"},
+		{name: "source count", endpoint: ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodPost, Path: "/responses"}, expected: "endpoint_source_count"},
+		{name: "setting field", endpoint: ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodPost, SettingField: "missing", Path: "/responses"}, expected: "dangling_reference"},
+		{name: "URL parse", endpoint: ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodPost, DefaultBaseURL: "%", Path: "/responses"}, expected: ".default_base_url"},
+		{name: "URL security", endpoint: ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodPost, DefaultBaseURL: "http://192.0.2.1", Path: "/responses"}, expected: ".default_base_url"},
+		{name: "gRPC HTTP fields", endpoint: ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolGRPC, Method: CatalogEndpointMethodPost, SettingField: "grpc_address"}, expected: "field=endpoint"},
+		{name: "gRPC field missing", endpoint: ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolGRPC}, expected: "field=endpoint"},
+		{name: "gRPC field wrong type", endpoint: ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolGRPC, SettingField: "base_url"}, expected: "reason=dangling_reference"},
 	}
 	for _, testCase := range endpointCases {
 		t.Run("endpoint "+testCase.name, func(t *testing.T) {
@@ -369,9 +423,9 @@ func TestProviderCatalogEndpointAndProtocolEdges(t *testing.T) {
 	}
 	for _, endpoint := range []ProviderCatalogEndpoint{
 		validEndpoint,
-		{Method: CatalogEndpointMethodPost, SettingField: "base_url", Path: "/responses"},
-		{Method: CatalogEndpointMethodPost, DefaultBaseURL: "http://localhost:8080", Path: "/responses"},
-		{Method: CatalogEndpointMethodPost, DefaultBaseURL: "http://127.0.0.1:8080", Path: "/responses"},
+		{Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodPost, SettingField: "base_url", Path: "/responses"},
+		{Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodPost, DefaultBaseURL: "http://localhost:8080", Path: "/responses"},
+		{Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodPost, DefaultBaseURL: "http://127.0.0.1:8080", Path: "/responses"},
 	} {
 		if endpointError := validateProviderCatalogEndpoint(endpoint, fields, "endpoint"); endpointError != nil {
 			t.Fatalf("valid endpoint=%+v error=%v", endpoint, endpointError)
@@ -381,6 +435,7 @@ func TestProviderCatalogEndpointAndProtocolEdges(t *testing.T) {
 	authenticationCases := []ProviderCatalogAuthentication{
 		{Kind: CatalogAuthenticationBearer, Header: "X-Key", Prefix: "Bearer "},
 		{Kind: CatalogAuthenticationHeader, Header: " ", Prefix: ""},
+		{Kind: CatalogAuthenticationGRPCBearer, Header: "Authorization"},
 		{Kind: "future", Header: "Authorization"},
 	}
 	for authenticationIndex, authentication := range authenticationCases {
@@ -411,6 +466,13 @@ func TestProviderCatalogEndpointAndProtocolEdges(t *testing.T) {
 	unknownTransport.Components.RequestCodec = ProviderCatalogCodecReference{ID: "future"}
 	_, compositionError = composeProviderTransport(unknownTransport, "transport")
 	assertInvalidProviderCatalogError(t, compositionError, "unsupported_codec")
+	dictatorTransport := internalProtocolTransport(t, CatalogProtocolDictatorSpeechV1)
+	dictatorTransport.Components.Authentication = ProviderCatalogAuthentication{Kind: CatalogAuthenticationBearer, Header: "Authorization", Prefix: "Bearer "}
+	_, compositionError = composeProviderTransport(dictatorTransport, "transport")
+	assertInvalidProviderCatalogError(t, compositionError, "transport_protocol")
+	if schemaVersion := internalCanonicalProviderCatalog().SchemaVersion(); schemaVersion != ProviderCatalogSchemaVersion {
+		t.Fatalf("schema version=%d", schemaVersion)
+	}
 }
 
 func TestProviderCatalogConnectionValueBoundaries(t *testing.T) {
@@ -463,6 +525,24 @@ func internalValidSettingField() ProviderCatalogField {
 		ID: "base_url", Label: "Base URL", Kind: CatalogProviderFieldKindSetting,
 		Type: CatalogProviderFieldTypeURL, Required: true, Default: &empty,
 		Validation: ProviderCatalogFieldValidation{AllowedSchemes: []string{"https"}}, Environment: "TEST_BASE_URL",
+	}
+}
+
+func internalValidGRPCTargetField() ProviderCatalogField {
+	empty := ""
+	return ProviderCatalogField{
+		ID: "grpc_address", Label: "gRPC address", Kind: CatalogProviderFieldKindSetting,
+		Type: CatalogProviderFieldTypeGRPCTarget, Required: true, Default: &empty,
+		Validation: ProviderCatalogFieldValidation{MinimumLength: 1}, Environment: "TEST_GRPC_ADDRESS",
+	}
+}
+
+func internalValidBooleanField() ProviderCatalogField {
+	empty := ""
+	return ProviderCatalogField{
+		ID: "grpc_tls", Label: "gRPC TLS", Kind: CatalogProviderFieldKindSetting,
+		Type: CatalogProviderFieldTypeBoolean, Required: true, Default: &empty,
+		Validation: ProviderCatalogFieldValidation{MinimumLength: 1}, Environment: "TEST_GRPC_TLS",
 	}
 }
 

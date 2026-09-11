@@ -8,20 +8,20 @@ model migrations, controls, limits, and prices.
 
 The loader reads `providers.yml` from the directory of the selected
 `config.yml`. It parses the provider catalog before it validates service
-configuration. The loader accepts only schema version 3.
+configuration. The loader accepts only schema version 4.
 
 The current provider catalog has these records:
 
-- 13 provider definitions.
-- 12 model publishers.
-- 29 model families, with 26 runtime families.
-- 81 exact models, with 71 enabled models.
-- 86 provider offerings, with 74 runtime offerings.
-- 86 price records, with 74 runtime records.
-- 13 managed model migrations.
-- Ten configured request and response codec identifiers.
-- Two authentication kinds.
-- Two lifecycle values.
+- 14 provider definitions.
+- 13 model publishers.
+- 30 model families, with 27 runtime families.
+- 82 exact models, with 72 enabled models.
+- 87 provider offerings, with 75 runtime offerings.
+- 92 price records, with 80 runtime records.
+- 15 managed model migrations.
+- Eleven configured request and response codec identifiers.
+- Three authentication kinds.
+- Three lifecycle values.
 
 The two [GLM 5.3 candidates](zai-current-models.md) remain disabled during provider qualification.
 The five [Qwen 3.8 candidates](qwen-current-models.md) remain disabled during provider qualification.
@@ -111,7 +111,7 @@ See [MiniMax M3](minimax-m3.md) for the current candidate contract and qualifica
 | Target model | `model_migrations[].target_model` | References the current provider offering that replaces the source. |
 | Migration reasoning | `model_migrations[].target_reasoning_effort` | Sets the replacement text route effort when declared. |
 | Historical source | `model_migrations[].preserve_source_usage` | Permits the exact source identity in historical usage records only. |
-| Operation identifier | `operations[].id` | Identifies `text`, `dictation`, or `video_generation`. |
+| Operation identifier | `operations[].id` | Identifies one text, dictation, video, or durable speech operation. |
 | Operation inputs | `operations[].input_artifacts` | Declares accepted artifact kinds. |
 | Operation outputs | `operations[].output_artifacts` | Declares result artifact kinds. |
 | Publisher identity | `publishers[].id` | Owns one model publisher identity. |
@@ -144,7 +144,8 @@ Each item in `providers` is one provider definition.
 | Canonical provider identifier | `providers[].id` | Owns routing, persistence, and public identity. |
 | Display label | `providers[].label` | Supplies the management and public label. |
 | API service label | `providers[].api_service_label` | Supplies the authenticated provider card title. |
-| Key-acquisition URL | `providers[].key_acquisition_url` | Supplies the official HTTPS destination for the provider card. It cannot contain credentials, a query, or a fragment. |
+| Connection ownership | `providers[].connection_ownership` | Selects a tenant-managed connection or deployment-owned runtime configuration. |
+| Key-acquisition URL | `providers[].key_acquisition_url` | Supplies the official HTTPS destination for a tenant-owned provider card. Deployment-owned providers omit it. |
 | Request aliases | `providers[].aliases` | Resolve to the canonical provider identifier. |
 | Provider fields | `providers[].fields` | Define tenant and environment connection inputs. |
 | Provider transports | `providers[].transports` | Select endpoints and reusable transport components. |
@@ -157,7 +158,7 @@ Each item in `providers[].fields` is one provider field.
 | Field identifier | `fields[].id` | Owns the persistence and request-map key. |
 | Field label | `fields[].label` | Supplies the management form label. |
 | Field kind | `fields[].kind` | Selects `credential` or `setting`. |
-| Value type | `fields[].type` | Selects `opaque` or `url`. |
+| Value type | `fields[].type` | Selects `opaque`, `url`, `grpc_target`, or `boolean`. |
 | Requirement | `fields[].required` | Requires the value for a usable provider connection. |
 | Static default | `fields[].default` | Supplies a non-tenant default value. |
 | Secrecy | `fields[].secret` | Selects encrypted storage and masked output. |
@@ -172,6 +173,8 @@ The live CLI discovery also publishes each field default.
 The live harness uses that default when the environment supplies no value.
 Required credentials have empty defaults and remain mandatory.
 A setting with a default can omit its environment binding.
+Every deployment-owned field is required and has an environment binding.
+Deployment-owned providers do not appear in tenant connection management.
 
 ## Provider transport mapping
 
@@ -180,26 +183,28 @@ Each item in `providers[].transports` is one provider transport.
 | Transport datum | Schema location | Runtime use |
 |---|---|---|
 | Transport identifier | `transports[].id` | Connects a provider offering to one transport. |
+| Transport protocol | `transports[].endpoint.protocol` | Selects `http` or `grpc`. |
 | HTTP method | `transports[].endpoint.method` | Selects the adapter request method. |
 | Static base URL | `transports[].endpoint.default_base_url` | Supplies a catalog-owned endpoint base. |
-| Tenant URL field | `transports[].endpoint.setting_field` | References a tenant-owned endpoint base. |
+| Endpoint setting field | `transports[].endpoint.setting_field` | References a URL or gRPC target from the provider connection owner. |
 | Endpoint path | `transports[].endpoint.path` | Appends the adapter path to the selected base. |
 | Static headers | `transports[].headers` | Supplies exact nonsecret headers. |
 | Request codec | `transports[].components.request_codec.id` | Selects request serialization and request-field rules. |
 | Request variation | `transports[].components.request_codec.variation` | Selects one typed request-codec difference. |
 | Response codec | `transports[].components.response_codec.id` | Selects response, finish, continuation, error, and usage rules. |
 | Response variation | `transports[].components.response_codec.variation` | Selects one typed response-codec difference. |
-| Authentication kind | `transports[].components.authentication.kind` | Selects bearer or direct-header credential injection. |
+| Authentication kind | `transports[].components.authentication.kind` | Selects HTTP bearer, direct-header, or gRPC bearer credential injection. |
 | Authentication field | `transports[].components.authentication.field` | References the credential provider field. |
 | Authentication header | `transports[].components.authentication.header` | Selects the exact HTTP header. |
 | Authentication prefix | `transports[].components.authentication.prefix` | Supplies the value prefix for that header. |
-| Execution lifecycle | `transports[].components.execution.id` | Selects synchronous completion or a pollable resource. |
+| Execution lifecycle | `transports[].components.execution.id` | Selects synchronous completion, a pollable resource, or an asynchronous job. |
 | Visibility retry interval | `transports[].components.execution.resource_visibility.retry_interval_milliseconds` | Declares the wait between created-resource visibility reads. |
 | Visibility retry limit | `transports[].components.execution.resource_visibility.retry_limit` | Bounds created-resource visibility retries. |
 | Visibility retry statuses | `transports[].components.execution.resource_visibility.retry_status_codes` | Declares the provider HTTP statuses that mean the created resource is not visible yet. |
 
-An endpoint must use one base source. It must use either
-`default_base_url` or `setting_field`.
+An HTTP endpoint must use one base source: `default_base_url` or
+`setting_field`. A gRPC endpoint uses one `grpc_target` setting field and has no
+HTTP method, path, or base URL.
 
 ## Transport components
 
@@ -223,6 +228,7 @@ The startup composer accepts these codec and lifecycle combinations:
 | `gemini_interactions` | `pollable_resource` or `synchronous_completion` for text. `synchronous_completion` for dictation. |
 | `multipart_transcription` | `synchronous_completion` |
 | `xai_videos_generations` | `pollable_resource` |
+| `dictator_speech_v1` | `asynchronous_job` |
 
 The shared `pollable_resource` execution component owns post-create
 observation for every compatible codec. Each shared text transport declares a

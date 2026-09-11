@@ -529,7 +529,7 @@ func catalogWithTestProvider(testingInstance *testing.T) *proxy.ProviderCatalog 
 		Operations: []string{proxy.ModelOperationText}, MediaInputs: []string{},
 	}})
 	schema.Providers = append(schema.Providers, proxy.ProviderCatalogProvider{
-		ID: testCatalogProviderID, Label: "Catalog Test", APIServiceLabel: "Catalog Test API", KeyAcquisitionURL: "https://provider.example/keys", Aliases: []string{testCatalogProviderAlias},
+		ID: testCatalogProviderID, Label: "Catalog Test", APIServiceLabel: "Catalog Test API", ConnectionOwnership: proxy.CatalogProviderConnectionTenant, KeyAcquisitionURL: "https://provider.example/keys", Aliases: []string{testCatalogProviderAlias},
 		Fields: []proxy.ProviderCatalogField{
 			{
 				ID: testCatalogCredentialField, Label: "Access token",
@@ -549,7 +549,7 @@ func catalogWithTestProvider(testingInstance *testing.T) *proxy.ProviderCatalog 
 		Transports: []proxy.ProviderCatalogTransport{{
 			ID: testCatalogTransportID,
 			Endpoint: proxy.ProviderCatalogEndpoint{
-				Method: proxy.CatalogEndpointMethodPost, SettingField: testCatalogSettingField, Path: "/chat/completions",
+				Protocol: proxy.CatalogEndpointProtocolHTTP, Method: proxy.CatalogEndpointMethodPost, SettingField: testCatalogSettingField, Path: "/chat/completions",
 			},
 			Components: proxy.ProviderCatalogTransportComponents{
 				RequestCodec:  proxy.ProviderCatalogCodecReference{ID: proxy.CatalogProtocolOpenAIChatCompletions, Variation: proxy.CatalogProtocolVariationMaxTokens},

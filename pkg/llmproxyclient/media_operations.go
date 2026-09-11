@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -15,6 +16,8 @@ import (
 )
 
 const mediaResourceMaximumBytes = 8 * 1024 * 1024
+
+var mediaVoiceIdentifierPattern = regexp.MustCompile(`^voi_[0-9a-f]{32}$`)
 
 // MediaOperationInput is one complete media-generation intent.
 type MediaOperationInput struct {
@@ -74,6 +77,22 @@ type MediaCapabilityRoute struct {
 	Model      string            `json:"model"`
 	Controls   []json.RawMessage `json:"controls"`
 	Limits     []json.RawMessage `json:"limits"`
+}
+
+// MediaVoice is one tenant-owned public synthesis voice.
+type MediaVoice struct {
+	VoiceID           string `json:"voice_id"`
+	Provider          string `json:"provider"`
+	Mode              string `json:"mode"`
+	Language          string `json:"language"`
+	DisplayName       string `json:"display_name"`
+	Default           bool   `json:"default"`
+	SampleRates       []int  `json:"sample_rates"`
+	DefaultSampleRate int    `json:"default_sample_rate"`
+}
+
+type mediaVoiceCollection struct {
+	Voices []MediaVoice `json:"voices"`
 }
 
 // CreateMediaOperation validates and accepts one durable media operation.
@@ -159,6 +178,78 @@ func (client Client) GetMediaCapabilities(contextValue context.Context) (MediaCa
 		return MediaCapabilities{}, fmt.Errorf("%w: invalid media capabilities response", ErrClientHTTPFailure)
 	}
 	return capabilities, nil
+}
+
+// GetMediaVoices discovers and returns tenant-owned voices for one provider.
+func (client Client) GetMediaVoices(contextValue context.Context, provider string) ([]MediaVoice, error) {
+	provider = strings.TrimSpace(provider)
+	if provider == "" || provider != strings.ToLower(provider) {
+		return nil, fmt.Errorf("%w: invalid media voice provider", ErrInvalidClientRequest)
+	}
+	requestURL := client.config.mediaResourceURL(llmproxycontract.MediaVoicesPath)
+	query := requestURL.Query()
+	query.Set("provider", provider)
+	requestURL.RawQuery = query.Encode()
+	request := (&http.Request{Method: http.MethodGet, URL: &requestURL, Header: http.Header{}}).WithContext(contextValue)
+	request.Header.Set(headerAccept, "application/json")
+	request.Header.Set("Authorization", "Bearer "+client.config.secret)
+	responseBody, responseError := client.doMediaResource(request, http.StatusOK)
+	if responseError != nil {
+		return nil, responseError
+	}
+	var collection mediaVoiceCollection
+	if decodeError := decodeExactJSON(responseBody, &collection); decodeError != nil || collection.Voices == nil || !validMediaVoices(collection.Voices) {
+		return nil, fmt.Errorf("%w: invalid media voice collection", ErrClientHTTPFailure)
+	}
+	return collection.Voices, nil
+}
+
+// GetMediaVoice reads one tenant-owned voice without provider discovery.
+func (client Client) GetMediaVoice(contextValue context.Context, voiceID string) (MediaVoice, error) {
+	if !mediaVoiceIdentifierPattern.MatchString(voiceID) {
+		return MediaVoice{}, fmt.Errorf("%w: invalid media voice identifier", ErrInvalidClientRequest)
+	}
+	requestURL := client.config.mediaResourceURL(llmproxycontract.MediaVoicesPath + "/" + voiceID)
+	request := (&http.Request{Method: http.MethodGet, URL: &requestURL, Header: http.Header{}}).WithContext(contextValue)
+	request.Header.Set(headerAccept, "application/json")
+	request.Header.Set("Authorization", "Bearer "+client.config.secret)
+	responseBody, responseError := client.doMediaResource(request, http.StatusOK)
+	if responseError != nil {
+		return MediaVoice{}, responseError
+	}
+	var voice MediaVoice
+	if decodeError := decodeExactJSON(responseBody, &voice); decodeError != nil || !validMediaVoice(voice) {
+		return MediaVoice{}, fmt.Errorf("%w: invalid media voice response", ErrClientHTTPFailure)
+	}
+	return voice, nil
+}
+
+func validMediaVoices(voices []MediaVoice) bool {
+	for _, voice := range voices {
+		if !validMediaVoice(voice) {
+			return false
+		}
+	}
+	return true
+}
+
+func validMediaVoice(voice MediaVoice) bool {
+	if !mediaVoiceIdentifierPattern.MatchString(voice.VoiceID) || voice.Provider == "" || (voice.Mode != "preset" && voice.Mode != "extracted") || voice.Language == "" || voice.DisplayName == "" || len(voice.SampleRates) == 0 || voice.DefaultSampleRate <= 0 {
+		return false
+	}
+	seen := make(map[int]struct{}, len(voice.SampleRates))
+	defaultFound := false
+	for _, sampleRate := range voice.SampleRates {
+		if sampleRate <= 0 {
+			return false
+		}
+		if _, duplicate := seen[sampleRate]; duplicate {
+			return false
+		}
+		seen[sampleRate] = struct{}{}
+		defaultFound = defaultFound || sampleRate == voice.DefaultSampleRate
+	}
+	return defaultFound
 }
 
 func validMediaCapabilityRoutes(routes []MediaCapabilityRoute) bool {
