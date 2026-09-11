@@ -143,7 +143,7 @@ retain satisfied historical dependencies.
   Blocked: Complete central mpr-ui I009 final-candidate qualification, coordinated publication, cache convergence, and real Google acceptance.
 
 
-- [ ] [I256] (P1) Add shared public scenarios for protocol acceptance.
+- [x] [I256] (P1) Add shared public scenarios for protocol acceptance.
   Goal:
   Add reusable acceptance evidence before changes to the provider catalog and protocol adapters.
   Requirements:
@@ -166,6 +166,14 @@ retain satisfied historical dependencies.
   - Prove that the suite detects a wrong endpoint, unsupported field, malformed result, and incorrect usage total.
   - Run the focused target and applicable repository checks.
   - Keep all current runtime and public API behavior unchanged.
+  Resolution:
+  - Added disposable provider definitions for each current text and dictation adapter.
+  - Recorded each fixture operation, protocol, lifecycle, request profile, control, and media input.
+  - Used the real service and official Go client for public discovery, routing, result, and usage checks.
+  - Added negative controls for endpoint, field, result, credential, and usage drift.
+  - Added `make test-protocol-acceptance` to the Go integration gate.
+  - Documented the catalog-only provider qualification procedure.
+  Validation: `make test-protocol-acceptance` passed. `make ci` passed all 13 gates in 312 seconds with 100.0 percent Go statement coverage.
 
 - [ ] [I257] (P1) {I256} Remove duplicated protocol facts from provider catalog records.
   Goal:

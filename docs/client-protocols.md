@@ -165,10 +165,30 @@ The proxy keeps its existing failure accounting.
 
 ## Validation
 
-Run `make test-client-protocols` for real HTTP, OpenAI SDK, native client, and OpenCode acceptance tests.
-The tests use fake provider servers and isolated local fixtures.
+Run `make test-protocol-acceptance` for the shared local provider qualification.
+The target starts the real service and uses the official Go client.
+It also runs the OpenAI SDK, native client, OpenCode, connection, persistence, media, lifecycle, and usage scenarios.
+The tests use fake provider servers and isolated local data.
 OpenAI SDK `7.10.0` and OpenCode `1.18.28` are pinned in test dependencies.
 Run `make ci` for repository validation after the final change.
+
+## Qualify another provider
+
+Use this procedure when a provider can use a current protocol adapter.
+
+1. Add a disposable provider definition to the test catalog.
+2. Select the protocol, lifecycle, operation, request profile, controls, and media inputs in the test case.
+3. Supply test connection values through `ManagedTenantTestConfiguration`.
+4. Use the real HTTP service and the official Go client for the request.
+5. Verify public discovery, connection fields, secret masking, routing, tenant isolation, restart behavior, and usage.
+6. Verify that unsupported controls and invalid credentials cause no provider request.
+7. Verify wrong endpoints, malformed results, and incorrect usage totals with the negative controls.
+8. Run `make test-protocol-acceptance`.
+9. Add the provider definition to `configs/providers.yml` only after the local qualification passes.
+10. Run `make ci` after the catalog change.
+
+Do not add a production provider constant for the disposable definition.
+Keep live-provider qualification in the live-provider harness.
 
 The protocol references are the [OpenAI Responses API](https://developers.openai.com/api/reference/typescript/resources/responses/methods/create)
 and [OpenCode provider configuration](https://opencode.ai/docs/providers/).

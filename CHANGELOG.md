@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Added shared local acceptance for each current text and dictation protocol adapter.
+  The tests use disposable provider definitions, the real service, and the official Go client.
+  Added negative controls for endpoint, field, result, credential, and usage drift.
+
 - P011 specified the media API, SQLite operation store, first consumer, provider sequence, and acceptance gates.
   Updated F022 and related migration issues to use one idempotent operation creation contract.
 

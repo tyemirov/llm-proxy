@@ -104,6 +104,7 @@ builtin printf 'total:\t(statements)\t%s\n' "${CI_COVERAGE_TOTAL:-100.0%}"
 		"go-lint",
 		"python-lint",
 		"frontend-lint",
+		"test-protocol-acceptance",
 		"go-test",
 		"python-test",
 		"frontend-test",
@@ -131,7 +132,7 @@ builtin printf 'total:\t(statements)\t%s\n' "${CI_COVERAGE_TOTAL:-100.0%}"
 			"CI summary",
 			"Go coverage verification",
 			"100.0%",
-			"CI PASSED: all 12 gates completed; Go statement coverage 100.0%.",
+			"CI PASSED: all 13 gates completed; Go statement coverage 100.0%.",
 		} {
 			if !strings.Contains(outputText, expectedFragment) {
 				testingInstance.Fatalf("complete CI output omitted %q:\n%s", expectedFragment, outputText)

@@ -5,10 +5,139 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/tyemirov/llm-proxy/internal/proxy"
 )
+
+// ProtocolFixture identifies one disposable provider route for an executable protocol adapter.
+type ProtocolFixture struct {
+	Protocol             string
+	Provider             string
+	Model                string
+	Operation            string
+	Lifecycle            string
+	RequestProfile       string
+	EndpointPath         string
+	AuthenticationHeader string
+	AuthenticationPrefix string
+	Controls             []string
+	MediaInputs          []string
+	CallerTools          bool
+	WebSearch            bool
+}
+
+// ProviderCatalogWithProtocolFixtures adds one disposable provider route for each executable protocol adapter.
+func ProviderCatalogWithProtocolFixtures(testingInstance testing.TB) (*proxy.ProviderCatalog, []ProtocolFixture) {
+	testingInstance.Helper()
+	schema := ProviderCatalog(testingInstance).Schema()
+	modelForFixture := func(identifier string) string {
+		for modelIndex := range schema.Models {
+			if schema.Models[modelIndex].ID == identifier {
+				if schema.Models[modelIndex].Enabled == proxy.ModelEnabled {
+					return identifier
+				}
+				fixtureModel := schema.Models[modelIndex]
+				fixtureModel.ID = fmt.Sprintf("fixture-model-%d", len(schema.Models)+1)
+				fixtureModel.Enabled = proxy.ModelEnabled
+				schema.Models = append(schema.Models, fixtureModel)
+				return fixtureModel.ID
+			}
+		}
+		testingInstance.Fatalf("protocol fixture model is absent: %s", identifier)
+		return ""
+	}
+	selected := map[string]bool{}
+	fixtures := []ProtocolFixture{}
+	for _, provider := range schema.Providers {
+		if provider.Enabled == proxy.ModelDisabled {
+			continue
+		}
+		for _, transport := range provider.Transports {
+			for _, offering := range provider.Offerings {
+				if offering.Transport != transport.ID {
+					continue
+				}
+				for _, operation := range offering.Operations {
+					if operation != proxy.ModelOperationText && operation != proxy.ModelOperationDictation {
+						continue
+					}
+					fixtureKey := strings.Join([]string{transport.RequestProtocol, transport.Lifecycle, operation}, "-")
+					if selected[fixtureKey] {
+						continue
+					}
+					fixtureProvider := provider
+					fixtureProvider.ID = "fixture-" + strings.ReplaceAll(fixtureKey, "_", "-")
+					fixtureProvider.Label = "Fixture " + fixtureKey
+					fixtureProvider.APIServiceLabel = fixtureProvider.Label + " API"
+					fixtureProvider.KeyAcquisitionURL = "https://fixture.example/keys"
+					fixtureProvider.Aliases = nil
+					fixtureProvider.Fields = append([]proxy.ProviderCatalogField(nil), provider.Fields...)
+					for fieldIndex := range fixtureProvider.Fields {
+						fixtureProvider.Fields[fieldIndex].Environment = ""
+					}
+					fixtureProvider.Transports = []proxy.ProviderCatalogTransport{transport}
+					fixtureOffering := offering
+					fixtureOffering.Enabled = proxy.ModelEnabled
+					fixtureOffering.Model = modelForFixture(fixtureOffering.Model)
+					fixtureOffering.Operations = []string{operation}
+					fixtureOffering.DefaultOperations = []string{operation}
+					fixtureOffering.Prices = append([]proxy.ProviderCatalogPrice(nil), fixtureOffering.Prices...)
+					fixtureOffering.Prices = slices.DeleteFunc(fixtureOffering.Prices, func(price proxy.ProviderCatalogPrice) bool {
+						return price.Operation != operation
+					})
+					fixtureProvider.Offerings = []proxy.ProviderCatalogOffering{fixtureOffering}
+					if operation == proxy.ModelOperationDictation {
+						for _, textOffering := range provider.Offerings {
+							if !slices.Contains(textOffering.Operations, proxy.ModelOperationText) {
+								continue
+							}
+							textOffering.Enabled = proxy.ModelEnabled
+							textOffering.Model = modelForFixture(textOffering.Model)
+							textOffering.Operations = []string{proxy.ModelOperationText}
+							textOffering.DefaultOperations = []string{proxy.ModelOperationText}
+							textOffering.Prices = append([]proxy.ProviderCatalogPrice(nil), textOffering.Prices...)
+							textOffering.Prices = slices.DeleteFunc(textOffering.Prices, func(price proxy.ProviderCatalogPrice) bool {
+								return price.Operation != proxy.ModelOperationText
+							})
+							fixtureProvider.Offerings = append(fixtureProvider.Offerings, textOffering)
+							if textOffering.Transport != transport.ID {
+								for _, textTransport := range provider.Transports {
+									if textTransport.ID == textOffering.Transport {
+										fixtureProvider.Transports = append(fixtureProvider.Transports, textTransport)
+										break
+									}
+								}
+							}
+							break
+						}
+					}
+					schema.Providers = append(schema.Providers, fixtureProvider)
+					controls := make([]string, 0, len(offering.Controls))
+					for _, control := range offering.Controls {
+						controls = append(controls, control.ID)
+					}
+					fixtures = append(fixtures, ProtocolFixture{
+						Protocol: transport.RequestProtocol, Provider: fixtureProvider.ID,
+						Model: fixtureOffering.Model, Operation: operation, Lifecycle: transport.Lifecycle,
+						RequestProfile: offering.RequestProfile, EndpointPath: transport.Endpoint.Path,
+						AuthenticationHeader: transport.Authentication.Header, AuthenticationPrefix: transport.Authentication.Prefix,
+						Controls: controls, MediaInputs: append([]string(nil), offering.MediaInputs...),
+						CallerTools: offering.CallerTools, WebSearch: offering.WebSearch,
+					})
+					selected[fixtureKey] = true
+				}
+			}
+		}
+	}
+	catalog, catalogError := proxy.NewProviderCatalog(schema)
+	if catalogError != nil {
+		testingInstance.Fatalf("compile protocol fixture catalog: %v", catalogError)
+	}
+	return catalog, fixtures
+}
 
 // ProviderCatalog loads the repository provider catalog for tests.
 func ProviderCatalog(testingInstance testing.TB) *proxy.ProviderCatalog {
