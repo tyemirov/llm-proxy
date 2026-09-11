@@ -300,12 +300,42 @@ The first OpenAI generation slice uses the current tenant asset store directly.
 
 F042 keeps `dictator` as the provider identity.
 Move MediaOps `internal/media/provider/dictator/audio` into LLM Proxy's private provider implementation.
-Use the existing MediaOps capability matrix to specify speech, transcription, diarization, subtitles, alignment, voices, and history.
-Give retained voices and histories tenant-owned gateway identifiers.
+Expose `audio.transcribe`, `audio.diarize`, `audio.align`, `subtitles.create`, `audio.speech.generate`, and `audio.voice.extract` as durable operations.
+Publish transcript, diarization, alignment, subtitle, audio, and timeline results only as tenant assets.
+Give preset and extracted voices tenant-owned gateway identifiers.
+Do not add a Dictator history resource because MediaOps does not retain Dictator history. F026 owns ElevenLabs history.
 Keep native jobs, voice identifiers, engine choices, and runtime credentials private.
-Configure and authenticate the gateway-to-Dictator connection through deployment-owned inputs.
+Use the current async Dictator routes as the only execution and recovery contract.
+Configure and authenticate the gateway-to-Dictator connection through deployment-owned `DICTATOR_GRPC_ADDR`, `DICTATOR_GRPC_AUTH_TOKEN`, and `DICTATOR_GRPC_TLS` inputs.
+Do not require a tenant-managed Dictator connection.
+Require a released Dictator SDK that contains the retained preset-voice and text-format fields.
+Do not copy protobuf definitions or bind the production adapter to an unreleased pseudo-version.
 Prove that a Dictator outage leaves unrelated cloud requests usable.
 P008 GPU expansion has a separate delivery boundary.
+
+The gateway accepts the following exact Dictator operation inputs. Each request
+also supplies `provider: dictator`, `model: dictator-speech-v1`, and the named
+capability. Unknown and irrelevant fields are invalid.
+
+| Capability | Input | Controls |
+| --- | --- | --- |
+| `audio.transcribe` | `audio_asset_id` | Exactly one of `language` or `detect_language: true` |
+| `audio.diarize` | `audio_asset_id` | Language selector, `model_size`, optional `utterance_gap_seconds` |
+| `audio.align` | `audio_asset_id`, `transcript` | `language`, optional `remove_punctuation` |
+| `subtitles.create` | `audio_asset_id`, optional `transcript` | Language selector, `granularity`, `group_size` |
+| `audio.speech.generate` | `text`, opaque gateway `voice_id` | `language`, `text_format`, `sample_rate_hz`, optional duration and timeline controls |
+| `audio.voice.extract` | `audio_asset_id`, `transcript`, `display_name`, `language` | `model_size` |
+
+The adapter reads input bytes from the tenant asset store. It records the
+native job handle immediately after Dictator accepts the request and before it
+polls. Restart recovery and cancellation use only that private handle. It
+publishes verified output bytes as tenant assets. A successful voice extraction
+also creates one tenant-owned gateway voice and publishes only its public voice
+document. Native jobs, source and result artifact identifiers, engine details,
+and native voice references do not enter public responses or assets.
+
+The service uses a separate bounded Dictator queue and worker setting. A full or
+unavailable Dictator path does not consume the cloud media worker pool.
 
 For each consumer switch, remove direct execution for that capability in the same source change.
 Keep one active provider execution owner for that capability during the scheduled runtime switch.

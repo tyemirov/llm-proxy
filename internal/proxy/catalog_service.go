@@ -252,7 +252,7 @@ func validateModelOperationKinds(operations []ModelOperationKind, validated map[
 		if identifierError != nil {
 			return identifierError
 		}
-		if identifier != ModelOperationText && identifier != ModelOperationDictation && identifier != ModelOperationVideoGeneration {
+		if !supportedModelOperation(identifier) {
 			return fmt.Errorf("%w: field=catalog.operations[%d].id operation=%s", ErrInvalidModelCatalog, operationIndex, identifier)
 		}
 		if _, duplicate := validated[identifier]; duplicate {
@@ -294,7 +294,7 @@ func validateArtifactKinds(artifacts []string, field string) error {
 }
 
 func validateCredentialKinds(credentials []string, field string) error {
-	if len(credentials) != 1 || credentials[0] != CatalogCredentialAPIKey {
+	if len(credentials) != 1 || (credentials[0] != CatalogCredentialAPIKey && credentials[0] != CatalogCredentialDeployment) {
 		return fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
 	}
 	return nil

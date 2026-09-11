@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -21,6 +22,9 @@ KEY_QUERY_KEY = "key"
 REQUEST_TIMEOUT_HEADER = "X-LLM-Proxy-Request-Timeout-Seconds"
 IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
 ASSET_ENDPOINT_PATH = "/model/v1/assets"
+MEDIA_CAPABILITIES_ENDPOINT_PATH = "/model/v1/media-capabilities"
+MEDIA_OPERATIONS_ENDPOINT_PATH = "/model/v1/operations"
+MEDIA_VOICES_ENDPOINT_PATH = "/model/v1/voices"
 PROVIDER_QUERY_KEY = "provider"
 MODEL_PROFILE_MODEL_KEY = "model"
 MODEL_PROFILE_SUBJECT = "model_profile"
@@ -47,6 +51,8 @@ IMAGE_MIME_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 AUDIO_MIME_TYPES = frozenset({"audio/m4a", "audio/mpeg", "audio/wav"})
 MEDIA_MIME_TYPES = IMAGE_MIME_TYPES | AUDIO_MIME_TYPES
 ASSET_ID_PATTERN = re.compile(r"^ast_[0-9a-f]{32}$")
+MEDIA_OPERATION_ID_PATTERN = re.compile(r"^mop_[0-9a-f]{32}$")
+MEDIA_VOICE_ID_PATTERN = re.compile(r"^voi_[0-9a-f]{32}$")
 IDEMPOTENCY_KEY_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 
 
@@ -175,6 +181,18 @@ class ClientConfig:
                 urllib.parse.urlencode(preserved_items),
                 "",
             )
+        )
+
+    def media_resource_url(self, resource_path: str, query: dict[str, str] | None = None) -> str:
+        """Return one authenticated media-resource URL without legacy query credentials."""
+
+        parsed_url = urllib.parse.urlparse(self.base_url.strip())
+        base_path = parsed_url.path.strip().rstrip("/")
+        if base_path.endswith("/v2"):
+            base_path = base_path[: -len("/v2")]
+        query_values = urllib.parse.urlencode(query or {})
+        return urllib.parse.urlunparse(
+            (parsed_url.scheme, parsed_url.netloc, f"{base_path}{resource_path}", "", query_values, "")
         )
 
     def _current_model_profile(self) -> _ModelProfile:
@@ -669,6 +687,103 @@ class ClientAsset:
 
 
 @dataclass(frozen=True)
+class ClientMediaOperationInput:
+    """One complete durable media operation intent."""
+
+    capability: str
+    provider: str
+    model: str
+    input: dict[str, Any]
+    controls: dict[str, Any]
+
+    def __post_init__(self) -> None:
+        if not self.capability.strip() or not self.provider.strip() or not self.model.strip():
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: incomplete media operation")
+        if self.provider != self.provider.strip().lower():
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid media operation provider")
+        if not isinstance(self.input, dict) or not isinstance(self.controls, dict):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: media input and controls must be objects")
+        try:
+            json.dumps(self.body(), ensure_ascii=False, allow_nan=False)
+        except (TypeError, ValueError) as error:
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid media operation JSON") from error
+
+    def body(self) -> dict[str, Any]:
+        """Return the canonical media operation request object."""
+
+        return {
+            "capability": self.capability.strip(),
+            "provider": self.provider,
+            "model": self.model.strip(),
+            "input": self.input,
+            "controls": self.controls,
+        }
+
+
+@dataclass(frozen=True)
+class ClientMediaOperationOutput:
+    """One ordered result asset."""
+
+    asset_id: str
+    mime_type: str
+    size_bytes: int
+    ordinal: int
+
+
+@dataclass(frozen=True)
+class ClientMediaOperation:
+    """One durable tenant media operation."""
+
+    operation_id: str
+    capability: str
+    provider: str
+    model: str
+    catalog_revision: str
+    state: str
+    cancellation_state: str
+    outputs: tuple[ClientMediaOperationOutput, ...]
+    error_code: str | None
+    cost_available: bool
+    cost_reason: str | None
+    accepted_at: str
+    updated_at: str
+    deadline_at: str
+
+
+@dataclass(frozen=True)
+class ClientMediaCapabilityRoute:
+    """One tenant-available durable media route."""
+
+    capability: str
+    provider: str
+    model: str
+    controls: tuple[dict[str, Any], ...]
+    limits: tuple[dict[str, Any], ...]
+
+
+@dataclass(frozen=True)
+class ClientMediaCapabilities:
+    """Tenant-available durable media routes and their catalog revision."""
+
+    catalog_revision: str
+    routes: tuple[ClientMediaCapabilityRoute, ...]
+
+
+@dataclass(frozen=True)
+class ClientMediaVoice:
+    """One tenant-owned public synthesis voice."""
+
+    voice_id: str
+    provider: str
+    mode: str
+    language: str
+    display_name: str
+    default: bool
+    sample_rates: tuple[int, ...]
+    default_sample_rate: int
+
+
+@dataclass(frozen=True)
 class Client:
     """HTTP client for llm-proxy v2 JSON POST text requests."""
 
@@ -758,6 +873,137 @@ class Client:
             expires_at=response["expires_at"],
         )
 
+    def create_media_operation(
+        self, idempotency_key: str, operation: ClientMediaOperationInput
+    ) -> ClientMediaOperation:
+        """Accept one durable media operation."""
+
+        if not IDEMPOTENCY_KEY_PATTERN.fullmatch(idempotency_key):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid idempotency key")
+        if not isinstance(operation, ClientMediaOperationInput):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid media operation")
+        response = self._media_json_request(
+            "POST",
+            MEDIA_OPERATIONS_ENDPOINT_PATH,
+            operation.body(),
+            {IDEMPOTENCY_KEY_HEADER: idempotency_key},
+        )
+        return _decode_media_operation(response)
+
+    def get_media_operation(self, operation_id: str) -> ClientMediaOperation:
+        """Read one tenant-owned durable media operation."""
+
+        if not MEDIA_OPERATION_ID_PATTERN.fullmatch(operation_id):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid media operation identifier")
+        response = self._media_json_request("GET", f"{MEDIA_OPERATIONS_ENDPOINT_PATH}/{operation_id}")
+        return _decode_media_operation(response)
+
+    def cancel_media_operation(self, operation_id: str) -> ClientMediaOperation:
+        """Request cancellation and return the observed operation state."""
+
+        if not MEDIA_OPERATION_ID_PATTERN.fullmatch(operation_id):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid media operation identifier")
+        response = self._media_json_request(
+            "PUT", f"{MEDIA_OPERATIONS_ENDPOINT_PATH}/{operation_id}/cancellation"
+        )
+        return _decode_media_operation(response)
+
+    def wait_media_operation(
+        self, operation_id: str, poll_interval_seconds: float, timeout_seconds: float
+    ) -> ClientMediaOperation:
+        """Poll one durable media operation until it reaches a terminal state."""
+
+        if not MEDIA_OPERATION_ID_PATTERN.fullmatch(operation_id):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid media operation identifier")
+        if (
+            isinstance(poll_interval_seconds, bool)
+            or not isinstance(poll_interval_seconds, (int, float))
+            or poll_interval_seconds <= 0
+            or isinstance(timeout_seconds, bool)
+            or not isinstance(timeout_seconds, (int, float))
+            or timeout_seconds <= 0
+        ):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid media operation wait budget")
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            operation = self.get_media_operation(operation_id)
+            if operation.state in {"succeeded", "failed", "cancelled", "uncertain"}:
+                return operation
+            remaining_seconds = deadline - time.monotonic()
+            if remaining_seconds <= 0:
+                raise LLMProxyTransportError(
+                    "llm_proxy_client_transport_failure: media operation wait timed out"
+                )
+            time.sleep(min(poll_interval_seconds, remaining_seconds))
+
+    def get_media_capabilities(self) -> ClientMediaCapabilities:
+        """Read durable media routes available to the authenticated tenant."""
+
+        response = self._media_json_request("GET", MEDIA_CAPABILITIES_ENDPOINT_PATH)
+        return _decode_media_capabilities(response)
+
+    def get_media_voices(self, provider: str) -> tuple[ClientMediaVoice, ...]:
+        """Discover and return tenant-owned voices for one provider."""
+
+        if not provider or provider != provider.strip().lower():
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid media voice provider")
+        response = self._media_json_request("GET", MEDIA_VOICES_ENDPOINT_PATH, query={"provider": provider})
+        if set(response) != {"voices"} or not isinstance(response["voices"], list):
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media voice collection")
+        return tuple(_decode_media_voice(voice) for voice in response["voices"])
+
+    def get_media_voice(self, voice_id: str) -> ClientMediaVoice:
+        """Read one tenant-owned media voice."""
+
+        if not MEDIA_VOICE_ID_PATTERN.fullmatch(voice_id):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid media voice identifier")
+        response = self._media_json_request("GET", f"{MEDIA_VOICES_ENDPOINT_PATH}/{voice_id}")
+        return _decode_media_voice(response)
+
+    def _media_json_request(
+        self,
+        method: str,
+        resource_path: str,
+        body: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        query: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """Execute one strict tenant media-resource request."""
+
+        request_headers = {ACCEPT_HEADER: "application/json", "Authorization": f"Bearer {self.config.secret.strip()}"}
+        request_headers.update(headers or {})
+        request_data = None
+        if body is not None:
+            request_data = json.dumps(body, ensure_ascii=False, allow_nan=False).encode("utf-8")
+            request_headers[CONTENT_TYPE_HEADER] = "application/json"
+        prepared_request = urllib.request.Request(
+            self.config.media_resource_url(resource_path, query),
+            data=request_data,
+            headers=request_headers,
+            method=method,
+        )
+        opener = self.opener or default_response_opener
+        try:
+            response_text = opener(prepared_request)
+        except urllib.error.HTTPError as error:
+            response_body = error.read().decode("utf-8", errors="replace")
+            raise LLMProxyHTTPError(
+                error.code, response_body, str(error.reason), f"operation=media_resource method={method}"
+            ) from error
+        except (urllib.error.URLError, TimeoutError, OSError) as error:
+            raise LLMProxyTransportError(
+                f"llm_proxy_client_transport_failure: operation=media_resource method={method}"
+            ) from error
+        if not isinstance(response_text, str) or len(response_text.encode("utf-8")) > 8 * 1024 * 1024:
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media response")
+        try:
+            response = json.loads(response_text)
+        except (json.JSONDecodeError, TypeError) as error:
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media response") from error
+        if not isinstance(response, dict):
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media response")
+        return response
+
     def _post_json(
         self,
         request_payload: dict[str, Any],
@@ -801,6 +1047,202 @@ class Client:
             raise LLMProxyTransportError(
                 f"llm_proxy_client_transport_failure: {failure_context} reason={error}"
             ) from error
+
+
+def _decode_media_operation(response: dict[str, Any]) -> ClientMediaOperation:
+    """Decode one exact durable media operation response."""
+
+    required_fields = {
+        "operation_id",
+        "capability",
+        "provider",
+        "model",
+        "catalog_revision",
+        "state",
+        "cancellation_state",
+        "outputs",
+        "cost",
+        "accepted_at",
+        "updated_at",
+        "deadline_at",
+    }
+    if frozenset(response) not in {frozenset(required_fields), frozenset(required_fields | {"error"})}:
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media operation response")
+    string_fields = ("capability", "provider", "model", "catalog_revision")
+    if (
+        not isinstance(response["operation_id"], str)
+        or not MEDIA_OPERATION_ID_PATTERN.fullmatch(response["operation_id"])
+        or any(not isinstance(response[field], str) or not response[field] for field in string_fields)
+        or not isinstance(response["state"], str)
+        or response["state"] not in {"queued", "running", "succeeded", "failed", "cancelled", "uncertain"}
+        or not isinstance(response["cancellation_state"], str)
+        or response["cancellation_state"] not in {"not_requested", "requested", "confirmed", "unsupported"}
+        or not isinstance(response["outputs"], list)
+        or not isinstance(response["cost"], dict)
+    ):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media operation response")
+    outputs = tuple(_decode_media_operation_output(output) for output in response["outputs"])
+    cost = response["cost"]
+    if set(cost) not in ({"available"}, {"available", "reason"}) or not isinstance(cost["available"], bool):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media operation response")
+    cost_reason = cost.get("reason")
+    if cost_reason is not None and (not isinstance(cost_reason, str) or not cost_reason):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media operation response")
+    error_code = None
+    if "error" in response:
+        error_value = response["error"]
+        if not isinstance(error_value, dict) or set(error_value) != {"code"} or not isinstance(error_value["code"], str):
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media operation response")
+        error_code = error_value["code"]
+    accepted_at = _media_timestamp(response["accepted_at"])
+    updated_at = _media_timestamp(response["updated_at"])
+    deadline_at = _media_timestamp(response["deadline_at"])
+    if updated_at < accepted_at or deadline_at <= accepted_at:
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media operation response")
+    return ClientMediaOperation(
+        operation_id=response["operation_id"],
+        capability=response["capability"],
+        provider=response["provider"],
+        model=response["model"],
+        catalog_revision=response["catalog_revision"],
+        state=response["state"],
+        cancellation_state=response["cancellation_state"],
+        outputs=outputs,
+        error_code=error_code,
+        cost_available=cost["available"],
+        cost_reason=cost_reason,
+        accepted_at=response["accepted_at"],
+        updated_at=response["updated_at"],
+        deadline_at=response["deadline_at"],
+    )
+
+
+def _decode_media_operation_output(value: Any) -> ClientMediaOperationOutput:
+    """Decode one exact operation output asset."""
+
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"asset_id", "mime_type", "size_bytes", "ordinal"}
+        or not isinstance(value["asset_id"], str)
+        or not ASSET_ID_PATTERN.fullmatch(value["asset_id"])
+        or not isinstance(value["mime_type"], str)
+        or not value["mime_type"]
+        or isinstance(value["size_bytes"], bool)
+        or not isinstance(value["size_bytes"], int)
+        or value["size_bytes"] <= 0
+        or isinstance(value["ordinal"], bool)
+        or not isinstance(value["ordinal"], int)
+        or value["ordinal"] < 0
+    ):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media operation response")
+    return ClientMediaOperationOutput(
+        asset_id=value["asset_id"],
+        mime_type=value["mime_type"],
+        size_bytes=value["size_bytes"],
+        ordinal=value["ordinal"],
+    )
+
+
+def _decode_media_capabilities(value: Any) -> ClientMediaCapabilities:
+    """Decode the exact public media-capability collection."""
+
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"catalog_revision", "routes"}
+        or not isinstance(value["catalog_revision"], str)
+        or not value["catalog_revision"]
+        or not isinstance(value["routes"], list)
+    ):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media capabilities response")
+    return ClientMediaCapabilities(
+        catalog_revision=value["catalog_revision"],
+        routes=tuple(_decode_media_capability_route(route) for route in value["routes"]),
+    )
+
+
+def _decode_media_capability_route(value: Any) -> ClientMediaCapabilityRoute:
+    """Decode one exact public media-capability route."""
+
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"capability", "provider", "model", "controls", "limits"}
+        or any(
+            not isinstance(value[field], str) or not value[field]
+            for field in ("capability", "provider", "model")
+        )
+        or not isinstance(value["controls"], list)
+        or not all(isinstance(control, dict) for control in value["controls"])
+        or not isinstance(value["limits"], list)
+        or not all(isinstance(limit, dict) for limit in value["limits"])
+    ):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media capabilities response")
+    return ClientMediaCapabilityRoute(
+        capability=value["capability"],
+        provider=value["provider"],
+        model=value["model"],
+        controls=tuple(value["controls"]),
+        limits=tuple(value["limits"]),
+    )
+
+
+def _decode_media_voice(value: Any) -> ClientMediaVoice:
+    """Decode one exact public voice without accepting private provider fields."""
+
+    required_fields = {
+        "voice_id",
+        "provider",
+        "mode",
+        "language",
+        "display_name",
+        "default",
+        "sample_rates",
+        "default_sample_rate",
+    }
+    if (
+        not isinstance(value, dict)
+        or set(value) != required_fields
+        or not isinstance(value["voice_id"], str)
+        or not MEDIA_VOICE_ID_PATTERN.fullmatch(value["voice_id"])
+        or not isinstance(value["provider"], str)
+        or not value["provider"]
+        or value["mode"] not in {"preset", "extracted"}
+        or not isinstance(value["language"], str)
+        or not value["language"]
+        or not isinstance(value["display_name"], str)
+        or not value["display_name"]
+        or not isinstance(value["default"], bool)
+        or not isinstance(value["sample_rates"], list)
+        or not value["sample_rates"]
+        or any(isinstance(rate, bool) or not isinstance(rate, int) or rate <= 0 for rate in value["sample_rates"])
+        or len(set(value["sample_rates"])) != len(value["sample_rates"])
+        or isinstance(value["default_sample_rate"], bool)
+        or value["default_sample_rate"] not in value["sample_rates"]
+    ):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media voice response")
+    return ClientMediaVoice(
+        voice_id=value["voice_id"],
+        provider=value["provider"],
+        mode=value["mode"],
+        language=value["language"],
+        display_name=value["display_name"],
+        default=value["default"],
+        sample_rates=tuple(value["sample_rates"]),
+        default_sample_rate=value["default_sample_rate"],
+    )
+
+
+def _media_timestamp(value: Any) -> datetime:
+    """Parse one exact UTC media-resource timestamp."""
+
+    if not isinstance(value, str) or not value.endswith("Z"):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media operation response")
+    try:
+        timestamp = datetime.fromisoformat(value.removesuffix("Z") + "+00:00")
+    except ValueError as error:
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media operation response") from error
+    if timestamp.tzinfo is None or timestamp.utcoffset() != timezone.utc.utcoffset(timestamp):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media operation response")
+    return timestamp
 
 
 def _asset_timestamp(value: Any) -> datetime:

@@ -210,3 +210,56 @@ func TestMediaOperationClientExactJSONAndStateValidation(testingInstance *testin
 		testingInstance.Fatal(operationError)
 	}
 }
+
+func TestMediaVoiceClientRejectsInvalidRequestsAndResponses(testingInstance *testing.T) {
+	client := mediaOperationTestClient(mediaOperationDoer(func(*http.Request) (*http.Response, error) {
+		return mediaOperationTestResponse(http.StatusOK, `{"voices":[]}`), nil
+	}))
+	if _, voiceError := client.GetMediaVoices(context.Background(), " XAI "); !errors.Is(voiceError, ErrInvalidClientRequest) {
+		testingInstance.Fatalf("provider error=%v", voiceError)
+	}
+	if _, voiceError := client.GetMediaVoice(context.Background(), "invalid"); !errors.Is(voiceError, ErrInvalidClientRequest) {
+		testingInstance.Fatalf("voice id error=%v", voiceError)
+	}
+	if _, voiceError := client.GetMediaVoice(context.Background(), "voi_short"); !errors.Is(voiceError, ErrInvalidClientRequest) {
+		testingInstance.Fatalf("short voice id error=%v", voiceError)
+	}
+
+	transportFailure := mediaOperationTestClient(mediaOperationDoer(func(*http.Request) (*http.Response, error) {
+		return nil, io.ErrUnexpectedEOF
+	}))
+	if _, voiceError := transportFailure.GetMediaVoices(context.Background(), "xai"); !errors.Is(voiceError, ErrClientHTTPFailure) {
+		testingInstance.Fatalf("voice list transport error=%v", voiceError)
+	}
+	if _, voiceError := transportFailure.GetMediaVoice(context.Background(), "voi_0123456789abcdef0123456789abcdef"); !errors.Is(voiceError, ErrClientHTTPFailure) {
+		testingInstance.Fatalf("voice transport error=%v", voiceError)
+	}
+
+	invalidCollections := []string{
+		`{}`,
+		`{"voices":[{"voice_id":"invalid","provider":"xai","mode":"preset","language":"en","display_name":"voice","default":false,"sample_rates":[24000],"default_sample_rate":24000}]}`,
+	}
+	for _, body := range invalidCollections {
+		invalidClient := mediaOperationTestClient(mediaOperationDoer(func(*http.Request) (*http.Response, error) {
+			return mediaOperationTestResponse(http.StatusOK, body), nil
+		}))
+		if _, voiceError := invalidClient.GetMediaVoices(context.Background(), "xai"); !errors.Is(voiceError, ErrClientHTTPFailure) {
+			testingInstance.Fatalf("collection=%s error=%v", body, voiceError)
+		}
+	}
+
+	invalidVoices := []string{
+		`{}`,
+		`{"voice_id":"voi_0123456789abcdef0123456789abcdef","provider":"xai","mode":"preset","language":"en","display_name":"voice","default":false,"sample_rates":[24000],"default_sample_rate":48000}`,
+		`{"voice_id":"voi_0123456789abcdef0123456789abcdef","provider":"xai","mode":"preset","language":"en","display_name":"voice","default":false,"sample_rates":[24000,24000],"default_sample_rate":24000}`,
+		`{"voice_id":"voi_0123456789abcdef0123456789abcdef","provider":"xai","mode":"preset","language":"en","display_name":"voice","default":false,"sample_rates":[24000,-1],"default_sample_rate":24000}`,
+	}
+	for _, body := range invalidVoices {
+		invalidClient := mediaOperationTestClient(mediaOperationDoer(func(*http.Request) (*http.Response, error) {
+			return mediaOperationTestResponse(http.StatusOK, body), nil
+		}))
+		if _, voiceError := invalidClient.GetMediaVoice(context.Background(), "voi_0123456789abcdef0123456789abcdef"); !errors.Is(voiceError, ErrClientHTTPFailure) {
+			testingInstance.Fatalf("voice=%s error=%v", body, voiceError)
+		}
+	}
+}

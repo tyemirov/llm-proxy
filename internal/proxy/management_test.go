@@ -370,6 +370,7 @@ func TestManagementRejectsInvalidSessionsAndRequests(t *testing.T) {
 	}{
 		{method: http.MethodPost, path: "/api/management/connections", body: `{"name":"Unknown","provider":"unknown","fields":{"api_key":"sk"}}`, status: http.StatusBadRequest},
 		{method: http.MethodPost, path: "/api/management/connections", body: `{"name":"Retired","provider":"qwencloud","fields":{"api_key":"sk"}}`, status: http.StatusBadRequest},
+		{method: http.MethodPost, path: "/api/management/connections", body: `{"name":"Deployment owned","provider":"dictator","fields":{"grpc_auth_token":"sk"}}`, status: http.StatusBadRequest},
 		{method: http.MethodPost, path: "/api/management/connections", body: `{"name":"Empty","provider":"openai","fields":{"api_key":""}}`, status: http.StatusBadRequest},
 		{method: http.MethodPost, path: "/api/management/connections", body: `{"name":"Extra","provider":"openai","fields":{"api_key":"sk"},"extra":true}`, status: http.StatusBadRequest},
 		{method: http.MethodPost, path: "/api/management/connections", body: `{"name":"Missing fields","provider":"openai"}`, status: http.StatusBadRequest},
@@ -926,6 +927,9 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 	matchedModelEfforts := map[string]bool{}
 	matchedKimiK3 := false
 	for _, provider := range profile.Providers {
+		if provider.ID == "dictator" {
+			t.Fatal("deployment-owned Dictator provider exposed in tenant connection profile")
+		}
 		if provider.ID == proxy.ProviderNameOpenAI {
 			if len(provider.ReasoningEffort) != 0 {
 				t.Fatalf("OpenAI profile retains provider-level reasoning capability=%s", string(provider.ReasoningEffort))

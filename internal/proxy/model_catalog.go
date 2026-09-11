@@ -15,8 +15,22 @@ const (
 	ModelOperationDictation = "dictation"
 	// ModelOperationVideoGeneration identifies provider-backed video generation.
 	ModelOperationVideoGeneration = "video_generation"
+	// ModelOperationAudioTranscription identifies durable speech transcription.
+	ModelOperationAudioTranscription = "audio_transcription"
+	// ModelOperationAudioDiarization identifies durable speaker diarization.
+	ModelOperationAudioDiarization = "audio_diarization"
+	// ModelOperationAudioAlignment identifies durable transcript alignment.
+	ModelOperationAudioAlignment = "audio_alignment"
+	// ModelOperationSubtitleCreation identifies durable subtitle creation.
+	ModelOperationSubtitleCreation = "subtitle_creation"
+	// ModelOperationSpeechGeneration identifies durable speech synthesis.
+	ModelOperationSpeechGeneration = "speech_generation"
+	// ModelOperationVoiceExtraction identifies durable voice extraction.
+	ModelOperationVoiceExtraction = "voice_extraction"
 	// CatalogCredentialAPIKey identifies one opaque provider API key.
 	CatalogCredentialAPIKey = "api_key"
+	// CatalogCredentialDeployment identifies server-owned provider access.
+	CatalogCredentialDeployment = "deployment"
 	// CatalogArtifactText identifies text input or output.
 	CatalogArtifactText = "text"
 	// CatalogArtifactImage identifies image input or output.
@@ -550,7 +564,7 @@ func validatedOperationSet(rawOperations []string, field string) (map[string]str
 	}
 	operations := make(map[string]struct{}, len(rawOperations))
 	for index, operation := range rawOperations {
-		if operation != ModelOperationText && operation != ModelOperationDictation && operation != ModelOperationVideoGeneration {
+		if !supportedModelOperation(operation) {
 			return nil, fmt.Errorf("%w: field=%s[%d] operation=%s", ErrInvalidModelCatalog, field, index, operation)
 		}
 		if _, duplicate := operations[operation]; duplicate {
@@ -559,6 +573,23 @@ func validatedOperationSet(rawOperations []string, field string) (map[string]str
 		operations[operation] = struct{}{}
 	}
 	return operations, nil
+}
+
+func supportedModelOperation(operation string) bool {
+	switch operation {
+	case ModelOperationText,
+		ModelOperationDictation,
+		ModelOperationVideoGeneration,
+		ModelOperationAudioTranscription,
+		ModelOperationAudioDiarization,
+		ModelOperationAudioAlignment,
+		ModelOperationSubtitleCreation,
+		ModelOperationSpeechGeneration,
+		ModelOperationVoiceExtraction:
+		return true
+	default:
+		return false
+	}
 }
 
 func validatedExactModelMediaInputs(rawMediaInputs []string, field string) (map[messageMediaType]struct{}, error) {

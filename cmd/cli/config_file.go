@@ -54,6 +54,7 @@ type serverConfiguration struct {
 	AssetStorePath                    string                           `mapstructure:"asset_store_path"`
 	MaxInputAudioBytes                int64                            `mapstructure:"max_input_audio_bytes"`
 	MediaOperationWorkers             *int                             `mapstructure:"media_operation_workers"`
+	DictatorMediaOperationWorkers     *int                             `mapstructure:"dictator_media_operation_workers"`
 	MediaOperationCapacity            *int                             `mapstructure:"media_operation_capacity"`
 	TenantMediaOperationCapacity      *int                             `mapstructure:"tenant_media_operation_capacity"`
 	MediaOperationLifetimeSeconds     *int                             `mapstructure:"media_operation_lifetime_seconds"`
@@ -233,6 +234,10 @@ func (configuration fileConfiguration) toProxyConfiguration(providerCatalog *pro
 	if mediaOperationWorkersError != nil {
 		return proxy.Configuration{}, mediaOperationWorkersError
 	}
+	dictatorMediaOperationWorkers, dictatorMediaOperationWorkersError := configuredPositiveInteger(configuration.Server.DictatorMediaOperationWorkers, proxy.DefaultDictatorMediaOperationWorkers, "server.dictator_media_operation_workers")
+	if dictatorMediaOperationWorkersError != nil {
+		return proxy.Configuration{}, dictatorMediaOperationWorkersError
+	}
 	mediaOperationCapacity, mediaOperationCapacityError := configuredPositiveInteger(configuration.Server.MediaOperationCapacity, proxy.DefaultMediaOperationCapacity, "server.media_operation_capacity")
 	if mediaOperationCapacityError != nil {
 		return proxy.Configuration{}, mediaOperationCapacityError
@@ -269,6 +274,7 @@ func (configuration fileConfiguration) toProxyConfiguration(providerCatalog *pro
 		AssetStorePath:                    configuration.Server.AssetStorePath,
 		MaxInputAudioBytes:                configuration.Server.MaxInputAudioBytes,
 		MediaOperationWorkers:             mediaOperationWorkers,
+		DictatorMediaOperationWorkers:     dictatorMediaOperationWorkers,
 		MediaOperationCapacity:            mediaOperationCapacity,
 		TenantMediaOperationCapacity:      tenantMediaOperationCapacity,
 		MediaOperationLifetimeSeconds:     mediaOperationLifetimeSeconds,

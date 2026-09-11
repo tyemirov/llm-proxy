@@ -767,6 +767,9 @@ func (service *managementService) providerResponses(providerSettings map[provide
 	for _, summary := range summaries {
 		providerIdentifier := providerID(summary.identifier)
 		definition := service.providers.definitions[providerIdentifier]
+		if definition.connectionOwnership != CatalogProviderConnectionTenant {
+			continue
+		}
 		settings, configured := providerSettings[providerIdentifier]
 		textModels := make([]managementTextModelResponse, 0, len(summary.textModels))
 		for _, model := range summary.textModels {

@@ -234,8 +234,10 @@ func ProviderCatalogFromModelCatalog(testingInstance testing.TB, modelCatalog pr
 // NewProviderCatalogFromModelCatalog returns strict construction errors to rejection tests.
 func NewProviderCatalogFromModelCatalog(modelCatalog proxy.ModelCatalog) (*proxy.ProviderCatalog, error) {
 	providerLabels := map[string]string{}
+	providerDefinitions := map[string]proxy.CatalogProvider{}
 	for _, provider := range modelCatalog.Providers {
 		providerLabels[provider.ID] = provider.Label
+		providerDefinitions[provider.ID] = provider
 	}
 	prices := map[string][]proxy.ProviderCatalogPrice{}
 	for _, price := range modelCatalog.Prices {
@@ -265,14 +267,24 @@ func NewProviderCatalogFromModelCatalog(modelCatalog proxy.ModelCatalog) (*proxy
 		if !found {
 			providerIndex = len(schema.Providers)
 			providerIndexes[offering.Provider] = providerIndex
-			schema.Providers = append(schema.Providers, proxy.ProviderCatalogProvider{
-				ID: offering.Provider, Label: providerLabels[offering.Provider], APIServiceLabel: providerLabels[offering.Provider] + " API", KeyAcquisitionURL: "https://provider.example/keys",
+			provider := proxy.ProviderCatalogProvider{
+				ID: offering.Provider, Label: providerLabels[offering.Provider], APIServiceLabel: providerLabels[offering.Provider] + " API", ConnectionOwnership: proxy.CatalogProviderConnectionTenant, KeyAcquisitionURL: "https://provider.example/keys",
 				Fields: []proxy.ProviderCatalogField{{
 					ID: proxy.CatalogCredentialAPIKey, Label: "Test API key", Kind: proxy.CatalogProviderFieldKindCredential,
 					Type: proxy.CatalogProviderFieldTypeOpaque, Required: true, Default: &empty, Secret: true,
 					Validation: proxy.ProviderCatalogFieldValidation{MinimumLength: 1},
 				}},
-			})
+			}
+			if slices.Contains(providerDefinitions[offering.Provider].CredentialKinds, proxy.CatalogCredentialDeployment) {
+				provider.ConnectionOwnership = proxy.CatalogProviderConnectionDeployment
+				provider.KeyAcquisitionURL = ""
+				provider.Fields = []proxy.ProviderCatalogField{
+					{ID: "grpc_address", Label: "Test gRPC address", Kind: proxy.CatalogProviderFieldKindSetting, Type: proxy.CatalogProviderFieldTypeGRPCTarget, Required: true, Default: &empty, Validation: proxy.ProviderCatalogFieldValidation{MinimumLength: 1}, Environment: "DICTATOR_GRPC_ADDR"},
+					{ID: "grpc_auth_token", Label: "Test gRPC token", Kind: proxy.CatalogProviderFieldKindCredential, Type: proxy.CatalogProviderFieldTypeOpaque, Required: true, Default: &empty, Secret: true, Validation: proxy.ProviderCatalogFieldValidation{MinimumLength: 1}, Environment: "DICTATOR_GRPC_AUTH_TOKEN"},
+					{ID: "grpc_tls", Label: "Test gRPC TLS", Kind: proxy.CatalogProviderFieldKindSetting, Type: proxy.CatalogProviderFieldTypeBoolean, Required: true, Default: &empty, Validation: proxy.ProviderCatalogFieldValidation{MinimumLength: 1}, Environment: "DICTATOR_GRPC_TLS"},
+				}
+			}
+			schema.Providers = append(schema.Providers, provider)
 		}
 		provider := &schema.Providers[providerIndex]
 		transportKey := offering.Provider + "\x00" + offering.WireContract + "\x00" + offering.ExecutionLifecycle
@@ -305,12 +317,16 @@ func testProviderTransport(identifier string, offering proxy.ProviderOffering) p
 	}
 	transport := proxy.ProviderCatalogTransport{
 		ID:       identifier,
-		Endpoint: proxy.ProviderCatalogEndpoint{Method: proxy.CatalogEndpointMethodPost, DefaultBaseURL: "https://provider.example", Path: testProviderProtocolPath(offering.WireContract)},
+		Endpoint: proxy.ProviderCatalogEndpoint{Protocol: proxy.CatalogEndpointProtocolHTTP, Method: proxy.CatalogEndpointMethodPost, DefaultBaseURL: "https://provider.example", Path: testProviderProtocolPath(offering.WireContract)},
 		Components: proxy.ProviderCatalogTransportComponents{
 			RequestCodec: requestCodec, ResponseCodec: proxy.ProviderCatalogCodecReference{ID: offering.WireContract},
 			Authentication: proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationBearer, Field: proxy.CatalogCredentialAPIKey, Header: "Authorization", Prefix: "Bearer "},
 			Execution:      proxy.ProviderCatalogExecutionReference{ID: offering.ExecutionLifecycle},
 		},
+	}
+	if offering.WireContract == proxy.CatalogProtocolDictatorSpeechV1 {
+		transport.Endpoint = proxy.ProviderCatalogEndpoint{Protocol: proxy.CatalogEndpointProtocolGRPC, SettingField: "grpc_address"}
+		transport.Components.Authentication = proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationGRPCBearer, Field: "grpc_auth_token"}
 	}
 	if offering.ExecutionLifecycle == "pollable_resource" {
 		switch offering.Provider {

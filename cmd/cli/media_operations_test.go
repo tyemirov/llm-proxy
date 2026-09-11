@@ -12,6 +12,7 @@ func TestRootCommandRejectsInvalidMediaOperationConfiguration(testingInstance *t
 		expectedError string
 	}{
 		{name: "zero workers", serverYAML: "  media_operation_workers: 0\n", expectedError: "server.media_operation_workers must be positive"},
+		{name: "zero Dictator workers", serverYAML: "  dictator_media_operation_workers: 0\n", expectedError: "server.dictator_media_operation_workers must be positive"},
 		{name: "zero capacity", serverYAML: "  media_operation_capacity: 0\n", expectedError: "server.media_operation_capacity must be positive"},
 		{name: "zero tenant capacity", serverYAML: "  tenant_media_operation_capacity: 0\n", expectedError: "server.tenant_media_operation_capacity must be positive"},
 		{name: "zero lifetime", serverYAML: "  media_operation_lifetime_seconds: 0\n", expectedError: "server.media_operation_lifetime_seconds must be positive"},

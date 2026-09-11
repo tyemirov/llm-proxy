@@ -31,6 +31,13 @@ const (
 	ProviderNameMeta = "meta"
 	// ProviderNameXAI identifies the xAI credential and routing boundary.
 	ProviderNameXAI = "xai"
+	// ProviderNameDictator identifies the deployment-owned Dictator speech runtime.
+	ProviderNameDictator = "dictator"
+)
+
+const (
+	// ModelNameDictatorSpeechV1 identifies the Dictator speech v1 capability surface.
+	ModelNameDictatorSpeechV1 = "dictator-speech-v1"
 )
 
 const (
@@ -335,6 +342,7 @@ func (definition textModelDefinition) supportsMediaInput(mediaInput messageMedia
 
 type providerDefinition struct {
 	identifier                providerID
+	connectionOwnership       string
 	label                     string
 	apiServiceLabel           string
 	keyAcquisitionURL         string

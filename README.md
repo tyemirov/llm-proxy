@@ -88,7 +88,8 @@ The media worker settings are explicit under `server`:
 
 | Setting | Default | Meaning |
 | --- | ---: | --- |
-| `media_operation_workers` | `2` | In-process workers that claim accepted operations. |
+| `media_operation_workers` | `2` | In-process workers that claim accepted cloud operations. |
+| `dictator_media_operation_workers` | `1` | Isolated workers that claim accepted Dictator operations. |
 | `media_operation_capacity` | `32` | Maximum active accepted operations for the service. |
 | `tenant_media_operation_capacity` | `4` | Maximum active accepted operations for one tenant. |
 | `media_operation_lifetime_seconds` | `900` | Execution authority from acceptance. |
@@ -443,8 +444,8 @@ The loader rejects unknown fields and unsupported schema versions. It also
 rejects invalid identities, references, defaults, protocols, capabilities,
 limits, and prices.
 
-The current snapshot contains 13 providers, 81 exact models, 86 provider offerings, and 86 price records.
-Runtime discovery contains 71 enabled exact models, 74 offerings, and 74 price records.
+The current snapshot contains 14 providers, 82 exact models, 87 provider offerings, and 92 price records.
+Runtime discovery contains 72 enabled exact models, 75 offerings, and 80 price records.
 The application compiles one immutable registry from this snapshot.
 
 [Baidu Qianfan](docs/baidu-qianfan.md) provides four text offerings through one API key.

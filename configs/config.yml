@@ -9,6 +9,7 @@ server:
   max_asset_bytes: 2000000000
   asset_retention_seconds: 172800
   media_operation_workers: 2
+  dictator_media_operation_workers: 1
   media_operation_capacity: 32
   tenant_media_operation_capacity: 4
   media_operation_lifetime_seconds: 900

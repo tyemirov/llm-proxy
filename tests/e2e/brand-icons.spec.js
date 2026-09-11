@@ -15,7 +15,7 @@ const root = fileURLToPath(new URL("../..", import.meta.url));
 
 test("brand icons build validates the complete private catalog", async () => {
   const result = await executeFile("node", ["scripts/validate_brand_icons.mjs"], { cwd: root });
-  expect(result.stdout).toContain("13 providers, 29 families, 18 SVGs");
+  expect(result.stdout).toContain("14 providers, 30 families, 18 SVGs");
 });
 
 for (const scenario of ["unknown provider", "unknown family", "obsolete mapping", "missing asset", "changed asset", "invalid reference", "invalid path"]) {

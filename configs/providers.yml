@@ -1,4 +1,4 @@
-schema_version: 3
+schema_version: 4
 model_migrations:
     - managed_schema_version: 4
       provider: qwencloud
@@ -104,6 +104,39 @@ operations:
         - image
       output_artifacts:
         - video
+    - id: audio_transcription
+      input_artifacts:
+        - audio
+      output_artifacts:
+        - text
+    - id: audio_diarization
+      input_artifacts:
+        - audio
+      output_artifacts:
+        - text
+    - id: audio_alignment
+      input_artifacts:
+        - audio
+        - text
+      output_artifacts:
+        - text
+    - id: subtitle_creation
+      input_artifacts:
+        - audio
+        - text
+      output_artifacts:
+        - text
+    - id: speech_generation
+      input_artifacts:
+        - text
+      output_artifacts:
+        - audio
+        - text
+    - id: voice_extraction
+      input_artifacts:
+        - audio
+      output_artifacts:
+        - audio
 publishers:
     - id: baidu
       label: Baidu
@@ -129,6 +162,8 @@ publishers:
       label: Meta
     - id: xai
       label: xAI
+    - id: mprlab
+      label: Marco Polo Research Lab
 families:
     - id: gpt-6
       publisher: openai
@@ -245,6 +280,10 @@ families:
     - id: xai-stt
       publisher: xai
       label: xAI STT
+      weight_access: proprietary
+    - id: dictator-speech
+      publisher: mprlab
+      label: Dictator Speech
       weight_access: proprietary
 models:
     - id: gpt-6-astra
@@ -943,8 +982,22 @@ models:
       operations:
         - dictation
       media_inputs: []
+    - id: dictator-speech-v1
+      enabled: true
+      publisher: mprlab
+      family: dictator-speech
+      version: v1
+      operations:
+        - audio_transcription
+        - audio_diarization
+        - audio_alignment
+        - subtitle_creation
+        - speech_generation
+        - voice_extraction
+      media_inputs: []
 providers:
     - id: openai
+      connection_ownership: tenant
       label: OpenAI
       api_service_label: OpenAI API
       key_acquisition_url: https://platform.openai.com/api-keys
@@ -962,6 +1015,7 @@ providers:
       transports:
         - id: text
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.openai.com/v1
             path: /responses
@@ -985,6 +1039,7 @@ providers:
                     - 404
         - id: dictation
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.openai.com/v1
             path: /audio/transcriptions
@@ -1694,6 +1749,7 @@ providers:
                   conditions:
                     billing_mode: standard
     - id: deepseek
+      connection_ownership: tenant
       label: DeepSeek
       api_service_label: DeepSeek API
       key_acquisition_url: https://platform.deepseek.com/api_keys
@@ -1711,6 +1767,7 @@ providers:
       transports:
         - id: text
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.deepseek.com
             path: /chat/completions
@@ -1761,6 +1818,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: dashscope
+      connection_ownership: tenant
       label: DashScope
       api_service_label: DashScope API
       key_acquisition_url: https://help.aliyun.com/en/model-studio/get-api-key
@@ -1792,6 +1850,7 @@ providers:
       transports:
         - id: text
           endpoint:
+            protocol: http
             method: POST
             setting_field: base_url
             path: /responses
@@ -2320,6 +2379,7 @@ providers:
                     billing_mode: pay_as_you_go_list
                     mode: singapore_international;thinking_or_non_thinking;input_tokens_0_to_1000000
     - id: moonshot
+      connection_ownership: tenant
       label: Moonshot
       api_service_label: Moonshot API
       key_acquisition_url: https://platform.kimi.ai/console/api-keys
@@ -2339,6 +2399,7 @@ providers:
       transports:
         - id: text
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.moonshot.ai/v1
             path: /chat/completions
@@ -2525,6 +2586,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: minimax
+      connection_ownership: tenant
       label: MiniMax
       api_service_label: MiniMax API
       key_acquisition_url: https://platform.minimax.io/docs/guides/quickstart-preparation
@@ -2542,6 +2604,7 @@ providers:
       transports:
         - id: text
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.minimax.io/v1
             path: /chat/completions
@@ -2985,6 +3048,7 @@ providers:
               source: https://platform.minimax.io/docs/guides/pricing-paygo
               last_verified: "2026-08-13"
     - id: siliconflow
+      connection_ownership: tenant
       label: SiliconFlow
       api_service_label: SiliconFlow API
       key_acquisition_url: https://cloud.siliconflow.com/account/ak
@@ -3002,6 +3066,7 @@ providers:
       transports:
         - id: text
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.siliconflow.com/v1
             path: /chat/completions
@@ -3020,6 +3085,7 @@ providers:
               id: synchronous_completion
         - id: dictation
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.siliconflow.com/v1
             path: /audio/transcriptions
@@ -3066,6 +3132,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: zai
+      connection_ownership: tenant
       label: Z.AI
       api_service_label: Z.AI API
       key_acquisition_url: https://z.ai/manage-apikey/apikey-list
@@ -3083,6 +3150,7 @@ providers:
       transports:
         - id: text
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.z.ai/api/paas/v4
             path: /chat/completions
@@ -3101,6 +3169,7 @@ providers:
               id: synchronous_completion
         - id: dictation
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.z.ai/api/paas/v4
             path: /audio/transcriptions
@@ -3308,6 +3377,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: gemini
+      connection_ownership: tenant
       label: Gemini
       api_service_label: Gemini API
       key_acquisition_url: https://aistudio.google.com/app/apikey
@@ -3325,6 +3395,7 @@ providers:
       transports:
         - id: text_pollable
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://generativelanguage.googleapis.com/v1beta
             path: /interactions
@@ -3352,6 +3423,7 @@ providers:
                     - 404
         - id: text_synchronous
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://generativelanguage.googleapis.com/v1beta
             path: /interactions
@@ -3372,6 +3444,7 @@ providers:
               id: synchronous_completion
         - id: dictation
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://generativelanguage.googleapis.com/v1beta
             path: /interactions
@@ -3926,6 +3999,7 @@ providers:
               source: https://ai.google.dev/gemini-api/docs/pricing
               last_verified: "2026-09-05"
     - id: anthropic
+      connection_ownership: tenant
       label: Anthropic
       api_service_label: Anthropic API
       key_acquisition_url: https://platform.claude.com/settings/keys
@@ -3945,6 +4019,7 @@ providers:
       transports:
         - id: text
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.anthropic.com
             path: /v1/messages
@@ -4495,6 +4570,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: meta
+      connection_ownership: tenant
       label: Meta
       api_service_label: Meta API
       key_acquisition_url: https://dev.meta.ai/
@@ -4512,6 +4588,7 @@ providers:
       transports:
         - id: text
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.meta.ai/v1
             path: /chat/completions
@@ -4530,6 +4607,7 @@ providers:
               id: synchronous_completion
         - id: dictation
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.meta.ai/v1
             path: /asr/transcribe
@@ -4636,6 +4714,7 @@ providers:
                   conditions:
                     billing_mode: standard
     - id: xai
+      connection_ownership: tenant
       label: xAI
       api_service_label: xAI API
       key_acquisition_url: https://console.x.ai/team/default/api-keys
@@ -4653,6 +4732,7 @@ providers:
       transports:
         - id: text_responses
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.x.ai/v1
             path: /responses
@@ -4670,6 +4750,7 @@ providers:
               id: synchronous_completion
         - id: video_generation
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.x.ai/v1
             path: /videos/generations
@@ -4687,6 +4768,7 @@ providers:
               id: pollable_resource
         - id: dictation
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.x.ai/v1
             path: /stt
@@ -5032,6 +5114,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: baidu
+      connection_ownership: tenant
       label: Baidu Qianfan
       api_service_label: Qianfan API
       key_acquisition_url: https://intl.cloud.baidu.com/en/doc/qianfan/s/qm8qxemze-intl-en
@@ -5058,6 +5141,7 @@ providers:
       transports:
         - id: text
           endpoint:
+            protocol: http
             method: POST
             setting_field: base_url
             path: /chat/completions
@@ -5192,6 +5276,7 @@ providers:
                   conditions:
                     billing_mode: pay_as_you_go
     - id: vertex
+      connection_ownership: tenant
       enabled: true
       label: Vertex AI
       api_service_label: Google Cloud Vertex AI
@@ -5210,6 +5295,7 @@ providers:
       transports:
         - id: generate_content
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://aiplatform.googleapis.com/v1
             path: /publishers/google/models
@@ -5521,3 +5607,103 @@ providers:
               unavailable_reason: Exact Vertex prices require import for this offering.
               source: https://cloud.google.com/vertex-ai/generative-ai/pricing
               last_verified: '2026-09-07'
+    - id: dictator
+      connection_ownership: deployment
+      label: Dictator
+      api_service_label: Dictator Speech API
+      fields:
+        - id: grpc_address
+          label: Dictator gRPC address
+          kind: setting
+          type: grpc_target
+          required: true
+          default: ""
+          secret: false
+          validation:
+            minimum_length: 1
+          environment: DICTATOR_GRPC_ADDR
+        - id: grpc_auth_token
+          label: Dictator gRPC bearer token
+          kind: credential
+          type: opaque
+          required: true
+          default: ""
+          secret: true
+          validation:
+            minimum_length: 1
+          environment: DICTATOR_GRPC_AUTH_TOKEN
+        - id: grpc_tls
+          label: Dictator gRPC TLS
+          kind: setting
+          type: boolean
+          required: true
+          default: ""
+          secret: false
+          validation:
+            minimum_length: 1
+          environment: DICTATOR_GRPC_TLS
+      transports:
+        - id: speech
+          endpoint:
+            protocol: grpc
+            setting_field: grpc_address
+          components:
+            request_codec:
+              id: dictator_speech_v1
+            response_codec:
+              id: dictator_speech_v1
+            authentication:
+              kind: grpc_bearer
+              field: grpc_auth_token
+            execution:
+              id: asynchronous_job
+      offerings:
+        - model: dictator-speech-v1
+          created: 1788998400
+          upstream_model: dictator-speech-v1
+          transport: speech
+          operations:
+            - audio_transcription
+            - audio_diarization
+            - audio_alignment
+            - subtitle_creation
+            - speech_generation
+            - voice_extraction
+          default_operations:
+            - audio_transcription
+            - audio_diarization
+            - audio_alignment
+            - subtitle_creation
+            - speech_generation
+            - voice_extraction
+          prices:
+            - operation: audio_transcription
+              available: false
+              unavailable_reason: Dictator is a deployment-owned provider without tenant billing.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: audio_diarization
+              available: false
+              unavailable_reason: Dictator is a deployment-owned provider without tenant billing.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: audio_alignment
+              available: false
+              unavailable_reason: Dictator is a deployment-owned provider without tenant billing.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: subtitle_creation
+              available: false
+              unavailable_reason: Dictator is a deployment-owned provider without tenant billing.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: speech_generation
+              available: false
+              unavailable_reason: Dictator is a deployment-owned provider without tenant billing.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: voice_extraction
+              available: false
+              unavailable_reason: Dictator is a deployment-owned provider without tenant billing.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'

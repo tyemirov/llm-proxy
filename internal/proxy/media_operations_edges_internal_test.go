@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -27,7 +28,26 @@ type mediaOperationInternalAdapter struct {
 	recoverResult  MediaOperationExecutionResult
 	cancelResult   MediaOperationCancellationResult
 	validateHook   func()
+	executeHook    func(MediaOperationExecutionRequest)
 	cancelHook     func()
+}
+
+type deploymentMediaOperationAdapter struct {
+	*mediaOperationInternalAdapter
+	credentialReference string
+}
+
+type internalMediaVoiceProvider struct {
+	voices []MediaVoiceProviderRecord
+	err    error
+}
+
+func (provider internalMediaVoiceProvider) DiscoverMediaVoices(context.Context) ([]MediaVoiceProviderRecord, error) {
+	return provider.voices, provider.err
+}
+
+func (adapter *deploymentMediaOperationAdapter) MediaOperationCredentialReference() string {
+	return adapter.credentialReference
 }
 
 func (adapter *mediaOperationInternalAdapter) Validate(request MediaOperationAdapterRequest) (MediaOperationValidatedRequest, error) {
@@ -43,7 +63,10 @@ func (adapter *mediaOperationInternalAdapter) Validate(request MediaOperationAda
 	return adapter.validateResult, adapter.validateError
 }
 
-func (adapter *mediaOperationInternalAdapter) Execute(context.Context, MediaOperationExecutionRequest) MediaOperationExecutionResult {
+func (adapter *mediaOperationInternalAdapter) Execute(_ context.Context, request MediaOperationExecutionRequest) MediaOperationExecutionResult {
+	if adapter.executeHook != nil {
+		adapter.executeHook(request)
+	}
 	return adapter.executeResult
 }
 
@@ -72,7 +95,7 @@ func newMediaOperationInternalFixture(testingInstance *testing.T) mediaOperation
 	if databaseError != nil {
 		testingInstance.Fatal(databaseError)
 	}
-	if migrationError := database.AutoMigrate(&mediaOperationRecord{}, &mediaOperationClaimRecord{}, &mediaOperationAssetReferenceRecord{}, &mediaOperationUsageDeliveryRecord{}, &mediaOperationTombstoneRecord{}, &managedUsageEventRecord{}, &managedAccountConnectionRecord{}, &managedTenantConnectionRecord{}); migrationError != nil {
+	if migrationError := database.AutoMigrate(&mediaOperationRecord{}, &mediaOperationClaimRecord{}, &mediaOperationAssetReferenceRecord{}, &mediaOperationUsageDeliveryRecord{}, &mediaOperationTombstoneRecord{}, &mediaVoiceRecord{}, &managedUsageEventRecord{}, &managedAccountConnectionRecord{}, &managedTenantConnectionRecord{}); migrationError != nil {
 		testingInstance.Fatal(migrationError)
 	}
 	providerCatalog := internalCanonicalProviderCatalog()
@@ -177,11 +200,11 @@ func TestMediaOperationHelperContracts(testingInstance *testing.T) {
 		{{MIMEType: "video/mp4"}},
 		{{MIMEType: "video/mp4", Data: bytes.Repeat([]byte("x"), 33)}},
 	} {
-		if fixture.service.validOutputs(outputs) {
+		if fixture.service.validOutputs(outputs, nil) {
 			testingInstance.Fatalf("invalid outputs accepted=%+v", outputs)
 		}
 	}
-	if !fixture.service.validOutputs([]MediaOperationOutput{{MIMEType: " VIDEO/MP4 ", Data: []byte("x")}}) {
+	if !fixture.service.validOutputs([]MediaOperationOutput{{MIMEType: " VIDEO/MP4 ", Data: []byte("x")}}, nil) {
 		testingInstance.Fatal("valid output rejected")
 	}
 	if callerSafeMediaOperationError(" provider_rate_limited ") != "provider_rate_limited" || callerSafeMediaOperationError("native private failure") != "" {
@@ -545,6 +568,95 @@ func TestMediaOperationRunOperationFailureContracts(testingInstance *testing.T) 
 	}
 }
 
+func TestMediaOperationPersistsProviderHandleBeforeAdapterCompletion(testingInstance *testing.T) {
+	fixture := newMediaOperationInternalFixture(testingInstance)
+	fixture.service.claimRenewal = time.Hour
+	record := fixture.record(MediaOperationStateQueued, MediaProviderExecutionNotDispatched)
+	record.DeadlineAt = time.Now().UTC().Add(time.Hour)
+	if updateError := fixture.database.Model(&record).Update("deadline_at", record.DeadlineAt).Error; updateError != nil {
+		testingInstance.Fatal(updateError)
+	}
+	var hookError error
+	fixture.adapter.executeHook = func(request MediaOperationExecutionRequest) {
+		if request.TenantID != fixture.tenant.identifier.string() || request.PersistProviderHandle == nil {
+			hookError = fmt.Errorf("execution request=%+v", request)
+			return
+		}
+		if persistError := request.PersistProviderHandle(`{"version":1,"job_id":"native-job"}`); persistError != nil {
+			hookError = fmt.Errorf("persist provider handle: %w", persistError)
+			return
+		}
+		var persisted mediaOperationRecord
+		if queryError := fixture.database.First(&persisted, "operation_id = ?", request.OperationID).Error; queryError != nil || !strings.Contains(persisted.ProviderHandle, "native-job") {
+			hookError = fmt.Errorf("persisted handle=%q error=%v", persisted.ProviderHandle, queryError)
+		}
+	}
+	fixture.adapter.executeResult = MediaOperationExecutionResult{State: MediaOperationStateFailed, ProviderHandle: `{"version":1,"job_id":"native-job"}`, ErrorCode: "provider_error"}
+	fixture.service.runOperation("worker", record.OperationID)
+	if hookError != nil {
+		testingInstance.Fatal(hookError)
+	}
+	var completed mediaOperationRecord
+	if queryError := fixture.database.First(&completed, "operation_id = ?", record.OperationID).Error; queryError != nil || !strings.Contains(completed.ProviderHandle, "native-job") {
+		testingInstance.Fatalf("completed handle=%q error=%v", completed.ProviderHandle, queryError)
+	}
+}
+
+func TestDictatorWorkerIsolationPreservesAdmittedCloudExecution(testingInstance *testing.T) {
+	fixture := newMediaOperationInternalFixture(testingInstance)
+	fixture.service.claimRenewal = time.Hour
+	fixture.service.dictatorQueue = make(chan string, 2)
+	cloud := fixture.record(MediaOperationStateQueued, MediaProviderExecutionNotDispatched)
+	cloud.DeadlineAt = time.Now().UTC().Add(time.Hour)
+	if saveError := fixture.database.Save(&cloud).Error; saveError != nil {
+		testingInstance.Fatal(saveError)
+	}
+	dictator := fixture.record(MediaOperationStateQueued, MediaProviderExecutionNotDispatched)
+	dictator.Provider = ProviderNameDictator
+	dictator.Model = ModelNameDictatorSpeechV1
+	dictator.Capability = llmproxycontract.MediaCapabilityAudioTranscribe
+	dictator.CatalogOperation = ModelOperationAudioTranscription
+	dictator.DeadlineAt = time.Now().UTC().Add(time.Hour)
+	if saveError := fixture.database.Save(&dictator).Error; saveError != nil {
+		testingInstance.Fatal(saveError)
+	}
+	dictatorStarted := make(chan struct{})
+	releaseDictator := make(chan struct{})
+	dictatorAdapter := &deploymentMediaOperationAdapter{mediaOperationInternalAdapter: &mediaOperationInternalAdapter{
+		executeHook:   func(MediaOperationExecutionRequest) { close(dictatorStarted); <-releaseDictator },
+		executeResult: MediaOperationExecutionResult{State: MediaOperationStateFailed, ErrorCode: "provider_error"},
+	}, credentialReference: "deployment:dictator:test"}
+	fixture.service.adapters[mediaOperationAdapterKey(dictator.Capability, dictator.Provider, dictator.Model)] = dictatorAdapter
+	cloudCompleted := make(chan struct{})
+	fixture.adapter.executeHook = func(MediaOperationExecutionRequest) { close(cloudCompleted) }
+	go fixture.service.runWorker("cloud-worker", fixture.service.queue)
+	go fixture.service.runWorker("dictator-worker", fixture.service.dictatorQueue)
+	defer close(fixture.service.queue)
+	defer close(fixture.service.dictatorQueue)
+	fixture.service.enqueue(dictator.OperationID)
+	select {
+	case <-dictatorStarted:
+	case <-time.After(time.Second):
+		testingInstance.Fatal("Dictator worker did not start")
+	}
+	fixture.service.enqueue(cloud.OperationID)
+	select {
+	case <-cloudCompleted:
+	case <-time.After(time.Second):
+		testingInstance.Fatal("admitted cloud operation was blocked by Dictator")
+	}
+	close(releaseDictator)
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		response, responseError := fixture.service.store.publicResponse(context.Background(), fixture.tenant.identifier.string(), cloud.OperationID)
+		if responseError == nil && response.State == MediaOperationStateSucceeded {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	testingInstance.Fatal("cloud operation did not complete")
+}
+
 func TestMediaOperationFinishPersistenceFailures(testingInstance *testing.T) {
 	testCases := []struct {
 		name       string
@@ -870,5 +982,319 @@ func TestMediaOperationHandlersReturnResourceErrors(testingInstance *testing.T) 
 	fixture.service.createHandler()(ginContext)
 	if response.Code != http.StatusBadRequest {
 		testingInstance.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestDictatorMediaCapabilityContract(testingInstance *testing.T) {
+	expectedOperations := map[string]string{
+		llmproxycontract.MediaCapabilityAudioTranscribe:     ModelOperationAudioTranscription,
+		llmproxycontract.MediaCapabilityAudioDiarize:        ModelOperationAudioDiarization,
+		llmproxycontract.MediaCapabilityAudioAlign:          ModelOperationAudioAlignment,
+		llmproxycontract.MediaCapabilitySubtitlesCreate:     ModelOperationSubtitleCreation,
+		llmproxycontract.MediaCapabilityAudioSpeechGenerate: ModelOperationSpeechGeneration,
+		llmproxycontract.MediaCapabilityAudioVoiceExtract:   ModelOperationVoiceExtraction,
+	}
+	for capability, operation := range expectedOperations {
+		if catalogOperationForMediaCapability(capability) != operation || mediaCapabilityForCatalogOperation(operation) != capability {
+			testingInstance.Fatalf("capability=%s operation=%s", capability, operation)
+		}
+	}
+	for _, mimeType := range []string{"application/json", "application/x-subrip", "audio/wav"} {
+		if !supportedTenantAssetMIME(mimeType) {
+			testingInstance.Fatalf("unsupported Dictator result MIME type=%s", mimeType)
+		}
+	}
+}
+
+func TestDictatorRegistrationQueueAndTerminalEdges(testingInstance *testing.T) {
+	fixture := newMediaOperationInternalFixture(testingInstance)
+	validValues := map[string]map[string]string{ProviderNameDictator: {"grpc_address": "dictator.internal:50051", "grpc_auth_token": "token", "grpc_tls": "true"}}
+	configuration := Configuration{ProviderConnectionValues: validValues, dictatorProtocol: &controlledDictatorProtocol{}}
+	fixture.service.adapters = nil
+	fixture.service.voiceProviders = nil
+	if registrationError := fixture.service.registerDictatorAdapter(configuration); registrationError != nil || len(fixture.service.adapters) != 6 || fixture.service.voiceProviders[ProviderNameDictator] == nil {
+		testingInstance.Fatalf("registration error=%v adapters=%d voices=%v", registrationError, len(fixture.service.adapters), fixture.service.voiceProviders)
+	}
+	if registrationError := fixture.service.registerDictatorAdapter(Configuration{dictatorProtocol: &controlledDictatorProtocol{}}); !errors.Is(registrationError, errMediaOperationUnavailable) {
+		testingInstance.Fatalf("invalid connection registration error=%v", registrationError)
+	}
+	invalidService := &mediaOperationService{store: fixture.service.store}
+	if registrationError := invalidService.registerDictatorAdapter(configuration); registrationError == nil {
+		testingInstance.Fatal("invalid adapter dependencies accepted")
+	}
+
+	managedTenants := &managedTenantStore{database: &gormManagedTenantDatabase{database: fixture.database}}
+	serviceConfiguration := Configuration{
+		ProviderConnectionValues: validValues, dictatorProtocol: &controlledDictatorProtocol{},
+		MediaOperationCapacity: 1, TenantMediaOperationCapacity: 1,
+		MediaOperationLifetimeSeconds: 60, MediaOperationClaimSeconds: 10, MediaOperationClaimRenewalSeconds: 1, AssetRetentionSeconds: 60,
+	}
+	service, serviceError := newMediaOperationService(serviceConfiguration, managedTenants, fixture.service.assets, fixture.service.providers)
+	if serviceError != nil || service == nil {
+		testingInstance.Fatalf("service=%v error=%v", service, serviceError)
+	}
+	serviceConfiguration.ProviderConnectionValues = nil
+	if invalid, serviceError := newMediaOperationService(serviceConfiguration, managedTenants, fixture.service.assets, fixture.service.providers); invalid != nil || !errors.Is(serviceError, errMediaOperationUnavailable) {
+		testingInstance.Fatalf("invalid service=%v error=%v", invalid, serviceError)
+	}
+
+	fixture.service.dictatorQueue = make(chan string, 1)
+	fixture.service.enqueue("mop_00000000000000000000000000000000")
+	if _, queued := fixture.service.queued.Load("mop_00000000000000000000000000000000"); queued {
+		testingInstance.Fatal("missing operation retained in queue set")
+	}
+	if persistError := fixture.service.persistProviderHandle("missing", 1, " "); !errors.Is(persistError, errMediaOperationStore) {
+		testingInstance.Fatalf("empty provider handle error=%v", persistError)
+	}
+	if persistError := fixture.service.persistProviderHandle("missing", 1, "native"); !errors.Is(persistError, errMediaOperationStore) {
+		testingInstance.Fatalf("missing provider handle error=%v", persistError)
+	}
+
+	finish := func(record mediaOperationRecord, result MediaOperationExecutionResult) mediaOperationResponse {
+		if claimError := fixture.database.Create(&mediaOperationClaimRecord{OperationID: record.OperationID, WorkerID: "worker", Generation: 1, ExpiresAt: fixture.now.Add(time.Minute)}).Error; claimError != nil {
+			testingInstance.Fatal(claimError)
+		}
+		fixture.service.finish(record.OperationID, 1, result)
+		response, responseError := fixture.service.store.publicResponse(context.Background(), fixture.tenant.identifier.string(), record.OperationID)
+		if responseError != nil {
+			testingInstance.Fatal(responseError)
+		}
+		return response
+	}
+	cancelled := finish(fixture.record(MediaOperationStateRunning, MediaProviderExecutionDispatched), MediaOperationExecutionResult{State: MediaOperationStateCancelled})
+	if cancelled.State != MediaOperationStateCancelled || cancelled.CancellationState != MediaCancellationConfirmed {
+		testingInstance.Fatalf("cancelled=%+v", cancelled)
+	}
+	validVoice := MediaVoiceProviderRecord{Provider: ProviderNameXAI, Model: "model", Mode: MediaVoiceModeExtracted, Language: "en", DisplayName: "voice", SampleRates: []int{24000}, DefaultSampleRate: 24000, ProviderVoiceReference: "native"}
+	wrongCapability := finish(fixture.record(MediaOperationStateRunning, MediaProviderExecutionDispatched), MediaOperationExecutionResult{State: MediaOperationStateSucceeded, Voice: &validVoice, Outputs: []MediaOperationOutput{{MIMEType: "application/json", Data: []byte(`{}`)}}})
+	if wrongCapability.State != MediaOperationStateFailed || wrongCapability.Error == nil || wrongCapability.Error.Code != "provider_result_invalid" {
+		testingInstance.Fatalf("wrong capability=%+v", wrongCapability)
+	}
+	extractionRecord := fixture.record(MediaOperationStateRunning, MediaProviderExecutionDispatched)
+	extractionRecord.Capability = llmproxycontract.MediaCapabilityAudioVoiceExtract
+	extractionRecord.CatalogOperation = ModelOperationVoiceExtraction
+	if saveError := fixture.database.Save(&extractionRecord).Error; saveError != nil {
+		testingInstance.Fatal(saveError)
+	}
+	invalidVoice := validVoice
+	invalidVoice.Provider = ProviderNameDictator
+	invalidExtraction := finish(extractionRecord, MediaOperationExecutionResult{State: MediaOperationStateSucceeded, Voice: &invalidVoice, Outputs: []MediaOperationOutput{{MIMEType: "application/json", Data: []byte(`{}`)}}})
+	if invalidExtraction.State != MediaOperationStateFailed || invalidExtraction.Error == nil || invalidExtraction.Error.Code != "provider_result_invalid" {
+		testingInstance.Fatalf("invalid extraction=%+v", invalidExtraction)
+	}
+}
+
+func TestMediaOperationDeploymentCredentialDoesNotRequireTenantConnection(testingInstance *testing.T) {
+	fixture := newMediaOperationInternalFixture(testingInstance)
+	fixture.tenant.providerSettings = map[providerID]managedProviderSettings{}
+	adapter := &deploymentMediaOperationAdapter{mediaOperationInternalAdapter: fixture.adapter, credentialReference: "deployment:dictator:sha256-reference"}
+	fixture.service.adapters = map[string]MediaOperationAdapter{
+		mediaOperationAdapterKey(llmproxycontract.MediaCapabilityVideoGenerate, ProviderNameXAI, "grok-imagine-video-1.5"): adapter,
+	}
+
+	response := httptest.NewRecorder()
+	ginContext, _ := gin.CreateTestContext(response)
+	ginContext.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	ginContext.Set(contextKeyTenant, fixture.tenant)
+	fixture.service.capabilitiesHandler()(ginContext)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"provider":"xai"`) {
+		testingInstance.Fatalf("capabilities=%s", response.Body.String())
+	}
+
+	record, created, createError := fixture.service.create(context.Background(), fixture.tenant, "deployment-credential", mediaOperationCreatePayload{
+		Capability: llmproxycontract.MediaCapabilityVideoGenerate,
+		Provider:   ProviderNameXAI,
+		Model:      "grok-imagine-video-1.5",
+		Input:      json.RawMessage(`{"prompt":"generate"}`),
+		Controls:   json.RawMessage(`{}`),
+	})
+	if createError != nil || !created || record.CredentialReference != adapter.credentialReference {
+		testingInstance.Fatalf("created=%t credential=%q error=%v", created, record.CredentialReference, createError)
+	}
+	emptyCredential := &deploymentMediaOperationAdapter{mediaOperationInternalAdapter: fixture.adapter}
+	provider := fixture.service.providers.definitions[providerID(ProviderNameXAI)]
+	if fixture.service.mediaOperationCredentialAvailable(fixture.tenant, provider, emptyCredential) {
+		testingInstance.Fatal("empty deployment credential accepted")
+	}
+	if _, credentialError := fixture.service.mediaOperationCredentialReference(context.Background(), fixture.tenant, provider, emptyCredential); !errors.Is(credentialError, errMediaOperationUnavailable) {
+		testingInstance.Fatalf("credential error=%v", credentialError)
+	}
+}
+
+func TestMediaVoiceBoundaryFailuresAndPrivateStore(testingInstance *testing.T) {
+	validVoice := MediaVoiceProviderRecord{
+		Provider: ProviderNameXAI, Model: "private-model", Mode: MediaVoiceModePreset,
+		Language: "en-US", DisplayName: "Narrator", Default: true,
+		SampleRates: []int{48000, 24000}, DefaultSampleRate: 24000, ProviderVoiceReference: "native-voice",
+	}
+	fixture := newMediaOperationInternalFixture(testingInstance)
+	fixture.service.voiceProviders = map[string]MediaVoiceProvider{ProviderNameXAI: internalMediaVoiceProvider{voices: []MediaVoiceProviderRecord{validVoice}}}
+
+	request := func(path string) (*httptest.ResponseRecorder, *gin.Context) {
+		response := httptest.NewRecorder()
+		ginContext, _ := gin.CreateTestContext(response)
+		ginContext.Request = httptest.NewRequest(http.MethodGet, path, nil)
+		ginContext.Set(contextKeyTenant, fixture.tenant)
+		return response, ginContext
+	}
+
+	response, ginContext := request("/?provider=XAI")
+	fixture.service.mediaVoiceCollectionHandler()(ginContext)
+	if response.Code != http.StatusBadRequest {
+		testingInstance.Fatalf("invalid provider status=%d", response.Code)
+	}
+	fixture.service.voiceProviders[ProviderNameXAI] = internalMediaVoiceProvider{err: io.ErrUnexpectedEOF}
+	response, ginContext = request("/?provider=xai")
+	fixture.service.mediaVoiceCollectionHandler()(ginContext)
+	if response.Code != http.StatusBadGateway {
+		testingInstance.Fatalf("provider failure status=%d", response.Code)
+	}
+	fixture.service.voiceProviders[ProviderNameXAI] = internalMediaVoiceProvider{voices: []MediaVoiceProviderRecord{{Provider: ProviderNameXAI}}}
+	response, ginContext = request("/?provider=xai")
+	fixture.service.mediaVoiceCollectionHandler()(ginContext)
+	if response.Code != http.StatusBadGateway {
+		testingInstance.Fatalf("invalid discovery status=%d", response.Code)
+	}
+
+	if persistError := fixture.service.store.persistMediaVoices(context.Background(), fixture.tenant.identifier.string(), ProviderNameXAI, []MediaVoiceProviderRecord{validVoice}); persistError != nil {
+		testingInstance.Fatal(persistError)
+	}
+	voices, listError := fixture.service.store.listMediaVoices(context.Background(), fixture.tenant.identifier.string(), ProviderNameXAI)
+	if listError != nil || len(voices) != 1 || voices[0].SampleRates[0] != 24000 {
+		testingInstance.Fatalf("voices=%+v error=%v", voices, listError)
+	}
+	voice, voiceError := fixture.service.store.mediaVoice(context.Background(), fixture.tenant.identifier.string(), voices[0].VoiceID)
+	if voiceError != nil || voice.VoiceID != voices[0].VoiceID {
+		testingInstance.Fatalf("voice=%+v error=%v", voice, voiceError)
+	}
+	validVoice.DisplayName = "Updated narrator"
+	if persistError := fixture.service.store.persistMediaVoices(context.Background(), fixture.tenant.identifier.string(), ProviderNameXAI, []MediaVoiceProviderRecord{validVoice}); persistError != nil {
+		testingInstance.Fatal(persistError)
+	}
+	updated, updateError := fixture.service.store.mediaVoice(context.Background(), fixture.tenant.identifier.string(), voice.VoiceID)
+	if updateError != nil || updated.DisplayName != "Updated narrator" {
+		testingInstance.Fatalf("updated=%+v error=%v", updated, updateError)
+	}
+	if _, invalidIDError := fixture.service.store.mediaVoice(context.Background(), fixture.tenant.identifier.string(), "invalid"); invalidIDError == nil {
+		testingInstance.Fatal("invalid voice identifier accepted")
+	}
+	if _, missingError := fixture.service.store.mediaVoice(context.Background(), fixture.tenant.identifier.string(), "voi_00000000000000000000000000000000"); missingError == nil || missingError.Error() != llmproxycontract.ErrorCodeMediaVoiceNotFound {
+		testingInstance.Fatalf("missing voice error=%v", missingError)
+	}
+
+	invalidRecords := []MediaVoiceProviderRecord{
+		{Provider: ProviderNameXAI},
+		{Provider: ProviderNameXAI, Model: "model", Mode: MediaVoiceModePreset, Language: "en", DisplayName: "voice", SampleRates: []int{24000, 24000}, DefaultSampleRate: 24000, ProviderVoiceReference: "native"},
+		{Provider: ProviderNameXAI, Model: "model", Mode: MediaVoiceModePreset, Language: "en", DisplayName: "voice", SampleRates: []int{24000}, DefaultSampleRate: 48000, ProviderVoiceReference: "native"},
+	}
+	for _, invalid := range invalidRecords {
+		if _, recordError := newMediaVoiceRecord(fixture.tenant.identifier.string(), ProviderNameXAI, invalid, fixture.now); recordError == nil {
+			testingInstance.Fatalf("invalid voice accepted=%+v", invalid)
+		}
+	}
+
+	corrupt := mediaVoiceRecord{VoiceID: "voi_11111111111111111111111111111111", TenantID: fixture.tenant.identifier.string(), Provider: ProviderNameXAI, ProviderVoiceReference: "corrupt", Model: "private", Mode: MediaVoiceModePreset, Language: "en", DisplayName: "corrupt", SampleRates: []byte(`null`), DefaultSampleRate: 24000}
+	if createError := fixture.database.Create(&corrupt).Error; createError != nil {
+		testingInstance.Fatal(createError)
+	}
+	if _, corruptError := fixture.service.store.mediaVoice(context.Background(), fixture.tenant.identifier.string(), corrupt.VoiceID); corruptError == nil {
+		testingInstance.Fatal("corrupt voice accepted")
+	}
+	if _, corruptListError := fixture.service.store.listMediaVoices(context.Background(), fixture.tenant.identifier.string(), ProviderNameXAI); corruptListError == nil {
+		testingInstance.Fatal("corrupt voice list accepted")
+	}
+
+	response, ginContext = request("/")
+	ginContext.Params = gin.Params{{Key: "voice_id", Value: "invalid"}}
+	fixture.service.mediaVoiceHandler()(ginContext)
+	if response.Code != http.StatusNotFound {
+		testingInstance.Fatalf("missing voice handler status=%d", response.Code)
+	}
+
+	for voiceError, expectedStatus := range map[error]int{
+		errors.New(llmproxycontract.ErrorCodeMediaVoiceInvalid):  http.StatusBadRequest,
+		errors.New(llmproxycontract.ErrorCodeMediaVoiceNotFound): http.StatusNotFound,
+		errors.New(llmproxycontract.ErrorCodeMediaVoiceProvider): http.StatusBadGateway,
+		errors.New(llmproxycontract.ErrorCodeMediaVoiceStore):    http.StatusInternalServerError,
+		errors.New("private provider detail"):                    http.StatusInternalServerError,
+	} {
+		response := httptest.NewRecorder()
+		ginContext, _ := gin.CreateTestContext(response)
+		writeMediaVoiceError(ginContext, voiceError)
+		if response.Code != expectedStatus || strings.Contains(response.Body.String(), "private provider detail") {
+			testingInstance.Fatalf("error=%v status=%d body=%s", voiceError, response.Code, response.Body.String())
+		}
+	}
+
+	brokenFixture := newMediaOperationInternalFixture(testingInstance)
+	if dropError := brokenFixture.database.Migrator().DropTable(&mediaVoiceRecord{}); dropError != nil {
+		testingInstance.Fatal(dropError)
+	}
+	brokenFixture.service.voiceProviders = map[string]MediaVoiceProvider{ProviderNameXAI: internalMediaVoiceProvider{voices: []MediaVoiceProviderRecord{validVoice}}}
+	response = httptest.NewRecorder()
+	ginContext, _ = gin.CreateTestContext(response)
+	ginContext.Request = httptest.NewRequest(http.MethodGet, "/?provider=xai", nil)
+	ginContext.Set(contextKeyTenant, brokenFixture.tenant)
+	brokenFixture.service.mediaVoiceCollectionHandler()(ginContext)
+	if response.Code != http.StatusInternalServerError {
+		testingInstance.Fatalf("persist failure status=%d", response.Code)
+	}
+	if _, listError := brokenFixture.service.store.listMediaVoices(context.Background(), brokenFixture.tenant.identifier.string(), ProviderNameXAI); listError == nil {
+		testingInstance.Fatal("broken voice list succeeded")
+	}
+	if _, readError := brokenFixture.service.store.mediaVoice(context.Background(), brokenFixture.tenant.identifier.string(), "voi_22222222222222222222222222222222"); readError == nil || readError.Error() != llmproxycontract.ErrorCodeMediaVoiceStore {
+		testingInstance.Fatalf("broken voice read error=%v", readError)
+	}
+	response = httptest.NewRecorder()
+	ginContext, _ = gin.CreateTestContext(response)
+	ginContext.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	ginContext.Params = gin.Params{{Key: "voice_id", Value: "voi_22222222222222222222222222222222"}}
+	ginContext.Set(contextKeyTenant, brokenFixture.tenant)
+	brokenFixture.service.mediaVoiceHandler()(ginContext)
+	if response.Code != http.StatusInternalServerError {
+		testingInstance.Fatalf("broken voice handler status=%d", response.Code)
+	}
+
+	listFailureFixture := newMediaOperationInternalFixture(testingInstance)
+	listFailureFixture.service.voiceProviders = map[string]MediaVoiceProvider{ProviderNameXAI: internalMediaVoiceProvider{}}
+	registerManagedGORMError(testingInstance, listFailureFixture.database, "media_voice_list_failure", "query", "media_voice_records", errInternalTestDatabase)
+	response = httptest.NewRecorder()
+	ginContext, _ = gin.CreateTestContext(response)
+	ginContext.Request = httptest.NewRequest(http.MethodGet, "/?provider=xai", nil)
+	ginContext.Set(contextKeyTenant, listFailureFixture.tenant)
+	listFailureFixture.service.mediaVoiceCollectionHandler()(ginContext)
+	if response.Code != http.StatusInternalServerError {
+		testingInstance.Fatalf("list failure status=%d", response.Code)
+	}
+}
+
+func TestMediaVoicePrivateStoreFailures(testingInstance *testing.T) {
+	validVoice := MediaVoiceProviderRecord{Provider: ProviderNameDictator, Model: "model", Mode: MediaVoiceModePreset, Language: "en", DisplayName: "voice", SampleRates: []int{24000}, DefaultSampleRate: 24000, ProviderVoiceReference: "native"}
+	for _, testCase := range []struct {
+		name      string
+		operation string
+	}{
+		{name: "create", operation: "create"},
+		{name: "read after upsert", operation: "query"},
+	} {
+		testingInstance.Run(testCase.name, func(testingInstance *testing.T) {
+			fixture := newMediaOperationInternalFixture(testingInstance)
+			failNthMediaGORMOperation(testingInstance, fixture.database, testCase.operation, "media_voice_records", 1)
+			if persistError := fixture.service.store.persistMediaVoices(context.Background(), fixture.tenant.identifier.string(), ProviderNameDictator, []MediaVoiceProviderRecord{validVoice}); persistError == nil || persistError.Error() != llmproxycontract.ErrorCodeMediaVoiceStore {
+				testingInstance.Fatalf("persist error=%v", persistError)
+			}
+		})
+	}
+	fixture := newMediaOperationInternalFixture(testingInstance)
+	if _, voiceError := fixture.service.store.providerMediaVoice(context.Background(), fixture.tenant.identifier.string(), "invalid"); voiceError == nil || voiceError.Error() != llmproxycontract.ErrorCodeMediaVoiceNotFound {
+		testingInstance.Fatalf("invalid identifier error=%v", voiceError)
+	}
+	if _, voiceError := fixture.service.store.providerMediaVoice(context.Background(), fixture.tenant.identifier.string(), "voi_00000000000000000000000000000000"); voiceError == nil || voiceError.Error() != llmproxycontract.ErrorCodeMediaVoiceNotFound {
+		testingInstance.Fatalf("missing voice error=%v", voiceError)
+	}
+	fixture = newMediaOperationInternalFixture(testingInstance)
+	failNthMediaGORMOperation(testingInstance, fixture.database, "query", "media_voice_records", 1)
+	if _, voiceError := fixture.service.store.providerMediaVoice(context.Background(), fixture.tenant.identifier.string(), "voi_00000000000000000000000000000000"); voiceError == nil || voiceError.Error() != llmproxycontract.ErrorCodeMediaVoiceStore {
+		testingInstance.Fatalf("store error=%v", voiceError)
 	}
 }

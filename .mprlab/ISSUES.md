@@ -1833,9 +1833,13 @@ retain satisfied historical dependencies.
   - Prove queue recovery after restart, uncertain transport behavior, exact controls, and ordered verified artifacts.
   - Prove staging fetch and cleanup through real files and an HTTP serving boundary.
   - Run current repository validation and separately record explicitly authorized live acceptance.
-- [ ] [F042] (P1) {F022} Expose Dictator media capabilities through the tenant gateway.
+- [!] [F042] (P1) {F022} Expose Dictator media capabilities through the tenant gateway.
   Goal:
   Make Dictator a private media provider behind LLM Proxy's public API.
+  Blocked:
+  - The latest released `github.com/tyemirov/dictator/sdk/go/dictatorspeechv1` module is `v1.10.0`. It does not contain the retained preset-voice and text-format fields.
+  - Dictator application tags do not publish the independently versioned Go module. Resume production adapter construction after the automated lifecycle publishes the current nested module contract.
+  - Do not copy protobuf definitions or use an unreleased pseudo-version.
   Current boundary:
   - MediaOps currently calls Dictator through one internal adapter.
   - After consolidation, LLM Proxy owns that adapter and the public tenant authorization boundary.
@@ -1843,27 +1847,34 @@ retain satisfied historical dependencies.
   - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
   - Inventory retained capabilities against the current Dictator gRPC contract and MediaOps capability matrix.
   - Cover transcription, diarization, subtitles, alignment, synthesis, voice extraction, and discovery where currently supported.
-  - Define tenant-owned voices, history, assets, artifacts, and operation resources for retained capabilities.
-  - Keep native voice, job, history, and artifact identifiers inside private provider records.
+  - Define tenant-owned voices, assets, artifacts, and operation resources for retained capabilities.
+  - Keep native voice, job, and artifact identifiers inside private provider records.
   - Map progress, cancellation, failures, and restart recovery through the common operation contract.
   - Authenticate the internal LLM Proxy-to-Dictator connection through deployment-owned configuration.
   - Keep speech engines and native workers in Dictator.
   - Use the existing qualified runtime when it satisfies the retained capability.
   - Treat P008 hardware or controller changes as dependencies only when measured requirements make them necessary.
   - Extend official Go and Python clients and current public caller interfaces in the selected capability release.
-  - Inventory retained voices and jobs before migration. Require explicit tenant and provider-account ownership mapping.
+  - Inventory retained voices and jobs before activation. Require explicit tenant and provider-account ownership mapping.
   - Coordinate MediaOps I087 and every discovered direct caller in one bounded cutover.
   - Remove obsolete public runtime routing and direct caller credentials after the cutover acceptance.
   Deliverables:
   - Private Dictator adapter, tenant media resources, official clients, caller migration inventory, and activation plan.
-  Open decisions:
-  - Use `dictator` as the canonical provider identity. Specify the public capability schemas before implementation.
-  - Select the current transcription route disposition without creating competing permanent contracts.
-  - Inventory runtime access and retained data before deciding exact migration and deployment changes.
+  Retained contract (2026-09-10):
+  - Use `dictator` as the canonical provider identity.
+  - Expose `audio.transcribe`, `audio.diarize`, `audio.align`, `subtitles.create`, `audio.speech.generate`, and `audio.voice.extract` through durable media operations.
+  - Publish transcript, diarization, alignment, subtitle, audio, and timeline results only as tenant assets.
+  - Expose synthesis voice discovery through tenant-owned gateway voice resources. Retain preset voices and extracted voices under opaque gateway identifiers.
+  - Do not add a Dictator history resource. MediaOps has no retained Dictator history capability. F026 owns ElevenLabs history.
+  - Keep Dictator jobs, artifacts, preset identifiers, extracted-speaker artifacts, engine selection, and connection values in private gateway records.
+  - Use the current async Dictator routes for transcription, diarization, subtitles, alignment, synthesis, and extraction. Do not retain the synchronous legacy RPCs as a second execution contract.
+  - Read `DICTATOR_GRPC_ADDR`, `DICTATOR_GRPC_AUTH_TOKEN`, and `DICTATOR_GRPC_TLS` from deployment-owned backend configuration. Do not require a tenant-managed Dictator connection.
+  - The released Dictator Go SDK must include the retained preset-voice and text-format fields before the production adapter dependency is added. Do not copy protobuf definitions or use an unreleased pseudo-version as a bridge.
+  - The current MediaOps inventory has no retained Dictator operation records that require import. Inventory extracted voices and active jobs again at activation and produce a zero-count receipt when none exist.
   Validation:
   - Complete the P011 second-provider acceptance procedure for each protocol adapter added or changed in this slice.
   - Start with real public API and persistence tests against a controlled Dictator protocol boundary.
-  - Prove tenant isolation for voices, histories, operations, and artifacts.
+  - Prove tenant isolation for voices, operations, and artifacts.
   - Prove exact speech behavior, native identifier privacy, restart recovery, and truthful cancellation.
   - Prove Dictator unavailability does not prevent admitted cloud operations.
   - Run repository validation and record real-runtime and consumer acceptance separately.
