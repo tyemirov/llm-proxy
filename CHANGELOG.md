@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Split provider transports into request codec, response codec,
+  authentication, and execution components. Schema version 3 now composes and
+  validates each route at startup. Shared acceptance now proves codec reuse
+  across different authentication kinds and execution lifecycles.
+
 - Reduced provider catalog transports to one protocol reference and typed variation.
   Codec definitions now own fixed request, response, finish, error, and usage facts.
   Schema version 2 rejects the removed protocol fields and obsolete parameter blocks.

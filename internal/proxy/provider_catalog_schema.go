@@ -19,7 +19,7 @@ import (
 
 const (
 	// ProviderCatalogSchemaVersion is the only accepted providers.yml schema.
-	ProviderCatalogSchemaVersion = 2
+	ProviderCatalogSchemaVersion = 3
 
 	CatalogProviderFieldKindCredential = "credential"
 	CatalogProviderFieldKindSetting    = "setting"
@@ -41,7 +41,7 @@ const (
 
 	CatalogProtocolVariationMaxTokens                 = "max_tokens"
 	CatalogProtocolVariationMaxCompletionTokens       = "max_completion_tokens"
-	CatalogProtocolVariationQianfanMaxTokens          = "qianfan_max_tokens"
+	CatalogProtocolVariationQianfan                   = "qianfan"
 	CatalogProtocolVariationTranscriptionModel        = "model"
 	CatalogProtocolVariationTranscriptionModelOmitted = "model_omitted"
 
@@ -141,21 +141,32 @@ type ProviderCatalogFieldValidation struct {
 	AllowedSchemes []string `yaml:"allowed_schemes,omitempty"`
 }
 
-// ProviderCatalogTransport defines one reusable provider protocol route.
+// ProviderCatalogTransport defines one provider route from reusable components.
 type ProviderCatalogTransport struct {
-	ID                 string                            `yaml:"id"`
-	Endpoint           ProviderCatalogEndpoint           `yaml:"endpoint"`
-	Authentication     ProviderCatalogAuthentication     `yaml:"authentication"`
-	Headers            []ProviderCatalogHeader           `yaml:"headers,omitempty"`
-	Protocol           ProviderCatalogProtocolReference  `yaml:"protocol"`
-	Lifecycle          string                            `yaml:"lifecycle"`
-	ResourceVisibility ProviderCatalogResourceVisibility `yaml:"resource_visibility,omitempty"`
+	ID         string                             `yaml:"id"`
+	Endpoint   ProviderCatalogEndpoint            `yaml:"endpoint"`
+	Headers    []ProviderCatalogHeader            `yaml:"headers,omitempty"`
+	Components ProviderCatalogTransportComponents `yaml:"components"`
 }
 
-// ProviderCatalogProtocolReference selects one codec definition and an optional typed variation.
-type ProviderCatalogProtocolReference struct {
+// ProviderCatalogTransportComponents selects the reusable parts of one provider route.
+type ProviderCatalogTransportComponents struct {
+	RequestCodec   ProviderCatalogCodecReference     `yaml:"request_codec"`
+	ResponseCodec  ProviderCatalogCodecReference     `yaml:"response_codec"`
+	Authentication ProviderCatalogAuthentication     `yaml:"authentication"`
+	Execution      ProviderCatalogExecutionReference `yaml:"execution"`
+}
+
+// ProviderCatalogCodecReference selects one codec definition and an optional typed variation.
+type ProviderCatalogCodecReference struct {
 	ID        string `yaml:"id"`
 	Variation string `yaml:"variation,omitempty"`
+}
+
+// ProviderCatalogExecutionReference selects one shared lifecycle and its provider visibility policy.
+type ProviderCatalogExecutionReference struct {
+	ID                 string                            `yaml:"id"`
+	ResourceVisibility ProviderCatalogResourceVisibility `yaml:"resource_visibility,omitempty"`
 }
 
 // ProviderCatalogResourceVisibility defines bounded retries for a created resource that is not readable yet.
@@ -535,7 +546,8 @@ func validateProviderCatalogSchema(schema ProviderCatalogSchema) error {
 			}
 			if offering.CallerTools {
 				transport := transports[offering.Transport]
-				supported := transport.Protocol.ID == CatalogProtocolXAIResponses || transport.Protocol.ID == CatalogProtocolOpenAIChatCompletions || (transport.Protocol.ID == CatalogProtocolOpenAIResponses && (offering.RequestProfile == string(requestProfileOpenAIResponsesReasoningTools) || offering.RequestProfile == string(requestProfileOpenAIResponsesTemperatureTools)))
+				requestCodec := transport.Components.RequestCodec.ID
+				supported := requestCodec == CatalogProtocolXAIResponses || requestCodec == CatalogProtocolOpenAIChatCompletions || (requestCodec == CatalogProtocolOpenAIResponses && (offering.RequestProfile == string(requestProfileOpenAIResponsesReasoningTools) || offering.RequestProfile == string(requestProfileOpenAIResponsesTemperatureTools)))
 				if !supported {
 					return fmt.Errorf("%w: field=%s.caller_tools", ErrInvalidModelCatalog, offeringField)
 				}
@@ -651,59 +663,46 @@ func validateProviderCatalogTransports(rawTransports []ProviderCatalogTransport,
 		if endpointError := validateProviderCatalogEndpoint(transport.Endpoint, fields, fieldPrefix+".endpoint"); endpointError != nil {
 			return nil, endpointError
 		}
-		credentialField, found := fields[transport.Authentication.Field]
+		credentialField, found := fields[transport.Components.Authentication.Field]
 		if !found || credentialField.Kind != CatalogProviderFieldKindCredential || !credentialField.Required {
-			return nil, fmt.Errorf("%w: field=%s.authentication.field field_id=%s reason=dangling_reference", ErrInvalidModelCatalog, fieldPrefix, transport.Authentication.Field)
-		}
-		if authenticationError := validateProviderCatalogAuthentication(transport.Authentication, fieldPrefix+".authentication"); authenticationError != nil {
-			return nil, authenticationError
+			return nil, fmt.Errorf("%w: field=%s.components.authentication.field field_id=%s reason=dangling_reference", ErrInvalidModelCatalog, fieldPrefix, transport.Components.Authentication.Field)
 		}
 		if headersError := validateProviderCatalogHeaders(transport.Headers, fieldPrefix+".headers"); headersError != nil {
 			return nil, headersError
 		}
-		definition, definitionError := providerProtocolDefinitionFor(transport.Protocol, fieldPrefix+".protocol")
-		if definitionError != nil {
-			return nil, definitionError
-		}
-		if !slices.Contains(definition.allowedLifecycles, textExecutionLifecycle(transport.Lifecycle)) {
-			return nil, fmt.Errorf("%w: field=%s.lifecycle lifecycle=%s", ErrInvalidModelCatalog, fieldPrefix, transport.Lifecycle)
-		}
-		if visibilityError := validateProviderCatalogResourceVisibility(transport, fieldPrefix+".resource_visibility"); visibilityError != nil {
-			return nil, visibilityError
-		}
-		if adapterError := validateProviderCatalogAdapterContract(transport, fieldPrefix); adapterError != nil {
-			return nil, adapterError
+		if _, compositionError := composeProviderTransport(transport, fieldPrefix); compositionError != nil {
+			return nil, compositionError
 		}
 		transports[identifier] = transport
 	}
 	return transports, nil
 }
 
-func validateProviderCatalogResourceVisibility(transport ProviderCatalogTransport, field string) error {
-	sharedPollableLifecycle := transport.Lifecycle == string(textExecutionLifecyclePollableResource) &&
-		(transport.Protocol.ID == CatalogProtocolOpenAIResponses || transport.Protocol.ID == CatalogProtocolGeminiInteractions)
-	visibility := transport.ResourceVisibility
+func validatedProviderCatalogResourceVisibility(execution ProviderCatalogExecutionReference, requestCodec string, field string) (pollableResourceVisibilityPolicy, error) {
+	sharedPollableLifecycle := execution.ID == string(textExecutionLifecyclePollableResource) &&
+		(requestCodec == CatalogProtocolOpenAIResponses || requestCodec == CatalogProtocolGeminiInteractions)
+	visibility := execution.ResourceVisibility
 	if !sharedPollableLifecycle {
 		if visibility.RetryIntervalMilliseconds != 0 || visibility.RetryLimit != 0 || len(visibility.RetryStatusCodes) != 0 {
-			return fmt.Errorf("%w: field=%s reason=unexpected_resource_visibility", ErrInvalidModelCatalog, field)
+			return pollableResourceVisibilityPolicy{}, fmt.Errorf("%w: field=%s reason=unexpected_resource_visibility", ErrInvalidModelCatalog, field)
 		}
-		return nil
+		return pollableResourceVisibilityPolicy{}, nil
 	}
 	if visibility.RetryIntervalMilliseconds <= 0 || visibility.RetryIntervalMilliseconds > providerCatalogResourceVisibilityMaxRetryIntervalMilliseconds ||
 		visibility.RetryLimit <= 0 || visibility.RetryLimit > providerCatalogResourceVisibilityMaxRetryLimit || len(visibility.RetryStatusCodes) == 0 {
-		return fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
+		return pollableResourceVisibilityPolicy{}, fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
 	}
 	seenStatusCodes := map[int]struct{}{}
 	for statusIndex, statusCode := range visibility.RetryStatusCodes {
 		if statusCode < http.StatusBadRequest || statusCode >= providerCatalogResourceVisibilityStatusCodeUpperBound {
-			return fmt.Errorf("%w: field=%s.retry_status_codes[%d] status=%d", ErrInvalidModelCatalog, field, statusIndex, statusCode)
+			return pollableResourceVisibilityPolicy{}, fmt.Errorf("%w: field=%s.retry_status_codes[%d] status=%d", ErrInvalidModelCatalog, field, statusIndex, statusCode)
 		}
 		if _, duplicate := seenStatusCodes[statusCode]; duplicate {
-			return fmt.Errorf("%w: field=%s.retry_status_codes[%d] duplicate=%d", ErrInvalidModelCatalog, field, statusIndex, statusCode)
+			return pollableResourceVisibilityPolicy{}, fmt.Errorf("%w: field=%s.retry_status_codes[%d] duplicate=%d", ErrInvalidModelCatalog, field, statusIndex, statusCode)
 		}
 		seenStatusCodes[statusCode] = struct{}{}
 	}
-	return nil
+	return pollableResourceVisibilityPolicyFromCatalog(visibility), nil
 }
 
 func validateProviderCatalogEndpoint(endpoint ProviderCatalogEndpoint, fields map[string]ProviderCatalogField, field string) error {
@@ -770,23 +769,6 @@ func validateProviderCatalogHeaders(headers []ProviderCatalogHeader, field strin
 	return nil
 }
 
-func validateProviderCatalogAdapterContract(transport ProviderCatalogTransport, field string) error {
-	definition, definitionError := providerProtocolDefinitionFor(transport.Protocol, field+".protocol")
-	if definitionError != nil {
-		return definitionError
-	}
-	expectedAuthentication := definition.authentication
-	expectedAuthentication.Field = transport.Authentication.Field
-	if transport.Authentication != expectedAuthentication || !providerCatalogHeadersEqual(transport.Headers, definition.headers) {
-		return providerCatalogAdapterContractError(field, transport.Protocol.ID)
-	}
-	return nil
-}
-
-func providerCatalogAdapterContractError(field string, protocol string) error {
-	return fmt.Errorf("%w: field=%s reason=adapter_contract_mismatch protocol=%s", ErrInvalidModelCatalog, field, protocol)
-}
-
 func providerCatalogHeadersEqual(actual []ProviderCatalogHeader, expected []ProviderCatalogHeader) bool {
 	return slices.EqualFunc(actual, expected, func(actualHeader ProviderCatalogHeader, expectedHeader ProviderCatalogHeader) bool {
 		return actualHeader == expectedHeader
@@ -813,7 +795,7 @@ func compileProviderCatalogSchema(schema ProviderCatalogSchema, revision string)
 		}
 		for _, rawOffering := range provider.Offerings {
 			transport := transports[rawOffering.Transport]
-			protocolDefinition, _ := providerProtocolDefinitionFor(transport.Protocol, "")
+			composition, _ := composeProviderTransport(transport, "")
 			offering := ProviderOffering{
 				Provider:                provider.ID,
 				Model:                   rawOffering.Model,
@@ -821,9 +803,9 @@ func compileProviderCatalogSchema(schema ProviderCatalogSchema, revision string)
 				Transport:               rawOffering.Transport,
 				Operations:              append([]string(nil), rawOffering.Operations...),
 				DefaultOperations:       append([]string(nil), rawOffering.DefaultOperations...),
-				WireContract:            transport.Protocol.ID,
-				ExecutionLifecycle:      transport.Lifecycle,
-				MediaExecutionLifecycle: protocolDefinition.parameters.MediaExecutionLifecycle,
+				WireContract:            composition.requestCodec,
+				ExecutionLifecycle:      string(composition.lifecycle),
+				MediaExecutionLifecycle: composition.parameters.MediaExecutionLifecycle,
 				RequestProfile:          rawOffering.RequestProfile,
 				WebSearch:               rawOffering.WebSearch, CallerTools: rawOffering.CallerTools, Created: rawOffering.Created,
 				OutputTokenLimit: rawOffering.OutputTokenLimit,

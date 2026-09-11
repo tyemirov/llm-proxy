@@ -207,7 +207,7 @@ retain satisfied historical dependencies.
   - Extended shared acceptance to all 15 retained protocol variations and lifecycles.
   Validation: `make test-provider-catalog` and `make test-protocol-acceptance` passed.
 
-- [ ] [I258] (P1) {I257} Separate protocol codecs, authentication, and execution lifecycles.
+- [x] [I258] (P1) {I257} Separate protocol codecs, authentication, and execution lifecycles.
   Goal:
   Let provider transports combine reusable components through validated catalog data.
   The current adapter validator couples protocol selection to exact authentication headers and permitted lifecycle values.
@@ -232,6 +232,13 @@ retain satisfied historical dependencies.
   - Prove invalid combinations stop startup and rejected requests cause zero upstream dispatch.
   - Keep public errors, credential isolation, continuation, timeout budgets, and usage totals.
   - Run focused transport tests and applicable repository checks.
+  Resolution:
+  - Added schema version 3 with separate request codec, response codec, authentication, and execution component references.
+  - Added one startup composer that rejects unknown components, invalid variations, incompatible pairs, required-header drift, and unsupported lifecycles.
+  - Converted the production catalog, test catalogs, provider registry, router, CLI tests, and provider tests to the component contract.
+  - Proved each retained text and dictation codec through a second provider with a different supported authentication kind.
+  - Preserved synchronous and pollable behavior, credential isolation, public errors, continuation, cancellation, timeout budgets, and usage totals.
+  Validation: `make test-provider-catalog` and `make test-protocol-acceptance` passed.
 
 - [ ] [I259] (P2) {I258} Use one Responses codec with explicit protocol variations.
   Goal:

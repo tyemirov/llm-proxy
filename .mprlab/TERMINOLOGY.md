@@ -47,7 +47,7 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `provider offering`: One exact model that one provider makes available as a route.
 - `provider profile`: Tenant settings for one provider, such as the selected text model and system prompt.
 - `provider staging`: Temporary storage that lets a provider read media for an accepted operation.
-- `provider transport`: One provider route that defines an endpoint, authentication, protocol adapter, and lifecycle.
+- `provider transport`: One provider route that defines an endpoint and selects request codec, response codec, authentication, and execution components.
 - `request disposition`: A closed value that identifies a request as rejected, succeeded, or failed.
 - `rejected request`: A request that cannot execute because it does not satisfy an input or tenant configuration requirement.
 - `request intent`: The tenant-bound semantic inputs that one idempotency key identifies.

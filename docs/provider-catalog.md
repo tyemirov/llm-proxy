@@ -8,7 +8,7 @@ model migrations, controls, limits, and prices.
 
 The loader reads `providers.yml` from the directory of the selected
 `config.yml`. It parses the provider catalog before it validates service
-configuration. The loader accepts only schema version 2.
+configuration. The loader accepts only schema version 3.
 
 The current provider catalog has these records:
 
@@ -19,7 +19,8 @@ The current provider catalog has these records:
 - 86 provider offerings, with 74 runtime offerings.
 - 86 price records, with 74 runtime records.
 - 13 managed model migrations.
-- Ten configured request protocols.
+- Ten configured request and response codec identifiers.
+- Two authentication kinds.
 - Two lifecycle values.
 
 The two [GLM 5.3 candidates](zai-current-models.md) remain disabled during provider qualification.
@@ -146,7 +147,7 @@ Each item in `providers` is one provider definition.
 | Key-acquisition URL | `providers[].key_acquisition_url` | Supplies the official HTTPS destination for the provider card. It cannot contain credentials, a query, or a fragment. |
 | Request aliases | `providers[].aliases` | Resolve to the canonical provider identifier. |
 | Provider fields | `providers[].fields` | Define tenant and environment connection inputs. |
-| Provider transports | `providers[].transports` | Select endpoints and protocol adapters. |
+| Provider transports | `providers[].transports` | Select endpoints and reusable transport components. |
 | Provider offerings | `providers[].offerings` | Define the exact model routes for this provider. |
 
 Each item in `providers[].fields` is one provider field.
@@ -183,27 +184,35 @@ Each item in `providers[].transports` is one provider transport.
 | Static base URL | `transports[].endpoint.default_base_url` | Supplies a catalog-owned endpoint base. |
 | Tenant URL field | `transports[].endpoint.setting_field` | References a tenant-owned endpoint base. |
 | Endpoint path | `transports[].endpoint.path` | Appends the adapter path to the selected base. |
-| Authentication kind | `transports[].authentication.kind` | Selects bearer or direct-header authentication. |
-| Authentication field | `transports[].authentication.field` | References the credential provider field. |
-| Authentication header | `transports[].authentication.header` | Selects the exact HTTP header. |
-| Authentication prefix | `transports[].authentication.prefix` | Supplies the value prefix for that header. |
 | Static headers | `transports[].headers` | Supplies exact nonsecret headers. |
-| Protocol definition | `transports[].protocol.id` | Selects one request, response, error, and usage codec. |
-| Protocol variation | `transports[].protocol.variation` | Selects one typed difference in the codec. |
-| Lifecycle | `transports[].lifecycle` | Selects synchronous completion or a pollable resource. |
-| Visibility retry interval | `transports[].resource_visibility.retry_interval_milliseconds` | Declares the wait between created-resource visibility reads. |
-| Visibility retry limit | `transports[].resource_visibility.retry_limit` | Bounds created-resource visibility retries. |
-| Visibility retry statuses | `transports[].resource_visibility.retry_status_codes` | Declares the provider HTTP statuses that mean the created resource is not visible yet. |
+| Request codec | `transports[].components.request_codec.id` | Selects request serialization and request-field rules. |
+| Request variation | `transports[].components.request_codec.variation` | Selects one typed request-codec difference. |
+| Response codec | `transports[].components.response_codec.id` | Selects response, finish, continuation, error, and usage rules. |
+| Response variation | `transports[].components.response_codec.variation` | Selects one typed response-codec difference. |
+| Authentication kind | `transports[].components.authentication.kind` | Selects bearer or direct-header credential injection. |
+| Authentication field | `transports[].components.authentication.field` | References the credential provider field. |
+| Authentication header | `transports[].components.authentication.header` | Selects the exact HTTP header. |
+| Authentication prefix | `transports[].components.authentication.prefix` | Supplies the value prefix for that header. |
+| Execution lifecycle | `transports[].components.execution.id` | Selects synchronous completion or a pollable resource. |
+| Visibility retry interval | `transports[].components.execution.resource_visibility.retry_interval_milliseconds` | Declares the wait between created-resource visibility reads. |
+| Visibility retry limit | `transports[].components.execution.resource_visibility.retry_limit` | Bounds created-resource visibility retries. |
+| Visibility retry statuses | `transports[].components.execution.resource_visibility.retry_status_codes` | Declares the provider HTTP statuses that mean the created resource is not visible yet. |
 
 An endpoint must use one base source. It must use either
 `default_base_url` or `setting_field`.
 
-## Protocol adapters
+## Transport components
 
-Protocol adapters own request serialization, response parsing, usage mapping,
-and lifecycle behavior. Provider identifiers do not select protocol code.
+Request codecs own serialization and request-field rules. Response codecs own
+response parsing, finish and continuation decisions, public error mapping, and
+usage mapping. Authentication components inject one stored credential through
+bearer or direct-header authentication. Execution components own synchronous
+completion or resource polling. Provider identifiers do not select component
+code.
 
-| Adapter identifier | Accepted lifecycle |
+The startup composer accepts these codec and lifecycle combinations:
+
+| Codec identifier | Accepted lifecycle |
 |---|---|
 | `openai_responses` | `pollable_resource` |
 | `xai_responses` | `synchronous_completion` |
@@ -215,9 +224,9 @@ and lifecycle behavior. Provider identifiers do not select protocol code.
 | `multipart_transcription` | `synchronous_completion` |
 | `xai_videos_generations` | `pollable_resource` |
 
-The shared `pollable_resource` lifecycle owns post-create observation for all
-protocol adapters. Each shared text transport declares a bounded
-`resource_visibility` policy. The policy lists the provider statuses that mean
+The shared `pollable_resource` execution component owns post-create
+observation for every compatible codec. Each shared text transport declares a
+bounded `components.execution.resource_visibility` policy. The policy lists the provider statuses that mean
 a created resource is not visible yet, the retry interval, and the retry limit.
 The lifecycle reads the resource immediately and applies that policy without
 provider-specific control flow. The caller context bounds every wait. A status
@@ -227,19 +236,20 @@ The OpenAI transport allows one retry after two seconds for `403` or `404`.
 The Gemini transport allows six retries at five-second intervals for `400`,
 `403`, or `404`.
 
-Each codec definition owns its request fields, output fields, finish rules,
-continuation rules, error rules, and usage mapping. The catalog does not repeat
-these fixed values. Startup rejects an unknown protocol, an unknown variation,
-or a variation that does not apply to the selected protocol.
+The catalog does not repeat fixed codec behavior. Startup composes the selected
+request codec, response codec, authentication component, and execution
+component once. It rejects unknown components, unsupported variations,
+incompatible codec pairs, missing required static headers, and unsupported
+codec-lifecycle combinations.
 
-Chat Completions requires one of these variations:
+The Chat Completions request codec requires one of these variations:
 
 - `max_tokens`
 - `max_completion_tokens`
-- `qianfan_max_tokens`
 
-Multipart transcription requires `model` or `model_omitted`. Other current
-protocols do not accept a variation.
+Its response codec optionally selects the `qianfan` variation. The multipart
+transcription request codec requires `model` or `model_omitted`. Other current
+codecs do not accept a variation.
 
 The completion coordinator starts a new request only when the codec definition
 includes continuation actions. A codec without these actions returns an
@@ -336,7 +346,9 @@ It never estimates a missing price.
 | Selected provider text model and provider system prompt | Provider profile records |
 | Tenant route defaults | Tenant records |
 | HTTP request and response schemas | `docs/openapi.yaml` |
-| Protocol implementation | Reusable protocol adapter code |
+| Request and response implementation | Reusable codec code |
+| Credential injection | Reusable authentication component code |
+| Synchronous and pollable execution | Reusable lifecycle component code |
 | Fake upstream endpoint changes | Explicit test-only endpoint controls |
 
 The database uses `(tenant_id, provider_id, field_id)` as the provider
@@ -392,14 +404,14 @@ Startup rejects these conditions:
 - A missing provider field, transport, offering, operation, publisher, family, model, or price reference.
 - An invalid field type, requirement, default, secrecy rule, validation rule, or environment name.
 - An invalid endpoint source, URL, method, authentication rule, or static header.
-- An unsupported protocol, protocol variation, lifecycle, request profile, or adapter contract.
+- An unsupported codec, codec variation, authentication kind, lifecycle, request profile, or component combination.
 - An invalid operation, default operation, capability, control, limit, or media declaration.
 - A missing or duplicate provider-operation default.
 - A missing, duplicate, invalid, or nonfinite price value.
 
 ## Add a provider
 
-Use this procedure when an existing protocol adapter represents the complete
+Use this procedure when existing transport components represent the complete
 provider contract:
 
 1. Add the publisher and model family records when they do not exist.
@@ -407,8 +419,8 @@ provider contract:
 3. Add one provider definition to the root `providers` list.
 4. Define every credential field and setting field in `fields`.
 5. Add an environment name only when static or live-test input is necessary.
-6. Define each provider transport with one supported protocol definition.
-7. Select a protocol variation only when the protocol requires it.
+6. Define each provider transport with request codec, response codec, authentication, and execution component references.
+7. Select a codec variation only when that codec requires it.
 8. Add each provider offering and reference one exact model and one transport.
 9. Add one default offering for every supported provider operation.
 10. Add one valid price for every offering operation.
@@ -420,8 +432,9 @@ provider contract:
 Do not change provider-specific production source for this case. The generic
 consumers receive the new provider from the compiled registry.
 
-If no adapter represents the complete contract, add one reusable protocol
-adapter first. Do not approximate the provider through a different adapter.
+If no supported component composition represents the complete contract, add
+the missing reusable component and its explicit composition contract first. Do
+not approximate the provider through a different composition.
 
 Use this safe discovery command to inspect provider environment bindings:
 

@@ -29,13 +29,13 @@ func TestProviderCatalogParserRejectsTrailingDocuments(t *testing.T) {
 	}
 }
 
-func TestProviderCatalogParserAcceptsOneProtocolReferencePerTransport(t *testing.T) {
+func TestProviderCatalogParserAcceptsTransportComponents(t *testing.T) {
 	document, marshalError := yaml.Marshal(internalCanonicalProviderCatalog().Schema())
 	if marshalError != nil {
 		t.Fatalf("marshal canonical provider catalog: %v", marshalError)
 	}
 	if _, catalogError := ParseProviderCatalog(document); catalogError != nil {
-		t.Fatalf("parse protocol-reference provider catalog: %v", catalogError)
+		t.Fatalf("parse component provider catalog: %v", catalogError)
 	}
 }
 
@@ -44,14 +44,14 @@ func TestProviderCatalogParserRejectsObsoleteProtocolFields(t *testing.T) {
 	if marshalError != nil {
 		t.Fatalf("marshal canonical provider catalog: %v", marshalError)
 	}
-	for _, field := range []string{"request_protocol", "response_protocol", "usage_mapping", "protocol_parameters"} {
+	for _, field := range []string{"protocol", "authentication", "lifecycle", "resource_visibility", "request_protocol", "response_protocol", "usage_mapping", "protocol_parameters"} {
 		t.Run(field, func(t *testing.T) {
 			value := "openai_responses"
-			if field == "protocol_parameters" {
+			if field == "protocol" || field == "authentication" || field == "resource_visibility" || field == "protocol_parameters" {
 				value = "{}"
 			}
-			protocol := "          protocol:\n            id: openai_responses\n"
-			obsolete := strings.Replace(string(document), protocol, protocol+"          "+field+": "+value+"\n", 1)
+			components := "          components:\n"
+			obsolete := strings.Replace(string(document), components, "          "+field+": "+value+"\n"+components, 1)
 			_, catalogError := ParseProviderCatalog([]byte(obsolete))
 			assertInvalidProviderCatalogError(t, catalogError, "field "+field+" not found")
 		})
@@ -270,7 +270,7 @@ func TestProviderCatalogTransportValidationRejectsEveryInvalidShape(t *testing.T
 			(*transports)[0].Endpoint.Method = "GET"
 		}, expected: ".endpoint"},
 		{name: "authentication field", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].Authentication.Field = "missing"
+			(*transports)[0].Components.Authentication.Field = "missing"
 		}, expected: "reason=dangling_reference"},
 		{name: "authentication field optional", mutate: func(_ *[]ProviderCatalogTransport, fields map[string]ProviderCatalogField) {
 			credential := fields[CatalogCredentialAPIKey]
@@ -278,42 +278,52 @@ func TestProviderCatalogTransportValidationRejectsEveryInvalidShape(t *testing.T
 			fields[CatalogCredentialAPIKey] = credential
 		}, expected: "reason=dangling_reference"},
 		{name: "authentication", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].Authentication.Header = "X-Key"
+			(*transports)[0].Components.Authentication.Header = "X-Key"
 		}, expected: ".authentication"},
 		{name: "headers", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
 			(*transports)[0].Headers = []ProviderCatalogHeader{{Name: "", Value: "value"}}
 		}, expected: ".headers"},
-		{name: "protocol", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].Protocol.ID = "future"
-		}, expected: "unsupported_protocol"},
-		{name: "protocol variation", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].Protocol.Variation = "future"
-		}, expected: "unsupported_protocol_variation"},
+		{name: "unexpected static headers", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
+			(*transports)[0].Headers = []ProviderCatalogHeader{{Name: "X-Future", Value: "value"}}
+		}, expected: "unsupported_component_combination"},
+		{name: "request codec", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
+			(*transports)[0].Components.RequestCodec.ID = "future"
+		}, expected: "unsupported_codec"},
+		{name: "response codec", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
+			(*transports)[0].Components.ResponseCodec.ID = "future"
+		}, expected: "unsupported_codec"},
+		{name: "request codec variation", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
+			(*transports)[0].Components.RequestCodec.Variation = "future"
+		}, expected: "unsupported_codec_variation"},
+		{name: "codec pair", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
+			(*transports)[0].Components.ResponseCodec.ID = CatalogProtocolGeminiInteractions
+		}, expected: "unsupported_component_combination"},
 		{name: "lifecycle", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].Lifecycle = "future"
-		}, expected: ".lifecycle"},
+			(*transports)[0].Components.Execution.ID = "future"
+		}, expected: "unsupported_execution_lifecycle"},
 		{name: "resource visibility missing", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].ResourceVisibility = ProviderCatalogResourceVisibility{}
+			(*transports)[0].Components.Execution.ResourceVisibility = ProviderCatalogResourceVisibility{}
 		}, expected: ".resource_visibility"},
 		{name: "resource visibility interval", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].ResourceVisibility.RetryIntervalMilliseconds = providerCatalogResourceVisibilityMaxRetryIntervalMilliseconds + 1
+			(*transports)[0].Components.Execution.ResourceVisibility.RetryIntervalMilliseconds = providerCatalogResourceVisibilityMaxRetryIntervalMilliseconds + 1
 		}, expected: ".resource_visibility"},
 		{name: "resource visibility retry limit", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].ResourceVisibility.RetryLimit = providerCatalogResourceVisibilityMaxRetryLimit + 1
+			(*transports)[0].Components.Execution.ResourceVisibility.RetryLimit = providerCatalogResourceVisibilityMaxRetryLimit + 1
 		}, expected: ".resource_visibility"},
 		{name: "resource visibility status", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].ResourceVisibility.RetryStatusCodes = []int{http.StatusOK}
+			(*transports)[0].Components.Execution.ResourceVisibility.RetryStatusCodes = []int{http.StatusOK}
 		}, expected: ".retry_status_codes[0]"},
 		{name: "resource visibility duplicate status", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].ResourceVisibility.RetryStatusCodes = []int{http.StatusNotFound, http.StatusNotFound}
+			(*transports)[0].Components.Execution.ResourceVisibility.RetryStatusCodes = []int{http.StatusNotFound, http.StatusNotFound}
 		}, expected: "duplicate=404"},
 		{name: "resource visibility on synchronous transport", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[1].ResourceVisibility = (*transports)[0].ResourceVisibility
+			(*transports)[1].Components.Execution.ResourceVisibility = (*transports)[0].Components.Execution.ResourceVisibility
 		}, expected: "unexpected_resource_visibility"},
 		{name: "missing required variation", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
 			transportsWithChat := *transports
-			transportsWithChat[1].Protocol = ProviderCatalogProtocolReference{ID: CatalogProtocolOpenAIChatCompletions}
-		}, expected: "unsupported_protocol_variation"},
+			transportsWithChat[1].Components.RequestCodec = ProviderCatalogCodecReference{ID: CatalogProtocolOpenAIChatCompletions}
+			transportsWithChat[1].Components.ResponseCodec = ProviderCatalogCodecReference{ID: CatalogProtocolOpenAIChatCompletions}
+		}, expected: "unsupported_codec_variation"},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -384,14 +394,17 @@ func TestProviderCatalogEndpointAndProtocolEdges(t *testing.T) {
 	}
 
 	chatTransport := internalProtocolTransport(t, CatalogProtocolOpenAIChatCompletions)
-	chatTransport.Protocol.Variation = CatalogProtocolVariationTranscriptionModel
-	assertInvalidProviderCatalogError(t, validateProviderCatalogAdapterContract(chatTransport, "transport"), "unsupported_protocol_variation")
+	chatTransport.Components.RequestCodec.Variation = CatalogProtocolVariationTranscriptionModel
+	_, compositionError := composeProviderTransport(chatTransport, "transport")
+	assertInvalidProviderCatalogError(t, compositionError, "unsupported_codec_variation")
 	transcriptionTransport := internalProtocolTransport(t, CatalogProtocolMultipartTranscription)
-	transcriptionTransport.Protocol.Variation = CatalogProtocolVariationMaxTokens
-	assertInvalidProviderCatalogError(t, validateProviderCatalogAdapterContract(transcriptionTransport, "transport"), "unsupported_protocol_variation")
+	transcriptionTransport.Components.RequestCodec.Variation = CatalogProtocolVariationMaxTokens
+	_, compositionError = composeProviderTransport(transcriptionTransport, "transport")
+	assertInvalidProviderCatalogError(t, compositionError, "unsupported_codec_variation")
 	unknownTransport := chatTransport
-	unknownTransport.Protocol = ProviderCatalogProtocolReference{ID: "future"}
-	assertInvalidProviderCatalogError(t, validateProviderCatalogAdapterContract(unknownTransport, "transport"), "unsupported_protocol")
+	unknownTransport.Components.RequestCodec = ProviderCatalogCodecReference{ID: "future"}
+	_, compositionError = composeProviderTransport(unknownTransport, "transport")
+	assertInvalidProviderCatalogError(t, compositionError, "unsupported_codec")
 }
 
 func TestProviderCatalogConnectionValueBoundaries(t *testing.T) {
@@ -451,7 +464,7 @@ func internalProtocolTransport(t *testing.T, protocol string) ProviderCatalogTra
 	t.Helper()
 	for _, provider := range internalCanonicalProviderCatalog().Schema().Providers {
 		for _, transport := range provider.Transports {
-			if transport.Protocol.ID == protocol {
+			if transport.Components.RequestCodec.ID == protocol {
 				return transport
 			}
 		}

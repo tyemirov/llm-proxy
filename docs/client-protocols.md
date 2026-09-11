@@ -177,7 +177,9 @@ Run `make ci` for repository validation after the final change.
 Use this procedure when a provider can use a current protocol adapter.
 
 1. Add a disposable provider definition to the test catalog.
-2. Select the protocol, typed variation, lifecycle, operation, request profile, controls, and media inputs in the test case.
+2. Select request and response codecs, typed variations, authentication,
+   lifecycle, operation, request profile, controls, and media inputs in the
+   test case.
 3. Supply test connection values through `ManagedTenantTestConfiguration`.
 4. Use the real HTTP service and the official Go client for the request.
 5. Verify public discovery, connection fields, secret masking, routing, tenant isolation, restart behavior, and usage.

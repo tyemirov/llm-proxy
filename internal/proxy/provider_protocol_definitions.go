@@ -6,11 +6,29 @@ import (
 	"github.com/tyemirov/llm-proxy/internal/constants"
 )
 
-type providerProtocolDefinition struct {
-	allowedLifecycles []textExecutionLifecycle
-	authentication    ProviderCatalogAuthentication
-	headers           []ProviderCatalogHeader
-	parameters        providerProtocolParameters
+type providerRequestCodecDefinition struct {
+	modelField              string
+	tokenField              string
+	mediaExecutionLifecycle textExecutionLifecycle
+	requiredHeaders         []ProviderCatalogHeader
+}
+
+type providerResponseCodecDefinition struct {
+	responsePolicy    string
+	outputFields      []string
+	finishRules       providerProtocolFinishRules
+	continuationRules []string
+	errorRules        []string
+	usageFields       providerProtocolUsageFields
+}
+
+type providerTransportComposition struct {
+	requestCodec       string
+	responseCodec      string
+	authentication     ProviderCatalogAuthentication
+	lifecycle          textExecutionLifecycle
+	resourceVisibility pollableResourceVisibilityPolicy
+	parameters         providerProtocolParameters
 }
 
 type providerProtocolParameters struct {
@@ -36,173 +54,208 @@ type providerProtocolUsageFields struct {
 	Total  string
 }
 
-func providerProtocolDefinitionFor(reference ProviderCatalogProtocolReference, field string) (providerProtocolDefinition, error) {
-	bearerAuthentication := ProviderCatalogAuthentication{
-		Kind: CatalogAuthenticationBearer, Header: "Authorization", Prefix: "Bearer ",
+func composeProviderTransport(transport ProviderCatalogTransport, field string) (providerTransportComposition, error) {
+	request, requestError := providerRequestCodecDefinitionFor(transport.Components.RequestCodec, field+".components.request_codec")
+	if requestError != nil {
+		return providerTransportComposition{}, requestError
 	}
-	definition := providerProtocolDefinition{authentication: bearerAuthentication}
-	synchronous := []textExecutionLifecycle{textExecutionLifecycleSynchronousCompletion}
-	switch reference.ID {
-	case CatalogProtocolDashScopeResponses:
-		if reference.Variation != constants.EmptyString {
-			return providerProtocolDefinition{}, unsupportedProviderProtocolVariation(reference, field)
-		}
-		definition.allowedLifecycles = synchronous
-		definition.parameters = providerProtocolParameters{
-			ModelField: "model", TokenField: "max_output_tokens", MediaExecutionLifecycle: string(textExecutionLifecycleSynchronousCompletion),
-			OutputFields:      []string{"output[].content[].text"},
-			FinishRules:       providerProtocolFinishRules{Complete: []string{"completed"}, Continue: []string{"incomplete"}},
-			ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
-			ErrorRules:        []string{"cancelled", "failed", "unknown_status"},
-			UsageFields:       providerProtocolUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens"},
-		}
-	case CatalogProtocolOpenAIResponses:
-		if reference.Variation != constants.EmptyString {
-			return providerProtocolDefinition{}, unsupportedProviderProtocolVariation(reference, field)
-		}
-		definition.allowedLifecycles = []textExecutionLifecycle{textExecutionLifecyclePollableResource}
-		definition.parameters = responsesProtocolParameters(textExecutionLifecyclePollableResource)
-	case CatalogProtocolXAIResponses:
-		if reference.Variation != constants.EmptyString {
-			return providerProtocolDefinition{}, unsupportedProviderProtocolVariation(reference, field)
-		}
-		definition.allowedLifecycles = synchronous
-		definition.parameters = responsesProtocolParameters(textExecutionLifecycleSynchronousCompletion)
-	case CatalogProtocolOpenAIChatCompletions:
-		definition.allowedLifecycles = synchronous
-		definition.parameters = chatCompletionsProtocolParameters(reference.Variation)
-		if definition.parameters.TokenField == constants.EmptyString {
-			return providerProtocolDefinition{}, unsupportedProviderProtocolVariation(reference, field)
-		}
-	case CatalogProtocolAnthropicMessages:
-		if reference.Variation != constants.EmptyString {
-			return providerProtocolDefinition{}, unsupportedProviderProtocolVariation(reference, field)
-		}
-		definition.allowedLifecycles = synchronous
-		definition.authentication = ProviderCatalogAuthentication{Kind: CatalogAuthenticationHeader, Header: "x-api-key"}
-		definition.headers = []ProviderCatalogHeader{{Name: "anthropic-version", Value: "2023-06-01"}}
-		definition.parameters = providerProtocolParameters{
-			ModelField: "model", TokenField: "max_tokens", MediaExecutionLifecycle: string(textExecutionLifecycleSynchronousCompletion),
-			OutputFields: []string{"content[].text"},
+	response, responseError := providerResponseCodecDefinitionFor(transport.Components.ResponseCodec, field+".components.response_codec")
+	if responseError != nil {
+		return providerTransportComposition{}, responseError
+	}
+	if transport.Components.RequestCodec.ID != transport.Components.ResponseCodec.ID {
+		return providerTransportComposition{}, unsupportedTransportComponentCombination(transport, field, "codec_pair")
+	}
+	if authenticationError := validateProviderCatalogAuthentication(transport.Components.Authentication, field+".components.authentication"); authenticationError != nil {
+		return providerTransportComposition{}, authenticationError
+	}
+	if !providerCatalogHeadersEqual(transport.Headers, request.requiredHeaders) {
+		return providerTransportComposition{}, unsupportedTransportComponentCombination(transport, field, "required_headers")
+	}
+	lifecycle := textExecutionLifecycle(transport.Components.Execution.ID)
+	if !knownTextExecutionLifecycle(lifecycle) {
+		return providerTransportComposition{}, fmt.Errorf("%w: field=%s.components.execution.id reason=unsupported_execution_lifecycle lifecycle=%s", ErrInvalidModelCatalog, field, transport.Components.Execution.ID)
+	}
+	if !requestCodecSupportsLifecycle(transport.Components.RequestCodec.ID, lifecycle) {
+		return providerTransportComposition{}, unsupportedTransportComponentCombination(transport, field, "execution_lifecycle")
+	}
+	visibility, visibilityError := validatedProviderCatalogResourceVisibility(transport.Components.Execution, transport.Components.RequestCodec.ID, field+".components.execution.resource_visibility")
+	if visibilityError != nil {
+		return providerTransportComposition{}, visibilityError
+	}
+	return providerTransportComposition{
+		requestCodec:       transport.Components.RequestCodec.ID,
+		responseCodec:      transport.Components.ResponseCodec.ID,
+		authentication:     transport.Components.Authentication,
+		lifecycle:          lifecycle,
+		resourceVisibility: visibility,
+		parameters: providerProtocolParameters{
+			ResponsePolicy:          response.responsePolicy,
+			ModelField:              request.modelField,
+			TokenField:              request.tokenField,
+			MediaExecutionLifecycle: string(request.mediaExecutionLifecycle),
+			OutputFields:            append([]string(nil), response.outputFields...),
 			FinishRules: providerProtocolFinishRules{
-				Complete: []string{"end_turn", "stop_sequence"}, Continue: []string{"max_tokens"},
+				Complete: append([]string(nil), response.finishRules.Complete...),
+				Continue: append([]string(nil), response.finishRules.Continue...),
 			},
-			ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
-			ErrorRules:        []string{"pause_turn", "refusal", "tool_use", "unknown_stop_reason"},
-			UsageFields: providerProtocolUsageFields{
-				Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "derived_input_plus_output",
-			},
+			ContinuationRules: append([]string(nil), response.continuationRules...),
+			ErrorRules:        append([]string(nil), response.errorRules...),
+			UsageFields:       response.usageFields,
+		},
+	}, nil
+}
+
+func providerRequestCodecDefinitionFor(reference ProviderCatalogCodecReference, field string) (providerRequestCodecDefinition, error) {
+	definition := providerRequestCodecDefinition{}
+	switch reference.ID {
+	case CatalogProtocolOpenAIResponses:
+		definition.modelField = "model"
+		definition.tokenField = "max_output_tokens"
+		definition.mediaExecutionLifecycle = textExecutionLifecyclePollableResource
+	case CatalogProtocolDashScopeResponses, CatalogProtocolXAIResponses:
+		definition.modelField = "model"
+		definition.tokenField = "max_output_tokens"
+		definition.mediaExecutionLifecycle = textExecutionLifecycleSynchronousCompletion
+	case CatalogProtocolOpenAIChatCompletions:
+		definition.modelField = "model"
+		definition.mediaExecutionLifecycle = textExecutionLifecycleSynchronousCompletion
+		switch reference.Variation {
+		case CatalogProtocolVariationMaxTokens:
+			definition.tokenField = string(chatCompletionTokenLimitMaxTokens)
+		case CatalogProtocolVariationMaxCompletionTokens:
+			definition.tokenField = string(chatCompletionTokenLimitMaxCompletionTokens)
+		default:
+			return providerRequestCodecDefinition{}, unsupportedProviderCodecVariation(reference, field)
 		}
+		return definition, nil
+	case CatalogProtocolAnthropicMessages:
+		definition.modelField = "model"
+		definition.tokenField = "max_tokens"
+		definition.mediaExecutionLifecycle = textExecutionLifecycleSynchronousCompletion
+		definition.requiredHeaders = []ProviderCatalogHeader{{Name: "anthropic-version", Value: "2023-06-01"}}
 	case CatalogProtocolVertexGenerateContent:
-		if reference.Variation != constants.EmptyString {
-			return providerProtocolDefinition{}, unsupportedProviderProtocolVariation(reference, field)
-		}
-		definition.allowedLifecycles = synchronous
-		definition.authentication = ProviderCatalogAuthentication{Kind: CatalogAuthenticationHeader, Header: "x-goog-api-key"}
-		definition.parameters = providerProtocolParameters{
-			ModelField: "path.model", TokenField: "generationConfig.maxOutputTokens", MediaExecutionLifecycle: string(textExecutionLifecycleSynchronousCompletion),
-			OutputFields: []string{"candidates[].content.parts[].text"},
-			FinishRules:  providerProtocolFinishRules{Complete: []string{"STOP"}},
-			ErrorRules:   []string{"MAX_TOKENS", "blocked", "unknown_finish_reason"},
-			UsageFields:  providerProtocolUsageFields{Input: "usageMetadata.promptTokenCount", Output: "usageMetadata.candidatesTokenCount+thoughtsTokenCount", Total: "usageMetadata.totalTokenCount"},
-		}
+		definition.modelField = "path.model"
+		definition.tokenField = "generationConfig.maxOutputTokens"
+		definition.mediaExecutionLifecycle = textExecutionLifecycleSynchronousCompletion
 	case CatalogProtocolGeminiInteractions:
-		if reference.Variation != constants.EmptyString {
-			return providerProtocolDefinition{}, unsupportedProviderProtocolVariation(reference, field)
-		}
-		definition.allowedLifecycles = []textExecutionLifecycle{textExecutionLifecyclePollableResource, textExecutionLifecycleSynchronousCompletion}
-		definition.authentication = ProviderCatalogAuthentication{Kind: CatalogAuthenticationHeader, Header: "x-goog-api-key"}
-		definition.headers = []ProviderCatalogHeader{{Name: "Api-Revision", Value: "2026-05-20"}}
-		definition.parameters = providerProtocolParameters{
-			ModelField: "model", TokenField: "generation_config.max_output_tokens", MediaExecutionLifecycle: string(textExecutionLifecycleSynchronousCompletion),
-			OutputFields:      []string{"outputs[].text"},
-			FinishRules:       providerProtocolFinishRules{Complete: []string{"completed"}, Continue: []string{"incomplete"}},
-			ContinuationRules: []string{},
-			ErrorRules:        []string{"blocked", "cancelled", "failed", "unknown_status"},
-			UsageFields:       providerProtocolUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens"},
-		}
+		definition.modelField = "model"
+		definition.tokenField = "generation_config.max_output_tokens"
+		definition.mediaExecutionLifecycle = textExecutionLifecycleSynchronousCompletion
+		definition.requiredHeaders = []ProviderCatalogHeader{{Name: "Api-Revision", Value: "2026-05-20"}}
 	case CatalogProtocolMetaTranscription:
-		if reference.Variation != constants.EmptyString {
-			return providerProtocolDefinition{}, unsupportedProviderProtocolVariation(reference, field)
-		}
-		definition.allowedLifecycles = synchronous
-		definition.parameters = providerProtocolParameters{
-			ModelField: "request.model", OutputFields: []string{"transcript"},
-			FinishRules: providerProtocolFinishRules{Complete: []string{"http_2xx"}},
-			ErrorRules:  []string{"malformed_response", "provider_error"},
-		}
+		definition.modelField = "request.model"
 	case CatalogProtocolMultipartTranscription:
-		definition.allowedLifecycles = synchronous
-		modelField := constants.EmptyString
 		switch reference.Variation {
 		case CatalogProtocolVariationTranscriptionModel:
-			modelField = "model"
+			definition.modelField = "model"
 		case CatalogProtocolVariationTranscriptionModelOmitted:
 		default:
-			return providerProtocolDefinition{}, unsupportedProviderProtocolVariation(reference, field)
+			return providerRequestCodecDefinition{}, unsupportedProviderCodecVariation(reference, field)
 		}
-		definition.parameters = providerProtocolParameters{
-			ModelField: modelField, OutputFields: []string{"text"},
-			FinishRules:       providerProtocolFinishRules{Complete: []string{"http_2xx"}, Continue: []string{}},
-			ContinuationRules: []string{}, ErrorRules: []string{"malformed_response", "provider_error"},
-			UsageFields: providerProtocolUsageFields{},
-		}
+		return definition, nil
 	case CatalogProtocolXAIVideosGenerations:
-		if reference.Variation != constants.EmptyString {
-			return providerProtocolDefinition{}, unsupportedProviderProtocolVariation(reference, field)
-		}
-		definition.allowedLifecycles = []textExecutionLifecycle{textExecutionLifecyclePollableResource}
-		definition.parameters = providerProtocolParameters{
-			ModelField: "model", OutputFields: []string{"data[].url"},
-			FinishRules:       providerProtocolFinishRules{Complete: []string{"completed"}, Continue: []string{"pending"}},
-			ContinuationRules: []string{}, ErrorRules: []string{"failed", "unknown_status"},
-			UsageFields: providerProtocolUsageFields{},
-		}
+		definition.modelField = "model"
 	default:
-		return providerProtocolDefinition{}, fmt.Errorf("%w: field=%s.id reason=unsupported_protocol protocol=%s", ErrInvalidModelCatalog, field, reference.ID)
+		return providerRequestCodecDefinition{}, unsupportedProviderCodec(reference, field)
+	}
+	if reference.Variation != constants.EmptyString {
+		return providerRequestCodecDefinition{}, unsupportedProviderCodecVariation(reference, field)
 	}
 	return definition, nil
 }
 
-func responsesProtocolParameters(mediaLifecycle textExecutionLifecycle) providerProtocolParameters {
-	return providerProtocolParameters{
-		ModelField: "model", TokenField: "max_output_tokens", MediaExecutionLifecycle: string(mediaLifecycle),
-		OutputFields: []string{"output[].content[].text", "output[].type", "output[].call_id", "output[].name", "output[].arguments"},
-		FinishRules: providerProtocolFinishRules{
-			Complete: []string{"completed"}, Continue: []string{"incomplete:max_output_tokens"},
-		},
-		ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
-		ErrorRules:        []string{"cancelled", "failed", "refusal", "unknown_status"},
-		UsageFields:       providerProtocolUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens"},
+func providerResponseCodecDefinitionFor(reference ProviderCatalogCodecReference, field string) (providerResponseCodecDefinition, error) {
+	definition := providerResponseCodecDefinition{}
+	switch reference.ID {
+	case CatalogProtocolDashScopeResponses:
+		definition.outputFields = []string{"output[].content[].text"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"completed"}, Continue: []string{"incomplete"}}
+		definition.continuationRules = []string{"append_visible_assistant_output", "request_missing_suffix"}
+		definition.errorRules = []string{"cancelled", "failed", "unknown_status"}
+		definition.usageFields = providerProtocolUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens"}
+	case CatalogProtocolOpenAIResponses, CatalogProtocolXAIResponses:
+		definition.outputFields = []string{"output[].content[].text", "output[].type", "output[].call_id", "output[].name", "output[].arguments"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"completed"}, Continue: []string{"incomplete:max_output_tokens"}}
+		definition.continuationRules = []string{"append_visible_assistant_output", "request_missing_suffix"}
+		definition.errorRules = []string{"cancelled", "failed", "refusal", "unknown_status"}
+		definition.usageFields = providerProtocolUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens"}
+	case CatalogProtocolOpenAIChatCompletions:
+		definition.outputFields = []string{"choices[].message.content", "choices[].message.tool_calls"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"stop", "tool_calls"}, Continue: []string{"length"}}
+		definition.continuationRules = []string{"append_visible_assistant_output", "request_missing_suffix"}
+		definition.errorRules = []string{"content_filter", "unknown_finish_reason"}
+		definition.usageFields = providerProtocolUsageFields{Input: "usage.prompt_tokens", Output: "usage.completion_tokens", Total: "usage.total_tokens"}
+		if reference.Variation == CatalogProtocolVariationQianfan {
+			definition.responsePolicy = string(chatCompletionResponsePolicyQianfan)
+			definition.outputFields = []string{"choices[].message.content"}
+			definition.finishRules.Complete = []string{"stop"}
+			definition.errorRules = []string{"content_filter", "tool_calls", "unknown_finish_reason", "blocked_flag"}
+			return definition, nil
+		}
+	case CatalogProtocolAnthropicMessages:
+		definition.outputFields = []string{"content[].text"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"end_turn", "stop_sequence"}, Continue: []string{"max_tokens"}}
+		definition.continuationRules = []string{"append_visible_assistant_output", "request_missing_suffix"}
+		definition.errorRules = []string{"pause_turn", "refusal", "tool_use", "unknown_stop_reason"}
+		definition.usageFields = providerProtocolUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "derived_input_plus_output"}
+	case CatalogProtocolVertexGenerateContent:
+		definition.outputFields = []string{"candidates[].content.parts[].text"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"STOP"}}
+		definition.errorRules = []string{"MAX_TOKENS", "blocked", "unknown_finish_reason"}
+		definition.usageFields = providerProtocolUsageFields{Input: "usageMetadata.promptTokenCount", Output: "usageMetadata.candidatesTokenCount+thoughtsTokenCount", Total: "usageMetadata.totalTokenCount"}
+	case CatalogProtocolGeminiInteractions:
+		definition.outputFields = []string{"outputs[].text"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"completed"}, Continue: []string{"incomplete"}}
+		definition.continuationRules = []string{}
+		definition.errorRules = []string{"blocked", "cancelled", "failed", "unknown_status"}
+		definition.usageFields = providerProtocolUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens"}
+	case CatalogProtocolMetaTranscription:
+		definition.outputFields = []string{"transcript"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"http_2xx"}}
+		definition.errorRules = []string{"malformed_response", "provider_error"}
+	case CatalogProtocolMultipartTranscription:
+		definition.outputFields = []string{"text"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"http_2xx"}, Continue: []string{}}
+		definition.continuationRules = []string{}
+		definition.errorRules = []string{"malformed_response", "provider_error"}
+	case CatalogProtocolXAIVideosGenerations:
+		definition.outputFields = []string{"data[].url"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"completed"}, Continue: []string{"pending"}}
+		definition.continuationRules = []string{}
+		definition.errorRules = []string{"failed", "unknown_status"}
+	default:
+		return providerResponseCodecDefinition{}, unsupportedProviderCodec(reference, field)
+	}
+	if reference.Variation != constants.EmptyString {
+		return providerResponseCodecDefinition{}, unsupportedProviderCodecVariation(reference, field)
+	}
+	return definition, nil
+}
+
+func requestCodecSupportsLifecycle(codec string, lifecycle textExecutionLifecycle) bool {
+	switch codec {
+	case CatalogProtocolOpenAIResponses, CatalogProtocolXAIVideosGenerations:
+		return lifecycle == textExecutionLifecyclePollableResource
+	case CatalogProtocolGeminiInteractions:
+		return lifecycle == textExecutionLifecyclePollableResource || lifecycle == textExecutionLifecycleSynchronousCompletion
+	case CatalogProtocolDashScopeResponses, CatalogProtocolXAIResponses, CatalogProtocolOpenAIChatCompletions,
+		CatalogProtocolAnthropicMessages, CatalogProtocolVertexGenerateContent,
+		CatalogProtocolMetaTranscription, CatalogProtocolMultipartTranscription:
+		return lifecycle == textExecutionLifecycleSynchronousCompletion
+	default:
+		return false
 	}
 }
 
-func chatCompletionsProtocolParameters(variation string) providerProtocolParameters {
-	parameters := providerProtocolParameters{
-		ModelField: "model", MediaExecutionLifecycle: string(textExecutionLifecycleSynchronousCompletion),
-		OutputFields: []string{"choices[].message.content", "choices[].message.tool_calls"},
-		FinishRules: providerProtocolFinishRules{
-			Complete: []string{"stop", "tool_calls"}, Continue: []string{"length"},
-		},
-		ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
-		ErrorRules:        []string{"content_filter", "unknown_finish_reason"},
-		UsageFields:       providerProtocolUsageFields{Input: "usage.prompt_tokens", Output: "usage.completion_tokens", Total: "usage.total_tokens"},
-	}
-	switch variation {
-	case CatalogProtocolVariationMaxTokens:
-		parameters.TokenField = string(chatCompletionTokenLimitMaxTokens)
-	case CatalogProtocolVariationMaxCompletionTokens:
-		parameters.TokenField = string(chatCompletionTokenLimitMaxCompletionTokens)
-	case CatalogProtocolVariationQianfanMaxTokens:
-		parameters.TokenField = string(chatCompletionTokenLimitMaxTokens)
-		parameters.ResponsePolicy = string(chatCompletionResponsePolicyQianfan)
-		parameters.OutputFields = []string{"choices[].message.content"}
-		parameters.FinishRules.Complete = []string{"stop"}
-		parameters.ErrorRules = []string{"content_filter", "tool_calls", "unknown_finish_reason", "blocked_flag"}
-	}
-	return parameters
+func unsupportedProviderCodec(reference ProviderCatalogCodecReference, field string) error {
+	return fmt.Errorf("%w: field=%s.id reason=unsupported_codec codec=%s", ErrInvalidModelCatalog, field, reference.ID)
 }
 
-func unsupportedProviderProtocolVariation(reference ProviderCatalogProtocolReference, field string) error {
-	return fmt.Errorf("%w: field=%s.variation reason=unsupported_protocol_variation protocol=%s variation=%s", ErrInvalidModelCatalog, field, reference.ID, reference.Variation)
+func unsupportedProviderCodecVariation(reference ProviderCatalogCodecReference, field string) error {
+	return fmt.Errorf("%w: field=%s.variation reason=unsupported_codec_variation codec=%s variation=%s", ErrInvalidModelCatalog, field, reference.ID, reference.Variation)
+}
+
+func unsupportedTransportComponentCombination(transport ProviderCatalogTransport, field string, component string) error {
+	return fmt.Errorf("%w: field=%s.components reason=unsupported_component_combination component=%s request_codec=%s response_codec=%s authentication=%s execution=%s", ErrInvalidModelCatalog, field, component, transport.Components.RequestCodec.ID, transport.Components.ResponseCodec.ID, transport.Components.Authentication.Kind, transport.Components.Execution.ID)
 }

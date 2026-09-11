@@ -12,10 +12,12 @@ import (
 	"github.com/tyemirov/llm-proxy/internal/proxy"
 )
 
-// ProtocolFixture identifies one disposable provider route for an executable protocol adapter.
+// ProtocolFixture identifies one disposable provider route for an executable component composition.
 type ProtocolFixture struct {
-	Protocol             string
-	Variation            string
+	RequestCodec         string
+	RequestVariation     string
+	ResponseCodec        string
+	ResponseVariation    string
 	Provider             string
 	Model                string
 	Operation            string
@@ -30,7 +32,7 @@ type ProtocolFixture struct {
 	WebSearch            bool
 }
 
-// ProviderCatalogWithProtocolFixtures adds one disposable provider route for each executable protocol adapter.
+// ProviderCatalogWithProtocolFixtures adds one disposable provider route for each executable codec composition.
 func ProviderCatalogWithProtocolFixtures(testingInstance testing.TB) (*proxy.ProviderCatalog, []ProtocolFixture) {
 	testingInstance.Helper()
 	schema := ProviderCatalog(testingInstance).Schema()
@@ -65,7 +67,8 @@ func ProviderCatalogWithProtocolFixtures(testingInstance testing.TB) (*proxy.Pro
 					if operation != proxy.ModelOperationText && operation != proxy.ModelOperationDictation {
 						continue
 					}
-					fixtureKey := strings.Join([]string{transport.Protocol.ID, transport.Protocol.Variation, transport.Lifecycle, operation}, "-")
+					components := transport.Components
+					fixtureKey := strings.Join([]string{components.RequestCodec.ID, components.RequestCodec.Variation, components.ResponseCodec.ID, components.ResponseCodec.Variation, components.Execution.ID, operation}, "-")
 					if selected[fixtureKey] {
 						continue
 					}
@@ -115,16 +118,30 @@ func ProviderCatalogWithProtocolFixtures(testingInstance testing.TB) (*proxy.Pro
 							break
 						}
 					}
+					for transportIndex := range fixtureProvider.Transports {
+						authentication := &fixtureProvider.Transports[transportIndex].Components.Authentication
+						if authentication.Kind == proxy.CatalogAuthenticationBearer {
+							authentication.Kind = proxy.CatalogAuthenticationHeader
+							authentication.Header = "X-API-Key"
+							authentication.Prefix = ""
+						} else {
+							authentication.Kind = proxy.CatalogAuthenticationBearer
+							authentication.Header = "Authorization"
+							authentication.Prefix = "Bearer "
+						}
+					}
 					schema.Providers = append(schema.Providers, fixtureProvider)
+					components = fixtureProvider.Transports[0].Components
 					controls := make([]string, 0, len(offering.Controls))
 					for _, control := range offering.Controls {
 						controls = append(controls, control.ID)
 					}
 					fixtures = append(fixtures, ProtocolFixture{
-						Protocol: transport.Protocol.ID, Variation: transport.Protocol.Variation, Provider: fixtureProvider.ID,
-						Model: fixtureOffering.Model, Operation: operation, Lifecycle: transport.Lifecycle,
+						RequestCodec: components.RequestCodec.ID, RequestVariation: components.RequestCodec.Variation,
+						ResponseCodec: components.ResponseCodec.ID, ResponseVariation: components.ResponseCodec.Variation,
+						Provider: fixtureProvider.ID, Model: fixtureOffering.Model, Operation: operation, Lifecycle: components.Execution.ID,
 						RequestProfile: offering.RequestProfile, EndpointPath: transport.Endpoint.Path,
-						AuthenticationHeader: transport.Authentication.Header, AuthenticationPrefix: transport.Authentication.Prefix,
+						AuthenticationHeader: components.Authentication.Header, AuthenticationPrefix: components.Authentication.Prefix,
 						Controls: controls, MediaInputs: append([]string(nil), offering.MediaInputs...),
 						CallerTools: offering.CallerTools, WebSearch: offering.WebSearch,
 					})
@@ -172,10 +189,10 @@ func ProviderCatalogWithResourceVisibilityInterval(testingInstance testing.TB, p
 		}
 		for transportIndex := range provider.Transports {
 			transport := &provider.Transports[transportIndex]
-			if transport.ResourceVisibility.RetryLimit == 0 {
+			if transport.Components.Execution.ResourceVisibility.RetryLimit == 0 {
 				continue
 			}
-			transport.ResourceVisibility.RetryIntervalMilliseconds = retryIntervalMilliseconds
+			transport.Components.Execution.ResourceVisibility.RetryIntervalMilliseconds = retryIntervalMilliseconds
 			matchCount++
 		}
 	}
@@ -279,29 +296,32 @@ func NewProviderCatalogFromModelCatalog(modelCatalog proxy.ModelCatalog) (*proxy
 }
 
 func testProviderTransport(identifier string, offering proxy.ProviderOffering) proxy.ProviderCatalogTransport {
-	protocol := proxy.ProviderCatalogProtocolReference{ID: offering.WireContract}
+	requestCodec := proxy.ProviderCatalogCodecReference{ID: offering.WireContract}
 	switch offering.WireContract {
 	case proxy.CatalogProtocolOpenAIChatCompletions:
-		protocol.Variation = proxy.CatalogProtocolVariationMaxTokens
+		requestCodec.Variation = proxy.CatalogProtocolVariationMaxTokens
 	case proxy.CatalogProtocolMultipartTranscription:
-		protocol.Variation = proxy.CatalogProtocolVariationTranscriptionModel
+		requestCodec.Variation = proxy.CatalogProtocolVariationTranscriptionModel
 	}
 	transport := proxy.ProviderCatalogTransport{
-		ID:             identifier,
-		Endpoint:       proxy.ProviderCatalogEndpoint{Method: proxy.CatalogEndpointMethodPost, DefaultBaseURL: "https://provider.example", Path: testProviderProtocolPath(offering.WireContract)},
-		Authentication: proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationBearer, Field: proxy.CatalogCredentialAPIKey, Header: "Authorization", Prefix: "Bearer "},
-		Protocol:       protocol, Lifecycle: offering.ExecutionLifecycle,
+		ID:       identifier,
+		Endpoint: proxy.ProviderCatalogEndpoint{Method: proxy.CatalogEndpointMethodPost, DefaultBaseURL: "https://provider.example", Path: testProviderProtocolPath(offering.WireContract)},
+		Components: proxy.ProviderCatalogTransportComponents{
+			RequestCodec: requestCodec, ResponseCodec: proxy.ProviderCatalogCodecReference{ID: offering.WireContract},
+			Authentication: proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationBearer, Field: proxy.CatalogCredentialAPIKey, Header: "Authorization", Prefix: "Bearer "},
+			Execution:      proxy.ProviderCatalogExecutionReference{ID: offering.ExecutionLifecycle},
+		},
 	}
 	if offering.ExecutionLifecycle == "pollable_resource" {
 		switch offering.Provider {
 		case proxy.ProviderNameOpenAI:
-			transport.ResourceVisibility = proxy.ProviderCatalogResourceVisibility{
+			transport.Components.Execution.ResourceVisibility = proxy.ProviderCatalogResourceVisibility{
 				RetryIntervalMilliseconds: 2000,
 				RetryLimit:                1,
 				RetryStatusCodes:          []int{403, 404},
 			}
 		case proxy.ProviderNameGemini:
-			transport.ResourceVisibility = proxy.ProviderCatalogResourceVisibility{
+			transport.Components.Execution.ResourceVisibility = proxy.ProviderCatalogResourceVisibility{
 				RetryIntervalMilliseconds: 5000,
 				RetryLimit:                6,
 				RetryStatusCodes:          []int{400, 403, 404},
@@ -309,14 +329,14 @@ func testProviderTransport(identifier string, offering proxy.ProviderOffering) p
 		}
 	}
 	if offering.WireContract == proxy.CatalogProtocolVertexGenerateContent {
-		transport.Authentication = proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationHeader, Field: proxy.CatalogCredentialAPIKey, Header: "x-goog-api-key"}
+		transport.Components.Authentication = proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationHeader, Field: proxy.CatalogCredentialAPIKey, Header: "x-goog-api-key"}
 	}
 	if offering.WireContract == proxy.CatalogProtocolGeminiInteractions {
-		transport.Authentication = proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationHeader, Field: proxy.CatalogCredentialAPIKey, Header: "x-goog-api-key"}
+		transport.Components.Authentication = proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationHeader, Field: proxy.CatalogCredentialAPIKey, Header: "x-goog-api-key"}
 		transport.Headers = []proxy.ProviderCatalogHeader{{Name: "Api-Revision", Value: "2026-05-20"}}
 	}
 	if offering.WireContract == proxy.CatalogProtocolAnthropicMessages {
-		transport.Authentication = proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationHeader, Field: proxy.CatalogCredentialAPIKey, Header: "x-api-key"}
+		transport.Components.Authentication = proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationHeader, Field: proxy.CatalogCredentialAPIKey, Header: "x-api-key"}
 		transport.Headers = []proxy.ProviderCatalogHeader{{Name: "anthropic-version", Value: "2023-06-01"}}
 	}
 	return transport

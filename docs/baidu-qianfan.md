@@ -29,7 +29,8 @@ The source review date is September 5, 2026.
 
 ## Response policy
 
-The catalog selects the `qianfan_max_tokens` variation of the shared Chat Completions protocol.
+The catalog selects the shared Chat Completions request codec with the
+`max_tokens` variation and its response codec with the `qianfan` variation.
 The adapter accepts `finish_reason=stop` as completion.
 It sends `length` responses to the common missing-suffix coordinator.
 Other finish reasons fail the request.
