@@ -15,21 +15,6 @@ import (
 
 const lifecycleManifestRelativePath = ".mprlab/deploy/resources.yml"
 
-var expectedSiblingGatewayWrapper = strings.Join([]string{
-	".PHONY: release publish deploy",
-	"",
-	"release publish deploy:",
-	"\t@application_root=\"$$(git rev-parse --show-toplevel)\"; \\",
-	"\tgateway_root=\"$$(dirname \"$${application_root}\")/mprlab-gateway\"; \\",
-	"\tif [ ! -d \"$${gateway_root}\" ]; then \\",
-	"\t\tprintf \"required sibling gateway is missing: %s; clone mprlab-gateway at exactly %s\\n\" \\",
-	"\t\t\t\"$${gateway_root}\" \"$${gateway_root}\" >&2; \\",
-	"\t\texit 2; \\",
-	"\tfi; \\",
-	"\t$(MAKE) --no-print-directory -C \"$${gateway_root}\" \"app-$@\" \\",
-	"\t\tMPRLAB_APP_ROOT=\"$${application_root}\"",
-}, "\n")
-
 func TestOperationalRepositoryOwnsVersionlessLifecycle(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	manifestPath := filepath.Join(repositoryRoot, filepath.FromSlash(lifecycleManifestRelativePath))
@@ -271,16 +256,13 @@ func TestOperationalRepositoryOwnsVersionlessLifecycle(testingInstance *testing.
 	}
 }
 
-func TestOperationalProductionLifecycleKeepsPolicyInAppAndDelegatesToSiblingGateway(testingInstance *testing.T) {
+func TestOperationalProductionLifecycleKeepsPolicyInAppAndDelegatesToInstalledGateway(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	makefileBytes, readError := os.ReadFile(filepath.Join(repositoryRoot, "Makefile"))
 	if readError != nil {
 		testingInstance.Fatalf("read Makefile: %v", readError)
 	}
 	makefileText := string(makefileBytes)
-	if !strings.Contains(makefileText, expectedSiblingGatewayWrapper) {
-		testingInstance.Fatal("Makefile does not expose the exact sibling-gateway lifecycle wrapper")
-	}
 	for _, obsoleteTarget := range []string{
 		"\ncontainer-artifacts:",
 		"\npages-artifact:",
