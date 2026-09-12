@@ -152,18 +152,18 @@ ci-backend: test-release-policy check-format go-lint python-lint test-protocol-a
 
 ci-frontend: frontend-lint frontend-test test-openapi-pages-artifact test-management-auth-blackbox
 
+MPRLAB_GATEWAY_EXECUTABLE ?= mprlab-gateway
+
 .PHONY: release publish deploy
 
 release publish deploy:
 	@application_root="$$(git rev-parse --show-toplevel)"; \
-	gateway_root="$$(dirname "$${application_root}")/mprlab-gateway"; \
-	if [ ! -d "$${gateway_root}" ]; then \
-		printf "required sibling gateway is missing: %s; clone mprlab-gateway at exactly %s\n" \
-			"$${gateway_root}" "$${gateway_root}" >&2; \
+	if ! command -v "$(MPRLAB_GATEWAY_EXECUTABLE)" >/dev/null 2>&1; then \
+		printf 'Gateway runtime is unavailable: %s. Install a released runtime and add its command directory to PATH.\n' \
+			"$(MPRLAB_GATEWAY_EXECUTABLE)" >&2; \
 		exit 2; \
 	fi; \
-	$(MAKE) --no-print-directory -C "$${gateway_root}" "app-$@" \
-		MPRLAB_APP_ROOT="$${application_root}"
+	exec "$(MPRLAB_GATEWAY_EXECUTABLE)" "app-$@" --app-root "$${application_root}"
 
 .PHONY: test-client-protocols test-protocol-acceptance test-media-operations
 .PHONY: test-mcp-versions
@@ -198,6 +198,10 @@ test-client-contracts: frontend-dependencies
 
 generate-api-docs:
 	$(NPM) exec -- node scripts/generate_openapi_docs.mjs
+
+.PHONY: test-installed-gateway
+test-installed-gateway:
+	$(GO) test ./tests -run '^TestOperationalInstalledGateway$$' -count=1
 
 .PHONY: test-release-policy
 test-release-policy:
