@@ -657,9 +657,10 @@ lifecycle state.
 There is no second signed-out application screen.
 The site is declared as a `github_pages` resource in
 `.mprlab/deploy/resources.yml`.
-`make release`, `make publish`, and `make deploy` delegate that resource to the
-exact sibling `../mprlab-gateway`; GitHub Actions is not used for Pages
-deployment. The backend does not serve management HTML or assets; `GET /`
+`make release`, `make publish`, and `make deploy` delegate that resource to the installed `mprlab-gateway` runtime.
+Gateway owns Pages deployment.
+The backend does not serve management HTML or assets.
+`GET /`
 remains a proxy endpoint and returns `403` without a tenant `key`. The backend
 serves public `/config-ui.yaml` from the loaded management config and
 `/api/public/capabilities` from the validated provider registry. The GitHub
@@ -1129,10 +1130,9 @@ Then configure GitHub Pages for this repository:
 1. Use branch publishing from `gh-pages` at `/`.
 2. Set the Pages custom domain to `llm-proxy.mprlab.com`.
 3. Use the standard `make release`, `make publish`, and `make deploy` lifecycle.
-   Those commands delegate to `../mprlab-gateway`, which renders the declared
-   frontend-built Pages container, publishes its immutable artifact, activates it on
-   `gh-pages`, and verifies the matching Pages build and cache-distinct
-   `/.mprlab-release.json` marker.
+   Those commands use the installed `mprlab-gateway` runtime.
+   Gateway renders the declared Pages container and publishes its immutable artifact.
+   It activates that artifact on `gh-pages` and verifies the matching Pages build and `/.mprlab-release.json` marker.
 4. Configure real backend deployment secrets outside the Pages artifact:
    `LLM_PROXY_MANAGEMENT_ADMIN_EMAILS`, `LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY`,
    `LLM_PROXY_MANAGEMENT_DATABASE_PATH`,
@@ -1152,10 +1152,10 @@ Configure TAuth for tenant `llm-proxy` with:
 - HTTPS-only cookies
 - JWT signing key matching `management.jwt_signing_key`
 
-The sibling `mprlab-gateway` Ansible orchestrator treats this declaration as one
-runtime contract: it resolves the `tauth.tenants` capability, stages TAuth and
-llm-proxy inputs, reconciles changed services, and verifies the declared public
-health checks before Pages activation. This prevents a newly deployed backend
+The installed `mprlab-gateway` runtime treats this declaration as one
+runtime contract.
+It resolves the `tauth.tenants` capability and prepares TAuth and llm-proxy inputs.
+It reconciles changed services and verifies the declared public health checks before Pages activation. This prevents a newly deployed backend
 from validating sessions against stale TAuth cookie or signing configuration.
 
 The same boundary is executable locally without Google OAuth or deployed
@@ -1357,9 +1357,9 @@ A failed, cancelled, skipped, or missing job result prevents success.
 | `make test-live-local-providers` | Build an isolated local Compose project, verify selected provider keys, and send paid `POST /v2` requests through its Dockerized API. |
 | `make test-live-local-gemini` | Run every registered Gemini model and reasoning level through the isolated local Compose API. |
 | `make live-test` | Send paid production `POST /v2` requests through the Default tenant using only `LLM_PROXY_DEFAULT_TENANT_KEY`: echo checks for OpenAI, Anthropic, Meta, Gemini, and Moonshot, plus large completion cases for OpenAI, Anthropic, Meta, and Gemini. |
-| `make release` | Delegate the clean checkout to the exact sibling `../mprlab-gateway`. The transaction validates its exact prepared or reused decision before CI. |
-| `make publish` | Delegate publication of the exact sealed release to `../mprlab-gateway`; it does not rebuild or deploy. |
-| `make deploy` | Delegate convergence of only this app's declared runtime, route, health, Pages, and TAuth resources to `../mprlab-gateway`. |
+| `make release` | Delegate the validated application checkout to the installed Gateway. The transaction validates its exact prepared or reused decision before CI. |
+| `make publish` | Publish the exact sealed release through the installed Gateway. |
+| `make deploy` | Converge the declared application resources through the installed Gateway. |
 
 Live provider smoke tests are intentionally not part of `make ci`; they call
 paid upstream APIs and depend on local or CI secret availability. The dynamic
@@ -1588,9 +1588,14 @@ make publish
 make deploy
 ```
 
-Each target resolves this checkout and the exact sibling `../mprlab-gateway`,
-then invokes the corresponding gateway transaction with this checkout as the
-selected app. The gateway runs the release gate and seals immutable artifacts;
+Each target resolves the application Git root and calls the installed `mprlab-gateway` command with `--app-root`.
+Use `MPRLAB_GATEWAY_EXECUTABLE` to select an explicit installed command.
+The Gateway package supplies its own assets and dependencies.
+Gateway development source is not an operational input.
+Follow the [Gateway installation guide](https://github.com/MarcoPoloResearchLab/mprlab-gateway/blob/master/docs/runtime-installation.md) for first installation and explicit upgrades.
+Use `mprlab-gateway version --json` to inspect the selected runtime.
+Gateway operator inputs use `MPRLAB_GATEWAY_OPERATOR_ROOT`, with `$HOME/.config/mprlab-gateway` as the default.
+The gateway runs the release gate and seals immutable artifacts.
 publish and deploy consume that exact release without rerunning CI or
 rebuilding. Retries reuse exact state and reject conflicting immutable state.
 The selected app transaction reads no unrelated app repository.
@@ -2600,10 +2605,9 @@ the selected integration profile or deployment docs, not in this README.
 
 ## Releasing
 
-Use `make release`, `make publish`, and `make deploy` from the selected clean
-checkout. These are deliberately thin entrypoints into the exact sibling
-`../mprlab-gateway`. This repository owns its permanent major version `1`
-release policy. Gix selects the release version once. The gateway keeps that
+Use `make release && make publish && make deploy` from the selected application checkout.
+These commands use the installed Gateway runtime.
+This repository owns its permanent major version `1` release policy. Gix selects the release version once. The gateway keeps that
 decision and uses its version for release artifacts, tags, and receipts.
 An exact release retry reuses the stored decision.
 

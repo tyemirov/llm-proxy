@@ -21,6 +21,9 @@ Give each term one meaning. Use the same term for the same concept in all docume
 
 ## Repository Technical Nouns
 
+- `Gateway runtime`: The installed MPR Lab deployment executable, runtime assets, and dependencies.
+- `operator root`: The directory that contains Gateway inventory and private operator inputs.
+
 - `codec`: Code that serializes requests and parses responses for one provider protocol.
 - `activation issue`: An issue that changes an external runtime to use completed development work.
 - `client protocol adapter`: Code that translates one public client protocol to and from canonical request and result types.

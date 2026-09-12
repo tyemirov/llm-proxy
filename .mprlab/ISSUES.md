@@ -986,6 +986,31 @@ retain satisfied historical dependencies.
     the final run after the last code edit.
 
 
+- [x] [I261] (P1) Use the installed Gateway for application lifecycle commands.
+  Goal:
+  Application release, publication, and deployment operate independently of Gateway development source.
+
+  Requirements:
+  - Replace sibling delegation with the installed `mprlab-gateway` command.
+  - Preserve `make release && make publish && make deploy` and the application Git root argument.
+  - Support `MPRLAB_GATEWAY_EXECUTABLE` for an explicit installed command.
+  - Preserve application source checks, release policy, resources, private inputs, and receipts.
+  - Report an unavailable runtime with an installation instruction.
+  - Keep production activation separate from development completion.
+
+  Validation:
+  - Verify the real Make targets with no sibling Gateway checkout.
+  - Verify argument order, operator environment, explicit command selection, and native failure output.
+  - Run applicable repository CI after the final change.
+
+  Coordination:
+  This is the selected application follow-up for Gateway I244.
+
+  Completion:
+  - The installed wrapper passed its public Make tests without a sibling Gateway checkout.
+  - Full CI passed all 13 gates in 320 seconds with 100.0% Go statement coverage.
+  - Source implementation is completed. Production activation remains operator-controlled.
+
 ## Maintenance
 
 - [ ] [M004R] (P1) Dependency and security audit.
