@@ -27,6 +27,69 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B217] (P2) Keep both dashboard prompt drafts after a failed save.
+  Observed: A provider prompt draft is lost after HTTP 500 when both prompt forms are visible.
+  Requirements: Keep both prompt drafts for retry.
+  Validation: Use browser tests for failed saves and successful retry. Run final `make ci`.
+  Resolution: Failed saves now keep both form drafts. Browser tests passed for both failed save actions and the successful provider prompt retry.
+  Deliverables: `site/assets/llm-proxy/js/ui/connectionDashboard.js`, `tests/blackbox/connection-dashboard.spec.js`.
+  Validation: Final `make ci` passed all 13 gates with 100.0 percent Go statement coverage.
+  Event contracts did not change.
+
+- [x] [B216] (P2) Limit Python media status requests to the wait deadline.
+  Observed: A stalled HTTP status response can keep the Python wait active without a timeout.
+  Requirements: Examine the deadline before each poll. Supply the remaining timeout to the HTTP transport.
+  Validation: Use HTTP tests for stalled headers, stalled response bytes, and the final poll interval. Run final `make ci`.
+  Resolution: Each status request receives the remaining timeout. The loop starts no request after its deadline. HTTP tests passed for stalled headers, stalled response bytes, and the final poll interval.
+  Deliverables: `python/llm_proxy_client/client.py`, `python/tests/test_client.py`, `docs/client-protocols.md`.
+  Validation: Final `make ci` passed all 13 gates with 100.0 percent Go statement coverage.
+  Event contracts did not change.
+
+- [x] [B215] (P2) Remove base URL query credentials from Go asset uploads.
+  Observed: The upload URL retains an existing query key. The server rejects that key with HTTP 403.
+  Requirements: Remove each query key and send the configured bearer key.
+  Validation: Use HTTP tests for the public Go client. Run client tests and final `make ci`.
+  Resolution: Go upload URLs now exclude query keys. HTTP client tests passed with duplicate query keys in the base URL.
+  Deliverables: `pkg/llmproxyclient/assets.go`, `pkg/llmproxyclient/media_test.go`, `Makefile`, `docs/client-protocols.md`.
+  Validation: Final `make ci` passed all 13 gates with 100.0 percent Go statement coverage.
+  Event contracts did not change.
+
+- [x] [B214] (P2) Keep active media inputs after upload expiry.
+  Observed: Asset expiry can remove bytes that an accepted operation still requires.
+  Requirements: Use active references for cleanup and reads. Keep uncertain inputs until operation completion.
+  Validation: Use HTTP asset tests with controlled time, cleanup, restart, and operation completion. Run final `make ci`.
+  Resolution: Asset reads and cleanup use active references. Uncertain operations keep their inputs. Completion releases input references. HTTP tests passed for expiry, startup, cleanup errors, and cancellation.
+  Deliverables: `internal/proxy/assets.go`, `internal/proxy/media_operations.go`, `internal/proxy/media_operations_edges_internal_test.go`, `Makefile`, `docs/media-gateway-consolidation.md`.
+  Validation: Final `make ci` passed all 13 gates with 100.0 percent Go statement coverage. The focused media tests also passed with the race detector.
+  Event contracts did not change.
+
+- [x] [B213] (P2) Return one operation for concurrent duplicate requests.
+  Observed: Concurrent duplicate requests can return HTTP 500 with `SQLITE_BUSY`.
+  Requirements: Return one operation for the same tenant, key, and intent. Keep capacity limits.
+  Validation: Use concurrent HTTP requests and SQLite. Run `make test-media-operations` and final `make ci`.
+  Resolution: An acceptance mutex now permits one creation transaction at a time. Concurrent HTTP duplicates returned one operation with SQLite runtime settings.
+  Deliverables: `internal/proxy/media_operations.go`, `internal/proxy/media_operations_edges_internal_test.go`.
+  Validation: Final `make ci` passed all 13 gates with 100.0 percent Go statement coverage. The focused media tests also passed with the race detector.
+  Event contracts did not change.
+
+- [x] [B212] (P1) Enforce connection authority before media execution.
+  Observed: A worker dispatches accepted work after connection removal.
+  Requirements: Compare the accepted credential reference with the current reference before dispatch and recovery. Keep uncertain provider evidence.
+  Validation: Use public HTTP resources with controlled worker execution. Run `make test-media-operations` and final `make ci`.
+  Resolution: The worker now compares the accepted credential reference with current authority before dispatch or recovery. Invalid authority prevents adapter execution. Dispatched work stays uncertain. The adapter receives the credential reference. Connection removal, replacement, and credential changes caused no adapter call in HTTP tests.
+  Deliverables: `internal/proxy/media_operations.go`, `internal/proxy/media_operations_edges_internal_test.go`, `docs/media-gateway-consolidation.md`.
+  Validation: Final `make ci` passed all 13 gates with 100.0 percent Go statement coverage. The focused media tests also passed with the race detector.
+  Event contracts did not change.
+
+- [x] [B211] (P1) Send bearer authentication for Python asset uploads.
+  Observed: The Python client sends a query key. The asset route returns HTTP 403.
+  Requirements: Remove query credentials. Send the tenant bearer key in the Authorization header.
+  Validation: Use an HTTP server to do a test of the public Python client. Run `make python-test` and final `make ci`.
+  Resolution: The client now sends the bearer key and removes query keys. HTTP tests passed with and without query keys in the base URL.
+  Deliverables: `python/llm_proxy_client/client.py`, `python/tests/test_client.py`, `docs/client-protocols.md`.
+  Validation: Final `make ci` passed all 13 gates with 100.0 percent Go statement coverage.
+  Event contracts did not change.
+
 - [!] [B210] (P1) Restore local startup with the current TAuth image contract.
   Goal: Start local TAuth with the current OAuth configuration.
   Observed: `ghcr.io/tyemirov/tauth:latest` rejected both OAuth blocks with `field oauth not found` and exited with status 1.
