@@ -27,6 +27,38 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [!] [B210] (P1) Restore local startup with the current TAuth image contract.
+  Goal: Start local TAuth with the current OAuth configuration.
+  Observed: `ghcr.io/tyemirov/tauth:latest` rejected both OAuth blocks with `field oauth not found` and exited with status 1.
+  The browser tests use TAuth `v1.2.7` from `go.mod`. The registry supplies `ghcr.io/tyemirov/tauth:1.2.7` for ARM64 and AMD64.
+  Requirements: Use `ghcr.io/tyemirov/tauth:latest` in local Compose.
+  Keep the current OAuth configuration.
+  Validation: Run `make up`. Check TAuth session and OAuth discovery responses through the frontend. Run `make ci`.
+  Investigation: The temporary `1.2.7` image passed local startup, session, OAuth discovery, and all 13 CI gates.
+  The user rejected the version pin. Compose again uses `latest`, and the README pin instruction was removed.
+  A fresh registry pull returned digest `sha256:bfe6b0ec4e7f3bb5e3934756d456266f603ae4871969e0091025725f527dcc85`.
+  The image creation date is July 29, 2026. TAuth added OAuth support in commit `40806aa` on August 8, 2026.
+  The current TAuth source and README still require the two OAuth blocks. The package manager resolves `@latest` to `v1.2.7`.
+  Removal of these blocks would remove the authorization server required by MCP.
+  Validation after pin removal: A fresh `latest` image still rejected both OAuth blocks with status 1.
+  `make ci` passed all 13 gates in 320 seconds with 100.0 percent Go statement coverage.
+  CI does not establish startup acceptance for the published `latest` image.
+  The changed prose has no mechanical findings. Existing guide differences and 71 findings in unchanged tracker text remain.
+  Blocked: TAuth publication must supply an image with the current OAuth contract through the `latest` tag.
+
+- [x] [B209] (P1) Restore the API container build.
+  Goal: Build the API image for local startup.
+  Observed: `docker build` reproduced HTTP 404 for `curl_7.74.0-1.3+deb11u16_arm64.deb` after `apt-get update`.
+  The package installation exited with status 100 on `debian:bullseye-slim`.
+  Requirements: Use `debian:bookworm-slim` for the runtime, consistent with the builder.
+  Keep curl and CA certificates in the runtime image.
+  Validation: Build the image. Make sure that the container returns HTTP 200 from `/api/public/capabilities`. Run `make ci`.
+  Resolution: The runtime now uses `debian:bookworm-slim`. The ARM64 image build passed with curl and CA certificates.
+  The container returned HTTP 200 from `/api/public/capabilities`. `make ci` passed all 13 gates in 318 seconds.
+  Go statement coverage was 100.0 percent. The changed prose has no mechanical findings.
+  The Governor check reported existing differences in `.mprlab/AGENTS.DOCKER.md` and `.mprlab/POLICY.md`.
+  The language check reported 71 findings in unchanged tracker text. API and event contracts did not change.
+
 - [x] [B208] (P1) Keep database error details out of management responses.
   Goal: Return a stable error code when a management database operation fails.
   Observed: F063 failure tests reproduced database details in tenant deletion responses.
