@@ -102,13 +102,14 @@ export class ConnectionDashboard extends HTMLElement {
     } finally {
       this.busy = false;
       if (this.isConnected) {
-        const form = this.querySelector('[data-default-form], [data-provider-profile]');
-        const draft = this.failure && form instanceof HTMLFormElement ? new FormData(form) : null;
-        const selector = form?.hasAttribute('data-default-form') ? '[data-default-form]' : '[data-provider-profile]';
+        const drafts = this.failure ? ['[data-default-form]', '[data-provider-profile]'].map(selector => {
+          const form = this.querySelector(selector);
+          return {selector, values: form instanceof HTMLFormElement ? new FormData(form) : null};
+        }) : [];
         this.render();
-        if (draft) {
+        for (const {selector, values} of drafts) {
           const renderedForm = this.querySelector(selector);
-          if (renderedForm instanceof HTMLFormElement) for (const [name, value] of draft) {
+          if (values && renderedForm instanceof HTMLFormElement) for (const [name, value] of values) {
             const input = renderedForm.elements.namedItem(name);
             if (typeof value === 'string' && (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement || input instanceof HTMLSelectElement)) input.value = value;
           }
