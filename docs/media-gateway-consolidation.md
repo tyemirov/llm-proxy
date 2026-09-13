@@ -211,12 +211,20 @@ Keep the normalized request, selected route, catalog revision, and credential-ve
 Keep credential values outside that record.
 A revoked credential prevents a new dispatch through that connection.
 Existing provider jobs require an authorized connection to the same provider account for recovery.
+The worker compares the current connection identifier and version with the accepted credential reference before dispatch or recovery.
+A changed reference prevents adapter execution. Dispatched work remains uncertain when its accepted authority is unavailable.
+The adapter receives the checked credential reference.
+The service permits one acceptance transaction at a time.
+The transaction reads capacity before it inserts the operation.
 
 Persist acceptance and input references before dispatch.
 Extend asset deletion and cleanup to consult those durable references.
 Coordinate reference creation with byte publication and deletion.
 Reconcile interrupted file publication through restart tests with the real database and filesystem.
 Keep active inputs and staged outputs until the operation reaches its documented completion boundary.
+Active input references prevent upload expiry during reads, timer cleanup, and startup cleanup.
+Uncertain operations keep their active inputs. Completion or confirmed cancellation releases input references.
+After release, the normal upload expiry applies. Cleanup checks retained expired assets each minute.
 
 Persist dispatch intent before the external call.
 Give each worker claim a generation number and expiry.

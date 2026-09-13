@@ -194,3 +194,15 @@ Keep live-provider qualification in the live-provider harness.
 
 The protocol references are the [OpenAI Responses API](https://developers.openai.com/api/reference/typescript/resources/responses/methods/create)
 and [OpenCode provider configuration](https://opencode.ai/docs/providers/).
+
+
+## Asset uploads and Python media waits
+
+The Go and Python asset clients send the tenant bearer key in the Authorization header.
+They remove query credentials from the upload URL, including credentials in the configured base URL.
+The asset route rejects query credentials.
+
+The Python media wait checks its deadline before each status request.
+It supplies the remaining timeout to the HTTP transport and stops polling when the budget expires.
+A custom Python response opener must accept the keyword argument `timeout` and apply it to its HTTP request.
+The argument is a number of seconds or `None` for a request without a client timeout.
