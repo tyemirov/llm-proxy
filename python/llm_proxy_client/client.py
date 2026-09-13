@@ -85,7 +85,7 @@ class LLMProxyTransportError(RuntimeError):
 class ResponseOpener(Protocol):
     """Callable that executes a prepared urllib request."""
 
-    def __call__(self, request: urllib.request.Request) -> str:
+    def __call__(self, request: urllib.request.Request, *, timeout: float | None = None) -> str:
         """Return decoded response text for the prepared request."""
 
 
@@ -171,7 +171,6 @@ class ClientConfig:
         preserved_items = [
             (query_key, query_value) for query_key, query_value in query_items if query_key not in stripped_query_keys
         ]
-        preserved_items.append((KEY_QUERY_KEY, self.secret.strip()))
         return urllib.parse.urlunparse(
             (
                 parsed_url.scheme,
@@ -824,7 +823,7 @@ class Client:
         prepared_request = urllib.request.Request(
             self.config.asset_upload_url(),
             data=data,
-            headers={CONTENT_TYPE_HEADER: normalized_mime_type},
+            headers={CONTENT_TYPE_HEADER: normalized_mime_type, "Authorization": f"Bearer {self.config.secret.strip()}"},
             method="POST",
         )
         opener = self.opener or default_response_opener
@@ -926,7 +925,14 @@ class Client:
             raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid media operation wait budget")
         deadline = time.monotonic() + timeout_seconds
         while True:
-            operation = self.get_media_operation(operation_id)
+            remaining_seconds = deadline - time.monotonic()
+            if remaining_seconds <= 0:
+                raise LLMProxyTransportError(
+                    "llm_proxy_client_transport_failure: media operation wait timed out"
+                )
+            operation = _decode_media_operation(self._media_json_request(
+                "GET", f"{MEDIA_OPERATIONS_ENDPOINT_PATH}/{operation_id}", timeout_seconds=remaining_seconds
+            ))
             if operation.state in {"succeeded", "failed", "cancelled", "uncertain"}:
                 return operation
             remaining_seconds = deadline - time.monotonic()
@@ -967,6 +973,7 @@ class Client:
         body: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
         query: dict[str, str] | None = None,
+        timeout_seconds: float | None = None,
     ) -> dict[str, Any]:
         """Execute one strict tenant media-resource request."""
 
@@ -984,7 +991,7 @@ class Client:
         )
         opener = self.opener or default_response_opener
         try:
-            response_text = opener(prepared_request)
+            response_text = opener(prepared_request, timeout=timeout_seconds)
         except urllib.error.HTTPError as error:
             response_body = error.read().decode("utf-8", errors="replace")
             raise LLMProxyHTTPError(
@@ -1285,9 +1292,9 @@ def first_query_value(query_values: dict[str, list[str]], key: str, default: str
     return value
 
 
-def default_response_opener(request: urllib.request.Request) -> str:
+def default_response_opener(request: urllib.request.Request, *, timeout: float | None = None) -> str:
     """Execute a prepared urllib request and return decoded text."""
 
-    with urllib.request.urlopen(request) as response:
+    with urllib.request.urlopen(request, timeout=timeout) as response:
         response_body = cast(bytes, response.read())
         return response_body.decode("utf-8")
