@@ -100,15 +100,16 @@ type MediaOperationValidatedRequest struct {
 
 // MediaOperationExecutionRequest is the private durable execution contract supplied to an adapter.
 type MediaOperationExecutionRequest struct {
-	OperationID    string
-	TenantID       string
-	DispatchToken  string
-	Capability     string
-	Provider       string
-	Model          string
-	Input          json.RawMessage
-	Controls       json.RawMessage
-	ProviderHandle string
+	CredentialReference string
+	OperationID         string
+	TenantID            string
+	DispatchToken       string
+	Capability          string
+	Provider            string
+	Model               string
+	Input               json.RawMessage
+	Controls            json.RawMessage
+	ProviderHandle      string
 	// PersistProviderHandle durably records a native job identity immediately
 	// after provider acceptance and before status polling begins.
 	PersistProviderHandle func(string) error
@@ -245,8 +246,9 @@ type mediaOperationExpiredEnvelope struct {
 }
 
 type mediaOperationStore struct {
-	database *gorm.DB
-	now      func() time.Time
+	acceptanceMutex sync.Mutex
+	database        *gorm.DB
+	now             func() time.Time
 }
 
 type mediaOperationService struct {
@@ -531,6 +533,8 @@ func (service *mediaOperationService) create(requestContext context.Context, req
 		CancellationState: MediaCancellationNotRequested, AcceptedAt: now, UpdatedAt: now, DeadlineAt: now.Add(service.lifetime),
 	}
 	created := false
+	service.store.acceptanceMutex.Lock()
+	defer service.store.acceptanceMutex.Unlock()
 	if len(validated.InputAssetIDs) != 0 {
 		service.assets.referenceMutex.Lock()
 		defer service.assets.referenceMutex.Unlock()
@@ -808,6 +812,21 @@ func (service *mediaOperationService) runOperation(workerID string, operationID 
 	}
 	requestContext, cancel := context.WithDeadline(context.Background(), record.DeadlineAt)
 	defer cancel()
+	var currentReference string
+	var authorityError error
+	if credential, deploymentOwned := adapter.(MediaOperationDeploymentCredential); deploymentOwned {
+		currentReference = credential.MediaOperationCredentialReference()
+	} else {
+		currentReference, authorityError = service.store.credentialReference(requestContext, record.TenantID, providerID(record.Provider))
+	}
+	if authorityError != nil || currentReference == "" || currentReference != record.CredentialReference {
+		state := MediaOperationStateFailed
+		if recoverOperation {
+			state = MediaOperationStateUncertain
+		}
+		service.finish(operationID, generation, MediaOperationExecutionResult{State: state, ErrorCode: errMediaOperationUnavailable.Error()})
+		return
+	}
 	request := executionRequestFromRecord(record)
 	request.PersistProviderHandle = func(providerHandle string) error {
 		return service.persistProviderHandle(operationID, generation, providerHandle)
@@ -1003,8 +1022,10 @@ func (service *mediaOperationService) finish(operationID string, generation uint
 		if saveError := transaction.Save(&record).Error; saveError != nil {
 			return saveError
 		}
-		if referenceError := transaction.Model(&mediaOperationAssetReferenceRecord{}).Where("operation_id = ? AND role = ?", operationID, "input").Update("active", false).Error; referenceError != nil {
-			return referenceError
+		if publicState != MediaOperationStateUncertain {
+			if referenceError := transaction.Model(&mediaOperationAssetReferenceRecord{}).Where("operation_id = ? AND role = ?", operationID, "input").Update("active", false).Error; referenceError != nil {
+				return referenceError
+			}
 		}
 		if usageError := deliverMediaOperationUsage(transaction, record, now); usageError != nil {
 			return usageError
@@ -1106,7 +1127,7 @@ func callerSafeMediaOperationError(errorCode string) string {
 
 func executionRequestFromRecord(record mediaOperationRecord) MediaOperationExecutionRequest {
 	return MediaOperationExecutionRequest{
-		OperationID: record.OperationID, TenantID: record.TenantID, DispatchToken: record.DispatchToken, Capability: record.Capability,
+		CredentialReference: record.CredentialReference, OperationID: record.OperationID, TenantID: record.TenantID, DispatchToken: record.DispatchToken, Capability: record.Capability,
 		Provider: record.Provider, Model: record.Model, Input: append(json.RawMessage(nil), record.NormalizedInput...),
 		Controls: append(json.RawMessage(nil), record.NormalizedControls...), ProviderHandle: record.ProviderHandle,
 	}

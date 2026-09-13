@@ -181,7 +181,24 @@ func (store *tenantAssetStore) upload(requestTenant tenant, mimeType string, sou
 	return metadata, nil
 }
 
+// expirationDueLocked checks durable retention while the asset mutex is held.
+func (store *tenantAssetStore) expirationDueLocked(metadata tenantAssetMetadata) (bool, error) {
+	if store.now().UTC().Before(metadata.ExpiresAt) {
+		return false, nil
+	}
+	if store.activeReference == nil {
+		return true, nil
+	}
+	active, err := store.activeReference(metadata.TenantID, metadata.AssetID)
+	if err != nil {
+		return false, fmt.Errorf("%w: read active asset references", errAssetStore)
+	}
+	return !active, nil
+}
+
 func (store *tenantAssetStore) resolve(requestTenant tenant, assetID string, expectedMIMEType string) (*tenantAssetReader, error) {
+	store.referenceMutex.Lock()
+	defer store.referenceMutex.Unlock()
 	if !assetIdentifierPattern.MatchString(assetID) || !supportedTenantAssetMIME(expectedMIMEType) {
 		return nil, errAssetInvalid
 	}
@@ -203,7 +220,12 @@ func (store *tenantAssetStore) resolve(requestTenant tenant, assetID string, exp
 		store.mutex.Unlock()
 		return nil, errAssetDeleted
 	}
-	if !store.now().UTC().Before(metadata.ExpiresAt) {
+	expired, expiryError := store.expirationDueLocked(metadata)
+	if expiryError != nil {
+		store.mutex.Unlock()
+		return nil, expiryError
+	}
+	if expired {
 		if removeError := assetRemove(store.dataPath(assetID)); removeError != nil && !errors.Is(removeError, os.ErrNotExist) {
 			store.mutex.Unlock()
 			return nil, errAssetStore
@@ -327,7 +349,11 @@ func (store *tenantAssetStore) initializeLocked() error {
 		if metadataError != nil {
 			return metadataError
 		}
-		if metadata.State == assetStateDeleted || !store.now().UTC().Before(metadata.ExpiresAt) {
+		expired, expiryError := store.expirationDueLocked(metadata)
+		if expiryError != nil {
+			return expiryError
+		}
+		if metadata.State == assetStateDeleted || expired {
 			if removeError := assetRemove(store.dataPath(assetID)); removeError != nil && !errors.Is(removeError, os.ErrNotExist) {
 				return fmt.Errorf("%w: reclaim asset", errAssetStore)
 			}
@@ -353,6 +379,8 @@ func (store *tenantAssetStore) scheduleExpirationLocked(metadata tenantAssetMeta
 }
 
 func (store *tenantAssetStore) expireAsset(assetID string, expectedExpiry time.Time) {
+	store.referenceMutex.Lock()
+	defer store.referenceMutex.Unlock()
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
 	if store.cleanupError != nil {
@@ -367,6 +395,17 @@ func (store *tenantAssetStore) expireAsset(assetID string, expectedExpiry time.T
 		return
 	}
 	if metadata.ExpiresAt != expectedExpiry || metadata.State == assetStateDeleted || store.now().UTC().Before(metadata.ExpiresAt) {
+		return
+	}
+	expired, expiryError := store.expirationDueLocked(metadata)
+	if expiryError != nil {
+		store.cleanupError = expiryError
+		return
+	}
+	if !expired {
+		assetAfterFunc(time.Minute, func() {
+			store.expireAsset(metadata.AssetID, metadata.ExpiresAt)
+		})
 		return
 	}
 	if removeError := assetRemove(store.dataPath(assetID)); removeError != nil && !errors.Is(removeError, os.ErrNotExist) {
@@ -567,7 +606,11 @@ func (store *tenantAssetStore) metadataLocked(requestTenant tenant, assetID stri
 	if metadata.State == assetStateDeleted {
 		return tenantAssetMetadata{}, errAssetDeleted
 	}
-	if !store.now().UTC().Before(metadata.ExpiresAt) {
+	expired, expiryError := store.expirationDueLocked(metadata)
+	if expiryError != nil {
+		return tenantAssetMetadata{}, expiryError
+	}
+	if expired {
 		return tenantAssetMetadata{}, errAssetExpired
 	}
 	return metadata, nil

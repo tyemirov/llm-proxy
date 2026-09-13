@@ -9,8 +9,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,6 +28,7 @@ type mediaOperationInternalAdapter struct {
 	validateError  error
 	executeResult  MediaOperationExecutionResult
 	recoverResult  MediaOperationExecutionResult
+	recoverHook    func(MediaOperationExecutionRequest)
 	cancelResult   MediaOperationCancellationResult
 	validateHook   func()
 	executeHook    func(MediaOperationExecutionRequest)
@@ -70,7 +73,10 @@ func (adapter *mediaOperationInternalAdapter) Execute(_ context.Context, request
 	return adapter.executeResult
 }
 
-func (adapter *mediaOperationInternalAdapter) Recover(context.Context, MediaOperationExecutionRequest) MediaOperationExecutionResult {
+func (adapter *mediaOperationInternalAdapter) Recover(_ context.Context, request MediaOperationExecutionRequest) MediaOperationExecutionResult {
+	if adapter.recoverHook != nil {
+		adapter.recoverHook(request)
+	}
 	return adapter.recoverResult
 }
 
@@ -91,7 +97,7 @@ type mediaOperationInternalFixture struct {
 
 func newMediaOperationInternalFixture(testingInstance *testing.T) mediaOperationInternalFixture {
 	testingInstance.Helper()
-	database, databaseError := gorm.Open(sqlite.Open(filepath.Join(testingInstance.TempDir(), "media-operations.db")), &gorm.Config{DisableForeignKeyConstraintWhenMigrating: true})
+	database, databaseError := gorm.Open(sqlite.Open(filepath.Join(testingInstance.TempDir(), "media-operations.db")+managedSQLiteRuntimeQuery), &gorm.Config{DisableForeignKeyConstraintWhenMigrating: true})
 	if databaseError != nil {
 		testingInstance.Fatal(databaseError)
 	}
@@ -560,6 +566,10 @@ func TestMediaOperationRunOperationFailureContracts(testingInstance *testing.T) 
 
 	fixture = newMediaOperationInternalFixture(testingInstance)
 	record = fixture.record(MediaOperationStateRunning, MediaProviderExecutionNotDispatched)
+	record.DeadlineAt = time.Now().UTC().Add(time.Hour)
+	if saveError := fixture.database.Save(&record).Error; saveError != nil {
+		testingInstance.Fatal(saveError)
+	}
 	failNthMediaGORMOperation(testingInstance, fixture.database, "update", "media_operation_records", 1)
 	fixture.service.runOperation("worker", record.OperationID)
 	response, responseError = fixture.service.store.publicResponse(context.Background(), fixture.tenant.identifier.string(), record.OperationID)
@@ -613,6 +623,7 @@ func TestDictatorWorkerIsolationPreservesAdmittedCloudExecution(testingInstance 
 	}
 	dictator := fixture.record(MediaOperationStateQueued, MediaProviderExecutionNotDispatched)
 	dictator.Provider = ProviderNameDictator
+	dictator.CredentialReference = "deployment:dictator:test"
 	dictator.Model = ModelNameDictatorSpeechV1
 	dictator.Capability = llmproxycontract.MediaCapabilityAudioTranscribe
 	dictator.CatalogOperation = ModelOperationAudioTranscription
@@ -1296,5 +1307,287 @@ func TestMediaVoicePrivateStoreFailures(testingInstance *testing.T) {
 	failNthMediaGORMOperation(testingInstance, fixture.database, "query", "media_voice_records", 1)
 	if _, voiceError := fixture.service.store.providerMediaVoice(context.Background(), fixture.tenant.identifier.string(), "voi_00000000000000000000000000000000"); voiceError == nil || voiceError.Error() != llmproxycontract.ErrorCodeMediaVoiceStore {
 		testingInstance.Fatalf("store error=%v", voiceError)
+	}
+}
+
+func mediaOperationHTTPServer(t *testing.T, fixture mediaOperationInternalFixture) *httptest.Server {
+	t.Helper()
+	router := gin.New()
+	router.Use(func(c *gin.Context) { c.Set(contextKeyTenant, fixture.tenant); c.Next() })
+	router.POST("/model/v1/operations", fixture.service.createHandler())
+	router.GET("/model/v1/operations/:operation_id", fixture.service.statusHandler())
+	router.GET("/model/v1/assets/:asset_id", tenantAssetMetadataHandler(fixture.service.assets))
+	router.GET("/model/v1/assets/:asset_id/content", tenantAssetContentHandler(fixture.service.assets))
+	server := httptest.NewServer(router)
+	t.Cleanup(server.Close)
+	return server
+}
+
+func createMediaOperationHTTP(t *testing.T, server *httptest.Server, payload mediaOperationCreatePayload, key string) mediaOperationResponse {
+	t.Helper()
+	body, _ := json.Marshal(payload)
+	request, _ := http.NewRequest(http.MethodPost, server.URL+"/model/v1/operations", bytes.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set(llmproxycontract.HeaderIdempotencyKey, key)
+	response, err := server.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var operation mediaOperationResponse
+	if response.StatusCode != http.StatusAccepted {
+		data, _ := io.ReadAll(response.Body)
+		t.Fatalf("accept status=%d body=%s", response.StatusCode, data)
+	}
+	if err := json.NewDecoder(response.Body).Decode(&operation); err != nil {
+		t.Fatal(err)
+	}
+	return operation
+}
+
+func TestMediaOperationRechecksAuthorityBeforeDispatchAndRecovery(t *testing.T) {
+	for _, recovery := range []bool{false, true} {
+		for _, mutation := range []string{"detach", "replace", "rotate", "unchanged"} {
+			t.Run(fmt.Sprintf("recovery=%t/%s", recovery, mutation), func(t *testing.T) {
+				fixture := newMediaOperationInternalFixture(t)
+				fixture.service.store.now = func() time.Time { return time.Now().UTC() }
+				server := mediaOperationHTTPServer(t, fixture)
+				operation := createMediaOperationHTTP(t, server, fixture.payload(), "authority")
+				if recovery {
+					if err := fixture.database.Model(&mediaOperationRecord{}).Where("operation_id = ?", operation.OperationID).Updates(map[string]any{"public_state": MediaOperationStateRunning, "provider_execution_state": MediaProviderExecutionDispatched, "provider_handle": "original-account-job"}).Error; err != nil {
+						t.Fatal(err)
+					}
+				}
+				switch mutation {
+				case "detach":
+					if err := fixture.database.Where("tenant_id = ?", fixture.tenant.identifier.string()).Delete(&managedTenantConnectionRecord{}).Error; err != nil {
+						t.Fatal(err)
+					}
+				case "replace":
+					connection := managedAccountConnectionRecord{ID: "different-account", OwnerUserID: "owner", ProviderID: ProviderNameXAI, Name: "Replacement", Version: 3}
+					if err := fixture.database.Create(&connection).Error; err != nil {
+						t.Fatal(err)
+					}
+					if err := fixture.database.Model(&managedTenantConnectionRecord{}).Where("tenant_id = ?", fixture.tenant.identifier.string()).Update("connection_id", connection.ID).Error; err != nil {
+						t.Fatal(err)
+					}
+				case "rotate":
+					if err := fixture.database.Model(&managedAccountConnectionRecord{}).Where("id = ?", "connection-internal").Update("version", 4).Error; err != nil {
+						t.Fatal(err)
+					}
+				}
+				calls := 0
+				fixture.adapter.executeHook = func(request MediaOperationExecutionRequest) {
+					calls++
+					if request.CredentialReference != "connection-internal:v3" {
+						t.Errorf("credential reference=%q", request.CredentialReference)
+					}
+				}
+				fixture.adapter.recoverHook = fixture.adapter.executeHook
+				fixture.service.runOperation("authority-worker", operation.OperationID)
+				response, err := server.Client().Get(server.URL + "/model/v1/operations/" + operation.OperationID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer response.Body.Close()
+				var status mediaOperationResponse
+				if err := json.NewDecoder(response.Body).Decode(&status); err != nil {
+					t.Fatal(err)
+				}
+				if mutation == "unchanged" {
+					if calls != 1 {
+						t.Fatalf("authorized calls=%d", calls)
+					}
+					return
+				}
+				expectedState := MediaOperationStateFailed
+				if recovery {
+					expectedState = MediaOperationStateUncertain
+				}
+				if calls != 0 || status.State != expectedState {
+					t.Fatalf("calls=%d state=%s expected=%s", calls, status.State, expectedState)
+				}
+			})
+		}
+	}
+}
+
+func TestMediaOperationConcurrentHTTPAcceptance(t *testing.T) {
+	fixture := newMediaOperationInternalFixture(t)
+	fixture.adapter.validateResult = MediaOperationValidatedRequest{Input: fixture.payload().Input, Controls: fixture.payload().Controls}
+	var validators sync.WaitGroup
+	validators.Add(2)
+	fixture.adapter.validateHook = func() { validators.Done(); validators.Wait() }
+	server := mediaOperationHTTPServer(t, fixture)
+	responses := make(chan *http.Response, 2)
+	failures := make(chan error, 2)
+	body, _ := json.Marshal(fixture.payload())
+	for i := 0; i < 2; i++ {
+		go func() {
+			request, _ := http.NewRequest(http.MethodPost, server.URL+"/model/v1/operations", bytes.NewReader(body))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set(llmproxycontract.HeaderIdempotencyKey, "concurrent")
+			response, err := server.Client().Do(request)
+			if err != nil {
+				failures <- err
+				return
+			}
+			responses <- response
+		}()
+	}
+	var operationID string
+	for i := 0; i < 2; i++ {
+		select {
+		case err := <-failures:
+			t.Fatal(err)
+		case response := <-responses:
+			data, _ := io.ReadAll(response.Body)
+			response.Body.Close()
+			if response.StatusCode != http.StatusAccepted && response.StatusCode != http.StatusOK {
+				t.Errorf("duplicate status=%d body=%s", response.StatusCode, data)
+				continue
+			}
+			var operation mediaOperationResponse
+			if err := json.Unmarshal(data, &operation); err != nil {
+				t.Fatal(err)
+			}
+			if operationID == "" {
+				operationID = operation.OperationID
+			} else if operationID != operation.OperationID {
+				t.Errorf("duplicate operation ids %s and %s", operationID, operation.OperationID)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatal("concurrent acceptance did not complete")
+		}
+	}
+}
+
+func TestMediaOperationActiveInputsSurviveUploadExpiry(t *testing.T) {
+	for _, cleanup := range []string{"read", "timer", "restart", "uncertain"} {
+		t.Run(cleanup, func(t *testing.T) {
+			fixture := newMediaOperationInternalFixture(t)
+			clock := fixture.now
+			fixture.service.store.now = func() time.Time { return clock }
+			assets := fixture.service.assets
+			assets.now = func() time.Time { return clock }
+			assets.activeReference = func(tenantID, assetID string) (bool, error) {
+				var count int64
+				err := fixture.database.Model(&mediaOperationAssetReferenceRecord{}).Where("tenant_id = ? AND asset_id = ? AND active = ?", tenantID, assetID, true).Count(&count).Error
+				return count != 0, err
+			}
+			input, err := assets.upload(fixture.tenant, "video/mp4", strings.NewReader("retained-input"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			clock = input.ExpiresAt.Add(-time.Second)
+			fixture.adapter.validateResult.InputAssetIDs = []string{input.AssetID}
+			server := mediaOperationHTTPServer(t, fixture)
+			operation := createMediaOperationHTTP(t, server, fixture.payload(), "retention")
+			clock = input.ExpiresAt.Add(time.Second)
+			var expirationCallback func()
+			switch cleanup {
+			case "timer":
+				originalAfterFunc := assetAfterFunc
+				assetAfterFunc = func(delay time.Duration, callback func()) *time.Timer {
+					expirationCallback = callback
+					return nil
+				}
+				assets.expireAsset(input.AssetID, input.ExpiresAt)
+				assetAfterFunc = originalAfterFunc
+			case "restart":
+				restarted := newTenantAssetStore(assets.root, assets.maxAssetBytes, int(assets.retention/time.Second))
+				restarted.now = assets.now
+				restarted.activeReference = assets.activeReference
+				fixture.service.assets = restarted
+				assets = restarted
+				server = mediaOperationHTTPServer(t, fixture)
+			case "uncertain":
+				_, generation, _, err := fixture.service.claim("retention-worker", operation.OperationID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				fixture.service.finish(operation.OperationID, generation, MediaOperationExecutionResult{State: MediaOperationStateUncertain})
+			}
+			for _, suffix := range []string{"", "/content"} {
+				response, err := server.Client().Get(server.URL + "/model/v1/assets/" + input.AssetID + suffix)
+				if err != nil {
+					t.Fatal(err)
+				}
+				body, _ := io.ReadAll(response.Body)
+				response.Body.Close()
+				if response.StatusCode != http.StatusOK {
+					t.Fatalf("active input %s status=%d body=%s", cleanup, response.StatusCode, body)
+				}
+				if suffix == "/content" && string(body) != "retained-input" {
+					t.Fatalf("input bytes=%q", body)
+				}
+			}
+			reader, err := assets.resolve(fixture.tenant, input.AssetID, "video/mp4")
+			if err != nil {
+				t.Fatal(err)
+			}
+			reader.Close()
+			if cleanup == "uncertain" {
+				return
+			}
+			if _, err := fixture.service.cancel(context.Background(), fixture.tenant, operation.OperationID); err != nil {
+				t.Fatal(err)
+			}
+			if expirationCallback != nil {
+				expirationCallback()
+			} else {
+				assets.expireAsset(input.AssetID, input.ExpiresAt)
+			}
+			response, err := server.Client().Get(server.URL + "/model/v1/assets/" + input.AssetID + "/content")
+			if err != nil {
+				t.Fatal(err)
+			}
+			response.Body.Close()
+			if response.StatusCode != http.StatusGone {
+				t.Fatalf("released input status=%d", response.StatusCode)
+			}
+		})
+	}
+}
+
+func TestMediaOperationAssetReferenceFailuresPreserveBytes(t *testing.T) {
+	for _, boundary := range []string{"metadata", "content", "startup", "timer"} {
+		t.Run(boundary, func(t *testing.T) {
+			fixture := newMediaOperationInternalFixture(t)
+			assets := fixture.service.assets
+			input, err := assets.upload(fixture.tenant, "video/mp4", strings.NewReader("retained-input"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			assets.now = func() time.Time { return input.ExpiresAt.Add(time.Second) }
+			calls := 0
+			assets.activeReference = func(string, string) (bool, error) {
+				calls++
+				if boundary == "content" && calls == 1 {
+					return true, nil
+				}
+				return false, errors.New("reference database unavailable")
+			}
+			if boundary == "startup" {
+				assets.initialized = false
+			}
+			if boundary == "timer" {
+				assets.expireAsset(input.AssetID, input.ExpiresAt)
+			}
+			server := mediaOperationHTTPServer(t, fixture)
+			response, err := server.Client().Get(server.URL + "/model/v1/assets/" + input.AssetID + "/content")
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, _ := io.ReadAll(response.Body)
+			response.Body.Close()
+			if response.StatusCode != http.StatusInternalServerError || !bytes.Contains(body, []byte("asset_store_error")) {
+				t.Fatalf("status=%d body=%s", response.StatusCode, body)
+			}
+			retained, err := os.ReadFile(assets.dataPath(input.AssetID))
+			if err != nil || string(retained) != "retained-input" {
+				t.Fatalf("retained bytes=%q error=%v", retained, err)
+			}
+		})
 	}
 }
