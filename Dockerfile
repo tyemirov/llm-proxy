@@ -13,7 +13,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS="${TARGETOS:-$(go env GOOS)}" GOARCH="${TARGETARCH:-$(go env GOARCH)}" go build -o llm-proxy ./cmd/cli
 
 # Runtime stage
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 WORKDIR /app
 RUN apt-get update && apt-get install -y ca-certificates curl && rm -rf /var/lib/apt/lists/*
 
