@@ -190,11 +190,11 @@ test-protocol-acceptance: frontend-dependencies
 	$(GO) test ./internal/proxy -run '^Test(ClientProtocols.*|AccountConnection(Lifecycle|SharedRoutingAndTenantUsage)|Management(ConnectionCredentialsRemainMaskedAndOwnerScoped|DatabasePersistenceAndOpenFailures)|V2(RoutesExactOrderedImageAndAudioAttachmentsThroughGemini|RoutesExactOrderedImagesThroughProviderAdapters|RejectsInvalidOrUnsupportedMediaBeforeUpstreamWork))$$' -count=1
 
 test-media-operations: frontend-dependencies
-	$(GO) test ./internal/proxy -run '^TestMediaOperation' -count=1
+	$(GO) test ./internal/proxy -run '^Test(MediaOperation|TenantAsset|DictatorWorkerIsolation)' -count=1
 
 .PHONY: test-client-contracts generate-api-docs
 test-client-contracts: frontend-dependencies
-	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run 'Test(ClientProtocols|OpenAPI|MessagesRequest|CoverageOpenAILifecycle|ManagementDashScopeWorkspaceChangeVerifiesRetainedKeyAndRoutesWithStoredURL)' -count=1
+	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run 'Test(ClientProtocols|ClientUploadsAsset|OpenAPI|MessagesRequest|CoverageOpenAILifecycle|ManagementDashScopeWorkspaceChangeVerifiesRetainedKeyAndRoutesWithStoredURL)' -count=1
 
 generate-api-docs:
 	$(NPM) exec -- node scripts/generate_openapi_docs.mjs
