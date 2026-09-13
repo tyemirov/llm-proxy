@@ -184,7 +184,7 @@ func TestClientUploadsAssetAndSerializesImageAndAudioAssetReferences(testingInst
 		}
 	}))
 	defer server.Close()
-	config, configError := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{BaseURL: server.URL, Secret: "sekret", Provider: "gemini"})
+	config, configError := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{BaseURL: server.URL + "?key=obsolete&key=duplicate", Secret: "sekret", Provider: "gemini"})
 	if configError != nil {
 		testingInstance.Fatalf("config: %v", configError)
 	}

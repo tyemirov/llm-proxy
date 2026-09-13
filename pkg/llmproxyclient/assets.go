@@ -45,6 +45,7 @@ func (config Config) assetUploadURL() url.URL {
 	}
 	queryValues.Del(queryFormat)
 	queryValues.Del(queryProvider)
+	queryValues.Del(queryKey)
 	requestURL.RawQuery = queryValues.Encode()
 	return requestURL
 }
