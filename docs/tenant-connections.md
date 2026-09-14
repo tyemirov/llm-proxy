@@ -59,15 +59,30 @@ The assignment removal and default updates occur in one database transaction.
 The service rejects connection deletion while assignments remain.
 The existing final-tenant deletion constraint remains in effect.
 
-## Data migration
+## Current database schema
 
-Schema version 17 creates one account connection for each existing provider configuration.
+The current schema is versionless.
+Fresh databases create the current tables directly, without a migration-version table or intermediate provider-key tables.
+Current account-connection databases validate their records on startup.
+Historical version records do not control this validation and remain unchanged.
+Startup rejects predecessor credential and temporary transfer tables beside the current account connections.
+It preserves the rejected records for operator action.
+
+New product fields and tables extend the declared current schema.
+Each change must define how existing records receive any required values.
+A data transfer must have a bounded procedure and a completion receipt before its bridge is removed.
+
+## Remaining data transfer
+
+The predecessor transfer creates one account connection for each existing provider configuration.
 It attaches each connection to the configuration's current tenant.
 Equal credential values remain in separate connections.
 The migration encrypts each secret with its new connection identity as authenticated data.
 It preserves tenant access keys, default routes, system prompts, and usage records.
 The transaction removes the predecessor credential table after the transfer.
 A restart uses the current schema and preserves the migrated connection identifiers.
+I261 retains this transfer until the production database has current account connections.
+The [schema transition record](managed-schema-transition.md) contains the inventory, local ownership prerequisite, and completion requirements.
 
 ## Connection inventory
 
@@ -84,7 +99,7 @@ Default-route validation and connection detachment use the same mutation lock.
 
 ## Acceptance
 
-1. Run `make test-account-connections` for connection ownership, assignment, and migration checks.
+1. Run `make test-account-connections` for connection ownership, assignment, versionless startup, restart, and remaining transfer checks.
 2. Run `make test-management-auth-blackbox BLACKBOX_TEST_ARGS='connection-dashboard.spec.js'` for the real browser flow.
 3. Run the remaining repository checks required by the current validation policy.
 

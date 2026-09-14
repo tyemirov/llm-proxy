@@ -44,6 +44,17 @@ value, a tenant setting value, a system prompt, or a routing default.
 The [Baidu Qianfan integration](baidu-qianfan.md) adds four text offerings and a typed protocol variation.
 The two DeepSeek V4 offerings share exact model records with the direct provider.
 
+## Alibaba Cloud connection labels
+
+The `dashscope` provider appears as **Alibaba Cloud** in connection setup and public model discovery.
+The provider catalog supplies the labels and the English [API-key setup link](https://www.alibabacloud.com/help/en/model-studio/get-api-key).
+The connection fields are **Alibaba Cloud API key** and **Alibaba Cloud API URL**.
+Qwen remains the model family name.
+The provider identifier, `dashscope_responses` codec, and `DASHSCOPE_*` environment variables retain their technical names.
+
+The setup guide includes a separate procedure for US (Virginia).
+F064 tracks US East endpoint support and the regional model inventory.
+
 ## Image formats and dimensions
 
 An offering can declare `image_mime_types` to restrict the protocol adapter's image formats.
@@ -371,7 +382,7 @@ the provider prompt, and masked connection state. The management app builds one
 provider card from each item. It never uses key presence or usage history to
 define provider membership.
 
-The DashScope catalog declares image input for `qwen3.7-plus` and
+The Alibaba Cloud catalog declares image input for `qwen3.7-plus` and
 `qwen3.6-flash`. These models accept image content and return text.
 Each route accepts at most 250 images and 20,000,000 bytes per complete image Data URI.
 The `attachment_data_uri_bytes` scope includes the URI prefix, MIME type, and Base64 content.

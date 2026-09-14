@@ -28,7 +28,7 @@ They identify the installed artwork. The collection is not an official asset pac
 | --- | --- | --- | --- |
 | `openai` | OpenAI API | OpenAI Blossom | `openai.svg` |
 | `deepseek` | DeepSeek API | DeepSeek whale | `deepseek-color.svg` |
-| `dashscope` | DashScope API | Alibaba Cloud symbol | `alibabacloud-color.svg` |
+| `dashscope` | Alibaba Cloud | Alibaba Cloud symbol | `alibabacloud-color.svg` |
 | `moonshot` | Moonshot API | Moonshot symbol | `moonshot.svg` |
 | `minimax` | MiniMax API | MiniMax symbol | `minimax-color.svg` |
 | `siliconflow` | SiliconFlow API | SiliconFlow cloud symbol | `siliconcloud-color.svg` |
@@ -41,7 +41,7 @@ They identify the installed artwork. The collection is not an official asset pac
 | `vertex` | Google Cloud Vertex AI | Vertex AI product symbol | `vertexai-color.svg` |
 | `dictator` | Dictator API | Explicit text-only presentation | No verified small logo |
 
-Alibaba Cloud identifies the service behind the [DashScope connection][model-studio].
+Alibaba Cloud identifies the service behind the [Alibaba Cloud connection][model-studio].
 Baidu Cloud identifies the service organization behind the [Qianfan connection][baidu-cloud].
 These are deliberate provider logo choices, not claims that each API has a separate logo.
 
@@ -92,7 +92,7 @@ An asset collection license is not a claim of brand endorsement.
 | [OpenAI brand guidance][openai-brand] | OpenAI Blossom and presentation rules |
 | [Anthropic official assets][anthropic-brand] | Anthropic and Claude artwork review |
 | [Google Cloud icon library][google-icons] | Vertex AI product artwork review |
-| [Alibaba Cloud Model Studio][model-studio] | DashScope service identity |
+| [Alibaba Cloud Model Studio][model-studio] | Alibaba Cloud service identity |
 | [Moonshot developer platform][moonshot-platform] | Current Kimi developer identity |
 | [SiliconFlow][siliconflow] | SiliconFlow service identity |
 | [Baidu AI Cloud][baidu-cloud] | Qianfan service organization |
