@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 4
 model_migrations:
     - managed_schema_version: 4
       provider: qwencloud
@@ -104,6 +104,39 @@ operations:
         - image
       output_artifacts:
         - video
+    - id: audio_transcription
+      input_artifacts:
+        - audio
+      output_artifacts:
+        - text
+    - id: audio_diarization
+      input_artifacts:
+        - audio
+      output_artifacts:
+        - text
+    - id: audio_alignment
+      input_artifacts:
+        - audio
+        - text
+      output_artifacts:
+        - text
+    - id: subtitle_creation
+      input_artifacts:
+        - audio
+        - text
+      output_artifacts:
+        - text
+    - id: speech_generation
+      input_artifacts:
+        - text
+      output_artifacts:
+        - audio
+        - text
+    - id: voice_extraction
+      input_artifacts:
+        - audio
+      output_artifacts:
+        - audio
 publishers:
     - id: baidu
       label: Baidu
@@ -129,6 +162,8 @@ publishers:
       label: Meta
     - id: xai
       label: xAI
+    - id: mprlab
+      label: Marco Polo Research Lab
 families:
     - id: gpt-6
       publisher: openai
@@ -245,6 +280,10 @@ families:
     - id: xai-stt
       publisher: xai
       label: xAI STT
+      weight_access: proprietary
+    - id: dictator-speech
+      publisher: mprlab
+      label: Dictator Speech
       weight_access: proprietary
 models:
     - id: gpt-6-astra
@@ -943,8 +982,22 @@ models:
       operations:
         - dictation
       media_inputs: []
+    - id: dictator-speech-v1
+      enabled: true
+      publisher: mprlab
+      family: dictator-speech
+      version: v1
+      operations:
+        - audio_transcription
+        - audio_diarization
+        - audio_alignment
+        - subtitle_creation
+        - speech_generation
+        - voice_extraction
+      media_inputs: []
 providers:
     - id: openai
+      connection_ownership: tenant
       label: OpenAI
       api_service_label: OpenAI API
       key_acquisition_url: https://platform.openai.com/api-keys
@@ -962,82 +1015,47 @@ providers:
       transports:
         - id: text
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.openai.com/v1
             path: /responses
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          request_protocol: openai_responses
-          response_protocol: openai_responses
-          usage_mapping: openai_responses
-          lifecycle: pollable_resource
-          resource_visibility:
-            retry_interval_milliseconds: 2000
-            retry_limit: 1
-            retry_status_codes:
-                - 403
-                - 404
-          protocol_parameters:
-            media_execution_lifecycle: pollable_resource
-            model_field: model
-            token_field: max_output_tokens
-            output_fields:
-                - output[].content[].text
-                - output[].type
-                - output[].call_id
-                - output[].name
-                - output[].arguments
-            finish_rules:
-                complete:
-                    - completed
-                continue:
-                    - incomplete:max_output_tokens
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - cancelled
-                - failed
-                - refusal
-                - unknown_status
-            usage_fields:
-                input: usage.input_tokens
-                output: usage.output_tokens
-                total: usage.total_tokens
+          components:
+            request_codec:
+              id: openai_responses
+            response_codec:
+              id: openai_responses
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: pollable_resource
+              resource_visibility:
+                retry_interval_milliseconds: 2000
+                retry_limit: 1
+                retry_status_codes:
+                    - 403
+                    - 404
         - id: dictation
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.openai.com/v1
             path: /audio/transcriptions
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          request_protocol: multipart_transcription
-          response_protocol: multipart_transcription
-          usage_mapping: multipart_transcription
-          lifecycle: synchronous_completion
-          protocol_parameters:
-            model_field: model
-            token_field: ""
-            output_fields:
-                - text
-            finish_rules:
-                complete:
-                    - http_2xx
-                continue: []
-            continuation_rules: []
-            error_rules:
-                - malformed_response
-                - provider_error
-            usage_fields:
-                input: ""
-                output: ""
-                total: ""
+          components:
+            request_codec:
+              id: multipart_transcription
+              variation: model
+            response_codec:
+              id: multipart_transcription
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
       offerings:
         - model: gpt-6-astra
           created: 1787853604
@@ -1731,6 +1749,7 @@ providers:
                   conditions:
                     billing_mode: standard
     - id: deepseek
+      connection_ownership: tenant
       label: DeepSeek
       api_service_label: DeepSeek API
       key_acquisition_url: https://platform.deepseek.com/api_keys
@@ -1748,41 +1767,23 @@ providers:
       transports:
         - id: text
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.deepseek.com
             path: /chat/completions
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          request_protocol: openai_chat_completions
-          response_protocol: openai_chat_completions
-          usage_mapping: openai_chat_completions
-          lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: max_tokens
-            output_fields:
-                - choices[].message.content
-                - choices[].message.tool_calls
-            finish_rules:
-                complete:
-                    - stop
-                    - tool_calls
-                continue:
-                    - length
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - content_filter
-                - unknown_finish_reason
-            usage_fields:
-                input: usage.prompt_tokens
-                output: usage.completion_tokens
-                total: usage.total_tokens
+          components:
+            request_codec:
+              id: openai_chat_completions
+              variation: max_tokens
+            response_codec:
+              id: openai_chat_completions
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
       offerings:
         - model: deepseek-v4-flash
           created: 1787276456
@@ -1817,14 +1818,15 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: dashscope
-      label: DashScope
-      api_service_label: DashScope API
-      key_acquisition_url: https://help.aliyun.com/en/model-studio/get-api-key
+      connection_ownership: tenant
+      label: Alibaba Cloud
+      api_service_label: Alibaba Cloud
+      key_acquisition_url: https://www.alibabacloud.com/help/en/model-studio/get-api-key
       aliases:
         - qwen
       fields:
         - id: api_key
-          label: DashScope API key
+          label: Alibaba Cloud API key
           kind: credential
           type: opaque
           required: true
@@ -1834,7 +1836,7 @@ providers:
             minimum_length: 1
           environment: DASHSCOPE_API_KEY
         - id: base_url
-          label: DashScope API URL
+          label: Alibaba Cloud API URL
           kind: setting
           type: url
           required: true
@@ -1848,40 +1850,22 @@ providers:
       transports:
         - id: text
           endpoint:
+            protocol: http
             method: POST
             setting_field: base_url
             path: /responses
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          request_protocol: dashscope_responses
-          response_protocol: dashscope_responses
-          usage_mapping: dashscope_responses
-          lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: max_output_tokens
-            output_fields:
-                - output[].content[].text
-            finish_rules:
-                complete:
-                    - completed
-                continue:
-                    - incomplete
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - cancelled
-                - failed
-                - unknown_status
-            usage_fields:
-                input: usage.input_tokens
-                output: usage.output_tokens
-                total: usage.total_tokens
+          components:
+            request_codec:
+              id: dashscope_responses
+            response_codec:
+              id: dashscope_responses
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
       offerings:
         - model: qwen-plus
           created: 1787276456
@@ -2395,6 +2379,7 @@ providers:
                     billing_mode: pay_as_you_go_list
                     mode: singapore_international;thinking_or_non_thinking;input_tokens_0_to_1000000
     - id: moonshot
+      connection_ownership: tenant
       label: Moonshot
       api_service_label: Moonshot API
       key_acquisition_url: https://platform.kimi.ai/console/api-keys
@@ -2414,41 +2399,23 @@ providers:
       transports:
         - id: text
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.moonshot.ai/v1
             path: /chat/completions
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          request_protocol: openai_chat_completions
-          response_protocol: openai_chat_completions
-          usage_mapping: openai_chat_completions
-          lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: max_completion_tokens
-            output_fields:
-                - choices[].message.content
-                - choices[].message.tool_calls
-            finish_rules:
-                complete:
-                    - stop
-                    - tool_calls
-                continue:
-                    - length
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - content_filter
-                - unknown_finish_reason
-            usage_fields:
-                input: usage.prompt_tokens
-                output: usage.completion_tokens
-                total: usage.total_tokens
+          components:
+            request_codec:
+              id: openai_chat_completions
+              variation: max_completion_tokens
+            response_codec:
+              id: openai_chat_completions
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
       offerings:
         - model: kimi-k2.6
           created: 1787276456
@@ -2619,6 +2586,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: minimax
+      connection_ownership: tenant
       label: MiniMax
       api_service_label: MiniMax API
       key_acquisition_url: https://platform.minimax.io/docs/guides/quickstart-preparation
@@ -2636,41 +2604,23 @@ providers:
       transports:
         - id: text
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.minimax.io/v1
             path: /chat/completions
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          request_protocol: openai_chat_completions
-          response_protocol: openai_chat_completions
-          usage_mapping: openai_chat_completions
-          lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: max_completion_tokens
-            output_fields:
-                - choices[].message.content
-                - choices[].message.tool_calls
-            finish_rules:
-                complete:
-                    - stop
-                    - tool_calls
-                continue:
-                    - length
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - content_filter
-                - unknown_finish_reason
-            usage_fields:
-                input: usage.prompt_tokens
-                output: usage.completion_tokens
-                total: usage.total_tokens
+          components:
+            request_codec:
+              id: openai_chat_completions
+              variation: max_completion_tokens
+            response_codec:
+              id: openai_chat_completions
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
       offerings:
         - model: minimax-m3
           created: 1788644880
@@ -3098,6 +3048,7 @@ providers:
               source: https://platform.minimax.io/docs/guides/pricing-paygo
               last_verified: "2026-08-13"
     - id: siliconflow
+      connection_ownership: tenant
       label: SiliconFlow
       api_service_label: SiliconFlow API
       key_acquisition_url: https://cloud.siliconflow.com/account/ak
@@ -3115,72 +3066,42 @@ providers:
       transports:
         - id: text
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.siliconflow.com/v1
             path: /chat/completions
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          request_protocol: openai_chat_completions
-          response_protocol: openai_chat_completions
-          usage_mapping: openai_chat_completions
-          lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: max_tokens
-            output_fields:
-                - choices[].message.content
-                - choices[].message.tool_calls
-            finish_rules:
-                complete:
-                    - stop
-                    - tool_calls
-                continue:
-                    - length
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - content_filter
-                - unknown_finish_reason
-            usage_fields:
-                input: usage.prompt_tokens
-                output: usage.completion_tokens
-                total: usage.total_tokens
+          components:
+            request_codec:
+              id: openai_chat_completions
+              variation: max_tokens
+            response_codec:
+              id: openai_chat_completions
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
         - id: dictation
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.siliconflow.com/v1
             path: /audio/transcriptions
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          request_protocol: multipart_transcription
-          response_protocol: multipart_transcription
-          usage_mapping: multipart_transcription
-          lifecycle: synchronous_completion
-          protocol_parameters:
-            model_field: model
-            token_field: ""
-            output_fields:
-                - text
-            finish_rules:
-                complete:
-                    - http_2xx
-                continue: []
-            continuation_rules: []
-            error_rules:
-                - malformed_response
-                - provider_error
-            usage_fields:
-                input: ""
-                output: ""
-                total: ""
+          components:
+            request_codec:
+              id: multipart_transcription
+              variation: model
+            response_codec:
+              id: multipart_transcription
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
       offerings:
         - model: deepseek-reasoner
           created: 1787276456
@@ -3211,6 +3132,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: zai
+      connection_ownership: tenant
       label: Z.AI
       api_service_label: Z.AI API
       key_acquisition_url: https://z.ai/manage-apikey/apikey-list
@@ -3228,72 +3150,42 @@ providers:
       transports:
         - id: text
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.z.ai/api/paas/v4
             path: /chat/completions
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          request_protocol: openai_chat_completions
-          response_protocol: openai_chat_completions
-          usage_mapping: openai_chat_completions
-          lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: max_tokens
-            output_fields:
-                - choices[].message.content
-                - choices[].message.tool_calls
-            finish_rules:
-                complete:
-                    - stop
-                    - tool_calls
-                continue:
-                    - length
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - content_filter
-                - unknown_finish_reason
-            usage_fields:
-                input: usage.prompt_tokens
-                output: usage.completion_tokens
-                total: usage.total_tokens
+          components:
+            request_codec:
+              id: openai_chat_completions
+              variation: max_tokens
+            response_codec:
+              id: openai_chat_completions
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
         - id: dictation
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.z.ai/api/paas/v4
             path: /audio/transcriptions
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          request_protocol: multipart_transcription
-          response_protocol: multipart_transcription
-          usage_mapping: multipart_transcription
-          lifecycle: synchronous_completion
-          protocol_parameters:
-            model_field: model
-            token_field: ""
-            output_fields:
-                - text
-            finish_rules:
-                complete:
-                    - http_2xx
-                continue: []
-            continuation_rules: []
-            error_rules:
-                - malformed_response
-                - provider_error
-            usage_fields:
-                input: ""
-                output: ""
-                total: ""
+          components:
+            request_codec:
+              id: multipart_transcription
+              variation: model
+            response_codec:
+              id: multipart_transcription
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
       offerings:
         - model: glm-5.3
           created: 1787011200
@@ -3485,6 +3377,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: gemini
+      connection_ownership: tenant
       label: Gemini
       api_service_label: Gemini API
       key_acquisition_url: https://aistudio.google.com/app/apikey
@@ -3502,125 +3395,74 @@ providers:
       transports:
         - id: text_pollable
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://generativelanguage.googleapis.com/v1beta
             path: /interactions
-          authentication:
-            kind: header
-            field: api_key
-            header: x-goog-api-key
-            prefix: ""
           headers:
             - name: Api-Revision
               value: "2026-05-20"
-          request_protocol: gemini_interactions
-          response_protocol: gemini_interactions
-          usage_mapping: gemini_interactions
-          lifecycle: pollable_resource
-          resource_visibility:
-            retry_interval_milliseconds: 5000
-            retry_limit: 6
-            retry_status_codes:
-                - 400
-                - 403
-                - 404
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: generation_config.max_output_tokens
-            output_fields:
-                - outputs[].text
-            finish_rules:
-                complete:
-                    - completed
-                continue:
-                    - incomplete
-            continuation_rules: []
-            error_rules:
-                - blocked
-                - cancelled
-                - failed
-                - unknown_status
-            usage_fields:
-                input: usage.input_tokens
-                output: usage.output_tokens
-                total: usage.total_tokens
+          components:
+            request_codec:
+              id: gemini_interactions
+            response_codec:
+              id: gemini_interactions
+            authentication:
+              kind: header
+              field: api_key
+              header: x-goog-api-key
+              prefix: ""
+            execution:
+              id: pollable_resource
+              resource_visibility:
+                retry_interval_milliseconds: 5000
+                retry_limit: 6
+                retry_status_codes:
+                    - 400
+                    - 403
+                    - 404
         - id: text_synchronous
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://generativelanguage.googleapis.com/v1beta
             path: /interactions
-          authentication:
-            kind: header
-            field: api_key
-            header: x-goog-api-key
-            prefix: ""
           headers:
             - name: Api-Revision
               value: "2026-05-20"
-          request_protocol: gemini_interactions
-          response_protocol: gemini_interactions
-          usage_mapping: gemini_interactions
-          lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: generation_config.max_output_tokens
-            output_fields:
-                - outputs[].text
-            finish_rules:
-                complete:
-                    - completed
-                continue:
-                    - incomplete
-            continuation_rules: []
-            error_rules:
-                - blocked
-                - cancelled
-                - failed
-                - unknown_status
-            usage_fields:
-                input: usage.input_tokens
-                output: usage.output_tokens
-                total: usage.total_tokens
+          components:
+            request_codec:
+              id: gemini_interactions
+            response_codec:
+              id: gemini_interactions
+            authentication:
+              kind: header
+              field: api_key
+              header: x-goog-api-key
+              prefix: ""
+            execution:
+              id: synchronous_completion
         - id: dictation
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://generativelanguage.googleapis.com/v1beta
             path: /interactions
-          authentication:
-            kind: header
-            field: api_key
-            header: x-goog-api-key
-            prefix: ""
           headers:
             - name: Api-Revision
               value: "2026-05-20"
-          request_protocol: gemini_interactions
-          response_protocol: gemini_interactions
-          usage_mapping: gemini_interactions
-          lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: generation_config.max_output_tokens
-            output_fields:
-                - outputs[].text
-            finish_rules:
-                complete:
-                    - completed
-                continue:
-                    - incomplete
-            continuation_rules: []
-            error_rules:
-                - blocked
-                - cancelled
-                - failed
-                - unknown_status
-            usage_fields:
-                input: usage.input_tokens
-                output: usage.output_tokens
-                total: usage.total_tokens
+          components:
+            request_codec:
+              id: gemini_interactions
+            response_codec:
+              id: gemini_interactions
+            authentication:
+              kind: header
+              field: api_key
+              header: x-goog-api-key
+              prefix: ""
+            execution:
+              id: synchronous_completion
       offerings:
         - model: gemini-3.6-flash
           created: 1788566400
@@ -4157,6 +3999,7 @@ providers:
               source: https://ai.google.dev/gemini-api/docs/pricing
               last_verified: "2026-09-05"
     - id: anthropic
+      connection_ownership: tenant
       label: Anthropic
       api_service_label: Anthropic API
       key_acquisition_url: https://platform.claude.com/settings/keys
@@ -4176,45 +4019,25 @@ providers:
       transports:
         - id: text
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.anthropic.com
             path: /v1/messages
-          authentication:
-            kind: header
-            field: api_key
-            header: x-api-key
-            prefix: ""
           headers:
             - name: anthropic-version
               value: "2023-06-01"
-          request_protocol: anthropic_messages
-          response_protocol: anthropic_messages
-          usage_mapping: anthropic_messages
-          lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: max_tokens
-            output_fields:
-                - content[].text
-            finish_rules:
-                complete:
-                    - end_turn
-                    - stop_sequence
-                continue:
-                    - max_tokens
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - pause_turn
-                - refusal
-                - tool_use
-                - unknown_stop_reason
-            usage_fields:
-                input: usage.input_tokens
-                output: usage.output_tokens
-                total: derived_input_plus_output
+          components:
+            request_codec:
+              id: anthropic_messages
+            response_codec:
+              id: anthropic_messages
+            authentication:
+              kind: header
+              field: api_key
+              header: x-api-key
+              prefix: ""
+            execution:
+              id: synchronous_completion
       offerings:
         - model: claude-fable-5-1
           created: 1787875200
@@ -4747,6 +4570,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: meta
+      connection_ownership: tenant
       label: Meta
       api_service_label: Meta API
       key_acquisition_url: https://dev.meta.ai/
@@ -4764,65 +4588,41 @@ providers:
       transports:
         - id: text
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.meta.ai/v1
             path: /chat/completions
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          request_protocol: openai_chat_completions
-          response_protocol: openai_chat_completions
-          usage_mapping: openai_chat_completions
-          lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: max_completion_tokens
-            output_fields:
-                - choices[].message.content
-                - choices[].message.tool_calls
-            finish_rules:
-                complete:
-                    - stop
-                    - tool_calls
-                continue:
-                    - length
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - content_filter
-                - unknown_finish_reason
-            usage_fields:
-                input: usage.prompt_tokens
-                output: usage.completion_tokens
-                total: usage.total_tokens
+          components:
+            request_codec:
+              id: openai_chat_completions
+              variation: max_completion_tokens
+            response_codec:
+              id: openai_chat_completions
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
         - id: dictation
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.meta.ai/v1
             path: /asr/transcribe
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          request_protocol: meta_transcription
-          response_protocol: meta_transcription
-          usage_mapping: meta_transcription
-          lifecycle: synchronous_completion
-          protocol_parameters:
-            model_field: request.model
-            output_fields:
-              - transcript
-            finish_rules:
-              complete:
-                - http_2xx
-            error_rules:
-              - malformed_response
-              - provider_error
+          components:
+            request_codec:
+              id: meta_transcription
+            response_codec:
+              id: meta_transcription
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
       offerings:
         - model: muse-voice-transcribe-1.0
           created: 1788652800
@@ -4914,6 +4714,7 @@ providers:
                   conditions:
                     billing_mode: standard
     - id: xai
+      connection_ownership: tenant
       label: xAI
       api_service_label: xAI API
       key_acquisition_url: https://console.x.ai/team/default/api-keys
@@ -4931,108 +4732,59 @@ providers:
       transports:
         - id: text_responses
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.x.ai/v1
             path: /responses
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          request_protocol: xai_responses
-          response_protocol: xai_responses
-          usage_mapping: xai_responses
-          lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: max_output_tokens
-            output_fields:
-                - output[].content[].text
-                - output[].type
-                - output[].call_id
-                - output[].name
-                - output[].arguments
-            finish_rules:
-                complete:
-                    - completed
-                continue:
-                    - incomplete:max_output_tokens
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - cancelled
-                - failed
-                - refusal
-                - unknown_status
-            usage_fields:
-                input: usage.input_tokens
-                output: usage.output_tokens
-                total: usage.total_tokens
+          components:
+            request_codec:
+              id: xai_responses
+            response_codec:
+              id: xai_responses
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
         - id: video_generation
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.x.ai/v1
             path: /videos/generations
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          request_protocol: xai_videos_generations
-          response_protocol: xai_videos_generations
-          usage_mapping: xai_videos_generations
-          lifecycle: pollable_resource
-          protocol_parameters:
-            model_field: model
-            token_field: ""
-            output_fields:
-                - data[].url
-            finish_rules:
-                complete:
-                    - completed
-                continue:
-                    - pending
-            continuation_rules: []
-            error_rules:
-                - failed
-                - unknown_status
-            usage_fields:
-                input: ""
-                output: ""
-                total: ""
+          components:
+            request_codec:
+              id: xai_videos_generations
+            response_codec:
+              id: xai_videos_generations
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: pollable_resource
         - id: dictation
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://api.x.ai/v1
             path: /stt
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          request_protocol: multipart_transcription
-          response_protocol: multipart_transcription
-          usage_mapping: multipart_transcription
-          lifecycle: synchronous_completion
-          protocol_parameters:
-            model_field: ""
-            token_field: ""
-            output_fields:
-                - text
-            finish_rules:
-                complete:
-                    - http_2xx
-                continue: []
-            continuation_rules: []
-            error_rules:
-                - malformed_response
-                - provider_error
-            usage_fields:
-                input: ""
-                output: ""
-                total: ""
+          components:
+            request_codec:
+              id: multipart_transcription
+              variation: model_omitted
+            response_codec:
+              id: multipart_transcription
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
       offerings:
         - model: grok-4.3
           created: 1787276456
@@ -5362,6 +5114,7 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: baidu
+      connection_ownership: tenant
       label: Baidu Qianfan
       api_service_label: Qianfan API
       key_acquisition_url: https://intl.cloud.baidu.com/en/doc/qianfan/s/qm8qxemze-intl-en
@@ -5388,40 +5141,24 @@ providers:
       transports:
         - id: text
           endpoint:
+            protocol: http
             method: POST
             setting_field: base_url
             path: /chat/completions
-          authentication:
-            kind: bearer
-            field: api_key
-            header: Authorization
-            prefix: 'Bearer '
-          request_protocol: openai_chat_completions
-          response_protocol: openai_chat_completions
-          usage_mapping: openai_chat_completions
-          lifecycle: synchronous_completion
-          protocol_parameters:
-            response_policy: qianfan
-            media_execution_lifecycle: synchronous_completion
-            model_field: model
-            token_field: max_tokens
-            output_fields:
-                - choices[].message.content
-            finish_rules:
-                complete: [stop]
-                continue: [length]
-            continuation_rules:
-                - append_visible_assistant_output
-                - request_missing_suffix
-            error_rules:
-                - content_filter
-                - tool_calls
-                - unknown_finish_reason
-                - blocked_flag
-            usage_fields:
-                input: usage.prompt_tokens
-                output: usage.completion_tokens
-                total: usage.total_tokens
+          components:
+            request_codec:
+              id: openai_chat_completions
+              variation: max_tokens
+            response_codec:
+              id: openai_chat_completions
+              variation: qianfan
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
       offerings:
         - model: ernie-5.0
           created: 1788566400
@@ -5539,6 +5276,7 @@ providers:
                   conditions:
                     billing_mode: pay_as_you_go
     - id: vertex
+      connection_ownership: tenant
       enabled: true
       label: Vertex AI
       api_service_label: Google Cloud Vertex AI
@@ -5557,36 +5295,22 @@ providers:
       transports:
         - id: generate_content
           endpoint:
+            protocol: http
             method: POST
             default_base_url: https://aiplatform.googleapis.com/v1
             path: /publishers/google/models
-          authentication:
-            kind: header
-            field: api_key
-            header: x-goog-api-key
-            prefix: ''
-          request_protocol: vertex_generate_content
-          response_protocol: vertex_generate_content
-          usage_mapping: vertex_generate_content
-          lifecycle: synchronous_completion
-          protocol_parameters:
-            media_execution_lifecycle: synchronous_completion
-            model_field: path.model
-            token_field: generationConfig.maxOutputTokens
-            output_fields:
-              - candidates[].content.parts[].text
-            finish_rules:
-              complete:
-                - STOP
-            continuation_rules: []
-            error_rules:
-              - MAX_TOKENS
-              - blocked
-              - unknown_finish_reason
-            usage_fields:
-              input: usageMetadata.promptTokenCount
-              output: usageMetadata.candidatesTokenCount+thoughtsTokenCount
-              total: usageMetadata.totalTokenCount
+          components:
+            request_codec:
+              id: vertex_generate_content
+            response_codec:
+              id: vertex_generate_content
+            authentication:
+              kind: header
+              field: api_key
+              header: x-goog-api-key
+              prefix: ''
+            execution:
+              id: synchronous_completion
       offerings:
         - model: gemini-3.8-flash
           created: 1788307200
@@ -5883,3 +5607,103 @@ providers:
               unavailable_reason: Exact Vertex prices require import for this offering.
               source: https://cloud.google.com/vertex-ai/generative-ai/pricing
               last_verified: '2026-09-07'
+    - id: dictator
+      connection_ownership: deployment
+      label: Dictator
+      api_service_label: Dictator Speech API
+      fields:
+        - id: grpc_address
+          label: Dictator gRPC address
+          kind: setting
+          type: grpc_target
+          required: true
+          default: ""
+          secret: false
+          validation:
+            minimum_length: 1
+          environment: DICTATOR_GRPC_ADDR
+        - id: grpc_auth_token
+          label: Dictator gRPC bearer token
+          kind: credential
+          type: opaque
+          required: true
+          default: ""
+          secret: true
+          validation:
+            minimum_length: 1
+          environment: DICTATOR_GRPC_AUTH_TOKEN
+        - id: grpc_tls
+          label: Dictator gRPC TLS
+          kind: setting
+          type: boolean
+          required: true
+          default: ""
+          secret: false
+          validation:
+            minimum_length: 1
+          environment: DICTATOR_GRPC_TLS
+      transports:
+        - id: speech
+          endpoint:
+            protocol: grpc
+            setting_field: grpc_address
+          components:
+            request_codec:
+              id: dictator_speech_v1
+            response_codec:
+              id: dictator_speech_v1
+            authentication:
+              kind: grpc_bearer
+              field: grpc_auth_token
+            execution:
+              id: asynchronous_job
+      offerings:
+        - model: dictator-speech-v1
+          created: 1788998400
+          upstream_model: dictator-speech-v1
+          transport: speech
+          operations:
+            - audio_transcription
+            - audio_diarization
+            - audio_alignment
+            - subtitle_creation
+            - speech_generation
+            - voice_extraction
+          default_operations:
+            - audio_transcription
+            - audio_diarization
+            - audio_alignment
+            - subtitle_creation
+            - speech_generation
+            - voice_extraction
+          prices:
+            - operation: audio_transcription
+              available: false
+              unavailable_reason: Dictator is a deployment-owned provider without tenant billing.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: audio_diarization
+              available: false
+              unavailable_reason: Dictator is a deployment-owned provider without tenant billing.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: audio_alignment
+              available: false
+              unavailable_reason: Dictator is a deployment-owned provider without tenant billing.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: subtitle_creation
+              available: false
+              unavailable_reason: Dictator is a deployment-owned provider without tenant billing.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: speech_generation
+              available: false
+              unavailable_reason: Dictator is a deployment-owned provider without tenant billing.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: voice_extraction
+              available: false
+              unavailable_reason: Dictator is a deployment-owned provider without tenant billing.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'

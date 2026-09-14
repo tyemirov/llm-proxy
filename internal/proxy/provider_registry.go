@@ -61,6 +61,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 		order = append(order, identifier)
 		definition := providerDefinition{
 			identifier:          identifier,
+			connectionOwnership: provider.ConnectionOwnership,
 			label:               provider.Label,
 			apiServiceLabel:     provider.APIServiceLabel,
 			keyAcquisitionURL:   provider.KeyAcquisitionURL,
@@ -71,6 +72,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			transports:          make(map[string]providerTransportDefinition, len(provider.Transports)),
 			textModels:          map[string]textModelDefinition{},
 			transcriptionModels: map[string]dictationModelDefinition{},
+			mediaModels:         map[string]struct{}{},
 		}
 		familyIDs := map[string]struct{}{}
 		for _, field := range provider.Fields {
@@ -82,17 +84,17 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			definition.connectionValues[fieldIdentifier] = value
 		}
 		for _, transport := range provider.Transports {
+			composition, _ := composeProviderTransport(transport, "")
 			definition.transports[transport.ID] = providerTransportDefinition{
 				identifier:         transport.ID,
 				endpoint:           transport.Endpoint,
-				authentication:     transport.Authentication,
+				authentication:     composition.authentication,
 				headers:            append([]ProviderCatalogHeader(nil), transport.Headers...),
-				requestProtocol:    transport.RequestProtocol,
-				responseProtocol:   transport.ResponseProtocol,
-				usageMapping:       transport.UsageMapping,
-				lifecycle:          textExecutionLifecycle(transport.Lifecycle),
-				resourceVisibility: pollableResourceVisibilityPolicyFromCatalog(transport.ResourceVisibility),
-				protocolParameters: transport.ProtocolParameters,
+				requestCodec:       composition.requestCodec,
+				responseCodec:      composition.responseCodec,
+				lifecycle:          composition.lifecycle,
+				resourceVisibility: composition.resourceVisibility,
+				protocolParameters: composition.parameters,
 			}
 		}
 		for _, offering := range provider.Offerings {
@@ -106,6 +108,9 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 					definition.capabilities = append(definition.capabilities, operation)
 				}
 			}
+			if slices.Contains(offering.Operations, ModelOperationVideoGeneration) {
+				definition.mediaModels[offering.Model] = struct{}{}
+			}
 			for _, mediaInput := range offering.MediaInputs {
 				capability := mediaInputCapability(mediaInput)
 				if !slices.Contains(definition.capabilities, capability) {
@@ -115,7 +120,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			transport := definition.transports[offering.Transport]
 			if slices.Contains(offering.Operations, ModelOperationText) {
 				routeCapabilities := textRouteCapabilities{
-					wireContract:       textWireContract(transport.requestProtocol),
+					wireContract:       textWireContract(transport.requestCodec),
 					executionLifecycle: transport.lifecycle,
 				}
 				definition.textModels[strings.ToLower(offering.Model)] = textModelDefinition{
@@ -226,7 +231,7 @@ func (registry *providerRegistry) forTenant(requestTenant tenant) *providerRegis
 	definitions := make(map[providerID]providerDefinition, len(registry.definitions))
 	for identifier, definition := range registry.definitions {
 		definition.connectionValues = cloneStringMap(definition.connectionValues)
-		if providerSettings, configured := requestTenant.providerSettings[identifier]; configured {
+		if providerSettings, configured := requestTenant.providerSettings[identifier]; configured && definition.connectionOwnership == CatalogProviderConnectionTenant {
 			for fieldIdentifier, value := range providerSettings.connectionValues {
 				definition.connectionValues[fieldIdentifier] = value
 			}

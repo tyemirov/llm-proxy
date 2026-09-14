@@ -231,10 +231,12 @@ func TestManagedUsageWriterKeepsPublicResponsesIndependentFromPersistence(t *tes
 	tenantRecord.DefaultModel = ModelNameGPT41
 	tenantRecord.DefaultDictationProvider = ProviderNameOpenAI
 	tenantRecord.DefaultDictationModel = DefaultDictationModel
-	tenantRecord.ProviderConnections = []managedProviderConnectionRecord{{
-		TenantID: tenantIDValue, ProviderID: ProviderNameOpenAI, FieldID: CatalogCredentialAPIKey,
-		Value: encryptedProviderAPIKey, CreatedAt: timestamp, UpdatedAt: timestamp,
+	tenantRecord.ConnectionAssignments = []managedTenantConnectionRecord{{
+		TenantID: tenantIDValue, ProviderID: ProviderNameOpenAI, ConnectionID: tenantIDValue,
+		Connection: managedAccountConnectionRecord{ID: tenantIDValue, OwnerUserID: ownerUserID, ProviderID: ProviderNameOpenAI,
+			Fields: []managedConnectionFieldRecord{{ConnectionID: tenantIDValue, FieldID: CatalogCredentialAPIKey, Value: encryptedProviderAPIKey, CreatedAt: timestamp, UpdatedAt: timestamp}}},
 	}}
+
 	tenantRecord.ProviderProfiles = []managedProviderProfileRecord{{
 		TenantID: tenantIDValue, ProviderID: ProviderNameOpenAI, TextModel: ModelNameGPT41,
 		CreatedAt: timestamp, UpdatedAt: timestamp,

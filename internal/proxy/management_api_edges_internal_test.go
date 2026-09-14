@@ -21,158 +21,11 @@ func (verifier internalProviderKeyVerifier) verify(context.Context, providerDefi
 	return verifier.verificationError
 }
 
-type pausingProviderKeyVerifier struct {
-	verificationStarted  chan struct{}
-	releaseVerification  chan struct{}
-	verificationComplete chan struct{}
-}
-
-func (verifier pausingProviderKeyVerifier) verify(context.Context, providerDefinition, textModelDefinition, string) error {
-	close(verifier.verificationStarted)
-	<-verifier.releaseVerification
-	close(verifier.verificationComplete)
-	return nil
-}
-
-func TestManagementProviderKeySaveStopsWhenVerifiedRequestIsCanceled(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	principal := managementPrincipal{userID: "tauth-handler-user", userEmail: "owner@example.com"}
-	service, database := newSeededInternalManagementService(t)
-	verifier := pausingProviderKeyVerifier{
-		verificationStarted:  make(chan struct{}),
-		releaseVerification:  make(chan struct{}),
-		verificationComplete: make(chan struct{}),
-	}
-	service.keyVerifier = verifier
-
-	requestContext, cancelRequest := context.WithCancel(context.Background())
-	defer cancelRequest()
-	responseComplete := make(chan *httptest.ResponseRecorder, 1)
-	go func() {
-		responseComplete <- executeInternalManagementHandlerWithContext(
-			service.saveProviderConnectionsHandler(),
-			http.MethodPut,
-			"/api/management/tenants/managed-default/provider-connections/openai",
-			`{"fields":{"api_key":"canceled-candidate"},"text_model":"`+ModelNameGPT41+`","system_prompt":""}`,
-			gin.Params{
-				{Key: "tenant_id", Value: "managed-default"},
-				{Key: "provider", Value: ProviderNameOpenAI},
-			},
-			principal,
-			requestContext,
-		)
-	}()
-
-	select {
-	case <-verifier.verificationStarted:
-	case <-time.After(time.Second):
-		t.Fatal("provider verification did not start")
-	}
-	if lockError := service.store.mutex.DatabaseWriteLockContext(context.Background()); lockError != nil {
-		t.Fatalf("hold database write gate: %v", lockError)
-	}
-	writeGateLocked := true
-	defer func() {
-		if writeGateLocked {
-			service.store.mutex.DatabaseWriteUnlock()
-		}
-	}()
-	close(verifier.releaseVerification)
-	<-verifier.verificationComplete
-	cancelRequest()
-
-	select {
-	case response := <-responseComplete:
-		if response.Code != http.StatusInternalServerError {
-			t.Fatalf("canceled save status=%d body=%q", response.Code, response.Body.String())
-		}
-	case <-time.After(time.Second):
-		service.store.mutex.DatabaseWriteUnlock()
-		writeGateLocked = false
-		<-responseComplete
-		t.Fatal("canceled provider-key save remained queued for the database")
-	}
-	service.store.mutex.DatabaseWriteUnlock()
-	writeGateLocked = false
-
-	tenantRecord := database.tenantsByID["managed-default"]
-	if len(tenantRecord.ProviderConnections) != 0 || len(tenantRecord.ProviderProfiles) != 0 {
-		t.Fatalf("canceled provider connection persisted connections=%+v profiles=%+v", tenantRecord.ProviderConnections, tenantRecord.ProviderProfiles)
-	}
-}
-
-func TestManagementDashScopeURLSaveRejectsAReplacedVerifiedKey(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	principal := managementPrincipal{userID: "tauth-handler-user", userEmail: "owner@example.com"}
-	service, _ := newSeededInternalManagementService(t)
-	providerIdentifier := newProviderID(ProviderNameDashScope)
-	initialURL := "https://initial-workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
-	verifiedURL := "https://verified-workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
-	replacementURL := "https://replacement-workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
-	if _, saveError := saveInternalProviderConnections(service.store, context.Background(), principal, "managed-default", providerIdentifier, "sk-initial", initialURL, ModelNameDashScopeQwenPlus, ""); saveError != nil {
-		t.Fatalf("seed DashScope provider key: %v", saveError)
-	}
-	verifier := pausingProviderKeyVerifier{
-		verificationStarted:  make(chan struct{}),
-		releaseVerification:  make(chan struct{}),
-		verificationComplete: make(chan struct{}),
-	}
-	service.keyVerifier = verifier
-	responseComplete := make(chan *httptest.ResponseRecorder, 1)
-	go func() {
-		responseComplete <- executeInternalManagementHandler(
-			service.saveProviderConnectionsHandler(),
-			http.MethodPut,
-			"/api/management/tenants/managed-default/provider-connections/dashscope",
-			`{"fields":{"api_key":"","base_url":"`+verifiedURL+`"},"text_model":"`+ModelNameDashScopeQwenPlus+`","system_prompt":""}`,
-			gin.Params{
-				{Key: "tenant_id", Value: "managed-default"},
-				{Key: "provider", Value: ProviderNameDashScope},
-			},
-			principal,
-		)
-	}()
-
-	select {
-	case <-verifier.verificationStarted:
-	case <-time.After(time.Second):
-		t.Fatal("retained provider-key verification did not start")
-	}
-	if _, saveError := saveInternalProviderConnections(service.store, context.Background(), principal, "managed-default", providerIdentifier, "sk-replacement", replacementURL, ModelNameDashScopeQwenPlus, ""); saveError != nil {
-		t.Fatalf("replace DashScope provider key: %v", saveError)
-	}
-	close(verifier.releaseVerification)
-
-	select {
-	case response := <-responseComplete:
-		if response.Code != http.StatusConflict {
-			t.Fatalf("stale URL save status=%d body=%q", response.Code, response.Body.String())
-		}
-		if !strings.Contains(response.Body.String(), errManagedProviderKeyConflict.Error()) {
-			t.Fatalf("stale URL save body=%q", response.Body.String())
-		}
-	case <-time.After(time.Second):
-		t.Fatal("stale URL save did not complete")
-	}
-	finalSnapshot, profileError := service.store.tenantProfile(principal, "managed-default")
-	if profileError != nil {
-		t.Fatalf("load final tenant profile: %v", profileError)
-	}
-	finalSettings := finalSnapshot.providerSettings[providerIdentifier]
-	if finalSettings.connectionValue(CatalogCredentialAPIKey) != "sk-replacement" || finalSettings.connectionValue("base_url") != replacementURL {
-		t.Fatalf("final DashScope settings=%+v", finalSettings)
-	}
-}
-
 func TestManagementTenantHandlersRejectInvalidAndFailedRequests(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	now := time.Date(2026, 7, 25, 15, 0, 0, 0, time.UTC)
 	principal := managementPrincipal{userID: "tauth-handler-user", userEmail: "owner@example.com"}
 	tenantParams := gin.Params{{Key: "tenant_id", Value: "managed-default"}}
-	providerParams := gin.Params{
-		{Key: "tenant_id", Value: "managed-default"},
-		{Key: "provider", Value: ProviderNameOpenAI},
-	}
 
 	newSeededService := func() (*managementService, *fakeManagedTenantDatabase) {
 		database := newFakeManagedTenantDatabase()
@@ -296,91 +149,6 @@ func TestManagementTenantHandlersRejectInvalidAndFailedRequests(t *testing.T) {
 	}
 
 	service, _ = newSeededService()
-	response = executeInternalManagementHandler(service.saveProviderConnectionsHandler(), http.MethodPut, "/api/management/tenants/%20/provider-connections/openai", `{}`, gin.Params{{Key: "tenant_id", Value: " "}}, principal)
-	if response.Code != http.StatusNotFound {
-		t.Fatalf("save key invalid tenant status=%d", response.Code)
-	}
-	invalidProviderParams := gin.Params{
-		{Key: "tenant_id", Value: "managed-default"},
-		{Key: "provider", Value: "missing"},
-	}
-	response = executeInternalManagementHandler(service.saveProviderConnectionsHandler(), http.MethodPut, "/api/management/tenants/managed-default/provider-connections/missing", `{}`, invalidProviderParams, principal)
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("save key provider status=%d", response.Code)
-	}
-	response = executeInternalManagementHandler(service.saveProviderConnectionsHandler(), http.MethodPut, "/api/management/tenants/managed-default/provider-connections/openai", "{", providerParams, principal)
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("save key decode status=%d", response.Code)
-	}
-	response = executeInternalManagementHandler(service.saveProviderConnectionsHandler(), http.MethodPut, "/api/management/tenants/managed-default/provider-connections/openai", `{"fields":{"api_key":"sk"},"text_model":"","system_prompt":""}`, providerParams, principal)
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("save key settings status=%d", response.Code)
-	}
-	service, database = newSeededService()
-	database.saveProviderConnectionsErrors = []error{errInternalTestDatabase}
-	response = executeInternalManagementHandler(service.saveProviderConnectionsHandler(), http.MethodPut, "/api/management/tenants/managed-default/provider-connections/openai", `{"fields":{"api_key":"sk"},"text_model":"`+ModelNameGPT41+`","system_prompt":""}`, providerParams, principal)
-	if response.Code != http.StatusInternalServerError {
-		t.Fatalf("save key store status=%d", response.Code)
-	}
-	service, _ = newSeededService()
-	dashScopeProviderParams := gin.Params{
-		{Key: "tenant_id", Value: "managed-default"},
-		{Key: "provider", Value: ProviderNameDashScope},
-	}
-	response = executeInternalManagementHandler(service.saveProviderConnectionsHandler(), http.MethodPut, "/api/management/tenants/managed-default/provider-connections/dashscope", `{"fields":{"api_key":"sk","base_url":"https://invalid.example/v1"},"text_model":"`+ModelNameDashScopeQwenPlus+`","system_prompt":""}`, dashScopeProviderParams, principal)
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("save key base URL status=%d body=%q", response.Code, response.Body.String())
-	}
-
-	service, _ = newSeededService()
-	response = executeInternalManagementHandler(service.removeProviderConnectionsHandler(), http.MethodDelete, "/api/management/tenants/%20/provider-connections/openai", "", gin.Params{{Key: "tenant_id", Value: " "}}, principal)
-	if response.Code != http.StatusNotFound {
-		t.Fatalf("remove key invalid tenant status=%d", response.Code)
-	}
-	response = executeInternalManagementHandler(service.removeProviderConnectionsHandler(), http.MethodDelete, "/api/management/tenants/managed-default/provider-connections/missing", "", invalidProviderParams, principal)
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("remove key provider status=%d", response.Code)
-	}
-	service, database = newSeededService()
-	database.deleteProviderConnectionsErrors = []error{errInternalTestDatabase}
-	response = executeInternalManagementHandler(service.removeProviderConnectionsHandler(), http.MethodDelete, "/api/management/tenants/managed-default/provider-connections/openai", "", providerParams, principal)
-	if response.Code != http.StatusInternalServerError {
-		t.Fatalf("remove key store status=%d", response.Code)
-	}
-
-	service, _ = newSeededService()
-	response = executeInternalManagementHandler(service.revealProviderFieldHandler(), http.MethodPost, "/api/management/tenants/%20/provider-connections/openai/fields/api_key/reveal", "", gin.Params{{Key: "tenant_id", Value: " "}, {Key: "field", Value: CatalogCredentialAPIKey}}, principal)
-	if response.Code != http.StatusNotFound {
-		t.Fatalf("reveal invalid tenant status=%d", response.Code)
-	}
-	response = executeInternalManagementHandler(service.revealProviderFieldHandler(), http.MethodPost, "/api/management/tenants/managed-default/provider-connections/missing/fields/api_key/reveal", "", append(invalidProviderParams, gin.Param{Key: "field", Value: CatalogCredentialAPIKey}), principal)
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("reveal invalid provider status=%d", response.Code)
-	}
-	response = executeInternalManagementHandler(service.revealProviderFieldHandler(), http.MethodPost, "/api/management/tenants/managed-default/provider-connections/openai/fields/future/reveal", "", append(providerParams, gin.Param{Key: "field", Value: "future"}), principal)
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("reveal invalid field status=%d", response.Code)
-	}
-	providerFieldParams := append(providerParams, gin.Param{Key: "field", Value: CatalogCredentialAPIKey})
-	response = executeInternalManagementHandler(service.revealProviderFieldHandler(), http.MethodPost, "/api/management/tenants/managed-default/provider-connections/openai/fields/api_key/reveal", "", providerFieldParams, principal)
-	if response.Code != http.StatusNotFound {
-		t.Fatalf("reveal missing status=%d", response.Code)
-	}
-	service, database = newSeededService()
-	record := database.tenantsByID["managed-default"]
-	record.ProviderConnections = []managedProviderConnectionRecord{{
-		TenantID: "managed-default", ProviderID: ProviderNameOpenAI, FieldID: CatalogCredentialAPIKey, Value: "invalid",
-	}}
-	record.ProviderProfiles = []managedProviderProfileRecord{{
-		TenantID: "managed-default", ProviderID: ProviderNameOpenAI, TextModel: ModelNameGPT41,
-	}}
-	database.tenantsByID["managed-default"] = record
-	response = executeInternalManagementHandler(service.revealProviderFieldHandler(), http.MethodPost, "/api/management/tenants/managed-default/provider-connections/openai/fields/api_key/reveal", "", providerFieldParams, principal)
-	if response.Code != http.StatusInternalServerError {
-		t.Fatalf("reveal store status=%d", response.Code)
-	}
-
-	service, _ = newSeededService()
 	response = executeInternalManagementHandler(service.updateDefaultsHandler(), http.MethodPut, "/api/management/tenants/%20/defaults", `{}`, gin.Params{{Key: "tenant_id", Value: " "}}, principal)
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("defaults invalid tenant status=%d", response.Code)
@@ -417,10 +185,14 @@ func TestManagementTenantHandlersRejectInvalidAndFailedRequests(t *testing.T) {
 		t.Fatalf("defaults validation status=%d body=%q", response.Code, response.Body.String())
 	}
 	service, database = newSeededService()
-	service.store.randomReader = strings.NewReader(strings.Repeat("x", 64))
-	if _, saveError := saveInternalProviderConnections(service.store, context.Background(), principal, "managed-default", newProviderID(ProviderNameOpenAI), "sk-openai", "", ModelNameGPT41, ""); saveError != nil {
-		t.Fatalf("seed defaults provider key: %v", saveError)
+	ciphertext, encryptionError := service.store.providerKeyCipher.encryptConnection(strings.NewReader(strings.Repeat("x", 64)), "test-connection", ProviderNameOpenAI, CatalogCredentialAPIKey, "sk-openai")
+	if encryptionError != nil {
+		t.Fatal(encryptionError)
 	}
+	record := database.tenantsByID["managed-default"]
+	record.ConnectionAssignments = []managedTenantConnectionRecord{{TenantID: record.TenantID, ProviderID: ProviderNameOpenAI, ConnectionID: "test-connection", Connection: managedAccountConnectionRecord{ID: "test-connection", OwnerUserID: principal.userID, ProviderID: ProviderNameOpenAI, Fields: []managedConnectionFieldRecord{{ConnectionID: "test-connection", FieldID: CatalogCredentialAPIKey, Value: ciphertext}}}}}
+	record.ProviderProfiles = []managedProviderProfileRecord{{TenantID: record.TenantID, ProviderID: ProviderNameOpenAI, TextModel: ModelNameGPT41}}
+	database.tenantsByID[record.TenantID] = record
 	database.saveTenantErrors = []error{errInternalTestDatabase}
 	response = executeInternalManagementHandler(service.updateDefaultsHandler(), http.MethodPut, "/api/management/tenants/managed-default/defaults", managementDefaultsBody(ProviderNameOpenAI, ModelNameGPT41), tenantParams, principal)
 	if response.Code != http.StatusInternalServerError {

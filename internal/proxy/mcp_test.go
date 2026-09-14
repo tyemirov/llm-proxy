@@ -638,8 +638,7 @@ func TestMCPProviderRateLimit(t *testing.T) {
 	}))
 	owner := managementSessionCookie(t, "rate-owner")
 	tenant := requestManagementAccount(t, fixture.router, owner).Tenants[0].ID
-	response := httptest.NewRecorder()
-	fixture.router.ServeHTTP(response, authenticatedJSONRequest("PUT", "/api/management/tenants/"+tenant+"/provider-connections/deepseek", `{"fields":{"api_key":"rate-fixture-key"},"text_model":"deepseek-v4-flash","system_prompt":""}`, owner))
+	response := putManagementProviderKey(t, fixture.router, owner, tenant, "deepseek", "rate-fixture-key", "deepseek-v4-flash", "", t.Context())
 	if response.Code != 200 {
 		t.Fatalf("configure rate provider=%d %s", response.Code, response.Body)
 	}
@@ -663,8 +662,7 @@ func TestMCPOrderedImageAndAudio(t *testing.T) {
 	}))
 	owner := managementSessionCookie(t, "audio-owner")
 	tenant := requestManagementAccount(t, fixture.router, owner).Tenants[0].ID
-	response := httptest.NewRecorder()
-	fixture.router.ServeHTTP(response, authenticatedJSONRequest("PUT", "/api/management/tenants/"+tenant+"/provider-connections/gemini", `{"fields":{"api_key":"audio-fixture-key"},"text_model":"gemini-3.5-flash","system_prompt":""}`, owner))
+	response := putManagementProviderKey(t, fixture.router, owner, tenant, "gemini", "audio-fixture-key", "gemini-3.5-flash", "", t.Context())
 	if response.Code != 200 {
 		t.Fatalf("configure audio provider=%d %s", response.Code, response.Body)
 	}

@@ -1,4 +1,4 @@
-# DashScope Responses
+# Alibaba Cloud Responses
 
 All four active Qwen offerings use `dashscope_responses` with
 `synchronous_completion`. The default remains `qwen-plus`.
@@ -13,7 +13,8 @@ All four active Qwen offerings use `dashscope_responses` with
 The private catalog also contains five disabled [Qwen 3.8 candidates](qwen-current-models.md).
 Those models add explicit reasoning control through the same Responses codec.
 
-The tenant saves its Singapore workspace URL and matching regional API key.
+The tenant assigns an Alibaba Cloud connection with a Singapore workspace URL and the matching regional API key.
+Use the English [API-key instructions](https://www.alibabacloud.com/help/en/model-studio/get-api-key) to create the key.
 Generation and credential verification append `/responses` to that URL.
 Model selectors, tenant defaults, credentials, and historical usage retain
 their existing identities.

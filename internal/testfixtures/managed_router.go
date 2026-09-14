@@ -65,6 +65,15 @@ func StandardManagedTenant(secret string) ManagedTenant {
 
 // BuildManagedRouter builds and provisions a router through the mandatory management API.
 func BuildManagedRouter(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger, tenant ManagedTenant) (*gin.Engine, error) {
+	configured, provisionError := ProvisionManagedRouter(testingInstance, configuration, structuredLogger, tenant)
+	if provisionError != nil {
+		return nil, provisionError
+	}
+	return proxy.BuildRouter(configured, structuredLogger)
+}
+
+// ProvisionManagedRouter provisions one tenant and returns the reusable persistent router configuration.
+func ProvisionManagedRouter(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger, tenant ManagedTenant) (proxy.Configuration, error) {
 	testingInstance.Helper()
 	databasePath := "file:managed-router-" + rand.Text() + "?mode=memory&cache=shared"
 	configuration.Management = managedRouterConfiguration(databasePath)
@@ -77,22 +86,22 @@ func BuildManagedRouter(testingInstance testing.TB, configuration proxy.Configur
 	bootstrapRouter, buildError := proxy.BuildRouter(bootstrapConfiguration, structuredLogger)
 	if buildError != nil {
 		proxy.HTTPClient = originalHTTPClient
-		return nil, buildError
+		return proxy.Configuration{}, buildError
 	}
 	sessionCookie, cookieError := managedRouterSessionCookie()
 	if cookieError != nil {
-		return nil, cookieError
+		return proxy.Configuration{}, cookieError
 	}
 	tenantID, accountError := managedRouterTenantID(bootstrapRouter, sessionCookie)
 	if accountError != nil {
 		proxy.HTTPClient = originalHTTPClient
-		return nil, accountError
+		return proxy.Configuration{}, accountError
 	}
 	for provider, apiKey := range tenant.ProviderKeys {
 		providerError := saveManagedProviderKey(bootstrapRouter, sessionCookie, tenantID, configuration.ProviderCatalog, provider, apiKey, tenant.ProviderFields[provider])
 		if providerError != nil {
 			proxy.HTTPClient = originalHTTPClient
-			return nil, providerError
+			return proxy.Configuration{}, providerError
 		}
 	}
 	defaults := tenant.Defaults
@@ -101,22 +110,18 @@ func BuildManagedRouter(testingInstance testing.TB, configuration proxy.Configur
 	}
 	if defaultsError := saveManagedDefaults(bootstrapRouter, sessionCookie, tenantID, defaults); defaultsError != nil {
 		proxy.HTTPClient = originalHTTPClient
-		return nil, defaultsError
+		return proxy.Configuration{}, defaultsError
 	}
 	if strings.TrimSpace(tenant.Secret) == "" {
 		proxy.HTTPClient = originalHTTPClient
-		return nil, fmt.Errorf("managed router fixture secret must be set")
+		return proxy.Configuration{}, fmt.Errorf("managed router fixture secret must be set")
 	}
 	if secretError := setManagedSecret(databasePath, tenantID, tenant.Secret); secretError != nil {
 		proxy.HTTPClient = originalHTTPClient
-		return nil, secretError
+		return proxy.Configuration{}, secretError
 	}
-	router, buildError := proxy.BuildRouter(configuration, structuredLogger)
 	proxy.HTTPClient = originalHTTPClient
-	if buildError != nil {
-		return nil, buildError
-	}
-	return router, nil
+	return configuration, nil
 }
 
 func managedRouterConfiguration(databasePath string) proxy.ManagementConfiguration {
@@ -198,19 +203,42 @@ func saveManagedProviderKey(router http.Handler, sessionCookie *http.Cookie, ten
 		}
 		break
 	}
-	body := map[string]any{"fields": fields, "text_model": managedProviderModel(provider)}
-	encodedBody, encodeError := json.Marshal(body)
-	if encodeError != nil {
-		return encodeError
+	exchange := func(method, path string, body any, status int) (*httptest.ResponseRecorder, error) {
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return nil, err
+		}
+		request := httptest.NewRequest(method, path, bytes.NewReader(encoded))
+		request.Header.Set("Content-Type", "application/json")
+		if method == http.MethodPost && path == "/api/management/connections" {
+			request.Header.Set("Idempotency-Key", rand.Text())
+		}
+		request.AddCookie(sessionCookie)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != status {
+			return nil, fmt.Errorf("managed router provider=%s path=%s status=%d body=%s", provider, path, response.Code, response.Body.String())
+		}
+		return response, nil
 	}
-	request := httptest.NewRequest(http.MethodPut, "/api/management/tenants/"+tenantID+"/provider-connections/"+provider, bytes.NewReader(encodedBody))
-	request.Header.Set("Content-Type", "application/json")
-	request.AddCookie(sessionCookie)
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
-	if response.Code != http.StatusOK {
-		return fmt.Errorf("managed router provider=%s status=%d body=%s", provider, response.Code, response.Body.String())
+	created, err := exchange(http.MethodPost, "/api/management/connections", map[string]any{"name": provider, "provider": provider, "fields": fields}, http.StatusCreated)
+	if err != nil {
+		return err
 	}
+	var connection struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(created.Body.Bytes(), &connection); err != nil {
+		return err
+	}
+	path := "/api/management/tenants/" + tenantID
+	if _, err := exchange(http.MethodPut, path+"/connections/"+provider, map[string]string{"connection_id": connection.ID}, http.StatusOK); err != nil {
+		return err
+	}
+	if _, err := exchange(http.MethodPut, path+"/provider-profiles/"+provider, map[string]string{"text_model": managedProviderModel(provider), "system_prompt": ""}, http.StatusOK); err != nil {
+		return err
+	}
+
 	return nil
 }
 

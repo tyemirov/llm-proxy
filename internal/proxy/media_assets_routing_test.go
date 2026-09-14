@@ -253,7 +253,8 @@ func TestTenantAssetReferenceValidationAndExactRouting(t *testing.T) {
 		})
 	}
 
-	deleteRequest := httptest.NewRequest(http.MethodDelete, llmproxycontract.AssetPath+"/"+asset.AssetID+"?key=secret-a", nil)
+	deleteRequest := httptest.NewRequest(http.MethodDelete, llmproxycontract.AssetPath+"/"+asset.AssetID, nil)
+	deleteRequest.Header.Set("Authorization", "Bearer secret-a")
 	deleteResponse := httptest.NewRecorder()
 	router.ServeHTTP(deleteResponse, deleteRequest)
 	if deleteResponse.Code != http.StatusNoContent {
@@ -430,7 +431,8 @@ func TestDeletingAssetAfterAdmissionKeepsTheOpenRequestStable(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("provider file admission did not start")
 	}
-	deleteRequest := httptest.NewRequest(http.MethodDelete, llmproxycontract.AssetPath+"/"+asset.AssetID+"?key=secret-a", nil)
+	deleteRequest := httptest.NewRequest(http.MethodDelete, llmproxycontract.AssetPath+"/"+asset.AssetID, nil)
+	deleteRequest.Header.Set("Authorization", "Bearer secret-a")
 	deleteResponse := httptest.NewRecorder()
 	router.ServeHTTP(deleteResponse, deleteRequest)
 	close(releaseStart)
@@ -504,7 +506,8 @@ func TestExpiredAssetAndProviderMediaLimitsFailWithStableCodes(t *testing.T) {
 
 func TestTenantAssetUploadUsesTheAuthenticatedRequestBudget(t *testing.T) {
 	router := mediaAssetRouter(t, "https://provider.invalid", t.TempDir(), testfixtures.ModelCatalog(t), 60)
-	request := httptest.NewRequest(http.MethodPost, llmproxycontract.AssetPath+"?key=secret-a", strings.NewReader("asset"))
+	request := httptest.NewRequest(http.MethodPost, llmproxycontract.AssetPath, strings.NewReader("asset"))
+	request.Header.Set("Authorization", "Bearer secret-a")
 	request.Header.Set("Content-Type", "image/png")
 	request.Header.Set(llmproxycontract.HeaderRequestTimeoutSeconds, "3601")
 	response := httptest.NewRecorder()
@@ -512,7 +515,8 @@ func TestTenantAssetUploadUsesTheAuthenticatedRequestBudget(t *testing.T) {
 	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), llmproxycontract.ErrorCodeInvalidRequestTimeout) {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
-	obsoleteRequest := httptest.NewRequest(http.MethodPost, llmproxycontract.AssetPath+"?key=secret-a", strings.NewReader("asset"))
+	obsoleteRequest := httptest.NewRequest(http.MethodPost, llmproxycontract.AssetPath, strings.NewReader("asset"))
+	obsoleteRequest.Header.Set("Authorization", "Bearer secret-a")
 	obsoleteRequest.Header.Set("Content-Type", "image/png")
 	obsoleteRequest.Header.Set("X-LLM-Proxy-Asset-SHA256", strings.Repeat("0", 64))
 	obsoleteResponse := httptest.NewRecorder()
@@ -551,7 +555,8 @@ func mediaAssetRouterWithMaxPrompt(t *testing.T, geminiBaseURL string, assetRoot
 
 func uploadTestAsset(t *testing.T, router http.Handler, secret string, mimeType string, data []byte) mediaAssetResponse {
 	t.Helper()
-	request := httptest.NewRequest(http.MethodPost, llmproxycontract.AssetPath+"?key="+secret, bytes.NewReader(data))
+	request := httptest.NewRequest(http.MethodPost, llmproxycontract.AssetPath, bytes.NewReader(data))
+	request.Header.Set("Authorization", "Bearer "+secret)
 	request.Header.Set("Content-Type", mimeType)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)

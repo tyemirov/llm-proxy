@@ -17,6 +17,12 @@ const capabilityDefinitions = Object.freeze([
   { identifier: "text", label: "Text generation", routeLabel: "Text", className: "capability-badge--primary" },
   { identifier: "dictation", label: "Dictation", routeLabel: "Dictation", className: "capability-badge--info" },
   { identifier: "video_generation", label: "Video generation", routeLabel: "Video", className: "capability-badge--info" },
+  { identifier: "audio_transcription", label: "Audio transcription", routeLabel: "Transcription", className: "capability-badge--info" },
+  { identifier: "audio_diarization", label: "Audio diarization", routeLabel: "Diarization", className: "capability-badge--info" },
+  { identifier: "audio_alignment", label: "Audio alignment", routeLabel: "Alignment", className: "capability-badge--info" },
+  { identifier: "subtitle_creation", label: "Subtitle creation", routeLabel: "Subtitles", className: "capability-badge--info" },
+  { identifier: "speech_generation", label: "Speech generation", routeLabel: "Speech", className: "capability-badge--info" },
+  { identifier: "voice_extraction", label: "Voice extraction", routeLabel: "Voice", className: "capability-badge--info" },
   { identifier: "image_input", label: "Image input", routeLabel: "Image", className: "capability-badge--info" },
   { identifier: "audio_input", label: "Audio message input", routeLabel: "Audio", className: "capability-badge--info" },
   { identifier: "caller_tools", label: "Caller tools", routeLabel: "Tools", className: "capability-badge--success" },
@@ -26,6 +32,12 @@ const capabilityDefinitions = Object.freeze([
 const capabilityDefinitionsByIdentifier = new Map(
   capabilityDefinitions.map((definition) => [definition.identifier, definition]),
 );
+const modelOperationIdentifiers = new Set([
+  "text", "dictation", "video_generation", "audio_transcription", "audio_diarization",
+  "audio_alignment", "subtitle_creation", "speech_generation", "voice_extraction",
+]);
+const providerCredentialKinds = new Set(["api_key", "deployment"]);
+const executionLifecycleIdentifiers = new Set(["synchronous_completion", "pollable_resource", "asynchronous_job"]);
 const weightAccessDefinitions = Object.freeze([
   { identifier: "proprietary", label: "Proprietary" },
   { identifier: "open_weights", label: "Open weights" },
@@ -220,7 +232,7 @@ function parseCapabilityCatalog(rawCatalog) {
     const operation = requiredRecord(rawOperation, field);
     requireExactKeys(operation, ["id", "input_artifacts", "output_artifacts"], field);
     const identifier = requiredString(operation.id, `${field}.id`);
-    if (identifier !== "text" && identifier !== "dictation" && identifier !== "video_generation") {
+    if (!modelOperationIdentifiers.has(identifier)) {
       throw new Error(`public_capabilities_invalid: ${field}.id value=${identifier}`);
     }
     return {
@@ -235,7 +247,7 @@ function parseCapabilityCatalog(rawCatalog) {
     const provider = requiredRecord(rawProvider, field);
     requireExactKeys(provider, ["identifier", "label", "credential_kinds"], field);
     const credentialKinds = requiredNonemptyStringArray(provider.credential_kinds, `${field}.credential_kinds`);
-    if (credentialKinds.length !== 1 || credentialKinds[0] !== "api_key") {
+    if (credentialKinds.length !== 1 || !providerCredentialKinds.has(credentialKinds[0])) {
       throw new Error(`public_capabilities_invalid: ${field}.credential_kinds`);
     }
     return {
@@ -280,7 +292,7 @@ function parseCapabilityCatalog(rawCatalog) {
     ], field);
     const operations = requiredNonemptyStringArray(model.operations, `${field}.operations`);
     for (const operation of operations) {
-      if (operation !== "text" && operation !== "dictation" && operation !== "video_generation") {
+      if (!modelOperationIdentifiers.has(operation)) {
         throw new Error(`public_capabilities_invalid: ${field}.operations value=${operation}`);
       }
     }
@@ -469,7 +481,7 @@ function parseArtifactKinds(rawArtifacts, field) {
  */
 function requiredExecutionLifecycle(rawLifecycle, field) {
   const lifecycle = requiredString(rawLifecycle, field);
-  if (lifecycle !== "synchronous_completion" && lifecycle !== "pollable_resource") {
+  if (!executionLifecycleIdentifiers.has(lifecycle)) {
     throw new Error(`public_capabilities_invalid: ${field} value=${lifecycle}`);
   }
   return lifecycle;

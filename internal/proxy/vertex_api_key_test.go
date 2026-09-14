@@ -1,6 +1,8 @@
 package proxy_test
 
 import (
+	"crypto/rand"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -19,7 +21,7 @@ func TestGeminiCurrentModelsVertexAPIKeyConnection(t *testing.T) {
 	expectedKey.Store("vertex-customer-key")
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		if r.URL.Path != "/publishers/google/models/gemini-3.8-flash:generateContent" || r.Method != http.MethodPost {
+		if (r.URL.Path != "/publishers/google/models/gemini-3.8-flash:generateContent" && r.URL.Path != "/publishers/google/models/gemini-3.5-flash:generateContent") || r.Method != http.MethodPost {
 			t.Errorf("Vertex method=%s path=%s", r.Method, r.URL.Path)
 		}
 		if r.Header.Get("x-goog-api-key") == "invalid-replacement" {
@@ -46,6 +48,9 @@ func TestGeminiCurrentModelsVertexAPIKeyConnection(t *testing.T) {
 			t.Fatal(err)
 		}
 		request.Header.Set("Content-Type", "application/json")
+		if method == http.MethodPost && path == "/api/management/connections" {
+			request.Header.Set("Idempotency-Key", rand.Text())
+		}
 		request.AddCookie(cookie)
 		response, err := http.DefaultClient.Do(request)
 		if err != nil {
@@ -58,15 +63,43 @@ func TestGeminiCurrentModelsVertexAPIKeyConnection(t *testing.T) {
 		}
 		return response.StatusCode, string(data)
 	}
-	path := "/api/management/tenants/" + tenant + "/provider-connections/vertex"
-	payload := `{"fields":{"api_key":"vertex-customer-key"},"text_model":"gemini-3.8-flash","system_prompt":""}`
-	status, body := send(http.MethodPut, path, payload, owner)
-	if status != http.StatusOK || calls.Load() != 1 {
+	payload := `{"name":"Vertex","provider":"vertex","fields":{"api_key":"vertex-customer-key"}}`
+	status, body := send(http.MethodPost, "/api/management/connections", payload, owner)
+	if status != http.StatusCreated || calls.Load() != 1 {
 		t.Fatalf("API-key connection status=%d calls=%d body=%s", status, calls.Load(), body)
 	}
 	if strings.Contains(body, "vertex-customer-key") {
 		t.Fatal("provider key exposed in profile")
 	}
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(body), &created); err != nil {
+		t.Fatal(err)
+	}
+	path := "/api/management/connections/" + created.ID
+	assignmentPath := "/api/management/tenants/" + tenant + "/connections/vertex"
+	status, body = send(http.MethodPut, assignmentPath, `{"connection_id":"`+created.ID+`"}`, owner)
+	if status != http.StatusOK {
+		t.Fatalf("assign connection status=%d body=%s", status, body)
+	}
+	update := func(key string) (int, string) {
+		t.Helper()
+		status, body := send(http.MethodGet, path, "", owner)
+		if status != http.StatusOK {
+			t.Fatalf("read connection status=%d body=%s", status, body)
+		}
+		var current map[string]any
+		if err := json.Unmarshal([]byte(body), &current); err != nil {
+			t.Fatal(err)
+		}
+		payload, err := json.Marshal(map[string]any{"name": "Vertex", "provider": "vertex", "version": current["version"], "fields": map[string]string{"api_key": key}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return send(http.MethodPut, path, string(payload), owner)
+	}
+
 	other := managementSessionCookie(t, "vertex-api-key-other")
 	otherTenant := managementDefaultTenantTestID(t, router, other)
 	profile := requestProviderKeyVerificationProfile(t, router, other, otherTenant)
@@ -74,10 +107,10 @@ func TestGeminiCurrentModelsVertexAPIKeyConnection(t *testing.T) {
 		t.Fatal("connection crossed tenants")
 	}
 	status, _ = send(http.MethodDelete, path, "", other)
-	if status != http.StatusNotFound || calls.Load() != 1 {
+	if status != http.StatusNoContent || calls.Load() != 1 {
 		t.Fatalf("cross-tenant disconnect status=%d", status)
 	}
-	status, _ = send(http.MethodPut, path, `{"fields":{"credential_profile":"old-profile"},"text_model":"gemini-3.8-flash","system_prompt":""}`, owner)
+	status, _ = send(http.MethodPut, path, `{"name":"Vertex","provider":"vertex","version":2,"fields":{"credential_profile":"old-profile"}}`, owner)
 	if status != http.StatusBadRequest || calls.Load() != 1 {
 		t.Fatalf("obsolete profile status=%d", status)
 	}
@@ -91,28 +124,35 @@ func TestGeminiCurrentModelsVertexAPIKeyConnection(t *testing.T) {
 		}
 	}
 	generate(ownerSecret, owner, http.StatusOK)
-	status, _ = send(http.MethodPut, path, strings.Replace(payload, "vertex-customer-key", "invalid-replacement", 1), owner)
+	status, _ = update("invalid-replacement")
 	if status != http.StatusUnprocessableEntity {
 		t.Fatalf("invalid replacement status=%d", status)
 	}
 	generate(ownerSecret, owner, http.StatusOK)
 	expectedKey.Store("vertex-second-key")
-	otherPath := "/api/management/tenants/" + otherTenant + "/provider-connections/vertex"
-	status, _ = send(http.MethodPut, otherPath, strings.Replace(payload, "vertex-customer-key", "vertex-second-key", 1), other)
-	if status != http.StatusOK {
+	status, body = send(http.MethodPost, "/api/management/connections", strings.Replace(payload, "vertex-customer-key", "vertex-second-key", 1), other)
+	if status != http.StatusCreated {
 		t.Fatalf("second connection status=%d", status)
 	}
+	if err := json.Unmarshal([]byte(body), &created); err != nil {
+		t.Fatal(err)
+	}
+	status, body = send(http.MethodPut, "/api/management/tenants/"+otherTenant+"/connections/vertex", `{"connection_id":"`+created.ID+`"}`, other)
+	if status != http.StatusOK {
+		t.Fatalf("assign second connection status=%d body=%s", status, body)
+	}
+
 	generate(otherSecret, other, http.StatusOK)
 	expectedKey.Store("vertex-replacement-key")
-	status, _ = send(http.MethodPut, path, strings.Replace(payload, "vertex-customer-key", "vertex-replacement-key", 1), owner)
+	status, _ = update("vertex-replacement-key")
 	if status != http.StatusOK {
 		t.Fatalf("valid replacement status=%d", status)
 	}
 	generate(ownerSecret, owner, http.StatusOK)
 	expectedKey.Store("vertex-second-key")
 	generate(otherSecret, other, http.StatusOK)
-	status, _ = send(http.MethodDelete, path, "", owner)
-	if status != http.StatusOK {
+	status, _ = send(http.MethodDelete, assignmentPath, "", owner)
+	if status != http.StatusNoContent {
 		t.Fatalf("disconnect status=%d", status)
 	}
 	profile = requestProviderKeyVerificationProfile(t, router, owner, tenant)

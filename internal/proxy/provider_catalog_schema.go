@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/tyemirov/llm-proxy/internal/constants"
@@ -19,15 +20,23 @@ import (
 
 const (
 	// ProviderCatalogSchemaVersion is the only accepted providers.yml schema.
-	ProviderCatalogSchemaVersion = 1
+	ProviderCatalogSchemaVersion = 4
 
 	CatalogProviderFieldKindCredential = "credential"
 	CatalogProviderFieldKindSetting    = "setting"
 	CatalogProviderFieldTypeOpaque     = "opaque"
 	CatalogProviderFieldTypeURL        = "url"
+	CatalogProviderFieldTypeGRPCTarget = "grpc_target"
+	CatalogProviderFieldTypeBoolean    = "boolean"
+
+	CatalogProviderConnectionTenant     = "tenant"
+	CatalogProviderConnectionDeployment = "deployment"
 
 	CatalogAuthenticationBearer           = "bearer"
 	CatalogAuthenticationHeader           = "header"
+	CatalogAuthenticationGRPCBearer       = "grpc_bearer"
+	CatalogEndpointProtocolHTTP           = "http"
+	CatalogEndpointProtocolGRPC           = "grpc"
 	CatalogEndpointMethodPost             = "POST"
 	CatalogProtocolOpenAIResponses        = "openai_responses"
 	CatalogProtocolDashScopeResponses     = "dashscope_responses"
@@ -38,6 +47,14 @@ const (
 	CatalogProtocolGeminiInteractions     = "gemini_interactions"
 	CatalogProtocolMultipartTranscription = "multipart_transcription"
 	CatalogProtocolMetaTranscription      = "meta_transcription"
+	CatalogProtocolDictatorSpeechV1       = "dictator_speech_v1"
+	CatalogExecutionAsynchronousJob       = "asynchronous_job"
+
+	CatalogProtocolVariationMaxTokens                 = "max_tokens"
+	CatalogProtocolVariationMaxCompletionTokens       = "max_completion_tokens"
+	CatalogProtocolVariationQianfan                   = "qianfan"
+	CatalogProtocolVariationTranscriptionModel        = "model"
+	CatalogProtocolVariationTranscriptionModelOmitted = "model_omitted"
 
 	providerCatalogResourceVisibilityMaxRetryIntervalMilliseconds = 60000
 	providerCatalogResourceVisibilityMaxRetryLimit                = 100
@@ -104,15 +121,16 @@ type ProviderCatalogModelMigration struct {
 // ProviderCatalogProvider defines one provider and all provider-owned routes.
 type ProviderCatalogProvider struct {
 	// Enabled defaults to enabled when omitted. Candidate providers set false explicitly.
-	Enabled           ModelActivation            `yaml:"enabled,omitempty"`
-	ID                string                     `yaml:"id"`
-	Label             string                     `yaml:"label"`
-	APIServiceLabel   string                     `yaml:"api_service_label"`
-	KeyAcquisitionURL string                     `yaml:"key_acquisition_url"`
-	Aliases           []string                   `yaml:"aliases,omitempty"`
-	Fields            []ProviderCatalogField     `yaml:"fields"`
-	Transports        []ProviderCatalogTransport `yaml:"transports"`
-	Offerings         []ProviderCatalogOffering  `yaml:"offerings"`
+	Enabled             ModelActivation            `yaml:"enabled,omitempty"`
+	ID                  string                     `yaml:"id"`
+	Label               string                     `yaml:"label"`
+	APIServiceLabel     string                     `yaml:"api_service_label"`
+	ConnectionOwnership string                     `yaml:"connection_ownership"`
+	KeyAcquisitionURL   string                     `yaml:"key_acquisition_url,omitempty"`
+	Aliases             []string                   `yaml:"aliases,omitempty"`
+	Fields              []ProviderCatalogField     `yaml:"fields"`
+	Transports          []ProviderCatalogTransport `yaml:"transports"`
+	Offerings           []ProviderCatalogOffering  `yaml:"offerings"`
 }
 
 // ProviderCatalogField defines one tenant connection input.
@@ -135,18 +153,32 @@ type ProviderCatalogFieldValidation struct {
 	AllowedSchemes []string `yaml:"allowed_schemes,omitempty"`
 }
 
-// ProviderCatalogTransport defines one reusable provider protocol route.
+// ProviderCatalogTransport defines one provider route from reusable components.
 type ProviderCatalogTransport struct {
+	ID         string                             `yaml:"id"`
+	Endpoint   ProviderCatalogEndpoint            `yaml:"endpoint"`
+	Headers    []ProviderCatalogHeader            `yaml:"headers,omitempty"`
+	Components ProviderCatalogTransportComponents `yaml:"components"`
+}
+
+// ProviderCatalogTransportComponents selects the reusable parts of one provider route.
+type ProviderCatalogTransportComponents struct {
+	RequestCodec   ProviderCatalogCodecReference     `yaml:"request_codec"`
+	ResponseCodec  ProviderCatalogCodecReference     `yaml:"response_codec"`
+	Authentication ProviderCatalogAuthentication     `yaml:"authentication"`
+	Execution      ProviderCatalogExecutionReference `yaml:"execution"`
+}
+
+// ProviderCatalogCodecReference selects one codec definition and an optional typed variation.
+type ProviderCatalogCodecReference struct {
+	ID        string `yaml:"id"`
+	Variation string `yaml:"variation,omitempty"`
+}
+
+// ProviderCatalogExecutionReference selects one shared lifecycle and its provider visibility policy.
+type ProviderCatalogExecutionReference struct {
 	ID                 string                            `yaml:"id"`
-	Endpoint           ProviderCatalogEndpoint           `yaml:"endpoint"`
-	Authentication     ProviderCatalogAuthentication     `yaml:"authentication"`
-	Headers            []ProviderCatalogHeader           `yaml:"headers,omitempty"`
-	RequestProtocol    string                            `yaml:"request_protocol"`
-	ResponseProtocol   string                            `yaml:"response_protocol"`
-	UsageMapping       string                            `yaml:"usage_mapping"`
-	Lifecycle          string                            `yaml:"lifecycle"`
 	ResourceVisibility ProviderCatalogResourceVisibility `yaml:"resource_visibility,omitempty"`
-	ProtocolParameters ProviderCatalogProtocolParameters `yaml:"protocol_parameters"`
 }
 
 // ProviderCatalogResourceVisibility defines bounded retries for a created resource that is not readable yet.
@@ -158,6 +190,7 @@ type ProviderCatalogResourceVisibility struct {
 
 // ProviderCatalogEndpoint defines a transport collection URL.
 type ProviderCatalogEndpoint struct {
+	Protocol       string `yaml:"protocol"`
 	Method         string `yaml:"method"`
 	DefaultBaseURL string `yaml:"default_base_url,omitempty"`
 	SettingField   string `yaml:"setting_field,omitempty"`
@@ -176,32 +209,6 @@ type ProviderCatalogAuthentication struct {
 type ProviderCatalogHeader struct {
 	Name  string `yaml:"name"`
 	Value string `yaml:"value"`
-}
-
-// ProviderCatalogProtocolParameters declares the adapter-owned wire fields and outcomes.
-type ProviderCatalogProtocolParameters struct {
-	ResponsePolicy          string                     `yaml:"response_policy,omitempty"`
-	ModelField              string                     `yaml:"model_field"`
-	TokenField              string                     `yaml:"token_field"`
-	MediaExecutionLifecycle string                     `yaml:"media_execution_lifecycle,omitempty"`
-	OutputFields            []string                   `yaml:"output_fields"`
-	FinishRules             ProviderCatalogFinishRules `yaml:"finish_rules"`
-	ContinuationRules       []string                   `yaml:"continuation_rules"`
-	ErrorRules              []string                   `yaml:"error_rules"`
-	UsageFields             ProviderCatalogUsageFields `yaml:"usage_fields"`
-}
-
-// ProviderCatalogFinishRules declares exact complete and incomplete signals.
-type ProviderCatalogFinishRules struct {
-	Complete []string `yaml:"complete"`
-	Continue []string `yaml:"continue"`
-}
-
-// ProviderCatalogUsageFields maps provider usage values to canonical token counts.
-type ProviderCatalogUsageFields struct {
-	Input  string `yaml:"input"`
-	Output string `yaml:"output"`
-	Total  string `yaml:"total"`
 }
 
 // ProviderCatalogOffering defines one exact model route inside its provider.
@@ -503,8 +510,17 @@ func validateProviderCatalogSchema(schema ProviderCatalogSchema) error {
 		if strings.TrimSpace(provider.APIServiceLabel) == constants.EmptyString || provider.APIServiceLabel != strings.TrimSpace(provider.APIServiceLabel) {
 			return fmt.Errorf("%w: field=%s.api_service_label", ErrInvalidModelCatalog, fieldPrefix)
 		}
-		if !validProviderKeyAcquisitionURL(provider.KeyAcquisitionURL) {
-			return fmt.Errorf("%w: field=%s.key_acquisition_url", ErrInvalidModelCatalog, fieldPrefix)
+		switch provider.ConnectionOwnership {
+		case CatalogProviderConnectionTenant:
+			if !validProviderKeyAcquisitionURL(provider.KeyAcquisitionURL) {
+				return fmt.Errorf("%w: field=%s.key_acquisition_url", ErrInvalidModelCatalog, fieldPrefix)
+			}
+		case CatalogProviderConnectionDeployment:
+			if provider.KeyAcquisitionURL != constants.EmptyString {
+				return fmt.Errorf("%w: field=%s.key_acquisition_url reason=deployment_owned", ErrInvalidModelCatalog, fieldPrefix)
+			}
+		default:
+			return fmt.Errorf("%w: field=%s.connection_ownership ownership=%s", ErrInvalidModelCatalog, fieldPrefix, provider.ConnectionOwnership)
 		}
 		for aliasIndex, rawAlias := range provider.Aliases {
 			alias, aliasError := canonicalCatalogIdentifier(rawAlias, fmt.Sprintf("%s.aliases[%d]", fieldPrefix, aliasIndex))
@@ -519,6 +535,13 @@ func validateProviderCatalogSchema(schema ProviderCatalogSchema) error {
 		fields, fieldError := validateProviderCatalogFields(provider.Fields, fieldPrefix+".fields")
 		if fieldError != nil {
 			return fieldError
+		}
+		if provider.ConnectionOwnership == CatalogProviderConnectionDeployment {
+			for fieldIdentifier, definition := range fields {
+				if definition.Environment == constants.EmptyString || !definition.Required {
+					return fmt.Errorf("%w: field=%s.fields field_id=%s reason=deployment_binding_required", ErrInvalidModelCatalog, fieldPrefix, fieldIdentifier)
+				}
+			}
 		}
 		for fieldIdentifier, definition := range fields {
 			if definition.Environment == constants.EmptyString {
@@ -552,7 +575,8 @@ func validateProviderCatalogSchema(schema ProviderCatalogSchema) error {
 			}
 			if offering.CallerTools {
 				transport := transports[offering.Transport]
-				supported := transport.RequestProtocol == CatalogProtocolXAIResponses || transport.RequestProtocol == CatalogProtocolOpenAIChatCompletions || (transport.RequestProtocol == CatalogProtocolOpenAIResponses && (offering.RequestProfile == string(requestProfileOpenAIResponsesReasoningTools) || offering.RequestProfile == string(requestProfileOpenAIResponsesTemperatureTools)))
+				requestCodec := transport.Components.RequestCodec.ID
+				supported := requestCodec == CatalogProtocolXAIResponses || requestCodec == CatalogProtocolOpenAIChatCompletions || (requestCodec == CatalogProtocolOpenAIResponses && (offering.RequestProfile == string(requestProfileOpenAIResponsesReasoningTools) || offering.RequestProfile == string(requestProfileOpenAIResponsesTemperatureTools)))
 				if !supported {
 					return fmt.Errorf("%w: field=%s.caller_tools", ErrInvalidModelCatalog, offeringField)
 				}
@@ -601,7 +625,9 @@ func validateProviderCatalogFields(rawFields []ProviderCatalogField, field strin
 				return nil, fmt.Errorf("%w: field=%s reason=invalid_credential_field", ErrInvalidModelCatalog, fieldPrefix)
 			}
 		case CatalogProviderFieldKindSetting:
-			if definition.Type != CatalogProviderFieldTypeURL || definition.Secret || definition.Validation.MinimumLength < 0 || len(definition.Validation.AllowedSchemes) == 0 {
+			validSettingType := definition.Type == CatalogProviderFieldTypeURL || definition.Type == CatalogProviderFieldTypeGRPCTarget || definition.Type == CatalogProviderFieldTypeBoolean
+			validSchemes := (definition.Type == CatalogProviderFieldTypeURL && len(definition.Validation.AllowedSchemes) > 0) || (definition.Type != CatalogProviderFieldTypeURL && len(definition.Validation.AllowedSchemes) == 0)
+			if !validSettingType || !validSchemes || definition.Secret || definition.Validation.MinimumLength < 0 {
 				return nil, fmt.Errorf("%w: field=%s reason=invalid_setting_field", ErrInvalidModelCatalog, fieldPrefix)
 			}
 		default:
@@ -636,7 +662,21 @@ func validatedProviderFieldValue(definition ProviderCatalogField, rawValue strin
 	if definition.Validation.Pattern != constants.EmptyString && !regexp.MustCompile(definition.Validation.Pattern).MatchString(value) {
 		return constants.EmptyString, fmt.Errorf("provider_field_invalid: field=%s", definition.ID)
 	}
-	if definition.Type != CatalogProviderFieldTypeURL {
+	if definition.Type == CatalogProviderFieldTypeOpaque {
+		return value, nil
+	}
+	if definition.Type == CatalogProviderFieldTypeGRPCTarget {
+		host, portValue, splitError := net.SplitHostPort(value)
+		port, portError := strconv.Atoi(portValue)
+		if splitError != nil || strings.TrimSpace(host) == constants.EmptyString || portError != nil || port <= 0 || port > 65535 {
+			return constants.EmptyString, fmt.Errorf("provider_field_invalid: field=%s", definition.ID)
+		}
+		return value, nil
+	}
+	if definition.Type == CatalogProviderFieldTypeBoolean {
+		if value != "true" && value != "false" {
+			return constants.EmptyString, fmt.Errorf("provider_field_invalid: field=%s", definition.ID)
+		}
 		return value, nil
 	}
 	parsedURL, parseError := url.Parse(value)
@@ -668,68 +708,60 @@ func validateProviderCatalogTransports(rawTransports []ProviderCatalogTransport,
 		if endpointError := validateProviderCatalogEndpoint(transport.Endpoint, fields, fieldPrefix+".endpoint"); endpointError != nil {
 			return nil, endpointError
 		}
-		credentialField, found := fields[transport.Authentication.Field]
+		credentialField, found := fields[transport.Components.Authentication.Field]
 		if !found || credentialField.Kind != CatalogProviderFieldKindCredential || !credentialField.Required {
-			return nil, fmt.Errorf("%w: field=%s.authentication.field field_id=%s reason=dangling_reference", ErrInvalidModelCatalog, fieldPrefix, transport.Authentication.Field)
-		}
-		if authenticationError := validateProviderCatalogAuthentication(transport.Authentication, fieldPrefix+".authentication"); authenticationError != nil {
-			return nil, authenticationError
+			return nil, fmt.Errorf("%w: field=%s.components.authentication.field field_id=%s reason=dangling_reference", ErrInvalidModelCatalog, fieldPrefix, transport.Components.Authentication.Field)
 		}
 		if headersError := validateProviderCatalogHeaders(transport.Headers, fieldPrefix+".headers"); headersError != nil {
 			return nil, headersError
 		}
-		if !knownProviderCatalogProtocol(transport.RequestProtocol) || !knownProviderCatalogProtocol(transport.ResponseProtocol) || !knownProviderCatalogProtocol(transport.UsageMapping) {
-			return nil, fmt.Errorf("%w: field=%s reason=unsupported_protocol", ErrInvalidModelCatalog, fieldPrefix)
-		}
-		if transport.RequestProtocol != transport.ResponseProtocol || transport.RequestProtocol != transport.UsageMapping {
-			return nil, fmt.Errorf("%w: field=%s reason=protocol_mismatch", ErrInvalidModelCatalog, fieldPrefix)
-		}
-		if !knownTextExecutionLifecycle(textExecutionLifecycle(transport.Lifecycle)) {
-			return nil, fmt.Errorf("%w: field=%s.lifecycle lifecycle=%s", ErrInvalidModelCatalog, fieldPrefix, transport.Lifecycle)
-		}
-		if visibilityError := validateProviderCatalogResourceVisibility(transport, fieldPrefix+".resource_visibility"); visibilityError != nil {
-			return nil, visibilityError
-		}
-		if parametersError := validateProviderCatalogProtocolParameters(transport.ProtocolParameters, fieldPrefix+".protocol_parameters"); parametersError != nil {
-			return nil, parametersError
-		}
-		if adapterError := validateProviderCatalogAdapterContract(transport, fieldPrefix); adapterError != nil {
-			return nil, adapterError
+		if _, compositionError := composeProviderTransport(transport, fieldPrefix); compositionError != nil {
+			return nil, compositionError
 		}
 		transports[identifier] = transport
 	}
 	return transports, nil
 }
 
-func validateProviderCatalogResourceVisibility(transport ProviderCatalogTransport, field string) error {
-	sharedPollableLifecycle := transport.Lifecycle == string(textExecutionLifecyclePollableResource) &&
-		(transport.RequestProtocol == CatalogProtocolOpenAIResponses || transport.RequestProtocol == CatalogProtocolGeminiInteractions)
-	visibility := transport.ResourceVisibility
+func validatedProviderCatalogResourceVisibility(execution ProviderCatalogExecutionReference, requestCodec string, field string) (pollableResourceVisibilityPolicy, error) {
+	sharedPollableLifecycle := execution.ID == string(textExecutionLifecyclePollableResource) &&
+		(requestCodec == CatalogProtocolOpenAIResponses || requestCodec == CatalogProtocolGeminiInteractions)
+	visibility := execution.ResourceVisibility
 	if !sharedPollableLifecycle {
 		if visibility.RetryIntervalMilliseconds != 0 || visibility.RetryLimit != 0 || len(visibility.RetryStatusCodes) != 0 {
-			return fmt.Errorf("%w: field=%s reason=unexpected_resource_visibility", ErrInvalidModelCatalog, field)
+			return pollableResourceVisibilityPolicy{}, fmt.Errorf("%w: field=%s reason=unexpected_resource_visibility", ErrInvalidModelCatalog, field)
 		}
-		return nil
+		return pollableResourceVisibilityPolicy{}, nil
 	}
 	if visibility.RetryIntervalMilliseconds <= 0 || visibility.RetryIntervalMilliseconds > providerCatalogResourceVisibilityMaxRetryIntervalMilliseconds ||
 		visibility.RetryLimit <= 0 || visibility.RetryLimit > providerCatalogResourceVisibilityMaxRetryLimit || len(visibility.RetryStatusCodes) == 0 {
-		return fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
+		return pollableResourceVisibilityPolicy{}, fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
 	}
 	seenStatusCodes := map[int]struct{}{}
 	for statusIndex, statusCode := range visibility.RetryStatusCodes {
 		if statusCode < http.StatusBadRequest || statusCode >= providerCatalogResourceVisibilityStatusCodeUpperBound {
-			return fmt.Errorf("%w: field=%s.retry_status_codes[%d] status=%d", ErrInvalidModelCatalog, field, statusIndex, statusCode)
+			return pollableResourceVisibilityPolicy{}, fmt.Errorf("%w: field=%s.retry_status_codes[%d] status=%d", ErrInvalidModelCatalog, field, statusIndex, statusCode)
 		}
 		if _, duplicate := seenStatusCodes[statusCode]; duplicate {
-			return fmt.Errorf("%w: field=%s.retry_status_codes[%d] duplicate=%d", ErrInvalidModelCatalog, field, statusIndex, statusCode)
+			return pollableResourceVisibilityPolicy{}, fmt.Errorf("%w: field=%s.retry_status_codes[%d] duplicate=%d", ErrInvalidModelCatalog, field, statusIndex, statusCode)
 		}
 		seenStatusCodes[statusCode] = struct{}{}
 	}
-	return nil
+	return pollableResourceVisibilityPolicyFromCatalog(visibility), nil
 }
 
 func validateProviderCatalogEndpoint(endpoint ProviderCatalogEndpoint, fields map[string]ProviderCatalogField, field string) error {
-	if endpoint.Method != CatalogEndpointMethodPost || !strings.HasPrefix(endpoint.Path, "/") || endpoint.Path != strings.TrimSpace(endpoint.Path) {
+	if endpoint.Protocol == CatalogEndpointProtocolGRPC {
+		if endpoint.Method != constants.EmptyString || endpoint.Path != constants.EmptyString || endpoint.DefaultBaseURL != constants.EmptyString || endpoint.SettingField == constants.EmptyString {
+			return fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
+		}
+		definition, found := fields[endpoint.SettingField]
+		if !found || definition.Kind != CatalogProviderFieldKindSetting || definition.Type != CatalogProviderFieldTypeGRPCTarget {
+			return fmt.Errorf("%w: field=%s.setting_field field_id=%s reason=dangling_reference", ErrInvalidModelCatalog, field, endpoint.SettingField)
+		}
+		return nil
+	}
+	if endpoint.Protocol != CatalogEndpointProtocolHTTP || endpoint.Method != CatalogEndpointMethodPost || !strings.HasPrefix(endpoint.Path, "/") || endpoint.Path != strings.TrimSpace(endpoint.Path) {
 		return fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
 	}
 	if (endpoint.DefaultBaseURL == constants.EmptyString) == (endpoint.SettingField == constants.EmptyString) {
@@ -771,6 +803,10 @@ func validateProviderCatalogAuthentication(authentication ProviderCatalogAuthent
 		if strings.TrimSpace(authentication.Header) == constants.EmptyString || authentication.Header != strings.TrimSpace(authentication.Header) || authentication.Prefix != constants.EmptyString {
 			return fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
 		}
+	case CatalogAuthenticationGRPCBearer:
+		if authentication.Header != constants.EmptyString || authentication.Prefix != constants.EmptyString {
+			return fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
+		}
 	default:
 		return fmt.Errorf("%w: field=%s.kind kind=%s", ErrInvalidModelCatalog, field, authentication.Kind)
 	}
@@ -792,214 +828,10 @@ func validateProviderCatalogHeaders(headers []ProviderCatalogHeader, field strin
 	return nil
 }
 
-func validateProviderCatalogProtocolParameters(parameters ProviderCatalogProtocolParameters, field string) error {
-	if strings.TrimSpace(parameters.ModelField) != parameters.ModelField || len(parameters.OutputFields) == 0 {
-		return fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
-	}
-	for _, values := range [][]string{parameters.OutputFields, parameters.FinishRules.Complete, parameters.FinishRules.Continue, parameters.ContinuationRules, parameters.ErrorRules} {
-		seen := map[string]struct{}{}
-		for _, value := range values {
-			if strings.TrimSpace(value) == constants.EmptyString || value != strings.TrimSpace(value) {
-				return fmt.Errorf("%w: field=%s reason=invalid_protocol_value", ErrInvalidModelCatalog, field)
-			}
-			if _, duplicate := seen[value]; duplicate {
-				return fmt.Errorf("%w: field=%s duplicate=%s", ErrInvalidModelCatalog, field, value)
-			}
-			seen[value] = struct{}{}
-		}
-	}
-	return nil
-}
-
-func validateProviderCatalogAdapterContract(transport ProviderCatalogTransport, field string) error {
-	var parameters ProviderCatalogProtocolParameters
-	expectedAuthentication := ProviderCatalogAuthentication{
-		Kind: CatalogAuthenticationBearer, Field: transport.Authentication.Field,
-		Header: "Authorization", Prefix: "Bearer ",
-	}
-	expectedHeaders := []ProviderCatalogHeader(nil)
-	var allowedLifecycles []string
-
-	switch transport.RequestProtocol {
-	case CatalogProtocolDashScopeResponses:
-		allowedLifecycles = []string{string(textExecutionLifecycleSynchronousCompletion)}
-		parameters = ProviderCatalogProtocolParameters{
-			ModelField: "model", TokenField: "max_output_tokens", MediaExecutionLifecycle: transport.Lifecycle,
-			OutputFields:      []string{"output[].content[].text"},
-			FinishRules:       ProviderCatalogFinishRules{Complete: []string{"completed"}, Continue: []string{"incomplete"}},
-			ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
-			ErrorRules:        []string{"cancelled", "failed", "unknown_status"},
-			UsageFields:       ProviderCatalogUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens"},
-		}
-	case CatalogProtocolOpenAIResponses, CatalogProtocolXAIResponses:
-		allowedLifecycles = []string{string(textExecutionLifecyclePollableResource)}
-		if transport.RequestProtocol == CatalogProtocolXAIResponses {
-			allowedLifecycles = []string{string(textExecutionLifecycleSynchronousCompletion)}
-		}
-		parameters = ProviderCatalogProtocolParameters{
-			ModelField: "model", TokenField: "max_output_tokens", MediaExecutionLifecycle: transport.Lifecycle,
-			OutputFields: []string{"output[].content[].text", "output[].type", "output[].call_id", "output[].name", "output[].arguments"},
-			FinishRules: ProviderCatalogFinishRules{
-				Complete: []string{"completed"}, Continue: []string{"incomplete:max_output_tokens"},
-			},
-			ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
-			ErrorRules:        []string{"cancelled", "failed", "refusal", "unknown_status"},
-			UsageFields: ProviderCatalogUsageFields{
-				Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens",
-			},
-		}
-	case CatalogProtocolOpenAIChatCompletions:
-		allowedLifecycles = []string{string(textExecutionLifecycleSynchronousCompletion)}
-		if transport.ProtocolParameters.TokenField != string(chatCompletionTokenLimitMaxTokens) && transport.ProtocolParameters.TokenField != string(chatCompletionTokenLimitMaxCompletionTokens) {
-			return providerCatalogAdapterContractError(field, transport.RequestProtocol)
-		}
-		parameters = ProviderCatalogProtocolParameters{
-			ModelField: "model", TokenField: transport.ProtocolParameters.TokenField,
-			MediaExecutionLifecycle: string(textExecutionLifecycleSynchronousCompletion),
-			OutputFields:            []string{"choices[].message.content", "choices[].message.tool_calls"},
-			FinishRules: ProviderCatalogFinishRules{
-				Complete: []string{"stop", "tool_calls"}, Continue: []string{"length"},
-			},
-			ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
-			ErrorRules:        []string{"content_filter", "unknown_finish_reason"},
-			UsageFields: ProviderCatalogUsageFields{
-				Input: "usage.prompt_tokens", Output: "usage.completion_tokens", Total: "usage.total_tokens",
-			},
-		}
-		switch chatCompletionResponsePolicy(transport.ProtocolParameters.ResponsePolicy) {
-		case chatCompletionResponsePolicyDefault:
-		case chatCompletionResponsePolicyQianfan:
-			parameters.ResponsePolicy = string(chatCompletionResponsePolicyQianfan)
-			parameters.OutputFields = []string{"choices[].message.content"}
-			parameters.FinishRules.Complete = []string{"stop"}
-			parameters.ErrorRules = []string{"content_filter", "tool_calls", "unknown_finish_reason", "blocked_flag"}
-		default:
-			return providerCatalogAdapterContractError(field, transport.RequestProtocol)
-		}
-	case CatalogProtocolAnthropicMessages:
-		allowedLifecycles = []string{string(textExecutionLifecycleSynchronousCompletion)}
-		expectedAuthentication = ProviderCatalogAuthentication{
-			Kind: CatalogAuthenticationHeader, Field: transport.Authentication.Field, Header: "x-api-key",
-		}
-		expectedHeaders = []ProviderCatalogHeader{{Name: "anthropic-version", Value: "2023-06-01"}}
-		parameters = ProviderCatalogProtocolParameters{
-			ModelField: "model", TokenField: "max_tokens",
-			MediaExecutionLifecycle: string(textExecutionLifecycleSynchronousCompletion),
-			OutputFields:            []string{"content[].text"},
-			FinishRules: ProviderCatalogFinishRules{
-				Complete: []string{"end_turn", "stop_sequence"}, Continue: []string{"max_tokens"},
-			},
-			ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
-			ErrorRules:        []string{"pause_turn", "refusal", "tool_use", "unknown_stop_reason"},
-			UsageFields: ProviderCatalogUsageFields{
-				Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "derived_input_plus_output",
-			},
-		}
-	case CatalogProtocolVertexGenerateContent:
-		allowedLifecycles = []string{string(textExecutionLifecycleSynchronousCompletion)}
-		expectedAuthentication = ProviderCatalogAuthentication{Kind: CatalogAuthenticationHeader, Field: transport.Authentication.Field, Header: "x-goog-api-key"}
-		parameters = ProviderCatalogProtocolParameters{
-			ModelField: "path.model", TokenField: "generationConfig.maxOutputTokens", MediaExecutionLifecycle: string(textExecutionLifecycleSynchronousCompletion),
-			OutputFields: []string{"candidates[].content.parts[].text"},
-			FinishRules:  ProviderCatalogFinishRules{Complete: []string{"STOP"}},
-			ErrorRules:   []string{"MAX_TOKENS", "blocked", "unknown_finish_reason"},
-			UsageFields:  ProviderCatalogUsageFields{Input: "usageMetadata.promptTokenCount", Output: "usageMetadata.candidatesTokenCount+thoughtsTokenCount", Total: "usageMetadata.totalTokenCount"},
-		}
-	case CatalogProtocolGeminiInteractions:
-		allowedLifecycles = []string{string(textExecutionLifecyclePollableResource), string(textExecutionLifecycleSynchronousCompletion)}
-		expectedAuthentication = ProviderCatalogAuthentication{
-			Kind: CatalogAuthenticationHeader, Field: transport.Authentication.Field, Header: "x-goog-api-key",
-		}
-		expectedHeaders = []ProviderCatalogHeader{{Name: "Api-Revision", Value: "2026-05-20"}}
-		parameters = ProviderCatalogProtocolParameters{
-			ModelField: "model", TokenField: "generation_config.max_output_tokens",
-			MediaExecutionLifecycle: string(textExecutionLifecycleSynchronousCompletion),
-			OutputFields:            []string{"outputs[].text"},
-			FinishRules: ProviderCatalogFinishRules{
-				Complete: []string{"completed"}, Continue: []string{"incomplete"},
-			},
-			ContinuationRules: []string{},
-			ErrorRules:        []string{"blocked", "cancelled", "failed", "unknown_status"},
-			UsageFields: ProviderCatalogUsageFields{
-				Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens",
-			},
-		}
-	case CatalogProtocolMetaTranscription:
-		allowedLifecycles = []string{string(textExecutionLifecycleSynchronousCompletion)}
-		parameters = ProviderCatalogProtocolParameters{
-			ModelField:   "request.model",
-			OutputFields: []string{"transcript"},
-			FinishRules:  ProviderCatalogFinishRules{Complete: []string{"http_2xx"}},
-			ErrorRules:   []string{"malformed_response", "provider_error"},
-		}
-	case CatalogProtocolMultipartTranscription:
-		allowedLifecycles = []string{string(textExecutionLifecycleSynchronousCompletion)}
-		if transport.ProtocolParameters.ModelField != constants.EmptyString && transport.ProtocolParameters.ModelField != "model" {
-			return providerCatalogAdapterContractError(field, transport.RequestProtocol)
-		}
-		parameters = ProviderCatalogProtocolParameters{
-			ModelField: transport.ProtocolParameters.ModelField, TokenField: constants.EmptyString,
-			OutputFields:      []string{"text"},
-			FinishRules:       ProviderCatalogFinishRules{Complete: []string{"http_2xx"}, Continue: []string{}},
-			ContinuationRules: []string{}, ErrorRules: []string{"malformed_response", "provider_error"},
-			UsageFields: ProviderCatalogUsageFields{},
-		}
-	case CatalogProtocolXAIVideosGenerations:
-		allowedLifecycles = []string{string(textExecutionLifecyclePollableResource)}
-		parameters = ProviderCatalogProtocolParameters{
-			ModelField: "model", TokenField: constants.EmptyString,
-			OutputFields:      []string{"data[].url"},
-			FinishRules:       ProviderCatalogFinishRules{Complete: []string{"completed"}, Continue: []string{"pending"}},
-			ContinuationRules: []string{}, ErrorRules: []string{"failed", "unknown_status"},
-			UsageFields: ProviderCatalogUsageFields{},
-		}
-	default:
-		return providerCatalogAdapterContractError(field, transport.RequestProtocol)
-	}
-
-	if !slices.Contains(allowedLifecycles, transport.Lifecycle) ||
-		transport.Authentication != expectedAuthentication ||
-		!providerCatalogHeadersEqual(transport.Headers, expectedHeaders) ||
-		!providerCatalogProtocolParametersEqual(transport.ProtocolParameters, parameters) {
-		return providerCatalogAdapterContractError(field, transport.RequestProtocol)
-	}
-	return nil
-}
-
-func providerCatalogAdapterContractError(field string, protocol string) error {
-	return fmt.Errorf("%w: field=%s reason=adapter_contract_mismatch protocol=%s", ErrInvalidModelCatalog, field, protocol)
-}
-
 func providerCatalogHeadersEqual(actual []ProviderCatalogHeader, expected []ProviderCatalogHeader) bool {
 	return slices.EqualFunc(actual, expected, func(actualHeader ProviderCatalogHeader, expectedHeader ProviderCatalogHeader) bool {
 		return actualHeader == expectedHeader
 	})
-}
-
-func providerCatalogProtocolParametersEqual(actual ProviderCatalogProtocolParameters, expected ProviderCatalogProtocolParameters) bool {
-	return actual.ResponsePolicy == expected.ResponsePolicy && actual.ModelField == expected.ModelField &&
-		actual.TokenField == expected.TokenField &&
-		actual.MediaExecutionLifecycle == expected.MediaExecutionLifecycle &&
-		slices.Equal(actual.OutputFields, expected.OutputFields) &&
-		slices.Equal(actual.FinishRules.Complete, expected.FinishRules.Complete) &&
-		slices.Equal(actual.FinishRules.Continue, expected.FinishRules.Continue) &&
-		slices.Equal(actual.ContinuationRules, expected.ContinuationRules) &&
-		slices.Equal(actual.ErrorRules, expected.ErrorRules) &&
-		actual.UsageFields == expected.UsageFields
-}
-
-func knownProviderCatalogProtocol(protocol string) bool {
-	switch protocol {
-	case CatalogProtocolDashScopeResponses, CatalogProtocolXAIResponses, CatalogProtocolOpenAIResponses,
-		CatalogProtocolOpenAIChatCompletions,
-		CatalogProtocolAnthropicMessages,
-		CatalogProtocolGeminiInteractions, CatalogProtocolVertexGenerateContent,
-		CatalogProtocolMultipartTranscription, CatalogProtocolMetaTranscription,
-		CatalogProtocolXAIVideosGenerations:
-		return true
-	default:
-		return false
-	}
 }
 
 func compileProviderCatalogSchema(schema ProviderCatalogSchema, revision string) (ModelCatalog, error) {
@@ -1013,8 +845,12 @@ func compileProviderCatalogSchema(schema ProviderCatalogSchema, revision string)
 		modelCatalog.Models = append(modelCatalog.Models, model.ExactModel)
 	}
 	for _, provider := range schema.Providers {
+		credentialKind := CatalogCredentialAPIKey
+		if provider.ConnectionOwnership == CatalogProviderConnectionDeployment {
+			credentialKind = CatalogCredentialDeployment
+		}
 		modelCatalog.Providers = append(modelCatalog.Providers, CatalogProvider{
-			ID: provider.ID, Label: provider.Label, CredentialKinds: []string{CatalogCredentialAPIKey},
+			ID: provider.ID, Label: provider.Label, CredentialKinds: []string{credentialKind},
 		})
 		transports := make(map[string]ProviderCatalogTransport, len(provider.Transports))
 		for _, transport := range provider.Transports {
@@ -1022,6 +858,7 @@ func compileProviderCatalogSchema(schema ProviderCatalogSchema, revision string)
 		}
 		for _, rawOffering := range provider.Offerings {
 			transport := transports[rawOffering.Transport]
+			composition, _ := composeProviderTransport(transport, "")
 			offering := ProviderOffering{
 				Provider:                provider.ID,
 				Model:                   rawOffering.Model,
@@ -1029,9 +866,9 @@ func compileProviderCatalogSchema(schema ProviderCatalogSchema, revision string)
 				Transport:               rawOffering.Transport,
 				Operations:              append([]string(nil), rawOffering.Operations...),
 				DefaultOperations:       append([]string(nil), rawOffering.DefaultOperations...),
-				WireContract:            transport.RequestProtocol,
-				ExecutionLifecycle:      transport.Lifecycle,
-				MediaExecutionLifecycle: transport.ProtocolParameters.MediaExecutionLifecycle,
+				WireContract:            composition.requestCodec,
+				ExecutionLifecycle:      string(composition.lifecycle),
+				MediaExecutionLifecycle: composition.parameters.MediaExecutionLifecycle,
 				RequestProfile:          rawOffering.RequestProfile,
 				WebSearch:               rawOffering.WebSearch, CallerTools: rawOffering.CallerTools, Created: rawOffering.Created,
 				OutputTokenLimit: rawOffering.OutputTokenLimit,

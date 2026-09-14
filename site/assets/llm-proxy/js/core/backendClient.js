@@ -1,6 +1,8 @@
 // @ts-check
 
-import { MPR_UI } from "../constants.js?v=20260903f037";
+import {assertManagementAccount, assertManagementTenantProfile, assertProviderCatalog, assertProviderField} from "./managementProfile.js?v=20260903f037";
+
+import { APP_INTEGRITY_ERROR, MPR_UI } from "../constants.js?v=20260903f037";
 
 const MANAGEMENT_BASE_PATH = "/api/management";
 const HEADER_CONTENT_TYPE = "Content-Type";
@@ -22,12 +24,35 @@ export class BackendClientError extends Error {
   }
 }
 
+const MANAGEMENT_FAILURE_MESSAGES = new Map([
+  ['managed_tenant_name_conflict', 'A tenant already uses this name. Choose another name.'],
+  ['managed_connection_conflict', 'The connection changed. Reload its details before saving.'],
+  ['managed_connection_assigned', 'Detach this connection from its tenants before deleting it.'],
+  ['managed_connection_invalid', 'Check the connection name, credentials, and required settings.'],
+  ['provider_key_rejected', 'The provider rejected these credentials. Check the key and required settings.'],
+  ['provider_key_verification_rate_limited', 'The provider rate limit prevented verification. Try again later.'],
+  ['provider_key_verification_timed_out', 'Provider verification timed out. Try again.'],
+  ['provider_key_verification_unavailable', 'Provider verification is unavailable. Try again later.'],
+]);
+
+/** @param {BackendClientError} error @returns {string} */
+export function managementFailureMessage(error) {
+  let code = error.message;
+  if (code.startsWith('{')) {
+    try { code = JSON.parse(code).error?.code; }
+    catch { code = EMPTY_STRING; }
+  }
+  return MANAGEMENT_FAILURE_MESSAGES.get(code) || 'Unable to complete this change. Try again.';
+}
+
 /**
  * @param {AbortSignal} [signal]
  * @returns {Promise<import("../types.d.js").ManagementAccount>}
  */
-export function fetchAccount(signal) {
-  return requestJSON(`${MANAGEMENT_BASE_PATH}/account`, { method: "GET", signal });
+export async function fetchAccount(signal) {
+  const account = await requestJSON(`${MANAGEMENT_BASE_PATH}/account`, { method: "GET", signal });
+  assertManagementAccount(account);
+  return account;
 }
 
 /**
@@ -36,7 +61,7 @@ export function fetchAccount(signal) {
  * @returns {Promise<import("../types.d.js").ManagementTenantProfile>}
  */
 export function fetchTenant(tenantID, signal) {
-  return requestJSON(managementTenantPath(tenantID), { method: "GET", signal });
+  return requestTenantProfile(managementTenantPath(tenantID), { method: "GET", signal }, tenantID);
 }
 
 /**
@@ -45,7 +70,7 @@ export function fetchTenant(tenantID, signal) {
  * @returns {Promise<import("../types.d.js").ManagementTenantProfile>}
  */
 export function createTenant(name, signal) {
-  return requestJSON(`${MANAGEMENT_BASE_PATH}/tenants`, {
+  return requestTenantProfile(`${MANAGEMENT_BASE_PATH}/tenants`, {
     method: "POST",
     body: { name },
     signal,
@@ -59,11 +84,11 @@ export function createTenant(name, signal) {
  * @returns {Promise<import("../types.d.js").ManagementTenantProfile>}
  */
 export function renameTenant(tenantID, name, signal) {
-  return requestJSON(managementTenantPath(tenantID), {
+  return requestTenantProfile(managementTenantPath(tenantID), {
     method: "PUT",
     body: { name },
     signal,
-  });
+  }, tenantID);
 }
 
 /**
@@ -188,60 +213,16 @@ export function fetchAdminUsers() {
 
 /**
  * @param {string} tenantID
- * @param {string} provider
- * @param {Record<string, string>} fields
- * @param {string} textModel
- * @param {string} systemPrompt
- * @param {AbortSignal} [signal]
- * @returns {Promise<import("../types.d.js").ManagementTenantProfile>}
- */
-export function saveProviderConnection(tenantID, provider, fields, textModel, systemPrompt, signal) {
-  return requestJSON(`${managementTenantPath(tenantID)}/provider-connections/${encodeURIComponent(provider)}`, {
-    method: "PUT",
-    body: { fields, text_model: textModel, system_prompt: systemPrompt },
-    signal,
-  });
-}
-
-/**
- * @param {string} tenantID
- * @param {string} provider
- * @param {AbortSignal} [signal]
- * @returns {Promise<import("../types.d.js").ManagementTenantProfile>}
- */
-export function removeProviderConnection(tenantID, provider, signal) {
-  return requestJSON(`${managementTenantPath(tenantID)}/provider-connections/${encodeURIComponent(provider)}`, {
-    method: "DELETE",
-    signal,
-  });
-}
-
-/**
- * @param {string} tenantID
- * @param {string} provider
- * @param {string} field
- * @param {AbortSignal} [signal]
- * @returns {Promise<import("../types.d.js").ProviderFieldReveal>}
- */
-export function revealProviderConnectionField(tenantID, provider, field, signal) {
-  return requestJSON(`${managementTenantPath(tenantID)}/provider-connections/${encodeURIComponent(provider)}/fields/${encodeURIComponent(field)}/reveal`, {
-    method: "POST",
-    signal,
-  });
-}
-
-/**
- * @param {string} tenantID
  * @param {import("../types.d.js").TenantDefaults} defaults
  * @param {AbortSignal} [signal]
  * @returns {Promise<import("../types.d.js").ManagementTenantProfile>}
  */
 export function updateDefaults(tenantID, defaults, signal) {
-  return requestJSON(`${managementTenantPath(tenantID)}/defaults`, {
+  return requestTenantProfile(`${managementTenantPath(tenantID)}/defaults`, {
     method: "PUT",
     body: defaults,
     signal,
-  });
+  }, tenantID);
 }
 
 /**
@@ -249,8 +230,12 @@ export function updateDefaults(tenantID, defaults, signal) {
  * @param {AbortSignal} [signal]
  * @returns {Promise<import("../types.d.js").SecretResponse>}
  */
-export function generateSecret(tenantID, signal) {
-  return requestJSON(`${managementTenantPath(tenantID)}/secrets`, { method: "POST", signal });
+export async function generateSecret(tenantID, signal) {
+  const response = await requestJSON(`${managementTenantPath(tenantID)}/secrets`, { method: "POST", signal });
+  if (!response || typeof response.secret !== 'string' || !response.secret.trim()) throw new Error(APP_INTEGRITY_ERROR);
+  assertManagementTenantProfile(response.profile, tenantID);
+  if (!response.profile.tenant.has_secret) throw new Error(APP_INTEGRITY_ERROR);
+  return response;
 }
 
 /**
@@ -273,7 +258,7 @@ export function loadFrontendRuntimeConfig() {
 
 /**
  * @param {string} path
- * @param {{ method: string, body?: unknown, signal?: AbortSignal }} options
+ * @param {{ method: string, body?: unknown, signal?: AbortSignal, idempotencyKey?: string }} options
  * @returns {Promise<any>}
  */
 async function requestJSON(path, options) {
@@ -287,6 +272,9 @@ async function requestJSON(path, options) {
   };
   if (options.method !== "GET") {
     requestInit.headers = { [HEADER_CONTENT_TYPE]: MIME_JSON };
+  }
+  if (options.idempotencyKey) {
+    requestInit.headers = {...requestInit.headers, "Idempotency-Key": options.idempotencyKey};
   }
   if (options.body !== undefined) {
     requestInit.body = JSON.stringify(options.body);
@@ -311,6 +299,18 @@ async function requestJSON(path, options) {
     return undefined;
   }
   return response.json();
+}
+
+/**
+ * @param {string} path
+ * @param {{method:string, body?:unknown, signal?:AbortSignal}} options
+ * @param {string} [tenantID]
+ * @returns {Promise<import('../types.d.js').ManagementTenantProfile>}
+ */
+async function requestTenantProfile(path, options, tenantID) {
+  const profile = await requestJSON(path, options);
+  assertManagementTenantProfile(profile, tenantID);
+  return profile;
 }
 
 /**
@@ -376,4 +376,107 @@ function normalizedOrigin(rawOrigin, fieldName) {
     throw new Error(`frontend_config_invalid: ${fieldName}`);
   }
   return new URL(origin).origin;
+}
+
+/** @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').AccountConnections>} */
+export async function fetchConnections(signal) {
+  /** @type {import('../types.d.js').AccountConnection[]} */
+  const connections = [];
+  const identifiers = new Set();
+  const assignments = new Set();
+  let cursor = EMPTY_STRING;
+  let result;
+  do {
+    const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : EMPTY_STRING;
+    result = await requestJSON(`${MANAGEMENT_BASE_PATH}/connections${query}`, {method: 'GET', signal});
+    if (!result || !Array.isArray(result.connections) || !Array.isArray(result.providers) ||
+        typeof result.next_cursor !== 'string' || (result.next_cursor !== EMPTY_STRING &&
+        (!CONNECTION_ID_PATTERN.test(result.next_cursor) || result.next_cursor <= cursor || !result.connections.length))) {
+      throw new Error(APP_INTEGRITY_ERROR);
+    }
+    const providerIDs = new Set();
+    for (const provider of result.providers) {
+      assertProviderCatalog(provider);
+      if (providerIDs.has(provider.id)) throw new Error(APP_INTEGRITY_ERROR);
+      providerIDs.add(provider.id);
+    }
+    for (const connection of result.connections) {
+      assertAccountConnection(connection);
+      if (identifiers.has(connection.id) || !providerIDs.has(connection.provider)) throw new Error(APP_INTEGRITY_ERROR);
+      identifiers.add(connection.id);
+      for (const tenantID of connection.tenant_ids) {
+        const assignment = JSON.stringify([tenantID, connection.provider]);
+        if (assignments.has(assignment)) throw new Error(APP_INTEGRITY_ERROR);
+        assignments.add(assignment);
+      }
+    }
+    if (result.next_cursor && result.next_cursor !== result.connections.at(-1).id) throw new Error(APP_INTEGRITY_ERROR);
+    connections.push(...result.connections);
+    cursor = result.next_cursor;
+  } while (cursor);
+  return {connections, providers: result.providers};
+}
+
+const CONNECTION_ID_PATTERN = /^connection-[a-f0-9]{32}$/;
+
+/** @param {import('../types.d.js').AccountConnection} connection */
+function assertAccountConnection(connection) {
+  if (!connection || typeof connection.id !== 'string' || !CONNECTION_ID_PATTERN.test(connection.id) ||
+      typeof connection.name !== 'string' || !connection.name.trim() || typeof connection.provider !== 'string' || !connection.provider ||
+      !Number.isSafeInteger(connection.version) || connection.version < 1 ||
+      typeof connection.created_at !== 'string' || !Number.isFinite(Date.parse(connection.created_at)) ||
+      typeof connection.updated_at !== 'string' || !Number.isFinite(Date.parse(connection.updated_at)) ||
+      !Array.isArray(connection.tenant_ids) || !connection.tenant_ids.every(id => typeof id === 'string' && id.length > 0) ||
+      new Set(connection.tenant_ids).size !== connection.tenant_ids.length ||
+      !Array.isArray(connection.fields) || !connection.fields.length) throw new Error(APP_INTEGRITY_ERROR);
+  const fieldIDs = new Set();
+  for (const field of connection.fields) {
+    assertProviderField(field);
+    if (fieldIDs.has(field.id)) throw new Error(APP_INTEGRITY_ERROR);
+    fieldIDs.add(field.id);
+  }
+}
+
+/** @param {string} id @param {{name:string, provider:string, fields:Record<string,string>, version:number}} body @param {AbortSignal} [signal] @param {string} [idempotencyKey] @returns {Promise<import('../types.d.js').AccountConnection>} */
+export async function saveConnection(id, body, signal, idempotencyKey) {
+  const connection = await requestJSON(`${MANAGEMENT_BASE_PATH}/connections${id ? '/' + encodeURIComponent(id) : ''}`, {method:id ? 'PUT':'POST', body, signal, idempotencyKey});
+  assertAccountConnection(connection);
+  if ((id && connection.id !== id) || connection.provider !== body.provider || connection.version !== body.version + 1) throw new Error(APP_INTEGRITY_ERROR);
+  return connection;
+}
+
+/** @param {string} id @param {AbortSignal} [signal] @returns {Promise<void>} */
+export function deleteConnection(id, signal) {
+  return requestJSON(`${MANAGEMENT_BASE_PATH}/connections/${encodeURIComponent(id)}`, {method:'DELETE', signal});
+}
+
+/** @param {string} tenantID @param {string} provider @param {string} connectionID @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').ManagementTenantProfile>} */
+export function assignConnection(tenantID, provider, connectionID, signal) {
+  return requestTenantProfile(`${managementTenantPath(tenantID)}/connections/${encodeURIComponent(provider)}`, {method:'PUT',body:{connection_id:connectionID},signal}, tenantID);
+}
+
+/** @param {string} tenantID @param {string} provider @param {boolean} clearDefaults @param {AbortSignal} [signal] @returns {Promise<void>} */
+export function detachConnection(tenantID, provider, clearDefaults, signal) {
+  return requestJSON(`${managementTenantPath(tenantID)}/connections/${encodeURIComponent(provider)}?clear_defaults=${clearDefaults}`, {method:'DELETE',signal});
+}
+
+/** @param {string} tenantID @param {string} provider @param {{text_model:string, system_prompt:string}} body @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').ManagementTenantProfile>} */
+export function saveTenantProviderProfile(tenantID, provider, body, signal) {
+  return requestTenantProfile(`${managementTenantPath(tenantID)}/provider-profiles/${encodeURIComponent(provider)}`, {method:'PUT',body,signal}, tenantID);
+}
+
+/** @param {AbortSignal} [signal] @returns {Promise<Record<string, string>>} */
+export async function fetchModelFamilies(signal) {
+  const config = await loadFrontendRuntimeConfig();
+  const response = await fetch(`${config.managementApiOrigin}/api/public/capabilities`, {signal, credentials:'omit'});
+  if (!response.ok) throw new BackendClientError(await response.text(), response.status);
+  const result = await response.json();
+  if (!result || !Array.isArray(result.models)) throw new Error('Invalid model catalog');
+  /** @type {Record<string, string>} */
+  const families = {};
+  for (const model of result.models) {
+    if (!model || typeof model.identifier !== 'string' || typeof model.family !== 'string' || !model.identifier || !model.family || Object.hasOwn(families, model.identifier)) throw new Error('Invalid model identity');
+    families[model.identifier] = model.family;
+  }
+  return families;
 }

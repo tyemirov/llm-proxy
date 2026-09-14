@@ -5,6 +5,8 @@ import { initializeMprShell } from "./core/mprShell.js?v=20260903f037";
 import { failApplicationStartup } from "./ui/applicationStartup.js?v=20260903f037";
 import { createManagementApplication } from "./ui/managementApplication.js?v=20260903f037";
 
+import './ui/connectionDashboard.js?v=20260903f037';
+
 initializeMprShell();
 
 const alpineRuntimeScript = document.createElement("script");

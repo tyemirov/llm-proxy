@@ -804,6 +804,13 @@ verify_provider_key() {
   local request_path
   local response_path
   local http_status
+  local inventory_path="${TMP_DIR}/connections.json"
+  local inventory_page_path="${TMP_DIR}/connections-page.json"
+  local inventory_cursor=""
+  local inventory_url="${LIVE_ORIGIN}/api/management/connections"
+  local connection_id
+  local method
+  local connection_path
   if [[ -n "${requested_model}" ]]; then
     model="${requested_model}"
   else
@@ -811,6 +818,44 @@ verify_provider_key() {
   fi
   request_path="${TMP_DIR}/${provider}-verification-request.json"
   response_path="${TMP_DIR}/${provider}-verification-response.json"
+  printf '%s' '{"connections":[]}' >"${inventory_path}"
+  while true; do
+    http_status="$(curl -sS --max-time "${LIVE_TIMEOUT}" --cookie "${SESSION_COOKIE_PATH}" -o "${inventory_page_path}" -w "%{http_code}" "${inventory_url}")"
+    if [[ "${http_status}" != "200" ]]; then
+      echo "error: connection inventory failed: status=${http_status}" >&2
+      exit 1
+    fi
+    inventory_cursor="$(python3 -c '
+import json, pathlib, re, sys
+inventory_path, page_path, previous_cursor = sys.argv[1:]
+inventory = json.loads(pathlib.Path(inventory_path).read_text())
+page = json.loads(pathlib.Path(page_path).read_text())
+cursor = page["next_cursor"]
+if not isinstance(cursor, str) or (cursor and (not re.fullmatch(r"connection-[0-9a-f]{32}", cursor) or cursor <= previous_cursor)):
+    raise SystemExit("invalid connection cursor")
+inventory["connections"].extend(page["connections"])
+pathlib.Path(inventory_path).write_text(json.dumps(inventory))
+print(cursor)
+' "${inventory_path}" "${inventory_page_path}" "${inventory_cursor}")"
+    if [[ -z "${inventory_cursor}" ]]; then
+      break
+    fi
+    inventory_url="${LIVE_ORIGIN}/api/management/connections?cursor=${inventory_cursor}"
+  done
+  connection_id="$(python3 -c '
+import json, pathlib, sys
+connections = json.loads(pathlib.Path(sys.argv[1]).read_text())["connections"]
+assigned = [c for c in connections if c["provider"] == sys.argv[2] and sys.argv[3] in c["tenant_ids"]]
+if len(assigned) > 1:
+    raise SystemExit("duplicate provider assignment")
+print(assigned[0]["id"] if assigned else "")
+' "${inventory_path}" "${provider}" "${TENANT_ID}")"
+  method="POST"
+  connection_path="${LIVE_ORIGIN}/api/management/connections"
+  if [[ -n "${connection_id}" ]]; then
+    method="PUT"
+    connection_path="${connection_path}/${connection_id}"
+  fi
   python3 -c '
 import json
 import os
@@ -829,30 +874,46 @@ for field in matches[0].get("fields", []):
         raise SystemExit(1)
     if value:
         fields[field["id"]] = value
+existing = next((c for c in json.loads(pathlib.Path(sys.argv[5]).read_text())["connections"] if c["id"] == sys.argv[6]), None)
 pathlib.Path(sys.argv[3]).write_text(
     json.dumps({
+        "name": existing["name"] if existing else sys.argv[2],
+        "provider": sys.argv[2],
+        "version": existing["version"] if existing else 0,
         "fields": fields,
-        "text_model": sys.argv[4],
-        "system_prompt": "",
     }, separators=(",", ":")),
     encoding="utf-8",
 )
-' "${PROVIDER_DISCOVERY_PATH}" "${provider}" "${request_path}" "${model}"
+' "${PROVIDER_DISCOVERY_PATH}" "${provider}" "${request_path}" "${model}" "${inventory_path}" "${connection_id}"
   chmod 600 "${request_path}"
 
   http_status="$(
     curl -sS --max-time "${LIVE_TIMEOUT}" \
       --cookie "${SESSION_COOKIE_PATH}" \
-      -X PUT \
+      -X "${method}" \
+      -H "Idempotency-Key: $(python3 -c 'import uuid; print(uuid.uuid4())')" \
       -H "Content-Type: application/json" \
       --data-binary "@${request_path}" \
       -o "${response_path}" \
       -w "%{http_code}" \
-      "${LIVE_ORIGIN}/api/management/tenants/${TENANT_ID}/provider-connections/${provider}"
+      "${connection_path}"
   )"
-  if [[ "${http_status}" != "200" ]]; then
+  if [[ "${http_status}" != "200" && "${http_status}" != "201" ]]; then
     echo "error: live provider verification failed: provider=${provider} model=${model} status=${http_status} error=$(verification_failure_code "${response_path}")" >&2
     redact_log
+    exit 1
+  fi
+  connection_id="$(python3 -c 'import json,pathlib,sys; print(json.loads(pathlib.Path(sys.argv[1]).read_text())["id"])' "${response_path}")"
+  python3 -c 'import json,pathlib,sys; pathlib.Path(sys.argv[1]).write_text(json.dumps({"connection_id":sys.argv[2]}))' "${request_path}" "${connection_id}"
+  http_status="$(curl -sS --max-time "${LIVE_TIMEOUT}" --cookie "${SESSION_COOKIE_PATH}" -X PUT -H "Content-Type: application/json" --data-binary "@${request_path}" -o "${response_path}" -w "%{http_code}" "${LIVE_ORIGIN}/api/management/tenants/${TENANT_ID}/connections/${provider}")"
+  if [[ "${http_status}" != "200" ]]; then
+    echo "error: live provider assignment failed: provider=${provider} status=${http_status}" >&2
+    exit 1
+  fi
+  python3 -c 'import json,pathlib,sys; pathlib.Path(sys.argv[1]).write_text(json.dumps({"text_model":sys.argv[2],"system_prompt":""}, separators=(",", ":")))' "${request_path}" "${model}"
+  http_status="$(curl -sS --max-time "${LIVE_TIMEOUT}" --cookie "${SESSION_COOKIE_PATH}" -X PUT -H "Content-Type: application/json" --data-binary "@${request_path}" -o "${response_path}" -w "%{http_code}" "${LIVE_ORIGIN}/api/management/tenants/${TENANT_ID}/provider-profiles/${provider}")"
+  if [[ "${http_status}" != "200" ]]; then
+    echo "error: live provider profile failed: provider=${provider} status=${http_status}" >&2
     exit 1
   fi
   echo "live provider verification passed: provider=${provider} model=${model} status=${http_status}"

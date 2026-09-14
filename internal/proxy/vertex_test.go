@@ -151,22 +151,13 @@ func vertexCatalog(t *testing.T) *proxy.ProviderCatalog {
 			transport := &provider.Transports[j]
 			transport.Endpoint.DefaultBaseURL = "https://aiplatform.googleapis.com/v1"
 			transport.Endpoint.Path = "/publishers/google/models"
-			transport.Authentication.Kind = "header"
-			transport.Authentication.Header = "x-goog-api-key"
-			transport.Authentication.Prefix = ""
+			transport.Components.Authentication.Kind = "header"
+			transport.Components.Authentication.Header = "x-goog-api-key"
+			transport.Components.Authentication.Prefix = ""
 			transport.Headers = nil
-			transport.RequestProtocol = "vertex_generate_content"
-			transport.ResponseProtocol = "vertex_generate_content"
-			transport.UsageMapping = "vertex_generate_content"
-			transport.Lifecycle = "synchronous_completion"
-			transport.ResourceVisibility = proxy.ProviderCatalogResourceVisibility{}
-			transport.ProtocolParameters = proxy.ProviderCatalogProtocolParameters{
-				ModelField: "path.model", TokenField: "generationConfig.maxOutputTokens", MediaExecutionLifecycle: "synchronous_completion",
-				OutputFields: []string{"candidates[].content.parts[].text"},
-				FinishRules:  proxy.ProviderCatalogFinishRules{Complete: []string{"STOP"}},
-				ErrorRules:   []string{"MAX_TOKENS", "blocked", "unknown_finish_reason"},
-				UsageFields:  proxy.ProviderCatalogUsageFields{Input: "usageMetadata.promptTokenCount", Output: "usageMetadata.candidatesTokenCount+thoughtsTokenCount", Total: "usageMetadata.totalTokenCount"},
-			}
+			transport.Components.RequestCodec = proxy.ProviderCatalogCodecReference{ID: proxy.CatalogProtocolVertexGenerateContent}
+			transport.Components.ResponseCodec = proxy.ProviderCatalogCodecReference{ID: proxy.CatalogProtocolVertexGenerateContent}
+			transport.Components.Execution = proxy.ProviderCatalogExecutionReference{ID: "synchronous_completion"}
 		}
 		for j := range provider.Offerings {
 			for _, media := range provider.Offerings[j].MediaInputs {

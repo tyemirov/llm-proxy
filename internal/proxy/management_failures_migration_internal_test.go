@@ -678,15 +678,12 @@ func TestManagedXAIProviderMigrationCanonicalizesCurrentRoutesAndPreservesUsage(
 	if fixture.database.Migrator().HasTable(managedProviderKeyTable) {
 		t.Fatal("predecessor provider table remains after xAI connection migration")
 	}
-	var connection managedProviderConnectionRecord
-	if queryError := fixture.database.Where(&managedProviderConnectionRecord{TenantID: fixture.tenant.TenantID, ProviderID: ProviderNameXAI, FieldID: CatalogCredentialAPIKey}).First(&connection).Error; queryError != nil {
-		t.Fatalf("load xAI provider connection: %v", queryError)
-	}
+	connection := assignedConnectionFieldForTest(t, fixture.database, fixture.tenant.TenantID, ProviderNameXAI, CatalogCredentialAPIKey)
 	var profile managedProviderProfileRecord
 	if queryError := fixture.database.Where(&managedProviderProfileRecord{TenantID: fixture.tenant.TenantID, ProviderID: ProviderNameXAI}).First(&profile).Error; queryError != nil {
 		t.Fatalf("load xAI provider profile: %v", queryError)
 	}
-	apiKey, decryptError := fixture.providerKeyCipher.decryptConnection(connection)
+	apiKey, decryptError := fixture.providerKeyCipher.decryptConnectionValue(connection.ConnectionID, ProviderNameXAI, CatalogCredentialAPIKey, connection.Value)
 	if decryptError != nil || apiKey != "sk-grok" || profile.TextModel != fixture.providerKey.TextModel || profile.SystemPrompt != fixture.providerKey.SystemPrompt || !connection.CreatedAt.Equal(fixture.providerKey.CreatedAt) || !connection.UpdatedAt.Equal(fixture.providerKey.UpdatedAt) || !profile.CreatedAt.Equal(fixture.providerKey.CreatedAt) || !profile.UpdatedAt.Equal(fixture.providerKey.UpdatedAt) {
 		t.Fatalf("migrated connection=%+v profile=%+v api_key=%q error=%v", connection, profile, apiKey, decryptError)
 	}
@@ -740,7 +737,7 @@ func TestManagedTenantRouteMigrationsComposeConfirmedPredecessorIdentities(t *te
 				t.Fatalf("migrate predecessor routes: %v", migrationError)
 			}
 			var tenantRecord managedTenantRecord
-			if queryError := fixture.database.Preload("ProviderConnections").Preload("ProviderProfiles").Where(&managedTenantRecord{TenantID: fixture.tenant.TenantID}).First(&tenantRecord).Error; queryError != nil {
+			if queryError := fixture.database.Preload("ConnectionAssignments.Connection.Fields").Preload("ProviderProfiles").Where(&managedTenantRecord{TenantID: fixture.tenant.TenantID}).First(&tenantRecord).Error; queryError != nil {
 				t.Fatalf("load migrated predecessor tenant: %v", queryError)
 			}
 			expectedDefaults := TenantDefaults{
@@ -748,8 +745,8 @@ func TestManagedTenantRouteMigrationsComposeConfirmedPredecessorIdentities(t *te
 				DictationProvider: ProviderNameXAI, DictationModel: "xai-stt",
 				SystemPrompt: "preserve tenant prompt",
 			}
-			if tenantRecord.defaults() != expectedDefaults || len(tenantRecord.ProviderConnections) != 3 || len(tenantRecord.ProviderProfiles) != 3 {
-				t.Fatalf("migrated predecessor tenant=%+v connections=%+v profiles=%+v", tenantRecord, tenantRecord.ProviderConnections, tenantRecord.ProviderProfiles)
+			if tenantRecord.defaults() != expectedDefaults || len(tenantRecord.ConnectionAssignments) != 3 || len(tenantRecord.ProviderProfiles) != 3 {
+				t.Fatalf("migrated predecessor tenant=%+v connections=%+v profiles=%+v", tenantRecord, tenantRecord.ConnectionAssignments, tenantRecord.ProviderProfiles)
 			}
 			modelsByProvider := map[string]string{}
 			for _, profile := range tenantRecord.ProviderProfiles {

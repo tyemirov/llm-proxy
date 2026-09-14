@@ -1,24 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-labelledby="title desc">
-  <title id="title">LLM Proxy favicon</title>
-  <desc id="desc">A small MPR-style provider-routing mark.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+<defs>
+<linearGradient id="brand-field" x2="0" y2="1"><stop stop-color="#0063b9"/><stop offset="1" stop-color="#009bd5"/></linearGradient>
+<filter id="brand-ink" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB"><feFlood flood-color="#ffd369"/><feComposite in2="SourceGraphic" operator="in"/></filter>
+</defs>
+<rect width="512" height="512" fill="url(#brand-field)"/>
+<g filter="url(#brand-ink)"><svg width="512" height="512" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">llm-proxy Icon</title>
   <defs>
-    <linearGradient id="llm-proxy-favicon-bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#092635"/>
-      <stop offset="1" stop-color="#12372a"/>
+    <linearGradient id="llm-proxy-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#092635" />
+      <stop offset="1" stop-color="#12372a" />
     </linearGradient>
   </defs>
-  <rect width="32" height="32" rx="5" fill="url(#llm-proxy-favicon-bg)"/>
-  <path
-    d="M7.5 10.8h5.2L16 16l3.3-5.2h5.2M7.5 21.2h5.2L16 16l3.3 5.2h5.2"
-    fill="none"
-    stroke="#ffd369"
-    stroke-width="1.9"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
-  <circle cx="7.5" cy="10.8" r="1.9" fill="#4ad3d9"/>
-  <circle cx="24.5" cy="10.8" r="1.9" fill="#4ad3d9"/>
-  <circle cx="7.5" cy="21.2" r="1.9" fill="#4ad3d9"/>
-  <circle cx="24.5" cy="21.2" r="1.9" fill="#4ad3d9"/>
-  <circle cx="16" cy="16" r="2.5" fill="none" stroke="#4ad3d9" stroke-width="1.9"/>
+  <path d="M60 86h42l26 42 26-42h42M60 170h42l26-42 26 42h42" fill="none" stroke="#ffd369" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="60" cy="86" r="14" fill="#4ad3d9" />
+  <circle cx="196" cy="86" r="14" fill="#4ad3d9" />
+  <circle cx="60" cy="170" r="14" fill="#4ad3d9" />
+  <circle cx="196" cy="170" r="14" fill="#4ad3d9" />
+  <circle cx="128" cy="128" r="18" fill="none" stroke="#4ad3d9" stroke-width="10" />
+</svg></g>
 </svg>

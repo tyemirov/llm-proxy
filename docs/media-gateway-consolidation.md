@@ -10,8 +10,9 @@ Dictator remains a private runtime behind the gateway.
 P011 records this implementation plan on 2026-09-06.
 The 2026-09-08 revision adds provider catalog, protocol adapter, and second-provider acceptance requirements.
 MediaOps P006 records the corresponding consumer plan.
-The implementation issues remain open.
-This plan changes the delivery contract. It does not establish runtime acceptance.
+F022 delivered the common durable media service through controlled provider
+protocols. It establishes local runtime acceptance for the shared lifecycle.
+Live provider acceptance remains with each provider capability issue.
 
 The product has one gateway API, tenant model, credential lifecycle, provider catalog, and usage view.
 The gateway can contain separate adapters and workers within the same repository.
@@ -46,7 +47,8 @@ MediaOps uses its own gateway tenant.
 The parent does not configure provider services.
 
 Reuse the existing bearer authentication adapter for the new media routes.
-Update asset upload, deletion, and all official asset clients to that same authentication contract in the F022 release.
+Asset upload, metadata, content, deletion, and official client calls use that
+same authentication contract.
 Use the same managed key identity and replacement behavior as existing gateway clients.
 Authorize every operation, asset, voice, and history read against that tenant.
 Return `404` for a resource owned by another tenant.
@@ -78,59 +80,67 @@ The following paths define the existing foundation or the source to move.
 | MediaOps `internal/mediajobs/api` | Preserve product jobs and replace their direct provider dependencies. |
 | MediaOps `internal/timelineexport` | Keep composition and local export under MediaOps ownership. |
 
-The current asset store provides uploads and deletion. It needs authenticated output reads and durable active references.
+The asset store provides authenticated upload, metadata, content, and deletion.
+Durable active references prevent deletion while an operation owns an input or
+output.
 Its metadata uses files. Managed tenant data already uses SQLite.
 The structured text store also uses files and a process-local mutex.
-Its terminal cleanup and failed-request retry behavior are insufficient for paid media operations.
-F022 adds a media operation store instead of adopting those retry rules.
+Its terminal cleanup and failed-request retry behavior remain separate from paid
+media operations. The media operation store owns paid-operation recovery.
 
 ## Provider Catalog And Protocol Adapters
 
 This contract applies to every migrated capability and each later provider addition.
 The [provider catalog contract](provider-catalog.md) defines the current provider data and the procedure for a compatible provider addition.
 The media migration extends that same catalog and registry.
-The schema validates provider definitions. Executable protocol adapters implement the supported API behavior.
+The schema validates provider definitions and transport-component composition.
+Executable components implement the supported API behavior.
 
 | Layer | Owner and responsibility |
 | --- | --- |
-| Provider catalog | `configs/providers.yml` owns provider fields, transports, offerings, operations, controls, limits, prices, and protocol adapter selection. |
-| Protocol adapters | Reusable code owns native requests, authentication, responses, errors, usage translation, submission, observation, cancellation, and recovery. |
+| Provider catalog | `configs/providers.yml` owns provider fields, transports, offerings, operations, controls, limits, prices, and transport-component selection. |
+| Request and response codecs | Reusable code owns native request serialization, response parsing, errors, continuation, and usage translation. |
+| Authentication components | Reusable code owns credential injection. Credential values remain in managed connection or private runtime storage. |
+| Execution components | Reusable code owns synchronous completion, submission, observation, cancellation, and provider recovery. |
 | Shared media service | F022 owns tenant authorization, operation storage, worker claims, duplicate prevention, assets, retention, and usage delivery. I046 owns network capacity. |
 | Consumer services | MediaOps and other backends own product workflows and use the official gateway clients. |
 
 Keep credential values and tenant settings in their existing stores outside the catalog.
 Use catalog projections for provider discovery, connection forms, capability validation, routing, and price metadata.
-Select executable adapters through the declared protocol and lifecycle.
+Compose executable routes from the declared request codec, response codec,
+authentication, and execution lifecycle.
 Keep provider identity as route data in the shared service.
-Keep native API behavior inside protocol adapters.
+Keep native API behavior inside reusable transport components.
 
-Before each capability slice, record its provider offering, protocol adapter, lifecycle, supported controls, and required assets.
+Before each capability slice, record its provider offering, component
+composition, supported controls, and required assets.
 Classify each addition with the following table.
 
 | Condition | Required change |
 | --- | --- |
-| An existing adapter implements the complete contract. | Add catalog data and connection values. Keep production code unchanged. Complete the second-provider acceptance procedure below. |
-| The provider needs an unsupported protocol variation. | Add or extend a reusable protocol adapter and its strict schema contract. Then add the provider definition. |
-| The provider needs a new capability or lifecycle. | Add the typed capability or shared lifecycle first. Then add its protocol adapter and catalog records. |
+| Existing components implement the complete contract. | Add catalog data and connection values. Keep production code unchanged. Complete the second-provider acceptance procedure below. |
+| The provider needs an unsupported codec variation. | Add or extend the reusable request or response codec and its strict schema contract. Then add the provider definition. |
+| The provider needs a new capability or lifecycle. | Add the typed capability or shared execution lifecycle first. Then add its codec and catalog records. |
 
 Compare authentication, request fields, response fields, controls, errors, usage, and execution lifecycle before selecting an adapter.
 A shared endpoint name or an OpenAI compatibility claim does not establish that complete match.
-Current catalog mappings must match implemented adapter contracts.
-Reject unsupported protocol declarations and incompatible controls at the applicable startup or request boundary.
+Current catalog mappings must match implemented component contracts.
+Reject unsupported component declarations and incompatible controls at the applicable startup or request boundary.
 Add new behavior through typed code and its schema contract, rather than executable expressions in provider data.
 
 ### Acceptance Through A Second Provider
 
-F022 owns the reusable acceptance harness and the shared service boundary.
-Each capability issue owns this acceptance for every protocol adapter that it adds or extends.
+F022 provides the reusable acceptance harness and the shared service boundary.
+Each capability issue owns this acceptance for every transport component that it adds or extends.
 F024 supplies the first image proof. F039 through F043 and F025 through F027 apply the same requirement to their slices.
 
 1. Start the real service with its YAML loader, SQLite database, filesystem, and official client.
 2. Exercise one provider through a controlled implementation of the selected external protocol.
-3. Add a second provider identity through a disposable `providers.yml` fixture with that same protocol adapter and lifecycle.
+3. Add a second provider identity with the same codecs and lifecycle.
+   Use a different supported authentication configuration.
 4. Give the second definition distinct connection fields, endpoint values, and upstream model identifiers where the protocol permits them.
 5. Supply test credentials through the existing connection contract.
-6. Reload the catalog through normal service startup. Use the same service executable, clients, and protocol adapter for both definitions.
+6. Reload the catalog through normal service startup. Use the same service executable, clients, and component implementations for both definitions.
 7. Use public HTTP and browser assertions for provider discovery, generated connection forms, and capability metadata.
 8. Use public assertions for routing, accepted controls, tenant isolation, artifact downloads, and one execution usage event per operation.
 9. Exercise duplicate requests, process restart, cancellation, and result recovery according to the declared protocol contract.
@@ -138,7 +148,7 @@ F024 supplies the first image proof. F039 through F043 and F025 through F027 app
 11. Make sure an invalid adapter declaration stops startup. Make sure an unsupported request causes zero provider dispatch.
 12. Record the catalog changes, test configuration, unchanged executable, and public test results in the slice's acceptance evidence.
 
-The second provider requires only catalog data, connection values, and controlled test infrastructure after the adapter exists.
+The second provider requires only catalog data, connection values, and controlled test infrastructure after the components exist.
 If that addition requires production changes, complete the missing shared contract before accepting the slice.
 Keep fictional provider definitions in test fixtures only.
 This procedure proves architectural reuse. Qualify each actual provider separately through authorized live acceptance.
@@ -153,7 +163,7 @@ Exact price estimates are optional catalog evidence, independent from acceptance
 
 All new media resources use the existing `/model/v1` namespace.
 The table specifies planned additions and the asset authorization change.
-F022 updates the server, OpenAPI, contract types, and official client together.
+F022 updated the server, OpenAPI, contract types, and official client together.
 
 | Method and resource | Result |
 | --- | --- |
@@ -187,9 +197,12 @@ An explicit cancellation request controls cancellation.
 
 ## Persistence And Execution Decisions
 
-F022 uses new operation tables in the existing managed SQLite database.
+F022 uses operation, claim, asset-reference, usage-delivery, and tombstone tables
+in the existing managed SQLite database.
 The first deployment has one API process with bounded in-process workers and the existing persistent asset volume.
-A worker restart reads its outstanding operations from SQLite.
+The service periodically reads outstanding operations from SQLite. It queues
+undispatched work without a live claim. It recovers dispatched work through the
+media operation adapter after an expired claim.
 Additional process replicas require their own qualification before activation.
 
 Create tables for operations, worker claims, input references, output references, and usage delivery records.
@@ -198,12 +211,20 @@ Keep the normalized request, selected route, catalog revision, and credential-ve
 Keep credential values outside that record.
 A revoked credential prevents a new dispatch through that connection.
 Existing provider jobs require an authorized connection to the same provider account for recovery.
+The worker compares the current connection identifier and version with the accepted credential reference before dispatch or recovery.
+A changed reference prevents adapter execution. Dispatched work remains uncertain when its accepted authority is unavailable.
+The adapter receives the checked credential reference.
+The service permits one acceptance transaction at a time.
+The transaction reads capacity before it inserts the operation.
 
 Persist acceptance and input references before dispatch.
 Extend asset deletion and cleanup to consult those durable references.
 Coordinate reference creation with byte publication and deletion.
 Reconcile interrupted file publication through restart tests with the real database and filesystem.
 Keep active inputs and staged outputs until the operation reaches its documented completion boundary.
+Active input references prevent upload expiry during reads, timer cleanup, and startup cleanup.
+Uncertain operations keep their active inputs. Completion or confirmed cancellation releases input references.
+After release, the normal upload expiry applies. Cleanup checks retained expired assets each minute.
 
 Persist dispatch intent before the external call.
 Give each worker claim a generation number and expiry.
@@ -287,12 +308,42 @@ The first OpenAI generation slice uses the current tenant asset store directly.
 
 F042 keeps `dictator` as the provider identity.
 Move MediaOps `internal/media/provider/dictator/audio` into LLM Proxy's private provider implementation.
-Use the existing MediaOps capability matrix to specify speech, transcription, diarization, subtitles, alignment, voices, and history.
-Give retained voices and histories tenant-owned gateway identifiers.
+Expose `audio.transcribe`, `audio.diarize`, `audio.align`, `subtitles.create`, `audio.speech.generate`, and `audio.voice.extract` as durable operations.
+Publish transcript, diarization, alignment, subtitle, audio, and timeline results only as tenant assets.
+Give preset and extracted voices tenant-owned gateway identifiers.
+Do not add a Dictator history resource because MediaOps does not retain Dictator history. F026 owns ElevenLabs history.
 Keep native jobs, voice identifiers, engine choices, and runtime credentials private.
-Configure and authenticate the gateway-to-Dictator connection through deployment-owned inputs.
+Use the current async Dictator routes as the only execution and recovery contract.
+Configure and authenticate the gateway-to-Dictator connection through deployment-owned `DICTATOR_GRPC_ADDR`, `DICTATOR_GRPC_AUTH_TOKEN`, and `DICTATOR_GRPC_TLS` inputs.
+Do not require a tenant-managed Dictator connection.
+Require a released Dictator SDK that contains the retained preset-voice and text-format fields.
+Do not copy protobuf definitions or bind the production adapter to an unreleased pseudo-version.
 Prove that a Dictator outage leaves unrelated cloud requests usable.
 P008 GPU expansion has a separate delivery boundary.
+
+The gateway accepts the following exact Dictator operation inputs. Each request
+also supplies `provider: dictator`, `model: dictator-speech-v1`, and the named
+capability. Unknown and irrelevant fields are invalid.
+
+| Capability | Input | Controls |
+| --- | --- | --- |
+| `audio.transcribe` | `audio_asset_id` | Exactly one of `language` or `detect_language: true` |
+| `audio.diarize` | `audio_asset_id` | Language selector, `model_size`, optional `utterance_gap_seconds` |
+| `audio.align` | `audio_asset_id`, `transcript` | `language`, optional `remove_punctuation` |
+| `subtitles.create` | `audio_asset_id`, optional `transcript` | Language selector, `granularity`, `group_size` |
+| `audio.speech.generate` | `text`, opaque gateway `voice_id` | `language`, `text_format`, `sample_rate_hz`, optional duration and timeline controls |
+| `audio.voice.extract` | `audio_asset_id`, `transcript`, `display_name`, `language` | `model_size` |
+
+The adapter reads input bytes from the tenant asset store. It records the
+native job handle immediately after Dictator accepts the request and before it
+polls. Restart recovery and cancellation use only that private handle. It
+publishes verified output bytes as tenant assets. A successful voice extraction
+also creates one tenant-owned gateway voice and publishes only its public voice
+document. Native jobs, source and result artifact identifiers, engine details,
+and native voice references do not enter public responses or assets.
+
+The service uses a separate bounded Dictator queue and worker setting. A full or
+unavailable Dictator path does not consume the cloud media worker pool.
 
 For each consumer switch, remove direct execution for that capability in the same source change.
 Keep one active provider execution owner for that capability during the scheduled runtime switch.

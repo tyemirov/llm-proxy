@@ -57,7 +57,7 @@ func TestGeminiQualifiedModelsManagement(t *testing.T) {
 				switch r.Method {
 				case http.MethodPost:
 					payload := decodeGeminiInteractionRequest(t, r)
-					if payload["model"] != model {
+					if payload["model"] != "gemini-3.5-flash" {
 						t.Errorf("model=%v", payload["model"])
 					}
 					writeGeminiInteractionSnapshot(t, w, "qualified-key", "in_progress", "", nil)
@@ -77,7 +77,7 @@ func TestGeminiQualifiedModelsManagement(t *testing.T) {
 			}
 			profile := requestProviderKeyVerificationProfile(t, router, cookie, tenantID)
 			provider := verificationProfileProvider(t, profile, "gemini")
-			if !provider.Configured || provider.TextModel != model || profile.Tenant.Defaults.Provider != "gemini" || profile.Tenant.Defaults.Model != model {
+			if !provider.Configured || provider.TextModel != model || profile.Tenant.Defaults.Provider != "" || profile.Tenant.Defaults.Model != "" {
 				t.Fatalf("defaults=%+v provider=%+v", profile.Tenant.Defaults, provider)
 			}
 		})
@@ -88,9 +88,7 @@ func TestGeminiQualifiedModelsSavedReasoning(t *testing.T) {
 	router := newManagementRouter(t, proxy.Configuration{})
 	cookie := managementSessionCookie(t, "qualified-gemini-reasoning")
 	tenantPath := managementDefaultTenantTestPath(t, router, cookie, "")
-	connection := authenticatedJSONRequest(http.MethodPut, tenantPath+"/provider-connections/gemini", managementProviderKeyRequestBody(t, "qualified-test-key", qualifiedGeminiModels[0], ""), cookie)
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, connection)
+	response := putManagementProviderKey(t, router, cookie, strings.TrimPrefix(tenantPath, "/api/management/tenants/"), "gemini", "qualified-test-key", qualifiedGeminiModels[0], "", context.Background())
 	if response.Code != http.StatusOK {
 		t.Fatalf("save connection: %d %s", response.Code, response.Body)
 	}

@@ -46,7 +46,7 @@ func TestBaiduManagementVerification(t *testing.T) {
 				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 					t.Fatal(err)
 				}
-				if r.Method != "POST" || r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer "+key || r.Header.Get("appid") != "" || payload["model"] != "deepseek-v4-pro" || payload["max_tokens"] != float64(16) {
+				if r.Method != "POST" || r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer "+key || r.Header.Get("appid") != "" || payload["model"] != "ernie-5.0" || payload["max_tokens"] != float64(16) {
 					t.Errorf("invalid verification request path=%s payload=%v", r.URL.Path, payload)
 				}
 				if !reflect.DeepEqual(payload["messages"], []any{map[string]any{"role": "user", "content": testProviderKeyVerificationPrompt}}) {
@@ -81,7 +81,7 @@ func TestBaiduManagementVerification(t *testing.T) {
 			after := requestProviderKeyVerificationProfile(t, router, cookie, tenantID)
 			provider := verificationProfileProvider(t, after, "baidu")
 			if scenario.status == 200 {
-				if !provider.Configured || provider.MaskedKey == "" || provider.TextModel != "deepseek-v4-pro" || provider.BaseURL != "https://api.baiduqianfan.ai/v1" || after.Tenant.Defaults.Provider != "baidu" || after.Tenant.Defaults.Model != "deepseek-v4-pro" {
+				if !provider.Configured || provider.MaskedKey == "" || provider.TextModel != "deepseek-v4-pro" || provider.BaseURL != "https://api.baiduqianfan.ai/v1" || after.Tenant.Defaults.Provider != "" || after.Tenant.Defaults.Model != "" {
 					t.Fatalf("saved profile=%+v provider=%+v", after.Tenant.Defaults, provider)
 				}
 				database := openManagedFixtureDatabase(t, databasePath)

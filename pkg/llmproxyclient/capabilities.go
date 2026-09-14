@@ -63,9 +63,11 @@ const (
 	publicWireContractDashScopeResponses     = "dashscope_responses"
 	publicWireContractXAIResponses           = "xai_responses"
 	publicWireContractXAIVideosGenerations   = "xai_videos_generations"
+	publicWireContractDictatorSpeechV1       = "dictator_speech_v1"
 
-	publicExecutionLifecyclePollable    = "pollable_resource"
-	publicExecutionLifecycleSynchronous = "synchronous_completion"
+	publicExecutionLifecyclePollable     = "pollable_resource"
+	publicExecutionLifecycleSynchronous  = "synchronous_completion"
+	publicExecutionLifecycleAsynchronous = "asynchronous_job"
 
 	publicMediaTypeAll   = "all"
 	publicMediaTypeAudio = "audio"
@@ -97,6 +99,8 @@ const (
 var publicCapabilityValues = map[string]struct{}{
 	publicCapabilityAudioInput: {}, "dictation": {}, publicCapabilityImageInput: {}, "reasoning": {},
 	"text": {}, "video_generation": {}, "web_search": {}, "caller_tools": {},
+	"audio_transcription": {}, "audio_diarization": {}, "audio_alignment": {},
+	"subtitle_creation": {}, "speech_generation": {}, "voice_extraction": {},
 }
 
 type publicOfferingRoute struct {
@@ -116,6 +120,7 @@ var publicOfferingMediaTransports = map[publicOfferingRoute]string{
 	{wireContract: publicWireContractDashScopeResponses, executionLifecycle: publicExecutionLifecycleSynchronous}:     publicMediaTransportInline,
 	{wireContract: publicWireContractXAIResponses, executionLifecycle: publicExecutionLifecycleSynchronous}:           publicMediaTransportInline,
 	{wireContract: publicWireContractXAIVideosGenerations, executionLifecycle: publicExecutionLifecyclePollable}:      "",
+	{wireContract: publicWireContractDictatorSpeechV1, executionLifecycle: publicExecutionLifecycleAsynchronous}:      "",
 }
 
 var publicMediaLimitValues = struct {

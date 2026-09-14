@@ -22,6 +22,7 @@ from llm_proxy_client import (
     ClientConfig,
     ClientMessage,
     ClientMessagesRequest,
+    ClientMediaOperationInput,
     ClientStructuredOutput,
     LLMProxyClientError,
     LLMProxyHTTPError,
@@ -93,11 +94,12 @@ def test_client_upload_asset_validates_exact_response_without_exposing_bytes() -
 
     data = b"asset-image"
 
-    def opener(request: urllib.request.Request) -> str:
-        assert request.full_url.endswith("/model/v1/assets?key=sekret")
+    def opener(request: urllib.request.Request, *, timeout: float | None = None) -> str:
+        assert request.full_url.endswith("/model/v1/assets")
         assert request.data == data
         assert request.headers["Content-type"] == "image/png"
-        assert set(request.headers) == {"Content-type"}
+        assert request.headers["Authorization"] == "Bearer sekret"
+        assert set(request.headers) == {"Content-type", "Authorization"}
         return json.dumps(
             {
                 "asset_id": "ast_0123456789abcdef0123456789abcdef",
@@ -113,6 +115,187 @@ def test_client_upload_asset_validates_exact_response_without_exposing_bytes() -
     asset = client.upload_asset(data, " IMAGE/PNG ")
     assert asset.asset_id == "ast_0123456789abcdef0123456789abcdef"
     assert image_asset_attachment(asset.asset_id, asset.mime_type).body()["asset_id"] == asset.asset_id
+
+
+@pytest.mark.parametrize("query", ["", "?key=obsolete&key=duplicate"])
+def test_client_upload_asset_uses_bearer_authentication_over_http(query: str) -> None:
+    data = b"asset-image"
+
+    class AssetHandler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            if "key" in urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query) or self.headers.get("Authorization") != "Bearer sekret":
+                self.send_error(403)
+                return
+            assert self.path == "/model/v1/assets"
+            assert self.rfile.read(int(self.headers["Content-Length"])) == data
+            body = json.dumps({
+                "asset_id": "ast_0123456789abcdef0123456789abcdef",
+                "mime_type": "image/png", "size_bytes": len(data), "state": "available",
+                "created_at": "2026-08-11T10:00:00Z", "expires_at": "2026-08-13T10:00:00Z",
+            }).encode()
+            self.send_response(201)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AssetHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        client = Client(ClientConfig(base_url=f"http://127.0.0.1:{server.server_port}/v2{query}", secret="sekret"))
+        assert client.upload_asset(data, "image/png").size_bytes == len(data)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
+def test_client_uses_typed_durable_media_and_voice_resources() -> None:
+    """The Python client uses authenticated canonical media resources."""
+
+    responses = iter(
+        (
+            json.dumps(
+                {
+                    "operation_id": "mop_0123456789abcdef0123456789abcdef",
+                    "capability": "audio.transcribe",
+                    "provider": "dictator",
+                    "model": "dictator-speech-v1",
+                    "catalog_revision": "sha256-revision",
+                    "state": "queued",
+                    "cancellation_state": "not_requested",
+                    "outputs": [],
+                    "cost": {"available": False, "reason": "exact_price_unavailable"},
+                    "accepted_at": "2026-09-10T20:00:00Z",
+                    "updated_at": "2026-09-10T20:00:00Z",
+                    "deadline_at": "2026-09-10T20:15:00Z",
+                }
+            ),
+            json.dumps(
+                {
+                    "voices": [
+                        {
+                            "voice_id": "voi_0123456789abcdef0123456789abcdef",
+                            "provider": "dictator",
+                            "mode": "preset",
+                            "language": "ru",
+                            "display_name": "Baya",
+                            "default": True,
+                            "sample_rates": [24000],
+                            "default_sample_rate": 24000,
+                        }
+                    ]
+                }
+            ),
+            json.dumps(
+                {
+                    "voice_id": "voi_0123456789abcdef0123456789abcdef",
+                    "provider": "dictator",
+                    "mode": "preset",
+                    "language": "ru",
+                    "display_name": "Baya",
+                    "default": True,
+                    "sample_rates": [24000],
+                    "default_sample_rate": 24000,
+                }
+            ),
+        )
+    )
+    requests: list[urllib.request.Request] = []
+
+    def opener(request: urllib.request.Request, *, timeout: float | None = None) -> str:
+        requests.append(request)
+        return next(responses)
+
+    client = Client(ClientConfig(base_url="https://proxy.example/v2", secret="sekret"), opener=opener)
+    operation = client.create_media_operation(
+        "transcribe-1",
+        ClientMediaOperationInput(
+            capability="audio.transcribe",
+            provider="dictator",
+            model="dictator-speech-v1",
+            input={"asset_id": "ast_0123456789abcdef0123456789abcdef"},
+            controls={"language": "ru"},
+        ),
+    )
+    voices = client.get_media_voices("dictator")
+    voice = client.get_media_voice(voices[0].voice_id)
+
+    assert operation.state == "queued"
+    assert voice.display_name == "Baya"
+    assert [request.get_method() for request in requests] == ["POST", "GET", "GET"]
+    assert requests[0].full_url == "https://proxy.example/model/v1/operations"
+    assert requests[0].headers["Authorization"] == "Bearer sekret"
+    assert requests[0].headers["Idempotency-key"] == "transcribe-1"
+    assert json.loads(requests[0].data or b"") == {
+        "capability": "audio.transcribe",
+        "provider": "dictator",
+        "model": "dictator-speech-v1",
+        "input": {"asset_id": "ast_0123456789abcdef0123456789abcdef"},
+        "controls": {"language": "ru"},
+    }
+    assert requests[1].full_url == "https://proxy.example/model/v1/voices?provider=dictator"
+    assert requests[2].full_url.endswith("/model/v1/voices/voi_0123456789abcdef0123456789abcdef")
+
+
+def test_client_reads_media_capabilities_and_waits_for_terminal_operation() -> None:
+    """Capability discovery and operation waiting use the canonical authenticated resources."""
+
+    operation = {
+        "operation_id": "mop_0123456789abcdef0123456789abcdef",
+        "capability": "audio.transcribe",
+        "provider": "dictator",
+        "model": "dictator-speech-v1",
+        "catalog_revision": "sha256-revision",
+        "state": "queued",
+        "cancellation_state": "not_requested",
+        "outputs": [],
+        "cost": {"available": False, "reason": "exact_price_unavailable"},
+        "accepted_at": "2026-09-10T20:00:00Z",
+        "updated_at": "2026-09-10T20:00:00Z",
+        "deadline_at": "2026-09-10T20:15:00Z",
+    }
+    terminal_operation = dict(operation, state="succeeded", updated_at="2026-09-10T20:01:00Z")
+    responses = iter(
+        (
+            json.dumps(
+                {
+                    "catalog_revision": "sha256-revision",
+                    "routes": [
+                        {
+                            "capability": "audio.transcribe",
+                            "provider": "dictator",
+                            "model": "dictator-speech-v1",
+                            "controls": [{"name": "language"}],
+                            "limits": [],
+                        }
+                    ],
+                }
+            ),
+            json.dumps(operation),
+            json.dumps(terminal_operation),
+        )
+    )
+    requests: list[urllib.request.Request] = []
+
+    def opener(request: urllib.request.Request, *, timeout: float | None = None) -> str:
+        requests.append(request)
+        return next(responses)
+
+    client = Client(ClientConfig(base_url="https://proxy.example/v2", secret="sekret"), opener=opener)
+    capabilities = client.get_media_capabilities()
+    completed = client.wait_media_operation(
+        operation["operation_id"], poll_interval_seconds=0.0001, timeout_seconds=1
+    )
+
+    assert capabilities.routes[0].capability == "audio.transcribe"
+    assert completed.state == "succeeded"
+    assert [request.full_url for request in requests] == [
+        "https://proxy.example/model/v1/media-capabilities",
+        "https://proxy.example/model/v1/operations/mop_0123456789abcdef0123456789abcdef",
+        "https://proxy.example/model/v1/operations/mop_0123456789abcdef0123456789abcdef",
+    ]
+    assert all(request.headers["Authorization"] == "Bearer sekret" for request in requests)
 
 
 @dataclass
@@ -827,7 +1010,7 @@ def test_http_error_exposes_status_and_body(running_server: RunningServer) -> No
 def test_transport_error_is_typed() -> None:
     """Transport errors are surfaced separately from HTTP status errors."""
 
-    def failing_opener(request: urllib.request.Request) -> str:
+    def failing_opener(request: urllib.request.Request, *, timeout: float | None = None) -> str:
         raise urllib.error.URLError("network unavailable")
 
     client = Client(
@@ -854,7 +1037,7 @@ def test_transport_error_is_typed() -> None:
 def test_transport_owned_timeout_is_typed_transport_error() -> None:
     """An injected transport may still enforce its independently owned cancellation policy."""
 
-    def timing_out_opener(request: urllib.request.Request) -> str:
+    def timing_out_opener(request: urllib.request.Request, *, timeout: float | None = None) -> str:
         raise TimeoutError("transport timed out")
 
     client = Client(
@@ -872,7 +1055,7 @@ def test_transport_owned_timeout_is_typed_transport_error() -> None:
 def test_ssl_failure_is_typed_transport_error() -> None:
     """Raw socket and SSL style failures are surfaced through the transport-error contract."""
 
-    def failing_opener(request: urllib.request.Request) -> str:
+    def failing_opener(request: urllib.request.Request, *, timeout: float | None = None) -> str:
         raise OSError("record layer failure")
 
     client = Client(
@@ -894,3 +1077,51 @@ def test_ssl_failure_is_typed_transport_error() -> None:
                 request_timeout_seconds=240,
             )
         )
+
+
+@pytest.mark.parametrize("stall", ["headers", "body", "poll_interval"])
+def test_media_wait_bounds_status_requests_by_deadline(stall: str) -> None:
+    operation = {
+        "operation_id": "mop_0123456789abcdef0123456789abcdef",
+        "capability": "audio.transcribe", "provider": "dictator", "model": "dictator-speech-v1",
+        "catalog_revision": "revision", "state": "queued", "cancellation_state": "not_requested",
+        "outputs": [], "cost": {"available": False, "reason": "exact_price_unavailable"},
+        "accepted_at": "2026-09-10T20:00:00Z", "updated_at": "2026-09-10T20:00:00Z",
+        "deadline_at": "2026-09-10T20:15:00Z",
+    }
+    requests: list[str] = []
+    release = threading.Event()
+
+    class StatusHandler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            requests.append(self.path)
+            body = json.dumps(operation).encode()
+            if stall == "headers":
+                release.wait(0.8)
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if stall == "body":
+                self.wfile.flush()
+                release.wait(0.8)
+            try:
+                self.wfile.write(body)
+            except BrokenPipeError:
+                pass  # The wait deadline closes the client connection.
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), StatusHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    client = Client(ClientConfig(base_url=f"http://127.0.0.1:{server.server_port}", secret="wait-secret"))
+    started = time.monotonic()
+    try:
+        with pytest.raises(LLMProxyTransportError):
+            client.wait_media_operation(operation["operation_id"], poll_interval_seconds=1, timeout_seconds=0.1)
+        elapsed = time.monotonic() - started
+        assert elapsed < 0.5, f"wait exceeded deadline: {elapsed:.3f}s"
+        assert len(requests) == 1, f"poll started after deadline: {len(requests)} requests"
+    finally:
+        release.set()
+        server.shutdown()
+        server.server_close()
+        thread.join()

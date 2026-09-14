@@ -88,7 +88,7 @@ func TestClaudeRetirementStartup(t *testing.T) {
 				}
 			}
 			if scenario == "completion record failure" {
-				if err = database.Exec(fmt.Sprintf(`CREATE TRIGGER reject_retirement_completion BEFORE INSERT ON managed_schema_migration_records WHEN NEW.version = %d AND EXISTS (SELECT 1 FROM managed_schema_migration_records WHERE version = %d) BEGIN SELECT RAISE(ABORT, 'retirement record rejected'); END`, managedTenantSchemaVersion, managedTenantSchemaVersion)).Error; err != nil {
+				if err = database.Exec(fmt.Sprintf(`CREATE TRIGGER reject_retirement_completion BEFORE INSERT ON managed_schema_migration_records WHEN NEW.version = %d BEGIN SELECT RAISE(ABORT, 'retirement record rejected'); END`, managedTenantSchemaVersion)).Error; err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -213,10 +213,20 @@ func TestClaudeRetirementStartup(t *testing.T) {
 				for _, query := range []struct {
 					record any
 					where  any
-				}{{&tenant, &managedTenantRecord{TenantID: original.TenantID}}, {&profile, &managedProviderProfileRecord{TenantID: original.TenantID, ProviderID: original.DefaultProvider}}, {&connection, &managedProviderConnectionRecord{TenantID: original.TenantID, ProviderID: original.DefaultProvider}}, {&event, &managedUsageEventRecord{ID: usage[index].ID}}} {
+				}{{&tenant, &managedTenantRecord{TenantID: original.TenantID}}, {&profile, &managedProviderProfileRecord{TenantID: original.TenantID, ProviderID: original.DefaultProvider}}, {&event, &managedUsageEventRecord{ID: usage[index].ID}}} {
 					if err = database.Where(query.where).First(query.record).Error; err != nil {
 						t.Fatal(err)
 					}
+				}
+				if failRecord {
+					if err = database.Where(&managedProviderConnectionRecord{TenantID: original.TenantID, ProviderID: original.DefaultProvider}).First(&connection).Error; err != nil {
+						t.Fatal(err)
+					}
+					if connection != connections[index] {
+						t.Fatal("failed migration changed the predecessor credential")
+					}
+				} else {
+					assertMigratedConnectionField(t, database, cipher, connections[index])
 				}
 				expectedProfile := profiles[index]
 				if !failRecord && index < 2 {
@@ -224,7 +234,7 @@ func TestClaudeRetirementStartup(t *testing.T) {
 					original.DefaultReasoningEffort = "high"
 					expectedProfile.TextModel = "claude-opus-5"
 				}
-				if !reflect.DeepEqual(tenant, original) || profile != expectedProfile || connection != connections[index] || event != usage[index] {
+				if !reflect.DeepEqual(tenant, original) || profile != expectedProfile || event != usage[index] {
 					t.Fatalf("state mismatch index=%d tenant=%+v expected=%+v profile=%+v usage=%+v", index, tenant, original, profile, event)
 				}
 			}

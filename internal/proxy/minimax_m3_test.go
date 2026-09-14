@@ -195,7 +195,7 @@ func TestMiniMaxM3ManagedVerification(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			t.Fatal(err)
 		}
-		if r.URL.Path != "/chat/completions" || payload["model"] != "MiniMax-M3" || payload["reasoning_split"] != true || payload["max_completion_tokens"] != float64(16) {
+		if r.URL.Path != "/chat/completions" || payload["model"] != "MiniMax-M2.7" || payload["reasoning_split"] != true || payload["max_completion_tokens"] != float64(16) {
 			t.Errorf("verification payload=%v", payload)
 		}
 		w.Header().Set("Content-Type", "application/json")

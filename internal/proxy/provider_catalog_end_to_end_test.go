@@ -53,8 +53,9 @@ func TestProviderCatalogDeclaresProviderSpecificResourceVisibilityPolicies(testi
 			continue
 		}
 		for _, transport := range provider.Transports {
-			if transport.ResourceVisibility.RetryLimit != 0 {
-				observedPolicies[provider.ID] = transport.ResourceVisibility
+			visibility := transport.Components.Execution.ResourceVisibility
+			if visibility.RetryLimit != 0 {
+				observedPolicies[provider.ID] = visibility
 			}
 		}
 	}
@@ -69,17 +70,17 @@ func TestProviderCatalogDeclaresProviderSpecificResourceVisibilityPolicies(testi
 	}
 }
 
-func TestProviderCatalogDeclaresGeminiInteractionsWithoutReplayContinuation(testingInstance *testing.T) {
+func TestProviderCatalogDeclaresGeminiInteractionsProtocolReference(testingInstance *testing.T) {
 	for _, provider := range testfixtures.ProviderCatalog(testingInstance).Schema().Providers {
 		if provider.ID != proxy.ProviderNameGemini {
 			continue
 		}
 		for _, transport := range provider.Transports {
-			if transport.RequestProtocol != proxy.CatalogProtocolGeminiInteractions {
+			if transport.Components.RequestCodec.ID != proxy.CatalogProtocolGeminiInteractions {
 				continue
 			}
-			if len(transport.ProtocolParameters.ContinuationRules) != 0 {
-				testingInstance.Fatalf("Gemini Interactions continuation rules=%v want=[]", transport.ProtocolParameters.ContinuationRules)
+			if transport.Components.RequestCodec.Variation != "" || transport.Components.ResponseCodec.Variation != "" {
+				testingInstance.Fatalf("Gemini Interactions components=%+v", transport.Components)
 			}
 			return
 		}
@@ -101,9 +102,11 @@ func TestProviderCatalogProjectsProviderCardTaxonomy(testingInstance *testing.T)
 	}
 	var profile struct {
 		Providers []struct {
-			ID              string `json:"id"`
-			APIServiceLabel string `json:"api_service_label"`
-			ModelFamilies   []struct {
+			ID                string `json:"id"`
+			Label             string `json:"label"`
+			KeyAcquisitionURL string `json:"key_acquisition_url"`
+			APIServiceLabel   string `json:"api_service_label"`
+			ModelFamilies     []struct {
 				Label string `json:"label"`
 			} `json:"model_families"`
 			Capabilities []string `json:"capabilities"`
@@ -118,13 +121,16 @@ func TestProviderCatalogProjectsProviderCardTaxonomy(testingInstance *testing.T)
 		capabilities    []string
 	}{
 		proxy.ProviderNameOpenAI:      {apiServiceLabel: "OpenAI API", families: []string{"GPT-6", "GPT-4", "GPT-5", "GPT Transcribe"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.ModelOperationDictation}},
-		proxy.ProviderNameDashScope:   {apiServiceLabel: "DashScope API", families: []string{"Qwen"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput}},
+		proxy.ProviderNameDashScope:   {apiServiceLabel: "Alibaba Cloud", families: []string{"Qwen"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput}},
 		proxy.ProviderNameGemini:      {apiServiceLabel: "Gemini API", families: []string{"Gemini"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityAudioInput, proxy.ModelOperationDictation}},
 		proxy.ProviderNameMeta:        {apiServiceLabel: "Meta API", families: []string{"Muse Spark"}, capabilities: []string{proxy.ModelOperationText}},
 		proxy.ProviderNameSiliconFlow: {apiServiceLabel: "SiliconFlow API", families: []string{"DeepSeek R1", "SenseVoice"}, capabilities: []string{proxy.ModelOperationText, proxy.ModelOperationDictation}},
 	}
 	observed := map[string]bool{}
 	for _, provider := range profile.Providers {
+		if provider.ID == proxy.ProviderNameDashScope && (provider.Label != "Alibaba Cloud" || provider.KeyAcquisitionURL != "https://www.alibabacloud.com/help/en/model-studio/get-api-key") {
+			testingInstance.Fatalf("Alibaba Cloud setup label=%q URL=%q", provider.Label, provider.KeyAcquisitionURL)
+		}
 		expectedProvider, required := expected[provider.ID]
 		if !required {
 			continue
@@ -204,74 +210,43 @@ func TestCatalogDefinedProviderFlowsThroughEveryGenericConsumer(testingInstance 
 		}
 	}
 
-	connectionBody, marshalError := json.Marshal(map[string]any{
-		"fields": map[string]string{
-			testCatalogCredentialField: testCatalogProviderCredential,
-			testCatalogSettingField:    upstreamServer.URL,
-		},
-		"text_model":    testCatalogModelID,
-		"system_prompt": testCatalogProviderSystem,
-	})
-	if marshalError != nil {
-		testingInstance.Fatalf("marshal catalog provider connection: %v", marshalError)
-	}
-	connectionRequest := authenticatedJSONRequest(http.MethodPut, tenantPath+"/provider-connections/"+testCatalogProviderAlias, string(connectionBody), sessionCookie)
-	connectionResponse := httptest.NewRecorder()
-	router.ServeHTTP(connectionResponse, connectionRequest)
-	if connectionResponse.Code != http.StatusOK {
-		testingInstance.Fatalf("save catalog provider connection status=%d body=%s", connectionResponse.Code, connectionResponse.Body.String())
-	}
-	if strings.Contains(connectionResponse.Body.String(), testCatalogProviderCredential) {
-		testingInstance.Fatalf("save response exposed catalog credential: %s", connectionResponse.Body.String())
-	}
-	assertTestCatalogManagementSchema(testingInstance, connectionResponse.Body.Bytes(), true, upstreamServer.URL)
-
+	connection := accountConnectionExchange(testingInstance, router, sessionCookie, http.MethodPost, "/connections", map[string]any{
+		"name": "Catalog connection", "provider": testCatalogProviderAlias,
+		"fields": map[string]string{testCatalogCredentialField: testCatalogProviderCredential, testCatalogSettingField: upstreamServer.URL},
+	}, http.StatusCreated)
+	connectionID := connection["id"].(string)
 	tenantID := managementDefaultTenantTestID(testingInstance, router, sessionCookie)
+	accountConnectionExchange(testingInstance, router, sessionCookie, http.MethodPut, "/tenants/"+tenantID+"/connections/"+testCatalogProviderID, map[string]string{"connection_id": connectionID}, http.StatusOK)
+	profile := accountConnectionExchange(testingInstance, router, sessionCookie, http.MethodPut, "/tenants/"+tenantID+"/provider-profiles/"+testCatalogProviderID, map[string]string{"text_model": testCatalogModelID, "system_prompt": testCatalogProviderSystem}, http.StatusOK)
+	profileBytes, marshalError := json.Marshal(profile)
+	if marshalError != nil {
+		testingInstance.Fatal(marshalError)
+	}
+	assertTestCatalogManagementSchema(testingInstance, profileBytes, true, upstreamServer.URL)
+	if strings.Contains(string(profileBytes), testCatalogProviderCredential) {
+		testingInstance.Fatal("management response exposed credential")
+	}
+	accountConnectionExchange(testingInstance, router, sessionCookie, http.MethodPut, "/tenants/"+tenantID+"/defaults", map[string]string{"provider": testCatalogProviderID, "model": testCatalogModelID, "dictation_provider": "", "dictation_model": "", "system_prompt": "", "reasoning_effort": ""}, http.StatusOK)
 	fixtureDatabase := openManagedFixtureDatabase(testingInstance, databasePath)
-	var credentialRecord managedProviderConnectionFixture
-	credentialQuery := fixtureDatabase.Where(
-		"tenant_id = ? AND provider_id = ? AND field_id = ?",
-		tenantID,
-		testCatalogProviderID,
-		testCatalogCredentialField,
-	).First(&credentialRecord)
-	if credentialQuery.Error != nil {
-		testingInstance.Fatalf("load catalog credential record: %v", credentialQuery.Error)
+	var credentialRecord struct{ Value string }
+	if err := fixtureDatabase.Table("managed_connection_field_records").Where("connection_id = ? AND field_id = ?", connectionID, testCatalogCredentialField).Take(&credentialRecord).Error; err != nil {
+		testingInstance.Fatal(err)
 	}
-	if credentialRecord.Value == testCatalogProviderCredential || strings.Contains(credentialRecord.Value, testCatalogProviderCredential) {
-		testingInstance.Fatalf("catalog credential was not encrypted: %q", credentialRecord.Value)
+	if strings.Contains(credentialRecord.Value, testCatalogProviderCredential) {
+		testingInstance.Fatal("catalog credential was not encrypted")
 	}
-	var settingRecord managedProviderConnectionFixture
-	settingQuery := fixtureDatabase.Where(
-		"tenant_id = ? AND provider_id = ? AND field_id = ?",
-		tenantID,
-		testCatalogProviderID,
-		testCatalogSettingField,
-	).First(&settingRecord)
-	if settingQuery.Error != nil {
-		testingInstance.Fatalf("load catalog setting record: %v", settingQuery.Error)
+	var settingRecord struct{ Value string }
+	if err := fixtureDatabase.Table("managed_connection_field_records").Where("connection_id = ? AND field_id = ?", connectionID, testCatalogSettingField).Take(&settingRecord).Error; err != nil {
+		testingInstance.Fatal(err)
 	}
 	if settingRecord.Value != upstreamServer.URL {
-		testingInstance.Fatalf("catalog setting value=%q want=%q", settingRecord.Value, upstreamServer.URL)
+		testingInstance.Fatalf("catalog setting=%q", settingRecord.Value)
 	}
-
-	revealRequest := authenticatedProviderKeyRevealRequest(
-		http.MethodPost,
-		tenantPath+"/provider-connections/"+testCatalogProviderID+"/fields/"+testCatalogCredentialField+"/reveal",
-		sessionCookie,
-		"http://localhost:8080",
-	)
+	revealRequest := authenticatedProviderKeyRevealRequest(http.MethodPost, tenantPath+"/provider-connections/"+testCatalogProviderID+"/fields/"+testCatalogCredentialField+"/reveal", sessionCookie, "http://localhost:8080")
 	revealResponse := httptest.NewRecorder()
 	router.ServeHTTP(revealResponse, revealRequest)
-	if revealResponse.Code != http.StatusOK {
-		testingInstance.Fatalf("reveal catalog credential status=%d body=%s", revealResponse.Code, revealResponse.Body.String())
-	}
-	var revealPayload map[string]string
-	if decodeError := json.Unmarshal(revealResponse.Body.Bytes(), &revealPayload); decodeError != nil {
-		testingInstance.Fatalf("decode catalog credential reveal: %v", decodeError)
-	}
-	if revealPayload["field_id"] != testCatalogCredentialField || revealPayload["value"] != testCatalogProviderCredential {
-		testingInstance.Fatalf("catalog credential reveal=%v", revealPayload)
+	if revealResponse.Code != http.StatusNotFound {
+		testingInstance.Fatalf("retired reveal status=%d", revealResponse.Code)
 	}
 
 	secretRequest := authenticatedJSONRequest(http.MethodPost, tenantPath+"/secrets", `{}`, sessionCookie)
@@ -334,12 +309,14 @@ func TestCatalogDefinedProviderFlowsThroughEveryGenericConsumer(testingInstance 
 		}
 	}
 
-	deleteRequest := authenticatedJSONRequest(http.MethodDelete, tenantPath+"/provider-connections/"+testCatalogProviderID, `{}`, sessionCookie)
+	accountConnectionExchange(testingInstance, reloadedRouter, sessionCookie, http.MethodDelete, "/tenants/"+tenantID+"/connections/"+testCatalogProviderID+"?clear_defaults=true", nil, http.StatusNoContent)
+	accountConnectionExchange(testingInstance, reloadedRouter, sessionCookie, http.MethodDelete, "/connections/"+connectionID, nil, http.StatusNoContent)
 	deleteResponse := httptest.NewRecorder()
-	reloadedRouter.ServeHTTP(deleteResponse, deleteRequest)
+	reloadedRouter.ServeHTTP(deleteResponse, authenticatedJSONRequest(http.MethodGet, tenantPath, "", sessionCookie))
 	if deleteResponse.Code != http.StatusOK {
-		testingInstance.Fatalf("delete catalog credential status=%d body=%s", deleteResponse.Code, deleteResponse.Body.String())
+		testingInstance.Fatalf("read detached profile status=%d", deleteResponse.Code)
 	}
+
 	var deletedProfile struct {
 		Providers []struct {
 			ID           string `json:"id"`
@@ -360,12 +337,12 @@ func TestCatalogDefinedProviderFlowsThroughEveryGenericConsumer(testingInstance 
 	if deletedProvider.ID != testCatalogProviderID || deletedProvider.Configured || deletedProvider.TextModel != testCatalogModelID || deletedProvider.SystemPrompt != testCatalogProviderSystem {
 		testingInstance.Fatalf("credential-deleted provider profile=%+v", deletedProvider)
 	}
-	if deletedProvider.Fields[0].Configured || deletedProvider.Fields[1].Value == nil || *deletedProvider.Fields[1].Value != upstreamServer.URL {
-		testingInstance.Fatalf("credential deletion changed provider fields=%+v", deletedProvider.Fields)
+	if deletedProvider.Fields[0].Configured || deletedProvider.Fields[1].Value == nil || *deletedProvider.Fields[1].Value != "" {
+		testingInstance.Fatalf("detached tenant retained connection fields=%+v", deletedProvider.Fields)
 	}
 }
 
-func TestProviderCatalogRejectsStructuralAndAdapterContractViolations(testingInstance *testing.T) {
+func TestProviderCatalogRejectsStructuralAndComponentContractViolations(testingInstance *testing.T) {
 	testCases := []struct {
 		name          string
 		mutate        func(*proxy.ProviderCatalogSchema)
@@ -402,16 +379,16 @@ func TestProviderCatalogRejectsStructuralAndAdapterContractViolations(testingIns
 		{
 			name: "unsupported lifecycle",
 			mutate: func(schema *proxy.ProviderCatalogSchema) {
-				schema.Providers[0].Transports[0].Lifecycle = "future_lifecycle"
+				schema.Providers[0].Transports[0].Components.Execution.ID = "future_lifecycle"
 			},
 			expectedError: "lifecycle=future_lifecycle",
 		},
 		{
-			name: "adapter parameter mismatch",
+			name: "adapter variation mismatch",
 			mutate: func(schema *proxy.ProviderCatalogSchema) {
-				schema.Providers[0].Transports[0].ProtocolParameters.ModelField = "future_model_field"
+				schema.Providers[0].Transports[0].Components.RequestCodec.Variation = "future"
 			},
-			expectedError: "reason=adapter_contract_mismatch",
+			expectedError: "reason=unsupported_codec_variation",
 		},
 		{
 			name: "negative output token limit",
@@ -557,7 +534,7 @@ func catalogWithTestProvider(testingInstance *testing.T) *proxy.ProviderCatalog 
 		Operations: []string{proxy.ModelOperationText}, MediaInputs: []string{},
 	}})
 	schema.Providers = append(schema.Providers, proxy.ProviderCatalogProvider{
-		ID: testCatalogProviderID, Label: "Catalog Test", APIServiceLabel: "Catalog Test API", KeyAcquisitionURL: "https://provider.example/keys", Aliases: []string{testCatalogProviderAlias},
+		ID: testCatalogProviderID, Label: "Catalog Test", APIServiceLabel: "Catalog Test API", ConnectionOwnership: proxy.CatalogProviderConnectionTenant, KeyAcquisitionURL: "https://provider.example/keys", Aliases: []string{testCatalogProviderAlias},
 		Fields: []proxy.ProviderCatalogField{
 			{
 				ID: testCatalogCredentialField, Label: "Access token",
@@ -577,27 +554,16 @@ func catalogWithTestProvider(testingInstance *testing.T) *proxy.ProviderCatalog 
 		Transports: []proxy.ProviderCatalogTransport{{
 			ID: testCatalogTransportID,
 			Endpoint: proxy.ProviderCatalogEndpoint{
-				Method: proxy.CatalogEndpointMethodPost, SettingField: testCatalogSettingField, Path: "/chat/completions",
+				Protocol: proxy.CatalogEndpointProtocolHTTP, Method: proxy.CatalogEndpointMethodPost, SettingField: testCatalogSettingField, Path: "/chat/completions",
 			},
-			Authentication: proxy.ProviderCatalogAuthentication{
-				Kind: proxy.CatalogAuthenticationBearer, Field: testCatalogCredentialField,
-				Header: "Authorization", Prefix: "Bearer ",
-			},
-			RequestProtocol:  proxy.CatalogProtocolOpenAIChatCompletions,
-			ResponseProtocol: proxy.CatalogProtocolOpenAIChatCompletions,
-			UsageMapping:     proxy.CatalogProtocolOpenAIChatCompletions,
-			Lifecycle:        "synchronous_completion",
-			ProtocolParameters: proxy.ProviderCatalogProtocolParameters{
-				ModelField: "model", TokenField: "max_tokens", MediaExecutionLifecycle: "synchronous_completion",
-				OutputFields: []string{"choices[].message.content", "choices[].message.tool_calls"},
-				FinishRules: proxy.ProviderCatalogFinishRules{
-					Complete: []string{"stop", "tool_calls"}, Continue: []string{"length"},
+			Components: proxy.ProviderCatalogTransportComponents{
+				RequestCodec:  proxy.ProviderCatalogCodecReference{ID: proxy.CatalogProtocolOpenAIChatCompletions, Variation: proxy.CatalogProtocolVariationMaxTokens},
+				ResponseCodec: proxy.ProviderCatalogCodecReference{ID: proxy.CatalogProtocolOpenAIChatCompletions},
+				Authentication: proxy.ProviderCatalogAuthentication{
+					Kind: proxy.CatalogAuthenticationBearer, Field: testCatalogCredentialField,
+					Header: "Authorization", Prefix: "Bearer ",
 				},
-				ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
-				ErrorRules:        []string{"content_filter", "unknown_finish_reason"},
-				UsageFields: proxy.ProviderCatalogUsageFields{
-					Input: "usage.prompt_tokens", Output: "usage.completion_tokens", Total: "usage.total_tokens",
-				},
+				Execution: proxy.ProviderCatalogExecutionReference{ID: "synchronous_completion"},
 			},
 		}},
 		Offerings: []proxy.ProviderCatalogOffering{{

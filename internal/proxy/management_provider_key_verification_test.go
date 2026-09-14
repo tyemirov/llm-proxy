@@ -95,13 +95,22 @@ func TestManagementProviderKeyVerificationUsesEveryCanonicalTransportBeforePersi
 		{provider: proxy.ProviderNameXAI, model: proxy.ModelNameGrok45, transport: verificationTransportResponses},
 	}
 
+	verificationCases := map[string]providerKeyVerificationTransportCase{}
+	for _, transportCase := range transportCases {
+		if _, exists := verificationCases[transportCase.provider]; !exists {
+			verificationCases[transportCase.provider] = transportCase
+		}
+	}
+	metaVerification := verificationCases[proxy.ProviderNameMeta]
+	metaVerification.model = proxy.ModelNameMuseSpark11
+	verificationCases[proxy.ProviderNameMeta] = metaVerification
 	for _, transportCase := range transportCases {
 		t.Run(transportCase.provider, func(subTest *testing.T) {
 			candidateKey := "candidate-" + transportCase.provider
 			var upstreamRequests atomic.Int32
 			upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 				upstreamRequests.Add(1)
-				assertProviderKeyVerificationRequest(subTest, request, transportCase, candidateKey)
+				assertProviderKeyVerificationRequest(subTest, request, verificationCases[transportCase.provider], candidateKey)
 				writeProviderKeyVerificationSuccess(responseWriter, transportCase.transport)
 			}))
 			subTest.Cleanup(upstreamServer.Close)
@@ -158,7 +167,7 @@ func TestManagementProviderKeyVerificationUsesEveryCanonicalTransportBeforePersi
 			if savedProvider.BaseURL != expectedBaseURL {
 				subTest.Fatalf("saved provider base URL=%q want=%q", savedProvider.BaseURL, expectedBaseURL)
 			}
-			if profile.Tenant.Defaults.Provider != transportCase.provider || profile.Tenant.Defaults.Model != transportCase.model {
+			if profile.Tenant.Defaults.Provider != "" || profile.Tenant.Defaults.Model != "" {
 				subTest.Fatalf("defaults=%+v", profile.Tenant.Defaults)
 			}
 			if upstreamRequests.Load() != 1 {
@@ -400,8 +409,8 @@ func TestManagementPollableGeminiProviderKeyVerificationRejectsRetrievalAndPrese
 	)
 	revealResponse := httptest.NewRecorder()
 	router.ServeHTTP(revealResponse, revealRequest)
-	if revealResponse.Code != http.StatusOK || !strings.Contains(revealResponse.Body.String(), verifiedKey) || strings.Contains(revealResponse.Body.String(), candidateKey) {
-		t.Fatalf("retained reveal status=%d body=%q", revealResponse.Code, revealResponse.Body.String())
+	if revealResponse.Code != http.StatusNotFound || strings.Contains(revealResponse.Body.String(), verifiedKey) || strings.Contains(revealResponse.Body.String(), candidateKey) {
+		t.Fatalf("retired reveal status=%d body=%q", revealResponse.Code, revealResponse.Body.String())
 	}
 	expectedSequence := []string{
 		verifiedKey + " " + http.MethodPost + " " + testGeminiInteractionsPath,
@@ -796,7 +805,7 @@ func TestManagementXAIResponsesVerificationUsesTheXAIEndpoint(t *testing.T) {
 		xAIRequests.Add(1)
 		assertProviderKeyVerificationRequest(t, request, providerKeyVerificationTransportCase{
 			provider:  proxy.ProviderNameXAI,
-			model:     proxy.ModelNameGrok45,
+			model:     proxy.ModelNameGrok43,
 			transport: verificationTransportResponses,
 		}, "candidate-xai-responses")
 		io.WriteString(responseWriter, `{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"OK"}]}]}`)
@@ -1118,8 +1127,8 @@ func TestManagementProviderKeyVerificationPreservesVerifiedReplacementAndCoversT
 		if !retainedProvider.HasKey ||
 			retainedProvider.TextModel != proxy.ModelNameDeepSeekV4Flash ||
 			retainedProvider.SystemPrompt != retainedText ||
-			profile.Tenant.Defaults.Provider != proxy.ProviderNameDeepSeek ||
-			profile.Tenant.Defaults.Model != proxy.ModelNameDeepSeekV4Flash {
+			profile.Tenant.Defaults.Provider != "" ||
+			profile.Tenant.Defaults.Model != "" {
 			subTest.Fatalf("retained provider=%+v defaults=%+v", retainedProvider, profile.Tenant.Defaults)
 		}
 		revealRequest := authenticatedProviderKeyRevealRequest(
@@ -1130,8 +1139,8 @@ func TestManagementProviderKeyVerificationPreservesVerifiedReplacementAndCoversT
 		)
 		revealResponse := httptest.NewRecorder()
 		router.ServeHTTP(revealResponse, revealRequest)
-		if revealResponse.Code != http.StatusOK || !strings.Contains(revealResponse.Body.String(), verifiedKey) || strings.Contains(revealResponse.Body.String(), rejectedKey) {
-			subTest.Fatalf("retained reveal status=%d body=%q", revealResponse.Code, revealResponse.Body.String())
+		if revealResponse.Code != http.StatusNotFound || strings.Contains(revealResponse.Body.String(), verifiedKey) || strings.Contains(revealResponse.Body.String(), rejectedKey) {
+			subTest.Fatalf("retired reveal status=%d body=%q", revealResponse.Code, revealResponse.Body.String())
 		}
 		if upstreamRequests.Load() != 2 {
 			subTest.Fatalf("verification requests=%d want=2", upstreamRequests.Load())
@@ -1344,15 +1353,72 @@ func putManagementProviderKey(t *testing.T, router http.Handler, sessionCookie *
 
 func putManagementProviderKeyWithBaseURL(t *testing.T, router http.Handler, sessionCookie *http.Cookie, tenantID string, provider string, apiKey string, baseURL string, model string, systemPrompt string, requestContext context.Context) *httptest.ResponseRecorder {
 	t.Helper()
-	request := authenticatedJSONRequest(
-		http.MethodPut,
-		managementTenantTestPath(tenantID, "/provider-connections/"+url.PathEscape(provider)),
-		managementProviderKeyRequestBodyWithBaseURL(t, apiKey, baseURL, model, systemPrompt),
-		sessionCookie,
-	).WithContext(requestContext)
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
-	return response
+	exchange := func(method, path string, body any) *httptest.ResponseRecorder {
+		t.Helper()
+		payload, err := json.Marshal(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request := authenticatedJSONRequest(method, path, string(payload), sessionCookie).WithContext(requestContext)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		return response
+	}
+	tenantResponse := exchange(http.MethodGet, managementTenantTestPath(tenantID, ""), nil)
+	if tenantResponse.Code != http.StatusOK {
+		return tenantResponse
+	}
+	inventoryResponse := exchange(http.MethodGet, "/api/management/connections", nil)
+	if inventoryResponse.Code != http.StatusOK {
+		return inventoryResponse
+	}
+	var inventory struct {
+		Connections []struct {
+			ID        string   `json:"id"`
+			Provider  string   `json:"provider"`
+			Version   uint64   `json:"version"`
+			TenantIDs []string `json:"tenant_ids"`
+		} `json:"connections"`
+	}
+	if err := json.Unmarshal(inventoryResponse.Body.Bytes(), &inventory); err != nil {
+		t.Fatal(err)
+	}
+	id := ""
+	var version uint64
+	for _, connection := range inventory.Connections {
+		for _, assigned := range connection.TenantIDs {
+			if assigned == tenantID && connection.Provider == provider {
+				id = connection.ID
+				version = connection.Version
+			}
+		}
+	}
+	fields := map[string]string{"api_key": apiKey}
+	if baseURL != "" {
+		fields["base_url"] = baseURL
+	}
+	method, path := http.MethodPut, "/api/management/connections/"+id
+	if id == "" {
+		method = http.MethodPost
+		path = "/api/management/connections"
+	}
+	response := exchange(method, path, map[string]any{"name": provider, "provider": provider, "fields": fields, "version": version})
+	if response.Code != http.StatusOK && response.Code != http.StatusCreated {
+		return response
+	}
+	if id == "" {
+		var connection struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &connection); err != nil {
+			t.Fatal(err)
+		}
+		assigned := exchange(http.MethodPut, managementTenantTestPath(tenantID, "/connections/"+url.PathEscape(provider)), map[string]string{"connection_id": connection.ID})
+		if assigned.Code != http.StatusOK {
+			return assigned
+		}
+	}
+	return exchange(http.MethodPut, managementTenantTestPath(tenantID, "/provider-profiles/"+url.PathEscape(provider)), map[string]string{"text_model": model, "system_prompt": systemPrompt})
 }
 
 func requestProviderKeyVerificationProfile(t *testing.T, router http.Handler, sessionCookie *http.Cookie, tenantID string) providerKeyVerificationProfile {

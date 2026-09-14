@@ -1,39 +1,36 @@
 # Management UI modules
 
-`app.js` is the browser composition root. It registers the single
-`llmProxyManagementApplication` Alpine component exported by
-`managementApplication.js`.
-
-The management application is composed from non-overlapping responsibilities:
+`app.js` is the browser composition root.
+It registers the `llmProxyManagementApplication` Alpine component and the `connection-dashboard` custom element.
 
 | Module | Responsibility |
 | --- | --- |
 | `managementApplication.js` | Compose the Alpine application and reject duplicate property ownership. |
-| `managementApplicationState.js` | Create the complete reactive state object. |
-| `managementApplicationPresentation.js` | Derive cross-responsibility Settings readiness and disabled state. |
-| `authenticationLifecycle.js` | Reconcile MPR UI authentication, hydrate the application, and clear authenticated state boundaries. |
-| `tenantSettings.js` | Select, create, rename, delete, and switch the Settings tenant. |
-| `settingsDialog.js` | Open, close, focus, and enforce the Settings modal. |
-| `providerEditor.js` | Select a provider and own its browser-memory editor session. |
-| `providerCredentials.js` | Enter, reveal, verify, and remove provider credentials. |
-| `providerSettings.js` | Serialize and autosave provider setting changes. |
-| `routingDefaults.js` | Edit and autosave tenant routing defaults. |
-| `profileMutations.js` | Serialize whole-profile mutations and apply returned profiles. |
-| `clientAccess.js` | Generate, replace, reveal, and copy one-time client keys. |
-| `usageDashboard.js` | Load account or tenant usage, failed-request details, and rejected-request details. |
-| `adminDashboard.js` | Load and present administrator usage. |
-| `requestExamples.js` | Build and copy current-profile proxy request examples. |
-| `notifications.js` | Publish and dismiss page or Settings notifications. |
-| `usageFailurePresentation.js` | Validate and present bounded failure or rejection payloads. |
-| `usagePresentation.js` | Transform usage summaries into metrics, rows, and chart points. |
-| `dialogFocus.js` | Keep keyboard focus inside modal dialogs. |
+| `managementApplicationState.js` | Create state for authentication, account context, usage, and notices. |
+| `authenticationLifecycle.js` | Load the authenticated account and clear state after sign out. |
+| `connectionDashboard.js` | Show tenants, connections, and models with explicit configuration controls. |
+| `connectionContext.js` | Apply the selected tenant to the usage dashboard. |
+| `usageDashboard.js` | Load account or tenant usage and request details. |
+| `adminDashboard.js` | Load and show administrator usage. |
+| `notifications.js` | Show and dismiss page notices. |
+| `usageFailurePresentation.js` | Validate and show failure or rejection records. |
+| `usagePresentation.js` | Convert usage summaries into metrics, rows, and chart points. |
+| `dialogFocus.js` | Keep keyboard focus inside usage dialogs. |
 
-All modules share one Alpine component instance. Cross-module calls therefore
-remain explicit component contracts, while server effects continue to pass
-through `core/backendClient.js` and complete profile writes continue to pass
-through `profileMutations.js`.
+`connectionDashboard.js` owns tenant selection and connection selection.
+It saves configuration through `core/backendClient.js`.
+It emits `llm-proxy:connection-context` with the selected tenant and its current profile.
+`connectionContext.js` applies this context to the Alpine usage state.
+
+Model cards use family identities from the public capability catalog.
+Provider cards use provider identities from the connection inventory.
+Both use the existing `brand-icon` element and asset manifest.
+
+Tenant access controls show each generated API key once.
+A tenant with a text default receives a copyable request example.
+Closing the dialog clears the key and example from browser state.
 
 After shared session recovery, `authenticationLifecycle.js` dispatches
 `llm-proxy:management-ready` when the application is already authenticated.
-This completion event clears the shared transition. It preserves application
-state and tenant selection.
+This completion event clears the shared transition.
+It preserves application state and tenant selection.

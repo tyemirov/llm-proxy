@@ -38,7 +38,7 @@ export function createAppRoutingDefaults(profile) {
   }
   const keyedTextProviders = providers.filter((provider) => provider.configured);
   let textModel = null;
-  if (keyedTextProviders.length === 0) {
+  if (defaults.provider === EMPTY_STRING || keyedTextProviders.length === 0) {
     if (defaults.provider !== EMPTY_STRING || defaults.model !== EMPTY_STRING || defaults.reasoning_effort !== EMPTY_STRING) {
       throw new Error(APP_INTEGRITY_ERROR);
     }
@@ -50,7 +50,7 @@ export function createAppRoutingDefaults(profile) {
     }
   }
   const dictationProviders = keyedTextProviders.filter((provider) => provider.supports_dictation);
-  if (dictationProviders.length === 0) {
+  if (defaults.dictation_provider === EMPTY_STRING || dictationProviders.length === 0) {
     if (defaults.dictation_provider !== EMPTY_STRING || defaults.dictation_model !== EMPTY_STRING) {
       throw new Error(APP_INTEGRITY_ERROR);
     }
@@ -138,13 +138,15 @@ export function assertManagementAccount(account) {
 
 /**
  * @param {import("../types.d.js").ManagementTenantProfile} profile
- * @param {string} tenantID
+ * @param {string} [tenantID]
  */
 export function assertManagementTenantProfile(profile, tenantID) {
   if (
     !profile ||
     !profile.tenant ||
-    profile.tenant.id !== tenantID ||
+    typeof profile.tenant.id !== "string" ||
+    !profile.tenant.id ||
+    (tenantID !== undefined && profile.tenant.id !== tenantID) ||
     typeof profile.tenant.name !== "string" ||
     profile.tenant.name === EMPTY_STRING ||
     typeof profile.tenant.has_secret !== "boolean" ||
@@ -158,6 +160,7 @@ export function assertManagementTenantProfile(profile, tenantID) {
   ) {
     throw new Error(APP_INTEGRITY_ERROR);
   }
+  createAppRoutingDefaults(profile);
 }
 
 /**
@@ -228,7 +231,7 @@ function routingDefaultsAreStrings(defaults) {
 }
 
 /** @param {import("../types.d.js").ProviderProfile} provider */
-function assertProviderCatalog(provider) {
+export function assertProviderCatalog(provider) {
   if (
     !provider ||
     typeof provider.id !== "string" ||
@@ -293,7 +296,7 @@ function assertCatalogIdentityList(identities) {
 }
 
 /** @param {import("../types.d.js").ProviderFieldProfile} field */
-function assertProviderField(field) {
+export function assertProviderField(field) {
   if (
     !field ||
     typeof field.id !== "string" ||

@@ -206,7 +206,7 @@ func prepareFrontendDependencyFixture(testingInstance *testing.T, repositoryRoot
 		testingInstance,
 		filepath.Join(fixtureRoot, "Makefile"),
 		string(makefileBytes)+`
-test-release-policy check-format go-lint python-lint python-test check-brand-icons test-openapi-pages-artifact test-live-provider-harness prepare-shared-ui:
+test-release-policy check-format go-lint python-lint python-test check-brand-icons test-openapi-pages-artifact test-live-provider-harness test-protocol-acceptance prepare-shared-ui:
 	@:
 
 go-test:

@@ -105,9 +105,9 @@ func TestOpenAPIContractDocumentsActualAuthenticationBoundaries(t *testing.T) {
 			expectedSecurity = [][]string{{"MCPAccessToken"}}
 		case "/.well-known/oauth-protected-resource/mcp":
 			expectedSecurity = [][]string{}
-		case "/", "/v2", llmproxycontract.TenantIdentityPath, "/v2/requests", "/dictate", "/model/v1/assets", "/model/v1/assets/{asset_id}":
+		case "/", "/v2", llmproxycontract.TenantIdentityPath, "/v2/requests", "/dictate":
 			expectedSecurity = [][]string{{"TenantClientKey"}}
-		case "/v1/chat/completions", "/v1/responses", "/v1/models", "/v1/audio/transcriptions":
+		case "/v1/chat/completions", "/v1/responses", "/v1/models", "/v1/audio/transcriptions", llmproxycontract.AssetPath, "/model/v1/assets/{asset_id}", "/model/v1/assets/{asset_id}/content", llmproxycontract.MediaCapabilitiesPath, llmproxycontract.MediaOperationsPath, "/model/v1/operations/{operation_id}", "/model/v1/operations/{operation_id}/cancellation", llmproxycontract.MediaVoicesPath, "/model/v1/voices/{voice_id}":
 			expectedSecurity = [][]string{{"TenantBearerKey"}}
 		case "/healthz", proxy.ManagementConfigUIPath, proxy.PublicCapabilitiesPath:
 			expectedSecurity = [][]string{}
@@ -221,6 +221,45 @@ func TestOpenAPIContractEnforcesV2MediaRelationships(t *testing.T) {
 	}
 }
 
+func TestOpenAPIContractEnforcesExactDictatorMediaOperations(t *testing.T) {
+	contract, loadError := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	if loadError != nil {
+		t.Fatalf("load canonical OpenAPI contract: %v", loadError)
+	}
+	assetID := "ast_0123456789abcdef0123456789abcdef"
+	voiceID := "voi_0123456789abcdef0123456789abcdef"
+	testCases := []struct {
+		name      string
+		body      string
+		wantValid bool
+	}{
+		{name: "transcription", body: `{"capability":"audio.transcribe","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `"},"controls":{"detect_language":true}}`, wantValid: true},
+		{name: "diarization", body: `{"capability":"audio.diarize","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `"},"controls":{"language":"en-US","model_size":"large","utterance_gap_seconds":0.4}}`, wantValid: true},
+		{name: "alignment", body: `{"capability":"audio.align","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `","transcript":"Aligned words."},"controls":{"language":"en-US","remove_punctuation":true}}`, wantValid: true},
+		{name: "subtitles", body: `{"capability":"subtitles.create","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `","transcript":"Subtitle words."},"controls":{"language":"en-US","granularity":"sentence","group_size":2}}`, wantValid: true},
+		{name: "speech", body: `{"capability":"audio.speech.generate","provider":"dictator","model":"dictator-speech-v1","input":{"text":"Speak this.","voice_id":"` + voiceID + `"},"controls":{"language":"en-US","text_format":"plain","sample_rate_hz":48000,"include_timeline":true,"max_duration_seconds":30}}`, wantValid: true},
+		{name: "voice extraction", body: `{"capability":"audio.voice.extract","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `","transcript":"Reference words.","display_name":"Narrator","language":"en-US"},"controls":{"model_size":"large"}}`, wantValid: true},
+		{name: "missing language selector", body: `{"capability":"audio.transcribe","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `"},"controls":{}}`},
+		{name: "irrelevant speech control", body: `{"capability":"audio.speech.generate","provider":"dictator","model":"dictator-speech-v1","input":{"text":"Speak this.","voice_id":"` + voiceID + `"},"controls":{"language":"en-US","text_format":"plain","sample_rate_hz":48000,"model_size":"large"}}`},
+		{name: "non Dictator provider", body: `{"capability":"audio.align","provider":"xai","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `","transcript":"Aligned words."},"controls":{"language":"en-US"}}`},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			body := []byte(testCase.body)
+			request := httptest.NewRequest(http.MethodPost, llmproxycontract.MediaOperationsPath, bytes.NewReader(body))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Idempotency-Key", "openapi-dictator-"+strings.ReplaceAll(testCase.name, " ", "-"))
+			validationError := contract.ValidateRequest(llmproxycontract.MediaOperationsPath, request.Method, request, body)
+			if testCase.wantValid && validationError != nil {
+				t.Fatalf("valid request rejected: %v", validationError)
+			}
+			if !testCase.wantValid && validationError == nil {
+				t.Fatal("invalid request accepted")
+			}
+		})
+	}
+}
+
 func TestOpenAPIContractEnforcesProviderOfferingMediaLifecycleRelationship(t *testing.T) {
 	contractPath := filepath.Join("..", "..", openapitest.CanonicalDocumentPath)
 	contractBytes, readError := os.ReadFile(contractPath)
@@ -311,7 +350,8 @@ func TestOpenAPIContractValidatesTenantAssetUploadAndDeleteExchanges(t *testing.
 		t.Fatalf("BuildRouter error: %v", buildError)
 	}
 	assetBytes := []byte("openapi-asset")
-	uploadRequest := httptest.NewRequest(http.MethodPost, "/model/v1/assets?key="+TestSecret, bytes.NewReader(assetBytes))
+	uploadRequest := httptest.NewRequest(http.MethodPost, "/model/v1/assets", bytes.NewReader(assetBytes))
+	uploadRequest.Header.Set("Authorization", "Bearer "+TestSecret)
 	uploadRequest.Header.Set("Content-Type", "image/png")
 	assertOpenAPIRequest(t, contract, "/model/v1/assets", uploadRequest, assetBytes)
 	uploadResponse := httptest.NewRecorder()
@@ -324,7 +364,8 @@ func TestOpenAPIContractValidatesTenantAssetUploadAndDeleteExchanges(t *testing.
 		t.Fatalf("asset response=%s error=%v", uploadResponse.Body.String(), decodeError)
 	}
 	deletePath := "/model/v1/assets/" + asset.AssetID
-	deleteRequest := httptest.NewRequest(http.MethodDelete, deletePath+"?key="+TestSecret, nil)
+	deleteRequest := httptest.NewRequest(http.MethodDelete, deletePath, nil)
+	deleteRequest.Header.Set("Authorization", "Bearer "+TestSecret)
 	assertOpenAPIRequest(t, contract, "/model/v1/assets/{asset_id}", deleteRequest, nil)
 	deleteResponse := httptest.NewRecorder()
 	router.ServeHTTP(deleteResponse, deleteRequest)
@@ -356,8 +397,8 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 	if decodeError := json.Unmarshal(capabilitiesResponse.Body.Bytes(), &capabilityCatalog); decodeError != nil {
 		t.Fatalf("decode public capability catalog: %v", decodeError)
 	}
-	if len(capabilityCatalog.Providers) != 13 {
-		t.Fatalf("public capability providers=%d want=13", len(capabilityCatalog.Providers))
+	if len(capabilityCatalog.Providers) != 14 {
+		t.Fatalf("public capability providers=%d want=14", len(capabilityCatalog.Providers))
 	}
 
 	configRequest := httptest.NewRequest(http.MethodGet, proxy.ManagementConfigUIPath, nil)
@@ -389,24 +430,31 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 	tenantID := account.Tenants[0].ID
 	tenantPath := "/api/management/tenants/" + url.PathEscape(tenantID)
 
-	providerKeyBody := []byte(managementProviderKeyRequestBody(t, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, ""))
-	providerKeyRequest := authenticatedJSONRequest(http.MethodPut, tenantPath+"/provider-connections/deepseek", string(providerKeyBody), sessionCookie)
-	assertOpenAPIRequest(t, contract, "/api/management/tenants/{tenant_id}/provider-connections/{provider}", providerKeyRequest, providerKeyBody)
+	providerKeyBody := []byte(`{"name":"DeepSeek","provider":"deepseek","fields":{"api_key":"` + testManagementDeepSeekKey + `"}}`)
+	providerKeyRequest := authenticatedJSONRequest(http.MethodPost, "/api/management/connections", string(providerKeyBody), sessionCookie)
+	assertOpenAPIRequest(t, contract, "/api/management/connections", providerKeyRequest, providerKeyBody)
 	providerKeyResponse := httptest.NewRecorder()
 	router.ServeHTTP(providerKeyResponse, providerKeyRequest)
-	assertOpenAPIResponse(t, contract, "/api/management/tenants/{tenant_id}/provider-connections/{provider}", http.MethodPut, providerKeyResponse)
-
-	retainedProviderKeyBody := []byte(managementProviderKeyRequestBody(t, "", proxy.ModelNameDeepSeekV4Flash, "Retain the existing key."))
-	retainedProviderKeyRequest := authenticatedJSONRequest(
-		http.MethodPut,
-		tenantPath+"/provider-connections/deepseek",
-		string(retainedProviderKeyBody),
-		sessionCookie,
-	)
-	assertOpenAPIRequest(t, contract, "/api/management/tenants/{tenant_id}/provider-connections/{provider}", retainedProviderKeyRequest, retainedProviderKeyBody)
-	retainedProviderKeyResponse := httptest.NewRecorder()
-	router.ServeHTTP(retainedProviderKeyResponse, retainedProviderKeyRequest)
-	assertOpenAPIResponse(t, contract, "/api/management/tenants/{tenant_id}/provider-connections/{provider}", http.MethodPut, retainedProviderKeyResponse)
+	assertOpenAPIResponse(t, contract, "/api/management/connections", http.MethodPost, providerKeyResponse)
+	var connection struct {
+		ID      string `json:"id"`
+		Version uint64 `json:"version"`
+	}
+	if err := json.Unmarshal(providerKeyResponse.Body.Bytes(), &connection); err != nil {
+		t.Fatal(err)
+	}
+	assignmentBody := []byte(`{"connection_id":"` + connection.ID + `"}`)
+	assignmentRequest := authenticatedJSONRequest(http.MethodPut, tenantPath+"/connections/deepseek", string(assignmentBody), sessionCookie)
+	assertOpenAPIRequest(t, contract, "/api/management/tenants/{tenant_id}/connections/{provider}", assignmentRequest, assignmentBody)
+	assignmentResponse := httptest.NewRecorder()
+	router.ServeHTTP(assignmentResponse, assignmentRequest)
+	assertOpenAPIResponse(t, contract, "/api/management/tenants/{tenant_id}/connections/{provider}", http.MethodPut, assignmentResponse)
+	retainedBody := []byte(`{"name":"DeepSeek renamed","provider":"deepseek","fields":{"api_key":""},"version":1}`)
+	retainedRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/connections/"+connection.ID, string(retainedBody), sessionCookie)
+	assertOpenAPIRequest(t, contract, "/api/management/connections/{connection_id}", retainedRequest, retainedBody)
+	retainedResponse := httptest.NewRecorder()
+	router.ServeHTTP(retainedResponse, retainedRequest)
+	assertOpenAPIResponse(t, contract, "/api/management/connections/{connection_id}", http.MethodPut, retainedResponse)
 
 	secretBody := []byte(`{}`)
 	secretRequest := authenticatedJSONRequest(http.MethodPost, tenantPath+"/secrets", string(secretBody), sessionCookie)

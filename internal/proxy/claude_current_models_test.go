@@ -153,7 +153,7 @@ func TestClaudeCurrentModelsManagedVerification(t *testing.T) {
 				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 					t.Fatal(err)
 				}
-				if body["model"] != model || body["max_tokens"] != float64(16) || body["thinking"] != nil || body["output_config"] != nil {
+				if body["model"] != "claude-sonnet-4-6" || body["max_tokens"] != float64(16) || body["thinking"] != nil || body["output_config"] != nil {
 					t.Errorf("Claude verification=%v", body)
 				}
 				w.Header().Set("Content-Type", "application/json")

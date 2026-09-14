@@ -40,8 +40,13 @@ test("MCP OAuth login, consent, generation, refresh, and revocation", async ({ p
     expect(accountResponse.status()).toBe(200);
     const account = await accountResponse.json();
     const tenantID = account.tenants[0].id;
-    const provider = await context.request.put(`${stack.llmProxyOrigin}/api/management/tenants/${tenantID}/provider-connections/openai`, { headers: { Origin: stack.frontendOrigin }, data: { fields: { api_key: "local-mcp-provider-fixture" }, text_model: "gpt-4.1", system_prompt: "" } });
-    expect(provider.status()).toBe(200);
+    const created = await context.request.post(`${stack.llmProxyOrigin}/api/management/connections`, { headers: { Origin: stack.frontendOrigin, "Idempotency-Key": "mcp-fixture-connection" }, data: { name: "MCP fixture", provider: "openai", fields: { api_key: "local-mcp-provider-fixture" } } });
+    expect(created.status()).toBe(201);
+    const connection = await created.json();
+    const assigned = await context.request.put(`${stack.llmProxyOrigin}/api/management/tenants/${tenantID}/connections/openai`, { headers: { Origin: stack.frontendOrigin }, data: { connection_id: connection.id } });
+    expect(assigned.status()).toBe(200);
+    const defaults = await context.request.put(`${stack.llmProxyOrigin}/api/management/tenants/${tenantID}/defaults`, { headers: { Origin: stack.frontendOrigin }, data: { provider: "openai", model: "gpt-4.1", dictation_provider: "", dictation_model: "", system_prompt: "", reasoning_effort: "" } });
+    expect(defaults.status()).toBe(200);
     await officialClient({ endpoint: `${stack.llmProxyOrigin}/mcp`, token: tokens.access_token, tenant_id: tenantID });
     await inspectorClient(`${stack.llmProxyOrigin}/mcp`, tokens.access_token, tenantID);
     if (process.env.MCP_CODEX_BINARY) await codexClient(`${stack.llmProxyOrigin}/mcp`, tokens.access_token, tenantID);

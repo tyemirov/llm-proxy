@@ -5,10 +5,157 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/tyemirov/llm-proxy/internal/proxy"
 )
+
+// ProtocolFixture identifies one disposable provider route for an executable component composition.
+type ProtocolFixture struct {
+	RequestCodec         string
+	RequestVariation     string
+	ResponseCodec        string
+	ResponseVariation    string
+	Provider             string
+	Model                string
+	Operation            string
+	Lifecycle            string
+	RequestProfile       string
+	EndpointPath         string
+	AuthenticationHeader string
+	AuthenticationPrefix string
+	Controls             []string
+	MediaInputs          []string
+	CallerTools          bool
+	WebSearch            bool
+}
+
+// ProviderCatalogWithProtocolFixtures adds one disposable provider route for each executable codec composition.
+func ProviderCatalogWithProtocolFixtures(testingInstance testing.TB) (*proxy.ProviderCatalog, []ProtocolFixture) {
+	testingInstance.Helper()
+	schema := ProviderCatalog(testingInstance).Schema()
+	modelForFixture := func(identifier string) string {
+		for modelIndex := range schema.Models {
+			if schema.Models[modelIndex].ID == identifier {
+				if schema.Models[modelIndex].Enabled == proxy.ModelEnabled {
+					return identifier
+				}
+				fixtureModel := schema.Models[modelIndex]
+				fixtureModel.ID = fmt.Sprintf("fixture-model-%d", len(schema.Models)+1)
+				fixtureModel.Enabled = proxy.ModelEnabled
+				schema.Models = append(schema.Models, fixtureModel)
+				return fixtureModel.ID
+			}
+		}
+		testingInstance.Fatalf("protocol fixture model is absent: %s", identifier)
+		return ""
+	}
+	selected := map[string]bool{}
+	fixtures := []ProtocolFixture{}
+	for _, provider := range schema.Providers {
+		if provider.Enabled == proxy.ModelDisabled {
+			continue
+		}
+		for _, transport := range provider.Transports {
+			for _, offering := range provider.Offerings {
+				if offering.Transport != transport.ID {
+					continue
+				}
+				for _, operation := range offering.Operations {
+					if operation != proxy.ModelOperationText && operation != proxy.ModelOperationDictation {
+						continue
+					}
+					components := transport.Components
+					fixtureKey := strings.Join([]string{components.RequestCodec.ID, components.RequestCodec.Variation, components.ResponseCodec.ID, components.ResponseCodec.Variation, components.Execution.ID, operation}, "-")
+					if selected[fixtureKey] {
+						continue
+					}
+					fixtureProvider := provider
+					fixtureProvider.ID = "fixture-" + strings.ReplaceAll(fixtureKey, "_", "-")
+					fixtureProvider.Label = "Fixture " + fixtureKey
+					fixtureProvider.APIServiceLabel = fixtureProvider.Label + " API"
+					fixtureProvider.KeyAcquisitionURL = "https://fixture.example/keys"
+					fixtureProvider.Aliases = nil
+					fixtureProvider.Fields = append([]proxy.ProviderCatalogField(nil), provider.Fields...)
+					for fieldIndex := range fixtureProvider.Fields {
+						fixtureProvider.Fields[fieldIndex].Environment = ""
+					}
+					fixtureProvider.Transports = []proxy.ProviderCatalogTransport{transport}
+					fixtureOffering := offering
+					fixtureOffering.Enabled = proxy.ModelEnabled
+					fixtureOffering.Model = modelForFixture(fixtureOffering.Model)
+					fixtureOffering.Operations = []string{operation}
+					fixtureOffering.DefaultOperations = []string{operation}
+					fixtureOffering.Prices = append([]proxy.ProviderCatalogPrice(nil), fixtureOffering.Prices...)
+					fixtureOffering.Prices = slices.DeleteFunc(fixtureOffering.Prices, func(price proxy.ProviderCatalogPrice) bool {
+						return price.Operation != operation
+					})
+					fixtureProvider.Offerings = []proxy.ProviderCatalogOffering{fixtureOffering}
+					if operation == proxy.ModelOperationDictation {
+						for _, textOffering := range provider.Offerings {
+							if !slices.Contains(textOffering.Operations, proxy.ModelOperationText) {
+								continue
+							}
+							textOffering.Enabled = proxy.ModelEnabled
+							textOffering.Model = modelForFixture(textOffering.Model)
+							textOffering.Operations = []string{proxy.ModelOperationText}
+							textOffering.DefaultOperations = []string{proxy.ModelOperationText}
+							textOffering.Prices = append([]proxy.ProviderCatalogPrice(nil), textOffering.Prices...)
+							textOffering.Prices = slices.DeleteFunc(textOffering.Prices, func(price proxy.ProviderCatalogPrice) bool {
+								return price.Operation != proxy.ModelOperationText
+							})
+							fixtureProvider.Offerings = append(fixtureProvider.Offerings, textOffering)
+							if textOffering.Transport != transport.ID {
+								for _, textTransport := range provider.Transports {
+									if textTransport.ID == textOffering.Transport {
+										fixtureProvider.Transports = append(fixtureProvider.Transports, textTransport)
+										break
+									}
+								}
+							}
+							break
+						}
+					}
+					for transportIndex := range fixtureProvider.Transports {
+						authentication := &fixtureProvider.Transports[transportIndex].Components.Authentication
+						if authentication.Kind == proxy.CatalogAuthenticationBearer {
+							authentication.Kind = proxy.CatalogAuthenticationHeader
+							authentication.Header = "X-API-Key"
+							authentication.Prefix = ""
+						} else {
+							authentication.Kind = proxy.CatalogAuthenticationBearer
+							authentication.Header = "Authorization"
+							authentication.Prefix = "Bearer "
+						}
+					}
+					schema.Providers = append(schema.Providers, fixtureProvider)
+					components = fixtureProvider.Transports[0].Components
+					controls := make([]string, 0, len(offering.Controls))
+					for _, control := range offering.Controls {
+						controls = append(controls, control.ID)
+					}
+					fixtures = append(fixtures, ProtocolFixture{
+						RequestCodec: components.RequestCodec.ID, RequestVariation: components.RequestCodec.Variation,
+						ResponseCodec: components.ResponseCodec.ID, ResponseVariation: components.ResponseCodec.Variation,
+						Provider: fixtureProvider.ID, Model: fixtureOffering.Model, Operation: operation, Lifecycle: components.Execution.ID,
+						RequestProfile: offering.RequestProfile, EndpointPath: transport.Endpoint.Path,
+						AuthenticationHeader: components.Authentication.Header, AuthenticationPrefix: components.Authentication.Prefix,
+						Controls: controls, MediaInputs: append([]string(nil), offering.MediaInputs...),
+						CallerTools: offering.CallerTools, WebSearch: offering.WebSearch,
+					})
+					selected[fixtureKey] = true
+				}
+			}
+		}
+	}
+	catalog, catalogError := proxy.NewProviderCatalog(schema)
+	if catalogError != nil {
+		testingInstance.Fatalf("compile protocol fixture catalog: %v", catalogError)
+	}
+	return catalog, fixtures
+}
 
 // ProviderCatalog loads the repository provider catalog for tests.
 func ProviderCatalog(testingInstance testing.TB) *proxy.ProviderCatalog {
@@ -42,10 +189,10 @@ func ProviderCatalogWithResourceVisibilityInterval(testingInstance testing.TB, p
 		}
 		for transportIndex := range provider.Transports {
 			transport := &provider.Transports[transportIndex]
-			if transport.ResourceVisibility.RetryLimit == 0 {
+			if transport.Components.Execution.ResourceVisibility.RetryLimit == 0 {
 				continue
 			}
-			transport.ResourceVisibility.RetryIntervalMilliseconds = retryIntervalMilliseconds
+			transport.Components.Execution.ResourceVisibility.RetryIntervalMilliseconds = retryIntervalMilliseconds
 			matchCount++
 		}
 	}
@@ -87,8 +234,10 @@ func ProviderCatalogFromModelCatalog(testingInstance testing.TB, modelCatalog pr
 // NewProviderCatalogFromModelCatalog returns strict construction errors to rejection tests.
 func NewProviderCatalogFromModelCatalog(modelCatalog proxy.ModelCatalog) (*proxy.ProviderCatalog, error) {
 	providerLabels := map[string]string{}
+	providerDefinitions := map[string]proxy.CatalogProvider{}
 	for _, provider := range modelCatalog.Providers {
 		providerLabels[provider.ID] = provider.Label
+		providerDefinitions[provider.ID] = provider
 	}
 	prices := map[string][]proxy.ProviderCatalogPrice{}
 	for _, price := range modelCatalog.Prices {
@@ -118,14 +267,24 @@ func NewProviderCatalogFromModelCatalog(modelCatalog proxy.ModelCatalog) (*proxy
 		if !found {
 			providerIndex = len(schema.Providers)
 			providerIndexes[offering.Provider] = providerIndex
-			schema.Providers = append(schema.Providers, proxy.ProviderCatalogProvider{
-				ID: offering.Provider, Label: providerLabels[offering.Provider], APIServiceLabel: providerLabels[offering.Provider] + " API", KeyAcquisitionURL: "https://provider.example/keys",
+			provider := proxy.ProviderCatalogProvider{
+				ID: offering.Provider, Label: providerLabels[offering.Provider], APIServiceLabel: providerLabels[offering.Provider] + " API", ConnectionOwnership: proxy.CatalogProviderConnectionTenant, KeyAcquisitionURL: "https://provider.example/keys",
 				Fields: []proxy.ProviderCatalogField{{
 					ID: proxy.CatalogCredentialAPIKey, Label: "Test API key", Kind: proxy.CatalogProviderFieldKindCredential,
 					Type: proxy.CatalogProviderFieldTypeOpaque, Required: true, Default: &empty, Secret: true,
 					Validation: proxy.ProviderCatalogFieldValidation{MinimumLength: 1},
 				}},
-			})
+			}
+			if slices.Contains(providerDefinitions[offering.Provider].CredentialKinds, proxy.CatalogCredentialDeployment) {
+				provider.ConnectionOwnership = proxy.CatalogProviderConnectionDeployment
+				provider.KeyAcquisitionURL = ""
+				provider.Fields = []proxy.ProviderCatalogField{
+					{ID: "grpc_address", Label: "Test gRPC address", Kind: proxy.CatalogProviderFieldKindSetting, Type: proxy.CatalogProviderFieldTypeGRPCTarget, Required: true, Default: &empty, Validation: proxy.ProviderCatalogFieldValidation{MinimumLength: 1}, Environment: "DICTATOR_GRPC_ADDR"},
+					{ID: "grpc_auth_token", Label: "Test gRPC token", Kind: proxy.CatalogProviderFieldKindCredential, Type: proxy.CatalogProviderFieldTypeOpaque, Required: true, Default: &empty, Secret: true, Validation: proxy.ProviderCatalogFieldValidation{MinimumLength: 1}, Environment: "DICTATOR_GRPC_AUTH_TOKEN"},
+					{ID: "grpc_tls", Label: "Test gRPC TLS", Kind: proxy.CatalogProviderFieldKindSetting, Type: proxy.CatalogProviderFieldTypeBoolean, Required: true, Default: &empty, Validation: proxy.ProviderCatalogFieldValidation{MinimumLength: 1}, Environment: "DICTATOR_GRPC_TLS"},
+				}
+			}
+			schema.Providers = append(schema.Providers, provider)
 		}
 		provider := &schema.Providers[providerIndex]
 		transportKey := offering.Provider + "\x00" + offering.WireContract + "\x00" + offering.ExecutionLifecycle
@@ -149,25 +308,36 @@ func NewProviderCatalogFromModelCatalog(modelCatalog proxy.ModelCatalog) (*proxy
 }
 
 func testProviderTransport(identifier string, offering proxy.ProviderOffering) proxy.ProviderCatalogTransport {
-	parameters := testProviderProtocolParameters(offering)
+	requestCodec := proxy.ProviderCatalogCodecReference{ID: offering.WireContract}
+	switch offering.WireContract {
+	case proxy.CatalogProtocolOpenAIChatCompletions:
+		requestCodec.Variation = proxy.CatalogProtocolVariationMaxTokens
+	case proxy.CatalogProtocolMultipartTranscription:
+		requestCodec.Variation = proxy.CatalogProtocolVariationTranscriptionModel
+	}
 	transport := proxy.ProviderCatalogTransport{
-		ID:              identifier,
-		Endpoint:        proxy.ProviderCatalogEndpoint{Method: proxy.CatalogEndpointMethodPost, DefaultBaseURL: "https://provider.example", Path: testProviderProtocolPath(offering.WireContract)},
-		Authentication:  proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationBearer, Field: proxy.CatalogCredentialAPIKey, Header: "Authorization", Prefix: "Bearer "},
-		RequestProtocol: offering.WireContract, ResponseProtocol: offering.WireContract,
-		UsageMapping: offering.WireContract, Lifecycle: offering.ExecutionLifecycle,
-		ProtocolParameters: parameters,
+		ID:       identifier,
+		Endpoint: proxy.ProviderCatalogEndpoint{Protocol: proxy.CatalogEndpointProtocolHTTP, Method: proxy.CatalogEndpointMethodPost, DefaultBaseURL: "https://provider.example", Path: testProviderProtocolPath(offering.WireContract)},
+		Components: proxy.ProviderCatalogTransportComponents{
+			RequestCodec: requestCodec, ResponseCodec: proxy.ProviderCatalogCodecReference{ID: offering.WireContract},
+			Authentication: proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationBearer, Field: proxy.CatalogCredentialAPIKey, Header: "Authorization", Prefix: "Bearer "},
+			Execution:      proxy.ProviderCatalogExecutionReference{ID: offering.ExecutionLifecycle},
+		},
+	}
+	if offering.WireContract == proxy.CatalogProtocolDictatorSpeechV1 {
+		transport.Endpoint = proxy.ProviderCatalogEndpoint{Protocol: proxy.CatalogEndpointProtocolGRPC, SettingField: "grpc_address"}
+		transport.Components.Authentication = proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationGRPCBearer, Field: "grpc_auth_token"}
 	}
 	if offering.ExecutionLifecycle == "pollable_resource" {
 		switch offering.Provider {
 		case proxy.ProviderNameOpenAI:
-			transport.ResourceVisibility = proxy.ProviderCatalogResourceVisibility{
+			transport.Components.Execution.ResourceVisibility = proxy.ProviderCatalogResourceVisibility{
 				RetryIntervalMilliseconds: 2000,
 				RetryLimit:                1,
 				RetryStatusCodes:          []int{403, 404},
 			}
 		case proxy.ProviderNameGemini:
-			transport.ResourceVisibility = proxy.ProviderCatalogResourceVisibility{
+			transport.Components.Execution.ResourceVisibility = proxy.ProviderCatalogResourceVisibility{
 				RetryIntervalMilliseconds: 5000,
 				RetryLimit:                6,
 				RetryStatusCodes:          []int{400, 403, 404},
@@ -175,89 +345,17 @@ func testProviderTransport(identifier string, offering proxy.ProviderOffering) p
 		}
 	}
 	if offering.WireContract == proxy.CatalogProtocolVertexGenerateContent {
-		transport.Authentication = proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationHeader, Field: proxy.CatalogCredentialAPIKey, Header: "x-goog-api-key"}
+		transport.Components.Authentication = proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationHeader, Field: proxy.CatalogCredentialAPIKey, Header: "x-goog-api-key"}
 	}
 	if offering.WireContract == proxy.CatalogProtocolGeminiInteractions {
-		transport.Authentication = proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationHeader, Field: proxy.CatalogCredentialAPIKey, Header: "x-goog-api-key"}
+		transport.Components.Authentication = proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationHeader, Field: proxy.CatalogCredentialAPIKey, Header: "x-goog-api-key"}
 		transport.Headers = []proxy.ProviderCatalogHeader{{Name: "Api-Revision", Value: "2026-05-20"}}
 	}
 	if offering.WireContract == proxy.CatalogProtocolAnthropicMessages {
-		transport.Authentication = proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationHeader, Field: proxy.CatalogCredentialAPIKey, Header: "x-api-key"}
+		transport.Components.Authentication = proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationHeader, Field: proxy.CatalogCredentialAPIKey, Header: "x-api-key"}
 		transport.Headers = []proxy.ProviderCatalogHeader{{Name: "anthropic-version", Value: "2023-06-01"}}
 	}
 	return transport
-}
-
-func testProviderProtocolParameters(offering proxy.ProviderOffering) proxy.ProviderCatalogProtocolParameters {
-	switch offering.WireContract {
-	case proxy.CatalogProtocolVertexGenerateContent:
-		return proxy.ProviderCatalogProtocolParameters{
-			ModelField: "path.model", TokenField: "generationConfig.maxOutputTokens", MediaExecutionLifecycle: "synchronous_completion",
-			OutputFields: []string{"candidates[].content.parts[].text"}, FinishRules: proxy.ProviderCatalogFinishRules{Complete: []string{"STOP"}},
-			ContinuationRules: []string{}, ErrorRules: []string{"MAX_TOKENS", "blocked", "unknown_finish_reason"},
-			UsageFields: proxy.ProviderCatalogUsageFields{Input: "usageMetadata.promptTokenCount", Output: "usageMetadata.candidatesTokenCount+thoughtsTokenCount", Total: "usageMetadata.totalTokenCount"},
-		}
-
-	case proxy.CatalogProtocolDashScopeResponses:
-		return proxy.ProviderCatalogProtocolParameters{
-			ModelField: "model", TokenField: "max_output_tokens", MediaExecutionLifecycle: offering.ExecutionLifecycle,
-			OutputFields:      []string{"output[].content[].text"},
-			FinishRules:       proxy.ProviderCatalogFinishRules{Complete: []string{"completed"}, Continue: []string{"incomplete"}},
-			ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
-			ErrorRules:        []string{"cancelled", "failed", "unknown_status"},
-			UsageFields:       proxy.ProviderCatalogUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens"},
-		}
-	case proxy.CatalogProtocolOpenAIResponses, proxy.CatalogProtocolXAIResponses:
-		return proxy.ProviderCatalogProtocolParameters{
-			ModelField: "model", TokenField: "max_output_tokens", MediaExecutionLifecycle: offering.ExecutionLifecycle,
-			OutputFields:      []string{"output[].content[].text", "output[].type", "output[].call_id", "output[].name", "output[].arguments"},
-			FinishRules:       proxy.ProviderCatalogFinishRules{Complete: []string{"completed"}, Continue: []string{"incomplete:max_output_tokens"}},
-			ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
-			ErrorRules:        []string{"cancelled", "failed", "refusal", "unknown_status"},
-			UsageFields:       proxy.ProviderCatalogUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens"},
-		}
-	case proxy.CatalogProtocolOpenAIChatCompletions:
-		return proxy.ProviderCatalogProtocolParameters{
-			ModelField: "model", TokenField: "max_tokens", MediaExecutionLifecycle: "synchronous_completion",
-			OutputFields:      []string{"choices[].message.content", "choices[].message.tool_calls"},
-			FinishRules:       proxy.ProviderCatalogFinishRules{Complete: []string{"stop", "tool_calls"}, Continue: []string{"length"}},
-			ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
-			ErrorRules:        []string{"content_filter", "unknown_finish_reason"},
-			UsageFields:       proxy.ProviderCatalogUsageFields{Input: "usage.prompt_tokens", Output: "usage.completion_tokens", Total: "usage.total_tokens"},
-		}
-	case proxy.CatalogProtocolAnthropicMessages:
-		return proxy.ProviderCatalogProtocolParameters{
-			ModelField: "model", TokenField: "max_tokens", MediaExecutionLifecycle: "synchronous_completion",
-			OutputFields:      []string{"content[].text"},
-			FinishRules:       proxy.ProviderCatalogFinishRules{Complete: []string{"end_turn", "stop_sequence"}, Continue: []string{"max_tokens"}},
-			ContinuationRules: []string{"append_visible_assistant_output", "request_missing_suffix"},
-			ErrorRules:        []string{"pause_turn", "refusal", "tool_use", "unknown_stop_reason"},
-			UsageFields:       proxy.ProviderCatalogUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "derived_input_plus_output"},
-		}
-	case proxy.CatalogProtocolGeminiInteractions:
-		return proxy.ProviderCatalogProtocolParameters{
-			ModelField: "model", TokenField: "generation_config.max_output_tokens", MediaExecutionLifecycle: "synchronous_completion",
-			OutputFields:      []string{"outputs[].text"},
-			FinishRules:       proxy.ProviderCatalogFinishRules{Complete: []string{"completed"}, Continue: []string{"incomplete"}},
-			ContinuationRules: []string{},
-			ErrorRules:        []string{"blocked", "cancelled", "failed", "unknown_status"},
-			UsageFields:       proxy.ProviderCatalogUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens"},
-		}
-	case proxy.CatalogProtocolMultipartTranscription:
-		return proxy.ProviderCatalogProtocolParameters{
-			ModelField: "model", OutputFields: []string{"text"},
-			FinishRules:       proxy.ProviderCatalogFinishRules{Complete: []string{"http_2xx"}, Continue: []string{}},
-			ContinuationRules: []string{}, ErrorRules: []string{"malformed_response", "provider_error"},
-		}
-	case proxy.CatalogProtocolXAIVideosGenerations:
-		return proxy.ProviderCatalogProtocolParameters{
-			ModelField: "model", OutputFields: []string{"data[].url"},
-			FinishRules:       proxy.ProviderCatalogFinishRules{Complete: []string{"completed"}, Continue: []string{"pending"}},
-			ContinuationRules: []string{}, ErrorRules: []string{"failed", "unknown_status"},
-		}
-	default:
-		return proxy.ProviderCatalogProtocolParameters{}
-	}
 }
 
 func testProviderProtocolPath(protocol string) string {

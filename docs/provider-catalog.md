@@ -8,19 +8,20 @@ model migrations, controls, limits, and prices.
 
 The loader reads `providers.yml` from the directory of the selected
 `config.yml`. It parses the provider catalog before it validates service
-configuration. The loader accepts only schema version 1.
+configuration. The loader accepts only schema version 4.
 
 The current provider catalog has these records:
 
-- 13 provider definitions.
-- 12 model publishers.
-- 29 model families, with 26 runtime families.
-- 81 exact models, with 71 enabled models.
-- 86 provider offerings, with 74 runtime offerings.
-- 86 price records, with 74 runtime records.
-- 13 managed model migrations.
-- Ten configured request protocols.
-- Two lifecycle values.
+- 14 provider definitions.
+- 13 model publishers.
+- 30 model families, with 27 runtime families.
+- 82 exact models, with 72 enabled models.
+- 87 provider offerings, with 75 runtime offerings.
+- 92 price records, with 80 runtime records.
+- 15 managed model migrations.
+- Eleven configured request and response codec identifiers.
+- Three authentication kinds.
+- Three lifecycle values.
 
 The two [GLM 5.3 candidates](zai-current-models.md) remain disabled during provider qualification.
 The five [Qwen 3.8 candidates](qwen-current-models.md) remain disabled during provider qualification.
@@ -40,8 +41,19 @@ bytes. It compiles one immutable registry from the validated snapshot.
 The provider catalog contains definitions only. It never contains a credential
 value, a tenant setting value, a system prompt, or a routing default.
 
-The [Baidu Qianfan integration](baidu-qianfan.md) adds four text offerings and a catalog response policy.
+The [Baidu Qianfan integration](baidu-qianfan.md) adds four text offerings and a typed protocol variation.
 The two DeepSeek V4 offerings share exact model records with the direct provider.
+
+## Alibaba Cloud connection labels
+
+The `dashscope` provider appears as **Alibaba Cloud** in connection setup and public model discovery.
+The provider catalog supplies the labels and the English [API-key setup link](https://www.alibabacloud.com/help/en/model-studio/get-api-key).
+The connection fields are **Alibaba Cloud API key** and **Alibaba Cloud API URL**.
+Qwen remains the model family name.
+The provider identifier, `dashscope_responses` codec, and `DASHSCOPE_*` environment variables retain their technical names.
+
+The setup guide includes a separate procedure for US (Virginia).
+F064 tracks US East endpoint support and the regional model inventory.
 
 ## Image formats and dimensions
 
@@ -110,7 +122,7 @@ See [MiniMax M3](minimax-m3.md) for the current candidate contract and qualifica
 | Target model | `model_migrations[].target_model` | References the current provider offering that replaces the source. |
 | Migration reasoning | `model_migrations[].target_reasoning_effort` | Sets the replacement text route effort when declared. |
 | Historical source | `model_migrations[].preserve_source_usage` | Permits the exact source identity in historical usage records only. |
-| Operation identifier | `operations[].id` | Identifies `text`, `dictation`, or `video_generation`. |
+| Operation identifier | `operations[].id` | Identifies one text, dictation, video, or durable speech operation. |
 | Operation inputs | `operations[].input_artifacts` | Declares accepted artifact kinds. |
 | Operation outputs | `operations[].output_artifacts` | Declares result artifact kinds. |
 | Publisher identity | `publishers[].id` | Owns one model publisher identity. |
@@ -143,10 +155,11 @@ Each item in `providers` is one provider definition.
 | Canonical provider identifier | `providers[].id` | Owns routing, persistence, and public identity. |
 | Display label | `providers[].label` | Supplies the management and public label. |
 | API service label | `providers[].api_service_label` | Supplies the authenticated provider card title. |
-| Key-acquisition URL | `providers[].key_acquisition_url` | Supplies the official HTTPS destination for the provider card. It cannot contain credentials, a query, or a fragment. |
+| Connection ownership | `providers[].connection_ownership` | Selects a tenant-managed connection or deployment-owned runtime configuration. |
+| Key-acquisition URL | `providers[].key_acquisition_url` | Supplies the official HTTPS destination for a tenant-owned provider card. Deployment-owned providers omit it. |
 | Request aliases | `providers[].aliases` | Resolve to the canonical provider identifier. |
 | Provider fields | `providers[].fields` | Define tenant and environment connection inputs. |
-| Provider transports | `providers[].transports` | Select endpoints and protocol adapters. |
+| Provider transports | `providers[].transports` | Select endpoints and reusable transport components. |
 | Provider offerings | `providers[].offerings` | Define the exact model routes for this provider. |
 
 Each item in `providers[].fields` is one provider field.
@@ -156,7 +169,7 @@ Each item in `providers[].fields` is one provider field.
 | Field identifier | `fields[].id` | Owns the persistence and request-map key. |
 | Field label | `fields[].label` | Supplies the management form label. |
 | Field kind | `fields[].kind` | Selects `credential` or `setting`. |
-| Value type | `fields[].type` | Selects `opaque` or `url`. |
+| Value type | `fields[].type` | Selects `opaque`, `url`, `grpc_target`, or `boolean`. |
 | Requirement | `fields[].required` | Requires the value for a usable provider connection. |
 | Static default | `fields[].default` | Supplies a non-tenant default value. |
 | Secrecy | `fields[].secret` | Selects encrypted storage and masked output. |
@@ -171,6 +184,8 @@ The live CLI discovery also publishes each field default.
 The live harness uses that default when the environment supplies no value.
 Required credentials have empty defaults and remain mandatory.
 A setting with a default can omit its environment binding.
+Every deployment-owned field is required and has an environment binding.
+Deployment-owned providers do not appear in tenant connection management.
 
 ## Provider transport mapping
 
@@ -179,43 +194,41 @@ Each item in `providers[].transports` is one provider transport.
 | Transport datum | Schema location | Runtime use |
 |---|---|---|
 | Transport identifier | `transports[].id` | Connects a provider offering to one transport. |
+| Transport protocol | `transports[].endpoint.protocol` | Selects `http` or `grpc`. |
 | HTTP method | `transports[].endpoint.method` | Selects the adapter request method. |
 | Static base URL | `transports[].endpoint.default_base_url` | Supplies a catalog-owned endpoint base. |
-| Tenant URL field | `transports[].endpoint.setting_field` | References a tenant-owned endpoint base. |
+| Endpoint setting field | `transports[].endpoint.setting_field` | References a URL or gRPC target from the provider connection owner. |
 | Endpoint path | `transports[].endpoint.path` | Appends the adapter path to the selected base. |
-| Authentication kind | `transports[].authentication.kind` | Selects bearer or direct-header authentication. |
-| Authentication field | `transports[].authentication.field` | References the credential provider field. |
-| Authentication header | `transports[].authentication.header` | Selects the exact HTTP header. |
-| Authentication prefix | `transports[].authentication.prefix` | Supplies the value prefix for that header. |
 | Static headers | `transports[].headers` | Supplies exact nonsecret headers. |
-| Request adapter | `transports[].request_protocol` | Selects the request protocol adapter. |
-| Response adapter | `transports[].response_protocol` | Selects the response protocol adapter. |
-| Usage adapter | `transports[].usage_mapping` | Selects the usage protocol adapter. |
-| Lifecycle | `transports[].lifecycle` | Selects synchronous completion or a pollable resource. |
-| Visibility retry interval | `transports[].resource_visibility.retry_interval_milliseconds` | Declares the wait between created-resource visibility reads. |
-| Visibility retry limit | `transports[].resource_visibility.retry_limit` | Bounds created-resource visibility retries. |
-| Visibility retry statuses | `transports[].resource_visibility.retry_status_codes` | Declares the provider HTTP statuses that mean the created resource is not visible yet. |
-| Upstream model field | `protocol_parameters.model_field` | Declares the upstream model field. |
-| Upstream token field | `protocol_parameters.token_field` | Declares the upstream output-token field. |
-| Response policy | `protocol_parameters.response_policy` | Selects the `qianfan` response checks on the shared Chat Completions adapter. Omission uses the standard protocol policy. |
-| Output fields | `protocol_parameters.output_fields` | Declares the visible output locations. |
-| Complete rules | `protocol_parameters.finish_rules.complete` | Declares successful terminal signals. |
-| Continue rules | `protocol_parameters.finish_rules.continue` | Declares output-limit signals. |
-| Continuation rules | `protocol_parameters.continuation_rules` | Declares the canonical continuation actions. |
-| Error rules | `protocol_parameters.error_rules` | Declares provider failure signals. |
-| Input usage field | `protocol_parameters.usage_fields.input` | Maps the provider input count. |
-| Output usage field | `protocol_parameters.usage_fields.output` | Maps the provider output count. |
-| Total usage field | `protocol_parameters.usage_fields.total` | Maps or derives the provider total count. |
+| Request codec | `transports[].components.request_codec.id` | Selects request serialization and request-field rules. |
+| Request variation | `transports[].components.request_codec.variation` | Selects one typed request-codec difference. |
+| Response codec | `transports[].components.response_codec.id` | Selects response, finish, continuation, error, and usage rules. |
+| Response variation | `transports[].components.response_codec.variation` | Selects one typed response-codec difference. |
+| Authentication kind | `transports[].components.authentication.kind` | Selects HTTP bearer, direct-header, or gRPC bearer credential injection. |
+| Authentication field | `transports[].components.authentication.field` | References the credential provider field. |
+| Authentication header | `transports[].components.authentication.header` | Selects the exact HTTP header. |
+| Authentication prefix | `transports[].components.authentication.prefix` | Supplies the value prefix for that header. |
+| Execution lifecycle | `transports[].components.execution.id` | Selects synchronous completion, a pollable resource, or an asynchronous job. |
+| Visibility retry interval | `transports[].components.execution.resource_visibility.retry_interval_milliseconds` | Declares the wait between created-resource visibility reads. |
+| Visibility retry limit | `transports[].components.execution.resource_visibility.retry_limit` | Bounds created-resource visibility retries. |
+| Visibility retry statuses | `transports[].components.execution.resource_visibility.retry_status_codes` | Declares the provider HTTP statuses that mean the created resource is not visible yet. |
 
-An endpoint must use one base source. It must use either
-`default_base_url` or `setting_field`.
+An HTTP endpoint must use one base source: `default_base_url` or
+`setting_field`. A gRPC endpoint uses one `grpc_target` setting field and has no
+HTTP method, path, or base URL.
 
-## Protocol adapters
+## Transport components
 
-Protocol adapters own request serialization, response parsing, usage mapping,
-and lifecycle behavior. Provider identifiers do not select protocol code.
+Request codecs own serialization and request-field rules. Response codecs own
+response parsing, finish and continuation decisions, public error mapping, and
+usage mapping. Authentication components inject one stored credential through
+bearer or direct-header authentication. Execution components own synchronous
+completion or resource polling. Provider identifiers do not select component
+code.
 
-| Adapter identifier | Accepted lifecycle |
+The startup composer accepts these codec and lifecycle combinations:
+
+| Codec identifier | Accepted lifecycle |
 |---|---|
 | `openai_responses` | `pollable_resource` |
 | `xai_responses` | `synchronous_completion` |
@@ -226,10 +239,11 @@ and lifecycle behavior. Provider identifiers do not select protocol code.
 | `gemini_interactions` | `pollable_resource` or `synchronous_completion` for text. `synchronous_completion` for dictation. |
 | `multipart_transcription` | `synchronous_completion` |
 | `xai_videos_generations` | `pollable_resource` |
+| `dictator_speech_v1` | `asynchronous_job` |
 
-The shared `pollable_resource` lifecycle owns post-create observation for all
-protocol adapters. Each shared text transport declares a bounded
-`resource_visibility` policy. The policy lists the provider statuses that mean
+The shared `pollable_resource` execution component owns post-create
+observation for every compatible codec. Each shared text transport declares a
+bounded `components.execution.resource_visibility` policy. The policy lists the provider statuses that mean
 a created resource is not visible yet, the retry interval, and the retry limit.
 The lifecycle reads the resource immediately and applies that policy without
 provider-specific control flow. The caller context bounds every wait. A status
@@ -239,15 +253,26 @@ The OpenAI transport allows one retry after two seconds for `403` or `404`.
 The Gemini transport allows six retries at five-second intervals for `400`,
 `403`, or `404`.
 
-The schema records each adapter contract in `protocol_parameters`. Startup
-compares those values with the selected protocol adapter. A mismatch stops
-startup.
+The catalog does not repeat fixed codec behavior. Startup composes the selected
+request codec, response codec, authentication component, and execution
+component once. It rejects unknown components, unsupported variations,
+incompatible codec pairs, missing required static headers, and unsupported
+codec-lifecycle combinations.
 
-The completion coordinator starts a new request only when the transport
-declares continuation actions. An empty `continuation_rules` list makes an
-output-limit signal a provider error. The Gemini Interactions transport uses
-this empty list because the public request cannot carry provider interaction
-state or thought signatures.
+The Chat Completions request codec requires one of these variations:
+
+- `max_tokens`
+- `max_completion_tokens`
+
+Its response codec optionally selects the `qianfan` variation. The multipart
+transcription request codec requires `model` or `model_omitted`. Other current
+codecs do not accept a variation.
+
+The completion coordinator starts a new request only when the codec definition
+includes continuation actions. A codec without these actions returns an
+output-limit signal as a provider error. Gemini Interactions has no continuation
+actions because the public request cannot carry provider interaction state or
+thought signatures.
 
 ## Provider offering mapping
 
@@ -338,7 +363,9 @@ It never estimates a missing price.
 | Selected provider text model and provider system prompt | Provider profile records |
 | Tenant route defaults | Tenant records |
 | HTTP request and response schemas | `docs/openapi.yaml` |
-| Protocol implementation | Reusable protocol adapter code |
+| Request and response implementation | Reusable codec code |
+| Credential injection | Reusable authentication component code |
+| Synchronous and pollable execution | Reusable lifecycle component code |
 | Fake upstream endpoint changes | Explicit test-only endpoint controls |
 
 The database uses `(tenant_id, provider_id, field_id)` as the provider
@@ -355,7 +382,7 @@ the provider prompt, and masked connection state. The management app builds one
 provider card from each item. It never uses key presence or usage history to
 define provider membership.
 
-The DashScope catalog declares image input for `qwen3.7-plus` and
+The Alibaba Cloud catalog declares image input for `qwen3.7-plus` and
 `qwen3.6-flash`. These models accept image content and return text.
 Each route accepts at most 250 images and 20,000,000 bytes per complete image Data URI.
 The `attachment_data_uri_bytes` scope includes the URI prefix, MIME type, and Base64 content.
@@ -394,14 +421,14 @@ Startup rejects these conditions:
 - A missing provider field, transport, offering, operation, publisher, family, model, or price reference.
 - An invalid field type, requirement, default, secrecy rule, validation rule, or environment name.
 - An invalid endpoint source, URL, method, authentication rule, or static header.
-- An unsupported protocol, lifecycle, request profile, or adapter contract.
+- An unsupported codec, codec variation, authentication kind, lifecycle, request profile, or component combination.
 - An invalid operation, default operation, capability, control, limit, or media declaration.
 - A missing or duplicate provider-operation default.
 - A missing, duplicate, invalid, or nonfinite price value.
 
 ## Add a provider
 
-Use this procedure when an existing protocol adapter represents the complete
+Use this procedure when existing transport components represent the complete
 provider contract:
 
 1. Add the publisher and model family records when they do not exist.
@@ -409,19 +436,22 @@ provider contract:
 3. Add one provider definition to the root `providers` list.
 4. Define every credential field and setting field in `fields`.
 5. Add an environment name only when static or live-test input is necessary.
-6. Define each provider transport with one supported protocol adapter.
-7. Add each provider offering and reference one exact model and one transport.
-8. Add one default offering for every supported provider operation.
-9. Add one valid price for every offering operation.
-10. Keep all credential values and tenant setting values outside the file.
-11. Run `make ci` after the catalog change.
-12. Run the authorized paid live gate separately when the issue requires it.
+6. Define each provider transport with request codec, response codec, authentication, and execution component references.
+7. Select a codec variation only when that codec requires it.
+8. Add each provider offering and reference one exact model and one transport.
+9. Add one default offering for every supported provider operation.
+10. Add one valid price for every offering operation.
+11. Keep all credential values and tenant setting values outside the file.
+12. Run `make test-protocol-acceptance` after the catalog change.
+13. Run `make ci` after the local qualification passes.
+14. Run the authorized paid live gate separately when the issue requires it.
 
 Do not change provider-specific production source for this case. The generic
 consumers receive the new provider from the compiled registry.
 
-If no adapter represents the complete contract, add one reusable protocol
-adapter first. Do not approximate the provider through a different adapter.
+If no supported component composition represents the complete contract, add
+the missing reusable component and its explicit composition contract first. Do
+not approximate the provider through a different composition.
 
 Use this safe discovery command to inspect provider environment bindings:
 

@@ -12,7 +12,6 @@ import { successRateLabel } from "./usagePresentation.js?v=20260903f037";
 /** @typedef {ReturnType<typeof import("./managementApplicationState.js").createManagementApplicationState>} ManagementApplicationState */
 /** @typedef {ManagementApplicationState & {
  *   clearUsageDetails: (restoreFocus: boolean) => void,
- *   resetProviderCard: () => void,
  *   setPageNotice: (kind: string, message: string) => void
  * }} AdminDashboardHost */
 
@@ -73,7 +72,6 @@ export function createAdminDashboardResponsibility() {
       if (!this.isAdmin) {
         return;
       }
-      this.resetProviderCard();
       this.clearUsageDetails(false);
       this.dashboardView = DASHBOARD_VIEWS.ADMIN;
       await this.refreshAdminUsers();

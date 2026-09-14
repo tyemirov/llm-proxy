@@ -109,7 +109,24 @@ func TestGeminiCurrentModelsSynchronousKeyVerification(t *testing.T) {
 			}))
 			defer upstream.Close()
 			config := providerKeyVerificationConfiguration(upstream.URL)
-			config.ProviderCatalog = currentGeminiCandidateCatalog(t)
+			schema := currentGeminiCandidateCatalog(t).Schema()
+			for index := range schema.Providers {
+				if schema.Providers[index].ID != "gemini" {
+					continue
+				}
+				for offeringIndex := range schema.Providers[index].Offerings {
+					offering := &schema.Providers[index].Offerings[offeringIndex]
+					offering.DefaultOperations = slices.DeleteFunc(offering.DefaultOperations, func(operation string) bool { return operation == proxy.ModelOperationText })
+					if offering.Model == "gemini-3.5-flash-lite" {
+						offering.DefaultOperations = append(offering.DefaultOperations, proxy.ModelOperationText)
+					}
+				}
+			}
+			var catalogError error
+			config.ProviderCatalog, catalogError = proxy.NewProviderCatalog(schema)
+			if catalogError != nil {
+				t.Fatal(catalogError)
+			}
 			router := newOperationalProviderKeyVerificationRouter(t, config, zap.NewNop().Sugar(), t.TempDir()+"/managed.db", TestTimeout)
 			cookie := managementSessionCookie(t, "gemini-lite-verification")
 			tenantID := managementDefaultTenantTestID(t, router, cookie)
@@ -426,7 +443,13 @@ func TestGeminiCurrentModelsMediaRequestBound(t *testing.T) {
 				}
 				server := httptest.NewServer(router)
 				defer server.Close()
-				assetResponse, err := http.Post(server.URL+llmproxycontract.AssetPath+"?key="+TestSecret, mime, bytes.NewReader(mediaBytes))
+				assetRequest, err := http.NewRequest(http.MethodPost, server.URL+llmproxycontract.AssetPath, bytes.NewReader(mediaBytes))
+				if err != nil {
+					t.Fatal(err)
+				}
+				assetRequest.Header.Set("Authorization", "Bearer "+TestSecret)
+				assetRequest.Header.Set("Content-Type", mime)
+				assetResponse, err := server.Client().Do(assetRequest)
 				if err != nil {
 					t.Fatal(err)
 				}

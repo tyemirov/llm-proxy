@@ -81,7 +81,19 @@ test-management-auth-blackbox: frontend-dependencies prepare-shared-ui
 
 .PHONY: test-management-persistence
 test-management-persistence: frontend-dependencies
-	$(GO) test ./internal/proxy -run '^TestManagement(ProviderKeyRevealPersistsUpdatedKey|DatabasePersistenceAndOpenFailures|StartupRejectsInvalidPersistedRoutingDefaults)$$' -count=1
+	$(GO) test ./internal/proxy -run '^TestManagement(ConnectionPersistsUpdatedCredential|DatabasePersistenceAndOpenFailures|StartupRejectsInvalidPersistedRoutingDefaults)$$' -count=1
+
+.PHONY: test-account-connections
+test-account-connections:
+	$(GO) test ./internal/proxy -run '^TestAccountConnection' -count=1
+
+.PHONY: test-management-contracts
+test-management-contracts:
+	$(GO) test ./internal/proxy -run '$(if $(MANAGEMENT_TEST_PATTERN),$(MANAGEMENT_TEST_PATTERN),^TestManagement)' -timeout=2m -count=1
+
+.PHONY: test-operational-live-contracts
+test-operational-live-contracts:
+	$(GO) test ./tests -run '^TestOperational.*Live' -count=1
 
 test-live-provider-harness:
 	@GO="$(GO)" ./scripts/test_live_providers.sh --preflight
@@ -136,24 +148,24 @@ ci:
 		PYTHON_PROJECT_DIR="$(PYTHON_PROJECT_DIR)" ./scripts/run_ci.sh
 
 .PHONY: ci-backend ci-frontend
-ci-backend: test-release-policy check-format go-lint python-lint go-test python-test test-live-provider-harness
+ci-backend: test-release-policy check-format go-lint python-lint test-protocol-acceptance go-test python-test test-live-provider-harness
 
 ci-frontend: frontend-lint frontend-test test-openapi-pages-artifact test-management-auth-blackbox
+
+MPRLAB_GATEWAY_EXECUTABLE ?= mprlab-gateway
 
 .PHONY: release publish deploy
 
 release publish deploy:
 	@application_root="$$(git rev-parse --show-toplevel)"; \
-	gateway_root="$$(dirname "$${application_root}")/mprlab-gateway"; \
-	if [ ! -d "$${gateway_root}" ]; then \
-		printf "required sibling gateway is missing: %s; clone mprlab-gateway at exactly %s\n" \
-			"$${gateway_root}" "$${gateway_root}" >&2; \
+	if ! command -v "$(MPRLAB_GATEWAY_EXECUTABLE)" >/dev/null 2>&1; then \
+		printf 'Gateway runtime is unavailable: %s. Install a released runtime and add its command directory to PATH.\n' \
+			"$(MPRLAB_GATEWAY_EXECUTABLE)" >&2; \
 		exit 2; \
 	fi; \
-	$(MAKE) --no-print-directory -C "$${gateway_root}" "app-$@" \
-		MPRLAB_APP_ROOT="$${application_root}"
+	exec "$(MPRLAB_GATEWAY_EXECUTABLE)" "app-$@" --app-root "$${application_root}"
 
-.PHONY: test-client-protocols
+.PHONY: test-client-protocols test-protocol-acceptance test-media-operations
 .PHONY: test-mcp-versions
 test-mcp-versions:
 	$(GO) test ./internal/proxy -run '^TestMCPHandshakeVersions$$' -count=1
@@ -174,12 +186,22 @@ test-mcp-oauth: frontend-dependencies
 test-client-protocols: frontend-dependencies
 	$(GO) test ./internal/proxy -run '^TestClientProtocols' -count=1
 
+test-protocol-acceptance: frontend-dependencies
+	$(GO) test ./internal/proxy -run '^Test(ClientProtocols.*|AccountConnection(Lifecycle|SharedRoutingAndTenantUsage)|Management(ConnectionCredentialsRemainMaskedAndOwnerScoped|DatabasePersistenceAndOpenFailures)|V2(RoutesExactOrderedImageAndAudioAttachmentsThroughGemini|RoutesExactOrderedImagesThroughProviderAdapters|RejectsInvalidOrUnsupportedMediaBeforeUpstreamWork))$$' -count=1
+
+test-media-operations: frontend-dependencies
+	$(GO) test ./internal/proxy -run '^Test(MediaOperation|TenantAsset|DictatorWorkerIsolation)' -count=1
+
 .PHONY: test-client-contracts generate-api-docs
 test-client-contracts: frontend-dependencies
-	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run 'Test(ClientProtocols|OpenAPI|MessagesRequest|CoverageOpenAILifecycle|ManagementDashScopeWorkspaceChangeVerifiesRetainedKeyAndRoutesWithStoredURL)' -count=1
+	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run 'Test(ClientProtocols|ClientUploadsAsset|OpenAPI|MessagesRequest|CoverageOpenAILifecycle|ManagementDashScopeWorkspaceChangeVerifiesRetainedKeyAndRoutesWithStoredURL)' -count=1
 
 generate-api-docs:
 	$(NPM) exec -- node scripts/generate_openapi_docs.mjs
+
+.PHONY: test-installed-gateway
+test-installed-gateway:
+	$(GO) test ./tests -run '^TestOperationalInstalledGateway$$' -count=1
 
 .PHONY: test-release-policy
 test-release-policy:

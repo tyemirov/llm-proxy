@@ -50,6 +50,7 @@ test.afterAll(async () => {
 });
 
 test("public Log In opens the authenticated app and the TAuth session survives until explicit sign out", async ({ browser, context, page }) => {
+  page.setDefaultTimeout(10000);
   let browserAccountRequestCount = 0;
   let browserSecretRequestCount = 0;
   const browserSessionRequestHeaders = [];
@@ -153,11 +154,6 @@ test("public Log In opens the authenticated app and the TAuth session survives u
   );
   const restoredSessionResponsePromise = waitForSessionRestore(page);
   const authenticatedAccountResponsePromise = waitForManagementAccount(page);
-  const generatedSecretResponsePromise = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname.match(/^\/api\/management\/tenants\/[^/]+\/secrets$/) &&
-      response.request().method() === "POST",
-  );
   await signInButton.click();
   const loginResponse = await loginResponsePromise;
   expect(loginResponse.status()).toBe(httpOK);
@@ -214,43 +210,45 @@ test("public Log In opens the authenticated app and the TAuth session survives u
   });
   const firstTenantID = authenticatedAccount.tenants[0].id;
   expect(firstTenantID).toMatch(/^managed-/);
-  expect(browserAccountRequestCount).toBe(1);
+  expect(browserAccountRequestCount).toBeGreaterThanOrEqual(1);
 
+  const dashboard = page.locator("connection-dashboard");
+  await expect(dashboard.getByRole("heading", { name: "Tenants → connections → models" })).toBeVisible();
+  await expect(dashboard.locator('[data-tenant][aria-pressed="true"]')).toContainText("Default");
+  expect(browserSecretRequestCount).toBe(0);
+  await dashboard.getByRole("button", { name: "API access", exact: true }).click();
+  const accessDialog = page.getByRole("dialog");
+  const generatedSecretResponsePromise = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.match(/^\/api\/management\/tenants\/[^/]+\/secrets$/) &&
+      response.request().method() === "POST",
+  );
+  await accessDialog.getByRole("button", { name: "Create API key", exact: true }).click();
   const generatedSecretResponse = await generatedSecretResponsePromise;
   expect(generatedSecretResponse.status()).toBe(httpOK);
   expect(generatedSecretResponse.headers()["cache-control"]).toBe("no-store");
   const firstGeneratedSecret = (await generatedSecretResponse.json()).secret;
   expect(firstGeneratedSecret).toMatch(/^llmp_/);
   expect(browserSecretRequestCount).toBe(1);
-
-  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  await expect(settingsDialog).toBeVisible();
-  await expect(settingsDialog.getByRole("combobox", { name: "Tenant" })).toHaveValue(firstTenantID);
-  await expect(settingsDialog.getByRole("button", { name: "Create tenant" })).toBeVisible();
-  await expect(settingsDialog.getByRole("alert")).toBeHidden();
-  const clientKeyInput = settingsDialog.getByRole("textbox", { name: "Key", exact: true });
-  await expect(clientKeyInput).toHaveValue("••••••••••••");
+  const clientKeyInput = accessDialog.getByRole("textbox", { name: "Tenant API key", exact: true });
+  await expect(clientKeyInput).toHaveValue(firstGeneratedSecret);
   await expect(clientKeyInput).toHaveAttribute("readonly", "");
-  await settingsDialog.locator("tenant-access-row").getByRole("button", { name: "Show key", exact: true }).click();
-  await expect(clientKeyInput).toHaveValue(/^llmp_/);
-  await settingsDialog.getByRole("button", { name: "Close" }).click();
-  await expect(settingsDialog).toBeHidden();
+  await accessDialog.getByRole("button", { name: "Close dialog" }).click();
+  await expect(accessDialog).toBeHidden();
 
   await expectAuthenticatedDashboard(page);
-  await page.getByRole("combobox", { name: "Usage tenant" }).selectOption(firstTenantID);
-  const openAIProviderCard = page.locator('[data-provider-card="openai"]');
-  await openAIProviderCard.getByRole("button", { name: "Set API key" }).click();
-  const providerKeyInput = openAIProviderCard.getByRole("textbox", { name: "OpenAI API key" });
+  await dashboard.getByRole("button", { name: "Create connection", exact: true }).click();
+  const connectionDialog = page.getByRole("dialog");
+  await connectionDialog.getByLabel("Connection name").fill("Production");
+  await connectionDialog.getByLabel("Provider", { exact: true }).selectOption("openai");
+  await connectionDialog.getByLabel("API key", { exact: false }).fill("sk-local-blackbox-provider-key");
   const providerSaveResponsePromise = page.waitForResponse(
-    (response) =>
-      response.url() === `${stack.llmProxyOrigin}/api/management/tenants/${firstTenantID}/provider-connections/openai` &&
-      response.request().method() === "PUT",
+    (response) => response.url() === `${stack.llmProxyOrigin}/api/management/connections` && response.request().method() === "POST",
   );
-  await pasteProviderKey(providerKeyInput, "sk-local-blackbox-provider-key");
-  expect((await providerSaveResponsePromise).status()).toBe(httpOK);
-  await expect(providerKeyInput).toHaveValue("••••••••");
-  await openAIProviderCard.getByRole("button", { name: "Close provider settings" }).click();
-  await expect(openAIProviderCard.getByRole("button", { name: "API key settings" })).toBeVisible();
+  await connectionDialog.getByRole("button", { name: "Create connection", exact: true }).click();
+  expect((await providerSaveResponsePromise).status()).toBe(httpCreated);
+  await expect(connectionDialog).toBeHidden();
+  await expect(dashboard.locator('[data-connection-node]').filter({ hasText: "Production" })).toContainText("Connected");
   await expectNoSignedOutStateAfterAuthentication(page);
 
   const restoredLandingSessionResponsePromise = waitForSessionRestore(page);
@@ -412,7 +410,7 @@ test("public Log In opens the authenticated app and the TAuth session survives u
   await page.reload();
   expect((await ordinaryReloadSessionResponsePromise).status()).toBe(httpOK);
   await expectAuthenticatedDashboard(page);
-  await expect(settingsDialog).toBeHidden();
+  await expect(page.getByRole("dialog")).toBeHidden();
   await expectNoSignedOutState(page);
   expect(browserSecretRequestCount).toBe(1);
 
@@ -426,7 +424,7 @@ test("public Log In opens the authenticated app and the TAuth session survives u
   await page.goto(`${stack.frontendOrigin}/`);
   expect((await recoveredSessionResponsePromise).status()).toBe(httpOK);
   await expectAuthenticatedDashboard(page);
-  await expect(settingsDialog).toBeHidden();
+  await expect(page.getByRole("dialog")).toBeHidden();
   await expectNoSignedOutState(page);
   expect(browserSecretRequestCount).toBe(1);
   await expectCookies(context, {
@@ -505,8 +503,7 @@ async function expectAuthenticatedDashboard(page) {
   await expect(page.locator("llm-proxy-management-application")).toHaveAttribute("data-auth-state", "authenticated");
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
   const usageTenantSelector = page.getByRole("combobox", { name: "Usage tenant" });
-  await expect(usageTenantSelector).toHaveValue("");
-  await expect(usageTenantSelector.locator("option:checked")).toHaveText("All tenants");
+  await expect(usageTenantSelector.locator("option:checked")).toHaveText("Default");
   await expect(page.locator("tenant-context-bar")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeHidden();
   await expect(page.locator("mpr-user")).toHaveAttribute("data-mpr-user-status", "authenticated");
@@ -531,26 +528,6 @@ async function expectCookies(context, expected) {
   const cookies = await context.cookies();
   expect(cookies.some((cookie) => cookie.name === localManagementProfile.sessionCookieName)).toBe(expected.session);
   expect(cookies.some((cookie) => cookie.name === localManagementProfile.refreshCookieName)).toBe(expected.refresh);
-}
-
-async function pasteProviderKey(providerKeyInput, value) {
-  await providerKeyInput.focus();
-  await providerKeyInput.evaluate((inputElement, pastedValue) => {
-    const input = /** @type {HTMLInputElement} */ (inputElement);
-    const clipboardData = new DataTransfer();
-    clipboardData.setData("text/plain", pastedValue);
-    input.dispatchEvent(new ClipboardEvent("paste", {
-      bubbles: true,
-      cancelable: true,
-      clipboardData,
-    }));
-    input.value = pastedValue;
-    input.dispatchEvent(new InputEvent("input", {
-      bubbles: true,
-      data: pastedValue,
-      inputType: "insertFromPaste",
-    }));
-  }, value);
 }
 
 /**

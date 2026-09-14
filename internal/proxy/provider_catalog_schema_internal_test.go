@@ -29,12 +29,73 @@ func TestProviderCatalogParserRejectsTrailingDocuments(t *testing.T) {
 	}
 }
 
+func TestProviderCatalogParserAcceptsTransportComponents(t *testing.T) {
+	document, marshalError := yaml.Marshal(internalCanonicalProviderCatalog().Schema())
+	if marshalError != nil {
+		t.Fatalf("marshal canonical provider catalog: %v", marshalError)
+	}
+	if _, catalogError := ParseProviderCatalog(document); catalogError != nil {
+		t.Fatalf("parse component provider catalog: %v", catalogError)
+	}
+}
+
+func TestProviderCatalogAcceptsDeploymentOwnedGRPCTransport(t *testing.T) {
+	schema := internalCanonicalProviderCatalog().Schema()
+	var provider *ProviderCatalogProvider
+	for providerIndex := range schema.Providers {
+		if schema.Providers[providerIndex].ID == "dictator" {
+			provider = &schema.Providers[providerIndex]
+			break
+		}
+	}
+	if provider == nil {
+		t.Fatal("Dictator provider missing")
+	}
+
+	catalog, catalogError := NewProviderCatalog(schema)
+	if catalogError != nil {
+		t.Fatalf("compile deployment gRPC provider: %v", catalogError)
+	}
+	compiled := catalog.Schema().Providers[len(schema.Providers)-1]
+	if compiled.ConnectionOwnership != CatalogProviderConnectionDeployment || compiled.KeyAcquisitionURL != "" {
+		t.Fatalf("deployment provider=%+v", compiled)
+	}
+	bindings, bindingError := catalog.ResolveEnvironmentBindings(map[string]string{
+		"DICTATOR_GRPC_ADDR":       "dictator.internal:50051",
+		"DICTATOR_GRPC_AUTH_TOKEN": "token",
+		"DICTATOR_GRPC_TLS":        "true",
+	})
+	if bindingError != nil || bindings[provider.ID]["grpc_address"] != "dictator.internal:50051" || bindings[provider.ID]["grpc_tls"] != "true" {
+		t.Fatalf("deployment bindings=%v error=%v", bindings, bindingError)
+	}
+}
+
+func TestProviderCatalogParserRejectsObsoleteProtocolFields(t *testing.T) {
+	document, marshalError := yaml.Marshal(internalCanonicalProviderCatalog().Schema())
+	if marshalError != nil {
+		t.Fatalf("marshal canonical provider catalog: %v", marshalError)
+	}
+	for _, field := range []string{"protocol", "authentication", "lifecycle", "resource_visibility", "request_protocol", "response_protocol", "usage_mapping", "protocol_parameters"} {
+		t.Run(field, func(t *testing.T) {
+			value := "openai_responses"
+			if field == "protocol" || field == "authentication" || field == "resource_visibility" || field == "protocol_parameters" {
+				value = "{}"
+			}
+			components := "          components:\n"
+			obsolete := strings.Replace(string(document), components, "          "+field+": "+value+"\n"+components, 1)
+			_, catalogError := ParseProviderCatalog([]byte(obsolete))
+			assertInvalidProviderCatalogError(t, catalogError, "field "+field+" not found")
+		})
+	}
+}
+
 func TestProviderCatalogSchemaRejectsEveryStructuralBoundary(t *testing.T) {
 	testCases := []struct {
 		name     string
 		mutate   func(*ProviderCatalogSchema)
 		expected string
 	}{
+		{name: "obsolete schema version", mutate: func(schema *ProviderCatalogSchema) { schema.SchemaVersion = 1 }, expected: "field=schema_version value=1"},
 		{name: "providers missing", mutate: func(schema *ProviderCatalogSchema) { schema.Providers = nil }, expected: "field=providers"},
 		{name: "provider identifier", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].ID = "OpenAI" }, expected: "reason=not_canonical"},
 		{name: "provider identifier collides with prior alias", mutate: func(schema *ProviderCatalogSchema) {
@@ -42,6 +103,8 @@ func TestProviderCatalogSchemaRejectsEveryStructuralBoundary(t *testing.T) {
 		}, expected: "alias_collision=deepseek"},
 		{name: "provider label", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].Label = " OpenAI" }, expected: ".label"},
 		{name: "provider API service label", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].APIServiceLabel = " OpenAI API" }, expected: ".api_service_label"},
+		{name: "provider connection ownership missing", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].ConnectionOwnership = "" }, expected: ".connection_ownership"},
+		{name: "provider connection ownership unknown", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].ConnectionOwnership = "future" }, expected: "ownership=future"},
 		{name: "provider key acquisition URL missing", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].KeyAcquisitionURL = "" }, expected: ".key_acquisition_url"},
 		{name: "provider key acquisition URL insecure", mutate: func(schema *ProviderCatalogSchema) {
 			schema.Providers[0].KeyAcquisitionURL = "http://provider.example/keys"
@@ -49,6 +112,15 @@ func TestProviderCatalogSchemaRejectsEveryStructuralBoundary(t *testing.T) {
 		{name: "provider key acquisition URL carries query", mutate: func(schema *ProviderCatalogSchema) {
 			schema.Providers[0].KeyAcquisitionURL = "https://provider.example/keys?tenant=unsafe"
 		}, expected: ".key_acquisition_url"},
+		{name: "deployment provider key acquisition URL", mutate: func(schema *ProviderCatalogSchema) {
+			schema.Providers[len(schema.Providers)-1].KeyAcquisitionURL = "https://provider.example/keys"
+		}, expected: "reason=deployment_owned"},
+		{name: "deployment provider environment binding", mutate: func(schema *ProviderCatalogSchema) {
+			schema.Providers[len(schema.Providers)-1].Fields[0].Environment = ""
+		}, expected: "reason=deployment_binding_required"},
+		{name: "deployment provider required field", mutate: func(schema *ProviderCatalogSchema) {
+			schema.Providers[len(schema.Providers)-1].Fields[0].Required = false
+		}, expected: "reason=deployment_binding_required"},
 		{name: "provider alias", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].Aliases = []string{"Future Alias"} }, expected: "reason=not_canonical"},
 		{name: "provider fields", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].Fields = nil }, expected: ".fields"},
 		{name: "duplicate environment binding", mutate: func(schema *ProviderCatalogSchema) {
@@ -207,6 +279,9 @@ func TestProviderCatalogFieldValidationRejectsEveryInvalidShape(t *testing.T) {
 		{name: "pattern mismatch", definition: patternField, value: "token-invalid", expected: "provider_field_invalid"},
 		{name: "URL structure", definition: internalValidSettingField(), value: "https://user@provider.example", expected: "provider_field_invalid"},
 		{name: "URL scheme", definition: internalValidSettingField(), value: "ftp://provider.example", expected: "provider_field_invalid"},
+		{name: "gRPC target", definition: internalValidGRPCTargetField(), value: "provider.example", expected: "provider_field_invalid"},
+		{name: "gRPC port", definition: internalValidGRPCTargetField(), value: "provider.example:70000", expected: "provider_field_invalid"},
+		{name: "boolean", definition: internalValidBooleanField(), value: "TRUE", expected: "provider_field_invalid"},
 	} {
 		t.Run("value "+testCase.name, func(t *testing.T) {
 			_, valueError := validatedProviderFieldValue(testCase.definition, testCase.value)
@@ -220,6 +295,12 @@ func TestProviderCatalogFieldValidationRejectsEveryInvalidShape(t *testing.T) {
 	}
 	if value, valueError := validatedProviderFieldValue(internalValidSettingField(), "https://provider.example"); valueError != nil || value != "https://provider.example" {
 		t.Fatalf("valid setting value=%q error=%v", value, valueError)
+	}
+	if value, valueError := validatedProviderFieldValue(internalValidGRPCTargetField(), "provider.example:50051"); valueError != nil || value != "provider.example:50051" {
+		t.Fatalf("valid gRPC target=%q error=%v", value, valueError)
+	}
+	if value, valueError := validatedProviderFieldValue(internalValidBooleanField(), "false"); valueError != nil || value != "false" {
+		t.Fatalf("valid boolean=%q error=%v", value, valueError)
 	}
 }
 
@@ -240,7 +321,7 @@ func TestProviderCatalogTransportValidationRejectsEveryInvalidShape(t *testing.T
 			(*transports)[0].Endpoint.Method = "GET"
 		}, expected: ".endpoint"},
 		{name: "authentication field", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].Authentication.Field = "missing"
+			(*transports)[0].Components.Authentication.Field = "missing"
 		}, expected: "reason=dangling_reference"},
 		{name: "authentication field optional", mutate: func(_ *[]ProviderCatalogTransport, fields map[string]ProviderCatalogField) {
 			credential := fields[CatalogCredentialAPIKey]
@@ -248,44 +329,55 @@ func TestProviderCatalogTransportValidationRejectsEveryInvalidShape(t *testing.T
 			fields[CatalogCredentialAPIKey] = credential
 		}, expected: "reason=dangling_reference"},
 		{name: "authentication", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].Authentication.Header = "X-Key"
+			(*transports)[0].Components.Authentication.Header = "X-Key"
 		}, expected: ".authentication"},
 		{name: "headers", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
 			(*transports)[0].Headers = []ProviderCatalogHeader{{Name: "", Value: "value"}}
 		}, expected: ".headers"},
-		{name: "protocol", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].RequestProtocol = "future"
-		}, expected: "unsupported_protocol"},
-		{name: "protocol mismatch", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].ResponseProtocol = CatalogProtocolAnthropicMessages
-		}, expected: "protocol_mismatch"},
+		{name: "unexpected static headers", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
+			(*transports)[0].Headers = []ProviderCatalogHeader{{Name: "X-Future", Value: "value"}}
+		}, expected: "unsupported_component_combination"},
+		{name: "request codec", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
+			(*transports)[0].Components.RequestCodec.ID = "future"
+		}, expected: "unsupported_codec"},
+		{name: "response codec", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
+			(*transports)[0].Components.ResponseCodec.ID = "future"
+		}, expected: "unsupported_codec"},
+		{name: "request codec variation", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
+			(*transports)[0].Components.RequestCodec.Variation = "future"
+		}, expected: "unsupported_codec_variation"},
+		{name: "codec pair", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
+			(*transports)[0].Components.ResponseCodec.ID = CatalogProtocolGeminiInteractions
+		}, expected: "unsupported_component_combination"},
 		{name: "lifecycle", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].Lifecycle = "future"
-		}, expected: ".lifecycle"},
+			(*transports)[0].Components.Execution.ID = "future"
+		}, expected: "unsupported_execution_lifecycle"},
+		{name: "codec lifecycle", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
+			(*transports)[0].Components.Execution.ID = string(textExecutionLifecycleSynchronousCompletion)
+		}, expected: "unsupported_component_combination"},
 		{name: "resource visibility missing", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].ResourceVisibility = ProviderCatalogResourceVisibility{}
+			(*transports)[0].Components.Execution.ResourceVisibility = ProviderCatalogResourceVisibility{}
 		}, expected: ".resource_visibility"},
 		{name: "resource visibility interval", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].ResourceVisibility.RetryIntervalMilliseconds = providerCatalogResourceVisibilityMaxRetryIntervalMilliseconds + 1
+			(*transports)[0].Components.Execution.ResourceVisibility.RetryIntervalMilliseconds = providerCatalogResourceVisibilityMaxRetryIntervalMilliseconds + 1
 		}, expected: ".resource_visibility"},
 		{name: "resource visibility retry limit", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].ResourceVisibility.RetryLimit = providerCatalogResourceVisibilityMaxRetryLimit + 1
+			(*transports)[0].Components.Execution.ResourceVisibility.RetryLimit = providerCatalogResourceVisibilityMaxRetryLimit + 1
 		}, expected: ".resource_visibility"},
 		{name: "resource visibility status", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].ResourceVisibility.RetryStatusCodes = []int{http.StatusOK}
+			(*transports)[0].Components.Execution.ResourceVisibility.RetryStatusCodes = []int{http.StatusOK}
 		}, expected: ".retry_status_codes[0]"},
 		{name: "resource visibility duplicate status", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].ResourceVisibility.RetryStatusCodes = []int{http.StatusNotFound, http.StatusNotFound}
+			(*transports)[0].Components.Execution.ResourceVisibility.RetryStatusCodes = []int{http.StatusNotFound, http.StatusNotFound}
 		}, expected: "duplicate=404"},
 		{name: "resource visibility on synchronous transport", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[1].ResourceVisibility = (*transports)[0].ResourceVisibility
+			(*transports)[1].Components.Execution.ResourceVisibility = (*transports)[0].Components.Execution.ResourceVisibility
 		}, expected: "unexpected_resource_visibility"},
-		{name: "parameters", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].ProtocolParameters.OutputFields = nil
-		}, expected: ".protocol_parameters"},
-		{name: "adapter", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].ProtocolParameters.ModelField = "future"
-		}, expected: "adapter_contract_mismatch"},
+		{name: "missing required variation", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
+			transportsWithChat := *transports
+			transportsWithChat[1].Components.RequestCodec = ProviderCatalogCodecReference{ID: CatalogProtocolOpenAIChatCompletions}
+			transportsWithChat[1].Components.ResponseCodec = ProviderCatalogCodecReference{ID: CatalogProtocolOpenAIChatCompletions}
+		}, expected: "unsupported_codec_variation"},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -302,21 +394,27 @@ func TestProviderCatalogTransportValidationRejectsEveryInvalidShape(t *testing.T
 }
 
 func TestProviderCatalogEndpointAndProtocolEdges(t *testing.T) {
+	if requestCodecSupportsLifecycle("future", textExecutionLifecycleSynchronousCompletion) {
+		t.Fatal("unknown request codec accepted a lifecycle")
+	}
 	fields := map[string]ProviderCatalogField{
 		"api_key":  internalValidCredentialField(),
 		"base_url": internalValidSettingField(),
 	}
-	validEndpoint := ProviderCatalogEndpoint{Method: CatalogEndpointMethodPost, DefaultBaseURL: "https://provider.example", Path: "/responses"}
+	validEndpoint := ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodPost, DefaultBaseURL: "https://provider.example", Path: "/responses"}
 	endpointCases := []struct {
 		name     string
 		endpoint ProviderCatalogEndpoint
 		expected string
 	}{
-		{name: "method", endpoint: ProviderCatalogEndpoint{Method: "GET", DefaultBaseURL: "https://provider.example", Path: "/responses"}, expected: "field=endpoint"},
-		{name: "source count", endpoint: ProviderCatalogEndpoint{Method: CatalogEndpointMethodPost, Path: "/responses"}, expected: "endpoint_source_count"},
-		{name: "setting field", endpoint: ProviderCatalogEndpoint{Method: CatalogEndpointMethodPost, SettingField: "missing", Path: "/responses"}, expected: "dangling_reference"},
-		{name: "URL parse", endpoint: ProviderCatalogEndpoint{Method: CatalogEndpointMethodPost, DefaultBaseURL: "%", Path: "/responses"}, expected: ".default_base_url"},
-		{name: "URL security", endpoint: ProviderCatalogEndpoint{Method: CatalogEndpointMethodPost, DefaultBaseURL: "http://192.0.2.1", Path: "/responses"}, expected: ".default_base_url"},
+		{name: "method", endpoint: ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolHTTP, Method: "GET", DefaultBaseURL: "https://provider.example", Path: "/responses"}, expected: "field=endpoint"},
+		{name: "source count", endpoint: ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodPost, Path: "/responses"}, expected: "endpoint_source_count"},
+		{name: "setting field", endpoint: ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodPost, SettingField: "missing", Path: "/responses"}, expected: "dangling_reference"},
+		{name: "URL parse", endpoint: ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodPost, DefaultBaseURL: "%", Path: "/responses"}, expected: ".default_base_url"},
+		{name: "URL security", endpoint: ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodPost, DefaultBaseURL: "http://192.0.2.1", Path: "/responses"}, expected: ".default_base_url"},
+		{name: "gRPC HTTP fields", endpoint: ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolGRPC, Method: CatalogEndpointMethodPost, SettingField: "grpc_address"}, expected: "field=endpoint"},
+		{name: "gRPC field missing", endpoint: ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolGRPC}, expected: "field=endpoint"},
+		{name: "gRPC field wrong type", endpoint: ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolGRPC, SettingField: "base_url"}, expected: "reason=dangling_reference"},
 	}
 	for _, testCase := range endpointCases {
 		t.Run("endpoint "+testCase.name, func(t *testing.T) {
@@ -325,9 +423,9 @@ func TestProviderCatalogEndpointAndProtocolEdges(t *testing.T) {
 	}
 	for _, endpoint := range []ProviderCatalogEndpoint{
 		validEndpoint,
-		{Method: CatalogEndpointMethodPost, SettingField: "base_url", Path: "/responses"},
-		{Method: CatalogEndpointMethodPost, DefaultBaseURL: "http://localhost:8080", Path: "/responses"},
-		{Method: CatalogEndpointMethodPost, DefaultBaseURL: "http://127.0.0.1:8080", Path: "/responses"},
+		{Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodPost, SettingField: "base_url", Path: "/responses"},
+		{Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodPost, DefaultBaseURL: "http://localhost:8080", Path: "/responses"},
+		{Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodPost, DefaultBaseURL: "http://127.0.0.1:8080", Path: "/responses"},
 	} {
 		if endpointError := validateProviderCatalogEndpoint(endpoint, fields, "endpoint"); endpointError != nil {
 			t.Fatalf("valid endpoint=%+v error=%v", endpoint, endpointError)
@@ -337,6 +435,7 @@ func TestProviderCatalogEndpointAndProtocolEdges(t *testing.T) {
 	authenticationCases := []ProviderCatalogAuthentication{
 		{Kind: CatalogAuthenticationBearer, Header: "X-Key", Prefix: "Bearer "},
 		{Kind: CatalogAuthenticationHeader, Header: " ", Prefix: ""},
+		{Kind: CatalogAuthenticationGRPCBearer, Header: "Authorization"},
 		{Kind: "future", Header: "Authorization"},
 	}
 	for authenticationIndex, authentication := range authenticationCases {
@@ -355,31 +454,25 @@ func TestProviderCatalogEndpointAndProtocolEdges(t *testing.T) {
 		t.Fatal("duplicate catalog header was accepted")
 	}
 
-	parameters := internalCanonicalProviderCatalog().Schema().Providers[0].Transports[0].ProtocolParameters
-	parameters.ModelField = " model"
-	if parameterError := validateProviderCatalogProtocolParameters(parameters, "parameters"); parameterError == nil {
-		t.Fatal("noncanonical protocol model field was accepted")
-	}
-	parameters = internalCanonicalProviderCatalog().Schema().Providers[0].Transports[0].ProtocolParameters
-	parameters.OutputFields[0] = " "
-	if parameterError := validateProviderCatalogProtocolParameters(parameters, "parameters"); parameterError == nil {
-		t.Fatal("blank protocol value was accepted")
-	}
-	parameters = internalCanonicalProviderCatalog().Schema().Providers[0].Transports[0].ProtocolParameters
-	parameters.OutputFields = append(parameters.OutputFields, parameters.OutputFields[0])
-	if parameterError := validateProviderCatalogProtocolParameters(parameters, "parameters"); parameterError == nil {
-		t.Fatal("duplicate protocol value was accepted")
-	}
-
 	chatTransport := internalProtocolTransport(t, CatalogProtocolOpenAIChatCompletions)
-	chatTransport.ProtocolParameters.TokenField = "future"
-	assertInvalidProviderCatalogError(t, validateProviderCatalogAdapterContract(chatTransport, "transport"), "adapter_contract_mismatch")
+	chatTransport.Components.RequestCodec.Variation = CatalogProtocolVariationTranscriptionModel
+	_, compositionError := composeProviderTransport(chatTransport, "transport")
+	assertInvalidProviderCatalogError(t, compositionError, "unsupported_codec_variation")
 	transcriptionTransport := internalProtocolTransport(t, CatalogProtocolMultipartTranscription)
-	transcriptionTransport.ProtocolParameters.ModelField = "future"
-	assertInvalidProviderCatalogError(t, validateProviderCatalogAdapterContract(transcriptionTransport, "transport"), "adapter_contract_mismatch")
+	transcriptionTransport.Components.RequestCodec.Variation = CatalogProtocolVariationMaxTokens
+	_, compositionError = composeProviderTransport(transcriptionTransport, "transport")
+	assertInvalidProviderCatalogError(t, compositionError, "unsupported_codec_variation")
 	unknownTransport := chatTransport
-	unknownTransport.RequestProtocol = "future"
-	assertInvalidProviderCatalogError(t, validateProviderCatalogAdapterContract(unknownTransport, "transport"), "adapter_contract_mismatch")
+	unknownTransport.Components.RequestCodec = ProviderCatalogCodecReference{ID: "future"}
+	_, compositionError = composeProviderTransport(unknownTransport, "transport")
+	assertInvalidProviderCatalogError(t, compositionError, "unsupported_codec")
+	dictatorTransport := internalProtocolTransport(t, CatalogProtocolDictatorSpeechV1)
+	dictatorTransport.Components.Authentication = ProviderCatalogAuthentication{Kind: CatalogAuthenticationBearer, Header: "Authorization", Prefix: "Bearer "}
+	_, compositionError = composeProviderTransport(dictatorTransport, "transport")
+	assertInvalidProviderCatalogError(t, compositionError, "transport_protocol")
+	if schemaVersion := internalCanonicalProviderCatalog().SchemaVersion(); schemaVersion != ProviderCatalogSchemaVersion {
+		t.Fatalf("schema version=%d", schemaVersion)
+	}
 }
 
 func TestProviderCatalogConnectionValueBoundaries(t *testing.T) {
@@ -435,11 +528,29 @@ func internalValidSettingField() ProviderCatalogField {
 	}
 }
 
+func internalValidGRPCTargetField() ProviderCatalogField {
+	empty := ""
+	return ProviderCatalogField{
+		ID: "grpc_address", Label: "gRPC address", Kind: CatalogProviderFieldKindSetting,
+		Type: CatalogProviderFieldTypeGRPCTarget, Required: true, Default: &empty,
+		Validation: ProviderCatalogFieldValidation{MinimumLength: 1}, Environment: "TEST_GRPC_ADDRESS",
+	}
+}
+
+func internalValidBooleanField() ProviderCatalogField {
+	empty := ""
+	return ProviderCatalogField{
+		ID: "grpc_tls", Label: "gRPC TLS", Kind: CatalogProviderFieldKindSetting,
+		Type: CatalogProviderFieldTypeBoolean, Required: true, Default: &empty,
+		Validation: ProviderCatalogFieldValidation{MinimumLength: 1}, Environment: "TEST_GRPC_TLS",
+	}
+}
+
 func internalProtocolTransport(t *testing.T, protocol string) ProviderCatalogTransport {
 	t.Helper()
 	for _, provider := range internalCanonicalProviderCatalog().Schema().Providers {
 		for _, transport := range provider.Transports {
-			if transport.RequestProtocol == protocol {
+			if transport.Components.RequestCodec.ID == protocol {
 				return transport
 			}
 		}

@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -81,6 +82,39 @@ func tenantAuthenticatedHandler(authenticator tenantAuthenticator, structuredLog
 			telemetry.addPhase(requestTelemetryPhaseAuthentication, time.Since(authenticationStartedAt))
 			return
 		}
+		telemetry.addPhase(requestTelemetryPhaseAuthentication, time.Since(authenticationStartedAt))
+		handler(ginContext)
+	}
+}
+
+func mediaTenantAuthenticatedHandler(authenticator tenantAuthenticator, structuredLogger *zap.SugaredLogger, handler gin.HandlerFunc) gin.HandlerFunc {
+	return func(ginContext *gin.Context) {
+		telemetry := newRequestTelemetry(requestIDFromContext(ginContext), requestLogPath(ginContext.Request.URL))
+		ginContext.Request = ginContext.Request.WithContext(requestContextWithTelemetry(ginContext.Request.Context(), telemetry))
+		authenticationStartedAt := time.Now()
+		authorization := ginContext.GetHeader("Authorization")
+		const bearerPrefix = "Bearer "
+		if !strings.HasPrefix(authorization, bearerPrefix) || strings.TrimSpace(strings.TrimPrefix(authorization, bearerPrefix)) == "" || ginContext.Query(queryParameterKey) != "" {
+			telemetry.addPhase(requestTelemetryPhaseAuthentication, time.Since(authenticationStartedAt))
+			structuredLogger.Warnw(logEventForbiddenRequest, logFieldRequestID, requestIDFromContext(ginContext))
+			ginContext.String(http.StatusForbidden, errorMissingClientKey)
+			ginContext.Abort()
+			return
+		}
+		requestTenant, authenticated := authenticator.authenticate(ginContext.Request.Context(), strings.TrimPrefix(authorization, bearerPrefix))
+		if !authenticated {
+			telemetry.addPhase(requestTelemetryPhaseAuthentication, time.Since(authenticationStartedAt))
+			if ginContext.Request.Context().Err() != nil {
+				ginContext.Status(statusClientClosedRequest)
+				ginContext.Abort()
+				return
+			}
+			structuredLogger.Warnw(logEventForbiddenRequest, logFieldRequestID, requestIDFromContext(ginContext))
+			ginContext.String(http.StatusForbidden, errorMissingClientKey)
+			ginContext.Abort()
+			return
+		}
+		ginContext.Set(contextKeyTenant, requestTenant)
 		telemetry.addPhase(requestTelemetryPhaseAuthentication, time.Since(authenticationStartedAt))
 		handler(ginContext)
 	}
