@@ -35,6 +35,7 @@ const defaultTenantID = "tenant_1";
 const managementDefaultTenantPath = `/api/management/tenants/${defaultTenantID}`;
 const faviconPath = "/assets/llm-proxy/img/favicon.svg";
 const appIconPath = "/assets/llm-proxy/img/llm-proxy-icon.svg";
+const appleTouchIconPath = "/assets/llm-proxy/img/apple-touch-icon.png";
 const resourcesPath = "/resources/";
 const privacyPath = "/privacy/";
 const termsPath = "/terms/";
@@ -683,7 +684,7 @@ test("public landing explains the product and exposes the generated capability c
   html = managementHTML;
   expect(html).toContain('<meta name="theme-color" content="#0076c3">');
   expect(html).toContain(`<link rel="icon" type="image/svg+xml" href="${faviconPath}">`);
-  expect(html).toContain(`<link rel="apple-touch-icon" href="${appIconPath}">`);
+  expect(html).toContain(`<link rel="apple-touch-icon" href="${appleTouchIconPath}">`);
   expect(html).toContain(`data-config-url="${configPath}"`);
   expect(html).toContain(`<link rel="stylesheet" href="${mprUICSSURL}">`);
   expect(html).not.toContain(`<script src="${forbiddenTAuthBrowserClientURL}"></script>`);
@@ -781,17 +782,17 @@ test("public landing explains the product and exposes the generated capability c
   expect(faviconResponse.status()).toBe(httpOK);
   expect(faviconResponse.headers()["content-type"]).toContain(mimeTypes[".svg"]);
   const faviconSVG = await faviconResponse.text();
-  expect(faviconSVG).toContain("LLM Proxy favicon");
+  expect(faviconSVG).toContain("llm-proxy Icon");
   expect(faviconSVG).toContain("#ffd369");
-  expect(faviconSVG).toContain("#4ad3d9");
+  expect(faviconSVG).toContain("#0063b9");
 
   const appIconResponse = await request.get(`${baseURL}${appIconPath}`);
   expect(appIconResponse.status()).toBe(httpOK);
   expect(appIconResponse.headers()["content-type"]).toContain(mimeTypes[".svg"]);
   const appIconSVG = await appIconResponse.text();
-  expect(appIconSVG).toContain("LLM Proxy icon");
+  expect(appIconSVG).toContain("llm-proxy Icon");
   expect(appIconSVG).toContain("#ffd369");
-  expect(appIconSVG).toContain("#4ad3d9");
+  expect(appIconSVG).toContain("#0063b9");
 });
 
 test("the routing tree and capability catalog remain complete without JavaScript", async ({ browser }) => {
@@ -1282,6 +1283,7 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   await searchInput.fill("qwen3.7-plus dashscope_responses image_input");
   await expect(resultCount).toHaveText("1 of 72 model");
   await expect(visibleRows).toHaveAttribute("data-model", "qwen3.7-plus");
+  await expect(visibleRows).toContainText("Alibaba Cloud");
 
   await searchInput.fill("grok-4.3 xai_responses");
   await expect(resultCount).toHaveText("2 of 72 models");
@@ -2944,6 +2946,12 @@ test("connection setup uses each provider's required catalog fields", async ({ p
   await dialog.getByRole("textbox",{name:"Connection name"}).fill("My provider connection");
   for(const provider of profile.providers) {
     await dialog.getByRole("combobox",{name:"Provider",exact:true}).selectOption(provider.id);
+    if (provider.id === "dashscope") {
+      await expect(dialog.getByRole("combobox", { name: "Provider", exact: true }).locator("option:checked")).toHaveText("Alibaba Cloud");
+      await expect(dialog.getByLabel("Alibaba Cloud API key", { exact: true })).toBeVisible();
+      await expect(dialog.getByLabel("Alibaba Cloud API URL", { exact: true })).toBeVisible();
+      await expect(dialog.getByRole("link", { name: "Get Alibaba Cloud credentials ↗", exact: true })).toHaveAttribute("href", "https://www.alibabacloud.com/help/en/model-studio/get-api-key");
+    }
     await expect(dialog.locator("[data-credential-fields] input")).toHaveCount(provider.fields.length);
     for(const field of provider.fields) {
       const input=dialog.locator(`[name="field-${field.id}"]`);
@@ -4609,7 +4617,7 @@ function providerAPIKeyField(label, configured = false, maskedValue = "") {
 function dashScopeBaseURLField() {
   return {
     id: "base_url",
-    label: "DashScope API URL",
+    label: "Alibaba Cloud API URL",
     kind: "setting",
     type: "url",
     required: true,
@@ -4808,10 +4816,10 @@ function managementProfile(isAdmin = false, hasSecret = true) {
       },
       {
         id: "dashscope",
-        label: "DashScope",
+        label: "Alibaba Cloud",
         aliases: ["qwen"],
         configured: false,
-        fields: [providerAPIKeyField("DashScope API key"), dashScopeBaseURLField()],
+        fields: [providerAPIKeyField("Alibaba Cloud API key"), dashScopeBaseURLField()],
         text_model: "qwen-plus",
         system_prompt: "",
         text_default_model: "qwen-plus",
@@ -4967,7 +4975,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
       ],
     },
     dashscope: {
-      api_service_label: "DashScope API",
+      api_service_label: "Alibaba Cloud",
       model_families: [{ id: "qwen", label: "Qwen" }],
     },
     moonshot: {
@@ -5028,7 +5036,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
     baidu: "https://intl.cloud.baidu.com/en/doc/qianfan/s/qm8qxemze-intl-en",
     openai: "https://platform.openai.com/api-keys",
     deepseek: "https://platform.deepseek.com/api_keys",
-    dashscope: "https://help.aliyun.com/en/model-studio/get-api-key",
+    dashscope: "https://www.alibabacloud.com/help/en/model-studio/get-api-key",
     moonshot: "https://platform.kimi.ai/console/api-keys",
     minimax: "https://platform.minimax.io/docs/guides/quickstart-preparation",
     siliconflow: "https://cloud.siliconflow.com/account/ak",
