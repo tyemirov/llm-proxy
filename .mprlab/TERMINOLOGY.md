@@ -88,3 +88,10 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `Google credential profile`: An operator declaration that binds a Google identity, credential file, project, and location to one tenant.
 
 - `tenant assignment`: The saved relation between a tenant and one provider connection.
+
+- `versionless schema`: A database contract whose current tables and records define acceptance without a numeric schema-version requirement.
+
+- `access region`: The Alibaba region that receives API requests and stores request data.
+- `service deployment scope`: The geographic area in which Alibaba can execute model inference.
+- `model inventory`: A dated list of upstream model identifiers and their documented capabilities.
+- `model inventory importer`: An operator tool that converts upstream model data into a proposed provider catalog change.

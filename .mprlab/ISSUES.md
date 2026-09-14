@@ -205,6 +205,125 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [x] [I262] (P1) Use Alibaba Cloud labels and English API-key setup.
+  Goal:
+  Let users identify Alibaba Cloud as the provider of Qwen models and find English API-key instructions.
+  Requirements:
+  - Use `Alibaba Cloud` for the provider label and API service label.
+  - Use `Alibaba Cloud API key` and `Alibaba Cloud API URL` for connection fields.
+  - Link credential setup to `https://www.alibabacloud.com/help/en/model-studio/get-api-key`.
+  - Keep Qwen as the model family and Alibaba Cloud as the service provider.
+  - Keep the existing `dashscope` provider identifier and adapter contract.
+  - Apply the catalog values to connection setup and public model discovery.
+  - Keep regional expansion and model inventory work in F064.
+  Validation:
+  - Assert the labels and English setup URL through the management HTTP API and browser connection dialog.
+  - Assert Alibaba Cloud text beside Qwen in the public model catalog.
+  - Run the focused catalog and browser targets, then `make ci`.
+  Resolved 2026-09-13:
+  - Changed the catalog provider label, service label, connection field labels, and credential setup URL.
+  - Updated public resource text, its generator, browser fixtures, and current provider documentation.
+  - The initial HTTP assertion returned `label="DashScope"` and the `help.aliyun.com` setup URL.
+  - The initial browser assertion returned `DashScope API` instead of `Alibaba Cloud`.
+  - The catalog target and both focused browser scenarios passed after the change.
+  - Final `make ci` passed all 13 gates in 315 seconds with 100.0% Go statement coverage.
+  - The complete browser suites passed 117 frontend scenarios and seven management black-box scenarios.
+  - CI evidence: `/tmp/llm-proxy-i262-ci.log`.
+  - Changed prose and `git diff --check` passed their scoped checks.
+  - Governor reported existing managed-content differences in `.mprlab/POLICY.md` and `.mprlab/AGENTS.DOCKER.md`.
+  - Existing event and adapter contracts remain current. Production activation remains separate.
+  Changed files:
+  - `configs/providers.yml`, `internal/proxy/provider_catalog_end_to_end_test.go`, and `tests/e2e/management-ui.spec.js`.
+  - `scripts/generate_seo_resources.mjs`, `site/resources/index.html`, and `site/resources/openai-compatible-provider-gateway/index.html`.
+  - `README.md`, `docs/provider-catalog.md`, `docs/provider-model-icons.md`, and `docs/dashscope-responses.md`.
+  Sources:
+  - [English API-key instructions](https://www.alibabacloud.com/help/en/model-studio/get-api-key).
+
+- [!] [I261] (P0) Remove completed migration paths and initialize only the current schema.
+  Goal:
+  Remove obsolete database migrations, predecessor records, and migration-only provider rules after their data transfer is completed.
+  Keep one current schema for normal application startup and all new databases.
+  The user requested P0 removal on 2026-09-13 after the F064 investigation found a Singapore-only migration rule.
+  Evidence:
+  - `internal/proxy/management_store.go` contains `managedProviderBaseURL` and `dashScopeWorkspaceHostSuffix` with a Singapore-only URL rule.
+  - `managedProviderSettingsFromRecordsForSchema` calls this validator for predecessor provider-key records.
+  - Current account connections use catalog field validation in `internal/proxy/account_connections_store.go`.
+  - The current `managedAccountConnectionsSchemaVersion` is 17.
+  - `initializeManagedTenantSchema` calls `initializeManagedTenantSchemaRecords` and `migrateAccountConnections` for versions below 17.
+  - A fresh database enters that branch, creates intermediate tables, records version 16, and then enters the account-connection migration.
+  - The predecessor initializer also retains a version switch and provider retirement migrations for older databases.
+  - These paths remain reachable in source. Their presence alone does not prove that retained production databases still require them.
+  - F063 records development completion. It does not establish migration completion for every retained database.
+  Requirements:
+  - Trace production callers for each predecessor initializer, migration, record type, validator, constant, and catalog migration entry.
+  - Separate fresh-database dependencies from data transfers that remain necessary for a retained database.
+  - Record each retained database's actual shape and remaining predecessor records before removal of its required transfer path.
+  - Treat historical version records as inventory evidence only for the predecessor transfer.
+  - Use a versionless current schema. Extend its declared shape when the product adds fields or tables.
+  - Validate current tables and records instead of a schema number.
+  - Use authorized read-only evidence or an existing operator receipt for that inventory.
+  - If a transfer remains necessary, specify its exact input, owner, completion receipt, and bounded execution procedure.
+  - Complete each necessary one-off transfer before removal of its bridge.
+  - Create fresh databases directly in the current schema without intermediate tables or historical migration execution.
+  - Make current-schema restart validate and use the existing records without replay of completed transfers.
+  - Reject obsolete persisted shapes at the database boundary after removal of their transfer paths.
+  - Remove completed migration functions and their exclusive callers, record types, constants, fixtures, and configuration.
+  - Remove the Singapore-only migration validator when its last required caller is removed.
+  - Keep current provider URL validation in the canonical provider catalog.
+  - Preserve current account connections, tenant assignments, encrypted credentials, access keys, defaults, prompts, timestamps, and usage history.
+  - Preserve historical usage identities that the current product still requires.
+  - Remove historical model-migration declarations only after analysis of their remaining runtime consumers.
+  - Replace migration-only test expectations with public acceptance of fresh startup, current restart, and obsolete-schema rejection.
+  - Update the current schema and operator documentation in `README.md` and `docs/tenant-connections.md`.
+  - Keep I244 responsible for the separate MediaOps import bridge.
+  Deliverables:
+  - Record the removed migration paths and the evidence that permits each removal.
+  - Record each temporarily required transfer with its exact remaining prerequisite and removal condition.
+  - Implement direct current-schema initialization and remove completed predecessor code.
+  - Update the affected tests, catalog declarations, and current documentation.
+  Validation:
+  - Add public integration scenarios for fresh database creation and restart with current account and tenant data.
+  - Confirm fresh startup creates only current tables without a migration-version table.
+  - Confirm restart preserves credentials, ownership, assignments, defaults, and usage through public APIs.
+  - Confirm obsolete or unsupported schemas fail with a contextual error before data changes.
+  - Confirm transactional failure preserves the original database during any remaining authorized one-off transfer.
+  - Search production code and tests for removed symbols and obsolete record shapes.
+  - Run `make test-account-connections` and the applicable `make test-management-contracts` scenarios.
+  - Run `make ci` after the last application change under the repository validation policy.
+  - Report code removal, repository validation, data-transfer completion, and production acceptance as separate results.
+  Progress 2026-09-13:
+  - The user selected a versionless schema during implementation.
+  - Empty databases now enter direct current-schema creation.
+  - Current account-connection databases enter record validation without a version query or historical transfer.
+  - Current-schema acceptance rejects predecessor credential and temporary transfer tables without removal of their data.
+  - Public regression coverage checks startup, restart, schema creation failure, and retained data after rejection.
+  - The production inventory found one account, three tenants, ten credential-field records, ten profiles, and 4,684 usage records.
+  - The production database still uses predecessor tenant connections. Its last historical version record is 16.
+  - The ignored local database has one unclaimed static owner, two provider-key records, and one usage record.
+  - The local Compose volume already has current account connections for two tenants.
+  - Removed the historical fresh-initialization branch and its create-and-drop expectation.
+  - Remaining transfer tests now create explicit predecessor fixtures.
+  - Read-only inventory and the remaining transfer procedure are in [the schema transition record](../docs/managed-schema-transition.md).
+  Validation 2026-09-13:
+  - The initial fresh-start regression returned `schema versions=[16 17], want only [17]` before the versionless decision.
+  - The versionless regression then rejected the unwanted migration-version table.
+  - The initial unrecognized-database regression returned `startup error=<nil>`.
+  - Initial CI found three obsolete fixture expectations for version creation, predecessor-table deletion, and numeric current-schema rejection.
+  - The corrected Go suite passed its assertions but reported two uncovered predecessor failure paths.
+  - Public startup tests now verify rollback after predecessor-query and post-transfer validation failures.
+  - Final `make ci` passed all 13 gates in 302 seconds with 100.0 percent Go statement coverage.
+  - Evidence: `/tmp/llm-proxy-i261-ci-final.log`.
+  - Scoped prose checks, issue-ID checks, and `git diff --check` passed.
+  - Governor reported existing managed-content differences in `.mprlab/POLICY.md` and `.mprlab/AGENTS.DOCKER.md`.
+  - No production transfer, deployment, or retained-data deletion occurred. Public HTTP and event contracts remain unchanged.
+  Changed files:
+  - `internal/proxy/management_store.go` and `internal/proxy/account_connections_store.go`.
+  - `internal/proxy/account_connections_schema_test.go` and `internal/proxy/account_connections_test.go`.
+  - `internal/proxy/account_connections_migration_internal_test.go` and `internal/proxy/account_connections_migration_failures_internal_test.go`.
+  - `internal/proxy/management_gorm_internal_test.go`, `internal/proxy/management_provider_connections_migration_internal_test.go`, and `internal/proxy/management_tenants_internal_test.go`.
+  - `README.md`, `docs/tenant-connections.md`, `docs/managed-schema-transition.md`, and `.mprlab/TERMINOLOGY.md`.
+  Blocked: Complete the production connection transfer and decide ownership or disposal of the local predecessor database before bridge removal.
+
 - [!] [I260] (P1) Prepare the current shared UI migration.
   Goal:
   Use the current shared authentication config, footer menu, and protected request transport throughout the browser frontend.
@@ -1259,6 +1378,107 @@ retain satisfied historical dependencies.
 
 
 ## Features
+
+- [ ] [F064] (P1) Add Alibaba Model Studio US East access and its complete model inventory.
+  Goal:
+  Let users connect an Alibaba Cloud Model Studio workspace in US (Virginia), `us-east-1`.
+  Make all models available through that workspace part of the integration scope, including third-party models.
+  Keep access region and service deployment scope distinct.
+  This issue records future implementation work. The 2026-09-13 investigation changes documentation only.
+  Requirements:
+  - Extend the current `dashscope` provider with US East workspace support.
+  - Use the Alibaba Cloud labels and English credential setup link defined by I262.
+  - Keep `configs/providers.yml` as the only runtime provider catalog.
+  - Keep the account-owned provider connection and explicit tenant assignment from F063.
+  - Use a pay-as-you-go API key from the same region and workspace as the API host.
+  - Use `https://{WorkspaceId}.us-east-1.maas.aliyuncs.com/compatible-mode/v1` as the US East base URL.
+  - Keep Singapore and US East available as explicit current regions.
+  - Keep each upstream model selector exact, including each documented `-us` suffix.
+  - Show whether each US East offering uses Global or US service deployment scope.
+  - Treat US East access as distinct from a guarantee of inference in Virginia.
+  - Preserve model publishers such as Alibaba, DeepSeek, Moonshot, and Z.ai when Alibaba supplies the provider offering.
+  - Keep each unqualified offering disabled until its required live checks pass.
+  - Account for every inventory model with a supported route or an explicit implementation gap.
+  - File separate Feature issues for public operations or protocol adapters that the current product does not support.
+  Evidence checked on 2026-09-13:
+  - Alibaba documents US East workspace endpoints for both Responses and Chat Completions.
+  - The regions page distinguishes US East access from Global and US service deployment scopes.
+  - The documented `qwen-plus-us` selector restricts inference to the US.
+  - The Base URL page still lists `dashscope-us.aliyuncs.com`, but the newer regions page marks shared US access unsupported.
+  - Both pages document the workspace endpoint selected above.
+  - The US pricing tables include `qwen-plus-us`, `qwen3.6-flash-us`, `qwen-flash-us`, `deepseek-v4-pro-us`, and `deepseek-v4-flash-us`.
+  - The same tables include Global offerings such as `qwen3.7-plus`, `deepseek-v4-pro`, `deepseek-v4-flash`, and `kimi-k3`.
+  - These examples establish regional model availability in official documentation. They are not the complete workspace inventory.
+  - No authenticated inventory request or live generation request ran during this investigation.
+  Inventory procedure:
+  - Call `GET https://{WorkspaceId}.us-east-1.maas.aliyuncs.com/api/v1/models` with `Authorization: Bearer {API_KEY}`.
+  - Start with `page_no=1` and `page_size=20`.
+  - Retrieve all pages through `output.total` without publisher, name, capability, or deployment-scope filters.
+  - Read `output.models` and examine `success`, page counts, duplicate identifiers, and incomplete results.
+  - Run separate queries with `service_site=global` and `service_site=united-states` to establish scope membership.
+  - Record `provider`, `inference_provider`, modalities, features, token limits, prices, and `equivalent_snapshot` when present.
+  - Separate models available for inference from models that require a separate deployment or external provider connection.
+  - Preserve the response date, request ID, source host, and total count as inventory evidence.
+  - Keep credentials out of inventory files and logs.
+  - Compare the inventory with the US East console model list and each selected model's API reference.
+  Current implementation and gaps:
+  - `configs/providers.yml` has one `dashscope` provider, four active Qwen offerings, and five disabled Qwen 3.8 candidates.
+  - Its `base_url` pattern permits only `ap-southeast-1` workspace hosts.
+  - `internal/proxy/account_connections_store.go` validates current connection fields through `validatedProviderFieldValue` and the catalog pattern.
+  - Its current connection path does not require a new provider-specific authentication implementation.
+  - `internal/proxy/management_store.go` also contains `managedProviderBaseURL` and `dashScopeWorkspaceHostSuffix` with a Singapore-only rule.
+  - That rule applies to older persisted records. Examine its migration callers before deciding whether US East needs a code change there.
+  - `internal/proxy/dashscope_responses.go` receives the resolved endpoint and upstream selector without a region check.
+  - The existing text transport appends `/responses`, uses bearer authentication, and selects `dashscope_responses` with `synchronous_completion`.
+  - Alibaba documents this protocol in US East. Basic text connectivity can reuse the existing adapter, subject to live qualification.
+  - The codec supports text, image input, token limits, reasoning effort, usage, and terminal output handling.
+  - Its output parser rejects unsupported output items. An OpenAI-compatible label does not establish support for every model capability.
+  - The catalog schema and route selection have no access-region or service-deployment-scope restriction for an offering.
+  - A wider URL pattern alone would expose one combined offering list to both regions.
+  - `internal/proxy/provider_catalog_schema.go`, `internal/proxy/model_catalog.go`, and `internal/proxy/catalog_service.go` need a regional contract review.
+  - No Alibaba model inventory importer or `/api/v1/models` upstream request exists in the inspected application and scripts.
+  - Current discovery reads the validated YAML snapshot. It does not retrieve new models when a connection is saved.
+  - Image generation, video, speech, embeddings, rerank, and realtime models require a per-operation adapter and public-contract assessment.
+  - F022 supplies the durable media foundation. F024, F025, F026, and I046 contain related capability work.
+  Deliverables:
+  - Add a dated complete US East model inventory with exact selectors and scope membership.
+  - Add a repeatable model inventory importer through a documented Makefile target.
+  - Make the importer produce a proposed catalog change for review before runtime activation.
+  - Add typed regional restrictions to catalog validation, connection selection, route admission, and applicable discovery responses.
+  - Use the selected connection's region to prevent a route that is unavailable in that region.
+  - Import supported offerings, limits, controls, prices, currencies, and price conditions from the regional sources.
+  - Record unknown metadata explicitly where the current schema permits it.
+  - Give every remaining model an exact missing adapter, public operation, qualification gate, or external prerequisite.
+  - Add each required dependency issue before the affected model enters implementation.
+  - Update `docs/provider-catalog.md`, `docs/dashscope-responses.md`, and the relevant README connection and live-test instructions.
+  - Record the US East extension of P007's Singapore-only endpoint decision in current product documentation.
+  - Keep I038, I226, and F050 qualification evidence separate from US East acceptance.
+  Open Decisions:
+  - The requested scope includes models available through US East, with both Global and US inference identified.
+  - A US-only default for tenant selection requires a product decision. Do not infer it from the access-region name.
+  - Automatic runtime inventory refresh is not specified. The initial proposal uses an operator importer and reviewed YAML changes.
+  Validation:
+  - First add public integration scenarios that fail for US East connection creation and unavailable regional model selection.
+  - Examine connection creation, credential verification, tenant assignment, saved defaults, reload, and browser model selection.
+  - Examine Singapore and US East connections together with distinct credentials and exact model selectors.
+  - Examine malformed hosts, region mismatches, missing models, incomplete inventory pages, and safe provider errors.
+  - Examine inventory completeness against the recorded upstream total and explicit disposition of every unique model.
+  - Examine text, image input, usage, output limits, and reasoning controls for each advertised combination.
+  - Run `make test-account-connections`, `make test-provider-catalog`, and `make test-dashscope-responses` for their affected contracts.
+  - Run `make test-dashscope-media-limits` when image offerings change.
+  - Add a focused Makefile target for inventory and regional route scenarios.
+  - Run `make ci` after the last application change, as required by the repository policy.
+  - Run the exact US East model matrix with the regional key and base URL through the live-provider harness.
+  - Extend the live harness when its current inputs cannot select the complete regional matrix.
+  - Record each model, scope, operation, response status, request ID, and result without credentials or private content.
+  - Report repository validation, live-provider qualification, release, and production acceptance as separate gates.
+  Sources:
+  - [Regions and endpoints](https://www.alibabacloud.com/help/en/model-studio/regions).
+  - [Base URL overview](https://www.alibabacloud.com/help/en/model-studio/base-url).
+  - [List models API](https://www.alibabacloud.com/help/en/model-studio/list-models).
+  - [Responses API](https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-responses).
+  - [DeepSeek API and US East Chat Completions](https://help.aliyun.com/en/model-studio/deepseek-api).
+  - [Regional model pricing](https://help.aliyun.com/en/model-studio/model-pricing).
 
 - [x] [F063] (P1) Implement the tenant, connection, and model dashboard from P001.
   Resolution: Implemented account connections, tenant assignments, explicit dashboard controls, and the approved bounded migration.
