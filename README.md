@@ -46,7 +46,7 @@ See the [consolidation strategy](docs/media-gateway-consolidation.md) for issue 
 - TAuth-protected dashboard for tenants, reusable provider connections, explicit model defaults, and tenant API access
 - Supports plain text, JSON, XML, or CSV responses
 
-See [tenant connections](docs/tenant-connections.md) for the dashboard, ownership rules, and schema migration.
+See [tenant connections](docs/tenant-connections.md) for the dashboard, ownership rules, and versionless database schema.
 
 ## OpenCode and OpenAI clients
 
@@ -413,7 +413,7 @@ when the provider offering has a code-owned transport.
 | All 11 OpenAI text models in the GPT-4 and GPT-5 families | OpenAI | `image` |
 | All 12 Claude text models in the Fable, Sonnet, Opus, and Haiku families | Anthropic | `image` |
 | All four enabled Gemini text models | Gemini | `image`, `audio` |
-| `qwen3.7-plus`, `qwen3.6-flash` | DashScope/Qwen | `image` |
+| `qwen3.7-plus`, `qwen3.6-flash` | Alibaba Cloud/Qwen | `image` |
 | All four Kimi text models | Moonshot/Kimi | `image` |
 | `grok-4.5` | xAI | `image` |
 | Every other configured model | Its configured provider | None |
@@ -627,7 +627,7 @@ A provider request requires an assigned connection with its required fields.
 Otherwise, the proxy returns `409 provider_not_configured` before dispatch.
 
 Static provider URLs and paths belong to `providers.yml`.
-DashScope and Baidu also use a `base_url` connection field.
+Alibaba Cloud and Baidu also use a `base_url` connection field.
 Baidu supplies the international Qianfan URL as its catalog default.
 The `management` configuration is mandatory.
 Provider blocks in `config.yml` are unknown YAML keys and fail startup.
@@ -816,8 +816,11 @@ Runtime authentication loads the tenant and its assigned connections from one da
 Provider secret fields use AES-GCM encryption bound to the connection identity, provider, and field.
 Management responses keep these credentials masked.
 Tenant API keys are returned once, and the database retains their SHA-256 digests.
-The bounded connection migration preserves each existing provider configuration as a separate account connection.
-It attaches that connection to the original tenant and preserves tenant access, defaults, prompts, timestamps, and usage.
+Fresh databases create the current tables directly, without a schema number or intermediate migration tables.
+Current account-connection databases validate their records without a version query or a repeated transfer.
+The bounded connection transfer remains necessary for the retained production database.
+The transfer preserves tenant assignments, access keys, defaults, prompts, timestamps, and usage.
+See the [schema transition record](docs/managed-schema-transition.md) for I261 inventory evidence and the remaining transfer requirements.
 
 The packaged configuration requires every `LLM_PROXY_MANAGEMENT_*` placeholder to have a value.
 Local `make up` projects these values from `configs/.env.local` into `configs/.env.api.local`.
@@ -1051,10 +1054,10 @@ or dangling canonical route.
 
 The bounded schema-version-6 migration replaces the retired `grok` provider
 identity with `xai`. The bounded schema-version-7 migration adds the provider
-base URL field to managed provider settings. Existing DashScope records do not
+base URL field to managed provider settings. Existing Alibaba Cloud records do not
 contain a workspace URL. The migration removes those incomplete records and
 reconciles affected text defaults. It preserves tenant timestamps and
-historical usage. The owner must then save the complete DashScope key and URL
+historical usage. The owner must then save the complete Alibaba Cloud key and URL
 pair. The bounded schema-version-8 migration replaces the retired `zhipu`
 provider identity with `zai`. It preflights all provider settings and defaults,
 decrypts each affected key with `zhipu` associated data, and re-encrypts it with
@@ -1100,7 +1103,7 @@ changes to an invalid pair after startup.
 
 Server settings and browser-facing MPR UI/TAuth bootstrap settings remain in
 `config.yml`. Provider definitions and static endpoints remain in
-`providers.yml`. Each managed DashScope workspace URL belongs to an account connection and is
+`providers.yml`. Each managed Alibaba Cloud workspace URL belongs to an account connection and is
 stored as a provider connection value. The selected model and system prompt use
 a provider profile record. The GitHub Pages artifact is only the static shell.
 API-served browser config
@@ -1260,7 +1263,7 @@ live provider smoke-test credentials are not injected into auxiliary
 containers. The API image is built from the current source and runs the
 canonical `configs/config.yml` configuration.
 
-Local and production orchestration do not bind a DashScope URL. Each DashScope connection
+Local and production orchestration do not bind an Alibaba Cloud URL. Each Alibaba Cloud connection
 stores its Singapore Model Studio workspace URL and API key.
 The stack has these explicit browser-facing endpoints:
 
@@ -1434,7 +1437,7 @@ an ignored coverage artifact from an earlier run cannot satisfy completion.
 | Baidu Qianfan | `BAIDU_API_KEY` | `LLM_PROXY_LIVE_BAIDU_MODEL` |
 | Meta Muse Spark | `MUSE_API_KEY` | `LLM_PROXY_LIVE_META_MODEL` |
 | DeepSeek | `DEEPSEEK_API_KEY` | `LLM_PROXY_LIVE_DEEPSEEK_MODEL` |
-| DashScope/Qwen | `DASHSCOPE_API_KEY` | `LLM_PROXY_LIVE_DASHSCOPE_MODEL` |
+| Alibaba Cloud/Qwen | `DASHSCOPE_API_KEY` | `LLM_PROXY_LIVE_DASHSCOPE_MODEL` |
 | Moonshot/Kimi | `MOONSHOT_API_KEY` | `LLM_PROXY_LIVE_MOONSHOT_MODEL` |
 | MiniMax | `MINIMAX_API_KEY` | `LLM_PROXY_LIVE_MINIMAX_MODEL` |
 | SiliconFlow | `SILICONFLOW_API_KEY` | `LLM_PROXY_LIVE_SILICONFLOW_MODEL` |
@@ -2081,7 +2084,7 @@ curl --get \
   "http://localhost:8080/"
 ```
 
-Current Qwen text generation through the tenant's saved DashScope workspace:
+Current Qwen text generation through the tenant's saved Alibaba Cloud workspace:
 
 ```shell
 curl --get \
@@ -2441,10 +2444,10 @@ See the [operator procedure](docs/deepseek-retirement.md) for acceptance, migrat
 | `deepseek-v4-flash` | DeepSeek | Yes | - | No |
 | `deepseek-v4-pro` | DeepSeek | No | - | No |
 | `deepseek-reasoner` | SiliconFlow | Yes | - | No |
-| `qwen-plus` | DashScope/Qwen | Yes | - | No |
-| `qwen3.7-max` | DashScope/Qwen | No | `65536` | No |
-| `qwen3.7-plus` | DashScope/Qwen | No | `65536` | No |
-| `qwen3.6-flash` | DashScope/Qwen | No | `65536` | No |
+| `qwen-plus` | Alibaba Cloud/Qwen | Yes | - | No |
+| `qwen3.7-max` | Alibaba Cloud/Qwen | No | `65536` | No |
+| `qwen3.7-plus` | Alibaba Cloud/Qwen | No | `65536` | No |
+| `qwen3.6-flash` | Alibaba Cloud/Qwen | No | `65536` | No |
 | `kimi-k2.6` | Moonshot/Kimi | Yes | - | No |
 | `kimi-k3` | Moonshot/Kimi | No | - | No |
 | `kimi-k2.7-code` | Moonshot/Kimi | No | - | No |
