@@ -1414,7 +1414,7 @@ text = client.post_messages(
     modifiedDate: CONNECTION_DASHBOARD_MODIFIED_DATE,
     primaryKeyword: "OpenAI-compatible provider gateway",
     title: "OpenAI-compatible provider gateway",
-    description: "Route Meta Muse Spark, DeepSeek, DashScope Qwen, Kimi, MiniMax, SiliconFlow, Z.AI, and Grok text calls through one compatible adapter.",
+    description: "Route Meta Muse Spark, DeepSeek, Qwen through Alibaba Cloud, Kimi, MiniMax, SiliconFlow, Z.AI, and Grok text calls through one compatible adapter.",
     audience: "Teams adopting OpenAI-compatible chat providers without rewriting every caller.",
     problem: "OpenAI-compatible providers share a broad shape but still need different base URLs, keys, defaults, and availability rules.",
     solution: "LLM Proxy uses one compatible chat adapter. Provider transports and offerings stay in providers.yml, while tenant values stay in management storage.",
@@ -1431,7 +1431,7 @@ text = client.post_messages(
     ],
     examples: [
       ["Meta Muse route", "A caller sends provider=meta and model=muse-spark-1.2 through Chat Completions."],
-      ["Qwen alias", "A caller uses provider=qwen for DashScope routing."],
+      ["Qwen alias", "A caller uses provider=qwen for Alibaba Cloud routing."],
       ["MiniMax route", "A caller can select any configured MiniMax M2 route, such as provider=minimax and model=minimax-m2.7-highspeed, through the shared Chat Completions adapter."],
       ["xAI route", "A Grok text request uses the OpenAI-compatible chat adapter behind provider=xai."],
     ],
