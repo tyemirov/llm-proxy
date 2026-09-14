@@ -1819,14 +1819,14 @@ providers:
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: dashscope
       connection_ownership: tenant
-      label: DashScope
-      api_service_label: DashScope API
-      key_acquisition_url: https://help.aliyun.com/en/model-studio/get-api-key
+      label: Alibaba Cloud
+      api_service_label: Alibaba Cloud
+      key_acquisition_url: https://www.alibabacloud.com/help/en/model-studio/get-api-key
       aliases:
         - qwen
       fields:
         - id: api_key
-          label: DashScope API key
+          label: Alibaba Cloud API key
           kind: credential
           type: opaque
           required: true
@@ -1836,7 +1836,7 @@ providers:
             minimum_length: 1
           environment: DASHSCOPE_API_KEY
         - id: base_url
-          label: DashScope API URL
+          label: Alibaba Cloud API URL
           kind: setting
           type: url
           required: true
