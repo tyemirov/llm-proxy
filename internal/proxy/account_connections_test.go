@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -164,7 +165,9 @@ func TestAccountConnectionSharedRoutingAndTenantUsage(t *testing.T) {
 		_, _ = writer.Write([]byte(`{"id":"shared-response","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"tenant response"}]}],"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}`))
 	}))
 	t.Cleanup(upstream.Close)
-	router := newManagementRouter(t, proxy.Configuration{Endpoints: providerEndpoints(upstream.URL, proxy.ProviderNameOpenAI)})
+	databasePath := filepath.Join(t.TempDir(), "shared-connections.db")
+	configuration := proxy.Configuration{Endpoints: providerEndpoints(upstream.URL, proxy.ProviderNameOpenAI)}
+	router := newManagementRouterWithDatabasePath(t, configuration, databasePath)
 	owner := managementSessionCookie(t, "shared-route-owner")
 	first := requestManagementAccount(t, router, owner).Tenants[0].ID
 	second := createManagementTenant(t, router, owner, "FamilyHome").Tenant.ID
@@ -209,6 +212,26 @@ func TestAccountConnectionSharedRoutingAndTenantUsage(t *testing.T) {
 	if usage := requestManagementAccountUsage(t, router, owner); usage.Totals.Requests != 4 {
 		t.Fatalf("account requests=%d want=4", usage.Totals.Requests)
 	}
+	before := exchange(http.MethodGet, "/connections/"+id, nil, http.StatusOK)
+	tenantBefore := exchange(http.MethodGet, "/tenants/"+first, nil, http.StatusOK)
+	router = newManagementRouterWithDatabasePath(t, configuration, databasePath)
+	if after := exchange(http.MethodGet, "/connections/"+id, nil, http.StatusOK); !reflect.DeepEqual(before, after) {
+		t.Fatal("restart changed shared connection fields, assignments, or timestamps")
+	}
+	if after := exchange(http.MethodGet, "/tenants/"+first, nil, http.StatusOK); !reflect.DeepEqual(tenantBefore, after) {
+		t.Fatal("restart changed tenant defaults, prompts, or timestamps")
+	}
+	if usage := requestManagementAccountUsage(t, router, owner); usage.Totals.Requests != 4 {
+		t.Fatalf("restart changed usage history: requests=%d want=4", usage.Totals.Requests)
+	}
+	for _, secret := range secrets {
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/?"+url.Values{"key": {secret}, "prompt": {"after restart"}}.Encode(), nil))
+		if response.Code != http.StatusOK {
+			t.Fatalf("restart lost tenant access or provider credentials: status=%d", response.Code)
+		}
+	}
+	waitForManagementRequestCount(t, router, owner, 6)
 }
 
 func TestAccountConnectionStartupValidatesUnassignedConnections(t *testing.T) {

@@ -408,17 +408,6 @@ func TestManagedProviderConnectionsMigrationWrapperRejectsStageFailures(t *testi
 }
 
 func TestManagedProviderConnectionsSchemaInitializationEdges(t *testing.T) {
-	t.Run("fresh schema predecessor drop", func(t *testing.T) {
-		database, openError := gorm.Open(failingManagedDropDialector{Dialector: sqlite.Open(filepath.Join(t.TempDir(), "drop.db"))}, &gorm.Config{})
-		if openError != nil {
-			t.Fatalf("open fresh schema fixture: %v", openError)
-		}
-		migrationError := initializeManagedTenantSchema(database, internalManagedProviderKeyCipher(), internalManagementProviderRegistry())
-		if !errors.Is(migrationError, errManagedTenantSchemaMigration) || !strings.Contains(migrationError.Error(), "operation=drop_predecessor") {
-			t.Fatalf("migration error=%v want predecessor drop failure", migrationError)
-		}
-	})
-
 	t.Run("version eight predecessor shape", func(t *testing.T) {
 		fixture := newOpenAIProviderConnectionsMigrationFixture(t)
 		if createError := fixture.database.Create(&managedSchemaMigrationRecord{Version: managedZAIProviderSchemaVersion, AppliedAt: fixture.predecessor.CreatedAt}).Error; createError != nil {

@@ -50,9 +50,7 @@ func TestAccountConnectionMigrationFailuresPreservePredecessor(t *testing.T) {
 			}
 			cipher := internalManagedProviderKeyCipher()
 			providers := internalManagementProviderRegistry()
-			if err := initializeManagedTenantSchemaRecords(database, cipher, providers); err != nil {
-				t.Fatal(err)
-			}
+			createPredecessorAccountConnectionFixtureSchema(t, database)
 			now := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
 			if err := database.Create(&managedUserRecord{UserID: "owner", CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 				t.Fatal(err)
@@ -122,7 +120,7 @@ func TestAccountConnectionMigrationFailuresPreservePredecessor(t *testing.T) {
 }
 
 func TestAccountConnectionStartupRejectsInvalidSchemaAndRelations(t *testing.T) {
-	for _, scenario := range []string{"missing-table", "predecessor-table", "usage-schema", "version-read", "connections-read", "tenants-read", "missing-profile", "invalid-profile"} {
+	for _, scenario := range []string{"missing-table", "predecessor-table", "usage-schema", "connections-read", "tenants-read", "missing-profile", "invalid-profile"} {
 		t.Run(scenario, func(t *testing.T) {
 			service, database, server := newAccountConnectionHTTPFixture(t)
 			created := accountConnectionHTTPExchange(t, server, http.MethodPost, managementConnectionsPath, `{"name":"Startup","provider":"openai","fields":{"api_key":"sk-original"}}`, http.StatusCreated)
@@ -135,8 +133,6 @@ func TestAccountConnectionStartupRejectsInvalidSchemaAndRelations(t *testing.T) 
 				changeError = database.database.AutoMigrate(&managedProviderConnectionRecord{})
 			case "usage-schema":
 				changeError = database.database.Migrator().DropTable(&managedUsageEventRecord{})
-			case "version-read":
-				registerManagedGORMError(t, database.database, "startup_failure", "query", managedSchemaMigrationTable, errInternalTestDatabase)
 			case "connections-read":
 				registerManagedGORMError(t, database.database, "startup_failure", "query", "managed_account_connection_records", errInternalTestDatabase)
 			case "tenants-read":
@@ -164,9 +160,7 @@ func TestAccountConnectionMigrationRejectsInvalidPredecessorState(t *testing.T) 
 		}
 		cipher := internalManagedProviderKeyCipher()
 		providers := internalManagementProviderRegistry()
-		if err := initializeManagedTenantSchemaRecords(database, cipher, providers); err != nil {
-			t.Fatal(err)
-		}
+		createPredecessorAccountConnectionFixtureSchema(t, database)
 		if scenario == "unexpected-version" {
 			if err := database.Create(&managedSchemaMigrationRecord{Version: 999, AppliedAt: time.Now().UTC()}).Error; err != nil {
 				t.Fatal(err)

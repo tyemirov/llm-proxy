@@ -102,9 +102,11 @@ func TestProviderCatalogProjectsProviderCardTaxonomy(testingInstance *testing.T)
 	}
 	var profile struct {
 		Providers []struct {
-			ID              string `json:"id"`
-			APIServiceLabel string `json:"api_service_label"`
-			ModelFamilies   []struct {
+			ID                string `json:"id"`
+			Label             string `json:"label"`
+			KeyAcquisitionURL string `json:"key_acquisition_url"`
+			APIServiceLabel   string `json:"api_service_label"`
+			ModelFamilies     []struct {
 				Label string `json:"label"`
 			} `json:"model_families"`
 			Capabilities []string `json:"capabilities"`
@@ -119,13 +121,16 @@ func TestProviderCatalogProjectsProviderCardTaxonomy(testingInstance *testing.T)
 		capabilities    []string
 	}{
 		proxy.ProviderNameOpenAI:      {apiServiceLabel: "OpenAI API", families: []string{"GPT-6", "GPT-4", "GPT-5", "GPT Transcribe"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.ModelOperationDictation}},
-		proxy.ProviderNameDashScope:   {apiServiceLabel: "DashScope API", families: []string{"Qwen"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput}},
+		proxy.ProviderNameDashScope:   {apiServiceLabel: "Alibaba Cloud", families: []string{"Qwen"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput}},
 		proxy.ProviderNameGemini:      {apiServiceLabel: "Gemini API", families: []string{"Gemini"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityAudioInput, proxy.ModelOperationDictation}},
 		proxy.ProviderNameMeta:        {apiServiceLabel: "Meta API", families: []string{"Muse Spark"}, capabilities: []string{proxy.ModelOperationText}},
 		proxy.ProviderNameSiliconFlow: {apiServiceLabel: "SiliconFlow API", families: []string{"DeepSeek R1", "SenseVoice"}, capabilities: []string{proxy.ModelOperationText, proxy.ModelOperationDictation}},
 	}
 	observed := map[string]bool{}
 	for _, provider := range profile.Providers {
+		if provider.ID == proxy.ProviderNameDashScope && (provider.Label != "Alibaba Cloud" || provider.KeyAcquisitionURL != "https://www.alibabacloud.com/help/en/model-studio/get-api-key") {
+			testingInstance.Fatalf("Alibaba Cloud setup label=%q URL=%q", provider.Label, provider.KeyAcquisitionURL)
+		}
 		expectedProvider, required := expected[provider.ID]
 		if !required {
 			continue

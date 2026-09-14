@@ -785,29 +785,19 @@ func TestManagedTenantSQLiteOwnershipMigrationRollsBackInvalidData(t *testing.T)
 	}
 }
 
-func TestManagedTenantSchemaRejectsUnknownVersion(t *testing.T) {
+func TestManagedTenantPredecessorSchemaRejectsUnknownVersion(t *testing.T) {
 	databasePath := filepath.Join(t.TempDir(), "unknown-version.db")
-	providerKeyCipher := internalManagedProviderKeyCipher()
-	providers := internalManagementProviderRegistry()
-	database, databaseError := newGORMManagedTenantDatabase(
-		ManagementConfiguration{
-			DatabasePath:      databasePath,
-			DatabaseDialector: sqlite.Open(databasePath),
-		},
-		providerKeyCipher,
-		providers,
-	)
-	if databaseError != nil {
-		t.Fatalf("create current schema: %v", databaseError)
+	database, err := gorm.Open(sqlite.Open(databasePath), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if updateError := database.database.Model(&managedSchemaMigrationRecord{}).
-		Where(&managedSchemaMigrationRecord{Version: managedTenantSchemaVersion}).
-		Update(managedSchemaVersionColumn, managedTenantSchemaVersion+1).Error; updateError != nil {
-		t.Fatalf("write unknown schema version: %v", updateError)
+	createPredecessorAccountConnectionFixtureSchema(t, database)
+	if err := database.Model(&managedSchemaMigrationRecord{}).Where("version = ?", managedOpenAITranscriptionSchemaVersion).Update(managedSchemaVersionColumn, managedTenantSchemaVersion+1).Error; err != nil {
+		t.Fatal(err)
 	}
-	reopenError := initializeManagedTenantSchema(database.database, providerKeyCipher, providers)
-	if reopenError == nil || !strings.Contains(reopenError.Error(), "operation=validate_version") {
-		t.Fatalf("reopen error=%v want unknown-version rejection", reopenError)
+	err = initializeManagedTenantSchema(database, internalManagedProviderKeyCipher(), internalManagementProviderRegistry())
+	if err == nil || !strings.Contains(err.Error(), "operation=validate_version") {
+		t.Fatalf("predecessor error=%v want unknown-version rejection", err)
 	}
 }
 

@@ -324,8 +324,10 @@ func validateAccountConnectionSchema(database *gorm.DB, keyCipher managedProvide
 			return fmt.Errorf("%w: account connection table missing", errManagedTenantSchemaMigration)
 		}
 	}
-	if database.Migrator().HasTable(managedProviderConnectionTable) {
-		return fmt.Errorf("%w: predecessor connection table remains", errManagedTenantSchemaMigration)
+	for _, table := range []string{managedProviderKeyTable, managedProviderConnectionTable, legacyTenantMigrationTable, legacyProviderKeyMigrationTable, legacyUsageEventMigrationTable, obsoleteStaticMigrationTable, obsoleteRoutingMigrationTable} {
+		if database.Migrator().HasTable(table) {
+			return fmt.Errorf("%w: operation=validate_current_schema predecessor_table=%s", errManagedTenantSchemaMigration, table)
+		}
 	}
 	if err := validateManagedUsageDispositionSchema(database); err != nil {
 		return err

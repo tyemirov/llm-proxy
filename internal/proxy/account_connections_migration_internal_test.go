@@ -40,6 +40,16 @@ func assertMigratedConnectionField(t *testing.T, database *gorm.DB, cipher manag
 	}
 }
 
+func createPredecessorAccountConnectionFixtureSchema(t *testing.T, database *gorm.DB) {
+	t.Helper()
+	if err := database.AutoMigrate(&managedUserRecord{}, &managedTenantRecord{}, &managedProviderConnectionRecord{}, &managedProviderProfileRecord{}, &managedUsageEventRecord{}, &managedSchemaMigrationRecord{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Create(&managedSchemaMigrationRecord{Version: managedOpenAITranscriptionSchemaVersion, AppliedAt: time.Now().UTC()}).Error; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAccountConnectionMigration(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "migration.db")), &gorm.Config{})
 	if err != nil {
@@ -47,9 +57,7 @@ func TestAccountConnectionMigration(t *testing.T) {
 	}
 	cipher := internalManagedProviderKeyCipher()
 	providers := internalManagementProviderRegistry()
-	if err := initializeManagedTenantSchemaRecords(db, cipher, providers); err != nil {
-		t.Fatal(err)
-	}
+	createPredecessorAccountConnectionFixtureSchema(t, db)
 	now := time.Date(2026, 9, 10, 9, 0, 0, 0, time.UTC)
 	user := managedUserRecord{UserID: "migration-owner", CreatedAt: now, UpdatedAt: now}
 	if err := db.Create(&user).Error; err != nil {

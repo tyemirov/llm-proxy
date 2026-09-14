@@ -288,7 +288,7 @@ type managedTenantRecord struct {
 	// ProviderAPIKeys is populated only by bounded predecessor-schema migrations.
 	ProviderAPIKeys       []managedProviderAPIKeyRecord     `gorm:"-"`
 	ConnectionAssignments []managedTenantConnectionRecord   `gorm:"foreignKey:TenantID;references:TenantID;constraint:OnDelete:CASCADE"`
-	ProviderConnections   []managedProviderConnectionRecord `gorm:"foreignKey:TenantID;references:TenantID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	ProviderConnections   []managedProviderConnectionRecord `gorm:"-:migration;foreignKey:TenantID;references:TenantID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	ProviderProfiles      []managedProviderProfileRecord    `gorm:"foreignKey:TenantID;references:TenantID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	UsageEvents           []managedUsageEventRecord         `gorm:"foreignKey:TenantID;references:TenantID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	CreatedAt             time.Time                         `gorm:"index:idx_managed_tenant_owner_created,priority:2"`
@@ -637,6 +637,24 @@ func migrateCurrentManagedSchema(database *gorm.DB) error {
 
 func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry) error {
 	return database.Transaction(func(transaction *gorm.DB) error {
+		tables, err := transaction.Migrator().GetTables()
+		if err != nil {
+			return fmt.Errorf("%w: operation=inspect_schema: %w", errManagedTenantSchemaMigration, err)
+		}
+		if len(tables) == 0 {
+			if err := transaction.AutoMigrate(
+				&managedUserRecord{}, &managedTenantRecord{}, &managedProviderProfileRecord{},
+				&managedUsageEventRecord{},
+				&managedAccountConnectionRecord{}, &managedConnectionFieldRecord{},
+				&managedTenantConnectionRecord{}, &managedConnectionCreationRecord{},
+			); err != nil {
+				return fmt.Errorf("%w: operation=create_current_schema: %w", errManagedTenantSchemaMigration, err)
+			}
+			return nil
+		}
+		if transaction.Migrator().HasTable(&managedAccountConnectionRecord{}) {
+			return validateAccountConnectionSchema(transaction, providerKeyCipher, providers)
+		}
 		var version managedSchemaMigrationRecord
 		if transaction.Migrator().HasTable(&managedSchemaMigrationRecord{}) {
 			err := transaction.Order("version DESC").First(&version).Error
@@ -659,7 +677,7 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 			return err
 		}
 		if recordError := transaction.Clauses(clause.OnConflict{DoNothing: true}).Create(&managedSchemaMigrationRecord{Version: managedTenantSchemaVersion, AppliedAt: time.Now().UTC()}).Error; recordError != nil {
-			return fmt.Errorf("%w: operation=record_version version=%d: %v", errManagedTenantSchemaMigration, managedTenantSchemaVersion, recordError)
+			return fmt.Errorf("%w: operation=record_version version=%d: %w", errManagedTenantSchemaMigration, managedTenantSchemaVersion, recordError)
 		}
 		return nil
 	})
@@ -668,15 +686,7 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 func initializeManagedTenantSchemaRecords(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry) error {
 	migrator := database.Migrator()
 	if !migrator.HasTable(managedTenantTable) {
-		return database.Transaction(func(transaction *gorm.DB) error {
-			if migrationError := migrateCurrentManagedSchema(transaction); migrationError != nil {
-				return fmt.Errorf("%w: operation=create_current_schema: %v", errManagedTenantSchemaMigration, migrationError)
-			}
-			if dropError := transaction.Migrator().DropTable(&managedProviderAPIKeyRecord{}); dropError != nil {
-				return fmt.Errorf("%w: operation=drop_predecessor table=%s: %v", errManagedTenantSchemaMigration, managedProviderKeyTable, dropError)
-			}
-			return transaction.Create(&managedSchemaMigrationRecord{Version: managedOpenAITranscriptionSchemaVersion, AppliedAt: time.Now().UTC()}).Error
-		})
+		return fmt.Errorf("%w: operation=validate_current_schema missing_table=%s", errManagedTenantSchemaMigration, managedTenantTable)
 	}
 	if managedTableHasColumn(migrator, managedTenantTable, "user_id") {
 		return migrateLegacyManagedTenantSchema(database, providerKeyCipher, providers)

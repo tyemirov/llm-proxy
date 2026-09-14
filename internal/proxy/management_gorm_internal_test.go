@@ -45,6 +45,7 @@ func TestManagedTenantGORMInitializationEdges(t *testing.T) {
 	if openError != nil {
 		t.Fatalf("open version-error database: %v", openError)
 	}
+	createPredecessorAccountConnectionFixtureSchema(t, versionErrorDatabase)
 	if callbackError := versionErrorDatabase.Callback().Create().Before("gorm:create").Register("f014_version_create_error", func(callbackDatabase *gorm.DB) {
 		if callbackDatabase.Statement.Table == managedSchemaMigrationTable {
 			callbackDatabase.AddError(errInternalTestDatabase)
