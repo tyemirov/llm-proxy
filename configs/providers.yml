@@ -5608,9 +5608,10 @@ providers:
               source: https://cloud.google.com/vertex-ai/generative-ai/pricing
               last_verified: '2026-09-07'
     - id: dictator
-      connection_ownership: deployment
+      connection_ownership: tenant
       label: Dictator
       api_service_label: Dictator Speech API
+      key_acquisition_url: https://github.com/tyemirov/dictator
       fields:
         - id: grpc_address
           label: Dictator gRPC address
@@ -5621,7 +5622,6 @@ providers:
           secret: false
           validation:
             minimum_length: 1
-          environment: DICTATOR_GRPC_ADDR
         - id: grpc_auth_token
           label: Dictator gRPC bearer token
           kind: credential
@@ -5631,7 +5631,6 @@ providers:
           secret: true
           validation:
             minimum_length: 1
-          environment: DICTATOR_GRPC_AUTH_TOKEN
         - id: grpc_tls
           label: Dictator gRPC TLS
           kind: setting
@@ -5641,7 +5640,6 @@ providers:
           secret: false
           validation:
             minimum_length: 1
-          environment: DICTATOR_GRPC_TLS
       transports:
         - id: speech
           endpoint:
@@ -5679,31 +5677,31 @@ providers:
           prices:
             - operation: audio_transcription
               available: false
-              unavailable_reason: Dictator is a deployment-owned provider without tenant billing.
+              unavailable_reason: Dictator server prices are not available from the provider contract.
               source: https://github.com/tyemirov/dictator
               last_verified: '2026-09-10'
             - operation: audio_diarization
               available: false
-              unavailable_reason: Dictator is a deployment-owned provider without tenant billing.
+              unavailable_reason: Dictator server prices are not available from the provider contract.
               source: https://github.com/tyemirov/dictator
               last_verified: '2026-09-10'
             - operation: audio_alignment
               available: false
-              unavailable_reason: Dictator is a deployment-owned provider without tenant billing.
+              unavailable_reason: Dictator server prices are not available from the provider contract.
               source: https://github.com/tyemirov/dictator
               last_verified: '2026-09-10'
             - operation: subtitle_creation
               available: false
-              unavailable_reason: Dictator is a deployment-owned provider without tenant billing.
+              unavailable_reason: Dictator server prices are not available from the provider contract.
               source: https://github.com/tyemirov/dictator
               last_verified: '2026-09-10'
             - operation: speech_generation
               available: false
-              unavailable_reason: Dictator is a deployment-owned provider without tenant billing.
+              unavailable_reason: Dictator server prices are not available from the provider contract.
               source: https://github.com/tyemirov/dictator
               last_verified: '2026-09-10'
             - operation: voice_extraction
               available: false
-              unavailable_reason: Dictator is a deployment-owned provider without tenant billing.
+              unavailable_reason: Dictator server prices are not available from the provider contract.
               source: https://github.com/tyemirov/dictator
               last_verified: '2026-09-10'
