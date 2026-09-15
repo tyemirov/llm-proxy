@@ -4,6 +4,7 @@ import {readFile,mkdir} from 'node:fs/promises';
 import path from 'node:path';
 import {assets,directory} from './sharedUIAssets.mjs';
 import {localManagementProfile,startLocalManagementStack} from './localManagementStack.mjs';
+import {startDictatorProtocolFixture} from './dictatorProtocolFixture.mjs';
 
 let stack;
 test.beforeAll(async()=>{stack=await startLocalManagementStack();});
@@ -174,5 +175,28 @@ test('account connection dashboard links Social Threader explicitly and preserve
  await expect(unassigned).toContainText('Connected');
  await expect(dashboard.locator('[data-connection-node]')).toHaveCount(2);
  expect(creates).toBe(1);
+ await page.unroute('**/api/management/connections');
+ const dictator=await startDictatorProtocolFixture();
+ try {
+  await dashboard.getByRole('button',{name:'Create connection',exact:true}).click();
+  dialog=page.getByRole('dialog');
+  await dialog.getByLabel('Connection name').fill('Private speech server');
+  await dialog.getByLabel('Provider',{exact:true}).selectOption('dictator');
+  await dialog.getByLabel('Dictator gRPC address',{exact:true}).fill(dictator.address);
+  await dialog.getByLabel('Dictator gRPC bearer token',{exact:true}).fill('browser-dictator-token');
+  await dialog.getByLabel('Dictator gRPC TLS',{exact:true}).selectOption('false');
+  await dialog.getByRole('button',{name:'Create connection',exact:true}).click();
+  await expect(dialog).not.toBeVisible();
+  const speech=dashboard.locator('[data-connection-node]').filter({hasText:'Private speech server'});
+  await expect(speech).toContainText('Connected');
+  await expect(dashboard.locator('[data-provider-profile]')).toHaveCount(0);
+  await dashboard.getByRole('button',{name:'Media',exact:true}).click();
+  await dashboard.locator('[data-model="dictator-speech-v1"]').click();
+  await expect(dashboard.locator('[data-media-details]')).toContainText('Speech synthesis');
+  await expect(dashboard.locator('[data-media-details]')).toContainText('Voice extraction');
+  await expect(dashboard).not.toContainText('browser-dictator-token');
+  await page.reload();
+  await expect(dashboard.locator('[data-connection-node]').filter({hasText:'Private speech server'})).toBeVisible();
+ } finally { await dictator.stop(); }
  expect(errors).toEqual([]);
 });

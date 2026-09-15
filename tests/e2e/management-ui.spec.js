@@ -1654,7 +1654,9 @@ test("site publishes the exact canonical OpenAPI artifact and its derived refere
   expect(documentationHTML).toContain('id="operation-getHealth"');
   expect(documentationHTML).toContain('id="operation-postMCPRequest"');
   expect(documentationHTML).toContain('id="operation-getMCPResourceMetadata"');
-  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(47);
+  expect(documentationHTML).toContain('id="operation-getProviderDiagnostics"');
+  expect(documentationHTML).toContain('id="operation-getProviderDiagnosticsHeaders"');
+  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(49);
 });
 
 test("OpenCode integration opens the bearer-authenticated client API reference", async ({ page }) => {
