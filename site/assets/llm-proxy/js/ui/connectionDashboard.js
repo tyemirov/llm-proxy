@@ -3,7 +3,7 @@
 import * as backend from '../core/backendClient.js?v=20260903f037';
 import {profileFailureMessage} from '../core/managementProfile.js?v=20260903f037';
 
-import {COPY} from '../constants.js?v=20260903f037';
+import {COPY, PROVIDER_CAPABILITY_LABELS} from '../constants.js?v=20260903f037';
 
 const MCP_PATH = '/mcp';
 
@@ -25,6 +25,7 @@ export class ConnectionDashboard extends HTMLElement {
   /** @type {import('../types.d.js').ProviderProfile[]} */ providers = [];
   /** @type {import('../types.d.js').ManagementTenantProfile|null} */ profile = null;
   /** @type {Record<string, string>} */ modelFamilies = {};
+  /** @type {{provider:string,model:string,capabilities:string[]}[]} */ mediaOfferings = [];
   tenantID = '';
   connectionID = '';
   modelID = '';
@@ -49,7 +50,7 @@ export class ConnectionDashboard extends HTMLElement {
       }
     }, {signal:this.controller.signal});
     this.observer.observe(this);
-    void this.run(async () => { this.modelFamilies = await backend.fetchModelFamilies(this.controller.signal); await this.reload(); await this.selectTenant(this.tenants[0]?.id || ''); });
+    void this.run(async () => { const catalog = await backend.fetchDashboardModels(this.controller.signal); this.modelFamilies = catalog.families; this.mediaOfferings = catalog.offerings.filter(o=>o.capabilities.some(c=>!['text','dictation','image_input','audio_input','web_search','reasoning'].includes(c)));  await this.reload(); await this.selectTenant(this.tenants[0]?.id || ''); });
   }
   disconnectedCallback() { this.controller.abort(); this.observer.disconnect(); this.secret = ''; this.requestExample = ''; this.revision += 1; }
   get connection() { return this.connections.find(c => c.id === this.connectionID); }
@@ -60,6 +61,7 @@ export class ConnectionDashboard extends HTMLElement {
 
   /** @param {string} id */
   isDefaultModel(id) {
+    if(this.capability==='media')return false;
     const defaults=this.profile?.tenant.defaults;
     return this.connection?.provider===(this.capability==='text'?defaults?.provider:defaults?.dictation_provider)
       && id===(this.capability==='text'?defaults?.model:defaults?.dictation_model);
@@ -140,7 +142,7 @@ export class ConnectionDashboard extends HTMLElement {
     const map = this.querySelector('[data-map]'); if (!map) return;
     const matches = (/** @type {string} */ text) => text.toLowerCase().includes(this.search.toLowerCase());
     const disabled = this.busy ? 'disabled':'';
-    const modelIDs = this.attached && this.ready && this.provider ? (this.capability === 'text' ? this.provider.text_models.map(m=>m.id) : this.provider.dictation_models) : [];
+    const modelIDs = this.attached && this.ready && this.provider ? (this.capability === 'media' ? this.mediaOfferings.filter(o=>o.provider===this.connection?.provider).map(o=>o.model) : this.capability === 'text' ? this.provider.text_models.map(m=>m.id) : this.provider.dictation_models) : [];
     map.innerHTML = `<svg class="cw-wires" aria-hidden="true"></svg>
       <section class="cw-column"><header><h3>Tenants <span>${this.tenants.length}</span></h3><button data-action="create-tenant" ${disabled}>Create tenant</button></header>
       <button class="cw-account ${this.tenantID ? '':'selected'}" data-action="account">Account usage</button><div class="cw-list">
@@ -150,7 +152,7 @@ export class ConnectionDashboard extends HTMLElement {
         const assigned=c.tenant_ids.includes(this.tenantID); const occupied=this.connections.some(other=>other.provider===c.provider && other.tenant_ids.includes(this.tenantID));
         return `<article class="cw-node ${c.id===this.connectionID?(assigned?'selected':'browsing'):''}" data-connection-node="${escapeHTML(c.id)}"><div class="cw-row"><button class="cw-name" data-connection="${escapeHTML(c.id)}">${providerIcon(c.provider)}<strong>${escapeHTML(c.name)}</strong></button>${this.tenantID ? assigned ? '<span class="cw-connected">✓ Connected</span>' : occupied ? '<span class="cw-muted">Provider already connected</span>' : `<button class="cw-connect" data-connect="${escapeHTML(c.id)}" ${disabled}>Connect</button>` : ''}</div><small>${escapeHTML(this.providers.find(p=>p.id===c.provider)?.api_service_label || c.provider)}</small><small>${c.tenant_ids.length ? `Used by ${c.tenant_ids.length} tenant${c.tenant_ids.length===1?'':'s'}`:'Unassigned'}</small>${connectionReady(c)?'':'<small>Credentials needed</small>'}</article>`;
       }).join('') || '<p class="cw-empty">Create a connection to add provider credentials.</p>'}</div></section>
-      <section class="cw-column"><header><h3>Models</h3></header><div class="cw-tabs" role="group" aria-label="Model capability"><button data-capability="text" aria-pressed="${this.capability==='text'}">Text</button><button data-capability="dictation" aria-pressed="${this.capability==='dictation'}">Dictation</button></div><div class="cw-list">
+      <section class="cw-column"><header><h3>Models</h3></header><div class="cw-tabs" role="group" aria-label="Model capability"><button data-capability="text" aria-pressed="${this.capability==='text'}">Text</button><button data-capability="dictation" aria-pressed="${this.capability==='dictation'}">Dictation</button><button data-capability="media" aria-pressed="${this.capability==='media'}">Media</button></div><div class="cw-list">
       ${modelIDs.filter(matches).map(id=>{const saved=this.isDefaultModel(id);return `<button class="cw-node ${this.modelID===id?(saved?'selected':'preview'):''}" data-model="${escapeHTML(id)}" ${disabled}><span class="cw-row"><brand-icon kind="family" identifier="${escapeHTML(this.modelFamilies[id])}"></brand-icon><code>${escapeHTML(id)}</code></span>${saved?'<small class="cw-connected">★ Default model</small>':''}</button>`;}).join('') || `<p class="cw-empty">${this.attached ? this.ready ? 'No models for this capability.' : 'Add credentials to choose models. Edit this connection to complete its setup.' : 'Connect to choose models.<br>Use a Connect button in the middle column.'}</p>`}</div></section>`;
     const footer=this.querySelector('[data-route]');
     if (footer) footer.textContent=this.connection ? `${this.tenantName} ${this.attached?'→':'· Viewing'} ${this.connection.name}${this.attached?'':' · Not connected'}${this.modelID?(this.isDefaultModel(this.modelID)?' · Saved default: ':' · Preview: ')+this.modelID:''}` : `${this.tenantName} · Select a connection`;
@@ -184,13 +186,17 @@ export class ConnectionDashboard extends HTMLElement {
       <p class="cw-muted">${c.tenant_ids.length?'Used by '+c.tenant_ids.map(id=>escapeHTML(this.tenants.find(t=>t.id===id)?.name || id)).join(', '):'Unassigned'}</p>
       <dl class="cw-fields">${c.fields.map(f=>`<div><dt>${escapeHTML(f.label)}</dt><dd>${escapeHTML(f.secret?(f.masked_value||'Not configured'):f.value)}</dd></div>`).join('')}</dl>
       ${this.attached && this.modelID ? this.modelDetails() : ''}
-      ${this.attached ? `<form data-provider-profile><label>Provider system prompt for ${escapeHTML(this.tenantName)}<textarea name="provider_prompt">${escapeHTML(this.profile?.providers.find(p=>p.id===c.provider)?.system_prompt || '')}</textarea></label><button type="button" data-action="save-provider-profile" ${disabled}>Save provider prompt</button></form>` : ''}`;
+      ${this.attached && this.provider?.text_models.length ? `<form data-provider-profile><label>Provider system prompt for ${escapeHTML(this.tenantName)}<textarea name="provider_prompt">${escapeHTML(this.profile?.providers.find(p=>p.id===c.provider)?.system_prompt || '')}</textarea></label><button type="button" data-action="save-provider-profile" ${disabled}>Save provider prompt</button></form>` : ''}`;
     } else {
       details.innerHTML=`<header class="cw-row"><h3>${escapeHTML(this.tenantName)}</h3>${this.tenantID?`<button data-action="rename-tenant" ${disabled}>Rename tenant</button><button data-action="tenant-access" ${disabled}>API access</button><button data-action="delete-tenant" ${this.tenants.length===1?'disabled':disabled}>Delete tenant</button>`:''}</header><p class="cw-muted">${this.tenantID?'Connect providers to keep this tenant’s usage separate.':'Choose a tenant to manage its connections.'}</p>`;
     }
     if(this.tenantID && c) details.insertAdjacentHTML('beforeend',`<footer class="cw-row"><span>${escapeHTML(this.tenantName)}</span><button data-action="tenant-details">Tenant details and API access</button></footer>`);
   }
   modelDetails() {
+    if(this.capability==='media') {
+      const offering=this.mediaOfferings.find(o=>o.provider===this.connection?.provider && o.model===this.modelID);
+      return `<section data-media-details><h4>${escapeHTML(this.modelID)}</h4><p>Available through this tenant’s API key.</p><ul>${(offering?.capabilities||[]).map(capability=>`<li>${escapeHTML(PROVIDER_CAPABILITY_LABELS[/** @type {keyof typeof PROVIDER_CAPABILITY_LABELS} */(capability)]||capability)}</li>`).join('')}</ul></section>`;
+    }
     const model=this.provider?.text_models.find(m=>m.id===this.modelID);
     const efforts=this.capability==='text'?(model?.reasoning_effort?.efforts||[]):[];
     const defaults=this.profile?.tenant.defaults;
@@ -300,11 +306,11 @@ export class ConnectionDashboard extends HTMLElement {
       this.closeDialog();
       this.message=edit?'Connection saved.':'Connection created. Use Connect to attach it to this tenant.';
       if(!edit && data.get('attach'))await backend.assignConnection(this.tenantID,result.provider,result.id,this.controller.signal);
-      await this.reload();this.message='Connection saved.';
+      await this.reload();if(!provider.text_models.length)this.capability='media';this.message='Connection saved.';
     });
     const renderFields=()=>{
       const host=this.querySelector('[data-credential-fields]');if(!host)return;
-      host.innerHTML=`<p><a href="${escapeHTML(provider.key_acquisition_url)}" target="_blank" rel="noopener noreferrer">Get ${escapeHTML(provider.label)} credentials ↗</a></p>${provider.fields.map(field=>{const saved=c?.fields.find(f=>f.id===field.id);return `<label>${escapeHTML(field.label)}<input name="field-${escapeHTML(field.id)}" type="${field.secret?'password':field.type==='url'?'url':'text'}" autocomplete="off" ${field.required && !(edit&&field.secret&&saved?.configured)?'required':''} value="${field.secret?'':escapeHTML(saved?.value||field.default)}" placeholder="${escapeHTML(saved?.masked_value||(field.secret?'Enter credential':''))}"></label>`;}).join('')}${edit?'<p class="cw-muted">Leave a saved credential blank to retain it.</p>':''}`;
+      host.innerHTML=`<p><a href="${escapeHTML(provider.key_acquisition_url)}" target="_blank" rel="noopener noreferrer">Get ${escapeHTML(provider.label)} credentials ↗</a></p>${provider.fields.map(field=>{const saved=c?.fields.find(f=>f.id===field.id);if(field.type==='boolean')return `<label>${escapeHTML(field.label)}<select aria-label="${escapeHTML(field.label)}" name="field-${escapeHTML(field.id)}" required><option value="">Choose TLS setting</option><option value="true" ${(saved?.value||field.default)==='true'?'selected':''}>TLS enabled</option><option value="false" ${(saved?.value||field.default)==='false'?'selected':''}>TLS disabled</option></select></label>`;return `<label>${escapeHTML(field.label)}<input name="field-${escapeHTML(field.id)}" type="${field.secret?'password':field.type==='url'?'url':'text'}" autocomplete="off" ${field.required && !(edit&&field.secret&&saved?.configured)?'required':''} value="${field.secret?'':escapeHTML(saved?.value||field.default)}" placeholder="${escapeHTML(saved?.masked_value||(field.secret?'Enter credential':''))}"></label>`;}).join('')}${edit?'<p class="cw-muted">Leave a saved credential blank to retain it.</p>':''}`;
     };
     renderFields();this.querySelector('select[name="provider"]')?.addEventListener('change',event=>{if(event.target instanceof HTMLSelectElement){const value=event.target.value;const next=this.providers.find(p=>p.id===value);if(next){provider=next;renderFields();}}});
   }

@@ -125,6 +125,12 @@ export const PROVIDER_CAPABILITY_LABELS = Object.freeze({
   audio_input: "Audio analysis",
   dictation: "Dictation",
   video_generation: "Video generation",
+  audio_transcription: "Transcription",
+  audio_diarization: "Speaker diarization",
+  audio_alignment: "Transcript alignment",
+  subtitle_creation: "Subtitles",
+  speech_generation: "Speech synthesis",
+  voice_extraction: "Voice extraction",
 });
 
 export const USER_MENU_ITEMS = Object.freeze([
