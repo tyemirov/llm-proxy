@@ -121,6 +121,9 @@ func newManagedRoutingProviders(providers *providerRegistry, providerSettings ma
 	routingProviders := make([]managedRoutingProvider, 0, len(keyedProviderIdentifiers))
 	for _, providerIdentifier := range keyedProviderIdentifiers {
 		settings := providerSettings[providerIdentifier]
+		if definition, exists := providers.definitions[providerIdentifier]; exists && len(definition.textModels) == 0 && settings.textModel == "" {
+			continue
+		}
 		definition, model, resolutionError := providers.resolveTextModel(providerIdentifier.string(), settings.textModel, constants.EmptyString, constants.EmptyString, false)
 		if resolutionError != nil {
 			return nil, managedRoutingDefaultsPairError(endpointKindText, providerIdentifier.string(), settings.textModel, resolutionError)

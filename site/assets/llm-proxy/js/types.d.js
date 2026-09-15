@@ -38,7 +38,7 @@
  *   id: string,
  *   label: string,
  *   kind: "credential" | "setting",
- *   type: "opaque" | "url",
+ *   type: "opaque" | "url" | "grpc_target" | "boolean",
  *   required: boolean,
  *   default: string,
  *   secret: boolean,

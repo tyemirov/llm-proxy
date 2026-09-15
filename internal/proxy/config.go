@@ -7,7 +7,6 @@ import (
 	"net/mail"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/tyemirov/llm-proxy/internal/constants"
 	"gorm.io/gorm"
@@ -91,8 +90,6 @@ type Configuration struct {
 	MediaOperationLifetimeSeconds     int
 	MediaOperationClaimSeconds        int
 	MediaOperationClaimRenewalSeconds int
-	dictatorProtocol                  dictatorProtocol
-	dictatorPollInterval              time.Duration
 	upstreamRateLimits                upstreamRateLimits
 	managementSessionValidator        *managementSessionValidator
 	requestTimeoutPolicy              requestTimeoutPolicy

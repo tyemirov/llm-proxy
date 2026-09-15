@@ -36,7 +36,7 @@ export function createAppRoutingDefaults(profile) {
   for (const provider of providers) {
     assertProviderCatalog(provider);
   }
-  const keyedTextProviders = providers.filter((provider) => provider.configured);
+  const keyedTextProviders = providers.filter((provider) => provider.configured && provider.text_models.length > 0);
   let textModel = null;
   if (defaults.provider === EMPTY_STRING || keyedTextProviders.length === 0) {
     if (defaults.provider !== EMPTY_STRING || defaults.model !== EMPTY_STRING || defaults.reasoning_effort !== EMPTY_STRING) {
@@ -251,8 +251,10 @@ export function assertProviderCatalog(provider) {
     !Array.isArray(provider.fields) ||
     provider.fields.length === 0 ||
     !Array.isArray(provider.text_models) ||
-    !provider.text_models.some((model) => model && model.id === provider.text_default_model) ||
-    !provider.text_models.some((model) => model && model.id === provider.text_model)
+    (provider.text_models.length === 0
+      ? provider.text_default_model !== EMPTY_STRING || provider.text_model !== EMPTY_STRING || provider.system_prompt !== EMPTY_STRING
+      : !provider.text_models.some((model) => model && model.id === provider.text_default_model) ||
+        !provider.text_models.some((model) => model && model.id === provider.text_model))
   ) {
     throw new Error(APP_INTEGRITY_ERROR);
   }
@@ -304,7 +306,7 @@ export function assertProviderField(field) {
     typeof field.label !== "string" ||
     field.label === EMPTY_STRING ||
     !["credential", "setting"].includes(field.kind) ||
-    !["opaque", "url"].includes(field.type) ||
+    !["opaque", "url", "grpc_target", "boolean"].includes(field.type) ||
     typeof field.required !== "boolean" ||
     typeof field.default !== "string" ||
     typeof field.secret !== "boolean" ||

@@ -927,8 +927,8 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 	matchedModelEfforts := map[string]bool{}
 	matchedKimiK3 := false
 	for _, provider := range profile.Providers {
-		if provider.ID == "dictator" {
-			t.Fatal("deployment-owned Dictator provider exposed in tenant connection profile")
+		if provider.ID == proxy.ProviderNameDictator && len(provider.TextModels) != 0 {
+			t.Fatal("speech-only Dictator provider exposes text routing models")
 		}
 		if provider.ID == proxy.ProviderNameOpenAI {
 			if len(provider.ReasoningEffort) != 0 {

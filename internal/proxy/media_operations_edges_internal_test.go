@@ -45,15 +45,15 @@ type internalMediaVoiceProvider struct {
 	err    error
 }
 
-func (provider internalMediaVoiceProvider) DiscoverMediaVoices(context.Context) ([]MediaVoiceProviderRecord, error) {
-	return provider.voices, provider.err
+func (provider internalMediaVoiceProvider) DiscoverMediaVoices(context.Context, string) (MediaVoiceDiscovery, error) {
+	return MediaVoiceDiscovery{Voices: provider.voices}, provider.err
 }
 
 func (adapter *deploymentMediaOperationAdapter) MediaOperationCredentialReference() string {
 	return adapter.credentialReference
 }
 
-func (adapter *mediaOperationInternalAdapter) Validate(request MediaOperationAdapterRequest) (MediaOperationValidatedRequest, error) {
+func (adapter *mediaOperationInternalAdapter) Validate(_ context.Context, request MediaOperationAdapterRequest) (MediaOperationValidatedRequest, error) {
 	if adapter.validateHook != nil {
 		adapter.validateHook()
 	}
@@ -1019,36 +1019,6 @@ func TestDictatorMediaCapabilityContract(testingInstance *testing.T) {
 
 func TestDictatorRegistrationQueueAndTerminalEdges(testingInstance *testing.T) {
 	fixture := newMediaOperationInternalFixture(testingInstance)
-	validValues := map[string]map[string]string{ProviderNameDictator: {"grpc_address": "dictator.internal:50051", "grpc_auth_token": "token", "grpc_tls": "true"}}
-	configuration := Configuration{ProviderConnectionValues: validValues, dictatorProtocol: &controlledDictatorProtocol{}}
-	fixture.service.adapters = nil
-	fixture.service.voiceProviders = nil
-	if registrationError := fixture.service.registerDictatorAdapter(configuration); registrationError != nil || len(fixture.service.adapters) != 6 || fixture.service.voiceProviders[ProviderNameDictator] == nil {
-		testingInstance.Fatalf("registration error=%v adapters=%d voices=%v", registrationError, len(fixture.service.adapters), fixture.service.voiceProviders)
-	}
-	if registrationError := fixture.service.registerDictatorAdapter(Configuration{dictatorProtocol: &controlledDictatorProtocol{}}); !errors.Is(registrationError, errMediaOperationUnavailable) {
-		testingInstance.Fatalf("invalid connection registration error=%v", registrationError)
-	}
-	invalidService := &mediaOperationService{store: fixture.service.store}
-	if registrationError := invalidService.registerDictatorAdapter(configuration); registrationError == nil {
-		testingInstance.Fatal("invalid adapter dependencies accepted")
-	}
-
-	managedTenants := &managedTenantStore{database: &gormManagedTenantDatabase{database: fixture.database}}
-	serviceConfiguration := Configuration{
-		ProviderConnectionValues: validValues, dictatorProtocol: &controlledDictatorProtocol{},
-		MediaOperationCapacity: 1, TenantMediaOperationCapacity: 1,
-		MediaOperationLifetimeSeconds: 60, MediaOperationClaimSeconds: 10, MediaOperationClaimRenewalSeconds: 1, AssetRetentionSeconds: 60,
-	}
-	service, serviceError := newMediaOperationService(serviceConfiguration, managedTenants, fixture.service.assets, fixture.service.providers)
-	if serviceError != nil || service == nil {
-		testingInstance.Fatalf("service=%v error=%v", service, serviceError)
-	}
-	serviceConfiguration.ProviderConnectionValues = nil
-	if invalid, serviceError := newMediaOperationService(serviceConfiguration, managedTenants, fixture.service.assets, fixture.service.providers); invalid != nil || !errors.Is(serviceError, errMediaOperationUnavailable) {
-		testingInstance.Fatalf("invalid service=%v error=%v", invalid, serviceError)
-	}
-
 	fixture.service.dictatorQueue = make(chan string, 1)
 	fixture.service.enqueue("mop_00000000000000000000000000000000")
 	if _, queued := fixture.service.queued.Load("mop_00000000000000000000000000000000"); queued {
@@ -1170,7 +1140,7 @@ func TestMediaVoiceBoundaryFailuresAndPrivateStore(testingInstance *testing.T) {
 	if persistError := fixture.service.store.persistMediaVoices(context.Background(), fixture.tenant.identifier.string(), ProviderNameXAI, []MediaVoiceProviderRecord{validVoice}); persistError != nil {
 		testingInstance.Fatal(persistError)
 	}
-	voices, listError := fixture.service.store.listMediaVoices(context.Background(), fixture.tenant.identifier.string(), ProviderNameXAI)
+	voices, listError := fixture.service.store.listMediaVoices(context.Background(), fixture.tenant.identifier.string(), ProviderNameXAI, "")
 	if listError != nil || len(voices) != 1 || voices[0].SampleRates[0] != 24000 {
 		testingInstance.Fatalf("voices=%+v error=%v", voices, listError)
 	}
@@ -1211,7 +1181,7 @@ func TestMediaVoiceBoundaryFailuresAndPrivateStore(testingInstance *testing.T) {
 	if _, corruptError := fixture.service.store.mediaVoice(context.Background(), fixture.tenant.identifier.string(), corrupt.VoiceID); corruptError == nil {
 		testingInstance.Fatal("corrupt voice accepted")
 	}
-	if _, corruptListError := fixture.service.store.listMediaVoices(context.Background(), fixture.tenant.identifier.string(), ProviderNameXAI); corruptListError == nil {
+	if _, corruptListError := fixture.service.store.listMediaVoices(context.Background(), fixture.tenant.identifier.string(), ProviderNameXAI, ""); corruptListError == nil {
 		testingInstance.Fatal("corrupt voice list accepted")
 	}
 
@@ -1250,7 +1220,7 @@ func TestMediaVoiceBoundaryFailuresAndPrivateStore(testingInstance *testing.T) {
 	if response.Code != http.StatusInternalServerError {
 		testingInstance.Fatalf("persist failure status=%d", response.Code)
 	}
-	if _, listError := brokenFixture.service.store.listMediaVoices(context.Background(), brokenFixture.tenant.identifier.string(), ProviderNameXAI); listError == nil {
+	if _, listError := brokenFixture.service.store.listMediaVoices(context.Background(), brokenFixture.tenant.identifier.string(), ProviderNameXAI, ""); listError == nil {
 		testingInstance.Fatal("broken voice list succeeded")
 	}
 	if _, readError := brokenFixture.service.store.mediaVoice(context.Background(), brokenFixture.tenant.identifier.string(), "voi_22222222222222222222222222222222"); readError == nil || readError.Error() != llmproxycontract.ErrorCodeMediaVoiceStore {

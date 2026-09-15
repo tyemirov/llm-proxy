@@ -369,6 +369,10 @@ func validateAccountConnectionSchema(database *gorm.DB, keyCipher managedProvide
 			settings[providerID(assignment.ProviderID)] = value
 		}
 		for _, profile := range tenant.ProviderProfiles {
+			definition, known := providers.definitions[providerID(profile.ProviderID)]
+			if known && len(definition.textModels) == 0 && profile.TextModel == "" && profile.SystemPrompt == "" {
+				continue
+			}
 			if _, _, err := providers.resolveTextModel(profile.ProviderID, profile.TextModel, profile.ProviderID, profile.TextModel, false); err != nil {
 				return fmt.Errorf("%w: operation=validate table=%s owner=%s tenant=%s: %w", errManagedTenantSchemaMigration, managedProviderProfileTable, tenant.OwnerUserID, tenant.TenantID, err)
 			}

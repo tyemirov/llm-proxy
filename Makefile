@@ -192,6 +192,15 @@ test-protocol-acceptance: frontend-dependencies
 test-media-operations: frontend-dependencies
 	$(GO) test ./internal/proxy -run '^Test(MediaOperation|TenantAsset|DictatorWorkerIsolation)' -count=1
 
+.PHONY: test-dictator
+test-dictator: frontend-dependencies
+	$(GO) test ./internal/proxy -run '^TestDictator' -count=1
+
+.PHONY: test-provider-diagnostics
+test-provider-diagnostics: frontend-dependencies
+	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run '^Test(DictatorDiagnostics|ProviderDiagnostics)' -count=1
+	cd $(PYTHON_PROJECT_DIR) && $(UV) run --group dev pytest tests/test_provider_diagnostics.py
+
 .PHONY: test-client-contracts generate-api-docs
 test-client-contracts: frontend-dependencies
 	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run 'Test(ClientProtocols|ClientUploadsAsset|OpenAPI|MessagesRequest|CoverageOpenAILifecycle|ManagementDashScopeWorkspaceChangeVerifiesRetainedKeyAndRoutesWithStoredURL)' -count=1

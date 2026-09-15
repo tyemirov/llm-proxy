@@ -107,7 +107,7 @@ func TestOpenAPIContractDocumentsActualAuthenticationBoundaries(t *testing.T) {
 			expectedSecurity = [][]string{}
 		case "/", "/v2", llmproxycontract.TenantIdentityPath, "/v2/requests", "/dictate":
 			expectedSecurity = [][]string{{"TenantClientKey"}}
-		case "/v1/chat/completions", "/v1/responses", "/v1/models", "/v1/audio/transcriptions", llmproxycontract.AssetPath, "/model/v1/assets/{asset_id}", "/model/v1/assets/{asset_id}/content", llmproxycontract.MediaCapabilitiesPath, llmproxycontract.MediaOperationsPath, "/model/v1/operations/{operation_id}", "/model/v1/operations/{operation_id}/cancellation", llmproxycontract.MediaVoicesPath, "/model/v1/voices/{voice_id}":
+		case "/v1/chat/completions", "/v1/responses", "/v1/models", "/v1/audio/transcriptions", llmproxycontract.AssetPath, "/model/v1/assets/{asset_id}", "/model/v1/assets/{asset_id}/content", llmproxycontract.MediaCapabilitiesPath, llmproxycontract.MediaOperationsPath, "/model/v1/operations/{operation_id}", "/model/v1/operations/{operation_id}/cancellation", llmproxycontract.MediaVoicesPath, "/model/v1/voices/{voice_id}", llmproxycontract.ProviderDiagnosticsPath + "/{provider}":
 			expectedSecurity = [][]string{{"TenantBearerKey"}}
 		case "/healthz", proxy.ManagementConfigUIPath, proxy.PublicCapabilitiesPath:
 			expectedSecurity = [][]string{}

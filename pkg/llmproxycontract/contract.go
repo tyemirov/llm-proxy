@@ -10,6 +10,12 @@ const (
 	MediaOperationsPath = "/model/v1/operations"
 	// MediaVoicesPath is the authenticated tenant voice collection.
 	MediaVoicesPath = "/model/v1/voices"
+	// ProviderDiagnosticsPath contains retained tenant operation counts for assigned providers.
+	ProviderDiagnosticsPath = "/model/v1/provider-diagnostics"
+	// ProviderDiagnosticsScopeTenant identifies operation counts owned by the authenticated tenant.
+	ProviderDiagnosticsScopeTenant = "tenant"
+	// ErrorCodeProviderDiagnosticsNotFound identifies absent provider diagnostic authority.
+	ErrorCodeProviderDiagnosticsNotFound = "provider_diagnostics_not_found"
 	// MediaCapabilityVideoGenerate identifies durable video generation.
 	MediaCapabilityVideoGenerate = "video.generate"
 	// MediaCapabilityAudioTranscribe identifies durable speech transcription.

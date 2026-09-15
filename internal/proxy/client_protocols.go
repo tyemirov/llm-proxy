@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 	"go.uber.org/zap"
 )
 
@@ -127,6 +128,12 @@ func openAIClientAdapters(configuration Configuration, auth tenantAuthenticator,
 func registerClientMethodErrors(router *gin.Engine) {
 	methods := map[string]string{mcpPath: http.MethodPost, chatCompletionsPath: http.MethodPost, responsesPath: http.MethodPost, modelsPath: http.MethodGet, transcriptionsPath: http.MethodPost}
 	router.NoRoute(func(c *gin.Context) {
+		if provider, diagnostic := strings.CutPrefix(c.Request.URL.Path, llmproxycontract.ProviderDiagnosticsPath+"/"); diagnostic && provider != "" && !strings.Contains(provider, "/") && c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead {
+			c.Header("Cache-Control", "no-store")
+			c.Header("Allow", "GET, HEAD")
+			c.JSON(http.StatusMethodNotAllowed, mediaOperationErrorEnvelope{Error: mediaOperationErrorResponse{Code: "method_not_allowed"}})
+			return
+		}
 		if method, found := methods[c.Request.URL.Path]; found {
 			c.Header("Allow", method)
 			writeOpenAIError(c, http.StatusMethodNotAllowed, "method_not_allowed", "Unsupported HTTP method.")

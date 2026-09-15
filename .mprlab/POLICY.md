@@ -56,6 +56,17 @@ This policy controls all agent work in this repository.
 - Boolean parameters that switch unrelated behaviors.
 - Hardcoded workflow, path, event, or message literals when a canonical constant or backend payload exists.
 
+## Device Validation
+
+- Never require a physical device or physical-device access for any task or gate, under any circumstances.
+- Apply this prohibition to development, tests, validation, acceptance, issue closure, release, publication, and deployment.
+- Never ask the user to provide, obtain, connect, or arrange access to physical devices or physical-device test services.
+- Use simulators, emulators, and automated browsers for device validation.
+- Accept these environments as sufficient for device validation and acceptance.
+- Remove physical-device requirements and blockers from the selected task and its current acceptance records.
+- Never replace a removed physical-device gate with another hardware prerequisite.
+- Report the actual test environment and observed results without claiming physical-device execution.
+
 ## File Permission Boundary
 
 - File permission modes are outside agent scope.

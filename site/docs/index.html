@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="932f9e4356caa7f0820cb560ad8f73492eac64c60b15fb9d537ab50f1a21b28e">
+    <meta name="openapi-source-sha256" content="8902a86da646b37e92b514a039b87c2ff1f447e0644a872bca3f015cfd37c03a">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="932f9e4356caa7f0820cb560ad8f73492eac64c60b15fb9d537ab50f1a21b28e">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="8902a86da646b37e92b514a039b87c2ff1f447e0644a872bca3f015cfd37c03a">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>932f9e4356caa7f0820cb560ad8f73492eac64c60b15fb9d537ab50f1a21b28e</code></span>
+          <span>Source SHA-256 <code>8902a86da646b37e92b514a039b87c2ff1f447e0644a872bca3f015cfd37c03a</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -1163,6 +1163,63 @@ paths:
           $ref: &#39;#/components/responses/MediaOperationFailure&#39;
         &#39;422&#39;:
           $ref: &#39;#/components/responses/MediaOperationFailure&#39;
+  /model/v1/provider-diagnostics/{provider}:
+    get:
+      operationId: getProviderDiagnostics
+      summary: Read retained tenant operation counts for a provider
+      description: &gt;-
+        Counts include only retained media operations owned by the authenticated tenant for the selected provider.
+        Each accepted operation counts once. Repeated status reads and idempotent retries do not add operations.
+        Counts include every retained state, including uncertain. Terminal detail expiry removes its count.
+        These are retained operation counts, not lifetime usage or billing totals.
+        An assigned connection is required. Connection changes do not transfer another tenant&#39;s history.
+        The request does not contact the provider or return server health, uptime, or global latency.
+      tags: [Proxy]
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-z][a-z0-9_-]*$
+        - $ref: &#39;#/components/parameters/RequestTimeout&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/ProviderDiagnostics&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/ProxyBadRequest&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ProxyForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/ProviderDiagnosticsFailure&#39;
+        &#39;405&#39;:
+          $ref: &#39;#/components/responses/ProviderDiagnosticsFailure&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/ProviderDiagnosticsFailure&#39;
+    head:
+      operationId: getProviderDiagnosticsHeaders
+      summary: Read diagnostic response headers without a response body
+      tags: [Proxy]
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-z][a-z0-9_-]*$
+        - $ref: &#39;#/components/parameters/RequestTimeout&#39;
+      responses:
+        &#39;200&#39;:
+          description: Retained tenant operation counts are available.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+        default:
+          description: The diagnostic read failed. The response has no body.
   /model/v1/voices:
     get:
       operationId: listTenantMediaVoices
@@ -2885,6 +2942,35 @@ components:
         application/json:
           schema:
             $ref: &#39;#/components/schemas/MediaOperationExpired&#39;
+    ProviderDiagnostics:
+      description: Retained tenant operation counts for one assigned provider.
+      headers:
+        Cache-Control:
+          $ref: &#39;#/components/headers/NoStore&#39;
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/ProviderDiagnostics&#39;
+    ProviderDiagnosticsFailure:
+      description: A diagnostic read failed with a stable public code.
+      headers:
+        Cache-Control:
+          $ref: &#39;#/components/headers/NoStore&#39;
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [error]
+            properties:
+              error:
+                type: object
+                additionalProperties: false
+                required: [code]
+                properties:
+                  code:
+                    type: string
+                    enum: [provider_diagnostics_not_found, media_operation_store_error, method_not_allowed]
     MediaVoice:
       description: One tenant-owned voice without native provider identifiers.
       content:
@@ -5053,6 +5139,7 @@ components:
                 utterance_gap_seconds:
                   type: number
                   minimum: 0
+                  description: An explicit zero remains zero. Omission uses the Dictator default.
               oneOf:
                 - required: [language]
                   not:
@@ -5383,6 +5470,45 @@ components:
           type: array
           items:
             $ref: &#39;#/components/schemas/MediaVoice&#39;
+    ProviderDiagnostics:
+      type: object
+      additionalProperties: false
+      required: [provider, scope, operations_total, queued, running, succeeded, failed, cancelled, uncertain]
+      properties:
+        provider:
+          type: string
+          pattern: ^[a-z][a-z0-9_-]*$
+        scope:
+          type: string
+          const: tenant
+        operations_total:
+          type: integer
+          format: int64
+          minimum: 0
+        queued:
+          type: integer
+          format: int64
+          minimum: 0
+        running:
+          type: integer
+          format: int64
+          minimum: 0
+        succeeded:
+          type: integer
+          format: int64
+          minimum: 0
+        failed:
+          type: integer
+          format: int64
+          minimum: 0
+        cancelled:
+          type: integer
+          format: int64
+          minimum: 0
+        uncertain:
+          type: integer
+          format: int64
+          minimum: 0
     MediaVoiceErrorEnvelope:
       type: object
       additionalProperties: false
@@ -6080,6 +6206,12 @@ components:
               - audio_input
               - dictation
               - video_generation
+              - audio_transcription
+              - audio_diarization
+              - audio_alignment
+              - subtitle_creation
+              - speech_generation
+              - voice_extraction
         model_families:
           type: array
           minItems: 1
@@ -6197,6 +6329,8 @@ components:
           enum:
             - opaque
             - url
+            - grpc_target
+            - boolean
         required:
           type: boolean
         default:
@@ -7262,6 +7396,8 @@ components:
 <a href="#operation-createTenantMediaOperation"><span class="api-method api-method-post">POST</span><code>/model/v1/operations</code><span>Accept one durable tenant media operation</span></a>
 <a href="#operation-getTenantMediaOperation"><span class="api-method api-method-get">GET</span><code>/model/v1/operations/{operation_id}</code><span>Read one durable tenant media operation</span></a>
 <a href="#operation-cancelTenantMediaOperation"><span class="api-method api-method-put">PUT</span><code>/model/v1/operations/{operation_id}/cancellation</code><span>Request cancellation of one durable tenant media operation</span></a>
+<a href="#operation-getProviderDiagnostics"><span class="api-method api-method-get">GET</span><code>/model/v1/provider-diagnostics/{provider}</code><span>Read retained tenant operation counts for a provider</span></a>
+<a href="#operation-getProviderDiagnosticsHeaders"><span class="api-method api-method-head">HEAD</span><code>/model/v1/provider-diagnostics/{provider}</code><span>Read diagnostic response headers without a response body</span></a>
 <a href="#operation-listTenantMediaVoices"><span class="api-method api-method-get">GET</span><code>/model/v1/voices</code><span>Discover and list tenant-owned provider voices</span></a>
 <a href="#operation-getTenantMediaVoice"><span class="api-method api-method-get">GET</span><code>/model/v1/voices/{voice_id}</code><span>Read one tenant-owned voice</span></a>
 <a href="#operation-createTranscription"><span class="api-method api-method-post">POST</span><code>/v1/audio/transcriptions</code><span>createTranscription</span></a>
@@ -8831,6 +8967,79 @@ components:
 <tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
 <tr><td><code>404</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
 <tr><td><code>422</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getProviderDiagnostics">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/model/v1/provider-diagnostics/{provider}</code>
+          <span class="api-operation-id">getProviderDiagnostics</span>
+        </header>
+        <h2>Read retained tenant operation counts for a provider</h2>
+        <p>Counts include only retained media operations owned by the authenticated tenant for the selected provider. Each accepted operation counts once. Repeated status reads and idempotent retries do not add operations. Counts include every retained state, including uncertain. Terminal detail expiry removes its count. These are retained operation counts, not lifetime usage or billing totals. An assigned connection is required. Connection changes do not transfer another tenant&#39;s history. The request does not contact the provider or return server health, uptime, or global latency.</p>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>provider</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>X-LLM-Proxy-Request-Timeout-Seconds</code></td><td>header</td><td>No</td><td>integer</td><td>A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Retained tenant operation counts for one assigned provider.</td></tr>
+<tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
+<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>A diagnostic read failed with a stable public code.</td></tr>
+<tr><td><code>405</code></td><td>application/json</td><td>Cache-Control</td><td>A diagnostic read failed with a stable public code.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>A diagnostic read failed with a stable public code.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getProviderDiagnosticsHeaders">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-head">HEAD</span>
+          <code>/model/v1/provider-diagnostics/{provider}</code>
+          <span class="api-operation-id">getProviderDiagnosticsHeaders</span>
+        </header>
+        <h2>Read diagnostic response headers without a response body</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>provider</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>X-LLM-Proxy-Request-Timeout-Seconds</code></td><td>header</td><td>No</td><td>integer</td><td>A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>none</td><td>Cache-Control</td><td>Retained tenant operation counts are available.</td></tr>
+<tr><td><code>default</code></td><td>none</td><td>none</td><td>The diagnostic read failed. The response has no body.</td></tr>
               </tbody>
             </table>
           </div>

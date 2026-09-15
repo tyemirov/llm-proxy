@@ -50,6 +50,27 @@ Creation receipts remain after connection deletion, so a delayed retry cannot re
 Read the connection resource for its current state.
 The canonical [OpenAPI contract](openapi.yaml) defines each management operation and its request shape.
 
+## Dictator speech connections
+
+An account can connect its own Dictator server.
+Select `Dictator Speech API` in the provider selector.
+Enter the server address and bearer token. Select the required TLS setting.
+Connection creation checks the token through voice discovery without a speech job.
+The token remains encrypted in the backend credential store.
+Assign the saved connection to the required tenant.
+Select the Media tab to inspect `dictator-speech-v1` and its speech capabilities.
+Media models do not use text defaults or provider system prompts.
+
+Operations, output assets, and voice identifiers belong to the tenant.
+Execution and recovery require the accepted connection identity and version.
+A connection change cannot redirect an accepted job to another server.
+
+Assigned tenants read their retained operation counts through `GET /model/v1/provider-diagnostics/dictator`.
+The response contains `scope: tenant` and counts for each operation state.
+Counts exclude other tenants, including tenants with the same account connection.
+The request does not call Dictator. Detachment removes access.
+Terminal detail expiry removes its count. These counts are not lifetime usage or billing totals.
+
 ## Detach and delete
 
 A detach operation removes only the selected tenant's assignment.

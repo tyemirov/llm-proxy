@@ -465,18 +465,21 @@ export function saveTenantProviderProfile(tenantID, provider, body, signal) {
   return requestTenantProfile(`${managementTenantPath(tenantID)}/provider-profiles/${encodeURIComponent(provider)}`, {method:'PUT',body,signal}, tenantID);
 }
 
-/** @param {AbortSignal} [signal] @returns {Promise<Record<string, string>>} */
-export async function fetchModelFamilies(signal) {
+/** @param {AbortSignal} [signal] @returns {Promise<{families:Record<string, string>, offerings:{provider:string,model:string,capabilities:string[]}[]}>} */
+export async function fetchDashboardModels(signal) {
   const config = await loadFrontendRuntimeConfig();
   const response = await fetch(`${config.managementApiOrigin}/api/public/capabilities`, {signal, credentials:'omit'});
   if (!response.ok) throw new BackendClientError(await response.text(), response.status);
   const result = await response.json();
-  if (!result || !Array.isArray(result.models)) throw new Error('Invalid model catalog');
+  if (!result || !Array.isArray(result.models) || !Array.isArray(result.offerings)) throw new Error('Invalid model catalog');
   /** @type {Record<string, string>} */
   const families = {};
   for (const model of result.models) {
     if (!model || typeof model.identifier !== 'string' || typeof model.family !== 'string' || !model.identifier || !model.family || Object.hasOwn(families, model.identifier)) throw new Error('Invalid model identity');
     families[model.identifier] = model.family;
   }
-  return families;
+  for (const offering of result.offerings) {
+    if (!offering || typeof offering.provider !== 'string' || !offering.provider || typeof offering.model !== 'string' || !Object.hasOwn(families, offering.model) || !Array.isArray(offering.capabilities) || !offering.capabilities.every((/** @type {unknown} */ value)=>typeof value==='string')) throw new Error('Invalid provider offering');
+  }
+  return {families, offerings:result.offerings};
 }

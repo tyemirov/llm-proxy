@@ -37,7 +37,7 @@ type restartMediaOperationAdapter struct {
 	recoverCalls atomic.Int32
 }
 
-func (*restartMediaOperationAdapter) Validate(request proxy.MediaOperationAdapterRequest) (proxy.MediaOperationValidatedRequest, error) {
+func (*restartMediaOperationAdapter) Validate(_ context.Context, request proxy.MediaOperationAdapterRequest) (proxy.MediaOperationValidatedRequest, error) {
 	return proxy.MediaOperationValidatedRequest{Input: request.Input, Controls: request.Controls}, nil
 }
 
@@ -59,7 +59,7 @@ func (*restartMediaOperationAdapter) Cancel(context.Context, proxy.MediaOperatio
 	return proxy.MediaOperationCancellationResult{State: proxy.MediaCancellationUnsupported}
 }
 
-func (adapter *controlledMediaOperationAdapter) Validate(request proxy.MediaOperationAdapterRequest) (proxy.MediaOperationValidatedRequest, error) {
+func (adapter *controlledMediaOperationAdapter) Validate(_ context.Context, request proxy.MediaOperationAdapterRequest) (proxy.MediaOperationValidatedRequest, error) {
 	adapter.validationCalls.Add(1)
 	var input struct {
 		Prompt  string `json:"prompt"`
@@ -104,16 +104,16 @@ type invalidSuccessMediaOperationAdapter struct{}
 
 type controlledMediaVoiceProvider struct{}
 
-func (*controlledMediaVoiceProvider) DiscoverMediaVoices(context.Context) ([]proxy.MediaVoiceProviderRecord, error) {
-	return []proxy.MediaVoiceProviderRecord{{
+func (*controlledMediaVoiceProvider) DiscoverMediaVoices(context.Context, string) (proxy.MediaVoiceDiscovery, error) {
+	return proxy.MediaVoiceDiscovery{Voices: []proxy.MediaVoiceProviderRecord{{
 		Provider: "xai", Model: "private-model", Mode: proxy.MediaVoiceModePreset,
 		Language: "en-US", DisplayName: "Narrator", Default: true,
 		SampleRates: []int{24000, 48000}, DefaultSampleRate: 24000,
 		ProviderVoiceReference: "native-voice-id",
-	}}, nil
+	}}}, nil
 }
 
-func (*invalidSuccessMediaOperationAdapter) Validate(request proxy.MediaOperationAdapterRequest) (proxy.MediaOperationValidatedRequest, error) {
+func (*invalidSuccessMediaOperationAdapter) Validate(_ context.Context, request proxy.MediaOperationAdapterRequest) (proxy.MediaOperationValidatedRequest, error) {
 	return proxy.MediaOperationValidatedRequest{Input: request.Input, Controls: request.Controls}, nil
 }
 
