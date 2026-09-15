@@ -238,6 +238,37 @@ def test_client_uses_typed_durable_media_and_voice_resources() -> None:
     assert requests[2].full_url.endswith("/model/v1/voices/voi_0123456789abcdef0123456789abcdef")
 
 
+def test_media_capabilities_uses_server_resource_path() -> None:
+    """The official client reads the resource declared by the server contract."""
+
+    contract = yaml.safe_load((Path(__file__).resolve().parents[2] / "docs/openapi.yaml").read_text())
+    assert "/model/v1/capabilities" in contract["paths"]
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            valid = self.path == "/model/v1/capabilities" and self.headers.get("Authorization") == "Bearer tenant-secret"
+            body = json.dumps({"catalog_revision": "current", "routes": []}).encode()
+            self.send_response(200 if valid else 404)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, format: str, *args: Any) -> None:
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    try:
+        client = Client(ClientConfig(base_url=f"http://127.0.0.1:{server.server_port}/v2", secret="tenant-secret"))
+        assert client.get_media_capabilities().catalog_revision == "current"
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join()
+
+
 def test_client_reads_media_capabilities_and_waits_for_terminal_operation() -> None:
     """Capability discovery and operation waiting use the canonical authenticated resources."""
 
@@ -291,7 +322,7 @@ def test_client_reads_media_capabilities_and_waits_for_terminal_operation() -> N
     assert capabilities.routes[0].capability == "audio.transcribe"
     assert completed.state == "succeeded"
     assert [request.full_url for request in requests] == [
-        "https://proxy.example/model/v1/media-capabilities",
+        "https://proxy.example/model/v1/capabilities",
         "https://proxy.example/model/v1/operations/mop_0123456789abcdef0123456789abcdef",
         "https://proxy.example/model/v1/operations/mop_0123456789abcdef0123456789abcdef",
     ]

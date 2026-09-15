@@ -22,9 +22,12 @@ KEY_QUERY_KEY = "key"
 REQUEST_TIMEOUT_HEADER = "X-LLM-Proxy-Request-Timeout-Seconds"
 IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
 ASSET_ENDPOINT_PATH = "/model/v1/assets"
-MEDIA_CAPABILITIES_ENDPOINT_PATH = "/model/v1/media-capabilities"
+MEDIA_CAPABILITIES_ENDPOINT_PATH = "/model/v1/capabilities"
 MEDIA_OPERATIONS_ENDPOINT_PATH = "/model/v1/operations"
 MEDIA_VOICES_ENDPOINT_PATH = "/model/v1/voices"
+PROVIDER_DIAGNOSTICS_ENDPOINT_PATH = "/model/v1/provider-diagnostics"
+DIAGNOSTIC_PROVIDER_PATTERN = re.compile(r"^[a-z][a-z0-9_-]*$")
+DIAGNOSTIC_COUNTER_FIELDS = ("operations_total", "queued", "running", "succeeded", "failed", "cancelled", "uncertain")
 PROVIDER_QUERY_KEY = "provider"
 MODEL_PROFILE_MODEL_KEY = "model"
 MODEL_PROFILE_SUBJECT = "model_profile"
@@ -783,6 +786,21 @@ class ClientMediaVoice:
 
 
 @dataclass(frozen=True)
+class ClientProviderDiagnostics:
+    """Retained operation counts for the authenticated tenant and provider."""
+
+    provider: str
+    scope: str
+    operations_total: int
+    queued: int
+    running: int
+    succeeded: int
+    failed: int
+    cancelled: int
+    uncertain: int
+
+
+@dataclass(frozen=True)
 class Client:
     """HTTP client for llm-proxy v2 JSON POST text requests."""
 
@@ -965,6 +983,24 @@ class Client:
             raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid media voice identifier")
         response = self._media_json_request("GET", f"{MEDIA_VOICES_ENDPOINT_PATH}/{voice_id}")
         return _decode_media_voice(response)
+
+    def get_provider_diagnostics(self, provider: str) -> ClientProviderDiagnostics:
+        """Read retained tenant operation counts without contacting the provider."""
+
+        if not DIAGNOSTIC_PROVIDER_PATTERN.fullmatch(provider):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid diagnostic provider")
+        response = self._media_json_request("GET", f"{PROVIDER_DIAGNOSTICS_ENDPOINT_PATH}/{provider}")
+        required = {"provider", "scope", *DIAGNOSTIC_COUNTER_FIELDS}
+        if (
+            set(response) != required
+            or response["provider"] != provider
+            or response["scope"] != "tenant"
+            or any(type(response[field]) is not int or response[field] < 0 or response[field] > 2**63 - 1 for field in DIAGNOSTIC_COUNTER_FIELDS)
+        ):
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid provider diagnostics response")
+        if response["operations_total"] != sum(response[field] for field in DIAGNOSTIC_COUNTER_FIELDS if field != "operations_total"):
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: inconsistent provider operation counts")
+        return ClientProviderDiagnostics(**response)
 
     def _media_json_request(
         self,
