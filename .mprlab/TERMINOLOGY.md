@@ -21,6 +21,10 @@ Give each term one meaning. Use the same term for the same concept in all docume
 
 ## Repository Technical Nouns
 
+- `emulator`: Software that reproduces a device runtime for application tests.
+- `physical device`: Hardware used to run an application or do a device test.
+- `simulator`: Software that models a device environment for application tests.
+
 - `Gateway runtime`: The installed MPR Lab deployment executable, runtime assets, and dependencies.
 - `operator root`: The directory that contains Gateway inventory and private operator inputs.
 
