@@ -1100,6 +1100,63 @@ paths:
           $ref: '#/components/responses/MediaOperationFailure'
         '422':
           $ref: '#/components/responses/MediaOperationFailure'
+  /model/v1/provider-diagnostics/{provider}:
+    get:
+      operationId: getProviderDiagnostics
+      summary: Read retained tenant operation counts for a provider
+      description: >-
+        Counts include only retained media operations owned by the authenticated tenant for the selected provider.
+        Each accepted operation counts once. Repeated status reads and idempotent retries do not add operations.
+        Counts include every retained state, including uncertain. Terminal detail expiry removes its count.
+        These are retained operation counts, not lifetime usage or billing totals.
+        An assigned connection is required. Connection changes do not transfer another tenant's history.
+        The request does not contact the provider or return server health, uptime, or global latency.
+      tags: [Proxy]
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-z][a-z0-9_-]*$
+        - $ref: '#/components/parameters/RequestTimeout'
+      responses:
+        '200':
+          $ref: '#/components/responses/ProviderDiagnostics'
+        '400':
+          $ref: '#/components/responses/ProxyBadRequest'
+        '403':
+          $ref: '#/components/responses/ProxyForbidden'
+        '404':
+          $ref: '#/components/responses/ProviderDiagnosticsFailure'
+        '405':
+          $ref: '#/components/responses/ProviderDiagnosticsFailure'
+        '500':
+          $ref: '#/components/responses/ProviderDiagnosticsFailure'
+    head:
+      operationId: getProviderDiagnosticsHeaders
+      summary: Read diagnostic response headers without a response body
+      tags: [Proxy]
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-z][a-z0-9_-]*$
+        - $ref: '#/components/parameters/RequestTimeout'
+      responses:
+        '200':
+          description: Retained tenant operation counts are available.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+        default:
+          description: The diagnostic read failed. The response has no body.
   /model/v1/voices:
     get:
       operationId: listTenantMediaVoices
@@ -2822,6 +2879,35 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/MediaOperationExpired'
+    ProviderDiagnostics:
+      description: Retained tenant operation counts for one assigned provider.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProviderDiagnostics'
+    ProviderDiagnosticsFailure:
+      description: A diagnostic read failed with a stable public code.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [error]
+            properties:
+              error:
+                type: object
+                additionalProperties: false
+                required: [code]
+                properties:
+                  code:
+                    type: string
+                    enum: [provider_diagnostics_not_found, media_operation_store_error, method_not_allowed]
     MediaVoice:
       description: One tenant-owned voice without native provider identifiers.
       content:
@@ -4990,6 +5076,7 @@ components:
                 utterance_gap_seconds:
                   type: number
                   minimum: 0
+                  description: An explicit zero remains zero. Omission uses the Dictator default.
               oneOf:
                 - required: [language]
                   not:
@@ -5320,6 +5407,45 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MediaVoice'
+    ProviderDiagnostics:
+      type: object
+      additionalProperties: false
+      required: [provider, scope, operations_total, queued, running, succeeded, failed, cancelled, uncertain]
+      properties:
+        provider:
+          type: string
+          pattern: ^[a-z][a-z0-9_-]*$
+        scope:
+          type: string
+          const: tenant
+        operations_total:
+          type: integer
+          format: int64
+          minimum: 0
+        queued:
+          type: integer
+          format: int64
+          minimum: 0
+        running:
+          type: integer
+          format: int64
+          minimum: 0
+        succeeded:
+          type: integer
+          format: int64
+          minimum: 0
+        failed:
+          type: integer
+          format: int64
+          minimum: 0
+        cancelled:
+          type: integer
+          format: int64
+          minimum: 0
+        uncertain:
+          type: integer
+          format: int64
+          minimum: 0
     MediaVoiceErrorEnvelope:
       type: object
       additionalProperties: false
@@ -6017,6 +6143,12 @@ components:
               - audio_input
               - dictation
               - video_generation
+              - audio_transcription
+              - audio_diarization
+              - audio_alignment
+              - subtitle_creation
+              - speech_generation
+              - voice_extraction
         model_families:
           type: array
           minItems: 1
@@ -6134,6 +6266,8 @@ components:
           enum:
             - opaque
             - url
+            - grpc_target
+            - boolean
         required:
           type: boolean
         default:

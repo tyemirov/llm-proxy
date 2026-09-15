@@ -3,13 +3,15 @@
 ## Decision And Status
 
 LLM Proxy becomes the shared gateway for text, images, video, speech, and other media capabilities.
-MediaOps remains the creator product for projects, review, composition, and YouTube publication.
+MediaOps retains only the TelePrompter application. Other MediaOps functionality moves to LLM Proxy.
+The operator confirmed this boundary on 2026-09-14. It replaces the earlier creator-product boundary.
 FamilyHome uses the gateway through its backend.
 Dictator remains a private runtime behind the gateway.
 
 P011 records this implementation plan on 2026-09-06.
 The 2026-09-08 revision adds provider catalog, protocol adapter, and second-provider acceptance requirements.
-MediaOps P006 records the corresponding consumer plan.
+MediaOps P006 records the earlier plan. This ownership revision supersedes its broader MediaOps retention decision.
+F071 owns the remaining application migration. Provider capability issues retain their separate delivery boundaries.
 F022 delivered the common durable media service through controlled provider
 protocols. It establishes local runtime acceptance for the shared lifecycle.
 Live provider acceptance remains with each provider capability issue.
@@ -23,7 +25,8 @@ Dictator continues to run in its existing process.
 flowchart LR
     A[FamilyHome Android] --> B[FamilyHome backend]
     B --> G[LLM Proxy gateway]
-    M[MediaOps creator workflows] --> G
+    T[MediaOps TelePrompter] --> G
+    M[Other MediaOps functionality] -. migrate .-> G
     C[Other backend clients] --> G
     G --> L[Text providers]
     G --> P[Cloud media providers]
@@ -35,7 +38,8 @@ flowchart LR
 | Concern | Owner |
 | --- | --- |
 | Parent login, family access, calendars, child interface, product budgets | FamilyHome |
-| Projects, timelines, narration plans, accepted media, publication | MediaOps |
+| TelePrompter interface, project editing, and user access | MediaOps |
+| Other applications, shared narration, composition execution, review, and YouTube workflows | LLM Proxy under F071 |
 | Tenant authentication, provider connections, routes, execution, usage | LLM Proxy |
 | Speech engines, native jobs, GPU execution | Dictator |
 
@@ -43,7 +47,8 @@ Use an existing managed tenant and client key for each calling backend.
 Use separate tenants where environments need independent credentials and usage.
 An operator can manage multiple tenants through the existing management interface.
 FamilyHome stores its gateway key in backend configuration.
-MediaOps uses its own gateway tenant.
+TelePrompter uses a gateway tenant for its required backend operations.
+Do not add gateway consumers to MediaOps for functionality that moves into LLM Proxy.
 The parent does not configure provider services.
 
 Reuse the existing bearer authentication adapter for the new media routes.
@@ -57,7 +62,8 @@ Keep provider credentials in managed provider connections or private runtime con
 FamilyHome maps its own product job to a gateway operation.
 It checks family access before it returns status or bytes to Android.
 A gateway tenant represents a calling backend. It does not replace family or project authorization.
-MediaOps F021 owns any later external composition API and its product resource authorization.
+F071 owns the migrated composition API and its resource authorization.
+MediaOps F021 owns only the TelePrompter integration with that API.
 
 ## Verified Source And Reuse
 
@@ -76,9 +82,9 @@ The following paths define the existing foundation or the source to move.
 | `pkg/llmproxycontract`, `docs/openapi.yaml` | Define the canonical media resources and error shapes. |
 | `pkg/llmproxyclient` | Add media methods to the existing official Go client. |
 | MediaOps `internal/media/provider` | Move provider request translation, native recovery, and provider-specific tests by capability. |
-| MediaOps `internal/media/mcp` | Keep tool presentation and product authority. Replace provider execution with the official gateway client. |
-| MediaOps `internal/mediajobs/api` | Preserve product jobs and replace their direct provider dependencies. |
-| MediaOps `internal/timelineexport` | Keep composition and local export under MediaOps ownership. |
+| MediaOps `internal/media/mcp` | Move shared tool contracts and workflows to LLM Proxy. Retain only helpers required by TelePrompter. |
+| MediaOps `internal/mediajobs/api` | Move shared jobs and execution to LLM Proxy. Preserve TelePrompter project references. |
+| MediaOps `internal/timelineexport` | Move shared composition and export execution to LLM Proxy. Keep TelePrompter controls in MediaOps. |
 
 The asset store provides authenticated upload, metadata, content, and deletion.
 Durable active references prevent deletion while an operation owns an input or
@@ -103,7 +109,7 @@ Executable components implement the supported API behavior.
 | Authentication components | Reusable code owns credential injection. Credential values remain in managed connection or private runtime storage. |
 | Execution components | Reusable code owns synchronous completion, submission, observation, cancellation, and provider recovery. |
 | Shared media service | F022 owns tenant authorization, operation storage, worker claims, duplicate prevention, assets, retention, and usage delivery. I046 owns network capacity. |
-| Consumer services | MediaOps and other backends own product workflows and use the official gateway clients. |
+| Consumer services | TelePrompter, FamilyHome, WriterBlock, and other actual consumers use official gateway clients for their required operations. |
 
 Keep credential values and tenant settings in their existing stores outside the catalog.
 Use catalog projections for provider discovery, connection forms, capability validation, routing, and price metadata.
@@ -285,14 +291,15 @@ Implementation starts with a failing test through the relevant public API or pro
 | 2 | I046 | Prove bounded text progress during media saturation, including a shared origin and provider account. |
 | 3 | F024 | Move terminal OpenAI image generation behind the tenant API. Qualify one image through the official client. |
 | 4 | FamilyHome P003 and its implementation issue | Revise the product plan to call LLM Proxy. Complete backend and Android image acceptance. |
-| 5 | MediaOps I009, F039, MediaOps I084 | Add the shared consumer adapter, complete OpenAI controls, and remove direct OpenAI image execution. |
-| 6 | F042, MediaOps I087 | Move Dictator's adapter and retained resources. Switch every direct MediaOps caller. |
+| 5 | MediaOps I009, F039, MediaOps I084 | Inventory source resources, connect required TelePrompter operations, and move the complete OpenAI image capability. |
+| 6 | F042, MediaOps I087 | Move Dictator capabilities and retained resources. Migrate shared callers and connect required TelePrompter operations. |
 | 7 | F043, F040, MediaOps I085 | Add required Google credentials and staging. Move Vertex image operations. |
 | 8 | F041, MediaOps I086 | Move FAL image operations and their result recovery. |
 | 9 | F025, MediaOps I010 | Move video capabilities in the provider order below. |
 | 10 | F026, MediaOps I011 | Move ElevenLabs speech, music, voices, history, and alignment. |
 | 11 | F027, MediaOps I012 | Move HeyGen and remaining Kling account/resource capabilities. |
-| 12 | MediaOps I088, I244 | Reconcile migration receipts and remove the final direct-provider dependencies and temporary import tools. |
+| 12 | MediaOps I088, I244 | Reconcile provider migration receipts and remove obsolete provider dependencies and temporary import tools. |
+| 13 | F071, MediaOps I092 and F021 | Move remaining applications and shared workflows. Verify that MediaOps retains only TelePrompter. |
 
 Complete the provider catalog and protocol adapter acceptance above before each capability's consumer switch.
 Keep its evidence with the same slice's migration receipt.
@@ -314,8 +321,16 @@ Give preset and extracted voices tenant-owned gateway identifiers.
 Do not add a Dictator history resource because MediaOps does not retain Dictator history. F026 owns ElevenLabs history.
 Keep native jobs, voice identifiers, engine choices, and runtime credentials private.
 Use the current async Dictator routes as the only execution and recovery contract.
-Configure and authenticate the gateway-to-Dictator connection through deployment-owned `DICTATOR_GRPC_ADDR`, `DICTATOR_GRPC_AUTH_TOKEN`, and `DICTATOR_GRPC_TLS` inputs.
-Do not require a tenant-managed Dictator connection.
+Configure each Dictator server through an account-owned provider connection.
+Store `grpc_address`, `grpc_auth_token`, and `grpc_tls` in that connection.
+Encrypt the bearer token through the current account credential store.
+Assign the connection to each tenant that requires it.
+Bind accepted work to the connection identity and version before dispatch or recovery.
+Keep voice and job references bound to the server connection that created them.
+Voice discovery returns only voices with current connection authority.
+Address, token, and TLS changes invalidate the previous voice authority.
+Reject an obsolete voice reference before operation acceptance.
+The dashboard includes Dictator in its provider selector and speech capabilities in its Media tab.
 Require a released Dictator SDK that contains the retained preset-voice and text-format fields.
 Do not copy protobuf definitions or bind the production adapter to an unreleased pseudo-version.
 Prove that a Dictator outage leaves unrelated cloud requests usable.
@@ -334,6 +349,18 @@ capability. Unknown and irrelevant fields are invalid.
 | `audio.speech.generate` | `text`, opaque gateway `voice_id` | `language`, `text_format`, `sample_rate_hz`, optional duration and timeline controls |
 | `audio.voice.extract` | `audio_asset_id`, `transcript`, `display_name`, `language` | `model_size` |
 
+For `audio.diarize`, keep an explicit `utterance_gap_seconds: 0` through storage and the gRPC request.
+Omission leaves the optional gRPC field absent and permits the Dictator default.
+
+For `audio.speech.generate`, output ordinal `1` contains the requested timeline as JSON.
+The public timeline contains only `textSegments`, with `content`, `start`, and `end` fields.
+Times are nonnegative seconds. Each end time is at least its start time.
+Validate native timeline fields before publication. Exclude native voice metadata and server paths.
+
+For `audio.align`, output ordinal `0` contains JSON with the language and word timings.
+Output ordinal `1` contains the aligned SRT bytes with MIME type `application/x-subrip`.
+Both outputs are tenant assets. Native artifact identifiers remain private.
+
 The adapter reads input bytes from the tenant asset store. It records the
 native job handle immediately after Dictator accepts the request and before it
 polls. Restart recovery and cancellation use only that private handle. It
@@ -349,7 +376,52 @@ For each consumer switch, remove direct execution for that capability in the sam
 Keep one active provider execution owner for that capability during the scheduled runtime switch.
 Drain accepted direct work or import its proven recovery records before activation.
 Remove a shared provider credential after its last direct capability switches.
-MediaOps product workflows continue through the official gateway adapter.
+Shared MediaOps workflows move to LLM Proxy. TelePrompter calls only the gateway operations required by its user flows.
+
+### Dictator caller inventory
+
+The source audit on 2026-09-14 found these direct callers.
+This inventory does not establish production resource counts or complete activation.
+
+| Caller | Source evidence | Required replacement |
+| --- | --- | --- |
+| MediaOps CLI and MCP | `internal/media/provider/dictator/audio/service.go` | Move retained shared functionality to LLM Proxy. Retire obsolete MediaOps entry points after caller acceptance. |
+| MediaOps browser jobs | `internal/webapp/mediajobs_runtime.go`, `internal/mediajobs/api/dictator_speech_service.go` | Move shared execution to LLM Proxy. Connect required TelePrompter flows and preserve word timings and aligned SRT. |
+| MediaOps diagnostics | `internal/media/doctor/dictator/service.go` | Retire the provider diagnostic surface after migration. Do not add a MediaOps tenant metrics client. |
+| WriterBlock dictation | `internal/app/app.go`, `transcribeWithDictator` | Replace native transcription with the released gateway client. Preserve the `/api/dictate` result. |
+
+The audit used MediaOps commit `547234ddecd7bee8daffa2dfa6ab980029c8bacd` and WriterBlock commit `b6d731411ed8135f13f43c1543d71c5a0bc860a3`.
+MediaOps I087 owns the Dictator source migration, retained-data transfer, and required TelePrompter integration.
+F042 includes the additional WriterBlock caller.
+Preserve required timeline conversion in the migrated workflow. TelePrompter retains its project presentation and editing behavior.
+Its extracted voice records are in `<workspace_root>/.mediaops/voices`.
+MCP operation records are in `<workspace_root>/.mediaops/mcp/operations`.
+The MCP server selects its workspace through `--workspace-root` or its process directory.
+The backend YAML does not identify all caller workspaces.
+Inventory that configured workspace and active jobs before activation.
+Record each resource's tenant and provider connection. Do not infer an empty inventory from source files.
+Resource inventory, destination migration, actual consumer integration, client publication, and live acceptance remain open.
+A replacement MediaOps metrics client is not a completion requirement.
+
+The revised `mediaops.doctor.dictator` result contains provider identity and route health only.
+The operator requires tenant metrics only. MediaOps must not collect or expose Dictator server metrics.
+
+`GET /model/v1/provider-diagnostics/dictator` returns retained operation counts with `scope: tenant`.
+The gateway selects records by authenticated tenant and provider. Shared connections do not share these counts.
+Each accepted operation counts once. The response counts queued, running, succeeded, failed, cancelled, and uncertain operations.
+
+Terminal detail expiry removes its count. These counts are not lifetime usage or billing totals.
+The read requires a current assignment and does not contact Dictator.
+Go callers use `GetProviderDiagnostics`. Python callers use `get_provider_diagnostics`.
+
+MediaOps removed native metrics collection. No replacement tenant metrics client is planned in MediaOps.
+Tenant metrics remain a LLM Proxy resource. A future TelePrompter metric view requires its own concrete product requirement.
+
+The latest published LLM Proxy module remains `v1.9.1` at this audit.
+Its official client has no media operation, voice, or tenant diagnostic methods.
+Release required methods before changing WriterBlock or a required TelePrompter client integration.
+Publication is not required merely to move source code into LLM Proxy or retire a MediaOps diagnostic.
+Do not substitute a direct HTTP client or an unpublished module reference.
 
 ## First Consumer Acceptance
 
@@ -396,7 +468,7 @@ Record source digests and gateway identifiers in private operator evidence.
 I088 reconciles all receipts and proves zero remaining direct provider execution.
 I244 removes only the import tools actually introduced by these migrations.
 Remove obsolete adapters, provider secrets, recovery code, catalog copies, and provider tests after their new owner passes acceptance.
-Keep product behavior tests in MediaOps and provider protocol tests in LLM Proxy.
+Move behavior and provider protocol tests with their functionality. Keep TelePrompter interaction tests in MediaOps.
 
 ## Validation And Release Gates
 
@@ -418,7 +490,7 @@ Record a failed acceptance against its owning slice before the next capability s
 ## Product Position And Remaining Decisions
 
 Position the combined service as one gateway for AI capabilities.
-MediaOps remains the creator-facing product that uses that gateway.
+MediaOps retains only TelePrompter. F071 owns migration of its other application functionality into LLM Proxy.
 Keep the existing LLM Proxy name through the first consumer release.
 A broader brand is a later product decision.
 
@@ -433,10 +505,12 @@ The remaining decisions have explicit owners:
 - FamilyHome P003: image format, dimensions, input method, save behavior, family limits, and its implementation issue.
 - F043: exact staging routes, Google credential mode, and provider-readable URL lifetime.
 - F042: capability schemas and the disposition of existing transcription routes before its public release.
-- MediaOps F021: first external composition consumer and product resource authorization.
+- F071: application resource ownership, composition API, and the remaining application migration.
+- MediaOps F021: concrete TelePrompter composition flows through the gateway.
 - Each activation: credentials, runtime values, retained-data inventory, and measured provider acceptance.
 
 F028, F029, and F030 cover later AvatarV, MiniMax, and Speechify integrations.
-Their MediaOps counterparts remain F022, F023, and F024.
-MediaOps I027, I030, I031, P003, and P005 remain creator workflow work.
-MediaOps I089 retains the acceptance scope for its existing temporary HTTP store.
+MediaOps F022, F023, and F024 apply only to required TelePrompter exposure. Shared capability delivery belongs to LLM Proxy.
+F071 inventories remaining creator workflow work, including MediaOps I027, I030, I031, P003, and P005.
+Classify each requirement as a TelePrompter concern or functionality to migrate.
+MediaOps I089 supplies source acceptance evidence for the temporary HTTP store. Its final owner follows the migrated execution service.
