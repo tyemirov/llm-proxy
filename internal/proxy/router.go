@@ -155,6 +155,9 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	router.DELETE(llmproxycontract.AssetPath+"/:asset_id", mediaTenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, tenantAssetDeleteHandler(assetStore)))
 	if mediaOperations != nil {
 		registerMediaOperationRoutes(router, tenantAuthenticator, structuredLogger, mediaOperations)
+		for _, method := range []string{http.MethodGet, http.MethodHead} {
+			router.Handle(method, llmproxycontract.ProviderDiagnosticsPath+"/:provider", func(ctx *gin.Context) { ctx.Header("Cache-Control", "no-store") }, mediaTenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, mediaOperations.diagnosticsHandler())))
+		}
 	}
 	adapters := []ClientProtocolAdapter{{
 		Name: "native",

@@ -264,7 +264,9 @@ func (service *managementService) saveConnectionHandler(create bool) gin.Handler
 			provider := definition
 			model := definition.textModels[definition.defaultTextModel.string()]
 			provider.connectionValues = cloneStringMap(values)
-			provider, _ = provider.resolvedTransport(model.transportIdentifier)
+			if model.transportIdentifier != "" {
+				provider, _ = provider.resolvedTransport(model.transportIdentifier)
+			}
 			if err := service.keyVerifier.verify(ctx.Request.Context(), provider, model, values[provider.activeTransport.authentication.Field]); err != nil {
 				writeProviderKeyVerificationError(ctx, err)
 				return

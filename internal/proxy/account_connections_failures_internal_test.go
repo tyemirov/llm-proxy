@@ -575,3 +575,17 @@ func TestAccountConnectionDetachRequiresDefaultResolution(t *testing.T) {
 	accountConnectionHTTPExchange(t, server, http.MethodDelete, path+"?clear_defaults=true", "", http.StatusNoContent)
 	accountConnectionHTTPExchange(t, server, http.MethodDelete, path, "", http.StatusNoContent)
 }
+
+func TestAccountConnectionDeploymentProvidersAreExcludedAndRejected(t *testing.T) {
+	service, _, server := newAccountConnectionHTTPFixture(t)
+	definition := service.providers.definitions[providerID(ProviderNameOpenAI)]
+	definition.connectionOwnership = CatalogProviderConnectionDeployment
+	service.providers.definitions[providerID(ProviderNameOpenAI)] = definition
+	profile := accountConnectionHTTPExchange(t, server, http.MethodGet, "/tenants/managed-first", "", http.StatusOK)
+	for _, entry := range profile["providers"].([]any) {
+		if entry.(map[string]any)["id"] == ProviderNameOpenAI {
+			t.Fatal("deployment provider exposed for account connection")
+		}
+	}
+	accountConnectionHTTPExchange(t, server, http.MethodPost, "/connections", `{"name":"Invalid deployment connection","provider":"openai","fields":{"api_key":"sk-test"}}`, http.StatusBadRequest)
+}

@@ -311,13 +311,17 @@ func enabledProviderCatalog(schema ProviderCatalogSchema, catalog ModelCatalog) 
 	}
 	enabledModels := make(map[string]bool, len(schema.Models))
 	enabledFamilies := make(map[string]bool, len(schema.Families))
+	enabledPublishers := make(map[string]bool, len(schema.Publishers))
 	for _, model := range schema.Models {
 		enabledModels[model.ID] = model.Enabled == ModelEnabled && modelsWithEnabledOfferings[model.ID]
 		if enabledModels[model.ID] {
 			enabledFamilies[model.Family] = true
+			enabledPublishers[model.Publisher] = true
 		}
 	}
 	runtimeSchema := cloneProviderCatalogSchema(schema)
+	runtimeSchema.Publishers = slices.DeleteFunc(runtimeSchema.Publishers, func(publisher ModelPublisher) bool { return !enabledPublishers[publisher.ID] })
+	catalog.Publishers = slices.DeleteFunc(catalog.Publishers, func(publisher ModelPublisher) bool { return !enabledPublishers[publisher.ID] })
 	runtimeSchema.Providers = slices.DeleteFunc(runtimeSchema.Providers, func(provider ProviderCatalogProvider) bool { return !enabledProviders[provider.ID] })
 	catalog.Providers = slices.DeleteFunc(catalog.Providers, func(provider CatalogProvider) bool { return !enabledProviders[provider.ID] })
 	runtimeSchema.Families = slices.DeleteFunc(runtimeSchema.Families, func(family ModelFamily) bool { return !enabledFamilies[family.ID] })

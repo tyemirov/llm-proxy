@@ -52,6 +52,12 @@ func TestProviderCatalogAcceptsDeploymentOwnedGRPCTransport(t *testing.T) {
 		t.Fatal("Dictator provider missing")
 	}
 
+	provider.ConnectionOwnership = CatalogProviderConnectionDeployment
+	provider.KeyAcquisitionURL = ""
+	for index := range provider.Fields {
+		provider.Fields[index].Environment = "TEST_DEPLOYMENT_" + strings.ToUpper(provider.Fields[index].ID)
+	}
+
 	catalog, catalogError := NewProviderCatalog(schema)
 	if catalogError != nil {
 		t.Fatalf("compile deployment gRPC provider: %v", catalogError)
@@ -61,9 +67,9 @@ func TestProviderCatalogAcceptsDeploymentOwnedGRPCTransport(t *testing.T) {
 		t.Fatalf("deployment provider=%+v", compiled)
 	}
 	bindings, bindingError := catalog.ResolveEnvironmentBindings(map[string]string{
-		"DICTATOR_GRPC_ADDR":       "dictator.internal:50051",
-		"DICTATOR_GRPC_AUTH_TOKEN": "token",
-		"DICTATOR_GRPC_TLS":        "true",
+		"TEST_DEPLOYMENT_GRPC_ADDRESS":    "dictator.internal:50051",
+		"TEST_DEPLOYMENT_GRPC_AUTH_TOKEN": "token",
+		"TEST_DEPLOYMENT_GRPC_TLS":        "true",
 	})
 	if bindingError != nil || bindings[provider.ID]["grpc_address"] != "dictator.internal:50051" || bindings[provider.ID]["grpc_tls"] != "true" {
 		t.Fatalf("deployment bindings=%v error=%v", bindings, bindingError)
@@ -113,12 +119,18 @@ func TestProviderCatalogSchemaRejectsEveryStructuralBoundary(t *testing.T) {
 			schema.Providers[0].KeyAcquisitionURL = "https://provider.example/keys?tenant=unsafe"
 		}, expected: ".key_acquisition_url"},
 		{name: "deployment provider key acquisition URL", mutate: func(schema *ProviderCatalogSchema) {
+			schema.Providers[len(schema.Providers)-1].ConnectionOwnership = CatalogProviderConnectionDeployment
+			schema.Providers[len(schema.Providers)-1].KeyAcquisitionURL = ""
 			schema.Providers[len(schema.Providers)-1].KeyAcquisitionURL = "https://provider.example/keys"
 		}, expected: "reason=deployment_owned"},
 		{name: "deployment provider environment binding", mutate: func(schema *ProviderCatalogSchema) {
+			schema.Providers[len(schema.Providers)-1].ConnectionOwnership = CatalogProviderConnectionDeployment
+			schema.Providers[len(schema.Providers)-1].KeyAcquisitionURL = ""
 			schema.Providers[len(schema.Providers)-1].Fields[0].Environment = ""
 		}, expected: "reason=deployment_binding_required"},
 		{name: "deployment provider required field", mutate: func(schema *ProviderCatalogSchema) {
+			schema.Providers[len(schema.Providers)-1].ConnectionOwnership = CatalogProviderConnectionDeployment
+			schema.Providers[len(schema.Providers)-1].KeyAcquisitionURL = ""
 			schema.Providers[len(schema.Providers)-1].Fields[0].Required = false
 		}, expected: "reason=deployment_binding_required"},
 		{name: "provider alias", mutate: func(schema *ProviderCatalogSchema) { schema.Providers[0].Aliases = []string{"Future Alias"} }, expected: "reason=not_canonical"},

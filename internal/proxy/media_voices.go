@@ -26,12 +26,19 @@ var mediaVoiceIdentifierPattern = regexp.MustCompile(`^voi_[0-9a-f]{32}$`)
 // MediaVoiceProvider discovers native voices through one private provider
 // connection. The shared service assigns tenant-owned gateway identifiers.
 type MediaVoiceProvider interface {
-	DiscoverMediaVoices(context.Context) ([]MediaVoiceProviderRecord, error)
+	DiscoverMediaVoices(context.Context, string) (MediaVoiceDiscovery, error)
+}
+
+// MediaVoiceDiscovery contains voices and the current private connection authority.
+type MediaVoiceDiscovery struct {
+	Authority string
+	Voices    []MediaVoiceProviderRecord
 }
 
 // MediaVoiceProviderRecord is a validated private voice observation. Model and
 // provider reference values are retained privately and never returned publicly.
 type MediaVoiceProviderRecord struct {
+	Authority              string
 	Provider               string
 	Model                  string
 	Mode                   string
@@ -44,6 +51,7 @@ type MediaVoiceProviderRecord struct {
 }
 
 type mediaVoiceRecord struct {
+	Authority              string
 	VoiceID                string `gorm:"primaryKey"`
 	TenantID               string `gorm:"not null;uniqueIndex:idx_media_voice_native,priority:1;index:idx_media_voice_tenant,priority:1"`
 	Provider               string `gorm:"not null;uniqueIndex:idx_media_voice_native,priority:2;index:idx_media_voice_tenant,priority:2"`
@@ -82,17 +90,17 @@ func (service *mediaOperationService) mediaVoiceCollectionHandler() gin.HandlerF
 			writeMediaVoiceError(ginContext, errors.New(llmproxycontract.ErrorCodeMediaVoiceInvalid))
 			return
 		}
-		discovered, discoveryError := voiceProvider.DiscoverMediaVoices(ginContext.Request.Context())
+		requestTenant := authenticatedTenantFromContext(ginContext)
+		discovered, discoveryError := voiceProvider.DiscoverMediaVoices(ginContext.Request.Context(), requestTenant.identifier.string())
 		if discoveryError != nil {
 			writeMediaVoiceError(ginContext, errors.New(llmproxycontract.ErrorCodeMediaVoiceProvider))
 			return
 		}
-		requestTenant := authenticatedTenantFromContext(ginContext)
-		if persistError := service.store.persistMediaVoices(ginContext.Request.Context(), requestTenant.identifier.string(), provider, discovered); persistError != nil {
+		if persistError := service.store.persistMediaVoices(ginContext.Request.Context(), requestTenant.identifier.string(), provider, discovered.Voices); persistError != nil {
 			writeMediaVoiceError(ginContext, persistError)
 			return
 		}
-		voices, listError := service.store.listMediaVoices(ginContext.Request.Context(), requestTenant.identifier.string(), provider)
+		voices, listError := service.store.listMediaVoices(ginContext.Request.Context(), requestTenant.identifier.string(), provider, discovered.Authority)
 		if listError != nil {
 			writeMediaVoiceError(ginContext, listError)
 			return
@@ -135,7 +143,7 @@ func persistMediaVoice(transaction *gorm.DB, tenantID string, provider string, v
 	}
 	conflict := clause.OnConflict{
 		Columns:   []clause.Column{{Name: "tenant_id"}, {Name: "provider"}, {Name: "provider_voice_reference"}},
-		DoUpdates: clause.AssignmentColumns([]string{"model", "mode", "language", "display_name", "default", "sample_rates", "default_sample_rate", "updated_at"}),
+		DoUpdates: clause.AssignmentColumns([]string{"authority", "model", "mode", "language", "display_name", "default", "sample_rates", "default_sample_rate", "updated_at"}),
 	}
 	if createError := transaction.Clauses(conflict).Create(&record).Error; createError != nil {
 		return mediaVoiceResponse{}, createError
@@ -186,15 +194,15 @@ func newMediaVoiceRecord(tenantID string, provider string, voice MediaVoiceProvi
 	sampleRates, _ := json.Marshal(voice.SampleRates)
 	return mediaVoiceRecord{
 		VoiceID: newMediaVoiceIdentifier(), TenantID: tenantID, Provider: provider,
-		ProviderVoiceReference: voice.ProviderVoiceReference, Model: voice.Model, Mode: voice.Mode,
+		Authority: voice.Authority, ProviderVoiceReference: voice.ProviderVoiceReference, Model: voice.Model, Mode: voice.Mode,
 		Language: voice.Language, DisplayName: voice.DisplayName, Default: voice.Default,
 		SampleRates: sampleRates, DefaultSampleRate: voice.DefaultSampleRate, CreatedAt: now, UpdatedAt: now,
 	}, nil
 }
 
-func (store *mediaOperationStore) listMediaVoices(requestContext context.Context, tenantID string, provider string) ([]mediaVoiceResponse, error) {
+func (store *mediaOperationStore) listMediaVoices(requestContext context.Context, tenantID string, provider string, authority string) ([]mediaVoiceResponse, error) {
 	var records []mediaVoiceRecord
-	if queryError := store.database.WithContext(requestContext).Where("tenant_id = ? AND provider = ?", tenantID, provider).Order("mode, display_name, voice_id").Find(&records).Error; queryError != nil {
+	if queryError := store.database.WithContext(requestContext).Where("tenant_id = ? AND provider = ? AND authority = ?", tenantID, provider, authority).Order("mode, display_name, voice_id").Find(&records).Error; queryError != nil {
 		return nil, errors.New(llmproxycontract.ErrorCodeMediaVoiceStore)
 	}
 	voices := make([]mediaVoiceResponse, 0, len(records))

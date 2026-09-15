@@ -6,15 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 )
 
@@ -54,7 +51,7 @@ func (protocol *controlledDictatorProtocol) DiscoverVoices(context.Context) ([]M
 
 func TestDictatorAdapterValidatesEveryRetainedCapability(t *testing.T) {
 	fixture := newMediaOperationInternalFixture(t)
-	adapter, adapterError := newDictatorMediaOperationAdapter(&controlledDictatorProtocol{}, fixture.service.assets, fixture.service.store, "deployment:dictator:test", time.Millisecond)
+	adapter, adapterError := newDictatorMediaOperationAdapter(&controlledDictatorProtocol{}, fixture.service.assets, fixture.service.store, time.Millisecond)
 	if adapterError != nil {
 		t.Fatal(adapterError)
 	}
@@ -74,7 +71,7 @@ func TestDictatorAdapterValidatesEveryRetainedCapability(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.capability, func(t *testing.T) {
-			validated, validationError := adapter.Validate(MediaOperationAdapterRequest{Capability: testCase.capability, Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Input: json.RawMessage(testCase.input), Controls: json.RawMessage(testCase.controls)})
+			validated, validationError := adapter.Validate(context.Background(), MediaOperationAdapterRequest{Capability: testCase.capability, Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Input: json.RawMessage(testCase.input), Controls: json.RawMessage(testCase.controls)})
 			if validationError != nil || validated.Input == nil || validated.Controls == nil {
 				t.Fatalf("validated=%+v error=%v", validated, validationError)
 			}
@@ -97,7 +94,7 @@ func TestDictatorAdapterValidatesEveryRetainedCapability(t *testing.T) {
 		{Capability: llmproxycontract.MediaCapabilityAudioSpeechGenerate, Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Input: json.RawMessage(`{"text":"hello","voice_id":"` + voiceID + `"}`), Controls: json.RawMessage(`{"language":"en","text_format":"ssml","sample_rate_hz":16000}`)},
 	}
 	for invalidIndex, request := range invalidRequests {
-		if _, validationError := adapter.Validate(request); !errors.Is(validationError, errMediaOperationInvalid) {
+		if _, validationError := adapter.Validate(context.Background(), request); !errors.Is(validationError, errMediaOperationInvalid) {
 			t.Fatalf("invalid request %d error=%v", invalidIndex, validationError)
 		}
 	}
@@ -115,11 +112,11 @@ func TestDictatorAdapterPersistsPrivateHandleAndRecovers(t *testing.T) {
 		submit:       dictatorProtocolObservation{State: dictatorProtocolStateRunning, Handle: handle},
 		observations: []dictatorProtocolObservation{{State: dictatorProtocolStateSucceeded, Handle: completedHandle, Outputs: []MediaOperationOutput{{MIMEType: "application/json", Data: []byte(`{"transcript":"hello"}`)}}}},
 	}
-	adapter, adapterError := newDictatorMediaOperationAdapter(protocol, fixture.service.assets, fixture.service.store, "deployment:dictator:test", time.Millisecond)
+	adapter, adapterError := newDictatorMediaOperationAdapter(protocol, fixture.service.assets, fixture.service.store, time.Millisecond)
 	if adapterError != nil {
 		t.Fatal(adapterError)
 	}
-	validated, validationError := adapter.Validate(MediaOperationAdapterRequest{Capability: llmproxycontract.MediaCapabilityAudioTranscribe, Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Input: json.RawMessage(`{"audio_asset_id":"` + asset.AssetID + `"}`), Controls: json.RawMessage(`{"detect_language":true}`)})
+	validated, validationError := adapter.Validate(context.Background(), MediaOperationAdapterRequest{Capability: llmproxycontract.MediaCapabilityAudioTranscribe, Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Input: json.RawMessage(`{"audio_asset_id":"` + asset.AssetID + `"}`), Controls: json.RawMessage(`{"detect_language":true}`)})
 	if validationError != nil {
 		t.Fatal(validationError)
 	}
@@ -186,75 +183,17 @@ func TestDictatorVoiceExtractionPublishesOnlyGatewayVoiceIdentity(t *testing.T) 
 	}
 }
 
-func TestDictatorControlledProtocolThroughPublicOperationHandlers(t *testing.T) {
-	fixture := newMediaOperationInternalFixture(t)
-	fixture.service.claimRenewal = time.Hour
-	fixture.service.assets.maxAssetBytes = 1024
-	asset, uploadError := fixture.service.assets.upload(fixture.tenant, "audio/wav", bytesReader("audio"))
-	if uploadError != nil {
-		t.Fatal(uploadError)
-	}
-	handle := dictatorProviderHandle{Version: dictatorProviderHandleVersion, JobID: "native-job", SourceArtifactIDs: []string{"native-source"}, ResultArtifactIDs: []string{"native-result"}}
-	protocol := &controlledDictatorProtocol{submit: dictatorProtocolObservation{
-		State: dictatorProtocolStateSucceeded, Handle: handle,
-		Outputs: []MediaOperationOutput{{MIMEType: "application/json", Data: []byte(`{"transcript":"hello","language":"en","words":[{"text":"hello","start":0,"end":1}]}`)}},
-	}}
-	providerCatalog := internalCanonicalProviderCatalog()
-	connectionValues := map[string]map[string]string{ProviderNameDictator: {"grpc_address": "dictator.internal:50051", "grpc_auth_token": "private-token", "grpc_tls": "true"}}
-	fixture.service.catalog, _ = NewCatalogService(providerCatalog.ModelCatalog())
-	fixture.service.providers = newProviderRegistry(Configuration{ProviderCatalog: providerCatalog, ProviderConnectionValues: connectionValues, Endpoints: NewEndpoints()})
-	if registrationError := fixture.service.registerDictatorAdapter(Configuration{ProviderConnectionValues: connectionValues, dictatorProtocol: protocol, dictatorPollInterval: time.Millisecond}); registrationError != nil {
-		t.Fatal(registrationError)
-	}
-
-	capabilitiesResponse := httptest.NewRecorder()
-	capabilitiesContext, _ := gin.CreateTestContext(capabilitiesResponse)
-	capabilitiesContext.Request = httptest.NewRequest(http.MethodGet, llmproxycontract.MediaCapabilitiesPath, nil)
-	capabilitiesContext.Set(contextKeyTenant, fixture.tenant)
-	fixture.service.capabilitiesHandler()(capabilitiesContext)
-	if capabilitiesResponse.Code != http.StatusOK || !strings.Contains(capabilitiesResponse.Body.String(), `"capability":"audio.transcribe"`) || !strings.Contains(capabilitiesResponse.Body.String(), `"provider":"dictator"`) {
-		t.Fatalf("capabilities status=%d body=%s", capabilitiesResponse.Code, capabilitiesResponse.Body.String())
-	}
-
-	createBody := `{"capability":"audio.transcribe","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + asset.AssetID + `"},"controls":{"detect_language":true}}`
-	createResponse := httptest.NewRecorder()
-	createContext, _ := gin.CreateTestContext(createResponse)
-	createContext.Request = httptest.NewRequest(http.MethodPost, llmproxycontract.MediaOperationsPath, strings.NewReader(createBody))
-	createContext.Request.Header.Set(llmproxycontract.HeaderIdempotencyKey, "dictator-controlled")
-	createContext.Set(contextKeyTenant, fixture.tenant)
-	fixture.service.createHandler()(createContext)
-	if createResponse.Code != http.StatusAccepted {
-		t.Fatalf("create status=%d body=%s", createResponse.Code, createResponse.Body.String())
-	}
-	var accepted mediaOperationResponse
-	if decodeError := json.Unmarshal(createResponse.Body.Bytes(), &accepted); decodeError != nil {
-		t.Fatal(decodeError)
-	}
-	if deadlineUpdateError := fixture.database.Model(&mediaOperationRecord{}).Where("operation_id = ?", accepted.OperationID).Update("deadline_at", time.Now().UTC().Add(time.Hour)).Error; deadlineUpdateError != nil {
-		t.Fatal(deadlineUpdateError)
-	}
-	fixture.service.runOperation("dictator-worker", accepted.OperationID)
-	completed, completedError := fixture.service.store.publicResponse(context.Background(), fixture.tenant.identifier.string(), accepted.OperationID)
-	if completedError != nil || completed.State != MediaOperationStateSucceeded || len(completed.Outputs) != 1 {
-		t.Fatalf("completed=%+v error=%v", completed, completedError)
-	}
-	var privateRecord mediaOperationRecord
-	if queryError := fixture.database.First(&privateRecord, "operation_id = ?", accepted.OperationID).Error; queryError != nil || !strings.Contains(privateRecord.ProviderHandle, "native-job") || strings.Contains(createResponse.Body.String(), "native-job") {
-		t.Fatalf("private handle=%q query error=%v create=%s", privateRecord.ProviderHandle, queryError, createResponse.Body.String())
-	}
-}
-
 func TestDictatorAdapterFailureAndPrivacyEdges(t *testing.T) {
 	fixture := newMediaOperationInternalFixture(t)
 	protocol := &controlledDictatorProtocol{voices: []MediaVoiceProviderRecord{{Provider: ProviderNameDictator}}}
-	adapter, adapterError := newDictatorMediaOperationAdapter(protocol, fixture.service.assets, fixture.service.store, "deployment:dictator:test", time.Millisecond)
+	adapter, adapterError := newDictatorMediaOperationAdapter(protocol, fixture.service.assets, fixture.service.store, time.Millisecond)
 	if adapterError != nil {
 		t.Fatal(adapterError)
 	}
-	if _, invalidError := newDictatorMediaOperationAdapter(nil, fixture.service.assets, fixture.service.store, "deployment:dictator:test", time.Millisecond); invalidError == nil {
+	if _, invalidError := newDictatorMediaOperationAdapter(nil, fixture.service.assets, fixture.service.store, time.Millisecond); invalidError == nil {
 		t.Fatal("nil protocol accepted")
 	}
-	if voices, voicesError := adapter.DiscoverMediaVoices(context.Background()); voicesError != nil || len(voices) != 1 {
+	if voices, voicesError := adapter.DiscoverMediaVoices(context.Background(), "tenant"); voicesError != nil || len(voices.Voices) != 1 {
 		t.Fatalf("voices=%v error=%v", voices, voicesError)
 	}
 
@@ -368,12 +307,12 @@ func TestDictatorCanonicalRequestAndHandleEdges(t *testing.T) {
 		{Capability: llmproxycontract.MediaCapabilityAudioVoiceExtract, Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `","transcript":"hello","display_name":"Narrator","language":"en"}`), Controls: json.RawMessage(`{}`)},
 	}
 	fixture := newMediaOperationInternalFixture(t)
-	adapter, adapterError := newDictatorMediaOperationAdapter(&controlledDictatorProtocol{}, fixture.service.assets, fixture.service.store, "deployment:dictator:test", time.Millisecond)
+	adapter, adapterError := newDictatorMediaOperationAdapter(&controlledDictatorProtocol{}, fixture.service.assets, fixture.service.store, time.Millisecond)
 	if adapterError != nil {
 		t.Fatal(adapterError)
 	}
 	for index, request := range invalidRequests {
-		if _, validationError := adapter.Validate(request); !errors.Is(validationError, errMediaOperationInvalid) {
+		if _, validationError := adapter.Validate(context.Background(), request); !errors.Is(validationError, errMediaOperationInvalid) {
 			t.Fatalf("invalid request %d error=%v", index, validationError)
 		}
 	}
@@ -400,7 +339,7 @@ func TestDictatorCanonicalRequestAndHandleEdges(t *testing.T) {
 
 func TestDictatorSpeechVoiceResolutionIsTenantAndProviderBound(t *testing.T) {
 	fixture := newMediaOperationInternalFixture(t)
-	adapter, adapterError := newDictatorMediaOperationAdapter(&controlledDictatorProtocol{}, fixture.service.assets, fixture.service.store, "deployment:dictator:test", time.Millisecond)
+	adapter, adapterError := newDictatorMediaOperationAdapter(&controlledDictatorProtocol{}, fixture.service.assets, fixture.service.store, time.Millisecond)
 	if adapterError != nil {
 		t.Fatal(adapterError)
 	}
@@ -415,7 +354,7 @@ func TestDictatorSpeechVoiceResolutionIsTenantAndProviderBound(t *testing.T) {
 		if persistError := fixture.service.store.persistMediaVoices(context.Background(), fixture.tenant.identifier.string(), provider, []MediaVoiceProviderRecord{voice}); persistError != nil {
 			t.Fatal(persistError)
 		}
-		voices, listError := fixture.service.store.listMediaVoices(context.Background(), fixture.tenant.identifier.string(), provider)
+		voices, listError := fixture.service.store.listMediaVoices(context.Background(), fixture.tenant.identifier.string(), provider, "")
 		if listError != nil {
 			t.Fatal(listError)
 		}

@@ -69,7 +69,7 @@ func (failure mediaOperationExpiredError) Error() string { return errMediaOperat
 // MediaOperationAdapter is one provider-capability execution component. It validates
 // provider-specific input before acceptance and owns submission, recovery, and cancellation.
 type MediaOperationAdapter interface {
-	Validate(MediaOperationAdapterRequest) (MediaOperationValidatedRequest, error)
+	Validate(context.Context, MediaOperationAdapterRequest) (MediaOperationValidatedRequest, error)
 	Execute(context.Context, MediaOperationExecutionRequest) MediaOperationExecutionResult
 	Recover(context.Context, MediaOperationExecutionRequest) MediaOperationExecutionResult
 	Cancel(context.Context, MediaOperationExecutionRequest) MediaOperationCancellationResult
@@ -84,11 +84,13 @@ type MediaOperationDeploymentCredential interface {
 
 // MediaOperationAdapterRequest is the caller request after catalog route resolution.
 type MediaOperationAdapterRequest struct {
-	Capability string
-	Provider   string
-	Model      string
-	Input      json.RawMessage
-	Controls   json.RawMessage
+	TenantID            string
+	CredentialReference string
+	Capability          string
+	Provider            string
+	Model               string
+	Input               json.RawMessage
+	Controls            json.RawMessage
 }
 
 // MediaOperationValidatedRequest is the canonical provider-specific request retained at acceptance.
@@ -299,7 +301,8 @@ func newMediaOperationService(configuration Configuration, managedTenants *manag
 		return nil, storeError
 	}
 	catalog := CatalogService{catalog: validatedModelCatalog{revision: configuration.ModelCatalog.Revision}}
-	if len(configuration.MediaOperationAdapters) != 0 {
+	_, dictatorEnabled := providers.definitions[providerID(ProviderNameDictator)]
+	if len(configuration.MediaOperationAdapters) != 0 || dictatorEnabled {
 		var catalogError error
 		catalog, catalogError = NewCatalogService(configuration.ModelCatalog)
 		if catalogError != nil {
@@ -320,10 +323,18 @@ func newMediaOperationService(configuration Configuration, managedTenants *manag
 		tenantCapacity:    configuration.TenantMediaOperationCapacity,
 		terminalRetention: time.Duration(configuration.AssetRetentionSeconds) * time.Second,
 	}
-	if configuration.dictatorProtocol != nil {
-		if adapterError := service.registerDictatorAdapter(configuration); adapterError != nil {
-			return nil, adapterError
+	if dictatorEnabled {
+		adapter := &accountDictatorAdapter{tenants: managedTenants, store: store, assets: assets}
+		if service.adapters == nil {
+			service.adapters = map[string]MediaOperationAdapter{}
 		}
+		if service.voiceProviders == nil {
+			service.voiceProviders = map[string]MediaVoiceProvider{}
+		}
+		for _, capability := range []string{llmproxycontract.MediaCapabilityAudioTranscribe, llmproxycontract.MediaCapabilityAudioDiarize, llmproxycontract.MediaCapabilityAudioAlign, llmproxycontract.MediaCapabilitySubtitlesCreate, llmproxycontract.MediaCapabilityAudioSpeechGenerate, llmproxycontract.MediaCapabilityAudioVoiceExtract} {
+			service.adapters[mediaOperationAdapterKey(capability, ProviderNameDictator, ModelNameDictatorSpeechV1)] = adapter
+		}
+		service.voiceProviders[ProviderNameDictator] = adapter
 	}
 	assets.activeReference = func(tenantID string, assetID string) (bool, error) {
 		var count int64
@@ -343,44 +354,6 @@ func newMediaOperationService(configuration Configuration, managedTenants *manag
 	service.expireTerminalData()
 	service.resumeOutstanding()
 	return service, nil
-}
-
-func (service *mediaOperationService) registerDictatorAdapter(configuration Configuration) error {
-	connectionValues := configuration.ProviderConnectionValues[ProviderNameDictator]
-	address := strings.TrimSpace(connectionValues["grpc_address"])
-	authToken := strings.TrimSpace(connectionValues["grpc_auth_token"])
-	tlsValue := strings.TrimSpace(connectionValues["grpc_tls"])
-	if address == "" || authToken == "" || (tlsValue != "true" && tlsValue != "false") {
-		return errMediaOperationUnavailable
-	}
-	pollInterval := configuration.dictatorPollInterval
-	if pollInterval <= 0 {
-		pollInterval = 250 * time.Millisecond
-	}
-	credentialMaterial := []byte(address + "\x00" + authToken + "\x00" + tlsValue)
-	credentialReference := "deployment:dictator:sha256-" + mediaSHA256Hex(credentialMaterial)
-	adapter, adapterError := newDictatorMediaOperationAdapter(configuration.dictatorProtocol, service.assets, service.store, credentialReference, pollInterval)
-	if adapterError != nil {
-		return adapterError
-	}
-	if service.adapters == nil {
-		service.adapters = map[string]MediaOperationAdapter{}
-	}
-	for _, capability := range []string{
-		llmproxycontract.MediaCapabilityAudioTranscribe,
-		llmproxycontract.MediaCapabilityAudioDiarize,
-		llmproxycontract.MediaCapabilityAudioAlign,
-		llmproxycontract.MediaCapabilitySubtitlesCreate,
-		llmproxycontract.MediaCapabilityAudioSpeechGenerate,
-		llmproxycontract.MediaCapabilityAudioVoiceExtract,
-	} {
-		service.adapters[mediaOperationAdapterKey(capability, ProviderNameDictator, ModelNameDictatorSpeechV1)] = adapter
-	}
-	if service.voiceProviders == nil {
-		service.voiceProviders = map[string]MediaVoiceProvider{}
-	}
-	service.voiceProviders[ProviderNameDictator] = adapter
-	return nil
 }
 
 func registerMediaOperationRoutes(router *gin.Engine, authenticator tenantAuthenticator, structuredLogger *zap.SugaredLogger, service *mediaOperationService) {
@@ -510,7 +483,11 @@ func (service *mediaOperationService) create(requestContext context.Context, req
 	if adapter == nil || !service.mediaOperationCredentialAvailable(requestTenant, provider, adapter) {
 		return mediaOperationRecord{}, false, errMediaOperationUnavailable
 	}
-	validated, validationError := adapter.Validate(MediaOperationAdapterRequest{Capability: payload.Capability, Provider: payload.Provider, Model: payload.Model, Input: canonicalInput, Controls: canonicalControls})
+	credentialVersionReference, credentialError := service.mediaOperationCredentialReference(requestContext, requestTenant, provider, adapter)
+	if credentialError != nil {
+		return mediaOperationRecord{}, false, credentialError
+	}
+	validated, validationError := adapter.Validate(requestContext, MediaOperationAdapterRequest{TenantID: requestTenant.identifier.string(), CredentialReference: credentialVersionReference, Capability: payload.Capability, Provider: payload.Provider, Model: payload.Model, Input: canonicalInput, Controls: canonicalControls})
 	if validationError != nil {
 		return mediaOperationRecord{}, false, errMediaOperationInvalid
 	}
@@ -520,10 +497,6 @@ func (service *mediaOperationService) create(requestContext context.Context, req
 		return mediaOperationRecord{}, false, errMediaOperationInvalid
 	}
 	now := service.store.now()
-	credentialVersionReference, credentialError := service.mediaOperationCredentialReference(requestContext, requestTenant, provider, adapter)
-	if credentialError != nil {
-		return mediaOperationRecord{}, false, credentialError
-	}
 	record := mediaOperationRecord{
 		OperationID: newMediaOperationIdentifier(), TenantID: requestTenant.identifier.string(), IdempotencyKeyDigest: keyDigest,
 		IntentDigest: intentDigest, Capability: payload.Capability, CatalogOperation: catalogOperation,

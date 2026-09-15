@@ -138,13 +138,11 @@ func internalTestProviderCatalog(modelCatalog ModelCatalog) *ProviderCatalog {
 					Validation: ProviderCatalogFieldValidation{MinimumLength: 1},
 				}},
 			}
-			if slices.Contains(providerDefinitions[offering.Provider].CredentialKinds, CatalogCredentialDeployment) {
-				provider.ConnectionOwnership = CatalogProviderConnectionDeployment
-				provider.KeyAcquisitionURL = ""
+			if offering.WireContract == CatalogProtocolDictatorSpeechV1 {
 				provider.Fields = []ProviderCatalogField{
-					{ID: "grpc_address", Label: "Test gRPC address", Kind: CatalogProviderFieldKindSetting, Type: CatalogProviderFieldTypeGRPCTarget, Required: true, Default: &empty, Validation: ProviderCatalogFieldValidation{MinimumLength: 1}, Environment: "DICTATOR_GRPC_ADDR"},
-					{ID: "grpc_auth_token", Label: "Test gRPC token", Kind: CatalogProviderFieldKindCredential, Type: CatalogProviderFieldTypeOpaque, Required: true, Default: &empty, Secret: true, Validation: ProviderCatalogFieldValidation{MinimumLength: 1}, Environment: "DICTATOR_GRPC_AUTH_TOKEN"},
-					{ID: "grpc_tls", Label: "Test gRPC TLS", Kind: CatalogProviderFieldKindSetting, Type: CatalogProviderFieldTypeBoolean, Required: true, Default: &empty, Validation: ProviderCatalogFieldValidation{MinimumLength: 1}, Environment: "DICTATOR_GRPC_TLS"},
+					{ID: "grpc_address", Label: "Test gRPC address", Kind: CatalogProviderFieldKindSetting, Type: CatalogProviderFieldTypeGRPCTarget, Required: true, Default: &empty, Validation: ProviderCatalogFieldValidation{MinimumLength: 1}},
+					{ID: "grpc_auth_token", Label: "Test gRPC token", Kind: CatalogProviderFieldKindCredential, Type: CatalogProviderFieldTypeOpaque, Required: true, Default: &empty, Secret: true, Validation: ProviderCatalogFieldValidation{MinimumLength: 1}},
+					{ID: "grpc_tls", Label: "Test gRPC TLS", Kind: CatalogProviderFieldKindSetting, Type: CatalogProviderFieldTypeBoolean, Required: true, Default: &empty, Validation: ProviderCatalogFieldValidation{MinimumLength: 1}},
 				}
 			}
 			schema.Providers = append(schema.Providers, provider)
