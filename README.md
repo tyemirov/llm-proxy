@@ -27,7 +27,8 @@ LLM Proxy owns the shared media operation gateway. F022 added the durable
 tenant API, operation store, asset delivery, and official Go client. Provider
 capability issues add adapters to this common service. Private Dictator access
 remains in F042.
-MediaOps retains production workflows and YouTube channel management.
+MediaOps retains only the TelePrompter application. Its other functionality moves to LLM Proxy under F071.
+TelePrompter consumes gateway operations only where its user flows require them.
 See the [consolidation strategy](docs/media-gateway-consolidation.md) for issue ownership, delivery order, and acceptance requirements.
 
 ## Features
