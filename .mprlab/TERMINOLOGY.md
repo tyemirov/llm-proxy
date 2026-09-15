@@ -21,6 +21,10 @@ Give each term one meaning. Use the same term for the same concept in all docume
 
 ## Repository Technical Nouns
 
+- `emulator`: Software that reproduces a device runtime for application tests.
+- `physical device`: Hardware used to run an application or do a device test.
+- `simulator`: Software that models a device environment for application tests.
+
 - `Gateway runtime`: The installed MPR Lab deployment executable, runtime assets, and dependencies.
 - `operator root`: The directory that contains Gateway inventory and private operator inputs.
 
@@ -98,3 +102,22 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `service deployment scope`: The geographic area in which Alibaba can execute model inference.
 - `model inventory`: A dated list of upstream model identifiers and their documented capabilities.
 - `model inventory importer`: An operator tool that converts upstream model data into a proposed provider catalog change.
+
+## Hosted Billing Technical Nouns
+
+- `billing account`: The account resource that owns customer funds, charges, and payment references across its tenants.
+- `hosted access grant`: An explicit authorization for a tenant to use specified provider offerings through platform credentials.
+- `platform connection`: An operator-owned provider credential resource used for hosted customer requests.
+- `billable attempt`: One recorded attempt to execute a customer request through an external provider.
+- `usage journal`: The durable record of requests, attempts, measured quantities, and provider evidence used for billing.
+- `price snapshot`: The immutable rates, conditions, effective time, and revision selected for one accepted request.
+- `customer charge`: The monetary amount assigned to customer usage under the selected price snapshot.
+- `provider cost`: The monetary amount attributed to upstream work, with its evidence and reconciliation state.
+- `credit ledger`: An append-only record of balanced monetary entries for customer funds, reservations, charges, and adjustments.
+- `funds reservation`: A durable hold that reduces available customer funds before provider work starts.
+- `payment receipt`: A retained record of a processor payment and its verified financial state.
+- `payment inbox`: A durable collection of verified processor events awaiting application to financial records.
+- `delivery outbox`: A durable collection of external delivery requests committed with the source transaction.
+- `reconciliation case`: A durable record of a difference or uncertainty between local financial records and external evidence.
+- `chargeback`: A payment reversal initiated through a card issuer or payment network.
+- `rating`: The calculation of a customer charge or provider cost from measured quantities and an applicable price snapshot.

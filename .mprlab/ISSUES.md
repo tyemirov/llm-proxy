@@ -27,6 +27,41 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B219] (P1) Remove private data from speech timelines.
+  Observed: Tenant timeline assets contain native voice identifiers, engine details, and server paths.
+  Requirements: Validate the native timeline. Publish only public text and timing fields.
+  Validation: Use the public HTTP API with a local Dictator gRPC server. Run final `make ci`.
+  Resolution: The public timeline contains only validated text segments. Malformed native timelines produce no tenant assets.
+  Deliverables: `internal/proxy/dictator_grpc_protocol.go`, `internal/proxy/dictator_grpc_e2e_test.go`, `docs/media-gateway-consolidation.md`.
+  Validation: Focused tests passed. Final local `make ci` passed all 13 gates with 100.0 percent Go statement coverage.
+  Event contracts did not change.
+
+- [x] [B220] (P2) Exclude voices with obsolete connection authority.
+  Observed: Voice discovery returns obsolete voices after connection changes. Accepted work with these voices becomes uncertain.
+  Requirements: Return only current voices. Reject obsolete voice references before acceptance.
+  Validation: Change the connection address and token through HTTP. Run final `make ci`.
+  Resolution: Discovery uses current connection authority. Obsolete voices receive HTTP 400 before acceptance. Current voices complete synthesis after address and token changes.
+  Deliverables: `internal/proxy/media_voices.go`, `internal/proxy/media_operations.go`, `internal/proxy/dictator_account.go`, `internal/proxy/dictator_adapter.go`, `internal/proxy/dictator_grpc_protocol.go`, and their integration tests.
+  Validation: Focused tests passed. Final local `make ci` passed all 13 gates with 100.0 percent Go statement coverage.
+  Event contracts did not change.
+
+- [x] [B221] (P2) Keep an explicit zero diarization gap.
+  Observed: A zero `utterance_gap_seconds` value disappears before the gRPC request.
+  Requirements: Keep zero and omission as distinct control values.
+  Validation: Inspect gRPC requests from public HTTP operations. Run final `make ci`.
+  Resolution: The optional control retains its presence through storage and gRPC. Tests distinguish zero, omission, and a positive value.
+  Deliverables: `internal/proxy/dictator_adapter.go`, `internal/proxy/dictator_grpc_protocol.go`, `internal/proxy/dictator_grpc_e2e_test.go`, `docs/openapi.yaml`, `site/docs/index.html`, `docs/media-gateway-consolidation.md`.
+  Validation: Focused tests passed. Final local `make ci` passed all 13 gates with 100.0 percent Go statement coverage.
+  Event contracts did not change.
+
+- [x] [B218] (P1) Use the canonical Python media capability resource.
+  Observed: The Python client requests `/model/v1/media-capabilities`. The server exposes `/model/v1/capabilities`.
+  Requirements: Use the canonical server path without an alias.
+  Validation: Read capabilities through the official Python client and a real HTTP listener. Run final `make ci`.
+  Resolution: The HTTP regression first returned 404. The corrected client uses `/model/v1/capabilities` without an alias.
+  Deliverables: `python/llm_proxy_client/client.py`, `python/tests/test_client.py`.
+  Validation: Python and package-install tests passed. Final `make ci` passed all 13 gates with 100 percent Go coverage.
+
 - [x] [B217] (P2) Keep both dashboard prompt drafts after a failed save.
   Observed: A provider prompt draft is lost after HTTP 500 when both prompt forms are visible.
   Requirements: Keep both prompt drafts for retry.
@@ -204,6 +239,11 @@ retain satisfied historical dependencies.
   The initial Governor check reported format template drift. I254 records its correction.
 
 ## Improvements
+
+- [ ] [I263] (P2) Remove the duplicate I261 identifier.
+  Observed: A blocked schema entry and a completed lifecycle entry both use I261 in the active tracker.
+  Requirements: Keep the completed I261 identifier. Give the blocked entry an unused identifier and update its affected dependencies.
+  Validation: Verify unique identifiers and valid dependencies in the active tracker and archive.
 
 - [x] [I262] (P1) Use Alibaba Cloud labels and English API-key setup.
   Goal:
@@ -1404,6 +1444,324 @@ retain satisfied historical dependencies.
 
 ## Features
 
+- [ ] [F071] (P1) {F022} Migrate remaining MediaOps application functionality into LLM Proxy.
+  Goal:
+  Retain only the TelePrompter application in MediaOps. Move its other functionality into LLM Proxy.
+  Requirements:
+  - Inventory Tube and YouTube workflows, Subtitles, Audio QC, Text Video, Frame Picker, shared CLI/MCP operations, and shared composition execution.
+  - Preserve each required workflow in its destination. Do not replace migration with feature deletion.
+  - Keep TelePrompter project editing, interface behavior, and user access in MediaOps.
+  - Move shared narration, rendering, validation, artifact recovery, and provider diagnostics to their LLM Proxy owners.
+  - Keep tenant metrics in LLM Proxy. Do not add a MediaOps metrics consumer without a concrete TelePrompter requirement.
+  - Define application resource authorization before each migration. A tenant key must not expose another user's records.
+  - Map actual data, accepted jobs, artifacts, external callers, and credentials before each runtime switch.
+  - Preserve paid-operation authority, cancellation, idempotency, and recovery without replaying accepted work.
+  - Move functionality and its behavior tests together. Remove obsolete MediaOps routes and workers after destination acceptance.
+  - Reuse provider capability issues. Do not make F042 completion depend on unrelated application migration.
+  - Coordinate MediaOps I092 for application retirement and F021 for required TelePrompter composition integration.
+  Deliverables:
+  - An application migration inventory, destination implementations, required consumer changes, and bounded data migration receipts.
+  - A verified MediaOps runtime with only TelePrompter and its required support services.
+  Validation:
+  - Verify each migrated workflow through the destination public interface and its actual consumer.
+  - Prove tenant and user isolation, retained-data integrity, and zero obsolete MediaOps entry points after each accepted migration.
+  - Record source validation, publication, deployment, and live acceptance separately.
+  Status:
+  - The operator confirmed this scope on 2026-09-14. Application implementation remains open.
+
+- [ ] [F065] (P1) Add platform connections and explicit hosted access grants.
+  Goal:
+  Let customers use approved provider offerings through platform credentials after account creation.
+  Give each customer separate tenant access, usage attribution, and billing ownership.
+  Requirements:
+  - Use F070 as the shared hosted service contract.
+  - Extend the ownership rules in `docs/tenant-connections.md` and the account connection store.
+  - Create one billing account for each management account through an explicit mutation.
+  - Keep account identity, tenant identity, platform connection identity, and provider credential version separate.
+  - Define platform connections as operator resources with encrypted credentials and explicit provider settings.
+  - Add hosted access grants with account, tenant, offering, platform connection, state, and revision fields.
+  - Define grant states as `active`, `suspended`, and `revoked`.
+  - Select either an account connection or a hosted access grant for each tenant provider assignment.
+  - Represent this selection with a closed resource type and an explicit identifier.
+  - Preserve customer-owned connections as an explicit product choice with separate usage attribution.
+  - Require an explicit assignment change between customer credentials and platform credentials.
+  - Keep platform credentials and private provider handles outside customer responses, exports, and logs.
+  - Add account reads and grant resources under `/api/management/billing-accounts` and `/api/management/hosted-access-grants`.
+  - Restrict platform connection mutations to the existing authenticated operator boundary or a documented operator CLI.
+  - Require idempotency keys for resource creation and revision preconditions for grant changes.
+  - Resolve the exact grant, tenant, connection version, offering, and catalog revision before admission.
+  - Recheck grant authority before each new upstream attempt or continuation.
+  - Preserve accepted credential references for recovery after credential rotation.
+  - Define revocation behavior separately for queued, dispatched, and recoverable work.
+  - Keep result recovery possible without authorizing new provider work after revocation.
+  - Make hosted eligibility depend on credential qualification, pricing, metering, and an active grant.
+  - Keep public catalog availability separate from paid customer eligibility.
+  - Apply the same authority contract to native HTTP, client protocols, MCP, dictation, and media operations.
+  - Require the completed F068 admission check before production requests use platform credentials.
+  - Keep hosted execution disabled until F070 development acceptance passes.
+  Deliverables:
+  - Billing account, platform connection, grant, and assignment schemas with database constraints.
+  - Operator provisioning interface, customer entitlement views, and audited grant transitions.
+  - Onboarding flow that creates tenant access without requesting provider credentials.
+  - OpenAPI, applicable clients, README, and tenant connection documentation updates.
+  Validation:
+  - Exercise account creation, grant creation, and provider dispatch through real authenticated HTTP entry points.
+  - Prove one customer's key cannot use another customer's grant, resources, or results.
+  - Prove customers cannot read or change platform credentials.
+  - Prove duplicate creation, revision conflicts, rotation, revocation, and restart behavior.
+  - Prove an unavailable grant causes zero upstream dispatches across every supported entry point.
+  - Prove existing customer-owned assignments remain explicit and independently attributed.
+  - Verify onboarding through the real browser and controlled provider endpoints.
+  - Run `make ci` after the last application change.
+
+- [ ] [F066] (P1) {F065} Add a durable usage journal for customer billing.
+  Goal:
+  Record every hosted request and upstream attempt with enough evidence to explain its financial outcome after a restart.
+  Requirements:
+  - Use F070 as the shared hosted service contract.
+  - Replace the billing dependency on `management_usage_writer.go` with a durable journal in the managed database.
+  - Retain operational telemetry as a separate, explicitly nonfinancial projection.
+  - Create request, attempt, usage observation, and reconciliation records with stable opaque identifiers.
+  - Bind each request to its billing account, tenant, grant, offering, connection version, and catalog revision.
+  - Bind the selected price snapshot and funds reservation when F067 and F068 provide them.
+  - Require one tenant-scoped idempotency key for every hosted generation request.
+  - Reuse current structured request and media operation identities instead of creating competing execution records.
+  - Define native, client protocol, and MCP representations for the same hosted idempotency contract.
+  - Return the retained result or operation for identical intent and reject changed intent with `409`.
+  - Record admission and dispatch intent before each upstream attempt starts.
+  - Assign separate attempt identifiers to continuations and explicit retries.
+  - Use database uniqueness constraints for request identities, attempt numbers, observations, and final accounting effects.
+  - Define request states as `accepted`, `executing`, `completed`, `failed`, and `uncertain`.
+  - Define attempt states as `prepared`, `dispatched`, `observed`, and `uncertain`.
+  - Keep execution outcomes separate from usage completeness and customer charge eligibility.
+  - Record provider request identifiers privately when the provider supplies them.
+  - Record input, output, cache-read, cache-write, and other independently billed token quantities when applicable.
+  - Record audio duration, generated media quantities, tool calls, and provider-specific billing units when applicable.
+  - Preserve the provider's inclusion rules to prevent duplicate counting of reasoning or cached tokens.
+  - Represent missing quantities as unknown with a reason, never as measured zero.
+  - Retain normalized evidence, source fields, adapter revision, timestamps, and evidence digests without prompt or credential content.
+  - Commit observations and accounting delivery records together before financial settlement.
+  - Recover pending deliveries after restart and deduplicate their effects at the destination.
+  - Reconcile uncertain dispatches through provider evidence before any new paid attempt.
+  - Retain an unresolved state when the provider cannot establish the outcome.
+  - Preserve financial evidence independently of tenant deletion, response expiry, and asset retention.
+  - Define authorized deletion and retention procedures before production acceptance.
+  - Expose account-scoped, cursor-paginated journal reads with safe request and reconciliation identifiers.
+  Deliverables:
+  - Durable journal tables, transaction boundaries, restart recovery, and accounting delivery integration.
+  - Usage extraction in each initially eligible provider adapter and operation.
+  - Safe journal API, applicable client updates, and retention documentation.
+  Validation:
+  - Interrupt the real service before dispatch, after dispatch, after observation, and before settlement.
+  - Prove each restart preserves known usage and exposes unresolved provider outcomes.
+  - Prove concurrent duplicate requests cause one logical execution and one final accounting effect.
+  - Exercise provider failure, timeout, client disconnect, continuation, and missing usage through controlled upstream protocols.
+  - Prove unknown usage cannot become a zero-cost settled request.
+  - Prove telemetry queue saturation cannot lose financial evidence.
+  - Prove journal attribution and access remain isolated across accounts and tenants.
+  - Run `make ci` after the last application change.
+
+- [ ] [F067] (P1) {F066} Calculate exact provider costs and customer charges.
+  Goal:
+  Convert measured usage into reproducible provider costs and customer charges with the price selected at request acceptance.
+  Requirements:
+  - Use F070 as the shared hosted service contract.
+  - Extend `catalog_service.go` and the canonical provider catalog instead of copying provider rates into billing code.
+  - Use one shared price condition model for F036 comparison and hosted rating.
+  - Coordinate typed condition changes with F036 and preserve its separate public comparison scope.
+  - Define exact component units, currencies, token ranges, cache classes, service tiers, regions, and effective intervals.
+  - Reject overlapping conditions, missing components, incompatible units, and expired rate intervals during paid eligibility validation.
+  - Preserve unavailable prices as unavailable and exclude their routes from hosted admission.
+  - Import rate evidence from official provider sources with verification dates and explicit effective times.
+  - Store immutable price snapshots for accepted requests independently of later catalog changes.
+  - Keep historical snapshots as financial evidence under the current schema, without obsolete catalog readers or compatibility paths.
+  - Record provider rates and customer rates separately under one accepted snapshot identifier.
+  - Support a configured customer price schedule without assuming provider cost equals customer price.
+  - Require explicit approval of customer rates and fees before production activation.
+  - Use exact decimal or rational arithmetic for rates and integer monetary units for ledger amounts.
+  - Specify monetary precision, overflow bounds, rounding direction, and the single rounding boundary.
+  - Preserve fractional remainders when aggregation requires finer precision than the ledger unit.
+  - Define component inclusion rules for cache, reasoning, audio, images, tools, and minimum charges.
+  - Calculate each billable attempt separately and aggregate attempts under the customer request.
+  - Define customer treatment of continuations, failed work, cancellations, and provider charges without a successful result.
+  - Preserve incurred provider cost when a customer adjustment removes the customer charge.
+  - Return a typed unresolved result when quantities or required rate conditions remain unknown.
+  - Produce a maximum authorized cost estimate before dispatch for F068 reservations.
+  - Include output limits, continuation limits, and optional tool costs in that estimate.
+  - Reject hosted work when its cost cannot be bounded under the selected policy.
+  - Require a new authorized reservation before work exceeds the accepted maximum.
+  - Expose account-scoped charge resources with quantities, rates, units, totals, and price snapshot identifiers.
+  - Keep tax amounts, processor fees, provider costs, and customer charges separately attributable.
+  Deliverables:
+  - Exact rating service, immutable price snapshots, and maximum-cost calculation.
+  - Charge records and itemized customer representations with safe evidence references.
+  - Canonical catalog, OpenAPI, client, pricing, and operator documentation updates.
+  Validation:
+  - Verify calculations against hand-calculated fixtures for every initially eligible billing component.
+  - Prove cached and reasoning quantities follow provider inclusion rules without duplicate counting.
+  - Prove repeated rating of one immutable observation produces the same charge.
+  - Prove historical charges remain unchanged after catalog, margin, or currency configuration changes.
+  - Exercise tier boundaries, minimum charges, fractional amounts, large values, and rounding through public APIs.
+  - Prove unknown quantities and unmatched conditions prevent final settlement.
+  - Prove every permitted execution path stays within its declared reservation bound.
+  - Run `make ci` after the last application change.
+
+- [ ] [F068] (P1) {F067} Enforce prepaid balances with atomic funds reservations.
+  Goal:
+  Bound hosted provider spending by each customer's available funds across concurrent requests and process restarts.
+  Requirements:
+  - Use F070 as the shared hosted service contract.
+  - Create an append-only credit ledger with balanced entries for each transaction and currency.
+  - Use one billing account balance across all customer tenants, with optional lower tenant spending limits.
+  - Define available funds as posted credits minus settled charges, active reservations, and payment reversal holds.
+  - Store ledger amounts in the precision defined by F067.
+  - Create reservation records with request, account, currency, maximum amount, state, and revision.
+  - Define reservation states as `held`, `settled`, `released`, and `reconciliation_required`.
+  - Commit request admission, funds reservation, and ledger effects in one database transaction.
+  - Enforce sufficient funds with database constraints or conditional updates across all service instances.
+  - Reserve the F067 maximum before each initial dispatch or authorized extension.
+  - Return `402` with `insufficient_funds` before dispatch when available funds cannot cover the reservation.
+  - Return `403` for suspended hosted authority and `503` when financial admission is unavailable.
+  - Settle known charges and release unused funds in one transaction with a unique request settlement identifier.
+  - Release reservations for requests proven never dispatched.
+  - Keep reservations for uncertain dispatched work until reconciliation establishes the required financial disposition.
+  - Use expiry to trigger recovery review, not automatic release of potentially incurred costs.
+  - Require an explicit audited adjustment when policy resolves an outcome without complete provider evidence.
+  - Stop further paid attempts when the reservation cannot cover additional work.
+  - Record any provider cost above the authorized bound as platform exposure with a reconciliation case.
+  - Apply admission through native HTTP, client protocols, MCP, dictation, and media execution.
+  - Reuse the same accounting identity for retries, result reads, and media polling.
+  - Keep status reads and existing result downloads outside generation reservations.
+  - Accept payment credits and reversals only through verified, idempotent F069 ledger commands.
+  - Preserve original entries and use compensating entries for refunds, disputes, and corrections.
+  - Retain financial records when account access ends, under the approved retention policy.
+  - Add balance, reservation, and ledger reads under the account management API.
+  - Show available, reserved, spent, and pending amounts separately in the dashboard.
+  Deliverables:
+  - Credit ledger, funds reservations, atomic admission, settlement, and reconciliation procedures.
+  - Stable funding errors and account balance views across supported client surfaces.
+  - Financial backup, restore, and recovery verification through documented operator commands.
+  Validation:
+  - Submit concurrent requests whose combined maximum exceeds the funded balance through multiple real service processes.
+  - Prove admitted reservations never exceed available funds and rejected requests cause zero provider work.
+  - Prove ledger entries balance after settlement, refund, reversal, and recovery.
+  - Prove duplicate settlements, credits, and releases change balances once.
+  - Interrupt execution across each transaction boundary and verify recovery against the real database.
+  - Prove uncertain work retains its hold and known undispatched work releases its hold.
+  - Prove database failure prevents new hosted dispatch.
+  - Verify browser balances, tenant limits, and insufficient-funds messages through real public entry points.
+  - Run `make ci` after the last application change.
+
+- [ ] [F069] (P1) {F068} Add prepaid payments, receipts, and financial reconciliation.
+  Goal:
+  Convert verified customer payments into account funds and explain differences between local records and external financial evidence.
+  Requirements:
+  - Use F070 as the shared hosted service contract.
+  - Use Stripe Checkout as the proposed first payment processor integration.
+  - Record processor selection and merchant ownership before external configuration or production activation.
+  - Keep the credit ledger authoritative for immediate admission and customer usage deductions.
+  - Use payment processing for account funding, receipts, refunds, and payment reversals.
+  - Keep metered invoices outside the initial prepaid contract to prevent duplicate collection for consumed credits.
+  - Map one processor customer to each billing account within the selected processor environment.
+  - Add account-owned funding orders and checkout sessions through authenticated resource creation.
+  - Require idempotency keys and derive amounts, currency, account identity, and return URLs on the server.
+  - Define funding states as `created`, `pending`, `paid`, `failed`, `partially_refunded`, `refunded`, and `disputed`.
+  - Keep payment receipts separate from credit ledger entries and link both through a unique funding order.
+  - Verify webhook signatures against raw request bytes and validate the processor environment.
+  - Persist verified events in a payment inbox before acknowledging durable acceptance.
+  - Deduplicate processor event identifiers and financial effects by payment object and effect type.
+  - Handle duplicate and out-of-order events with verified payment state and explicit transition rules.
+  - Credit funds only after verified payment success with matching account, amount, and currency.
+  - Keep browser return pages informational until the server confirms the payment state.
+  - Use a delivery outbox for retryable external requests with stable idempotency identifiers.
+  - Retry transient transport failures while retaining uncertain outcomes for provider reconciliation.
+  - Apply partial refunds, disputes, and chargebacks through compensating ledger entries and explicit account holds.
+  - Prevent new spending from funds allocated to a pending refund or reversal.
+  - Define account suspension and deficit treatment when a reversal exceeds remaining funds.
+  - Keep gross payment, tax, processor fee, net settlement, customer credit, and refund amounts separate.
+  - Add itemized funding history, usage charges, receipt links, and pending payment states to the dashboard.
+  - Add an idempotent reconciliation command with a durable run identifier, checkpoint, and result report.
+  - Compare payment receipts with processor records and customer credits with ledger entries.
+  - Compare provider costs with provider usage exports or invoices where those sources are available.
+  - Separate timing, currency, discount, fee, missing usage, and duplicate-effect differences in reconciliation cases.
+  - Require explicit approval and an audit record for corrective monetary entries.
+  - Define tax, receipt, retention, refund, and dispute policies before production activation.
+  - Keep sandbox and production identifiers, secrets, and records isolated.
+  Deliverables:
+  - Checkout integration, verified webhook endpoint, payment inbox, delivery outbox, and receipt resources.
+  - Funding and refund state machines, account holds, and browser payment history.
+  - Reconciliation command, scheduled execution contract, difference reports, and operator recovery procedures.
+  - OpenAPI, applicable client, payment setup, and operational documentation updates.
+  Validation:
+  - Exercise the real service with controlled processor protocols for each financial transition and failure.
+  - Qualify checkout, webhook signatures, delayed payment, and refund behavior in the processor sandbox.
+  - Prove duplicate events and different events for one payment create one customer credit.
+  - Prove invalid signatures, mismatched amounts, and another account's payment cannot create funds.
+  - Prove a browser success URL cannot create funds without verified payment evidence.
+  - Exercise crashes before and after inbox persistence, ledger posting, and external response receipt.
+  - Prove partial refunds, disputes, delayed success, and event reordering preserve ledger invariants.
+  - Prove reconciliation reruns preserve existing effects and expose seeded discrepancies.
+  - Verify the complete funding and receipt flow through the real browser.
+  - Run `make ci` after the last application change and record sandbox acceptance separately.
+
+- [ ] [F070] (P1) {F065,F066,F067,F068,F069} Deliver the unified prepaid hosted service.
+  Goal:
+  Give a customer one account, one funded balance, and immediate access to approved services without provider account setup.
+  Govern implementation and development acceptance across the five connected billing capabilities.
+  Requirements:
+  - Implement F065, F066, F067, F068, and F069 sequentially in dependency order.
+  - Use this umbrella for shared decisions, interface ownership, and complete service acceptance.
+  - Keep implementation details and component acceptance in the owning child issue.
+  - Use a prepaid account balance and USD as the proposed initial product scope.
+  - Use explicit customer rates with a limited initial set of qualified provider offerings.
+  - Record scope decisions before implementation depends on them.
+  - Record the initial provider list, supported operations, customer rates, fees, funding minimum, and maximum account exposure.
+  - Record the processor choice, merchant identity, refund policy, failure-charge policy, and financial retention policy.
+  - Confirm provider commercial authorization and paid capacity before hosted activation for each offering.
+  - Keep unresolved commercial choices visible without inventing rates, tax rules, or provider rights.
+  - Use F065 for billing identity, platform credentials, grants, and customer onboarding.
+  - Use F066 for request identities, billable attempts, usage evidence, and restart recovery.
+  - Use F067 for immutable price snapshots, provider costs, customer charges, and maximum authorized costs.
+  - Use F068 for funds reservations, ledger entries, admission, settlement, and financial account holds.
+  - Use F069 for payment receipts, processor events, funding credits, reversals, and external reconciliation.
+  - Reuse the current managed database, authentication boundary, provider catalog, and execution coordinators.
+  - Add current schema resources through explicit migrations only when an actual stored-data inventory requires a transfer.
+  - Keep billing schema extensions separate from historical telemetry conversion.
+  - Start customer financial history from verified funding and journal records, not reconstructed telemetry totals.
+  - Keep current customer-owned provider access as an explicit service option.
+  - Keep each hosted provider assignment explicit and prevent automatic credential substitution.
+  - Make sure every public route that can incur provider costs uses the same financial admission contract.
+  - Include continuations, tool execution, disconnected clients, and durable media workers in the cost boundary.
+  - Activate each hosted offering only after metering, bounded pricing, funding enforcement, and provider qualification pass.
+  - Preserve uncertain financial outcomes until an audited reconciliation decision resolves them.
+  - Give customers readable amounts, itemized charges, funding history, and actionable funding errors.
+  - Coordinate catalog condition ownership with F036 and service commitment decisions with P006.
+  - Keep new provider implementations with their existing capability issues.
+  - Document the hosted architecture, state transitions, failure recovery, and component ownership in one current source document.
+  - Add repository-native targets for component integration, complete billing acceptance, and processor sandbox qualification.
+  - Require database backup and restore evidence for journal, ledger, reservations, and payment records together.
+  - Add operational signals for unresolved attempts, settlement delay, reconciliation differences, and funded exposure.
+  - Keep development completion separate from deployment, real payments, and provider invoice acceptance.
+  - Obtain explicit operator authorization for production activation and any live financial qualification.
+  - File reproducible defects discovered during acceptance as separate BugFix issues.
+  Deliverables:
+  - Completed F065 through F069 with linked validation evidence and resolved shared product decisions.
+  - Hosted service architecture document, OpenAPI resources, customer onboarding, and billing dashboard.
+  - Controlled end-to-end acceptance suite and separate processor sandbox receipts.
+  - Operator launch checklist with provider qualification, rate evidence, recovery evidence, and remaining activation decisions.
+  Validation:
+  - Create a fresh account, complete sandbox funding, and use platform credentials through the customer interface.
+  - Verify the exact customer charge, provider cost, funds release, and remaining balance for each pilot operation.
+  - Exhaust the available balance and prove subsequent rejected requests cause zero upstream work.
+  - Exercise concurrent requests across tenants, idempotent retries, failed providers, client disconnects, and restarts.
+  - Exercise payment duplication, delayed confirmation, refund, reversal, and uncertain provider outcomes.
+  - Restore a consistent backup and prove retained financial records explain all accepted requests and payments.
+  - Verify one customer's resources and financial evidence remain inaccessible to another customer.
+  - Verify the rendered login, onboarding, model selection, funding, usage, and receipt flows on desktop and mobile widths.
+  - Compare sandbox payment receipts, usage journal entries, charge calculations, and ledger totals with expected fixtures.
+  - Run `make ci` after the last application change and record the complete acceptance target result.
+  - Mark this issue complete only after its development deliverables and acceptance requirements pass.
+
 - [ ] [F064] (P1) Add Alibaba Model Studio US East access and its complete model inventory.
   Goal:
   Let users connect an Alibaba Cloud Model Studio workspace in US (Virginia), `us-east-1`.
@@ -2173,15 +2531,16 @@ retain satisfied historical dependencies.
   - Prove queue recovery after restart, uncertain transport behavior, exact controls, and ordered verified artifacts.
   - Prove staging fetch and cleanup through real files and an HTTP serving boundary.
   - Run current repository validation and separately record explicitly authorized live acceptance.
-- [!] [F042] (P1) {F022} Expose Dictator media capabilities through the tenant gateway.
+- [ ] [F042] (P1) Expose Dictator media capabilities through the tenant gateway.
   Goal:
   Make Dictator a private media provider behind LLM Proxy's public API.
-  Blocked:
-  - The latest released `github.com/tyemirov/dictator/sdk/go/dictatorspeechv1` module is `v1.10.0`. It does not contain the retained preset-voice and text-format fields.
-  - Dictator application tags do not publish the independently versioned Go module. Resume production adapter construction after the automated lifecycle publishes the current nested module contract.
-  - Do not copy protobuf definitions or use an unreleased pseudo-version.
+  SDK evidence (2026-09-14):
+  - SDK `v1.11.0` is published at `sdk/go/dictatorspeechv1/v1.11.0` on commit `2f0c83c67dbd6f8093bb6f56359fdb818255fcbd`.
+  - Dictator application release `v2.0.3` contains the SDK publication receipt.
+  - `make verify-released-sdk` passed with `preset_speaker` and `text_format` through a separate consumer and fresh module cache.
   Current boundary:
-  - MediaOps currently calls Dictator through one internal adapter.
+  - MediaOps CLI, MCP, browser jobs, and diagnostics call Dictator through its internal adapter.
+  - WriterBlock dictation also calls the native SDK. F042 includes this caller replacement.
   - After consolidation, LLM Proxy owns that adapter and the public tenant authorization boundary.
   Requirements:
   - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
@@ -2190,13 +2549,15 @@ retain satisfied historical dependencies.
   - Define tenant-owned voices, assets, artifacts, and operation resources for retained capabilities.
   - Keep native voice, job, and artifact identifiers inside private provider records.
   - Map progress, cancellation, failures, and restart recovery through the common operation contract.
-  - Authenticate the internal LLM Proxy-to-Dictator connection through deployment-owned configuration.
+  - Use an account-owned Dictator connection for each assigned tenant.
   - Keep speech engines and native workers in Dictator.
   - Use the existing qualified runtime when it satisfies the retained capability.
   - Treat P008 hardware or controller changes as dependencies only when measured requirements make them necessary.
   - Extend official Go and Python clients and current public caller interfaces in the selected capability release.
   - Inventory retained voices and jobs before activation. Require explicit tenant and provider-account ownership mapping.
-  - Coordinate MediaOps I087 and every discovered direct caller in one bounded cutover.
+  - Coordinate MediaOps I087 source migration and each actual consumer in one bounded cutover.
+  - Retain only TelePrompter in MediaOps. Move shared Dictator workflows into LLM Proxy.
+  - Do not require a replacement MediaOps metrics client. Keep tenant metrics in LLM Proxy.
   - Remove obsolete public runtime routing and direct caller credentials after the cutover acceptance.
   Deliverables:
   - Private Dictator adapter, tenant media resources, official clients, caller migration inventory, and activation plan.
@@ -2208,9 +2569,13 @@ retain satisfied historical dependencies.
   - Do not add a Dictator history resource. MediaOps has no retained Dictator history capability. F026 owns ElevenLabs history.
   - Keep Dictator jobs, artifacts, preset identifiers, extracted-speaker artifacts, engine selection, and connection values in private gateway records.
   - Use the current async Dictator routes for transcription, diarization, subtitles, alignment, synthesis, and extraction. Do not retain the synchronous legacy RPCs as a second execution contract.
-  - Read `DICTATOR_GRPC_ADDR`, `DICTATOR_GRPC_AUTH_TOKEN`, and `DICTATOR_GRPC_TLS` from deployment-owned backend configuration. Do not require a tenant-managed Dictator connection.
+  - The operator selected account-owned Dictator servers on 2026-09-14. This requirement replaces deployment-owned Dictator access.
+  - Include Dictator in the provider selector. Store the server address, bearer token, and TLS setting in the account connection.
+  - Encrypt the token through the current account credential store. Keep each tenant assignment explicit.
+  - Bind execution, voice discovery, recovery, and cancellation to the assigned connection. Reject obsolete connection authority.
+  - Show speech capabilities in the dashboard without text-model defaults or provider prompts.
   - The released Dictator Go SDK must include the retained preset-voice and text-format fields before the production adapter dependency is added. Do not copy protobuf definitions or use an unreleased pseudo-version as a bridge.
-  - The current MediaOps inventory has no retained Dictator operation records that require import. Inventory extracted voices and active jobs again at activation and produce a zero-count receipt when none exist.
+  - Production resource counts are not verified. Inventory extracted voices and active jobs at activation. Produce a zero-count receipt only when verified.
   Validation:
   - Complete the P011 second-provider acceptance procedure for each protocol adapter added or changed in this slice.
   - Start with real public API and persistence tests against a controlled Dictator protocol boundary.
@@ -2218,6 +2583,34 @@ retain satisfied historical dependencies.
   - Prove exact speech behavior, native identifier privacy, restart recovery, and truthful cancellation.
   - Prove Dictator unavailability does not prevent admitted cloud operations.
   - Run repository validation and record real-runtime and consumer acceptance separately.
+  Implementation evidence (2026-09-14):
+  - The production adapter uses released SDK `v1.11.0` and the assigned account connection.
+  - The browser supports the server address, token, TLS selection, tenant assignment, and the Media tab.
+  - Public HTTP tests use real gRPC servers for all six capabilities, extracted voices, and separate account servers.
+  - The tests cover native cancellation and startup recovery without another submission.
+  - Cross-account voice, operation, and asset reads return HTTP 404.
+  - Credential rejection, rate limits, timeouts, and server failure do not save connections.
+  - SDK boundary tests reject damaged artifacts and foreign job or voice references.
+  - Diarization uses a closed result schema. The public HTTP regression rejects native resource fields without publishing an asset.
+  - Initial failures identified rejected connection creation and text-model validation for saved speech connections. Both paths now pass.
+  - Published LLM Proxy module `v1.9.1` does not contain the media-operation or voice client methods. I087 requires a new client release.
+  - Before the alignment SRT change, `make ci` passed all 13 gates in 337 seconds, with 100 percent Go statement coverage.
+  - MediaOps browser alignment requires SRT. The public HTTP test first failed with one output, then passed with two outputs.
+  - `make test-dictator` passed after the adapter published exact aligned SRT bytes as the second tenant asset.
+  - Final `make ci` passed all 13 gates in 331 seconds after the SRT change. Go coverage is 100 percent.
+  - Validation includes 59 Python checks, 117 frontend browser tests, and the real TAuth management browser suite.
+  - The caller inventory is in `docs/media-gateway-consolidation.md`. It includes MediaOps source migration, required TelePrompter flows, and WriterBlock dictation.
+  - The operator replaced server metrics with tenant metrics. MediaOps must not collect or expose server totals.
+  - `GET /model/v1/provider-diagnostics/dictator` returns retained tenant operation counts without a provider call.
+  - Counts exclude other tenants and providers. Terminal detail expiry removes its count.
+  - The server, official Go client, Python client, and OpenAPI schema use one closed tenant response.
+  - Public HTTP tests prove tenant and provider isolation, retained state counts, detachment, and zero native metrics calls.
+  - The first revision CI mixed source snapshots during coverage collection and reported 99.8 percent. Its result was discarded.
+  - Final `make ci` passed all 13 gates in 330 seconds against the fixed source. Go coverage is 100 percent.
+  - MediaOps removed native metrics collection and public metric fields. Its focused tests and final CI passed.
+  - The operator removed the proposed MediaOps tenant count integration from scope. It is not a publication or completion blocker.
+  - MCP resources belong to caller-selected workspaces. The backend YAML does not establish the complete retained-resource inventory.
+  - Remaining gates: destination migration, required consumer integration, client publication for those consumers, retained-resource inventory, and separate live acceptance.
 - [ ] [F043] (P1) {F022} Add provider-readable media staging and Google credential profiles.
   Goal:
   Let gateway providers read tenant media through the exact storage and credential contracts they require.
@@ -2447,7 +2840,7 @@ retain satisfied historical dependencies.
   - Keep OpenAI editing, response-chain controls, and progressive image output in F039.
   - Keep Vertex and FAL image adapters in F040 and F041.
   - Release the official Go client before the independent consumer integration.
-  - MediaOps I084 consumes the complete OpenAI slice after F039 preserves its current image capabilities.
+  - F039 preserves the complete OpenAI image contract. MediaOps I084 supplies source migration and required TelePrompter acceptance.
   Deliverables:
   - OpenAI image adapter, catalog route, operation schema, artifact results, and official-client example.
   - A backend-to-gateway acceptance fixture with the same tenant model as text calls.
@@ -2464,8 +2857,7 @@ retain satisfied historical dependencies.
   Make LLM Proxy the sole provider boundary for Vertex Veo, Vertex Gemini Omni,
   Runway, FAL, Kling, and xAI video generation.
   Cross-repository sequence:
-  - MediaOps I010 consumes this released video slice independently of the
-    image cutover.
+  - MediaOps I010 owns source migration and required TelePrompter acceptance for this video slice.
   Requirements:
   - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
   - Add a typed `video.generate` contract for prompt, start/end frame, source
@@ -2502,12 +2894,9 @@ retain satisfied historical dependencies.
   - Use the current repository validation policy instead of older baseline CI instructions.
 - [ ] [F026] (P1) {F022} Add ElevenLabs speech, music, and alignment operations.
   Goal:
-  Make LLM Proxy the sole external-provider boundary for the current
-  ElevenLabs account while MediaOps retains narration planning and local audio
-  assembly.
+  Move the current ElevenLabs capability into LLM Proxy. Preserve shared narration and audio assembly in the destination.
   Cross-repository sequence:
-  - MediaOps I011 consumes this released audio slice independently of the
-    image and video cutovers.
+  - MediaOps I011 owns source migration and required TelePrompter acceptance for this audio slice.
   Requirements:
   - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
   - Add typed operations for speech generation, speech conversion, voice
@@ -2517,9 +2906,9 @@ retain satisfied historical dependencies.
   - Preserve exact voice/model settings, pronunciation dictionaries,
     continuity context, timestamps, seed, normalization, pacing/speed
     translation, formats, provider concurrency, and history identifiers.
-  - Keep MediaOps-owned render-plan chunking, narrative cadence, deterministic
-    chunk reuse, stitching, and final composite validation outside the gateway;
-    each provider request becomes one durable gateway operation.
+  - Preserve render-plan chunking, narrative cadence, deterministic chunk reuse, stitching, and final composite validation in the migrated workflows.
+  - F071 owns shared workflow migration. Keep only TelePrompter project controls in MediaOps.
+  - Represent each provider request as one durable gateway operation.
   - Materialize provider audio and JSON outputs as typed artifacts and retain
     history or song identifiers as internal recovery evidence.
   - F042 owns Dictator as a private gateway provider. This issue owns ElevenLabs capabilities.
@@ -2546,8 +2935,7 @@ retain satisfied historical dependencies.
   Complete gateway ownership of external media-provider credentials and
   provider-native task recovery for HeyGen and Kling account operations.
   Cross-repository sequence:
-  - MediaOps I012 consumes this released account-operation slice independently
-    of the other current-provider cutovers.
+  - MediaOps I012 owns source migration and required TelePrompter acceptance for this account-operation slice.
   Requirements:
   - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
   - Add typed operations for HeyGen translation, existing-video lip-sync,
@@ -3006,10 +3394,9 @@ retain satisfied historical dependencies.
   passed local contract validation. Production activation remains separate.
 - [ ] [F028] (P2) {F027} Add HeyGen Avatar V as a gateway-owned avatar engine.
   Goal:
-  Add the current Avatar V engine to the gateway HeyGen avatar contract before
-  MediaOps exposes it through its product surfaces.
+  Add the current Avatar V engine to the gateway HeyGen avatar contract for actual gateway consumers, including required TelePrompter flows.
   Cross-repository sequence:
-  - MediaOps F022 consumes this after its I012 base HeyGen/Kling cutover.
+  - MediaOps F022 qualifies required TelePrompter exposure after its I012 base HeyGen/Kling cutover.
   Requirements:
   - Add exact engine values `avatar_iv` and `avatar_v` to the HeyGen avatar-video
     operation and capability catalog.
@@ -3029,10 +3416,9 @@ retain satisfied historical dependencies.
   - Start with the required failing integration test. Complete validation under the current repository policy.
 - [ ] [F029] (P2) {F025} Add MiniMax H3 V2 video generation to model operations.
   Goal:
-  Add the provider-qualified MiniMax H3 V2 route to the gateway before MediaOps
-  exposes the model through its video product contracts.
+  Add the provider-qualified MiniMax H3 V2 route to the gateway for actual gateway consumers, including required TelePrompter flows.
   Cross-repository sequence:
-  - MediaOps F023 consumes this after its I010 base video cutover.
+  - MediaOps F023 qualifies required TelePrompter exposure after its I010 base video cutover.
   Requirements:
   - Add canonical provider `minimax`, exact model `MiniMax-H3`, and only the
     documented V2 create/query and `video_generation_input` upload contracts.
@@ -3057,9 +3443,9 @@ retain satisfied historical dependencies.
 - [ ] [F030] (P2) {F026} Add Speechify text-to-speech and voice discovery to model operations.
   Goal:
   Add the current Speechify complete-response speech and voice-discovery
-  contracts to the gateway before MediaOps exposes them in narration flows.
+  contracts to the gateway for actual consumers, including required TelePrompter narration flows.
   Cross-repository sequence:
-  - MediaOps F024 consumes this after its I011 base audio cutover.
+  - MediaOps F024 qualifies required TelePrompter exposure after its I011 base audio cutover.
   Requirements:
   - Add canonical provider `speechify`, live `GET /v1/audio/models` and
     `GET /v1/voices` discovery, and complete-response `POST /v1/audio/speech`.
