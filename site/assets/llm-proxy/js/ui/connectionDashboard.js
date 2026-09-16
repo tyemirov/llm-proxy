@@ -51,7 +51,7 @@ export class ConnectionDashboard extends HTMLElement {
       }
     }, {signal:this.controller.signal});
     this.observer.observe(this);
-    void this.run(async () => { const catalog = await backend.fetchDashboardModels(this.controller.signal); this.modelFamilies = catalog.families; this.mediaOfferings = catalog.offerings.filter(o=>o.capabilities.some(c=>!['text','dictation','image_input','audio_input','web_search','reasoning'].includes(c)));  await this.reload(); await this.selectTenant(this.tenants[0]?.id || ''); });
+    void this.run(async () => { const catalog = await backend.fetchDashboardModels(this.controller.signal); this.modelFamilies = catalog.families; this.mediaOfferings = catalog.offerings.filter(o=>o.capabilities.some(c=>!['text','dictation','image_input','audio_input','web_search','reasoning'].includes(c)));  await this.reload(); await this.selectTenant(this.defaultTenantID()); });
   }
   disconnectedCallback() { this.controller.abort(); this.observer.disconnect(); if (this.drawFrame) { cancelAnimationFrame(this.drawFrame); this.drawFrame = 0; } this.secret = ''; this.requestExample = ''; this.revision += 1; }
   scheduleDraw() {
@@ -63,6 +63,9 @@ export class ConnectionDashboard extends HTMLElement {
   get attached() { return Boolean(this.connection?.tenant_ids.includes(this.tenantID)); }
   get ready() { return Boolean(this.connection && connectionReady(this.connection)); }
   get tenantName() { return this.tenants.find(t => t.id === this.tenantID)?.name || 'Account'; }
+  defaultTenantID() {
+    return this.tenants.find(t => t.name === 'Default')?.id || this.tenants[0]?.id || '';
+  }
 
   /** @param {string} id */
   isDefaultModel(id) {
@@ -150,7 +153,7 @@ export class ConnectionDashboard extends HTMLElement {
     const modelIDs = this.attached && this.ready && this.provider ? (this.capability === 'media' ? this.mediaOfferings.filter(o=>o.provider===this.connection?.provider).map(o=>o.model) : this.capability === 'text' ? this.provider.text_models.map(m=>m.id) : this.provider.dictation_models) : [];
     map.innerHTML = `<svg class="cw-wires" aria-hidden="true"></svg>
       <section class="cw-column"><header><h3>Tenants <span>${this.tenants.length}</span></h3><button data-action="create-tenant" ${disabled}>Create tenant</button></header>
-      <button class="cw-account ${this.tenantID ? '':'selected'}" data-action="account">Account usage</button><div class="cw-list">
+      <div class="cw-list">
       ${this.tenants.filter(t=>matches(t.name)).map(t=>{const count=this.connections.filter(c=>c.tenant_ids.includes(t.id)).length;return `<button class="cw-node ${t.id===this.tenantID?'selected':''}" data-tenant="${escapeHTML(t.id)}" aria-pressed="${t.id===this.tenantID}" ${disabled}><strong>${escapeHTML(t.name)}</strong><small>${count ? `${count} connection${count===1?'':'s'}`:'No connections yet'}</small></button>`;}).join('')}</div></section>
       <section class="cw-column"><header><h3>Connections <span>${this.connections.length}</span></h3><button data-action="create-connection" ${disabled}>Create connection</button></header><div class="cw-list">
       ${this.connections.filter(c=>matches(c.name+' '+c.provider)).map(c=>{
@@ -221,7 +224,6 @@ export class ConnectionDashboard extends HTMLElement {
     if(button.dataset.capability) {this.capability=button.dataset.capability;this.modelID='';this.render();return;}
     switch(button.dataset.action) {
       case 'copy-mcp':void this.run(async()=>{const runtime=await backend.loadFrontendRuntimeConfig();await navigator.clipboard.writeText(new URL(MCP_PATH,runtime.proxyOrigin).href);this.message='MCP URL copied.';});break;
-      case 'account': void this.run(()=>this.selectTenant(''));break;
       case 'tenant-details':this.connectionID='';this.modelID='';this.render();break;
       case 'create-tenant':this.tenantForm(false);break;
       case 'rename-tenant':this.tenantForm(true);break;
@@ -229,7 +231,7 @@ export class ConnectionDashboard extends HTMLElement {
       case 'edit-connection':this.connectionForm(true);break;
       case 'detach':this.confirmDetach();break;
       case 'delete-connection':this.confirm('Delete connection',`Delete ${this.connection?.name}?`,async()=>{await backend.deleteConnection(this.connectionID,this.controller.signal);this.connectionID='';await this.reload();});break;
-      case 'delete-tenant':this.confirm('Delete tenant',`Delete ${this.tenantName} and its usage history? Shared connections remain available.`,async()=>{await backend.deleteTenant(this.tenantID,this.controller.signal);this.tenantID='';await this.reload();await this.selectTenant(this.tenants[0].id);});break;
+      case 'delete-tenant':this.confirm('Delete tenant',`Delete ${this.tenantName} and its usage history? Shared connections remain available.`,async()=>{await backend.deleteTenant(this.tenantID,this.controller.signal);this.tenantID='';await this.reload();await this.selectTenant(this.defaultTenantID());});break;
       case 'save-default':void this.run(()=>this.saveDefault());break;
       case 'save-provider-profile':void this.run(()=>this.saveProviderPrompt());break;
       case 'tenant-access':this.accessDialog();break;
