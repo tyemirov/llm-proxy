@@ -192,6 +192,10 @@ test-protocol-acceptance: frontend-dependencies
 test-media-operations: frontend-dependencies
 	$(GO) test ./internal/proxy -run '^Test(MediaOperation|TenantAsset|DictatorWorkerIsolation)' -count=1
 
+.PHONY: test-media-cli
+test-media-cli:
+	$(GO) test ./llm-proxy-client -run '^TestMedia' -count=1
+
 .PHONY: test-dictator
 test-dictator: frontend-dependencies
 	$(GO) test ./internal/proxy -run '^TestDictator' -count=1
@@ -203,7 +207,7 @@ test-provider-diagnostics: frontend-dependencies
 
 .PHONY: test-client-contracts generate-api-docs
 test-client-contracts: frontend-dependencies
-	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run 'Test(ClientProtocols|ClientUploadsAsset|OpenAPI|MessagesRequest|CoverageOpenAILifecycle|ManagementDashScopeWorkspaceChangeVerifiesRetainedKeyAndRoutesWithStoredURL)' -count=1
+	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run 'Test(ClientProtocols|ClientRejectsInvalidOrCompetingModelProfilesBeforeHTTP|ClientUploadsAsset|OpenAPI|MessagesRequest|CoverageOpenAILifecycle|ManagementDashScopeWorkspaceChangeVerifiesRetainedKeyAndRoutesWithStoredURL)' -count=1
 
 generate-api-docs:
 	$(NPM) exec -- node scripts/generate_openapi_docs.mjs
@@ -351,3 +355,8 @@ generate-public-pages:
 	node scripts/generate_legal_pages.mjs
 	node scripts/generate_openapi_docs.mjs
 	node scripts/generate_seo_resources.mjs
+
+.PHONY: test-dictator-live
+# Supply the selected upstream credentials and a spoken 'hello world' WAV fixture.
+test-dictator-live: frontend-dependencies
+	LLM_PROXY_DICTATOR_LIVE_ENABLED=1 $(GO) test ./internal/proxy -run '^TestDictatorGatewayLiveAcceptance$$' -count=1 -v -timeout=20m

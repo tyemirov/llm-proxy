@@ -93,7 +93,7 @@ func TestMCPHandshakeVersions(t *testing.T) {
 			call("", "tools/list", map[string]any{}, false, token, 200)
 			call(version, "notifications/initialized", map[string]any{}, true, token, 202)
 			tools := call(version, "tools/list", map[string]any{}, false, token, 200)
-			if len(tools["tools"].([]any)) != 2 {
+			if len(tools["tools"].([]any)) != 5 {
 				t.Fatalf("tools=%v", tools)
 			}
 			tenants := call(version, "tools/call", map[string]any{"name": "llm_proxy.list_tenants", "arguments": map[string]any{}}, false, token, 200)

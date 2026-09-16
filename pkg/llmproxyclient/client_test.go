@@ -542,6 +542,13 @@ func TestClientRejectsInvalidOrCompetingModelProfilesBeforeHTTP(testingInstance 
 			errorMessage: "document must be an object",
 		},
 		{
+			name: "mismatched closing delimiter",
+			prepare: func(subTest *testing.T, path string) {
+				replaceModelProfile(subTest, path, "{]")
+			},
+			errorMessage: "decode model_profile",
+		},
+		{
 			name: "malformed",
 			prepare: func(subTest *testing.T, path string) {
 				replaceModelProfile(subTest, path, `{"provider":"gemini"`)

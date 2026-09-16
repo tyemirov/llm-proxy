@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -262,6 +263,7 @@ type mediaOperationService struct {
 	providers         *providerRegistry
 	queue             chan string
 	dictatorQueue     chan string
+	dictatorRoutes    map[string]bool
 	queued            sync.Map
 	workerCount       int
 	dictatorWorkers   int
@@ -301,8 +303,14 @@ func newMediaOperationService(configuration Configuration, managedTenants *manag
 		return nil, storeError
 	}
 	catalog := CatalogService{catalog: validatedModelCatalog{revision: configuration.ModelCatalog.Revision}}
-	_, dictatorEnabled := providers.definitions[providerID(ProviderNameDictator)]
-	if len(configuration.MediaOperationAdapters) != 0 || dictatorEnabled {
+	var dictatorOfferings []ProviderOffering
+	for _, offering := range configuration.ModelCatalog.Offerings {
+		transport := providers.definitions[providerID(offering.Provider)].transports[offering.Transport]
+		if transport.requestCodec == CatalogProtocolDictatorSpeechV1 {
+			dictatorOfferings = append(dictatorOfferings, offering)
+		}
+	}
+	if len(configuration.MediaOperationAdapters) != 0 || len(dictatorOfferings) != 0 {
 		var catalogError error
 		catalog, catalogError = NewCatalogService(configuration.ModelCatalog)
 		if catalogError != nil {
@@ -323,19 +331,25 @@ func newMediaOperationService(configuration Configuration, managedTenants *manag
 		tenantCapacity:    configuration.TenantMediaOperationCapacity,
 		terminalRetention: time.Duration(configuration.AssetRetentionSeconds) * time.Second,
 	}
-	if dictatorEnabled {
-		adapter := &accountDictatorAdapter{tenants: managedTenants, store: store, assets: assets}
+	service.dictatorRoutes = map[string]bool{}
+	for _, offering := range dictatorOfferings {
+		adapter := &accountDictatorAdapter{tenants: managedTenants, store: store, assets: assets, provider: offering.Provider, model: offering.Model, transport: providers.definitions[providerID(offering.Provider)].transports[offering.Transport]}
 		if service.adapters == nil {
 			service.adapters = map[string]MediaOperationAdapter{}
 		}
 		if service.voiceProviders == nil {
 			service.voiceProviders = map[string]MediaVoiceProvider{}
 		}
-		for _, capability := range []string{llmproxycontract.MediaCapabilityAudioTranscribe, llmproxycontract.MediaCapabilityAudioDiarize, llmproxycontract.MediaCapabilityAudioAlign, llmproxycontract.MediaCapabilitySubtitlesCreate, llmproxycontract.MediaCapabilityAudioSpeechGenerate, llmproxycontract.MediaCapabilityAudioVoiceExtract} {
-			service.adapters[mediaOperationAdapterKey(capability, ProviderNameDictator, ModelNameDictatorSpeechV1)] = adapter
+		for _, operation := range offering.Operations {
+			key := mediaOperationAdapterKey(mediaCapabilityForCatalogOperation(operation), offering.Provider, offering.Model)
+			service.adapters[key] = adapter
+			service.dictatorRoutes[key] = true
 		}
-		service.voiceProviders[ProviderNameDictator] = adapter
+		if slices.Contains(offering.DefaultOperations, ModelOperationSpeechGeneration) {
+			service.voiceProviders[offering.Provider] = adapter
+		}
 	}
+
 	assets.activeReference = func(tenantID string, assetID string) (bool, error) {
 		var count int64
 		errorValue := store.database.Model(&mediaOperationAssetReferenceRecord{}).Where("tenant_id = ? AND asset_id = ? AND active = ?", tenantID, assetID, true).Count(&count).Error
@@ -731,11 +745,11 @@ func (service *mediaOperationService) enqueue(operationID string) {
 	queue := service.queue
 	if service.dictatorQueue != nil {
 		var record mediaOperationRecord
-		if queryError := service.store.database.Select("provider").First(&record, "operation_id = ?", operationID).Error; queryError != nil {
+		if queryError := service.store.database.Select("provider", "model", "capability").First(&record, "operation_id = ?", operationID).Error; queryError != nil {
 			service.queued.Delete(operationID)
 			return
 		}
-		if record.Provider == ProviderNameDictator {
+		if service.dictatorRoutes[mediaOperationAdapterKey(record.Capability, record.Provider, record.Model)] {
 			queue = service.dictatorQueue
 		}
 	}

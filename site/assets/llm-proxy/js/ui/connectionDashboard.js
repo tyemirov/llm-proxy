@@ -37,8 +37,9 @@ export class ConnectionDashboard extends HTMLElement {
   secret = '';
   requestExample = '';
   controller = new AbortController();
-  observer = new ResizeObserver(() => this.drawRoutes());
+  observer = new ResizeObserver(() => this.scheduleDraw());
   revision = 0;
+  drawFrame = 0;
   /** @type {HTMLElement|null} */ returnFocus = null;
 
   connectedCallback() {
@@ -52,7 +53,11 @@ export class ConnectionDashboard extends HTMLElement {
     this.observer.observe(this);
     void this.run(async () => { const catalog = await backend.fetchDashboardModels(this.controller.signal); this.modelFamilies = catalog.families; this.mediaOfferings = catalog.offerings.filter(o=>o.capabilities.some(c=>!['text','dictation','image_input','audio_input','web_search','reasoning'].includes(c)));  await this.reload(); await this.selectTenant(this.tenants[0]?.id || ''); });
   }
-  disconnectedCallback() { this.controller.abort(); this.observer.disconnect(); this.secret = ''; this.requestExample = ''; this.revision += 1; }
+  disconnectedCallback() { this.controller.abort(); this.observer.disconnect(); if (this.drawFrame) { cancelAnimationFrame(this.drawFrame); this.drawFrame = 0; } this.secret = ''; this.requestExample = ''; this.revision += 1; }
+  scheduleDraw() {
+    if (this.drawFrame) return;
+    this.drawFrame = requestAnimationFrame(() => { this.drawFrame = 0; this.drawRoutes(); });
+  }
   get connection() { return this.connections.find(c => c.id === this.connectionID); }
   get provider() { return this.providers.find(p => p.id === this.connection?.provider); }
   get attached() { return Boolean(this.connection?.tenant_ids.includes(this.tenantID)); }
@@ -156,7 +161,8 @@ export class ConnectionDashboard extends HTMLElement {
       ${modelIDs.filter(matches).map(id=>{const saved=this.isDefaultModel(id);return `<button class="cw-node ${this.modelID===id?(saved?'selected':'preview'):''}" data-model="${escapeHTML(id)}" ${disabled}><span class="cw-row"><brand-icon kind="family" identifier="${escapeHTML(this.modelFamilies[id])}"></brand-icon><code>${escapeHTML(id)}</code></span>${saved?'<small class="cw-connected">★ Default model</small>':''}</button>`;}).join('') || `<p class="cw-empty">${this.attached ? this.ready ? 'No models for this capability.' : 'Add credentials to choose models. Edit this connection to complete its setup.' : 'Connect to choose models.<br>Use a Connect button in the middle column.'}</p>`}</div></section>`;
     const footer=this.querySelector('[data-route]');
     if (footer) footer.textContent=this.connection ? `${this.tenantName} ${this.attached?'→':'· Viewing'} ${this.connection.name}${this.attached?'':' · Not connected'}${this.modelID?(this.isDefaultModel(this.modelID)?' · Saved default: ':' · Preview: ')+this.modelID:''}` : `${this.tenantName} · Select a connection`;
-    requestAnimationFrame(()=>this.drawRoutes());
+    map.querySelectorAll('.cw-list').forEach(list => list.addEventListener('scroll', () => this.scheduleDraw(), {passive:true}));
+    this.scheduleDraw();
   }
   drawRoutes() {
     const svg=this.querySelector('.cw-wires'); const map=this.querySelector('[data-map]');

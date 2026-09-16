@@ -27,6 +27,51 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B225] (P1) Keep dashboard connectors attached during inner list scroll.
+  Observed: The tenant-to-connection wire detaches from its connection card after the connections list scrolls. The wire keeps its pre-scroll endpoint while the card moves.
+  Cause: `drawRoutes` computed endpoints once per render. Inner `.cw-list` scroll moves cards without a redraw.
+  Requirements: Redraw wires on inner list scroll. Keep the redraw rAF-throttled.
+  Resolution: Scroll listeners on each `.cw-list` schedule a redraw. Resize observation uses the same schedule. Pending frames cancel on disconnect.
+  Deliverables: `site/assets/llm-proxy/js/ui/connectionDashboard.js`, `tests/e2e/management-ui.spec.js`. Existing event contracts did not change.
+  Validation: The new `dashboard connectors follow connection cards after inner list scroll` test failed with a 143px endpoint error before the fix and passes after. `npm run frontend:lint` passes. Eight dashboard browser tests pass.
+
+- [x] [B224] (P1) Migrate retained asset metadata before production speech acceptance.
+  Observed: Authenticated asset upload returns HTTP 500 with `asset_store_error`.
+  Cause: The deployed store contains 139 version-1 records. The current contract requires version 2 and `content_sha256`.
+  Requirements:
+  - Verify each retained record and its available bytes before the bounded migration.
+  - Back up the original metadata and record per-tenant counts.
+  - Change only the metadata version and digest field name.
+  - Verify upload and download through the public tenant API after migration.
+  - Remove the temporary migration program after acceptance.
+  Resolution (2026-09-16): Migrated all 139 records after byte and digest checks. All were expired and belonged to the Default tenant.
+  Original metadata and the receipt remain in the host data volume under `migrations/B224-20260916`.
+  Validation: The Creative Director live test passed upload, speech execution, download, and receipt reuse in 12.67 seconds.
+  The temporary migration program was removed. Application code and event contracts did not change.
+
+- [x] [B223] (P1) Preserve MCP protocol errors before response conversion.
+  Observed: An authenticated unknown tool call causes a nil pointer panic in `mcpCurrentProtocol`.
+  Requirements: Return the SDK error before conversion of its response. Keep subsequent requests available.
+  Resolution: The middleware returns SDK errors before response conversion. Unknown tool calls no longer terminate the server.
+  Deliverables: `internal/proxy/mcp.go`, `internal/proxy/mcp_media_test.go`, and `docs/mcp.md`. Existing event contracts did not change.
+  Final result: `make test-mcp` passed. Final `make ci` passed all 13 gates in 324 seconds with 100.0 percent Go coverage.
+  Validation: Reproduce the failure with `make test-mcp`. Verify unknown tool rejection and subsequent discovery. Run final `make ci`.
+
+- [x] [B222] (P1) Register speech adapters from the provider catalog.
+  Observed: A second provider with the Dictator speech protocol passes catalog validation. Voice discovery through the official client returns HTTP 400.
+  Requirements: Use the catalog provider, model, endpoint field, and credential field for registration and execution. Use the selected route for voices and worker selection.
+  Initial result: Distinct connection fields caused HTTP 503 with `provider_key_verification_unavailable`.
+  Validation: Run the same public acceptance flow for both providers. Run final `make ci`.
+  Initial result: `make test-dictator` failed in `TestDictatorSecondProviderUsesCatalogRegistration` with `llm_proxy_client_http_failure: status=400`.
+  Resolution: Registration, account binding, voices, and worker selection use the catalog route. Distinct endpoint and credential fields pass verification.
+  Validation: Both providers pass the public flow and browser checks. All six live capabilities passed. Final `make ci` passed 13 gates in 333 seconds with 100.0 percent Go coverage.
+  Production files: `internal/proxy/media_operations.go`, `dictator_account.go`, `dictator_adapter.go`, `dictator_grpc.go`, `dictator_grpc_protocol.go`, and `provider_key_verifier.go`.
+  Test files: `internal/proxy/dictator_grpc_e2e_test.go`, `dictator_live_test.go`, `dictator_grpc_internal_test.go`, `dictator_adapter_internal_test.go`, and `media_operations_edges_internal_test.go`.
+  Browser files: `tests/blackbox/connection-dashboard.spec.js` and `localManagementStack.mjs`.
+  Operator files: `Makefile`, `README.md`, `docs/dictator-live-acceptance.md`, `docs/dictator-migration-audit.md`, and `docs/media-gateway-consolidation.md`.
+  Event contracts did not change. F042 migration requirements remain open.
+
+
 - [x] [B219] (P1) Remove private data from speech timelines.
   Observed: Tenant timeline assets contain native voice identifiers, engine details, and server paths.
   Requirements: Validate the native timeline. Publish only public text and timing fields.
@@ -239,6 +284,16 @@ retain satisfied historical dependencies.
   The initial Governor check reported format template drift. I254 records its correction.
 
 ## Improvements
+
+- [x] [I264] (P2) Cover a model profile with a mismatched delimiter through the public client.
+  Observed: The B222 CI run passed all Go tests but left one uncovered block in `model_profile.go`.
+  Requirements: Exercise a JSON object with a mismatched delimiter through the public client. Verify rejection before HTTP dispatch.
+  Validation: Run `make go-test` and final `make ci`. Keep the complete coverage requirement.
+  Resolution: The public client rejects `{]` before HTTP dispatch. The focused client target includes profile rejection.
+  Deliverables: `pkg/llmproxyclient/client_test.go` and `Makefile`.
+  Validation: The focused coverage record exercises the closing-token error. Final `make ci` passed all 13 gates with 100.0 percent Go coverage.
+  Production client code and event contracts did not change.
+
 
 - [ ] [I263] (P2) Remove the duplicate I261 identifier.
   Observed: A blocked schema entry and a completed lifecycle entry both use I261 in the active tracker.
@@ -2532,6 +2587,24 @@ retain satisfied historical dependencies.
   - Prove staging fetch and cleanup through real files and an HTTP serving boundary.
   - Run current repository validation and separately record explicitly authorized live acceptance.
 - [ ] [F042] (P1) Expose Dictator media capabilities through the tenant gateway.
+  Current execution: Positive extraction duration, media CLI commands, and durable MCP tools are implemented.
+  Validation: Public CLI and MCP tests passed. All six live capabilities passed in 5.21 seconds. Final `make ci` passed 13 gates in 324 seconds.
+  Initial result: CI reported four uncovered blocks. Public rejection and store-failure tests cleared all four blocks.
+  Source files: `internal/proxy/dictator_adapter.go`, `dictator_grpc_protocol.go`, `mcp.go`, `mcp_media.go`, `router.go`, and `llm-proxy-client/media.go`.
+  Contracts: `duration_seconds`, three media MCP tools, and eight media CLI commands. Existing event contracts did not change.
+  Test and operator files: Public speech and MCP tests, CLI tests, `Makefile`, OpenAPI, generated API pages, and `docs/speech-workflows.md`.
+  Production inventory: Both deployed MediaOps volumes are empty. The account owns the dedicated MediaOps tenant and its assigned Dictator connection.
+  Remaining: Migrate retained consumer state and verify installed product acceptance.
+  Reconciliation (2026-09-16):
+  - The MediaOps tenant has Dictator connection `connection-ef115fb73594e0158a626d610393aec1` and a client key.
+  - The deployed capability API returned all six speech routes for that key.
+  - Five uncertain records have established failure dispositions. The user directed deletion of the dispatch without terminal evidence.
+  - The private receipt maps 23 Dictator records and 13 workspace roots to the selected account, tenant, and connection.
+  - Deleted `mediaops-20260821T030050-000001` as directed. The other 22 source digests still match. No replacement work was submitted.
+  - Creative Director I013 owns the consumer change. Its live adapter test passed in 12.67 seconds.
+  - Final consumer CI passed with 100.0 percent statement coverage. The qualified CLI is installed and its public startup checks pass.
+  - Creative Director I014 owns retained state with obsolete identities and no current artifact registry. Installed validation reports 184 errors.
+  - Source retirement remains open for that migration and installed product acceptance.
   Goal:
   Make Dictator a private media provider behind LLM Proxy's public API.
   SDK evidence (2026-09-14):
@@ -2540,7 +2613,7 @@ retain satisfied historical dependencies.
   - `make verify-released-sdk` passed with `preset_speaker` and `text_format` through a separate consumer and fresh module cache.
   Current boundary:
   - MediaOps CLI, MCP, browser jobs, and diagnostics call Dictator through its internal adapter.
-  - WriterBlock dictation also calls the native SDK. F042 includes this caller replacement.
+  - WriterBlock is paused and is not an active project. Its caller replacement is outside F042.
   - After consolidation, LLM Proxy owns that adapter and the public tenant authorization boundary.
   Requirements:
   - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
@@ -2599,7 +2672,7 @@ retain satisfied historical dependencies.
   - `make test-dictator` passed after the adapter published exact aligned SRT bytes as the second tenant asset.
   - Final `make ci` passed all 13 gates in 331 seconds after the SRT change. Go coverage is 100 percent.
   - Validation includes 59 Python checks, 117 frontend browser tests, and the real TAuth management browser suite.
-  - The caller inventory is in `docs/media-gateway-consolidation.md`. It includes MediaOps source migration, required TelePrompter flows, and WriterBlock dictation.
+  - The caller inventory is in `docs/media-gateway-consolidation.md`. Active scope includes MediaOps source migration and required TelePrompter flows.
   - The operator replaced server metrics with tenant metrics. MediaOps must not collect or expose server totals.
   - `GET /model/v1/provider-diagnostics/dictator` returns retained tenant operation counts without a provider call.
   - Counts exclude other tenants and providers. Terminal detail expiry removes its count.
@@ -2611,6 +2684,39 @@ retain satisfied historical dependencies.
   - The operator removed the proposed MediaOps tenant count integration from scope. It is not a publication or completion blocker.
   - MCP resources belong to caller-selected workspaces. The backend YAML does not establish the complete retained-resource inventory.
   - Remaining gates: destination migration, required consumer integration, client publication for those consumers, retained-resource inventory, and separate live acceptance.
+  Audit evidence (2026-09-15):
+  - `docs/dictator-migration-audit.md` records the implementation, caller inventory, resource locations, and next source changes.
+  - Published Go module `v1.10.0` contains the required client methods. Its client and contract files match commit `d7c7dab0b530d2294f3b347595c45e52a445b2a0`.
+  - The Go-client publication blocker is cleared. Publication does not prove deployed service or consumer acceptance.
+  - `make test-dictator` and `make test-client-contracts` passed against the current source.
+  - MediaOps retains direct shared execution. The paused WriterBlock caller is excluded from active migration requirements.
+  - B222 corrected catalog-selected registration and connection fields. The second provider passes the shared public acceptance flow and browser checks.
+  - The inspected MediaOps MCP store has 164 records and no Dictator provider records. Other workspaces and deployed stores remain unverified.
+  - Live gateway acceptance passed all six capabilities. Production owner mappings, retained-resource transfer, deployment, and consumer acceptance remain open.
+  Protocol and live acceptance (2026-09-15):
+  - The second provider uses distinct model identity, connection fields, endpoint values, and credentials through the existing protocol components.
+  - Public tests cover duplicate requests, restart recovery, cancellation, tenant isolation, and one usage event per completed operation.
+  - The browser test creates both account connections and displays the selected model capabilities.
+  - `make test-dictator-live` passed transcription, diarization, alignment, subtitles, extraction, and synthesis in 22.94 seconds.
+  - `docs/dictator-live-acceptance.md` records required inputs, fixture duration, and the live result.
+  - Final `make ci` passed 13 gates in 333 seconds, with 100.0 percent Go coverage. B222 and I264 are resolved.
+  - Shared MediaOps workflows and production resource ownership remain open. WriterBlock remains excluded.
+  - MediaOps extraction exposes a duration control. Preserve this control when the shared voice workflow moves.
+  Shared workflows and ownership (2026-09-15):
+  - Destination CLI and MCP tools now use the durable media operation lifecycle. Extraction preserves the positive duration control and default.
+  - Public tests and live acceptance passed all six speech capabilities. Final `make ci` passed 13 gates with 100.0 percent Go coverage.
+  - The operator requested a MediaOps tenant. The management API created `managed-39cb2d58f065d06646f487cc82b98d4f` and verified its account ownership.
+  - The tenant has no provider connection or client key. Connection assignment and deployed consumer acceptance remain open.
+  - Both deployed MediaOps volumes contain zero files. Creative Director uses an additional MediaOps store in `/Users/tyemirov/Development/Kamu/.mediaops`.
+  - That store contains 1,065 operation records, including 23 Dictator records. Six diarization records remain unresolved: five `uncertain` and one `dispatched`.
+  - Records reference 13 absent historical workspace roots. Corresponding directories exist under the current Kamu root and require explicit migration mapping.
+  - Reconcile retained evidence and migrate Creative Director's shared speech calls before source retirement. Do not infer a complete zero-record inventory.
+  - No record transfer, provider work, publication, or deployment occurred during tenant creation and the external workspace inventory.
+  Scope correction (2026-09-15):
+  - The operator confirmed that WriterBlock is paused and is not an active project.
+  - Its public homepage already displays the pause notice. Its README and product document record the same status.
+  - Exclude WriterBlock code, credentials, resource transfer, and consumer acceptance from this migration.
+  - WriterBlock does not gate F042 acceptance, publication, or deployment.
 - [ ] [F043] (P1) {F022} Add provider-readable media staging and Google credential profiles.
   Goal:
   Let gateway providers read tenant media through the exact storage and credential contracts they require.

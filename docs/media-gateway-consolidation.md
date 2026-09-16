@@ -109,7 +109,7 @@ Executable components implement the supported API behavior.
 | Authentication components | Reusable code owns credential injection. Credential values remain in managed connection or private runtime storage. |
 | Execution components | Reusable code owns synchronous completion, submission, observation, cancellation, and provider recovery. |
 | Shared media service | F022 owns tenant authorization, operation storage, worker claims, duplicate prevention, assets, retention, and usage delivery. I046 owns network capacity. |
-| Consumer services | TelePrompter, FamilyHome, WriterBlock, and other actual consumers use official gateway clients for their required operations. |
+| Consumer services | TelePrompter, FamilyHome, and other active consumers use official gateway clients for their required operations. |
 
 Keep credential values and tenant settings in their existing stores outside the catalog.
 Use catalog projections for provider discovery, connection forms, capability validation, routing, and price metadata.
@@ -378,6 +378,26 @@ Drain accepted direct work or import its proven recovery records before activati
 Remove a shared provider credential after its last direct capability switches.
 Shared MediaOps workflows move to LLM Proxy. TelePrompter calls only the gateway operations required by its user flows.
 
+### Dictator protocol acceptance
+
+B222 makes adapter registration depend on the catalog transport codec.
+The account binding uses the offering's provider, model, endpoint field, and credential field.
+Voice records retain the selected provider and model.
+The default speech offering supplies provider voice discovery.
+Worker selection uses the registered capability route.
+
+The second provider test loads `speech-fixture` and `speech-fixture-v1` through the YAML parser.
+Its connection uses `speech_endpoint` and `speech_bearer` with distinct endpoint and credential values.
+Both providers use `dictator_speech_v1` and `grpc_bearer`.
+The same public test covers six capabilities, controls, isolation, restart, cancellation, and duplicate requests.
+Public usage totals remain one event per operation after restart.
+The browser test covers generated connection fields and media details for both providers.
+The fictional provider and its icon mapping exist only in test configuration.
+
+The [live acceptance runbook](dictator-live-acceptance.md) defines `make test-dictator-live`.
+All six capabilities passed against the selected live provider on 2026-09-15.
+Production resource ownership and MediaOps consumer acceptance remain open.
+
 ### Dictator caller inventory
 
 The source audit on 2026-09-14 found these direct callers.
@@ -388,11 +408,14 @@ This inventory does not establish production resource counts or complete activat
 | MediaOps CLI and MCP | `internal/media/provider/dictator/audio/service.go` | Move retained shared functionality to LLM Proxy. Retire obsolete MediaOps entry points after caller acceptance. |
 | MediaOps browser jobs | `internal/webapp/mediajobs_runtime.go`, `internal/mediajobs/api/dictator_speech_service.go` | Move shared execution to LLM Proxy. Connect required TelePrompter flows and preserve word timings and aligned SRT. |
 | MediaOps diagnostics | `internal/media/doctor/dictator/service.go` | Retire the provider diagnostic surface after migration. Do not add a MediaOps tenant metrics client. |
-| WriterBlock dictation | `internal/app/app.go`, `transcribeWithDictator` | Replace native transcription with the released gateway client. Preserve the `/api/dictate` result. |
+| WriterBlock dictation, excluded | `internal/app/app.go`, `transcribeWithDictator` | WriterBlock is paused. No caller replacement is required by this migration. |
 
 The audit used MediaOps commit `547234ddecd7bee8daffa2dfa6ab980029c8bacd` and WriterBlock commit `b6d731411ed8135f13f43c1543d71c5a0bc860a3`.
 MediaOps I087 owns the Dictator source migration, retained-data transfer, and required TelePrompter integration.
-F042 includes the additional WriterBlock caller.
+The operator confirmed WriterBlock's paused status on 2026-09-15. WriterBlock is not an active project.
+Its public homepage, README, and product document already record this status.
+WriterBlock code, credentials, resources, and consumer acceptance are outside the active migration scope.
+WriterBlock does not gate F042 acceptance, publication, or deployment.
 Preserve required timeline conversion in the migrated workflow. TelePrompter retains its project presentation and editing behavior.
 Its extracted voice records are in `<workspace_root>/.mediaops/voices`.
 MCP operation records are in `<workspace_root>/.mediaops/mcp/operations`.
@@ -417,9 +440,10 @@ Go callers use `GetProviderDiagnostics`. Python callers use `get_provider_diagno
 MediaOps removed native metrics collection. No replacement tenant metrics client is planned in MediaOps.
 Tenant metrics remain a LLM Proxy resource. A future TelePrompter metric view requires its own concrete product requirement.
 
-The latest published LLM Proxy module remains `v1.9.1` at this audit.
-Its official client has no media operation, voice, or tenant diagnostic methods.
-Release required methods before changing WriterBlock or a required TelePrompter client integration.
+The 2026-09-15 audit verified published LLM Proxy module `v1.10.0` from commit `d7c7dab0b530d2294f3b347595c45e52a445b2a0`.
+Its official Go client contains the required media operation, voice, asset, and tenant diagnostic methods.
+The [Dictator migration audit](dictator-migration-audit.md) records archive verification, current callers, local record counts, and remaining acceptance requirements.
+The Go-client publication blocker is cleared. Service activation and consumer acceptance remain open.
 Publication is not required merely to move source code into LLM Proxy or retire a MediaOps diagnostic.
 Do not substitute a direct HTTP client or an unpublished module reference.
 

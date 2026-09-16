@@ -638,6 +638,7 @@ func TestDictatorWorkerIsolationPreservesAdmittedCloudExecution(testingInstance 
 		executeResult: MediaOperationExecutionResult{State: MediaOperationStateFailed, ErrorCode: "provider_error"},
 	}, credentialReference: "deployment:dictator:test"}
 	fixture.service.adapters[mediaOperationAdapterKey(dictator.Capability, dictator.Provider, dictator.Model)] = dictatorAdapter
+	fixture.service.dictatorRoutes = map[string]bool{mediaOperationAdapterKey(dictator.Capability, dictator.Provider, dictator.Model): true}
 	cloudCompleted := make(chan struct{})
 	fixture.adapter.executeHook = func(MediaOperationExecutionRequest) { close(cloudCompleted) }
 	go fixture.service.runWorker("cloud-worker", fixture.service.queue)

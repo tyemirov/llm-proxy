@@ -34,7 +34,7 @@ func dictatorProtocolBoundary(t *testing.T, unary func(string, any, any) error, 
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = connection.Close() })
-	return &dictatorGRPCProtocol{connection: connection, token: "token", binding: "account-a", maxAssetBytes: 32}
+	return &dictatorGRPCProtocol{provider: ProviderNameDictator, model: ModelNameDictatorSpeechV1, connection: connection, token: "token", binding: "account-a", maxAssetBytes: 32}
 }
 
 type dictatorBoundaryStream struct {
@@ -249,7 +249,7 @@ func TestDictatorConnectionAuthorityAtExecutionBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := &managedTenantStore{routingDefaults: fixture.service.providers, providerKeyCipher: internalManagedProviderKeyCipher()}
-	adapter := &accountDictatorAdapter{tenants: store, store: fixture.service.store, assets: fixture.service.assets}
+	adapter := &accountDictatorAdapter{provider: ProviderNameDictator, model: ModelNameDictatorSpeechV1, transport: fixture.service.providers.definitions[providerID(ProviderNameDictator)].transports["speech"], tenants: store, store: fixture.service.store, assets: fixture.service.assets}
 	request := MediaOperationExecutionRequest{TenantID: fixture.tenant.identifier.string(), CredentialReference: "connection-internal:v3", ProviderHandle: "private-handle"}
 	if result := adapter.Execute(context.Background(), request); result.State != MediaOperationStateFailed {
 		t.Fatalf("dispatched without assignment: %+v", result)
@@ -286,7 +286,8 @@ func TestDictatorConnectionAuthorityAtExecutionBoundary(t *testing.T) {
 
 func TestDictatorTLSAndTargetConstruction(t *testing.T) {
 	ctx := context.Background()
-	connection, authenticated, err := openDictatorConnection(ctx, map[string]string{dictatorAddressField: "localhost:50051", dictatorTLSField: "true", dictatorTokenField: "token"})
+	transport := providerTransportDefinition{endpoint: ProviderCatalogEndpoint{SettingField: dictatorAddressField}, authentication: ProviderCatalogAuthentication{Field: dictatorTokenField}}
+	connection, authenticated, err := openDictatorConnection(ctx, map[string]string{dictatorAddressField: "localhost:50051", dictatorTLSField: "true", dictatorTokenField: "token"}, transport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,11 +297,11 @@ func TestDictatorTLSAndTargetConstruction(t *testing.T) {
 		t.Fatal("TLS connection lost authentication")
 	}
 	for _, values := range []map[string]string{{dictatorTLSField: "invalid"}, {dictatorTLSField: "false", dictatorAddressField: "%"}} {
-		if connection, _, err := openDictatorConnection(ctx, values); err == nil {
+		if connection, _, err := openDictatorConnection(ctx, values, transport); err == nil {
 			connection.Close()
 			t.Fatal("accepted invalid connection settings")
 		}
-		if err := verifyDictatorConnection(ctx, values); !errors.Is(err, errProviderKeyVerificationUnavailable) {
+		if err := verifyDictatorConnection(ctx, values, transport); !errors.Is(err, errProviderKeyVerificationUnavailable) {
 			t.Fatalf("invalid connection verification=%v", err)
 		}
 	}

@@ -165,6 +165,7 @@ func newRootCommand(
 	flagSet.StringVar(&options.reasoningEffort, flagReasoningEffort, "", "model-supported reasoning effort")
 	flagSet.IntVar(&options.requestTimeoutSeconds, flagRequestTimeoutSeconds, 0, "positive proxy work budget in whole seconds")
 
+	rootCommand.AddCommand(newMediaCommand(stdin, stdout, httpClientFactoryValue))
 	return rootCommand
 }
 

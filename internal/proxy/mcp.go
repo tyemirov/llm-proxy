@@ -55,7 +55,7 @@ type mcpResourceMetadata struct {
 	BearerMethodsSupported []string `json:"bearer_methods_supported"`
 }
 
-func registerMCPRoutes(router *gin.Engine, configuration Configuration, service *managementService, upstream *providerRouter, assets *tenantAssetStore) error {
+func registerMCPRoutes(router *gin.Engine, configuration Configuration, service *managementService, upstream *providerRouter, assets *tenantAssetStore, mediaOperations *mediaOperationService) error {
 	issuer := configuration.Management.TAuthURL
 	audience := configuration.Management.ProxyOrigin
 	validator, err := oauthvalidator.New(oauthvalidator.Config{
@@ -81,6 +81,7 @@ func registerMCPRoutes(router *gin.Engine, configuration Configuration, service 
 			return nil, mcpTenantList{Tenants: tenantSummaryResponses(summaries)}, nil
 		})
 	registerMCPGeneration(server, configuration, service, upstream, assets)
+	registerMCPMedia(server, service, mediaOperations)
 	server.AddResourceTemplate(&mcp.ResourceTemplate{URITemplate: mcpRoutesTemplate, Name: "Tenant text routes", MIMEType: mimeApplicationJSON},
 		func(ctx context.Context, request *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 			// The SDK matched the complete URI against the registered template.
@@ -190,6 +191,9 @@ func readMCPBody(writer http.ResponseWriter, request *http.Request, budget time.
 func mcpCurrentProtocol(next mcp.MethodHandler) mcp.MethodHandler {
 	return func(ctx context.Context, method string, request mcp.Request) (mcp.Result, error) {
 		result, err := next(ctx, method, request)
+		if err != nil {
+			return result, err
+		}
 		if toolResult, ok := result.(*mcp.CallToolResult); ok && toolResult.IsError && toolResult.StructuredContent == nil {
 			return mcpToolFailure(string(managedUsageOutcomeInvalidRequest)), nil
 		}

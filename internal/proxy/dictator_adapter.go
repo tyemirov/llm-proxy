@@ -61,6 +61,8 @@ type dictatorProtocolObservation struct {
 }
 
 type dictatorMediaOperationAdapter struct {
+	provider       string
+	model          string
 	voiceAuthority string
 	protocol       dictatorProtocol
 	assets         *tenantAssetStore
@@ -77,7 +79,10 @@ type dictatorCanonicalInput struct {
 	Language     string `json:"language,omitempty"`
 }
 
+const dictatorExtractionDurationSeconds = 20
+
 type dictatorCanonicalControls struct {
+	DurationSeconds     *float64 `json:"duration_seconds,omitempty"`
 	Language            string   `json:"language,omitempty"`
 	DetectLanguage      bool     `json:"detect_language,omitempty"`
 	RemovePunctuation   bool     `json:"remove_punctuation,omitempty"`
@@ -91,11 +96,11 @@ type dictatorCanonicalControls struct {
 	IncludeTimeline     bool     `json:"include_timeline,omitempty"`
 }
 
-func newDictatorMediaOperationAdapter(protocol dictatorProtocol, assets *tenantAssetStore, store *mediaOperationStore, pollInterval time.Duration) (*dictatorMediaOperationAdapter, error) {
+func newDictatorMediaOperationAdapter(provider, model string, protocol dictatorProtocol, assets *tenantAssetStore, store *mediaOperationStore, pollInterval time.Duration) (*dictatorMediaOperationAdapter, error) {
 	if protocol == nil || assets == nil || store == nil || pollInterval <= 0 {
 		return nil, errors.New("invalid Dictator adapter configuration")
 	}
-	return &dictatorMediaOperationAdapter{protocol: protocol, assets: assets, store: store, pollInterval: pollInterval}, nil
+	return &dictatorMediaOperationAdapter{provider: provider, model: model, protocol: protocol, assets: assets, store: store, pollInterval: pollInterval}, nil
 }
 
 func (adapter *dictatorMediaOperationAdapter) DiscoverMediaVoices(requestContext context.Context, _ string) (MediaVoiceDiscovery, error) {
@@ -104,7 +109,7 @@ func (adapter *dictatorMediaOperationAdapter) DiscoverMediaVoices(requestContext
 }
 
 func (adapter *dictatorMediaOperationAdapter) Validate(_ context.Context, request MediaOperationAdapterRequest) (MediaOperationValidatedRequest, error) {
-	if request.Provider != ProviderNameDictator || request.Model != ModelNameDictatorSpeechV1 {
+	if request.Provider != adapter.provider || request.Model != adapter.model {
 		return MediaOperationValidatedRequest{}, errMediaOperationInvalid
 	}
 	input, controls, validationError := validateDictatorOperation(request.Capability, request.Input, request.Controls)
@@ -231,7 +236,7 @@ func (adapter *dictatorMediaOperationAdapter) protocolRequest(requestContext con
 	}
 	if input.VoiceID != "" {
 		voice, voiceError := adapter.store.providerMediaVoice(requestContext, request.TenantID, input.VoiceID)
-		if voiceError != nil || voice.Provider != ProviderNameDictator {
+		if voiceError != nil || voice.Provider != adapter.provider || voice.Model != adapter.model {
 			return dictatorProtocolRequest{}, errors.New(llmproxycontract.ErrorCodeMediaVoiceNotFound)
 		}
 		protocolRequest.Voice = &voice
@@ -242,6 +247,10 @@ func (adapter *dictatorMediaOperationAdapter) protocolRequest(requestContext con
 func validateDictatorOperation(capability string, rawInput json.RawMessage, rawControls json.RawMessage) (dictatorCanonicalInput, dictatorCanonicalControls, error) {
 	var input dictatorCanonicalInput
 	var controls dictatorCanonicalControls
+	if capability == llmproxycontract.MediaCapabilityAudioVoiceExtract {
+		duration := float64(dictatorExtractionDurationSeconds)
+		controls.DurationSeconds = &duration
+	}
 	if decodeError := decodeExactDictatorJSON(rawInput, &input); decodeError != nil {
 		return input, controls, errMediaOperationInvalid
 	}
@@ -259,6 +268,9 @@ func validateDictatorOperation(capability string, rawInput json.RawMessage, rawC
 	controls.ModelSize = strings.TrimSpace(controls.ModelSize)
 	controls.TextFormat = strings.TrimSpace(controls.TextFormat)
 	validAudio := assetIdentifierPattern.MatchString(input.AudioAssetID)
+	if capability != llmproxycontract.MediaCapabilityAudioVoiceExtract && controls.DurationSeconds != nil {
+		return input, controls, errMediaOperationInvalid
+	}
 	switch capability {
 	case llmproxycontract.MediaCapabilityAudioTranscribe:
 		if !validAudio || !dictatorInputOnlyAudio(input) || !validDictatorLanguageSelection(controls) || !dictatorControlsOnlyLanguage(controls) {
@@ -281,7 +293,7 @@ func validateDictatorOperation(capability string, rawInput json.RawMessage, rawC
 			return input, controls, errMediaOperationInvalid
 		}
 	case llmproxycontract.MediaCapabilityAudioVoiceExtract:
-		if !validAudio || input.Transcript == "" || input.Text != "" || input.VoiceID != "" || input.DisplayName == "" || input.Language == "" || controls.Language != "" || controls.DetectLanguage || controls.ModelSize == "" || controls.RemovePunctuation || controls.Granularity != "" || controls.GroupSize != 0 || controls.UtteranceGapSeconds != nil || controls.TextFormat != "" || controls.SampleRateHz != 0 || controls.MaxDurationSeconds != 0 || controls.IncludeTimeline {
+		if controls.DurationSeconds == nil || *controls.DurationSeconds <= 0 || !validAudio || input.Transcript == "" || input.Text != "" || input.VoiceID != "" || input.DisplayName == "" || input.Language == "" || controls.Language != "" || controls.DetectLanguage || controls.ModelSize == "" || controls.RemovePunctuation || controls.Granularity != "" || controls.GroupSize != 0 || controls.UtteranceGapSeconds != nil || controls.TextFormat != "" || controls.SampleRateHz != 0 || controls.MaxDurationSeconds != 0 || controls.IncludeTimeline {
 			return input, controls, errMediaOperationInvalid
 		}
 	default:

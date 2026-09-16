@@ -156,7 +156,8 @@ REST and MCP share route validation, media handling, admission, queues, rate lim
 Usage records use endpoint `mcp` and the logical proxy status.
 For example, queue rejection records `503` even when the MCP transport returns `200`.
 Schema rejection and discovery create no generation usage event.
-Management mutations and dictation are outside this MCP interface.
+Management mutations remain outside this MCP interface.
+Media operations use the durable tools below. Their usage retains the common media-operation contract.
 
 The server applies the configured message limit to each authenticated request body, with a maximum of 8 MiB.
 The upload must finish within `server.request_timeout_seconds`.
@@ -194,3 +195,25 @@ For `2026-07-28`, low-level callers must send the method headers and per-request
 The handshake revisions use their negotiated version header without those modern fields.
 Use an SDK to construct the fields for the selected revision.
 The generated OpenAPI reference describes the HTTP envelope and generation schema.
+
+## Durable Media Tools
+
+`llm_proxy.create_media_operation` accepts these required fields:
+`tenant_id`, `idempotency_key`, `capability`, `provider`, `model`, `input`, and `controls`.
+The operation fields use the current HTTP media contract.
+The same tenant, idempotency key, and complete request identify one accepted operation.
+A changed request with the same key returns `media_operation_intent_conflict`.
+
+`llm_proxy.get_media_operation` and `llm_proxy.cancel_media_operation` require `tenant_id` and `operation_id`.
+All three tools return the current public operation representation as structured content.
+Poll status until `state` is terminal. A disconnected MCP client does not cancel accepted work.
+Cancellation reports the observed result and can remain unresolved at the provider boundary.
+
+Each tool verifies account ownership before access to the tenant's resources.
+Foreign and absent tenants return `not_found`.
+Media failures use the public `media_operation_*` codes. Store failures contain no database details.
+Provider credentials and native job, voice, and artifact identifiers remain private.
+Upload inputs and download outputs through the official client or CLI.
+See [Speech Workflows](speech-workflows.md) for extraction controls and recovery steps.
+
+Unknown tool calls return an SDK protocol error. The server continues to accept new requests.

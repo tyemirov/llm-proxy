@@ -197,6 +197,21 @@ test('account connection dashboard links Social Threader explicitly and preserve
   await expect(dashboard).not.toContainText('browser-dictator-token');
   await page.reload();
   await expect(dashboard.locator('[data-connection-node]').filter({hasText:'Private speech server'})).toBeVisible();
+  await dashboard.getByRole('button',{name:'Create connection',exact:true}).click();
+  dialog=page.getByRole('dialog');
+  await dialog.getByLabel('Connection name').fill('Second speech server');
+  await dialog.getByLabel('Provider',{exact:true}).selectOption('speech-fixture');
+  await dialog.getByLabel('Speech endpoint',{exact:true}).fill(dictator.address);
+  await dialog.getByLabel('Speech bearer credential',{exact:true}).fill('browser-dictator-token');
+  await dialog.getByLabel('Dictator gRPC TLS',{exact:true}).selectOption('false');
+  await dialog.getByRole('button',{name:'Create connection',exact:true}).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(dashboard.locator('[data-connection-node]').filter({hasText:'Second speech server'})).toContainText('Connected');
+  await dashboard.getByRole('button',{name:'Media',exact:true}).click();
+  await dashboard.locator('[data-model="speech-fixture-v1"]').click();
+  await expect(dashboard.locator('[data-media-details]')).toContainText('Speech synthesis');
+  await expect(dashboard.locator('[data-media-details]')).toContainText('Voice extraction');
+  await expect(dashboard).not.toContainText('browser-dictator-token');
  } finally { await dictator.stop(); }
  expect(errors).toEqual([]);
 });
