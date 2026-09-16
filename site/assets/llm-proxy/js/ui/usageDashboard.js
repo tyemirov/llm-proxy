@@ -278,6 +278,13 @@ export function createUsageDashboardResponsibility() {
       if (tenantID === this.selectedUsageTenantID) {
         return;
       }
+      if (!tenantID) {
+        this.clearUsageDetails(false);
+        this.selectedUsageTenantID = EMPTY_STRING;
+        this.usageProfile = null;
+        await this.loadUsageSummary(false);
+        return;
+      }
       const dashboard = document.querySelector('connection-dashboard');
       if (dashboard instanceof HTMLElement) {
         const controller = /** @type {import('./connectionDashboard.js').ConnectionDashboard} */ (dashboard);

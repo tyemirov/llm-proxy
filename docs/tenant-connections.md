@@ -18,8 +18,9 @@ This count is independent of recent requests.
 ## Dashboard
 
 The dashboard presents tenants, connections, and models in that order.
+The dashboard always keeps one tenant selected. It selects the `Default` tenant, or the first tenant when none is named `Default`.
 The selected tenant also controls the usage view.
-Account usage remains available through an explicit selection.
+Account-wide usage remains available through the usage scope selector.
 Search filters the visible lists. Each column scrolls when its list exceeds the available space.
 
 1. Create a tenant with a descriptive name.
