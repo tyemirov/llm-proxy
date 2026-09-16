@@ -296,6 +296,31 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [ ] [I269] (P2) Isolate temporary Python repositories from retained uv Git caches.
+  Observed: Three selected-version installation tests returned `0.0.post1.dev2` versions during I268 validation.
+  The cached `v1.5.0` tag pointed to commit `be24384`. The temporary source repository had that tag on commit `ef298f1`.
+  Git could not describe the installed commit from the cached tags. All five package tests passed on an unchanged rerun.
+  Goal: Give each temporary source repository an independent cache identity.
+  Deliverables: `tests/python_package_contract_test.py`.
+  Validation: Reproduce installation with retained Git cache data. Run `make python-package-install-test` and final `make ci`.
+  Evidence: `/tmp/llm-proxy-i268-ci.log` and `/tmp/llm-proxy-i268-package-recheck.log`.
+
+- [ ] [I268] (P1) Give each Dictator operation wait its own timeout.
+  Observed: Hosted run `35159126469` failed in `TestDictatorAccountConnectionUsesAuthenticatedGRPC` with `context deadline exceeded`.
+  The final diarization check used the same ten-second context as earlier speech, recovery, cancellation, and credential checks.
+  The frontend job passed. The aggregate job failed because the backend job failed.
+  Goal: Prevent earlier test scenarios from consuming the timeout of a later operation wait.
+  Requirements: Keep each operation wait and HTTP request bounded. Keep all public result assertions.
+  Deliverables: `internal/proxy/dictator_grpc_e2e_test.go`.
+  Validation: Run `make test-dictator`. Run final `make ci`.
+  Change: Each operation wait now has a ten-second context from `t.Context()`. Each HTTP client also has a ten-second request timeout.
+  Cancellation scenarios have separate bounded contexts. The shared scenario deadlines were removed.
+  Focused result: `make test-dictator` passed before and after the change.
+  `GOMAXPROCS=1 GOFLAGS='-race -v' make test-dictator` passed. The two complete speech flows took 10.65 and 11.17 seconds.
+  Application and event contracts did not change.
+  Initial CI result: Go integration passed. Three Python package version assertions failed. I269 records the retained-cache mismatch.
+  The unchanged package target then passed all five tests. Final CI validation is in progress.
+
 - [x] [I267] (P1) Wait for dashboard startup before the session recovery test.
   Observed: The shared UI test receives one more GET during application startup. This failure stops `make ci`.
   Goal: Start recovery checks after the dashboard completes its initial requests.
