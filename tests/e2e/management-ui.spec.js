@@ -2296,10 +2296,10 @@ test("dashboard connectors follow connection cards after inner list scroll", asy
     scrollHeight: list.scrollHeight,
   }));
   expect(overflow.scrollHeight).toBeGreaterThan(overflow.clientHeight + 10);
+  // Draw once in the constrained layout so the pre-scroll baseline is exact.
   await dashboard.evaluate((element) => (/** @type {{drawRoutes: () => void}} */ (/** @type {unknown} */ (element))).drawRoutes());
   await expect.poll(async () => pathEndpointError(dashboard)).toBeLessThanOrEqual(2);
   await connectionsList.evaluate((list) => { list.scrollTop = list.scrollHeight; });
-  await page.waitForTimeout(300);
   expect(await connectionsList.evaluate((list) => list.scrollTop)).toBeGreaterThan(0);
   await expect.poll(async () => pathEndpointError(dashboard)).toBeLessThanOrEqual(2);
   await connectionsList.evaluate((list) => { list.scrollTop = 0; });
