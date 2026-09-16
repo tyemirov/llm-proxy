@@ -1351,6 +1351,8 @@ A failed, cancelled, skipped, or missing job result prevents success.
 | `make up` | Require the ignored private `configs/.env.local`, then build and run the complete local browser orchestration: ghttp static UI and same-origin TAuth routes on `localhost:4179`, plus the API on `localhost:8080`. It waits for Compose startup before verifying the static/config/auth/API boundaries and reporting ready. |
 | `make down` | Stop the exact local Compose project started by `make up`, including orphaned services and its project network, while retaining the named local TAuth and management data volumes. |
 | `make ci` | Prepare pinned frontend dependencies, then run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, frontend syntax checks, the 100% coverage-gated Go test suite, Python pytest, Playwright browser tests, the app lifecycle contract test, and the non-paid live-harness preflight. A successful run ends with a per-gate table, current-run coverage, and an explicit `CI PASSED` receipt. |
+| `make test-dictator` | Run speech protocol acceptance with local providers and the official client. |
+| `make test-dictator-live` | Run all six speech capabilities against the selected live service. See [Dictator live acceptance](docs/dictator-live-acceptance.md). |
 | `make test-live-provider-harness` | Save a temporary managed OpenAI connection and route one request through a loopback provider. |
 | `make test-live-providers` | Start a disposable managed tenant, verify every available provider key through the canonical management operation, and run that provider's live text smoke only after verification succeeds; use `LIVE_ENV_FILE=/path/to/env` to load key values. |
 | `make test-live-provider-media` | Verify OpenAI, Anthropic, Gemini, Moonshot, and xAI keys, then send one paid canonical image request through each provider. |
@@ -2645,3 +2647,5 @@ this repository.
 
 This project is licensed under the MIT License. See [LICENSE](MIT-LICENSE) for
 details.
+
+Shared speech commands and MCP operation tools are documented in [Speech Workflows](docs/speech-workflows.md).
