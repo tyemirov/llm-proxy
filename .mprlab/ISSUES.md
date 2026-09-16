@@ -296,6 +296,19 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [x] [I267] (P1) Wait for dashboard startup before the session recovery test.
+  Observed: The shared UI test receives one more GET during application startup. This failure stops `make ci`.
+  Goal: Start recovery checks after the dashboard completes its initial requests.
+  Requirements: Keep the recovery request sequence assertion. Make sure that the requests create only one tenant.
+  Deliverables: `tests/blackbox/shared-ui-migration.spec.js`.
+  Validation: Run the four browser scenarios ten times through `make test-shared-ui`. Run final `make ci`.
+  Initial result: The supplied CI failure expected `GET, GET, POST, POST, GET` but received `GET, GET, GET, POST, POST, GET`.
+  The saved trace shows an account request during dashboard startup after the recovery test starts. All 40 initial rerun scenarios passed.
+  Resolution: The test waits for the authenticated application, selected Default tenant, and dashboard `aria-busy="false"` before recovery checks.
+  Focused result: All 40 scenarios passed after the change. Application and event contracts did not change.
+  Final result: `make ci` passed all 13 gates in 329 seconds with 100.0 percent Go statement coverage.
+  All 121 frontend browser tests and seven authentication scenarios passed. The CI log is `/tmp/llm-proxy-i267-ci.log`.
+
 - [x] [I265] (P2) Select account usage from the Usage overview title.
   Observed: The tenants column carries an `Account usage` button while the top card already presents a `Usage overview` title for the same account scope.
   Resolution (2026-09-16): Superseded by I266 before implementation. The dashboard keeps an explicit tenant selection instead of an account view, so the title button is not built. The tenants-column account button is removed under I266.
