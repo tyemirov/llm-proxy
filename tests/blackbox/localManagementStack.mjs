@@ -85,9 +85,26 @@ export async function startLocalManagementStack(authRouting = "frontend") {
     if (providerCatalog === packagedProviderCatalog) {
       throw new Error("llm_proxy_blackbox_openai_transport_contract_missing");
     }
+    const speechCatalog = yaml.load(providerCatalog);
+    const speechProvider = structuredClone(speechCatalog.providers.find(provider => provider.id === "dictator"));
+    const speechModel = structuredClone(speechCatalog.models.find(model => model.id === "dictator-speech-v1"));
+    speechProvider.id = "speech-fixture";
+    speechProvider.label = "Second speech provider";
+    speechProvider.api_service_label = "Second speech service";
+    speechModel.id = "speech-fixture-v1";
+    for (const field of speechProvider.fields) {
+      if (field.id === "grpc_address") { field.id = "speech_endpoint"; field.label = "Speech endpoint"; }
+      if (field.id === "grpc_auth_token") { field.id = "speech_bearer"; field.label = "Speech bearer credential"; }
+    }
+    speechProvider.transports[0].endpoint.setting_field = "speech_endpoint";
+    speechProvider.transports[0].components.authentication.field = "speech_bearer";
+    speechProvider.offerings[0].model = speechModel.id;
+    speechProvider.offerings[0].upstream_model = "private-speech-fixture";
+    speechCatalog.models.push(speechModel);
+    speechCatalog.providers.push(speechProvider);
     const llmProxyConfigPath = path.join(temporaryDirectory, "llm-proxy-config.yml");
     await writeFile(llmProxyConfigPath, llmProxyConfig, { mode: 0o600 });
-    await writeFile(path.join(temporaryDirectory, "providers.yml"), providerCatalog, { mode: 0o600 });
+    await writeFile(path.join(temporaryDirectory, "providers.yml"), yaml.dump(speechCatalog), { mode: 0o600 });
 
     const tAuthProcess = startService("tauth", tAuthBinaryPath, ["--config", tAuthConfigPath]);
     serviceProcesses.push(tAuthProcess);
@@ -251,6 +268,12 @@ async function startFrontendServer() {
 async function handleFrontendRequest(request, response, managementAPIOrigin, tAuthOrigin) {
   try {
     const requestURL = new URL(request.url || "/", "http://localhost");
+    if (requestURL.pathname === "/assets/llm-proxy/js/brandIconManifest.js") {
+      const manifest = await readFile(path.join(siteRoot, "assets/llm-proxy/js/brandIconManifest.js"), "utf8");
+      response.writeHead(200, {"content-type": "application/javascript"});
+      response.end(`${manifest}\nbrandIconManifest.providers["speech-fixture"] = null;\n`);
+      return;
+    }
     if (requestURL.pathname === "/config-ui.yaml") {
       if (!managementAPIOrigin) {
         throw new Error("management_api_origin_not_ready");

@@ -2250,6 +2250,61 @@ test("tenant selection clears unsaved model and prompt previews", async ({ page 
   await expect(dashboard.getByRole("textbox", {name:"Tenant system prompt",exact:true})).toHaveValue("");
 });
 
+/**
+ * @param {import("@playwright/test").Locator} dashboard
+ * @returns {Promise<number>}
+ */
+async function pathEndpointError(dashboard) {
+  return dashboard.evaluate((element) => {
+    const map = element.querySelector("[data-map]");
+    const paths = [...element.querySelectorAll(".cw-wires path")];
+    const nodes = [...element.querySelectorAll("[data-connection-node]")];
+    if (!(map instanceof HTMLElement) || paths.length === 0 || nodes.length === 0) {
+      throw new Error("dashboard_connector_surface_missing");
+    }
+    const mapBounds = map.getBoundingClientRect();
+    const endpoints = paths.map((path) => {
+      const numbers = path.getAttribute("d")?.match(/-?\d+(?:\.\d+)?/g)?.map(Number) || [];
+      return {x: numbers[numbers.length - 2] || 0, y: numbers[numbers.length - 1] || 0};
+    });
+    const errors = nodes.map((node) => {
+      const bounds = node.getBoundingClientRect();
+      const target = {x: bounds.left - mapBounds.left, y: bounds.top + bounds.height / 2 - mapBounds.top};
+      return Math.min(...endpoints.map((endpoint) => Math.hypot(endpoint.x - target.x, endpoint.y - target.y)));
+    });
+    return Math.max(...errors);
+  });
+}
+
+test("dashboard connectors follow connection cards after inner list scroll", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+  await page.setViewportSize({width:1280,height:800});
+  await page.goto(baseURL + applicationPath);
+  const dashboard = page.locator("connection-dashboard");
+  await expect(dashboard.getByRole("heading", {name:"Tenants → connections → models"})).toBeVisible();
+  await expect(dashboard.locator("[data-connection-node]").first()).toBeVisible();
+  const connectionCount = await dashboard.locator("[data-connection-node]").count();
+  expect(connectionCount).toBeGreaterThanOrEqual(2);
+  const connectionsList = dashboard.locator(".cw-column").nth(1).locator(".cw-list");
+  await connectionsList.evaluate((list) => {
+    if (!(list instanceof HTMLElement)) throw new Error("dashboard_connections_list_missing");
+    list.style.maxHeight = "170px";
+  });
+  const overflow = await connectionsList.evaluate((list) => ({
+    clientHeight: list.clientHeight,
+    scrollHeight: list.scrollHeight,
+  }));
+  expect(overflow.scrollHeight).toBeGreaterThan(overflow.clientHeight + 10);
+  await dashboard.evaluate((element) => (/** @type {{drawRoutes: () => void}} */ (/** @type {unknown} */ (element))).drawRoutes());
+  await expect.poll(async () => pathEndpointError(dashboard)).toBeLessThanOrEqual(2);
+  await connectionsList.evaluate((list) => { list.scrollTop = list.scrollHeight; });
+  await page.waitForTimeout(300);
+  expect(await connectionsList.evaluate((list) => list.scrollTop)).toBeGreaterThan(0);
+  await expect.poll(async () => pathEndpointError(dashboard)).toBeLessThanOrEqual(2);
+  await connectionsList.evaluate((list) => { list.scrollTop = 0; });
+  await expect.poll(async () => pathEndpointError(dashboard)).toBeLessThanOrEqual(2);
+});
 
 test("usage intervals load every dashboard surface, remain active on refresh, and fit mobile", async ({ page }) => {
   const requestedIntervals = [];
