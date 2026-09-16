@@ -130,6 +130,11 @@ mprlab_resources:
             dial_timeout_seconds: 10
             response_header_timeout_seconds: 3660
             read_timeout_seconds: 3660
+          access:
+            browser:
+              allowed_origins:
+                - https://llm-proxy.mprlab.com
+              allow_credentials: true
       tls:
         mode: automatic
       access:
@@ -138,8 +143,8 @@ mprlab_resources:
           - 172.19.0.0/16
           - 192.168.1.158/32
         rate_limit:
-          events: 10
-          window_seconds: 10
+          events: 120
+          window_seconds: 60
     - kind: health_check
       id: api-health
       protocol: http

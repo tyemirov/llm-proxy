@@ -27,6 +27,17 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B226] (P1) Add browser CORS access to Caddy rate limit responses.
+  Observed: Cross-origin browser requests from `https://llm-proxy.mprlab.com` to `https://llm-proxy-api.mprlab.com` fail with CORS error `net::ERR_FAILED` when the rate limit triggers.
+  Cause: The `caddy_route` resource sets `events: 10, window_seconds: 10`. Normal page loads exceed this budget. When Caddy responds with HTTP 429, the default handler lacks an `access.browser` policy, so Caddy emits no `Access-Control-Allow-Origin` header.
+  Requirements:
+  - Add the `browser` access policy with origin `https://llm-proxy.mprlab.com` and `allow_credentials: true` to the default handler of `public-api`.
+  - Increase the rate limit budget to `events: 120, window_seconds: 60` on the `public-api` route.
+  - Verify manifest canonicality and schema conformance.
+  Resolution: Added `access.browser` with origin `https://llm-proxy.mprlab.com` and credentials enabled to the `public-api` default handler. Increased route rate limit to 120 events in 60 seconds.
+  Deliverables: `.mprlab/deploy/resources.yml`.
+  Validation: Verified YAML syntax and Gateway contract conformance. Repository checks and Governor validation passed.
+
 - [x] [B225] (P1) Keep dashboard connectors attached during inner list scroll.
   Observed: The tenant-to-connection wire detaches from its connection card after the connections list scrolls. The wire keeps its pre-scroll endpoint while the card moves.
   Cause: `drawRoutes` computed endpoints once per render. Inner `.cw-list` scroll moves cards without a redraw.
