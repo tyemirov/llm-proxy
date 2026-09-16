@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="8902a86da646b37e92b514a039b87c2ff1f447e0644a872bca3f015cfd37c03a">
+    <meta name="openapi-source-sha256" content="c3c94694a54ceabf0449f4079eba7062ad5ba1916a2a7ae55441528897051fc3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="8902a86da646b37e92b514a039b87c2ff1f447e0644a872bca3f015cfd37c03a">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="c3c94694a54ceabf0449f4079eba7062ad5ba1916a2a7ae55441528897051fc3">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>8902a86da646b37e92b514a039b87c2ff1f447e0644a872bca3f015cfd37c03a</code></span>
+          <span>Source SHA-256 <code>c3c94694a54ceabf0449f4079eba7062ad5ba1916a2a7ae55441528897051fc3</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -5298,6 +5298,10 @@ components:
               additionalProperties: false
               required: [model_size]
               properties:
+                duration_seconds:
+                  type: number
+                  exclusiveMinimum: 0
+                  default: 20
                 model_size:
                   type: string
                   minLength: 1
