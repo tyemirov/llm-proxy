@@ -305,7 +305,7 @@ retain satisfied historical dependencies.
   Validation: Reproduce installation with retained Git cache data. Run `make python-package-install-test` and final `make ci`.
   Evidence: `/tmp/llm-proxy-i268-ci.log` and `/tmp/llm-proxy-i268-package-recheck.log`.
 
-- [ ] [I268] (P1) Give each Dictator operation wait its own timeout.
+- [x] [I268] (P1) Give each Dictator operation wait its own timeout.
   Observed: Hosted run `35159126469` failed in `TestDictatorAccountConnectionUsesAuthenticatedGRPC` with `context deadline exceeded`.
   The final diarization check used the same ten-second context as earlier speech, recovery, cancellation, and credential checks.
   The frontend job passed. The aggregate job failed because the backend job failed.
@@ -319,7 +319,9 @@ retain satisfied historical dependencies.
   `GOMAXPROCS=1 GOFLAGS='-race -v' make test-dictator` passed. The two complete speech flows took 10.65 and 11.17 seconds.
   Application and event contracts did not change.
   Initial CI result: Go integration passed. Three Python package version assertions failed. I269 records the retained-cache mismatch.
-  The unchanged package target then passed all five tests. Final CI validation is in progress.
+  The unchanged package target then passed all five tests.
+  Resolution: Each operation wait uses a new ten-second context. Each HTTP client uses a ten-second request timeout.
+  Final result: `make test-dictator` passed in 21 seconds. `make ci` passed all 13 gates in 331 seconds with 100.0 percent Go statement coverage.
 
 - [x] [I267] (P1) Wait for dashboard startup before the session recovery test.
   Observed: The shared UI test receives one more GET during application startup. This failure stops `make ci`.
