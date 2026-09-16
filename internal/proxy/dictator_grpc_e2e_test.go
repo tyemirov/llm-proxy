@@ -32,6 +32,8 @@ import (
 	"gorm.io/gorm"
 )
 
+const dictatorAcceptanceTimeout = 10 * time.Second
+
 // Inject a lost assignment at the database read used by admission validation.
 type dictatorAdmissionFailureDialector struct {
 	gorm.Dialector
@@ -177,6 +179,13 @@ func TestDictatorSecondProviderUsesCatalogRegistration(t *testing.T) {
 	exerciseDictatorAccountConnection(t, providerID, modelID, catalog)
 }
 
+func waitForDictatorAcceptanceOperation(t *testing.T, client llmproxyclient.Client, operationID string) (llmproxyclient.MediaOperation, error) {
+	// Earlier scenarios must not consume this operation's completion budget.
+	ctx, cancel := context.WithTimeout(t.Context(), dictatorAcceptanceTimeout)
+	defer cancel()
+	return client.WaitMediaOperation(ctx, operationID, 10*time.Millisecond)
+}
+
 func exerciseDictatorAccountConnection(t *testing.T, provider, model string, catalog *proxy.ProviderCatalog) {
 	t.Helper()
 	var addressField, tokenField string
@@ -193,6 +202,7 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 	router := newManagementRouterWithDatabasePath(t, configuration, databasePath)
 	server := httptest.NewServer(router)
 	t.Cleanup(server.Close)
+	server.Client().Timeout = dictatorAcceptanceTimeout
 	owner := managementSessionCookie(t, "dictator-account-owner")
 	account := requestManagementAccount(t, router, owner)
 	request := authenticatedJSONRequest(http.MethodPost, server.URL+"/api/management/connections",
@@ -230,8 +240,7 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	ctx := t.Context()
 	voices, err := client.GetMediaVoices(ctx, provider)
 	if err != nil || len(voices) != 1 {
 		t.Fatalf("Dictator voices=%v error=%v", voices, err)
@@ -269,7 +278,7 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 	if err != nil || duplicate.OperationID != operation.OperationID {
 		t.Fatalf("duplicate operation=%s error=%v", duplicate.OperationID, err)
 	}
-	completed, err := client.WaitMediaOperation(ctx, operation.OperationID, 10*time.Millisecond)
+	completed, err := waitForDictatorAcceptanceOperation(t, client, operation.OperationID)
 	if err != nil || completed.State != "succeeded" || len(completed.Outputs) != 1 {
 		t.Fatalf("transcription=%+v error=%v", completed, err)
 	}
@@ -297,7 +306,7 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 			if err != nil {
 				t.Fatal(err)
 			}
-			completed, err := client.WaitMediaOperation(ctx, operation.OperationID, 10*time.Millisecond)
+			completed, err := waitForDictatorAcceptanceOperation(t, client, operation.OperationID)
 			if err != nil || completed.State != "succeeded" || len(completed.Outputs) != scenario.outputs {
 				t.Fatalf("result=%+v error=%v", completed, err)
 			}
@@ -330,7 +339,7 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 		if err != nil {
 			t.Fatal(err)
 		}
-		completed, err := client.WaitMediaOperation(ctx, accepted.OperationID, 10*time.Millisecond)
+		completed, err := waitForDictatorAcceptanceOperation(t, client, accepted.OperationID)
 		if err != nil || completed.State != "succeeded" {
 			t.Fatalf("extraction state=%s error=%v", completed.State, err)
 		}
@@ -351,7 +360,7 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 		if err != nil {
 			t.Fatal(err)
 		}
-		accepted, err = client.WaitMediaOperation(ctx, accepted.OperationID, 10*time.Millisecond)
+		accepted, err = waitForDictatorAcceptanceOperation(t, client, accepted.OperationID)
 		if err != nil || accepted.State != "succeeded" {
 			t.Fatalf("diarization presence operation=%+v error=%v", accepted, err)
 		}
@@ -383,7 +392,7 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 	if err != nil {
 		t.Fatal(err)
 	}
-	generated, err = client.WaitMediaOperation(ctx, generated.OperationID, 10*time.Millisecond)
+	generated, err = waitForDictatorAcceptanceOperation(t, client, generated.OperationID)
 	if err != nil || generated.State != "succeeded" {
 		t.Fatalf("extracted synthesis=%+v error=%v", generated, err)
 	}
@@ -423,6 +432,7 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 	}
 	restarted := httptest.NewServer(recoveredRouter)
 	defer restarted.Close()
+	restarted.Client().Timeout = dictatorAcceptanceTimeout
 	restartedConfig, err := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{BaseURL: restarted.URL, Secret: secret})
 	if err != nil {
 		t.Fatal(err)
@@ -432,7 +442,7 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 		t.Fatal(err)
 	}
 	for _, record := range dispatched {
-		recovered, err := recoveredClient.WaitMediaOperation(ctx, record.OperationID, 10*time.Millisecond)
+		recovered, err := waitForDictatorAcceptanceOperation(t, recoveredClient, record.OperationID)
 		if err != nil || recovered.State != "succeeded" {
 			t.Fatalf("recovered=%+v error=%v", recovered, err)
 		}
@@ -455,6 +465,8 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 	fixture.pending.Store(true)
 	for _, scenario := range scenarios {
 		t.Run("cancel-"+scenario.capability, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), dictatorAcceptanceTimeout)
+			defer cancel()
 			accepted, err := client.CreateMediaOperation(ctx, "cancel-"+scenario.capability, llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: scenario.capability, Input: json.RawMessage(scenario.input), Controls: json.RawMessage(scenario.controls)})
 			if err != nil {
 				t.Fatal(err)
@@ -534,12 +546,10 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 	if err != nil {
 		t.Fatal(err)
 	}
-	invalidResult, err = client.WaitMediaOperation(ctx, invalidResult.OperationID, 10*time.Millisecond)
+	invalidResult, err = waitForDictatorAcceptanceOperation(t, client, invalidResult.OperationID)
 	if err != nil || invalidResult.State != "uncertain" || len(invalidResult.Outputs) != 0 {
 		t.Fatalf("invalid provider result=%+v error=%v", invalidResult, err)
 	}
-	ctx, finishTimelineChecks := context.WithTimeout(context.Background(), 10*time.Second)
-	defer finishTimelineChecks()
 	fixture.stopped.Delete("private-synthesis")
 	for index, document := range []string{`{`, `null`, `[]`, `{"textSegments":[]}`, `{"textSegments":[{"content":"Hello","end":1}]}`, `{"textSegments":[{"content":"Hello","start":-1,"end":1}]}`, `{"textSegments":[{"content":"Hello","start":2,"end":1}]}`, `{"textSegments":[{"content":"Hello","start":0,"end":1,"file":"/private/path"}]}`} {
 		fixture.timelineOverride.Store(document)
@@ -547,14 +557,12 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 		if err != nil {
 			t.Fatal(err)
 		}
-		invalid, err = client.WaitMediaOperation(ctx, invalid.OperationID, 10*time.Millisecond)
+		invalid, err = waitForDictatorAcceptanceOperation(t, client, invalid.OperationID)
 		if err != nil || invalid.State != "uncertain" || len(invalid.Outputs) != 0 {
 			t.Fatalf("invalid timeline %s: result=%+v error=%v", document, invalid, err)
 		}
 	}
 
-	ctx, finishConnectionChecks := context.WithTimeout(context.Background(), 10*time.Second)
-	defer finishConnectionChecks()
 	for index, fields := range []map[string]string{
 		{addressField: otherListener.Addr().String(), tokenField: "second-account-token", "grpc_tls": "false"},
 		{addressField: otherListener.Addr().String(), tokenField: "rotated-account-token", "grpc_tls": "false"},
@@ -578,7 +586,7 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 		if err != nil {
 			t.Fatal(err)
 		}
-		currentOperation, err = client.WaitMediaOperation(ctx, currentOperation.OperationID, 10*time.Millisecond)
+		currentOperation, err = waitForDictatorAcceptanceOperation(t, client, currentOperation.OperationID)
 		if err != nil || currentOperation.State != "succeeded" {
 			t.Fatalf("current voice execution: %+v error=%v", currentOperation, err)
 		}
