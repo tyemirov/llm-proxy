@@ -7,6 +7,14 @@ import { localManagementProfile, startLocalManagementStack } from "./localManage
 
 test.use({ actionTimeout: 5000, navigationTimeout: 10000 });
 
+/** @param {import("@playwright/test").Page} page */
+async function expectDashboardReady(page) {
+  await expect(page.locator("llm-proxy-management-application")).toHaveAttribute("data-auth-state", "authenticated");
+  const dashboard = page.locator("connection-dashboard");
+  await expect(dashboard.locator('[data-tenant][aria-pressed="true"]')).toContainText("Default");
+  await expect(dashboard).toHaveAttribute("aria-busy", "false");
+}
+
 for (const authRouting of ["frontend", "direct"]) {
   test.describe(`shared UI ${authRouting} auth origin`, () => {
     let stack;
@@ -55,11 +63,14 @@ for (const authRouting of ["frontend", "direct"]) {
           await page.getByRole("button", { name: "Sign in with Google", exact: true }).click();
           await page.waitForURL(`${stack.frontendOrigin}/app/`);
           await expect(page.locator("mpr-header")).toHaveAttribute("data-mpr-auth-status", "authenticated");
+          await expectDashboardReady(page);
           expect(exchanges).toBe(1);
           const beforeReload = sessions;
           await page.reload();
           await expect(page.locator("mpr-header")).toHaveAttribute("data-mpr-auth-status", "authenticated");
           expect(sessions).toBeGreaterThan(beforeReload);
+          // Startup account requests must finish before recovery attempts are counted.
+          await expectDashboardReady(page);
           const attempts = [];
           const rejected = new Set();
           for (const endpoint of ["account", "tenants"]) {
