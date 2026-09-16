@@ -1998,7 +1998,7 @@ test("MCP account URL remains the same after keyboard tenant creation", async ({
   await expect.poll(() => copiedText(page)).toBe(`${baseURL}/mcp`);
 });
 
-test("tenant selection controls the map and usage with an explicit account view", async ({ page }) => {
+test("tenant selection controls the map and usage while keeping a tenant selected", async ({ page }) => {
   await installAssetRoutes(page);
   await installMultiTenantRoutes(page);
   await page.goto(`${baseURL}${applicationPath}`);
@@ -2008,17 +2008,49 @@ test("tenant selection controls the map and usage with an explicit account view"
   await expect(scope).toHaveValue("tenant_1");
   await expect(dashboard.locator('[data-tenant][aria-pressed="true"]')).toContainText("Default");
   await expect(requests).toHaveText("37");
-  await dashboard.getByRole("button", { name: "Account usage", exact: true }).click();
+  await scope.selectOption("");
   await expect(scope).toHaveValue("");
   await expect(requests).toHaveText("44");
-  await expect(dashboard.locator('[data-tenant][aria-pressed="true"]')).toHaveCount(0);
+  await expect(dashboard.locator('[data-tenant][aria-pressed="true"]')).toContainText("Default");
   await dashboard.locator('[data-tenant="tenant_2"]').click();
   await expect(scope).toHaveValue("tenant_2");
   await expect(requests).toHaveText("7");
   await expect(dashboard.locator('[data-tenant][aria-pressed="true"]')).toContainText("Research");
 });
 
-test("the usage tenant selector uses the same dashboard tenant context", async ({ page }) => {
+test("dashboard always keeps a tenant selected", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installMultiTenantRoutes(page);
+  await page.goto(`${baseURL}${applicationPath}`);
+  const dashboard = page.locator("connection-dashboard");
+  const scope = page.getByRole("combobox", { name: "Usage tenant" });
+  await expect(dashboard.getByRole("button", { name: "Account usage", exact: true })).toHaveCount(0);
+  await expect(dashboard.locator('[data-tenant][aria-pressed="true"]')).toContainText("Default");
+  await scope.selectOption("");
+  await expect(scope).toHaveValue("");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("44");
+  await expect(dashboard.locator('[data-tenant][aria-pressed="true"]')).toContainText("Default");
+});
+
+test("dashboard prefers the Default tenant over the first tenant", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installMultiTenantRoutes(page, { profiles: [managementTenantProfile("tenant_2", "Research"), managementTenantProfile("tenant_1", "Default")] });
+  await page.goto(`${baseURL}${applicationPath}`);
+  const dashboard = page.locator("connection-dashboard");
+  await expect(dashboard.getByRole("button", { name: "Account usage", exact: true })).toHaveCount(0);
+  await expect(dashboard.locator('[data-tenant][aria-pressed="true"]')).toContainText("Default");
+});
+
+test("dashboard selects the first tenant when none is named Default", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installMultiTenantRoutes(page, { profiles: [managementTenantProfile("tenant_1", "Renamed"), managementTenantProfile("tenant_2", "Research")] });
+  await page.goto(`${baseURL}${applicationPath}`);
+  const dashboard = page.locator("connection-dashboard");
+  await expect(dashboard.getByRole("button", { name: "Account usage", exact: true })).toHaveCount(0);
+  await expect(dashboard.locator('[data-tenant][aria-pressed="true"]')).toContainText("Renamed");
+});
+
+test("the usage tenant selector follows dashboard tenants and keeps one selected for all tenants", async ({ page }) => {
   await installAssetRoutes(page);
   await installMultiTenantRoutes(page);
   await page.goto(`${baseURL}${applicationPath}`);
@@ -2030,7 +2062,7 @@ test("the usage tenant selector uses the same dashboard tenant context", async (
   await expect(dashboard.locator('[data-tenant][aria-pressed="true"]')).toContainText("Research");
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("7");
   await scope.selectOption("");
-  await expect(dashboard.locator('[data-tenant][aria-pressed="true"]')).toHaveCount(0);
+  await expect(dashboard.locator('[data-tenant][aria-pressed="true"]')).toContainText("Research");
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("44");
 });
 
@@ -2139,7 +2171,7 @@ test("concurrent tabs keep independent dashboard tenant contexts", async ({ cont
   await expect(secondPage.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("tenant_1");
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("7");
   await expect(secondPage.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
-  await secondPage.locator("connection-dashboard").getByRole("button", { name: "Account usage", exact: true }).click();
+  await secondPage.getByRole("combobox", { name: "Usage tenant" }).selectOption("");
   await expect(secondPage.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("");
   await expect(page.locator('connection-dashboard [data-tenant][aria-pressed="true"]')).toContainText("Research");
   await secondPage.close();
@@ -2642,7 +2674,7 @@ test("failed-request details expose 10 of 22 requests as safe, focus-managed met
   await installUsageFailuresResponse(page, managementUsageFailures("30d", 10));
 
   await page.goto(`${baseURL}${applicationPath}`);
-  await page.locator("connection-dashboard").getByRole("button", { name: "Account usage", exact: true }).click();
+  await page.getByRole("combobox", { name: "Usage tenant" }).selectOption("");
   await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("");
 
   const successRateCard = page.locator("usage-card").filter({ hasText: "Success rate" });
@@ -2783,7 +2815,7 @@ test("rejected requests stay visible without entering execution or failure metri
   await installUsageRejectionsResponse(page, managementUsageRejections("30d"));
 
   await page.goto(`${baseURL}${applicationPath}`);
-  await page.locator("connection-dashboard").getByRole("button", { name: "Account usage", exact: true }).click();
+  await page.getByRole("combobox", { name: "Usage tenant" }).selectOption("");
   await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("");
 
   const requestsCard = page.locator("usage-card").filter({ has: page.getByText("Requests", { exact: true }) });
@@ -2844,7 +2876,7 @@ test("failed-request pagination preserves metrics across loading and retryable e
   });
 
   await page.goto(`${baseURL}${applicationPath}`);
-  await page.locator("connection-dashboard").getByRole("button", { name: "Account usage", exact: true }).click();
+  await page.getByRole("combobox", { name: "Usage tenant" }).selectOption("");
   await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("");
   await page.getByRole("button", { name: "26 failed requests" }).click();
   const dialog = page.getByRole("dialog", { name: "Failed request details" });
@@ -3072,14 +3104,23 @@ test("Gemini dictation default preserves the text default after reload", async (
 
 test("models require a connection and unavailable dictation has no save action", async ({ page }) => {
   await installAssetRoutes(page);
-  await installManagementRoutes(page,{savedProviderIDs:["deepseek"]});
+  const primary=managementTenantProfile("tenant_1","Default");
+  for (const provider of primary.providers) {
+    if (provider.id!=="deepseek") clearFixtureProviderConnection(provider);
+  }
+  reconcileManagementProfileRoutingDefaults(primary);
+  const secondary=managementTenantProfile("tenant_2","Research");
+  for (const provider of secondary.providers) clearFixtureProviderConnection(provider);
+  reconcileManagementProfileRoutingDefaults(secondary);
+  await installMultiTenantRoutes(page,{profiles:[primary,secondary]});
   await page.goto(baseURL + applicationPath);
   const dashboard=page.locator("connection-dashboard");
   await expect(dashboard.locator("[data-connection]")).toHaveCount(1);
   await dashboard.getByRole("button",{name:"Dictation",exact:true}).click();
   await expect(dashboard).toContainText("No models for this capability.");
   await expect(dashboard.getByRole("button",{name:"Save dictation default"})).toHaveCount(0);
-  await dashboard.getByRole("button",{name:"Account usage",exact:true}).click();
+  await dashboard.locator('[data-tenant="tenant_2"]').click();
+  await dashboard.locator("[data-connection]").click();
   await expect(dashboard).toContainText("Connect to choose models.");
   await expect(dashboard.locator("[data-model]")).toHaveCount(0);
 });
