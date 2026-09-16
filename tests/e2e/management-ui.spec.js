@@ -3327,7 +3327,7 @@ test("public Log In authenticates through MPR UI before opening the app", async 
   expect(await page.evaluate(() => history.length)).toBe(landingHistoryLength);
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
-  expect(profileRequests.length).toBeGreaterThanOrEqual(1);
+  await expect.poll(() => profileRequests.length).toBeGreaterThanOrEqual(1);
 });
 
 test("a restored authenticated session replaces the anonymous landing with the app", async ({ page }) => {
@@ -3355,7 +3355,7 @@ test("startup reconciles MPR UI authentication after the lifecycle event has pas
 
   await expect(page.locator("mpr-header")).toHaveAttribute("data-mpr-auth-status", "authenticated");
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
-  expect(profileRequests.length).toBeGreaterThanOrEqual(1);
+  await expect.poll(() => profileRequests.length).toBeGreaterThanOrEqual(1);
 });
 
 test("blocked Alpine startup becomes an actionable application error", async ({ page }) => {
