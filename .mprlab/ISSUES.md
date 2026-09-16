@@ -285,6 +285,17 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [x] [I265] (P2) Select account usage from the Usage overview title.
+  Observed: The tenants column carries an `Account usage` button while the top card already presents a `Usage overview` title for the same account scope.
+  Resolution (2026-09-16): Superseded by I266 before implementation. The dashboard keeps an explicit tenant selection instead of an account view, so the title button is not built. The tenants-column account button is removed under I266.
+
+- [x] [I266] (P1) Keep a dashboard tenant selected at all times.
+  Observed: The dashboard can sit with no tenant selected. The tenants column offers an `Account usage` button and the footer reads `Account · Select a connection`.
+  Requirements: Remove the tenants-column account button. Select the `Default` tenant on load, or the first tenant when none is named `Default`. Keep the dashboard tenant selected when the usage scope selects all tenants.
+  Resolution: The tenants column has no account button. Loading and tenant deletion select the `Default` tenant, or the first tenant otherwise. The all-tenants usage scope updates only the usage view. The obsolete tenants-column style is removed.
+  Validation: New browser tests cover the missing button, the default-or-first selection, and the decoupled scope. The full `management-ui` suite passes (103 tests). `npm run frontend:lint` passes.
+  Deliverables: `site/assets/llm-proxy/js/ui/connectionDashboard.js`, `site/assets/llm-proxy/js/ui/usageDashboard.js`, `site/assets/llm-proxy/styles.css`, `tests/e2e/management-ui.spec.js`, `docs/tenant-connections.md`.
+
 - [x] [I264] (P2) Cover a model profile with a mismatched delimiter through the public client.
   Observed: The B222 CI run passed all Go tests but left one uncovered block in `model_profile.go`.
   Requirements: Exercise a JSON object with a mismatched delimiter through the public client. Verify rejection before HTTP dispatch.
