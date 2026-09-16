@@ -95,7 +95,7 @@ func (verifier *operationalProviderKeyVerifier) verify(parentContext context.Con
 	defer cancelVerification()
 	for _, transport := range provider.transports {
 		if transport.requestCodec == CatalogProtocolDictatorSpeechV1 {
-			return verifyDictatorConnection(verificationContext, provider.connectionValues)
+			return verifyDictatorConnection(verificationContext, provider.connectionValues, transport)
 		}
 	}
 

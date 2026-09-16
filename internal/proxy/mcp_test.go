@@ -204,7 +204,7 @@ func TestMCPTenantDiscoveryAndGeneration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools.Tools) != 2 {
+	if len(tools.Tools) != 5 {
 		t.Fatalf("tools=%+v", tools.Tools)
 	}
 	for _, tool := range tools.Tools {

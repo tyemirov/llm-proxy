@@ -16,6 +16,8 @@ import (
 const dictatorArtifactChunkBytes = 64 * 1024
 
 type dictatorGRPCProtocol struct {
+	provider      string
+	model         string
 	connection    *grpc.ClientConn
 	token         string
 	binding       string
@@ -58,7 +60,7 @@ func (protocol *dictatorGRPCProtocol) DiscoverVoices(ctx context.Context) ([]Med
 		for index, rate := range voice.NativeSampleRateHz {
 			rates[index] = int(rate)
 		}
-		result = append(result, MediaVoiceProviderRecord{Authority: protocol.binding, Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Mode: MediaVoiceModePreset, Language: voice.LanguageCode, DisplayName: voice.DisplayName, Default: voice.IsDefault, SampleRates: rates, DefaultSampleRate: int(voice.DefaultSampleRateHz), ProviderVoiceReference: string(reference)})
+		result = append(result, MediaVoiceProviderRecord{Authority: protocol.binding, Provider: protocol.provider, Model: protocol.model, Mode: MediaVoiceModePreset, Language: voice.LanguageCode, DisplayName: voice.DisplayName, Default: voice.IsDefault, SampleRates: rates, DefaultSampleRate: int(voice.DefaultSampleRateHz), ProviderVoiceReference: string(reference)})
 	}
 	return result, nil
 }
@@ -192,7 +194,7 @@ func (protocol *dictatorGRPCProtocol) Submit(ctx context.Context, request dictat
 		}
 	case llmproxycontract.MediaCapabilityAudioVoiceExtract:
 		handle.Extraction = &dictatorExtractionContext{Transcript: input.Transcript, DisplayName: input.DisplayName, Language: input.Language}
-		response, callErr := dictator.NewVoiceServiceClient(protocol.connection).SubmitExtractReferenceSampleJob(ctx, &dictator.ExtractReferenceSampleRequest{SourceArtifactId: audioID, ModelSize: controls.ModelSize, LanguageCode: input.Language})
+		response, callErr := dictator.NewVoiceServiceClient(protocol.connection).SubmitExtractReferenceSampleJob(ctx, &dictator.ExtractReferenceSampleRequest{SourceArtifactId: audioID, ModelSize: controls.ModelSize, LanguageCode: input.Language, DurationSeconds: *controls.DurationSeconds})
 		err = callErr
 		if err == nil {
 			handle.JobID, state = response.JobId, int32(response.State)
@@ -399,7 +401,7 @@ func (protocol *dictatorGRPCProtocol) Observe(ctx context.Context, capability st
 					return dictatorProtocolObservation{}, errors.New("invalid Dictator extracted voice")
 				}
 				reference, _ := json.Marshal(dictatorVoiceReference{Binding: protocol.binding, Engine: dictator.SynthesisEngine_SYNTHESIS_ENGINE_QWEN3, Artifact: response.SampleArtifact.ArtifactId, Transcript: handle.Extraction.Transcript})
-				observation.Voice = &MediaVoiceProviderRecord{Authority: protocol.binding, Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Mode: MediaVoiceModeExtracted, Language: handle.Extraction.Language, DisplayName: handle.Extraction.DisplayName, SampleRates: []int{24000}, DefaultSampleRate: 24000, ProviderVoiceReference: string(reference)}
+				observation.Voice = &MediaVoiceProviderRecord{Authority: protocol.binding, Provider: protocol.provider, Model: protocol.model, Mode: MediaVoiceModeExtracted, Language: handle.Extraction.Language, DisplayName: handle.Extraction.DisplayName, SampleRates: []int{24000}, DefaultSampleRate: 24000, ProviderVoiceReference: string(reference)}
 				observation.Handle.ResultArtifactIDs = []string{response.SampleArtifact.ArtifactId}
 			}
 		}

@@ -20,6 +20,7 @@ import (
 	"github.com/glebarez/sqlite"
 	dictator "github.com/tyemirov/dictator/sdk/go/dictatorspeechv1"
 	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxyclient"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -27,6 +28,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
+	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
 )
 
@@ -62,6 +64,7 @@ type dictatorGRPCFixture struct {
 	discoveryFailure   atomic.Int32
 	invalidDiarization atomic.Bool
 	diarizationRequest atomic.Pointer[dictator.DiarizeAudioRequest]
+	extractionRequest  atomic.Pointer[dictator.ExtractReferenceSampleRequest]
 	timelineOverride   atomic.Value
 	stopped            sync.Map
 	announced          sync.Map
@@ -121,37 +124,79 @@ func (fixture *dictatorGRPCFixture) ListSynthesisVoices(ctx context.Context, _ *
 }
 
 func TestDictatorAccountConnectionUsesAuthenticatedGRPC(t *testing.T) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	exerciseDictatorAccountConnection(t, proxy.ProviderNameDictator, proxy.ModelNameDictatorSpeechV1, testfixtures.ProviderCatalog(t))
+}
+
+func TestDictatorSecondProviderUsesCatalogRegistration(t *testing.T) {
+	const providerID = "speech-fixture"
+	const modelID = "speech-fixture-v1"
+	schema := testfixtures.ProviderCatalog(t).Schema()
+	for _, model := range schema.Models {
+		if model.ID == proxy.ModelNameDictatorSpeechV1 {
+			model.ID = modelID
+			schema.Models = append(schema.Models, model)
+			break
+		}
+	}
+	for _, provider := range schema.Providers {
+		if provider.ID == proxy.ProviderNameDictator {
+			provider.ID = providerID
+			provider.Label = "Second speech provider"
+			provider.APIServiceLabel = "Second speech service"
+			provider.Fields = append([]proxy.ProviderCatalogField(nil), provider.Fields...)
+			for index := range provider.Fields {
+				switch provider.Fields[index].ID {
+				case "grpc_address":
+					provider.Fields[index].ID = "speech_endpoint"
+				case "grpc_auth_token":
+					provider.Fields[index].ID = "speech_bearer"
+				}
+			}
+			provider.Transports = append([]proxy.ProviderCatalogTransport(nil), provider.Transports...)
+			provider.Transports[0].Endpoint.SettingField = "speech_endpoint"
+			provider.Transports[0].Components.Authentication.Field = "speech_bearer"
+			provider.Offerings = append([]proxy.ProviderCatalogOffering(nil), provider.Offerings...)
+			provider.Offerings[0].Model = modelID
+			provider.Offerings[0].UpstreamModel = "private-speech-fixture"
+			schema.Providers = append(schema.Providers, provider)
+			break
+		}
+	}
+	document, err := yaml.Marshal(schema)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixture := &dictatorGRPCFixture{token: "private-dictator-token", observed: make(chan string, 32)}
-	upstream := grpc.NewServer(grpc.UnaryInterceptor(func(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		values, _ := metadata.FromIncomingContext(ctx)
-		if strings.Join(values.Get("authorization"), "") != "Bearer "+fixture.token {
-			return nil, status.Error(codes.Unauthenticated, "invalid token")
+	invalidDocument := strings.Replace(string(document), "id: dictator_speech_v1", "id: unknown_speech_codec", 1)
+	if _, err := proxy.ParseProviderCatalog([]byte(invalidDocument)); err == nil {
+		t.Fatal("invalid speech codec accepted")
+	}
+	catalog, err := proxy.ParseProviderCatalog(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exerciseDictatorAccountConnection(t, providerID, modelID, catalog)
+}
+
+func exerciseDictatorAccountConnection(t *testing.T, provider, model string, catalog *proxy.ProviderCatalog) {
+	t.Helper()
+	var addressField, tokenField string
+	for _, definition := range catalog.Schema().Providers {
+		if definition.ID == provider {
+			addressField = definition.Transports[0].Endpoint.SettingField
+			tokenField = definition.Transports[0].Components.Authentication.Field
 		}
-		if strings.Contains(info.FullMethod, "/Submit") {
-			fixture.submissions.Add(1)
-		}
-		return handler(ctx, request)
-	}))
-	dictator.RegisterVoiceServiceServer(upstream, fixture)
-	dictator.RegisterTranscriptionServiceServer(upstream, fixture)
-	dictator.RegisterArtifactServiceServer(upstream, fixture)
-	dictator.RegisterAlignmentServiceServer(upstream, fixture)
-	dictator.RegisterSubtitleServiceServer(upstream, fixture)
-	go func() { _ = upstream.Serve(listener) }()
-	t.Cleanup(upstream.Stop)
+	}
+	fixture, listener := newDictatorAcceptanceUpstream(t, provider)
+	var err error
 	databasePath := filepath.Join(t.TempDir(), "management.sqlite")
-	configuration := proxy.Configuration{AssetStorePath: t.TempDir(), MediaOperationClaimSeconds: 7200, MediaOperationClaimRenewalSeconds: 3600}
+	configuration := proxy.Configuration{ProviderCatalog: catalog, AssetStorePath: t.TempDir(), MediaOperationClaimSeconds: 7200, MediaOperationClaimRenewalSeconds: 3600}
 	router := newManagementRouterWithDatabasePath(t, configuration, databasePath)
 	server := httptest.NewServer(router)
 	t.Cleanup(server.Close)
 	owner := managementSessionCookie(t, "dictator-account-owner")
 	account := requestManagementAccount(t, router, owner)
 	request := authenticatedJSONRequest(http.MethodPost, server.URL+"/api/management/connections",
-		`{"name":"My speech server","provider":"dictator","fields":{"grpc_address":"`+listener.Addr().String()+`","grpc_auth_token":"private-dictator-token","grpc_tls":"false"}}`, owner)
+		`{"name":"My speech server","provider":"`+provider+`","fields":{"`+addressField+`":"`+listener.Addr().String()+`","`+tokenField+`":"`+fixture.token+`","grpc_tls":"false"}}`, owner)
 	request.RequestURI = ""
 	request.Header.Set("Idempotency-Key", "dictator-account-create")
 	response, err := server.Client().Do(request)
@@ -166,7 +211,7 @@ func TestDictatorAccountConnectionUsesAuthenticatedGRPC(t *testing.T) {
 	if response.StatusCode != http.StatusCreated {
 		t.Fatalf("create Dictator connection: status=%d body=%s", response.StatusCode, body)
 	}
-	if strings.Contains(string(body), "private-dictator-token") {
+	if strings.Contains(string(body), fixture.token) {
 		t.Fatal("connection response exposed credential")
 	}
 	var connection struct {
@@ -175,7 +220,7 @@ func TestDictatorAccountConnectionUsesAuthenticatedGRPC(t *testing.T) {
 	if err := json.Unmarshal(body, &connection); err != nil {
 		t.Fatal(err)
 	}
-	accountConnectionExchange(t, router, owner, http.MethodPut, "/tenants/"+account.Tenants[0].ID+"/connections/dictator", map[string]string{"connection_id": connection.ID}, http.StatusOK)
+	accountConnectionExchange(t, router, owner, http.MethodPut, "/tenants/"+account.Tenants[0].ID+"/connections/"+provider, map[string]string{"connection_id": connection.ID}, http.StatusOK)
 	secret := generateManagementTenantSecret(t, router, owner, account.Tenants[0].ID)
 	config, err := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{BaseURL: server.URL, Secret: secret})
 	if err != nil {
@@ -187,7 +232,7 @@ func TestDictatorAccountConnectionUsesAuthenticatedGRPC(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	voices, err := client.GetMediaVoices(ctx, "dictator")
+	voices, err := client.GetMediaVoices(ctx, provider)
 	if err != nil || len(voices) != 1 {
 		t.Fatalf("Dictator voices=%v error=%v", voices, err)
 	}
@@ -195,9 +240,34 @@ func TestDictatorAccountConnectionUsesAuthenticatedGRPC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	operation, err := client.CreateMediaOperation(ctx, "dictator-transcribe", llmproxyclient.MediaOperationInput{Provider: "dictator", Model: "dictator-speech-v1", Capability: "audio.transcribe", Input: json.RawMessage(`{"audio_asset_id":"` + asset.AssetID + `"}`), Controls: json.RawMessage(`{"language":"en"}`)})
+	capabilities, err := client.GetMediaCapabilities(ctx)
 	if err != nil {
 		t.Fatal(err)
+	}
+	advertised := 0
+	for _, route := range capabilities.Routes {
+		if route.Provider == provider && route.Model == model {
+			advertised++
+		}
+	}
+	if advertised != 6 {
+		t.Fatalf("advertised speech capabilities=%d", advertised)
+	}
+	_, rejectedError := client.CreateMediaOperation(ctx, "unsupported-controls", llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: "audio.transcribe", Input: json.RawMessage(`{"audio_asset_id":"` + asset.AssetID + `"}`), Controls: json.RawMessage(`{"unknown_control":true}`)})
+	if httpFailureStatus(rejectedError) != http.StatusBadRequest || fixture.submissions.Load() != 0 {
+		t.Fatalf("unsupported request error=%v submissions=%d", rejectedError, fixture.submissions.Load())
+	}
+	_, durationError := client.CreateMediaOperation(ctx, "unsupported-duration", llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: "audio.transcribe", Input: json.RawMessage(`{"audio_asset_id":"` + asset.AssetID + `"}`), Controls: json.RawMessage(`{"language":"en","duration_seconds":0.5}`)})
+	if httpFailureStatus(durationError) != http.StatusBadRequest || fixture.submissions.Load() != 0 {
+		t.Fatalf("unsupported duration error=%v", durationError)
+	}
+	operation, err := client.CreateMediaOperation(ctx, "dictator-transcribe", llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: "audio.transcribe", Input: json.RawMessage(`{"audio_asset_id":"` + asset.AssetID + `"}`), Controls: json.RawMessage(`{"language":"en"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	duplicate, err := client.CreateMediaOperation(ctx, "dictator-transcribe", llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: "audio.transcribe", Input: json.RawMessage(`{"audio_asset_id":"` + asset.AssetID + `"}`), Controls: json.RawMessage(`{"language":"en"}`)})
+	if err != nil || duplicate.OperationID != operation.OperationID {
+		t.Fatalf("duplicate operation=%s error=%v", duplicate.OperationID, err)
 	}
 	completed, err := client.WaitMediaOperation(ctx, operation.OperationID, 10*time.Millisecond)
 	if err != nil || completed.State != "succeeded" || len(completed.Outputs) != 1 {
@@ -219,11 +289,11 @@ func TestDictatorAccountConnectionUsesAuthenticatedGRPC(t *testing.T) {
 		{"audio.align", `{"audio_asset_id":"` + asset.AssetID + `","transcript":"A clear transcript."}`, `{"language":"en","remove_punctuation":true}`, 2},
 		{"subtitles.create", `{"audio_asset_id":"` + asset.AssetID + `","transcript":"A clear transcript."}`, `{"language":"en","granularity":"sentence","group_size":2}`, 1},
 		{"audio.speech.generate", `{"text":"<speak>Привет</speak>","voice_id":"` + voices[0].VoiceID + `"}`, `{"language":"ru","text_format":"ssml","sample_rate_hz":48000,"include_timeline":true,"max_duration_seconds":5}`, 2},
-		{"audio.voice.extract", `{"audio_asset_id":"` + asset.AssetID + `","transcript":"A clear transcript.","display_name":"My voice","language":"en"}`, `{"model_size":"base"}`, 1},
+		{"audio.voice.extract", `{"audio_asset_id":"` + asset.AssetID + `","transcript":"A clear transcript.","display_name":"My voice","language":"en"}`, `{"model_size":"base","duration_seconds":0.5}`, 1},
 	}
 	for _, scenario := range scenarios {
 		t.Run(scenario.capability, func(t *testing.T) {
-			operation, err := client.CreateMediaOperation(ctx, "dictator-"+scenario.capability, llmproxyclient.MediaOperationInput{Provider: "dictator", Model: "dictator-speech-v1", Capability: scenario.capability, Input: json.RawMessage(scenario.input), Controls: json.RawMessage(scenario.controls)})
+			operation, err := client.CreateMediaOperation(ctx, "dictator-"+scenario.capability, llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: scenario.capability, Input: json.RawMessage(scenario.input), Controls: json.RawMessage(scenario.controls)})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -252,8 +322,32 @@ func TestDictatorAccountConnectionUsesAuthenticatedGRPC(t *testing.T) {
 			}
 		})
 	}
+	if request := fixture.extractionRequest.Load(); request == nil || request.DurationSeconds != 0.5 {
+		t.Fatalf("extraction duration was not preserved: %v", request)
+	}
+	for index, controls := range []string{`{"model_size":"base","duration_seconds":2.75}`, `{"model_size":"base"}`} {
+		accepted, err := client.CreateMediaOperation(ctx, fmt.Sprintf("extraction-duration-%d", index), llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: "audio.voice.extract", Input: json.RawMessage(scenarios[4].input), Controls: json.RawMessage(controls)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		completed, err := client.WaitMediaOperation(ctx, accepted.OperationID, 10*time.Millisecond)
+		if err != nil || completed.State != "succeeded" {
+			t.Fatalf("extraction state=%s error=%v", completed.State, err)
+		}
+		expected := []float64{2.75, 20}[index]
+		if got := fixture.extractionRequest.Load().DurationSeconds; got != expected {
+			t.Fatalf("extraction duration=%g want=%g", got, expected)
+		}
+	}
+	for index, controls := range []string{`{"model_size":"base","duration_seconds":0}`, `{"model_size":"base","duration_seconds":-1}`, `{"model_size":"base","duration_seconds":null}`} {
+		submitted := fixture.submissions.Load()
+		_, err := client.CreateMediaOperation(ctx, fmt.Sprintf("invalid-extraction-duration-%d", index), llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: "audio.voice.extract", Input: json.RawMessage(scenarios[4].input), Controls: json.RawMessage(controls)})
+		if httpFailureStatus(err) != http.StatusBadRequest || fixture.submissions.Load() != submitted {
+			t.Fatalf("invalid duration error=%v", err)
+		}
+	}
 	for index, controls := range []string{`{"language":"en","model_size":"base","utterance_gap_seconds":0}`, `{"language":"en","model_size":"base"}`, `{"language":"en","model_size":"base","utterance_gap_seconds":0.5}`} {
-		accepted, err := client.CreateMediaOperation(ctx, fmt.Sprintf("diarization-presence-%d", index), llmproxyclient.MediaOperationInput{Provider: "dictator", Model: "dictator-speech-v1", Capability: "audio.diarize", Input: json.RawMessage(scenarios[0].input), Controls: json.RawMessage(controls)})
+		accepted, err := client.CreateMediaOperation(ctx, fmt.Sprintf("diarization-presence-%d", index), llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: "audio.diarize", Input: json.RawMessage(scenarios[0].input), Controls: json.RawMessage(controls)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -272,7 +366,7 @@ func TestDictatorAccountConnectionUsesAuthenticatedGRPC(t *testing.T) {
 			t.Errorf("diarization gap presence lost: controls=%s native=%v", controls, native.UtteranceGapSeconds)
 		}
 	}
-	discovered, err := client.GetMediaVoices(ctx, "dictator")
+	discovered, err := client.GetMediaVoices(ctx, provider)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +379,7 @@ func TestDictatorAccountConnectionUsesAuthenticatedGRPC(t *testing.T) {
 	if extractedID == "" {
 		t.Fatal("extracted voice absent")
 	}
-	generated, err := client.CreateMediaOperation(ctx, "extracted-synthesis", llmproxyclient.MediaOperationInput{Provider: "dictator", Model: "dictator-speech-v1", Capability: "audio.speech.generate", Input: json.RawMessage(`{"text":"Hello","voice_id":"` + extractedID + `"}`), Controls: json.RawMessage(`{"language":"en","text_format":"plain","sample_rate_hz":24000}`)})
+	generated, err := client.CreateMediaOperation(ctx, "extracted-synthesis", llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: "audio.speech.generate", Input: json.RawMessage(`{"text":"Hello","voice_id":"` + extractedID + `"}`), Controls: json.RawMessage(`{"language":"en","text_format":"plain","sample_rate_hz":24000}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,6 +440,12 @@ func TestDictatorAccountConnectionUsesAuthenticatedGRPC(t *testing.T) {
 	if fixture.submissions.Load() != submitted {
 		t.Fatalf("restart submitted %d jobs", fixture.submissions.Load()-submitted)
 	}
+	usage := waitForManagementValue(t, func() managementTenantUsageTestResponse {
+		return requestManagementTenantUsage(t, recoveredRouter, owner, account.Tenants[0].ID)
+	}, func(value managementTenantUsageTestResponse) bool { return value.Totals.Requests == len(dispatched) })
+	if usage.Totals.Requests != len(dispatched) {
+		t.Fatalf("restart usage=%d operations=%d", usage.Totals.Requests, len(dispatched))
+	}
 	client = recoveredClient
 
 	scenarios = append(scenarios, struct {
@@ -355,7 +455,7 @@ func TestDictatorAccountConnectionUsesAuthenticatedGRPC(t *testing.T) {
 	fixture.pending.Store(true)
 	for _, scenario := range scenarios {
 		t.Run("cancel-"+scenario.capability, func(t *testing.T) {
-			accepted, err := client.CreateMediaOperation(ctx, "cancel-"+scenario.capability, llmproxyclient.MediaOperationInput{Provider: "dictator", Model: "dictator-speech-v1", Capability: scenario.capability, Input: json.RawMessage(scenario.input), Controls: json.RawMessage(scenario.controls)})
+			accepted, err := client.CreateMediaOperation(ctx, "cancel-"+scenario.capability, llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: scenario.capability, Input: json.RawMessage(scenario.input), Controls: json.RawMessage(scenario.controls)})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -386,9 +486,9 @@ func TestDictatorAccountConnectionUsesAuthenticatedGRPC(t *testing.T) {
 	defer otherUpstream.Stop()
 	otherOwner := managementSessionCookie(t, "other-dictator-owner")
 	otherAccount := requestManagementAccount(t, router, otherOwner)
-	created := accountConnectionExchange(t, router, otherOwner, http.MethodPost, "/connections", map[string]any{"name": "Other speech server", "provider": "dictator", "fields": map[string]string{"grpc_address": otherListener.Addr().String(), "grpc_auth_token": "second-account-token", "grpc_tls": "false"}}, http.StatusCreated)
+	created := accountConnectionExchange(t, router, otherOwner, http.MethodPost, "/connections", map[string]any{"name": "Other speech server", "provider": provider, "fields": map[string]string{addressField: otherListener.Addr().String(), tokenField: "second-account-token", "grpc_tls": "false"}}, http.StatusCreated)
 	otherConnectionID := created["id"].(string)
-	accountConnectionExchange(t, router, otherOwner, http.MethodPut, "/tenants/"+otherAccount.Tenants[0].ID+"/connections/dictator", map[string]string{"connection_id": otherConnectionID}, http.StatusOK)
+	accountConnectionExchange(t, router, otherOwner, http.MethodPut, "/tenants/"+otherAccount.Tenants[0].ID+"/connections/"+provider, map[string]string{"connection_id": otherConnectionID}, http.StatusOK)
 	otherSecret := generateManagementTenantSecret(t, router, otherOwner, otherAccount.Tenants[0].ID)
 	otherConfig, err := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{BaseURL: server.URL, Secret: otherSecret})
 	if err != nil {
@@ -398,7 +498,7 @@ func TestDictatorAccountConnectionUsesAuthenticatedGRPC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	otherVoices, err := otherClient.GetMediaVoices(ctx, "dictator")
+	otherVoices, err := otherClient.GetMediaVoices(ctx, provider)
 	if err != nil || len(otherVoices) != 1 || otherVoices[0].VoiceID == voices[0].VoiceID {
 		t.Fatalf("other voices=%+v error=%v", otherVoices, err)
 	}
@@ -418,7 +518,7 @@ func TestDictatorAccountConnectionUsesAuthenticatedGRPC(t *testing.T) {
 	}{{codes.Unauthenticated, 422}, {codes.PermissionDenied, 422}, {codes.ResourceExhausted, 429}, {codes.DeadlineExceeded, 504}, {codes.Canceled, 504}, {codes.Unavailable, 503}} {
 		fixture.discoveryFailure.Store(int32(scenario.code))
 		rejected := httptest.NewRecorder()
-		router.ServeHTTP(rejected, authenticatedJSONRequest(http.MethodPost, "/api/management/connections", fmt.Sprintf(`{"name":"Rejected %d","provider":"dictator","fields":{"grpc_address":%q,"grpc_auth_token":%q,"grpc_tls":"false"}}`, scenario.code, listener.Addr().String(), fixture.token), owner))
+		router.ServeHTTP(rejected, authenticatedJSONRequest(http.MethodPost, "/api/management/connections", fmt.Sprintf(`{"name":"Rejected %d","provider":%q,"fields":{%q:%q,%q:%q,"grpc_tls":"false"}}`, scenario.code, provider, addressField, listener.Addr().String(), tokenField, fixture.token), owner))
 		if rejected.Code != scenario.status || strings.Contains(rejected.Body.String(), "private") {
 			t.Fatalf("verification status=%d body=%s", rejected.Code, rejected.Body.String())
 		}
@@ -430,7 +530,7 @@ func TestDictatorAccountConnectionUsesAuthenticatedGRPC(t *testing.T) {
 	}
 	fixture.invalidDiarization.Store(true)
 	fixture.stopped.Delete("private-diarization")
-	invalidResult, err := client.CreateMediaOperation(ctx, "invalid-native-diarization", llmproxyclient.MediaOperationInput{Provider: "dictator", Model: "dictator-speech-v1", Capability: "audio.diarize", Input: json.RawMessage(scenarios[0].input), Controls: json.RawMessage(scenarios[0].controls)})
+	invalidResult, err := client.CreateMediaOperation(ctx, "invalid-native-diarization", llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: "audio.diarize", Input: json.RawMessage(scenarios[0].input), Controls: json.RawMessage(scenarios[0].controls)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -443,7 +543,7 @@ func TestDictatorAccountConnectionUsesAuthenticatedGRPC(t *testing.T) {
 	fixture.stopped.Delete("private-synthesis")
 	for index, document := range []string{`{`, `null`, `[]`, `{"textSegments":[]}`, `{"textSegments":[{"content":"Hello","end":1}]}`, `{"textSegments":[{"content":"Hello","start":-1,"end":1}]}`, `{"textSegments":[{"content":"Hello","start":2,"end":1}]}`, `{"textSegments":[{"content":"Hello","start":0,"end":1,"file":"/private/path"}]}`} {
 		fixture.timelineOverride.Store(document)
-		invalid, err := client.CreateMediaOperation(ctx, fmt.Sprintf("invalid-timeline-%d", index), llmproxyclient.MediaOperationInput{Provider: "dictator", Model: "dictator-speech-v1", Capability: scenarios[3].capability, Input: json.RawMessage(scenarios[3].input), Controls: json.RawMessage(scenarios[3].controls)})
+		invalid, err := client.CreateMediaOperation(ctx, fmt.Sprintf("invalid-timeline-%d", index), llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: scenarios[3].capability, Input: json.RawMessage(scenarios[3].input), Controls: json.RawMessage(scenarios[3].controls)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -456,24 +556,24 @@ func TestDictatorAccountConnectionUsesAuthenticatedGRPC(t *testing.T) {
 	ctx, finishConnectionChecks := context.WithTimeout(context.Background(), 10*time.Second)
 	defer finishConnectionChecks()
 	for index, fields := range []map[string]string{
-		{"grpc_address": otherListener.Addr().String(), "grpc_auth_token": "second-account-token", "grpc_tls": "false"},
-		{"grpc_address": otherListener.Addr().String(), "grpc_auth_token": "rotated-account-token", "grpc_tls": "false"},
+		{addressField: otherListener.Addr().String(), tokenField: "second-account-token", "grpc_tls": "false"},
+		{addressField: otherListener.Addr().String(), tokenField: "rotated-account-token", "grpc_tls": "false"},
 	} {
-		otherFixture.rotatedToken.Store(fields["grpc_auth_token"])
+		otherFixture.rotatedToken.Store(fields[tokenField])
 		current := accountConnectionExchange(t, router, owner, http.MethodGet, "/connections/"+connection.ID, nil, http.StatusOK)
-		accountConnectionExchange(t, router, owner, http.MethodPut, "/connections/"+connection.ID, map[string]any{"name": "Changed speech server", "provider": "dictator", "version": current["version"], "fields": fields}, http.StatusOK)
+		accountConnectionExchange(t, router, owner, http.MethodPut, "/connections/"+connection.ID, map[string]any{"name": "Changed speech server", "provider": provider, "version": current["version"], "fields": fields}, http.StatusOK)
 		for _, staleID := range []string{voices[0].VoiceID, extractedID} {
-			stale, err := client.CreateMediaOperation(ctx, fmt.Sprintf("stale-voice-%d-%s", index, staleID), llmproxyclient.MediaOperationInput{Provider: "dictator", Model: "dictator-speech-v1", Capability: "audio.speech.generate", Input: json.RawMessage(`{"text":"Hello","voice_id":"` + staleID + `"}`), Controls: json.RawMessage(`{"language":"en","text_format":"plain","sample_rate_hz":24000}`)})
+			stale, err := client.CreateMediaOperation(ctx, fmt.Sprintf("stale-voice-%d-%s", index, staleID), llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: "audio.speech.generate", Input: json.RawMessage(`{"text":"Hello","voice_id":"` + staleID + `"}`), Controls: json.RawMessage(`{"language":"en","text_format":"plain","sample_rate_hz":24000}`)})
 			var failure *llmproxyclient.HTTPFailure
 			if !errors.As(err, &failure) || failure.StatusCode() != http.StatusBadRequest {
 				t.Errorf("obsolete voice was not rejected before discovery: operation=%+v error=%v", stale, err)
 			}
 		}
-		currentVoices, err := client.GetMediaVoices(ctx, "dictator")
+		currentVoices, err := client.GetMediaVoices(ctx, provider)
 		if err != nil || len(currentVoices) != 1 || currentVoices[0].VoiceID == voices[0].VoiceID {
 			t.Fatalf("voices after connection change: %+v error=%v", currentVoices, err)
 		}
-		currentInput := llmproxyclient.MediaOperationInput{Provider: "dictator", Model: "dictator-speech-v1", Capability: scenarios[3].capability, Input: json.RawMessage(`{"text":"<speak>Привет</speak>","voice_id":"` + currentVoices[0].VoiceID + `"}`), Controls: json.RawMessage(scenarios[3].controls)}
+		currentInput := llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: scenarios[3].capability, Input: json.RawMessage(`{"text":"<speak>Привет</speak>","voice_id":"` + currentVoices[0].VoiceID + `"}`), Controls: json.RawMessage(scenarios[3].controls)}
 		currentOperation, err := client.CreateMediaOperation(ctx, fmt.Sprintf("current-voice-%d", index), currentInput)
 		if err != nil {
 			t.Fatal(err)
@@ -485,7 +585,7 @@ func TestDictatorAccountConnectionUsesAuthenticatedGRPC(t *testing.T) {
 		voices = currentVoices
 	}
 
-	validSpeech := llmproxyclient.MediaOperationInput{Provider: "dictator", Model: "dictator-speech-v1", Capability: scenarios[3].capability, Input: json.RawMessage(`{"text":"<speak>Привет</speak>","voice_id":"` + voices[0].VoiceID + `"}`), Controls: json.RawMessage(scenarios[3].controls)}
+	validSpeech := llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: scenarios[3].capability, Input: json.RawMessage(`{"text":"<speak>Привет</speak>","voice_id":"` + voices[0].VoiceID + `"}`), Controls: json.RawMessage(scenarios[3].controls)}
 	admissionFailure.Store(true)
 	_, err = client.CreateMediaOperation(ctx, "lost-admission-assignment", validSpeech)
 	admissionFailure.Store(false)
@@ -566,6 +666,7 @@ func (fixture *dictatorGRPCFixture) GetSynthesizeSpeechJob(_ context.Context, re
 	return &dictator.GetSynthesizeSpeechJobResponse{JobId: request.JobId, State: dictator.SynthesisJobState(fixture.jobState(request.JobId)), AudioArtifact: &dictator.ArtifactRef{ArtifactId: "private-audio"}, TimelineArtifactId: "private-timeline"}, nil
 }
 func (fixture *dictatorGRPCFixture) SubmitExtractReferenceSampleJob(_ context.Context, request *dictator.ExtractReferenceSampleRequest) (*dictator.SubmitExtractReferenceSampleJobResponse, error) {
+	fixture.extractionRequest.Store(request)
 	if request.SourceArtifactId != "private-input" || request.ModelSize != "base" || request.LanguageCode != "en" {
 		return nil, status.Error(codes.InvalidArgument, "wrong extraction controls")
 	}
@@ -628,4 +729,39 @@ func (fixture *dictatorGRPCFixture) CancelExtractReferenceSampleJob(_ context.Co
 	fixture.cancelled.Add(1)
 	fixture.stopped.Store(request.JobId, true)
 	return &dictator.CancelExtractReferenceSampleJobResponse{JobId: request.JobId, State: dictator.ExtractReferenceSampleJobState_EXTRACT_REFERENCE_SAMPLE_JOB_STATE_CANCELED}, nil
+}
+
+func newDictatorAcceptanceUpstream(t *testing.T, provider string) (*dictatorGRPCFixture, net.Listener) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture := &dictatorGRPCFixture{token: provider + "-private-token", observed: make(chan string, 32)}
+	upstream := grpc.NewServer(grpc.UnaryInterceptor(func(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		values, _ := metadata.FromIncomingContext(ctx)
+		if strings.Join(values.Get("authorization"), "") != "Bearer "+fixture.token {
+			return nil, status.Error(codes.Unauthenticated, "invalid token")
+		}
+		if strings.Contains(info.FullMethod, "/Submit") {
+			fixture.submissions.Add(1)
+		}
+		return handler(ctx, request)
+	}))
+	dictator.RegisterVoiceServiceServer(upstream, fixture)
+	dictator.RegisterTranscriptionServiceServer(upstream, fixture)
+	dictator.RegisterArtifactServiceServer(upstream, fixture)
+	dictator.RegisterAlignmentServiceServer(upstream, fixture)
+	dictator.RegisterSubtitleServiceServer(upstream, fixture)
+	go func() { _ = upstream.Serve(listener) }()
+	t.Cleanup(upstream.Stop)
+	return fixture, listener
+}
+
+func TestDictatorGatewayAcceptanceHarness(t *testing.T) {
+	fixture, listener := newDictatorAcceptanceUpstream(t, proxy.ProviderNameDictator)
+	client := newDictatorGatewayAcceptanceClient(t, listener.Addr().String(), fixture.token, "false")
+	exerciseDictatorGatewayAcceptance(t, client, []byte("fixture audio"), dictatorAcceptanceText{
+		transcript: "A clear transcript.", transcription: "A clear transcript.", diarization: "Speaker one.", alignment: "A", subtitles: "A clear transcript.",
+	})
 }

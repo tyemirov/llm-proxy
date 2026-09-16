@@ -20,7 +20,7 @@ const (
 	dictatorTLSField     = "grpc_tls"
 )
 
-func openDictatorConnection(ctx context.Context, values map[string]string) (*grpc.ClientConn, context.Context, error) {
+func openDictatorConnection(ctx context.Context, values map[string]string, transportDefinition providerTransportDefinition) (*grpc.ClientConn, context.Context, error) {
 	var transport credentials.TransportCredentials
 	switch values[dictatorTLSField] {
 	case "true":
@@ -30,15 +30,15 @@ func openDictatorConnection(ctx context.Context, values map[string]string) (*grp
 	default:
 		return nil, ctx, fmt.Errorf("dictator TLS setting: %w", errManagedConnectionInvalid)
 	}
-	connection, err := grpc.NewClient(values[dictatorAddressField], grpc.WithTransportCredentials(transport))
+	connection, err := grpc.NewClient(values[transportDefinition.endpoint.SettingField], grpc.WithTransportCredentials(transport))
 	if err != nil {
 		return nil, ctx, fmt.Errorf("open Dictator connection: %w", err)
 	}
-	return connection, metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+values[dictatorTokenField]), nil
+	return connection, metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+values[transportDefinition.authentication.Field]), nil
 }
 
-func verifyDictatorConnection(ctx context.Context, values map[string]string) error {
-	connection, callContext, err := openDictatorConnection(ctx, values)
+func verifyDictatorConnection(ctx context.Context, values map[string]string, transportDefinition providerTransportDefinition) error {
+	connection, callContext, err := openDictatorConnection(ctx, values, transportDefinition)
 	if err != nil {
 		return errProviderKeyVerificationUnavailable
 	}

@@ -51,7 +51,7 @@ func (protocol *controlledDictatorProtocol) DiscoverVoices(context.Context) ([]M
 
 func TestDictatorAdapterValidatesEveryRetainedCapability(t *testing.T) {
 	fixture := newMediaOperationInternalFixture(t)
-	adapter, adapterError := newDictatorMediaOperationAdapter(&controlledDictatorProtocol{}, fixture.service.assets, fixture.service.store, time.Millisecond)
+	adapter, adapterError := newDictatorMediaOperationAdapter(ProviderNameDictator, ModelNameDictatorSpeechV1, &controlledDictatorProtocol{}, fixture.service.assets, fixture.service.store, time.Millisecond)
 	if adapterError != nil {
 		t.Fatal(adapterError)
 	}
@@ -112,7 +112,7 @@ func TestDictatorAdapterPersistsPrivateHandleAndRecovers(t *testing.T) {
 		submit:       dictatorProtocolObservation{State: dictatorProtocolStateRunning, Handle: handle},
 		observations: []dictatorProtocolObservation{{State: dictatorProtocolStateSucceeded, Handle: completedHandle, Outputs: []MediaOperationOutput{{MIMEType: "application/json", Data: []byte(`{"transcript":"hello"}`)}}}},
 	}
-	adapter, adapterError := newDictatorMediaOperationAdapter(protocol, fixture.service.assets, fixture.service.store, time.Millisecond)
+	adapter, adapterError := newDictatorMediaOperationAdapter(ProviderNameDictator, ModelNameDictatorSpeechV1, protocol, fixture.service.assets, fixture.service.store, time.Millisecond)
 	if adapterError != nil {
 		t.Fatal(adapterError)
 	}
@@ -186,11 +186,11 @@ func TestDictatorVoiceExtractionPublishesOnlyGatewayVoiceIdentity(t *testing.T) 
 func TestDictatorAdapterFailureAndPrivacyEdges(t *testing.T) {
 	fixture := newMediaOperationInternalFixture(t)
 	protocol := &controlledDictatorProtocol{voices: []MediaVoiceProviderRecord{{Provider: ProviderNameDictator}}}
-	adapter, adapterError := newDictatorMediaOperationAdapter(protocol, fixture.service.assets, fixture.service.store, time.Millisecond)
+	adapter, adapterError := newDictatorMediaOperationAdapter(ProviderNameDictator, ModelNameDictatorSpeechV1, protocol, fixture.service.assets, fixture.service.store, time.Millisecond)
 	if adapterError != nil {
 		t.Fatal(adapterError)
 	}
-	if _, invalidError := newDictatorMediaOperationAdapter(nil, fixture.service.assets, fixture.service.store, time.Millisecond); invalidError == nil {
+	if _, invalidError := newDictatorMediaOperationAdapter(ProviderNameDictator, ModelNameDictatorSpeechV1, nil, fixture.service.assets, fixture.service.store, time.Millisecond); invalidError == nil {
 		t.Fatal("nil protocol accepted")
 	}
 	if voices, voicesError := adapter.DiscoverMediaVoices(context.Background(), "tenant"); voicesError != nil || len(voices.Voices) != 1 {
@@ -307,7 +307,7 @@ func TestDictatorCanonicalRequestAndHandleEdges(t *testing.T) {
 		{Capability: llmproxycontract.MediaCapabilityAudioVoiceExtract, Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `","transcript":"hello","display_name":"Narrator","language":"en"}`), Controls: json.RawMessage(`{}`)},
 	}
 	fixture := newMediaOperationInternalFixture(t)
-	adapter, adapterError := newDictatorMediaOperationAdapter(&controlledDictatorProtocol{}, fixture.service.assets, fixture.service.store, time.Millisecond)
+	adapter, adapterError := newDictatorMediaOperationAdapter(ProviderNameDictator, ModelNameDictatorSpeechV1, &controlledDictatorProtocol{}, fixture.service.assets, fixture.service.store, time.Millisecond)
 	if adapterError != nil {
 		t.Fatal(adapterError)
 	}
@@ -339,7 +339,7 @@ func TestDictatorCanonicalRequestAndHandleEdges(t *testing.T) {
 
 func TestDictatorSpeechVoiceResolutionIsTenantAndProviderBound(t *testing.T) {
 	fixture := newMediaOperationInternalFixture(t)
-	adapter, adapterError := newDictatorMediaOperationAdapter(&controlledDictatorProtocol{}, fixture.service.assets, fixture.service.store, time.Millisecond)
+	adapter, adapterError := newDictatorMediaOperationAdapter(ProviderNameDictator, ModelNameDictatorSpeechV1, &controlledDictatorProtocol{}, fixture.service.assets, fixture.service.store, time.Millisecond)
 	if adapterError != nil {
 		t.Fatal(adapterError)
 	}
@@ -350,7 +350,7 @@ func TestDictatorSpeechVoiceResolutionIsTenantAndProviderBound(t *testing.T) {
 		t.Fatal("missing voice accepted")
 	}
 	for _, provider := range []string{ProviderNameXAI, ProviderNameDictator} {
-		voice := MediaVoiceProviderRecord{Provider: provider, Model: "model", Mode: MediaVoiceModePreset, Language: "en", DisplayName: provider, SampleRates: []int{24000}, DefaultSampleRate: 24000, ProviderVoiceReference: "native-" + provider}
+		voice := MediaVoiceProviderRecord{Provider: provider, Model: ModelNameDictatorSpeechV1, Mode: MediaVoiceModePreset, Language: "en", DisplayName: provider, SampleRates: []int{24000}, DefaultSampleRate: 24000, ProviderVoiceReference: "native-" + provider}
 		if persistError := fixture.service.store.persistMediaVoices(context.Background(), fixture.tenant.identifier.string(), provider, []MediaVoiceProviderRecord{voice}); persistError != nil {
 			t.Fatal(persistError)
 		}

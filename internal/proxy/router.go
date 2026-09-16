@@ -144,7 +144,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	)
 	managementService := newManagementService(configuration.Management, configuration.managementSessionValidator, managedTenants, providers, keyVerifier, structuredLogger)
 	managementService.registerRoutes(router)
-	if err := registerMCPRoutes(router, configuration, managementService, upstreamProviders, assetStore); err != nil {
+	if err := registerMCPRoutes(router, configuration, managementService, upstreamProviders, assetStore, mediaOperations); err != nil {
 		return nil, err
 	}
 	router.GET(llmproxycontract.TenantIdentityPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, tenantIdentityHandler()))
