@@ -296,6 +296,46 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [ ] [I269] (P2) Isolate temporary Python repositories from retained uv Git caches.
+  Observed: Three selected-version installation tests returned `0.0.post1.dev2` versions during I268 validation.
+  The cached `v1.5.0` tag pointed to commit `be24384`. The temporary source repository had that tag on commit `ef298f1`.
+  Git could not describe the installed commit from the cached tags. All five package tests passed on an unchanged rerun.
+  Goal: Give each temporary source repository an independent cache identity.
+  Deliverables: `tests/python_package_contract_test.py`.
+  Validation: Reproduce installation with retained Git cache data. Run `make python-package-install-test` and final `make ci`.
+  Evidence: `/tmp/llm-proxy-i268-ci.log` and `/tmp/llm-proxy-i268-package-recheck.log`.
+
+- [x] [I268] (P1) Give each Dictator operation wait its own timeout.
+  Observed: Hosted run `35159126469` failed in `TestDictatorAccountConnectionUsesAuthenticatedGRPC` with `context deadline exceeded`.
+  The final diarization check used the same ten-second context as earlier speech, recovery, cancellation, and credential checks.
+  The frontend job passed. The aggregate job failed because the backend job failed.
+  Goal: Prevent earlier test scenarios from consuming the timeout of a later operation wait.
+  Requirements: Keep each operation wait and HTTP request bounded. Keep all public result assertions.
+  Deliverables: `internal/proxy/dictator_grpc_e2e_test.go`.
+  Validation: Run `make test-dictator`. Run final `make ci`.
+  Change: Each operation wait now has a ten-second context from `t.Context()`. Each HTTP client also has a ten-second request timeout.
+  Cancellation scenarios have separate bounded contexts. The shared scenario deadlines were removed.
+  Focused result: `make test-dictator` passed before and after the change.
+  `GOMAXPROCS=1 GOFLAGS='-race -v' make test-dictator` passed. The two complete speech flows took 10.65 and 11.17 seconds.
+  Application and event contracts did not change.
+  Initial CI result: Go integration passed. Three Python package version assertions failed. I269 records the retained-cache mismatch.
+  The unchanged package target then passed all five tests.
+  Resolution: Each operation wait uses a new ten-second context. Each HTTP client uses a ten-second request timeout.
+  Final result: `make test-dictator` passed in 21 seconds. `make ci` passed all 13 gates in 331 seconds with 100.0 percent Go statement coverage.
+
+- [x] [I267] (P1) Wait for dashboard startup before the session recovery test.
+  Observed: The shared UI test receives one more GET during application startup. This failure stops `make ci`.
+  Goal: Start recovery checks after the dashboard completes its initial requests.
+  Requirements: Keep the recovery request sequence assertion. Make sure that the requests create only one tenant.
+  Deliverables: `tests/blackbox/shared-ui-migration.spec.js`.
+  Validation: Run the four browser scenarios ten times through `make test-shared-ui`. Run final `make ci`.
+  Initial result: The supplied CI failure expected `GET, GET, POST, POST, GET` but received `GET, GET, GET, POST, POST, GET`.
+  The saved trace shows an account request during dashboard startup after the recovery test starts. All 40 initial rerun scenarios passed.
+  Resolution: The test waits for the authenticated application, selected Default tenant, and dashboard `aria-busy="false"` before recovery checks.
+  Focused result: All 40 scenarios passed after the change. Application and event contracts did not change.
+  Final result: `make ci` passed all 13 gates in 329 seconds with 100.0 percent Go statement coverage.
+  All 121 frontend browser tests and seven authentication scenarios passed. The CI log is `/tmp/llm-proxy-i267-ci.log`.
+
 - [x] [I265] (P2) Select account usage from the Usage overview title.
   Observed: The tenants column carries an `Account usage` button while the top card already presents a `Usage overview` title for the same account scope.
   Resolution (2026-09-16): Superseded by I266 before implementation. The dashboard keeps an explicit tenant selection instead of an account view, so the title button is not built. The tenants-column account button is removed under I266.
