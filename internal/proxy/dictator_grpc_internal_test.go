@@ -34,7 +34,7 @@ func dictatorProtocolBoundary(t *testing.T, unary func(string, any, any) error, 
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = connection.Close() })
-	return &dictatorGRPCProtocol{provider: ProviderNameDictator, model: ModelNameDictatorSpeechV1, connection: connection, token: "token", binding: "account-a", maxAssetBytes: 32}
+	return &dictatorGRPCProtocol{provider: ProviderNameDictator, model: ModelNameDictatorWhisperBase, connection: connection, token: "token", binding: "account-a", maxAssetBytes: 32}
 }
 
 type dictatorBoundaryStream struct {
@@ -249,7 +249,7 @@ func TestDictatorConnectionAuthorityAtExecutionBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := &managedTenantStore{routingDefaults: fixture.service.providers, providerKeyCipher: internalManagedProviderKeyCipher()}
-	adapter := &accountDictatorAdapter{provider: ProviderNameDictator, model: ModelNameDictatorSpeechV1, transport: fixture.service.providers.definitions[providerID(ProviderNameDictator)].transports["speech"], tenants: store, store: fixture.service.store, assets: fixture.service.assets}
+	adapter := &accountDictatorAdapter{provider: ProviderNameDictator, model: ModelNameDictatorWhisperBase, transport: fixture.service.providers.definitions[providerID(ProviderNameDictator)].transports["speech"], tenants: store, store: fixture.service.store, assets: fixture.service.assets}
 	request := MediaOperationExecutionRequest{TenantID: fixture.tenant.identifier.string(), CredentialReference: "connection-internal:v3", ProviderHandle: "private-handle"}
 	if result := adapter.Execute(context.Background(), request); result.State != MediaOperationStateFailed {
 		t.Fatalf("dispatched without assignment: %+v", result)

@@ -233,15 +233,15 @@ func TestOpenAPIContractEnforcesExactDictatorMediaOperations(t *testing.T) {
 		body      string
 		wantValid bool
 	}{
-		{name: "transcription", body: `{"capability":"audio.transcribe","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `"},"controls":{"detect_language":true}}`, wantValid: true},
-		{name: "diarization", body: `{"capability":"audio.diarize","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `"},"controls":{"language":"en-US","model_size":"large","utterance_gap_seconds":0.4}}`, wantValid: true},
-		{name: "alignment", body: `{"capability":"audio.align","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `","transcript":"Aligned words."},"controls":{"language":"en-US","remove_punctuation":true}}`, wantValid: true},
-		{name: "subtitles", body: `{"capability":"subtitles.create","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `","transcript":"Subtitle words."},"controls":{"language":"en-US","granularity":"sentence","group_size":2}}`, wantValid: true},
-		{name: "speech", body: `{"capability":"audio.speech.generate","provider":"dictator","model":"dictator-speech-v1","input":{"text":"Speak this.","voice_id":"` + voiceID + `"},"controls":{"language":"en-US","text_format":"plain","sample_rate_hz":48000,"include_timeline":true,"max_duration_seconds":30}}`, wantValid: true},
-		{name: "voice extraction", body: `{"capability":"audio.voice.extract","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `","transcript":"Reference words.","display_name":"Narrator","language":"en-US"},"controls":{"model_size":"large"}}`, wantValid: true},
-		{name: "missing language selector", body: `{"capability":"audio.transcribe","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `"},"controls":{}}`},
-		{name: "irrelevant speech control", body: `{"capability":"audio.speech.generate","provider":"dictator","model":"dictator-speech-v1","input":{"text":"Speak this.","voice_id":"` + voiceID + `"},"controls":{"language":"en-US","text_format":"plain","sample_rate_hz":48000,"model_size":"large"}}`},
-		{name: "non Dictator provider", body: `{"capability":"audio.align","provider":"xai","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `","transcript":"Aligned words."},"controls":{"language":"en-US"}}`},
+		{name: "transcription", body: `{"capability":"audio.transcribe","provider":"dictator","model":"whisper-base","input":{"audio_asset_id":"` + assetID + `"},"controls":{"detect_language":true}}`, wantValid: true},
+		{name: "diarization", body: `{"capability":"audio.diarize","provider":"dictator","model":"whisper-large-v3","input":{"audio_asset_id":"` + assetID + `"},"controls":{"language":"en-US","model_size":"large-v3","utterance_gap_seconds":0.4}}`, wantValid: true},
+		{name: "alignment", body: `{"capability":"audio.align","provider":"dictator","model":"whisper-base","input":{"audio_asset_id":"` + assetID + `","transcript":"Aligned words."},"controls":{"language":"en-US","remove_punctuation":true}}`, wantValid: true},
+		{name: "subtitles", body: `{"capability":"subtitles.create","provider":"dictator","model":"whisper-base","input":{"audio_asset_id":"` + assetID + `","transcript":"Subtitle words."},"controls":{"language":"en-US","granularity":"sentence","group_size":2}}`, wantValid: true},
+		{name: "speech", body: `{"capability":"audio.speech.generate","provider":"dictator","model":"qwen3-tts","input":{"text":"Speak this.","voice_id":"` + voiceID + `"},"controls":{"language":"en-US","text_format":"plain","sample_rate_hz":48000,"include_timeline":true,"max_duration_seconds":30}}`, wantValid: true},
+		{name: "voice extraction", body: `{"capability":"audio.voice.extract","provider":"dictator","model":"whisper-large-v3","input":{"audio_asset_id":"` + assetID + `","transcript":"Reference words.","display_name":"Narrator","language":"en-US"},"controls":{"model_size":"large-v3"}}`, wantValid: true},
+		{name: "missing language selector", body: `{"capability":"audio.transcribe","provider":"dictator","model":"whisper-base","input":{"audio_asset_id":"` + assetID + `"},"controls":{}}`},
+		{name: "irrelevant speech control", body: `{"capability":"audio.speech.generate","provider":"dictator","model":"qwen3-tts","input":{"text":"Speak this.","voice_id":"` + voiceID + `"},"controls":{"language":"en-US","text_format":"plain","sample_rate_hz":48000,"model_size":"large"}}`},
+		{name: "non Dictator provider", body: `{"capability":"audio.align","provider":"xai","model":"whisper-base","input":{"audio_asset_id":"` + assetID + `","transcript":"Aligned words."},"controls":{"language":"en-US"}}`},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {

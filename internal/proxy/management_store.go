@@ -279,12 +279,16 @@ type managedTenantRecord struct {
 	Name                     string  `gorm:"not null"`
 	NameKey                  string  `gorm:"not null;uniqueIndex:idx_managed_tenant_owner_name,priority:2"`
 	SecretDigest             *string `gorm:"uniqueIndex"`
-	DefaultProvider          string
-	DefaultModel             string
-	DefaultDictationProvider string
-	DefaultDictationModel    string
-	DefaultSystemPrompt      string
-	DefaultReasoningEffort   string
+	DefaultProvider             string
+	DefaultModel                string
+	DefaultDictationProvider    string
+	DefaultDictationModel       string
+	DefaultTranscriptionProvider string
+	DefaultTranscriptionModel    string
+	DefaultSpeechProvider       string
+	DefaultSpeechModel          string
+	DefaultSystemPrompt         string
+	DefaultReasoningEffort      string
 	// ProviderAPIKeys is populated only by bounded predecessor-schema migrations.
 	ProviderAPIKeys       []managedProviderAPIKeyRecord     `gorm:"-"`
 	ConnectionAssignments []managedTenantConnectionRecord   `gorm:"foreignKey:TenantID;references:TenantID;constraint:OnDelete:CASCADE"`
@@ -1781,8 +1785,8 @@ func canonicalManagedTenantDefaults(providers *providerRegistry, defaults Tenant
 		defaults.Model = canonicalModel
 		changed = true
 	}
-	if canonicalModel, modelChanged := providers.modelMigrationTarget(managedModelIdentitySchemaVersion, defaults.DictationProvider, ModelOperationDictation, defaults.DictationModel); modelChanged {
-		defaults.DictationModel = canonicalModel
+	if canonicalModel, modelChanged := providers.modelMigrationTarget(managedModelIdentitySchemaVersion, defaults.TranscriptionProvider, ModelOperationDictation, defaults.TranscriptionModel); modelChanged {
+		defaults.TranscriptionModel = canonicalModel
 		changed = true
 	}
 	return defaults, changed
@@ -1796,21 +1800,21 @@ func canonicalManagedPredecessorDefaults(providers *providerRegistry, defaults T
 }
 
 func canonicalManagedPendingModelDefaults(providers *providerRegistry, defaults TenantDefaults) (TenantDefaults, bool) {
-	dictationChanged := false
+	transcriptionChanged := false
 	for _, schemaVersion := range managedModelSelectionSchemaVersions {
 		for _, migration := range providers.modelMigrations[schemaVersion] {
 			if migration.operation == ModelOperationText && migration.provider == defaults.Provider && migration.source == defaults.Model && migration.targetReasoningEffort != "" {
 				defaults.ReasoningEffort = migration.targetReasoningEffort
 			}
-			if migration.operation == ModelOperationDictation && migration.provider == defaults.DictationProvider && migration.source == defaults.DictationModel {
-				defaults.DictationModel = migration.target
-				dictationChanged = true
+			if migration.operation == ModelOperationDictation && migration.provider == defaults.TranscriptionProvider && migration.source == defaults.TranscriptionModel {
+				defaults.TranscriptionModel = migration.target
+				transcriptionChanged = true
 			}
 		}
 	}
 	currentModel, changed := canonicalManagedPendingTextModel(providers, defaults.Provider, defaults.Model)
 	defaults.Model = currentModel
-	return defaults, changed || dictationChanged
+	return defaults, changed || transcriptionChanged
 }
 
 func managedModelIdentityHistoricalUsage(database *gorm.DB, providers *providerRegistry) ([]managedUsageEventRecord, error) {
@@ -1956,8 +1960,8 @@ func canonicalManagedXAIProviderDefaults(defaults TenantDefaults) (TenantDefault
 		defaults.Provider = ProviderNameXAI
 		changed = true
 	}
-	if defaults.DictationProvider == retiredGrokProviderIdentifier {
-		defaults.DictationProvider = ProviderNameXAI
+	if defaults.TranscriptionProvider == retiredGrokProviderIdentifier {
+		defaults.TranscriptionProvider = ProviderNameXAI
 		changed = true
 	}
 	return defaults, changed
@@ -2267,8 +2271,8 @@ func canonicalManagedZAIProviderDefaults(defaults TenantDefaults) (TenantDefault
 		defaults.Provider = ProviderNameZAI
 		changed = true
 	}
-	if defaults.DictationProvider == retiredZhipuProviderIdentifier {
-		defaults.DictationProvider = ProviderNameZAI
+	if defaults.TranscriptionProvider == retiredZhipuProviderIdentifier {
+		defaults.TranscriptionProvider = ProviderNameZAI
 		changed = true
 	}
 	return defaults, changed
@@ -2456,15 +2460,19 @@ type legacyManagedTenantRecord struct {
 	UserDisplayName          string
 	UserAvatarURL            string
 	TenantID                 string `gorm:"uniqueIndex"`
-	SecretDigest             string `gorm:"index"`
-	DefaultProvider          string
-	DefaultModel             string
-	DefaultDictationProvider string
-	DefaultDictationModel    string
-	DefaultSystemPrompt      string
-	DefaultReasoningEffort   string
-	CreatedAt                time.Time
-	UpdatedAt                time.Time
+	SecretDigest               string `gorm:"index"`
+	DefaultProvider            string
+	DefaultModel               string
+	DefaultDictationProvider   string
+	DefaultDictationModel      string
+	DefaultTranscriptionProvider string
+	DefaultTranscriptionModel    string
+	DefaultSpeechProvider      string
+	DefaultSpeechModel         string
+	DefaultSystemPrompt        string
+	DefaultReasoningEffort     string
+	CreatedAt                  time.Time
+	UpdatedAt                  time.Time
 }
 
 type legacyManagedProviderAPIKeyRecord struct {

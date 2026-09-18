@@ -38,7 +38,7 @@ func TestMCPDictatorWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := fixture.client(t, "speech-owner")
-	arguments := map[string]any{"tenant_id": tenantID, "idempotency_key": "mcp-extraction", "capability": "audio.voice.extract", "provider": "dictator", "model": "dictator-speech-v1", "input": map[string]any{"audio_asset_id": asset.AssetID, "transcript": "A clear transcript.", "display_name": "MCP voice", "language": "en"}, "controls": map[string]any{"model_size": "base", "duration_seconds": 0.5}}
+	arguments := map[string]any{"tenant_id": tenantID, "idempotency_key": "mcp-extraction", "capability": "audio.voice.extract", "provider": "dictator", "model": "whisper-base", "input": map[string]any{"audio_asset_id": asset.AssetID, "transcript": "A clear transcript.", "display_name": "MCP voice", "language": "en"}, "controls": map[string]any{"model_size": "base", "duration_seconds": 0.5}}
 	call := func(name string, args any) llmproxyclient.MediaOperation {
 		t.Helper()
 		result := mcpCall(t, client, name, args)
@@ -92,15 +92,16 @@ func TestMCPDictatorWorkflow(t *testing.T) {
 	}
 	for index, scenario := range []struct {
 		capability      string
+		model           string
 		input, controls map[string]any
 	}{
-		{"audio.transcribe", map[string]any{"audio_asset_id": asset.AssetID}, map[string]any{"language": "en"}},
-		{"audio.diarize", map[string]any{"audio_asset_id": asset.AssetID}, map[string]any{"language": "en", "model_size": "base", "utterance_gap_seconds": 0.0}},
-		{"audio.align", map[string]any{"audio_asset_id": asset.AssetID, "transcript": "A clear transcript."}, map[string]any{"language": "en", "remove_punctuation": true}},
-		{"subtitles.create", map[string]any{"audio_asset_id": asset.AssetID, "transcript": "A clear transcript."}, map[string]any{"language": "en", "granularity": "sentence", "group_size": 2}},
-		{"audio.speech.generate", map[string]any{"text": "Hello", "voice_id": voices[0].VoiceID}, map[string]any{"language": voices[0].Language, "text_format": "plain", "sample_rate_hz": 48000, "include_timeline": true}},
+		{"audio.transcribe", "whisper-base", map[string]any{"audio_asset_id": asset.AssetID}, map[string]any{"language": "en"}},
+		{"audio.diarize", "whisper-base", map[string]any{"audio_asset_id": asset.AssetID}, map[string]any{"language": "en", "utterance_gap_seconds": 0.0}},
+		{"audio.align", "whisper-base", map[string]any{"audio_asset_id": asset.AssetID, "transcript": "A clear transcript."}, map[string]any{"language": "en", "remove_punctuation": true}},
+		{"subtitles.create", "whisper-base", map[string]any{"audio_asset_id": asset.AssetID, "transcript": "A clear transcript."}, map[string]any{"language": "en", "granularity": "sentence", "group_size": 2}},
+		{"audio.speech.generate", "silero-ru", map[string]any{"text": "Hello", "voice_id": voices[0].VoiceID}, map[string]any{"language": voices[0].Language, "text_format": "plain", "sample_rate_hz": 48000, "include_timeline": true}},
 	} {
-		operation := call("llm_proxy.create_media_operation", map[string]any{"tenant_id": tenantID, "idempotency_key": fmt.Sprintf("speech-%d", index), "capability": scenario.capability, "provider": "dictator", "model": "dictator-speech-v1", "input": scenario.input, "controls": scenario.controls})
+		operation := call("llm_proxy.create_media_operation", map[string]any{"tenant_id": tenantID, "idempotency_key": fmt.Sprintf("speech-%d", index), "capability": scenario.capability, "provider": "dictator", "model": scenario.model, "input": scenario.input, "controls": scenario.controls})
 		completed, err := httpClient.WaitMediaOperation(t.Context(), operation.OperationID, 10*time.Millisecond)
 		if err != nil || completed.State != "succeeded" {
 			t.Fatalf("%s: %+v error=%v", scenario.capability, completed, err)
@@ -147,7 +148,7 @@ func TestMCPDictatorWorkflow(t *testing.T) {
 		}
 		return output
 	}
-	request, _ := json.Marshal(llmproxyclient.MediaOperationInput{Capability: "audio.voice.extract", Provider: "dictator", Model: "dictator-speech-v1", Input: json.RawMessage(fmt.Sprintf(`{"audio_asset_id":%q,"transcript":"A clear transcript.","display_name":"CLI voice","language":"en"}`, asset.AssetID)), Controls: json.RawMessage(`{"model_size":"base","duration_seconds":0.5}`)})
+	request, _ := json.Marshal(llmproxyclient.MediaOperationInput{Capability: "audio.voice.extract", Provider: "dictator", Model: "whisper-base", Input: json.RawMessage(fmt.Sprintf(`{"audio_asset_id":%q,"transcript":"A clear transcript.","display_name":"CLI voice","language":"en"}`, asset.AssetID)), Controls: json.RawMessage(`{"model_size":"base","duration_seconds":0.5}`)})
 	cliAccepted := cliCall(string(request), "submit", "--idempotency-key", "cli-speech")
 	var cliOperation llmproxyclient.MediaOperation
 	if err := json.Unmarshal(cliAccepted, &cliOperation); err != nil {

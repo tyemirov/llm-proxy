@@ -558,6 +558,61 @@ func TestManagementConnectionPersistsUpdatedCredential(t *testing.T) {
 	}
 }
 
+func TestManagementTranscriptionSpeechDefaults(t *testing.T) {
+	router := newManagementRouter(t, proxy.Configuration{})
+	sessionCookie := managementSessionCookie(t, "tauth-transcription-speech-user")
+	tenantPath := managementDefaultTenantTestPath(t, router, sessionCookie, "")
+	tenantID := strings.TrimPrefix(tenantPath, "/api/management/tenants/")
+	keyResponse := putManagementProviderKey(t, router, sessionCookie, tenantID, proxy.ProviderNameOpenAI, testManagementOpenAIKey, proxy.ModelNameGPT41, "", context.Background())
+	if keyResponse.Code != http.StatusOK {
+		t.Fatalf("save openai key status=%d body=%s", keyResponse.Code, keyResponse.Body.String())
+	}
+	defaultsBody := `{"provider":"openai","model":"gpt-4.1","transcription_provider":"openai","transcription_model":"gpt-transcribe","speech_provider":"","speech_model":"","system_prompt":"","reasoning_effort":""}`
+	saveResponse := httptest.NewRecorder()
+	router.ServeHTTP(saveResponse, authenticatedJSONRequest(http.MethodPut, tenantPath+"/defaults", defaultsBody, sessionCookie))
+	if saveResponse.Code != http.StatusOK {
+		t.Fatalf("save transcription defaults status=%d body=%s", saveResponse.Code, saveResponse.Body.String())
+	}
+	for _, expected := range []string{`"transcription_provider":"openai"`, `"transcription_model":"gpt-transcribe"`, `"speech_provider":""`, `"speech_model":"""`} {
+		if !strings.Contains(saveResponse.Body.String(), expected) {
+			t.Fatalf("save transcription defaults body missing %s body=%s", expected, saveResponse.Body.String())
+		}
+	}
+	profileResponse := httptest.NewRecorder()
+	router.ServeHTTP(profileResponse, authenticatedJSONRequest(http.MethodGet, tenantPath, "", sessionCookie))
+	if profileResponse.Code != http.StatusOK {
+		t.Fatalf("tenant profile status=%d body=%s", profileResponse.Code, profileResponse.Body.String())
+	}
+	var profile struct {
+		Providers []struct {
+			ID                 string   `json:"id"`
+			TranscriptionModels []string `json:"transcription_models"`
+			SpeechModels       []string `json:"speech_models"`
+		} `json:"providers"`
+	}
+	if jsonError := json.Unmarshal(profileResponse.Body.Bytes(), &profile); jsonError != nil {
+		t.Fatalf("decode tenant profile: %v", jsonError)
+	}
+	providerModels := map[string]struct {
+		transcription []string
+		speech        []string
+	}{}
+	for _, provider := range profile.Providers {
+		providerModels[provider.ID] = struct {
+			transcription []string
+			speech        []string
+		}{transcription: provider.TranscriptionModels, speech: provider.SpeechModels}
+	}
+	openai, found := providerModels[proxy.ProviderNameOpenAI]
+	if !found || !slices.Contains(openai.transcription, "gpt-transcribe") {
+		t.Fatalf("openai transcription models missing gpt-transcribe body=%s", profileResponse.Body.String())
+	}
+	dictator, found := providerModels[proxy.ProviderNameDictator]
+	if !found || !slices.Contains(dictator.transcription, "whisper-base") || !slices.Contains(dictator.speech, "qwen3-tts") || !slices.Contains(dictator.speech, "silero-ru") {
+		t.Fatalf("dictator domain models missing body=%s", profileResponse.Body.String())
+	}
+}
+
 func TestManagementRoutingDefaultsRequireCompleteCanonicalPairs(t *testing.T) {
 	router := newManagementRouter(t, proxy.Configuration{})
 	sessionCookie := managementSessionCookie(t, "tauth-routing-defaults-user")

@@ -68,7 +68,7 @@ func (adapter *accountDictatorAdapter) Validate(ctx context.Context, request Med
 	_ = json.Unmarshal(validated.Input, &input)
 	_ = json.Unmarshal(validated.Controls, &controls)
 	voice, err := adapter.store.providerMediaVoice(ctx, request.TenantID, input.VoiceID)
-	if err != nil || voice.Provider != request.Provider || voice.Model != request.Model || voice.Authority != protocol.binding {
+	if err != nil || voice.Provider != request.Provider || voice.Authority != protocol.binding {
 		return MediaOperationValidatedRequest{}, errMediaOperationInvalid
 	}
 	if _, err := protocol.synthesisRequest(input, controls, &voice); err != nil {

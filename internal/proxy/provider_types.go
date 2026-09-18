@@ -36,8 +36,20 @@ const (
 )
 
 const (
-	// ModelNameDictatorSpeechV1 identifies the Dictator speech v1 capability surface.
-	ModelNameDictatorSpeechV1 = "dictator-speech-v1"
+	// ModelNameDictatorWhisperTiny identifies the Dictator Whisper tiny transcription model.
+	ModelNameDictatorWhisperTiny = "whisper-tiny"
+	// ModelNameDictatorWhisperBase identifies the Dictator Whisper base transcription model.
+	ModelNameDictatorWhisperBase = "whisper-base"
+	// ModelNameDictatorWhisperSmall identifies the Dictator Whisper small transcription model.
+	ModelNameDictatorWhisperSmall = "whisper-small"
+	// ModelNameDictatorWhisperMedium identifies the Dictator Whisper medium transcription model.
+	ModelNameDictatorWhisperMedium = "whisper-medium"
+	// ModelNameDictatorWhisperLargeV3 identifies the Dictator Whisper large-v3 transcription model.
+	ModelNameDictatorWhisperLargeV3 = "whisper-large-v3"
+	// ModelNameDictatorQwen3TTS identifies the Dictator Qwen3 speech synthesis model.
+	ModelNameDictatorQwen3TTS = "qwen3-tts"
+	// ModelNameDictatorSileroRU identifies the Dictator Silero Russian speech synthesis model.
+	ModelNameDictatorSileroRU = "silero-ru"
 )
 
 const (
@@ -361,11 +373,14 @@ type providerDefinition struct {
 	transcriptionsURL         string
 	defaultTextModel          modelID
 	defaultTranscriptionModel modelID
+	defaultSpeechModel        modelID
 	transcriptionModelField   string
 	textModels                map[string]textModelDefinition
 	transcriptionModels       map[string]dictationModelDefinition
+	speechModels              map[string]dictationModelDefinition
 	mediaModels               map[string]struct{}
 	supportsDictation         bool
+	supportsSpeech            bool
 	chatTokenLimitParameter   chatCompletionTokenLimitParameter
 }
 
