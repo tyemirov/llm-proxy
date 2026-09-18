@@ -281,10 +281,18 @@ families:
       publisher: xai
       label: xAI STT
       weight_access: proprietary
-    - id: dictator-speech
+    - id: whisper
+      publisher: openai
+      label: Whisper
+      weight_access: open_weights
+    - id: qwen3
       publisher: mprlab
-      label: Dictator Speech
-      weight_access: proprietary
+      label: Qwen3 TTS
+      weight_access: open_weights
+    - id: silero
+      publisher: mprlab
+      label: Silero
+      weight_access: open_weights
 models:
     - id: gpt-6-astra
       enabled: true
@@ -982,18 +990,81 @@ models:
       operations:
         - dictation
       media_inputs: []
-    - id: dictator-speech-v1
+    - id: whisper-tiny
       enabled: true
-      publisher: mprlab
-      family: dictator-speech
-      version: v1
+      publisher: openai
+      family: whisper
+      version: whisper-tiny
       operations:
         - audio_transcription
         - audio_diarization
         - audio_alignment
         - subtitle_creation
-        - speech_generation
         - voice_extraction
+      media_inputs: []
+    - id: whisper-base
+      enabled: true
+      publisher: openai
+      family: whisper
+      version: whisper-base
+      operations:
+        - audio_transcription
+        - audio_diarization
+        - audio_alignment
+        - subtitle_creation
+        - voice_extraction
+      media_inputs: []
+    - id: whisper-small
+      enabled: true
+      publisher: openai
+      family: whisper
+      version: whisper-small
+      operations:
+        - audio_transcription
+        - audio_diarization
+        - audio_alignment
+        - subtitle_creation
+        - voice_extraction
+      media_inputs: []
+    - id: whisper-medium
+      enabled: true
+      publisher: openai
+      family: whisper
+      version: whisper-medium
+      operations:
+        - audio_transcription
+        - audio_diarization
+        - audio_alignment
+        - subtitle_creation
+        - voice_extraction
+      media_inputs: []
+    - id: whisper-large-v3
+      enabled: true
+      publisher: openai
+      family: whisper
+      version: whisper-large-v3
+      operations:
+        - audio_transcription
+        - audio_diarization
+        - audio_alignment
+        - subtitle_creation
+        - voice_extraction
+      media_inputs: []
+    - id: qwen3-tts
+      enabled: true
+      publisher: mprlab
+      family: qwen3
+      version: qwen3-tts
+      operations:
+        - speech_generation
+      media_inputs: []
+    - id: silero-ru
+      enabled: true
+      publisher: mprlab
+      family: silero
+      version: silero-ru
+      operations:
+        - speech_generation
       media_inputs: []
 providers:
     - id: openai
@@ -5656,23 +5727,58 @@ providers:
             execution:
               id: asynchronous_job
       offerings:
-        - model: dictator-speech-v1
+        - model: whisper-tiny
           created: 1788998400
-          upstream_model: dictator-speech-v1
+          upstream_model: whisper-tiny
           transport: speech
           operations:
             - audio_transcription
             - audio_diarization
             - audio_alignment
             - subtitle_creation
-            - speech_generation
+            - voice_extraction
+          default_operations: []
+          prices:
+            - operation: audio_transcription
+              available: false
+              unavailable_reason: Dictator server prices are not available from the provider contract.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: audio_diarization
+              available: false
+              unavailable_reason: Dictator server prices are not available from the provider contract.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: audio_alignment
+              available: false
+              unavailable_reason: Dictator server prices are not available from the provider contract.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: subtitle_creation
+              available: false
+              unavailable_reason: Dictator server prices are not available from the provider contract.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: voice_extraction
+              available: false
+              unavailable_reason: Dictator server prices are not available from the provider contract.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+        - model: whisper-base
+          created: 1788998400
+          upstream_model: whisper-base
+          transport: speech
+          operations:
+            - audio_transcription
+            - audio_diarization
+            - audio_alignment
+            - subtitle_creation
             - voice_extraction
           default_operations:
             - audio_transcription
             - audio_diarization
             - audio_alignment
             - subtitle_creation
-            - speech_generation
             - voice_extraction
           prices:
             - operation: audio_transcription
@@ -5695,12 +5801,145 @@ providers:
               unavailable_reason: Dictator server prices are not available from the provider contract.
               source: https://github.com/tyemirov/dictator
               last_verified: '2026-09-10'
-            - operation: speech_generation
+            - operation: voice_extraction
+              available: false
+              unavailable_reason: Dictator server prices are not available from the provider contract.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+        - model: whisper-small
+          created: 1788998400
+          upstream_model: whisper-small
+          transport: speech
+          operations:
+            - audio_transcription
+            - audio_diarization
+            - audio_alignment
+            - subtitle_creation
+            - voice_extraction
+          default_operations: []
+          prices:
+            - operation: audio_transcription
+              available: false
+              unavailable_reason: Dictator server prices are not available from the provider contract.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: audio_diarization
+              available: false
+              unavailable_reason: Dictator server prices are not available from the provider contract.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: audio_alignment
+              available: false
+              unavailable_reason: Dictator server prices are not available from the provider contract.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: subtitle_creation
               available: false
               unavailable_reason: Dictator server prices are not available from the provider contract.
               source: https://github.com/tyemirov/dictator
               last_verified: '2026-09-10'
             - operation: voice_extraction
+              available: false
+              unavailable_reason: Dictator server prices are not available from the provider contract.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+        - model: whisper-medium
+          created: 1788998400
+          upstream_model: whisper-medium
+          transport: speech
+          operations:
+            - audio_transcription
+            - audio_diarization
+            - audio_alignment
+            - subtitle_creation
+            - voice_extraction
+          default_operations: []
+          prices:
+            - operation: audio_transcription
+              available: false
+              unavailable_reason: Dictator server prices are not available from the provider contract.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: audio_diarization
+              available: false
+              unavailable_reason: Dictator server prices are not available from the provider contract.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: audio_alignment
+              available: false
+              unavailable_reason: Dictator server prices are not available from the provider contract.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: subtitle_creation
+              available: false
+              unavailable_reason: Dictator server prices are not available from the provider contract.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: voice_extraction
+              available: false
+              unavailable_reason: Dictator server prices are not available from the provider contract.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+        - model: whisper-large-v3
+          created: 1788998400
+          upstream_model: whisper-large-v3
+          transport: speech
+          operations:
+            - audio_transcription
+            - audio_diarization
+            - audio_alignment
+            - subtitle_creation
+            - voice_extraction
+          default_operations: []
+          prices:
+            - operation: audio_transcription
+              available: false
+              unavailable_reason: Dictator server prices are not available from the provider contract.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: audio_diarization
+              available: false
+              unavailable_reason: Dictator server prices are not available from the provider contract.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: audio_alignment
+              available: false
+              unavailable_reason: Dictator server prices are not available from the provider contract.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: subtitle_creation
+              available: false
+              unavailable_reason: Dictator server prices are not available from the provider contract.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+            - operation: voice_extraction
+              available: false
+              unavailable_reason: Dictator server prices are not available from the provider contract.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+        - model: qwen3-tts
+          created: 1788998400
+          upstream_model: qwen3-tts
+          transport: speech
+          operations:
+            - speech_generation
+          default_operations: []
+          prices:
+            - operation: speech_generation
+              available: false
+              unavailable_reason: Dictator server prices are not available from the provider contract.
+              source: https://github.com/tyemirov/dictator
+              last_verified: '2026-09-10'
+        - model: silero-ru
+          created: 1788998400
+          upstream_model: silero-ru
+          transport: speech
+          operations:
+            - speech_generation
+          default_operations:
+            - speech_generation
+          prices:
+            - operation: speech_generation
               available: false
               unavailable_reason: Dictator server prices are not available from the provider contract.
               source: https://github.com/tyemirov/dictator
