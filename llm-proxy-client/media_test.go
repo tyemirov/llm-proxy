@@ -17,7 +17,7 @@ func TestMediaCommandWorkflow(t *testing.T) {
 	const assetID = "ast_0123456789abcdef0123456789abcdef"
 	const operationID = "mop_0123456789abcdef0123456789abcdef"
 	const asset = `{"asset_id":"` + assetID + `","mime_type":"audio/wav","size_bytes":3,"state":"available","created_at":"2026-09-15T00:00:00Z","expires_at":"2026-09-16T00:00:00Z"}`
-	const operation = `{"operation_id":"` + operationID + `","capability":"audio.voice.extract","provider":"dictator","model":"dictator-speech-v1","catalog_revision":"fixture","state":"succeeded","cancellation_state":"not_requested","outputs":[],"cost":{"available":false,"reason":"unavailable"},"accepted_at":"2026-09-15T00:00:00Z","updated_at":"2026-09-15T00:00:00Z","deadline_at":"2026-09-16T00:00:00Z"}`
+	const operation = `{"operation_id":"` + operationID + `","capability":"audio.voice.extract","provider":"dictator","model":"whisper-base","catalog_revision":"fixture","state":"succeeded","cancellation_state":"not_requested","outputs":[],"cost":{"available":false,"reason":"unavailable"},"accepted_at":"2026-09-15T00:00:00Z","updated_at":"2026-09-15T00:00:00Z","deadline_at":"2026-09-16T00:00:00Z"}`
 	calls := []string{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer tenant-key" {
@@ -62,7 +62,7 @@ func TestMediaCommandWorkflow(t *testing.T) {
 		stdin, want string
 	}{
 		{[]string{"upload", "--file", file, "--mime-type", "audio/wav"}, "", assetID},
-		{[]string{"submit", "--idempotency-key", "speech-intent"}, `{"capability":"audio.voice.extract","provider":"dictator","model":"dictator-speech-v1","input":{},"controls":{"duration_seconds":0.5}}`, operationID},
+		{[]string{"submit", "--idempotency-key", "speech-intent"}, `{"capability":"audio.voice.extract","provider":"dictator","model":"whisper-base","input":{},"controls":{"duration_seconds":0.5}}`, operationID},
 		{[]string{"status", "--operation-id", operationID}, "", operationID},
 		{[]string{"wait", "--operation-id", operationID}, "", operationID},
 		{[]string{"cancel", "--operation-id", operationID}, "", operationID},
