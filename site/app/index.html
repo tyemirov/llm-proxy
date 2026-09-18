@@ -96,7 +96,7 @@
                 <dashboard-actions>
                   <button type="button" x-show="dashboardView === dashboardViews.ADMIN" x-on:click="openUsageDashboard()" x-text="copy.openUsageDashboard"></button>
                   <label class="usage-tenant-control" x-show="dashboardView === dashboardViews.USAGE">
-                    <span class="visually-hidden" x-text="copy.usageTenant"></span>
+                    <span class="usage-tenant-label" x-text="copy.tenantContext"></span>
                     <select
                       x-ref="usageTenantSelector"
                       x-bind:value="selectedUsageTenantID"
@@ -123,7 +123,6 @@
                       ></button>
                     </template>
                   </div>
-                  <button type="button" x-on:click="refreshDashboard()" x-bind:disabled="dashboardRefreshDisabled" x-text="dashboardRefreshCopy"></button>
                 </dashboard-actions>
               </header>
             </section>

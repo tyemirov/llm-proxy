@@ -39,19 +39,11 @@ export function createAdminDashboardResponsibility() {
       return this.dashboardView === DASHBOARD_VIEWS.ADMIN ? COPY.adminDashboardTitle : COPY.dashboardTitle;
     },
 
-    get dashboardRefreshCopy() {
-      return this.dashboardView === DASHBOARD_VIEWS.ADMIN ? COPY.refreshAdmin : COPY.refreshUsage;
-    },
-
-    get dashboardRefreshDisabled() {
-      return this.busy || this.usageLoading;
-    },
-
     get hasAdminUsers() {
       return this.adminUsers.length > 0;
     },
 
-    async refreshAdminUsers() {
+    async loadAdminUsers() {
       if (!this.isAdmin) {
         return;
       }
@@ -59,7 +51,6 @@ export function createAdminDashboardResponsibility() {
       try {
         const adminUsersResponse = await fetchAdminUsers();
         this.adminUsers = adminUsersResponse.users;
-        this.setPageNotice(NOTICE_KINDS.SUCCESS, COPY.usageRefreshed);
       } catch (requestError) {
         this.adminUsers = [];
         this.setPageNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
@@ -74,7 +65,7 @@ export function createAdminDashboardResponsibility() {
       }
       this.clearUsageDetails(false);
       this.dashboardView = DASHBOARD_VIEWS.ADMIN;
-      await this.refreshAdminUsers();
+      await this.loadAdminUsers();
     },
 
     openUsageDashboard() {

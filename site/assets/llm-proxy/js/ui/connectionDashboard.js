@@ -87,6 +87,23 @@ export class ConnectionDashboard extends HTMLElement {
   emitContext() {
     this.dispatchEvent(new CustomEvent(CONNECTION_CONTEXT_EVENT, {bubbles:true, detail:{tenantID:this.tenantID,tenants:this.tenants,profile:this.profile}}));
   }
+  adaptCapabilityForConnection() {
+    if (!this.connection || !this.provider) return;
+    const hasText = Boolean(this.provider.text_models.length);
+    const hasDictation = Boolean(this.provider.dictation_models.length);
+    const hasMedia = this.mediaOfferings.some(o => o.provider === this.connection?.provider);
+    if (this.capability === 'text' && !hasText) {
+      if (hasMedia) this.capability = 'media';
+      else if (hasDictation) this.capability = 'dictation';
+    } else if (this.capability === 'media' && !hasMedia) {
+      if (hasText) this.capability = 'text';
+      else if (hasDictation) this.capability = 'dictation';
+    } else if (this.capability === 'dictation' && !hasDictation) {
+      if (hasText) this.capability = 'text';
+      else if (hasMedia) this.capability = 'media';
+    }
+  }
+
   /** @param {string} id */
   async selectTenant(id) {
     const revision = ++this.revision;
@@ -97,6 +114,7 @@ export class ConnectionDashboard extends HTMLElement {
       if (revision !== this.revision) return;
       this.profile = profile;
       this.connectionID = this.connections.find(c => c.tenant_ids.includes(id))?.id || '';
+      this.adaptCapabilityForConnection();
     }
     this.emitContext(); this.render();
   }
@@ -216,13 +234,36 @@ export class ConnectionDashboard extends HTMLElement {
   }
   /** @param {MouseEvent} event */
   handleClick(event) {
-    const button=event.target instanceof Element?event.target.closest('button'):null;if(!button || this.busy)return;
-    if(button.dataset.tenant) {void this.run(()=>this.selectTenant(button.dataset.tenant || ''));return;}
-    if(button.dataset.connection) {this.connectionID=button.dataset.connection;this.modelID='';this.render();return;}
-    if(button.dataset.connect) {const id=button.dataset.connect;void this.run(async()=>{const c=this.connections.find(c=>c.id===id);if(!c)return;await backend.assignConnection(this.tenantID,c.provider,c.id,this.controller.signal);this.connectionID=id;this.modelID='';await this.reload();this.message=`Connected ${this.tenantName} to ${c.name}. Choose a model.`;});return;}
-    if(button.dataset.model) {this.modelID=button.dataset.model;this.render();return;}
-    if(button.dataset.capability) {this.capability=button.dataset.capability;this.modelID='';this.render();return;}
-    switch(button.dataset.action) {
+    if (!(event.target instanceof Element) || this.busy) return;
+    const connectButton = event.target.closest('button[data-connect]');
+    if (connectButton instanceof HTMLElement && connectButton.dataset.connect) {
+      const id = connectButton.dataset.connect;
+      void this.run(async () => {
+        const c = this.connections.find(c => c.id === id);
+        if (!c) return;
+        await backend.assignConnection(this.tenantID, c.provider, c.id, this.controller.signal);
+        this.connectionID = id;
+        this.modelID = '';
+        await this.reload();
+        this.adaptCapabilityForConnection();
+        this.message = `Connected ${this.tenantName} to ${c.name}. Choose a model.`;
+      });
+      return;
+    }
+    const connectionNode = event.target.closest('[data-connection-node]');
+    if (connectionNode instanceof HTMLElement && connectionNode.dataset.connectionNode) {
+      this.connectionID = connectionNode.dataset.connectionNode;
+      this.modelID = '';
+      this.adaptCapabilityForConnection();
+      this.render();
+      return;
+    }
+    const button = event.target.closest('button');
+    if (!button) return;
+    if (button.dataset.tenant) { void this.run(() => this.selectTenant(button.dataset.tenant || '')); return; }
+    if (button.dataset.model) { this.modelID = button.dataset.model; this.render(); return; }
+    if (button.dataset.capability) { this.capability = button.dataset.capability; this.modelID = ''; this.render(); return; }
+    switch (button.dataset.action) {
       case 'copy-mcp':void this.run(async()=>{const runtime=await backend.loadFrontendRuntimeConfig();await navigator.clipboard.writeText(new URL(MCP_PATH,runtime.proxyOrigin).href);this.message='MCP URL copied.';});break;
       case 'tenant-details':this.connectionID='';this.modelID='';this.render();break;
       case 'create-tenant':this.tenantForm(false);break;
@@ -314,7 +355,7 @@ export class ConnectionDashboard extends HTMLElement {
       this.closeDialog();
       this.message=edit?'Connection saved.':'Connection created. Use Connect to attach it to this tenant.';
       if(!edit && data.get('attach'))await backend.assignConnection(this.tenantID,result.provider,result.id,this.controller.signal);
-      await this.reload();if(!provider.text_models.length)this.capability='media';this.message='Connection saved.';
+      await this.reload();this.adaptCapabilityForConnection();this.message='Connection saved.';
     });
     const renderFields=()=>{
       const host=this.querySelector('[data-credential-fields]');if(!host)return;

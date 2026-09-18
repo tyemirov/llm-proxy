@@ -6,9 +6,17 @@
  *   model: string,
  *   dictation_provider: string,
  *   dictation_model: string,
+ *   transcription_provider?: string,
+ *   transcription_model?: string,
+ *   speech_provider?: string,
+ *   speech_model?: string,
  *   system_prompt: string,
  *   reasoning_effort: string
  * }} TenantDefaults
+ */
+
+/**
+ * @typedef {"text" | "transcription" | "speech" | "image" | "video"} CapabilityDomain
  */
 
 /**
