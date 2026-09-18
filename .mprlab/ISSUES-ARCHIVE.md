@@ -25,6 +25,9 @@ Archive passes:
 - 2026-09-08: Moved 71 resolved non-recurring entries from the active
   tracker: 44 BugFixes, 18 Improvements, three Maintenance, and six
   Features. Kept all Planning entries in the active tracker.
+- 2026-09-18: Moved 41 resolved non-recurring entries from the active tracker:
+  22 BugFixes, 12 Improvements, two Features, and five Planning entries after
+  the durable-documentation audit.
 
 `CHANGELOG.md` remains the release-level history. This index keeps completed
 issue titles discoverable without making the active tracker noisy.
@@ -5370,6 +5373,245 @@ issue titles discoverable without making the active tracker noisy.
   - `make ci` passed all 12 gates with 100.0% Go statement coverage.
   - The change is local. Production publication remains a separate operation.
 
+### Complete entries archived 2026-09-18
+
+- [x] [B227] (P1) Select connection when clicking anywhere within connection card.
+  Observed: Connection cards only responded to clicks on the inner connection name button (`button.cw-name`). Clicking anywhere else on the card (API label, tenant count, status badge, card whitespace) did not select the connection.
+  Cause: `handleClick` in `connectionDashboard.js` guarded events with `closest('button')`, and only `button.cw-name` had `data-connection`. Clicks on non-button elements inside `article.cw-node` evaluated to `null`.
+  Requirements: Allow clicking anywhere inside `article.cw-node` to select the connection, preserving the distinct `Connect` button action.
+  Resolution: Checked `closest('[data-connection-node]')` before general button handling, preserved `button[data-connect]`, integrated capability adaptation for media-only connections, and added `cursor: pointer` to `.cw-node`.
+  Deliverables: `site/assets/llm-proxy/js/ui/connectionDashboard.js`, `site/assets/llm-proxy/styles.css`, and `tests/e2e/management-ui.spec.js`.
+  Validation: The new test `clicking within a connection card selects the connection` failed before the fix and passed after. All 29 dashboard and connection tests passed. `npm run frontend:lint` passed.
+
+- [x] [B226] (P1) Add browser CORS access to Caddy rate limit responses.
+  Observed: Cross-origin browser requests from `https://llm-proxy.mprlab.com` to `https://llm-proxy-api.mprlab.com` fail with CORS error `net::ERR_FAILED` when the rate limit triggers.
+  Cause: The `caddy_route` resource sets `events: 10, window_seconds: 10`. Normal page loads exceed this budget. When Caddy responds with HTTP 429, the default handler lacks an `access.browser` policy, so Caddy emits no `Access-Control-Allow-Origin` header.
+  Requirements:
+  - Add the `browser` access policy with origin `https://llm-proxy.mprlab.com` and `allow_credentials: true` to the default handler of `public-api`.
+  - Increase the rate limit budget to `events: 120, window_seconds: 60` on the `public-api` route.
+  - Verify manifest canonicality and schema conformance.
+  Resolution: Added `access.browser` with origin `https://llm-proxy.mprlab.com` and credentials enabled to the `public-api` default handler. Increased route rate limit to 120 events in 60 seconds.
+  Deliverables: `.mprlab/deploy/resources.yml`.
+  Validation: Verified YAML syntax and Gateway contract conformance. Repository checks and Governor validation passed.
+
+- [x] [B225] (P1) Keep dashboard connectors attached during inner list scroll.
+  Observed: The tenant-to-connection wire detaches from its connection card after the connections list scrolls. The wire keeps its pre-scroll endpoint while the card moves.
+  Cause: `drawRoutes` computed endpoints once per render. Inner `.cw-list` scroll moves cards without a redraw.
+  Requirements: Redraw wires on inner list scroll. Keep the redraw rAF-throttled.
+  Resolution: Scroll listeners on each `.cw-list` schedule a redraw. Resize observation uses the same schedule. Pending frames cancel on disconnect.
+  Deliverables: `site/assets/llm-proxy/js/ui/connectionDashboard.js`, `tests/e2e/management-ui.spec.js`. Existing event contracts did not change.
+  Validation: The new `dashboard connectors follow connection cards after inner list scroll` test failed with a 143px endpoint error before the fix and passes after. `npm run frontend:lint` passes. Eight dashboard browser tests pass.
+
+- [x] [B224] (P1) Migrate retained asset metadata before production speech acceptance.
+  Observed: Authenticated asset upload returns HTTP 500 with `asset_store_error`.
+  Cause: The deployed store contains 139 version-1 records. The current contract requires version 2 and `content_sha256`.
+  Requirements:
+  - Verify each retained record and its available bytes before the bounded migration.
+  - Back up the original metadata and record per-tenant counts.
+  - Change only the metadata version and digest field name.
+  - Verify upload and download through the public tenant API after migration.
+  - Remove the temporary migration program after acceptance.
+  Resolution (2026-09-16): Migrated all 139 records after byte and digest checks. All were expired and belonged to the Default tenant.
+  Original metadata and the receipt remain in the host data volume under `migrations/B224-20260916`.
+  Validation: The Creative Director live test passed upload, speech execution, download, and receipt reuse in 12.67 seconds.
+  The temporary migration program was removed. Application code and event contracts did not change.
+
+- [x] [B223] (P1) Preserve MCP protocol errors before response conversion.
+  Observed: An authenticated unknown tool call causes a nil pointer panic in `mcpCurrentProtocol`.
+  Requirements: Return the SDK error before conversion of its response. Keep subsequent requests available.
+  Resolution: The middleware returns SDK errors before response conversion. Unknown tool calls no longer terminate the server.
+  Deliverables: `internal/proxy/mcp.go`, `internal/proxy/mcp_media_test.go`, and `docs/mcp.md`. Existing event contracts did not change.
+  Final result: `make test-mcp` passed. Final `make ci` passed all 13 gates in 324 seconds with 100.0 percent Go coverage.
+  Validation: Reproduce the failure with `make test-mcp`. Verify unknown tool rejection and subsequent discovery. Run final `make ci`.
+
+- [x] [B222] (P1) Register speech adapters from the provider catalog.
+  Observed: A second provider with the Dictator speech protocol passes catalog validation. Voice discovery through the official client returns HTTP 400.
+  Requirements: Use the catalog provider, model, endpoint field, and credential field for registration and execution. Use the selected route for voices and worker selection.
+  Initial result: Distinct connection fields caused HTTP 503 with `provider_key_verification_unavailable`.
+  Validation: Run the same public acceptance flow for both providers. Run final `make ci`.
+  Initial result: `make test-dictator` failed in `TestDictatorSecondProviderUsesCatalogRegistration` with `llm_proxy_client_http_failure: status=400`.
+  Resolution: Registration, account binding, voices, and worker selection use the catalog route. Distinct endpoint and credential fields pass verification.
+  Validation: Both providers pass the public flow and browser checks. All six live capabilities passed. Final `make ci` passed 13 gates in 333 seconds with 100.0 percent Go coverage.
+  Production files: `internal/proxy/media_operations.go`, `dictator_account.go`, `dictator_adapter.go`, `dictator_grpc.go`, `dictator_grpc_protocol.go`, and `provider_key_verifier.go`.
+  Test files: `internal/proxy/dictator_grpc_e2e_test.go`, `dictator_live_test.go`, `dictator_grpc_internal_test.go`, `dictator_adapter_internal_test.go`, and `media_operations_edges_internal_test.go`.
+  Browser files: `tests/blackbox/connection-dashboard.spec.js` and `localManagementStack.mjs`.
+  Operator files: `Makefile`, `README.md`, `docs/dictator-live-acceptance.md`, `docs/dictator-migration-audit.md`, and `docs/media-gateway-consolidation.md`.
+  Event contracts did not change. F042 migration requirements remain open.
+
+- [x] [B219] (P1) Remove private data from speech timelines.
+  Observed: Tenant timeline assets contain native voice identifiers, engine details, and server paths.
+  Requirements: Validate the native timeline. Publish only public text and timing fields.
+  Validation: Use the public HTTP API with a local Dictator gRPC server. Run final `make ci`.
+  Resolution: The public timeline contains only validated text segments. Malformed native timelines produce no tenant assets.
+  Deliverables: `internal/proxy/dictator_grpc_protocol.go`, `internal/proxy/dictator_grpc_e2e_test.go`, `docs/media-gateway-consolidation.md`.
+  Validation: Focused tests passed. Final local `make ci` passed all 13 gates with 100.0 percent Go statement coverage.
+  Event contracts did not change.
+
+- [x] [B220] (P2) Exclude voices with obsolete connection authority.
+  Observed: Voice discovery returns obsolete voices after connection changes. Accepted work with these voices becomes uncertain.
+  Requirements: Return only current voices. Reject obsolete voice references before acceptance.
+  Validation: Change the connection address and token through HTTP. Run final `make ci`.
+  Resolution: Discovery uses current connection authority. Obsolete voices receive HTTP 400 before acceptance. Current voices complete synthesis after address and token changes.
+  Deliverables: `internal/proxy/media_voices.go`, `internal/proxy/media_operations.go`, `internal/proxy/dictator_account.go`, `internal/proxy/dictator_adapter.go`, `internal/proxy/dictator_grpc_protocol.go`, and their integration tests.
+  Validation: Focused tests passed. Final local `make ci` passed all 13 gates with 100.0 percent Go statement coverage.
+  Event contracts did not change.
+
+- [x] [B221] (P2) Keep an explicit zero diarization gap.
+  Observed: A zero `utterance_gap_seconds` value disappears before the gRPC request.
+  Requirements: Keep zero and omission as distinct control values.
+  Validation: Inspect gRPC requests from public HTTP operations. Run final `make ci`.
+  Resolution: The optional control retains its presence through storage and gRPC. Tests distinguish zero, omission, and a positive value.
+  Deliverables: `internal/proxy/dictator_adapter.go`, `internal/proxy/dictator_grpc_protocol.go`, `internal/proxy/dictator_grpc_e2e_test.go`, `docs/openapi.yaml`, `site/docs/index.html`, `docs/media-gateway-consolidation.md`.
+  Validation: Focused tests passed. Final local `make ci` passed all 13 gates with 100.0 percent Go statement coverage.
+  Event contracts did not change.
+
+- [x] [B218] (P1) Use the canonical Python media capability resource.
+  Observed: The Python client requests `/model/v1/media-capabilities`. The server exposes `/model/v1/capabilities`.
+  Requirements: Use the canonical server path without an alias.
+  Validation: Read capabilities through the official Python client and a real HTTP listener. Run final `make ci`.
+  Resolution: The HTTP regression first returned 404. The corrected client uses `/model/v1/capabilities` without an alias.
+  Deliverables: `python/llm_proxy_client/client.py`, `python/tests/test_client.py`.
+  Validation: Python and package-install tests passed. Final `make ci` passed all 13 gates with 100 percent Go coverage.
+
+- [x] [B217] (P2) Keep both dashboard prompt drafts after a failed save.
+  Observed: A provider prompt draft is lost after HTTP 500 when both prompt forms are visible.
+  Requirements: Keep both prompt drafts for retry.
+  Validation: Use browser tests for failed saves and successful retry. Run final `make ci`.
+  Resolution: Failed saves now keep both form drafts. Browser tests passed for both failed save actions and the successful provider prompt retry.
+  Deliverables: `site/assets/llm-proxy/js/ui/connectionDashboard.js`, `tests/blackbox/connection-dashboard.spec.js`.
+  Validation: Final `make ci` passed all 13 gates with 100.0 percent Go statement coverage.
+  Event contracts did not change.
+
+- [x] [B216] (P2) Limit Python media status requests to the wait deadline.
+  Observed: A stalled HTTP status response can keep the Python wait active without a timeout.
+  Requirements: Examine the deadline before each poll. Supply the remaining timeout to the HTTP transport.
+  Validation: Use HTTP tests for stalled headers, stalled response bytes, and the final poll interval. Run final `make ci`.
+  Resolution: Each status request receives the remaining timeout. The loop starts no request after its deadline. HTTP tests passed for stalled headers, stalled response bytes, and the final poll interval.
+  Deliverables: `python/llm_proxy_client/client.py`, `python/tests/test_client.py`, `docs/client-protocols.md`.
+  Validation: Final `make ci` passed all 13 gates with 100.0 percent Go statement coverage.
+  Event contracts did not change.
+
+- [x] [B215] (P2) Remove base URL query credentials from Go asset uploads.
+  Observed: The upload URL retains an existing query key. The server rejects that key with HTTP 403.
+  Requirements: Remove each query key and send the configured bearer key.
+  Validation: Use HTTP tests for the public Go client. Run client tests and final `make ci`.
+  Resolution: Go upload URLs now exclude query keys. HTTP client tests passed with duplicate query keys in the base URL.
+  Deliverables: `pkg/llmproxyclient/assets.go`, `pkg/llmproxyclient/media_test.go`, `Makefile`, `docs/client-protocols.md`.
+  Validation: Final `make ci` passed all 13 gates with 100.0 percent Go statement coverage.
+  Event contracts did not change.
+
+- [x] [B214] (P2) Keep active media inputs after upload expiry.
+  Observed: Asset expiry can remove bytes that an accepted operation still requires.
+  Requirements: Use active references for cleanup and reads. Keep uncertain inputs until operation completion.
+  Validation: Use HTTP asset tests with controlled time, cleanup, restart, and operation completion. Run final `make ci`.
+  Resolution: Asset reads and cleanup use active references. Uncertain operations keep their inputs. Completion releases input references. HTTP tests passed for expiry, startup, cleanup errors, and cancellation.
+  Deliverables: `internal/proxy/assets.go`, `internal/proxy/media_operations.go`, `internal/proxy/media_operations_edges_internal_test.go`, `Makefile`, `docs/media-gateway-consolidation.md`.
+  Validation: Final `make ci` passed all 13 gates with 100.0 percent Go statement coverage. The focused media tests also passed with the race detector.
+  Event contracts did not change.
+
+- [x] [B213] (P2) Return one operation for concurrent duplicate requests.
+  Observed: Concurrent duplicate requests can return HTTP 500 with `SQLITE_BUSY`.
+  Requirements: Return one operation for the same tenant, key, and intent. Keep capacity limits.
+  Validation: Use concurrent HTTP requests and SQLite. Run `make test-media-operations` and final `make ci`.
+  Resolution: An acceptance mutex now permits one creation transaction at a time. Concurrent HTTP duplicates returned one operation with SQLite runtime settings.
+  Deliverables: `internal/proxy/media_operations.go`, `internal/proxy/media_operations_edges_internal_test.go`.
+  Validation: Final `make ci` passed all 13 gates with 100.0 percent Go statement coverage. The focused media tests also passed with the race detector.
+  Event contracts did not change.
+
+- [x] [B212] (P1) Enforce connection authority before media execution.
+  Observed: A worker dispatches accepted work after connection removal.
+  Requirements: Compare the accepted credential reference with the current reference before dispatch and recovery. Keep uncertain provider evidence.
+  Validation: Use public HTTP resources with controlled worker execution. Run `make test-media-operations` and final `make ci`.
+  Resolution: The worker now compares the accepted credential reference with current authority before dispatch or recovery. Invalid authority prevents adapter execution. Dispatched work stays uncertain. The adapter receives the credential reference. Connection removal, replacement, and credential changes caused no adapter call in HTTP tests.
+  Deliverables: `internal/proxy/media_operations.go`, `internal/proxy/media_operations_edges_internal_test.go`, `docs/media-gateway-consolidation.md`.
+  Validation: Final `make ci` passed all 13 gates with 100.0 percent Go statement coverage. The focused media tests also passed with the race detector.
+  Event contracts did not change.
+
+- [x] [B211] (P1) Send bearer authentication for Python asset uploads.
+  Observed: The Python client sends a query key. The asset route returns HTTP 403.
+  Requirements: Remove query credentials. Send the tenant bearer key in the Authorization header.
+  Validation: Use an HTTP server to do a test of the public Python client. Run `make python-test` and final `make ci`.
+  Resolution: The client now sends the bearer key and removes query keys. HTTP tests passed with and without query keys in the base URL.
+  Deliverables: `python/llm_proxy_client/client.py`, `python/tests/test_client.py`, `docs/client-protocols.md`.
+  Validation: Final `make ci` passed all 13 gates with 100.0 percent Go statement coverage.
+  Event contracts did not change.
+
+- [x] [B209] (P1) Restore the API container build.
+  Goal: Build the API image for local startup.
+  Observed: `docker build` reproduced HTTP 404 for `curl_7.74.0-1.3+deb11u16_arm64.deb` after `apt-get update`.
+  The package installation exited with status 100 on `debian:bullseye-slim`.
+  Requirements: Use `debian:bookworm-slim` for the runtime, consistent with the builder.
+  Keep curl and CA certificates in the runtime image.
+  Validation: Build the image. Make sure that the container returns HTTP 200 from `/api/public/capabilities`. Run `make ci`.
+  Resolution: The runtime now uses `debian:bookworm-slim`. The ARM64 image build passed with curl and CA certificates.
+  The container returned HTTP 200 from `/api/public/capabilities`. `make ci` passed all 13 gates in 318 seconds.
+  Go statement coverage was 100.0 percent. The changed prose has no mechanical findings.
+  The Governor check reported existing differences in `.mprlab/AGENTS.DOCKER.md` and `.mprlab/POLICY.md`.
+  The language check reported 71 findings in unchanged tracker text. API and event contracts did not change.
+
+- [x] [B208] (P1) Keep database error details out of management responses.
+  Goal: Return a stable error code when a management database operation fails.
+  Observed: F063 failure tests reproduced database details in tenant deletion responses.
+  Requirements:
+  - Return a stable code for unexpected management store failures.
+  - Keep database details and credentials out of HTTP responses.
+  - Preserve the saved tenant and connection state after a failed transaction.
+  Validation:
+  - Use HTTP tests with injected database failures.
+  - Complete repository validation after the correction.
+  Resolution: Management responses return stable error codes without database details.
+  HTTP failure tests verify transaction rollback and retry behavior.
+  Validation: `make ci` passed all 12 gates with 100.0 percent Go coverage.
+
+- [x] [B206] (P1) Clear the application transition after session recovery.
+  Goal:
+  Keep the authenticated application usable after shared session recovery.
+  Requirements:
+  - Dispatch the configured completion event when an authenticated application receives another authenticated event.
+  - Preserve the existing application state and tenant selection.
+  Validation:
+  - The I260 browser regression completed read and mutation recovery, then the shared transition blocked the user menu.
+  - The failure log is `/tmp/llm-proxy-i260-browser-green.log`.
+  - Verify visible user-menu access and logout after recovery at both viewport widths and auth origins.
+  Resolution:
+  The authenticated application now dispatches its configured completion event after shared session recovery.
+  All four recovery scenarios passed with visible user-menu access and logout.
+  Final native CI passed all 12 gates, including 100 percent Go coverage.
+
+- [x] [B205] (P2) Sequence the key persistence test across router reloads.
+  Observed: GitHub run `34264915879` failed at commit `b2731cb`.
+  `TestManagementProviderKeyRevealPersistsUpdatedKey` expected two usage records but observed one before its one-second deadline.
+  The test sent requests through two database runtimes before either usage write completed.
+  The second write continued after test cleanup started.
+  Requirements: Verify each usage record before the next test phase.
+  Construct the second router after the first request and its usage write complete.
+  Retain the key, response, usage, and corrupt-record assertions. Keep the current timeout.
+  Validation: Run focused HTTP tests with coverage and the race detector. Run `make ci`.
+  Resolution: The test now verifies the first usage record before it constructs the second router.
+  It verifies both records after the second request. All previous assertions remain in place.
+  Added `make test-management-persistence` for the related HTTP tests.
+  Focused tests passed with coverage and the race detector.
+  `make ci` passed all 12 gates with 100% Go statement coverage.
+  The Governor check and changed-prose review passed. Application and event contracts did not change.
+  The changes remain uncommitted. GitHub did not run the fix.
+
+- [x] [B204] (P2) Bound MCP request uploads in time.
+  Observed: An authenticated client can leave an incomplete `/mcp` upload open indefinitely.
+  The SDK waits for the body before the F021 generation timeout starts.
+  The initial HTTP regression exceeded the one-second server budget and failed
+  with `stalled MCP upload did not terminate within the server budget`.
+  Requirements: Apply the server default timeout before SDK body processing.
+  Stop reads on cancellation. Clear the upload deadline before generation.
+  Return HTTP `408` for an upload timeout and retain the byte limit.
+  Validation: Use real HTTP uploads and SDK calls. Run `make test-mcp` and `make ci`.
+  Resolution: Added a cancellable socket read deadline before SDK dispatch.
+  Cleared that deadline before generation. Retained the request byte limit.
+  Verified stalled uploads, cancellation, read errors, deadline errors, and longer generation budgets.
+  `make test-mcp` and `GOFLAGS=-race make test-mcp` passed.
+  `make ci` passed all 12 gates with 100% Go coverage.
+  Updated the MCP guide and OpenAPI reference. Usage event contracts did not change.
+  The initial Governor check reported format template drift. I254 records its correction.
+
 ## Improvements
 
 - [x] [I030] Document LLM Proxy client authentication and configuration boundaries.
@@ -8220,6 +8462,232 @@ issue titles discoverable without making the active tracker noisy.
   Resolution: Added one local bar/donut control and semantic request-share
   legends. Added zero-based UTC quantity axes and exact accessible bucket data.
 
+### Complete entries archived 2026-09-18
+
+- [x] [I263] (P2) Remove the duplicate I261 identifier.
+  Observed: A blocked schema entry used the same I261 identifier as the archived completed lifecycle entry.
+  Requirements: Keep the completed I261 identifier. Give the blocked entry an unused identifier and update its affected dependencies.
+  Resolution: Renamed the blocked schema-transition issue to I271. Preserved completed lifecycle I261 in the archive. No active dependency referred to the blocked identifier.
+  Documentation: Updated the schema-transition record, README, tenant-connections record, and Dictator migration audit.
+  Validation: Active and archive issue identifiers are unique, and active dependencies reference unresolved issues.
+
+- [x] [I268] (P1) Give each Dictator operation wait its own timeout.
+  Observed: Hosted run `35159126469` failed in `TestDictatorAccountConnectionUsesAuthenticatedGRPC` with `context deadline exceeded`.
+  The final diarization check used the same ten-second context as earlier speech, recovery, cancellation, and credential checks.
+  The frontend job passed. The aggregate job failed because the backend job failed.
+  Goal: Prevent earlier test scenarios from consuming the timeout of a later operation wait.
+  Requirements: Keep each operation wait and HTTP request bounded. Keep all public result assertions.
+  Deliverables: `internal/proxy/dictator_grpc_e2e_test.go`.
+  Validation: Run `make test-dictator`. Run final `make ci`.
+  Change: Each operation wait now has a ten-second context from `t.Context()`. Each HTTP client also has a ten-second request timeout.
+  Cancellation scenarios have separate bounded contexts. The shared scenario deadlines were removed.
+  Focused result: `make test-dictator` passed before and after the change.
+  `GOMAXPROCS=1 GOFLAGS='-race -v' make test-dictator` passed. The two complete speech flows took 10.65 and 11.17 seconds.
+  Application and event contracts did not change.
+  Initial CI result: Go integration passed. Three Python package version assertions failed. I269 records the retained-cache mismatch.
+  The unchanged package target then passed all five tests.
+  Resolution: Each operation wait uses a new ten-second context. Each HTTP client uses a ten-second request timeout.
+  Final result: `make test-dictator` passed in 21 seconds. `make ci` passed all 13 gates in 331 seconds with 100.0 percent Go statement coverage.
+
+- [x] [I267] (P1) Wait for dashboard startup before the session recovery test.
+  Observed: The shared UI test receives one more GET during application startup. This failure stops `make ci`.
+  Goal: Start recovery checks after the dashboard completes its initial requests.
+  Requirements: Keep the recovery request sequence assertion. Make sure that the requests create only one tenant.
+  Deliverables: `tests/blackbox/shared-ui-migration.spec.js`.
+  Validation: Run the four browser scenarios ten times through `make test-shared-ui`. Run final `make ci`.
+  Initial result: The supplied CI failure expected `GET, GET, POST, POST, GET` but received `GET, GET, GET, POST, POST, GET`.
+  The saved trace shows an account request during dashboard startup after the recovery test starts. All 40 initial rerun scenarios passed.
+  Resolution: The test waits for the authenticated application, selected Default tenant, and dashboard `aria-busy="false"` before recovery checks.
+  Focused result: All 40 scenarios passed after the change. Application and event contracts did not change.
+  Final result: `make ci` passed all 13 gates in 329 seconds with 100.0 percent Go statement coverage.
+  All 121 frontend browser tests and seven authentication scenarios passed. The CI log is `/tmp/llm-proxy-i267-ci.log`.
+
+- [x] [I265] (P2) Select account usage from the Usage overview title.
+  Observed: The tenants column carries an `Account usage` button while the top card already presents a `Usage overview` title for the same account scope.
+  Resolution (2026-09-16): Superseded by I266 before implementation. The dashboard keeps an explicit tenant selection instead of an account view, so the title button is not built. The tenants-column account button is removed under I266.
+
+- [x] [I266] (P1) Keep a dashboard tenant selected at all times.
+  Observed: The dashboard can sit with no tenant selected. The tenants column offers an `Account usage` button and the footer reads `Account · Select a connection`.
+  Requirements: Remove the tenants-column account button. Select the `Default` tenant on load, or the first tenant when none is named `Default`. Keep the dashboard tenant selected when the usage scope selects all tenants.
+  Resolution: The tenants column has no account button. Loading and tenant deletion select the `Default` tenant, or the first tenant otherwise. The all-tenants usage scope updates only the usage view. The obsolete tenants-column style is removed.
+  Validation: New browser tests cover the missing button, the default-or-first selection, and the decoupled scope. The full `management-ui` suite passes (103 tests). `npm run frontend:lint` passes.
+  Deliverables: `site/assets/llm-proxy/js/ui/connectionDashboard.js`, `site/assets/llm-proxy/js/ui/usageDashboard.js`, `site/assets/llm-proxy/styles.css`, `tests/e2e/management-ui.spec.js`, `docs/tenant-connections.md`.
+
+- [x] [I264] (P2) Cover a model profile with a mismatched delimiter through the public client.
+  Observed: The B222 CI run passed all Go tests but left one uncovered block in `model_profile.go`.
+  Requirements: Exercise a JSON object with a mismatched delimiter through the public client. Verify rejection before HTTP dispatch.
+  Validation: Run `make go-test` and final `make ci`. Keep the complete coverage requirement.
+  Resolution: The public client rejects `{]` before HTTP dispatch. The focused client target includes profile rejection.
+  Deliverables: `pkg/llmproxyclient/client_test.go` and `Makefile`.
+  Validation: The focused coverage record exercises the closing-token error. Final `make ci` passed all 13 gates with 100.0 percent Go coverage.
+  Production client code and event contracts did not change.
+
+- [x] [I262] (P1) Use Alibaba Cloud labels and English API-key setup.
+  Goal:
+  Let users identify Alibaba Cloud as the provider of Qwen models and find English API-key instructions.
+  Requirements:
+  - Use `Alibaba Cloud` for the provider label and API service label.
+  - Use `Alibaba Cloud API key` and `Alibaba Cloud API URL` for connection fields.
+  - Link credential setup to `https://www.alibabacloud.com/help/en/model-studio/get-api-key`.
+  - Keep Qwen as the model family and Alibaba Cloud as the service provider.
+  - Keep the existing `dashscope` provider identifier and adapter contract.
+  - Apply the catalog values to connection setup and public model discovery.
+  - Keep regional expansion and model inventory work in F064.
+  Validation:
+  - Assert the labels and English setup URL through the management HTTP API and browser connection dialog.
+  - Assert Alibaba Cloud text beside Qwen in the public model catalog.
+  - Run the focused catalog and browser targets, then `make ci`.
+  Resolved 2026-09-13:
+  - Changed the catalog provider label, service label, connection field labels, and credential setup URL.
+  - Updated public resource text, its generator, browser fixtures, and current provider documentation.
+  - The initial HTTP assertion returned `label="DashScope"` and the `help.aliyun.com` setup URL.
+  - The initial browser assertion returned `DashScope API` instead of `Alibaba Cloud`.
+  - The catalog target and both focused browser scenarios passed after the change.
+  - Final `make ci` passed all 13 gates in 315 seconds with 100.0% Go statement coverage.
+  - The complete browser suites passed 117 frontend scenarios and seven management black-box scenarios.
+  - CI evidence: `/tmp/llm-proxy-i262-ci.log`.
+  - Changed prose and `git diff --check` passed their scoped checks.
+  - Governor reported existing managed-content differences in `.mprlab/POLICY.md` and `.mprlab/AGENTS.DOCKER.md`.
+  - Existing event and adapter contracts remain current. Production activation remains separate.
+  Changed files:
+  - `configs/providers.yml`, `internal/proxy/provider_catalog_end_to_end_test.go`, and `tests/e2e/management-ui.spec.js`.
+  - `scripts/generate_seo_resources.mjs`, `site/resources/index.html`, and `site/resources/openai-compatible-provider-gateway/index.html`.
+  - `README.md`, `docs/provider-catalog.md`, `docs/provider-model-icons.md`, and `docs/dashscope-responses.md`.
+  Sources:
+  - [English API-key instructions](https://www.alibabacloud.com/help/en/model-studio/get-api-key).
+
+- [x] [I256] (P1) Add shared public scenarios for protocol acceptance.
+  Goal:
+  Add reusable acceptance evidence before changes to the provider catalog and protocol adapters.
+  Requirements:
+  - Extend the current catalog tests and provider HTTP fixtures through the real service and official Go client.
+  - Cover Chat Completions, Responses, Anthropic Messages, Google native protocols, and current dictation adapters.
+  - Record each supported operation, control, protocol variation, and lifecycle in the test cases.
+  - Exercise text, media input, caller tools, structured output, errors, usage, and continuation where the current route supports them.
+  - Prove rejected requests cause zero dispatch for unsupported controls and invalid credentials.
+  - Use controlled external protocols for timeout, cancellation, visibility retry, and terminal-state tests.
+  - Add a second provider definition for each executable protocol adapter through disposable catalog data and connection values.
+  - Use the same executable and clients for both provider definitions.
+  - Use public tests for discovery, connection forms, secret protection, routing, restart persistence, tenant isolation, and usage.
+  - Keep provider constants and production registrations outside the second-provider fixture change.
+  - Keep live-provider qualification separate from local protocol acceptance.
+  Deliverables:
+  - Shared protocol tests, a repository Make target, and inclusion in the applicable CI gate.
+  - A documented procedure to qualify another provider through catalog data.
+  Validation:
+  - Run existing public tests before extraction. Add characterization tests where public coverage is absent.
+  - Prove that the suite detects a wrong endpoint, unsupported field, malformed result, and incorrect usage total.
+  - Run the focused target and applicable repository checks.
+  - Keep all current runtime and public API behavior unchanged.
+  Resolution:
+  - Added disposable provider definitions for each current text and dictation adapter.
+  - Recorded each fixture operation, protocol, lifecycle, request profile, control, and media input.
+  - Used the real service and official Go client for public discovery, routing, result, and usage checks.
+  - Added negative controls for endpoint, field, result, credential, and usage drift.
+  - Added `make test-protocol-acceptance` to the Go integration gate.
+  - Documented the catalog-only provider qualification procedure.
+  Validation: `make test-protocol-acceptance` passed. `make ci` passed all 13 gates in 312 seconds with 100.0 percent Go statement coverage.
+
+- [x] [I257] (P1) {I256} Remove duplicated protocol facts from provider catalog records.
+  Goal:
+  Give each protocol invariant one authoritative definition and reduce provider additions to their required data.
+  The catalog currently repeats adapter constants that `validateProviderCatalogAdapterContract` compares with Go definitions.
+  Requirements:
+  - Keep `configs/providers.yml` as the sole provider catalog.
+  - Select one protocol definition per transport instead of three identifiers that must be equal.
+  - Give each codec one definition for its fixed response fields, finish rules, error rules, and usage mapping.
+  - Derive validation and runtime metadata from that definition.
+  - Keep endpoints, credential fields, settings, offerings, controls, limits, prices, and supported protocol variations in provider data.
+  - Keep every retained variation typed and validate it at the catalog boundary.
+  - Remove repeated invariant values from all provider records and test catalogs in one coordinated schema change.
+  - Reject obsolete fields and shapes. Keep one accepted schema without aliases, dual reads, or compatibility parsers.
+  - Keep provider identities, tenant connections, route defaults, and historical usage.
+  - Rebuild all discovery, management, and live-harness projections from the normalized registry.
+  - Update the catalog reference, onboarding procedure, and affected configuration examples.
+  Deliverables:
+  - A reduced catalog schema, authoritative codec definitions, and converted catalog consumers.
+  Validation:
+  - Run I256 characterization tests before production changes.
+  - First prove rejection of the new catalog shape, then implement its loader and conversion.
+  - Prove rejection of obsolete shapes, unknown variations, missing references, and invalid combinations.
+  - Prove equivalent public discovery, credentials, requests, responses, and usage for every active route.
+  - Run the focused catalog target and applicable repository checks.
+  Resolution:
+  - Replaced request, response, usage, and parameter copies with one protocol reference.
+  - Added typed variations for Chat Completions and multipart transcription.
+  - Moved fixed request, response, finish, continuation, error, and usage facts into codec definitions.
+  - Converted the production catalog, test catalogs, registry, router, CLI tests, and provider tests to schema version 2.
+  - Extended shared acceptance to all 15 retained protocol variations and lifecycles.
+  Validation: `make test-provider-catalog` and `make test-protocol-acceptance` passed.
+
+- [x] [I258] (P1) {I257} Separate protocol codecs, authentication, and execution lifecycles.
+  Goal:
+  Let provider transports combine reusable components through validated catalog data.
+  The current adapter validator couples protocol selection to exact authentication headers and permitted lifecycle values.
+  Requirements:
+  - Use separate typed components for request and response codecs, authentication, and execution lifecycles.
+  - Select those components through each catalog transport and construct one validated route at startup.
+  - Reject unsupported combinations through explicit component contracts.
+  - Keep provider identity as route data instead of a selector for shared execution code.
+  - Keep tenant secrets and settings in their existing connection stores.
+  - Keep bearer authentication, direct-header authentication, required static headers, and credential verification behavior.
+  - Keep synchronous completion, resource polling, visibility rules, deadlines, cancellation, and usage accounting.
+  - Share lifecycle code where the execution contract is equal. Retain explicit protocol requirements where behavior differs.
+  - Keep Google credential expansion and media staging under F043.
+  - Keep durable media workers and recovery under F022, and network fairness under I046.
+  - Update the provider catalog reference and media architecture with the final component ownership.
+  Deliverables:
+  - Catalog-selected transport components and one startup composition path for current routes.
+  Validation:
+  - Run I256 tests before extraction and after each component change.
+  - Prove that two catalog-defined providers share a codec with different supported authentication configurations.
+  - Prove that supported synchronous and pollable routes share codec logic without changing their execution behavior.
+  - Prove invalid combinations stop startup and rejected requests cause zero upstream dispatch.
+  - Keep public errors, credential isolation, continuation, timeout budgets, and usage totals.
+  - Run focused transport tests and applicable repository checks.
+  Resolution:
+  - Added schema version 3 with separate request codec, response codec, authentication, and execution component references.
+  - Added one startup composer that rejects unknown components, invalid variations, incompatible pairs, required-header drift, and unsupported lifecycles.
+  - Converted the production catalog, test catalogs, provider registry, router, CLI tests, and provider tests to the component contract.
+  - Proved each retained text and dictation codec through a second provider with a different supported authentication kind.
+  - Preserved synchronous and pollable behavior, credential isolation, public errors, continuation, cancellation, timeout budgets, and usage totals.
+  Validation: `make test-provider-catalog` and `make test-protocol-acceptance` passed.
+
+- [x] [I254] (P2) Use the Governor template for the managed issue format.
+  Goal: Remove the format template drift reported during B204 validation.
+  Requirements: Keep the cross-repository dependency specification in a separate document.
+  Link that document from the tracker. Use the canonical template for the managed format guide.
+  Validation: Run the Governor check, changed-prose review, identifier checks, and `git diff --check`.
+  Resolution: Restored the managed format guide from the current Governor template.
+  Moved the complete dependency specification to `DEPENDENCY-REFERENCES.md` and linked it from this tracker.
+  The Governor check passed with no drift or warnings. Changed-prose checks and identifier checks passed.
+  No application or event contract changed.
+
+- [x] [I261] (P1) Use the installed Gateway for application lifecycle commands.
+  Goal:
+  Application release, publication, and deployment operate independently of Gateway development source.
+
+  Requirements:
+  - Replace sibling delegation with the installed `mprlab-gateway` command.
+  - Preserve `make release && make publish && make deploy` and the application Git root argument.
+  - Support `MPRLAB_GATEWAY_EXECUTABLE` for an explicit installed command.
+  - Preserve application source checks, release policy, resources, private inputs, and receipts.
+  - Report an unavailable runtime with an installation instruction.
+  - Keep production activation separate from development completion.
+
+  Validation:
+  - Verify the real Make targets with no sibling Gateway checkout.
+  - Verify argument order, operator environment, explicit command selection, and native failure output.
+  - Run applicable repository CI after the final change.
+
+  Coordination:
+  This is the selected application follow-up for Gateway I244.
+
+  Completion:
+  - The installed wrapper passed its public Make tests without a sibling Gateway checkout.
+  - Full CI passed all 13 gates in 320 seconds with 100.0% Go statement coverage.
+  - Source implementation is completed. Production activation remains operator-controlled.
+
 ## Maintenance
 
 - [x] [M009] Consolidate repository runbook documents under `.mprlab/`. (historical M009R reclassified as a completed one-off)
@@ -9296,7 +9764,305 @@ issue titles discoverable without making the active tracker noisy.
   `tests/e2e/management-ui.spec.js`, `Makefile`, `README.md`, `docs/provider-catalog.md`, and `docs/baidu-qianfan.md`.
   Public discovery adds Baidu and four offerings. Public event schemas did not change.
 
+### Complete entries archived 2026-09-18
+
+- [x] [F063] (P1) Implement the tenant, connection, and model dashboard from P001.
+  Resolution: Implemented account connections, tenant assignments, explicit dashboard controls, and the approved bounded migration.
+  Connection creation supports durable retries. Tenant usage, access keys, routes, and prompts remain separate.
+  Validation: `make ci` passed all 12 gates, including 100.0 percent Go coverage, 117 frontend tests, and seven authenticated browser tests.
+  Goal: Implement the full P001 design approved by the user on September 10, 2026.
+  Requirements:
+  - Implement all P001 requirements and its approved routing and migration decisions.
+  - Keep one connection per provider per tenant and permit connection reuse within the account.
+  - Preserve tenant access, default routes, prompts, and usage during the bounded migration.
+  - Require explicit detach operations before connection deletion.
+  - Clear dependent defaults atomically when the user confirms a detach operation.
+  - Preserve the existing last-tenant deletion constraint.
+  - Provide searchable lists and scrollable columns for large dashboard inventories.
+  Deliverables:
+  - Implement connection storage, management APIs, the dashboard, migration, and current contract documentation.
+  Validation:
+  - Verify all P001 acceptance scenarios through management API and browser tests.
+  - Complete the current repository validation sequence after the last application change.
+
+- [x] [F022] (P1) {I258} Add durable tenant-owned media operations to the existing gateway.
+  Goal:
+  Extend the existing tenant API with durable media execution and result artifacts.
+  Use P011 and `docs/media-gateway-consolidation.md` as the current implementation contract.
+  Requirements:
+  - Extend the catalog and transport components completed by I257 and I258.
+  - Extend I256 public protocol tests with durable operations, artifacts, cancellation, and restart recovery.
+  - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
+  - Reuse managed tenant keys and bearer authentication for media resources.
+  - Extend the existing asset contract and official Go client in the same API change.
+  - Add capabilities, operations, cancellation resources, asset metadata reads, and bounded byte downloads under `/model/v1`.
+  - Validate and accept each request in one operation creation call.
+  - Keep the accepted intent, route, and catalog revision in the operation record.
+  - Keep a separate public plan resource outside this release.
+  - Return explicit unavailable cost evidence when exact catalog pricing is absent.
+  - Require a tenant-bound idempotency key and enforce a unique database constraint.
+  - Return the same operation for the same key and intent, including terminal and uncertain states.
+  - Reject changed intent with `409` before dispatch.
+  - Resolve an accepted request before current catalog validation.
+  - Add operation, claim, asset-reference, and usage-delivery tables in the existing managed SQLite database.
+  - Use bounded in-process workers for the first deployment.
+  - Persist acceptance, input references, and dispatch intent before provider execution.
+  - Use claim generations and transactional updates to reject stale workers.
+  - Resume undispatched work after restart. Recover dispatched work through recorded provider evidence.
+  - Keep accepted work independent from the initiating HTTP connection.
+  - Keep provider execution evidence separate from public operation state and cancellation observations.
+  - Use the state schemas, deadlines, retention, and initial capacity values specified by P011.
+  - Keep native handles and byte digests private.
+  - Coordinate asset publication and deletion with durable active references.
+  - Return output assets through authenticated metadata and content reads.
+  - Keep minimal idempotency tombstones for the tenant lifetime after terminal data expiry.
+  - Keep unresolved operation evidence until reconciliation or explicit disposition.
+  - Deduplicate execution usage by operation identifier through a durable delivery record.
+  - Keep status reads and downloads separate from generation charges.
+  - Coordinate network capacity with I046. Keep provider-specific staging in F043.
+  - Add migration tools only when an actual retained-record inventory requires them.
+  Deliverables:
+  - A reusable second-provider acceptance harness with catalog-selected adapters and controlled external protocols.
+  - Operation service, SQLite tables, worker, asset lifecycle, OpenAPI contract, and official Go client methods.
+  - A real-service client example with controlled provider protocols.
+  Validation:
+  - Exercise the P011 second-provider procedure through the shared service harness.
+  - Start with a failing integration test through the real HTTP listener, SQLite database, and filesystem.
+  - Prove duplicate convergence, intent conflicts, tenant isolation, and zero dispatch for rejected requests.
+  - Prove restart recovery, stale-worker rejection, explicit uncertainty, and truthful cancellation.
+  - Prove active references, interrupted downloads, output expiry, tombstones, and deduplicated usage after restart.
+  - Preserve current text behavior through integration tests before shared-code extraction.
+  - Run the current repository checks. Record provider and hosted acceptance separately.
+  Resolution:
+  - Added the durable operation service, SQLite records, worker claims, asset resources, OpenAPI contract, and official Go client.
+  - Added controlled-provider tests for tenant isolation, idempotency, cancellation, restart recovery, retention, usage delivery, and invalid results.
+  - Added a real-service client example. Live-provider acceptance remains with each provider capability issue.
+
 ## Planning
+
+### Complete entries archived 2026-09-18
+
+- [x] [P013] (P2) Plan provider and model logos for management and the public catalog.
+  Goal: Define small logos that distinguish API connections from model families on both surfaces.
+  Requirements:
+  - Record exact provider and family mappings with asset sources.
+  - Preserve the API connection and model family separation from I237.
+  - Specify icon placement, dimensions, accessibility, and shared asset ownership.
+  - Record uncertain brand identities and the implementation acceptance criteria.
+  Deliverable: `docs/provider-model-icons.md`.
+  Scope: This issue defines the plan. It does not authorize application implementation.
+  Resolution (2026-09-07): Recorded 13 provider mappings and 29 family mappings with 18 candidate SVG assets.
+  The proposal gives SenseVoice an explicit text-only presentation and records the current Moonshot identity decision.
+  The visual comparison passed a theme-switch check and a 390px layout check.
+  The plan passed the prose checker and Governor check. No application or event contract changed.
+
+- [x] [P010] (P2) Plan current SiliconFlow model expansion.
+  Goal:
+  Define the route mappings and acceptance sequence for the six SiliconFlow gaps in the provider audit.
+  Requirements:
+  - Verify exact upstream IDs for GLM-5.3, DeepSeek V4 Pro and Flash, Kimi K3, Hy3, and LongCat 2.0.
+  - Inspect provider-specific controls, conflicting limits, and existing model identities.
+  - Define independent qualification without exposing an unaccepted offering through an enabled shared model.
+  - Examine the existing repository credential inputs before declaring a paid acceptance blocker.
+  Deliverable:
+  `docs/siliconflow-expansion.md` records the proposed identities, provider evidence, source conflicts, and ordered acceptance sequence.
+  Scope:
+  This assessment records the expansion plan. It does not register or activate provider offerings.
+  Resolution (2026-09-05):
+  Verified all six upstream model strings and recorded the proposed public identities in the assessment.
+  The DeepSeek releases use separate dated selectors. The earlier audit's undated-update interpretation was incorrect.
+  Recorded conflicting Kimi K3 and LongCat output limits as unresolved provider evidence.
+  Defined disposable-catalog acceptance before canonical registration to preserve shared model activation behavior.
+  The SiliconFlow key is absent from the process and all six repository private environment files.
+  Paid discovery and acceptance remain pending. No provider offering or event contract changed.
+  Documentation checks and the Governor check passed.
+  Approval (2026-09-06):
+  The user approved the full P010 implementation scope.
+  F059 owns all six offerings, provider-specific controls, Kimi image assessment, and qualification.
+
+- [x] [P009] (P2) Assess new Meta image and transcription models.
+  Goal:
+  Define the integration scope for current Meta media models before implementation.
+  Evidence (2026-09-05):
+  - Meta lists hosted `muse-image-1.0` for image generation and image edits.
+  - Its documented endpoints include `/v1/images/generations`, `/v1/images/edits`, and Responses.
+  - Meta lists hosted `muse-voice-transcribe-1.0` for file and realtime transcription.
+  - Its documented endpoints are `POST /v1/asr/transcribe` and `wss://api.meta.ai/v1/asr/realtime`.
+  - Published prices are USD 0.01 per generated image and USD 0.18 per audio hour.
+  - Muse Glimmer requires self-hosting and belongs to the local-inference scope in P008.
+  Requirements:
+  - Read the exact request, response, limit, retention, and error contracts for each hosted model.
+  - Assess image generation and edits against the media operation design in F022.
+  - Assess file transcription against the current dictation interface.
+  - Treat realtime transcription as a separate public interface decision.
+  - Split approved implementation outcomes into Features after this assessment.
+  Sources:
+  - https://dev.meta.ai/docs/models
+  - https://dev.meta.ai/docs/pricing-rate-limits
+  - https://research.meta.ai/blog/introducing-muse-voice-transcribe
+  Scope:
+  This issue records newly discovered provider capabilities.
+  It does not authorize media adapter implementation.
+  Resolution (2026-09-05):
+  Recorded the assessment in `docs/meta-media-assessment.md`.
+  Defined native file dictation requirements and image operation dependencies on F022.
+  Recorded the separate realtime interface decision, request limits, retention gaps, and acceptance requirements.
+  Implementation approval remains pending, so no Feature issues were created.
+  The Meta key is absent from the process and all six repository private environment files.
+  Paid provider acceptance remains pending. No runtime offering or event contract changed.
+  Changed documentation passed the language review and repository checks.
+  Approval (2026-09-06):
+  The user approved the full P009 implementation scope.
+  F054, F055, F056, F057, and F058 own file dictation, structured file results, realtime sessions, images, and image conversations.
+  This approval supersedes the earlier implementation hold.
+
+- [x] [P001] (P1) Design the tenant, connection, and model dashboard.
+  Resolution: F063 implemented the approved design and routing and migration decisions.
+  The current contract is in `docs/tenant-connections.md` and `docs/openapi.yaml`.
+  Validation: The full repository CI passed all 12 gates.
+  Goal:
+  Give account owners one dashboard to create tenants, connect providers, select models, and examine tenant usage.
+  The user approved the revised visual direction on September 10, 2026.
+  This planning issue records that design and the decisions required before implementation.
+  It replaces the earlier Settings-only setup proposal in P001.
+  Context:
+  Tenant management is in Settings, while provider configuration uses separate cards.
+  The user cannot easily discover how to connect a tenant to an existing provider configuration.
+  FamilyHome can use existing provider credentials while its proxy access, token totals, and usage remain separate.
+  Proposed resource model:
+  An account owns multiple tenants and named provider connections.
+  In this design, a provider connection contains a provider identity, credentials, and required provider settings.
+  A tenant can reference one connection per provider. A provider can remain unconfigured for a tenant.
+  Multiple tenants in the same account can reference one connection.
+  Tenant identity, proxy access keys, default routes, system prompts, and usage remain tenant properties.
+  This proposal changes the current tenant-owned definition of `provider connection` when implementation occurs.
+  Requirements:
+  - Keep the name `tenant` for the tenant resource.
+  - Use `connection` for the named provider resource.
+  - Present the dashboard in this order: tenants, connections, models.
+  - Make tenant creation and connection management available directly from the dashboard.
+  - Let a new tenant use existing connections, create a connection, or complete configuration later.
+  - Keep the dashboard available when a tenant has no provider credentials.
+  - Show connection names, provider identities, and the number of assigned tenants on connection cards.
+  - Calculate `Used by N tenants` from current assignments, independently of recent request traffic.
+  - Show an unassigned state when the assignment count is zero.
+  - Treat shared and dedicated as descriptions of assignment counts, rather than selectable connection types.
+  - Keep tenant usage separate when multiple tenants use the same connection.
+  Dashboard layout:
+  - Preserve the current compact dark surfaces, thin borders, typography, and provider and model logos.
+  - Place the tenant, connection, and model columns in one central relationship map.
+  - Use explicit `Create tenant` and `Create connection` actions.
+  - Keep one visible tenant context for configuration, model defaults, and tenant usage.
+  - Provide a clearly labeled account usage view.
+  - Preserve Requests, Tokens, Success rate, and Providers metrics, plus request and token charts.
+  - Keep rejected requests distinct from failed executions.
+  - Show the selected tenant's relationships by default to reduce crossed lines.
+  - Use solid teal lines for saved assignments and dashed amber lines for proposed model changes.
+  - Mark saved default models with a star and a text label.
+  - Distinguish a selected card from a saved relationship through text and visual state.
+  - Keep the map usable with a keyboard and on narrow screens.
+  Connection interaction:
+  - When a tenant is selected, show a visible `Connect` button on each available connection card.
+  - After a successful connection, replace the button with `Connected` and show the saved relationship line.
+  - Update the tenant connection count and the connection assignment count from the saved result.
+  - Show available models after the tenant connects to the selected connection.
+  - Require a separate action to save a default model.
+  - For a tenant without connections, show `Connect to choose models` in the model column.
+  - Keep connection selection empty when the selected tenant has no connections.
+  - When a user examines an unattached connection, show `Not connected` beside the tenant context.
+  - Show a route in the footer only when the corresponding relationship exists.
+  - Show explicit progress and error states for connection changes.
+  - If a change fails, preserve the previous saved assignment and show the error.
+  Detail controls:
+  - Open connection details below the map when the user selects a connection.
+  - Show its name, provider, masked credentials, required settings, and assigned tenants.
+  - Provide connection edit and tenant detach actions in the same detail area.
+  - Before a shared connection changes, identify each affected tenant beside the save action.
+  - When a tenant detaches, preserve the connection and its other tenant assignments.
+  - Show affected default routes before a detach operation.
+  - Require explicit resolution of affected defaults without selecting another route automatically.
+  - Show models and capabilities from the provider catalog for the selected connection.
+  - Provide Text and Dictation controls with explicit actions to save tenant defaults.
+  - Keep reasoning controls and system prompts with the applicable tenant configuration.
+  - Keep model previews separate from saved defaults.
+  - Provide adjacent tenant access controls with one-time secret display and copyable route examples.
+  Credential setup:
+  - Let the user name a new connection and select its provider before entering required credentials and settings.
+  - Offer attachment to the selected tenant during connection creation.
+  - Use the provider catalog for field definitions, capabilities, model choices, and verified official credential URLs.
+  - Open official credential pages with `target="_blank"` and `rel="noopener noreferrer"`.
+  - Keep account data, tenant identifiers, and credentials out of external links.
+  - Preserve the form while the user obtains credentials in another window.
+  - Validate credentials and settings through the canonical management contract before reporting successful configuration.
+  - Keep stored credentials encrypted and saved values masked.
+  - Keep upstream credentials out of management responses, generated examples, and public proxy requests.
+  - Enforce account ownership for connection access and tenant assignments.
+  Approved routing and migration decisions:
+  The user approved these decisions on September 10, 2026.
+  - Limit each tenant to one assigned connection per provider.
+  - Use that connection for the tenant's requests to the provider.
+  - Permit the same connection to serve multiple tenants in its account.
+  - Create one account-owned connection for each existing provider configuration during the bounded migration.
+  - Attach each migrated connection to the configuration's current tenant.
+  - Keep migrated connections separate even when their credential values are equal.
+  - Preserve tenant access keys, default routes, system prompts, and usage history during migration.
+  Implementation decisions:
+  - Require all tenant assignments to be detached before connection deletion.
+  - Clear dependent defaults atomically after explicit detach confirmation.
+  - Preserve the existing last-tenant deletion constraint.
+  - Use searchable lists and scrollable columns when inventories exceed the visible map.
+  Implementation owner: F063 implements the full approved P001 scope under the user's September 10 instruction.
+  Deliverables:
+  - Complete the open decisions with one resource, ownership, and route-selection contract.
+  - Specify management API operations for connection creation, edits, assignments, detach operations, and deletion.
+  - Record the final dashboard states, responsive layout, keyboard behavior, and accessible labels.
+  - Specify the bounded migration and the removal of obsolete tenant credential paths.
+  - Define implementation work for storage, management APIs, the dashboard, and public-entrypoint acceptance.
+  - Include updates to OpenAPI, typed frontend contracts, examples, and repository terminology in the implementation scope.
+  - Retain P012 as the provider-specific access decision owner and P001 as the shared interface design owner.
+  Validation:
+  - Walk through Social Threader with no connections and no selected connection.
+  - Verify that the Production card presents an obvious `Connect` action.
+  - Connect Production and verify `Connected`, the new line, assignment counts, and available models.
+  - Verify that connection creation or attachment does not silently select a default model.
+  - Walk through FamilyHome creation with existing credentials and with a new connection.
+  - Verify that tenant creation can finish before provider configuration.
+  - Walk through model previews, explicit default saves, tenant switches, connection edits, detach operations, and failures.
+  - Specify browser acceptance for keyboard use, narrow layouts, masked secrets, and consistent tenant context.
+  - Specify management API acceptance for account isolation, assignment persistence, migration, and atomic changes to dependent defaults.
+  - Verify separate tenant usage when two tenants use the same connection.
+  - Verify that a tenant cannot have two assigned connections for the same provider.
+  - Verify that provider requests use the tenant's assigned connection.
+  - Verify one migrated connection per existing provider configuration and attachment to its original tenant.
+  - Verify that equal credentials in separate configurations produce separate migrated connections.
+  - Verify that migration preserves tenant access keys, default routes, system prompts, and usage history.
+  - Apply the current repository validation policy when the implementation issues execute.
+  Design reference:
+  The accepted local prototype is `dashboard-connections-design.html`, revised with explicit Connect buttons and Social Threader selected.
+  Local path: `/Users/tyemirov/.codex/visualizations/2026/09/10/01a08a31-cc66-7da2-a881-ed1babc4fcfe/dashboard-connections-design.html`.
+  This prototype uses sample data and illustrative credentials. The requirements above are the durable design record.
+
+- [x] [P011] (P1) Specify the MediaOps gateway migration.
+  Goal:
+  Define one shared gateway product and a complete first consumer delivery.
+  Deliverables:
+  - Specify catalog ownership, protocol adapter selection, and acceptance through a second provider definition.
+  - Record API, storage, worker, authentication, capacity, and resource ownership decisions.
+  - Specify the provider sequence, paired consumer changes, data receipts, and release evidence.
+  - Align F022 and related migration issues with one idempotent operation creation contract.
+  - Preserve unrelated provider-audit work.
+  Validation:
+  - Verify source paths, issue references, API consistency, and changed documentation language.
+  - Verify that staged changes exclude unrelated provider work.
+  Resolution:
+  - Added the provider catalog and protocol adapter contract on 2026-09-08.
+  - Required a second provider to use the same executable and clients through catalog data and connection values.
+  - Assigned the harness to F022 and the first image proof to F024.
+  - Applied the acceptance requirement to each affected media slice.
+  - Recorded the concrete contract in `docs/media-gateway-consolidation.md`.
+  - Paired the consumer delivery with MediaOps P006.
+  - Kept implementation issues open and identified the required FamilyHome P003 revision.
+
 
 ### Complete entries archived 2026-08-10
 
