@@ -624,7 +624,7 @@ func TestDictatorWorkerIsolationPreservesAdmittedCloudExecution(testingInstance 
 	dictator := fixture.record(MediaOperationStateQueued, MediaProviderExecutionNotDispatched)
 	dictator.Provider = ProviderNameDictator
 	dictator.CredentialReference = "deployment:dictator:test"
-	dictator.Model = ModelNameDictatorSpeechV1
+	dictator.Model = ModelNameDictatorWhisperBase
 	dictator.Capability = llmproxycontract.MediaCapabilityAudioTranscribe
 	dictator.CatalogOperation = ModelOperationAudioTranscription
 	dictator.DeadlineAt = time.Now().UTC().Add(time.Hour)

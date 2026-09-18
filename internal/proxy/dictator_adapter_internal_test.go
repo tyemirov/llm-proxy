@@ -51,27 +51,36 @@ func (protocol *controlledDictatorProtocol) DiscoverVoices(context.Context) ([]M
 
 func TestDictatorAdapterValidatesEveryRetainedCapability(t *testing.T) {
 	fixture := newMediaOperationInternalFixture(t)
-	adapter, adapterError := newDictatorMediaOperationAdapter(ProviderNameDictator, ModelNameDictatorSpeechV1, &controlledDictatorProtocol{}, fixture.service.assets, fixture.service.store, time.Millisecond)
-	if adapterError != nil {
-		t.Fatal(adapterError)
+	transcriptionAdapter, transcriptionError := newDictatorMediaOperationAdapter(ProviderNameDictator, ModelNameDictatorWhisperMedium, &controlledDictatorProtocol{}, fixture.service.assets, fixture.service.store, time.Millisecond)
+	if transcriptionError != nil {
+		t.Fatal(transcriptionError)
+	}
+	speechAdapter, speechError := newDictatorMediaOperationAdapter(ProviderNameDictator, ModelNameDictatorQwen3TTS, &controlledDictatorProtocol{}, fixture.service.assets, fixture.service.store, time.Millisecond)
+	if speechError != nil {
+		t.Fatal(speechError)
 	}
 	assetID := "ast_0123456789abcdef0123456789abcdef"
 	voiceID := "voi_0123456789abcdef0123456789abcdef"
 	testCases := []struct {
 		capability string
+		model      string
 		input      string
 		controls   string
 	}{
-		{llmproxycontract.MediaCapabilityAudioTranscribe, `{"audio_asset_id":"` + assetID + `"}`, `{"detect_language":true}`},
-		{llmproxycontract.MediaCapabilityAudioDiarize, `{"audio_asset_id":"` + assetID + `"}`, `{"language":"en","model_size":"medium","utterance_gap_seconds":0.5}`},
-		{llmproxycontract.MediaCapabilityAudioAlign, `{"audio_asset_id":"` + assetID + `","transcript":"Hello world."}`, `{"language":"en","remove_punctuation":true}`},
-		{llmproxycontract.MediaCapabilitySubtitlesCreate, `{"audio_asset_id":"` + assetID + `"}`, `{"detect_language":true,"granularity":"word","group_size":2}`},
-		{llmproxycontract.MediaCapabilityAudioSpeechGenerate, `{"text":"Hello world.","voice_id":"` + voiceID + `"}`, `{"language":"en","text_format":"plain","sample_rate_hz":24000,"include_timeline":true}`},
-		{llmproxycontract.MediaCapabilityAudioVoiceExtract, `{"audio_asset_id":"` + assetID + `","transcript":"Hello world.","display_name":"Narrator","language":"en"}`, `{"model_size":"medium"}`},
+		{llmproxycontract.MediaCapabilityAudioTranscribe, ModelNameDictatorWhisperMedium, `{"audio_asset_id":"` + assetID + `"}`, `{"detect_language":true}`},
+		{llmproxycontract.MediaCapabilityAudioDiarize, ModelNameDictatorWhisperMedium, `{"audio_asset_id":"` + assetID + `"}`, `{"language":"en","utterance_gap_seconds":0.5}`},
+		{llmproxycontract.MediaCapabilityAudioAlign, ModelNameDictatorWhisperMedium, `{"audio_asset_id":"` + assetID + `","transcript":"Hello world."}`, `{"language":"en","remove_punctuation":true}`},
+		{llmproxycontract.MediaCapabilitySubtitlesCreate, ModelNameDictatorWhisperMedium, `{"audio_asset_id":"` + assetID + `"}`, `{"detect_language":true,"granularity":"word","group_size":2}`},
+		{llmproxycontract.MediaCapabilityAudioSpeechGenerate, ModelNameDictatorQwen3TTS, `{"text":"Hello world.","voice_id":"` + voiceID + `"}`, `{"language":"en","text_format":"plain","sample_rate_hz":24000,"include_timeline":true}`},
+		{llmproxycontract.MediaCapabilityAudioVoiceExtract, ModelNameDictatorWhisperMedium, `{"audio_asset_id":"` + assetID + `","transcript":"Hello world.","display_name":"Narrator","language":"en"}`, `{}`},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.capability, func(t *testing.T) {
-			validated, validationError := adapter.Validate(context.Background(), MediaOperationAdapterRequest{Capability: testCase.capability, Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Input: json.RawMessage(testCase.input), Controls: json.RawMessage(testCase.controls)})
+			adapter := transcriptionAdapter
+			if testCase.model == ModelNameDictatorQwen3TTS {
+				adapter = speechAdapter
+			}
+			validated, validationError := adapter.Validate(context.Background(), MediaOperationAdapterRequest{Capability: testCase.capability, Provider: ProviderNameDictator, Model: testCase.model, Input: json.RawMessage(testCase.input), Controls: json.RawMessage(testCase.controls)})
 			if validationError != nil || validated.Input == nil || validated.Controls == nil {
 				t.Fatalf("validated=%+v error=%v", validated, validationError)
 			}
@@ -86,14 +95,20 @@ func TestDictatorAdapterValidatesEveryRetainedCapability(t *testing.T) {
 	}
 
 	invalidRequests := []MediaOperationAdapterRequest{
-		{Capability: llmproxycontract.MediaCapabilityAudioTranscribe, Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `"}`), Controls: json.RawMessage(`{`)},
-		{Capability: "future", Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Input: json.RawMessage(`{}`), Controls: json.RawMessage(`{}`)},
-		{Capability: llmproxycontract.MediaCapabilityAudioTranscribe, Provider: ProviderNameOpenAI, Model: ModelNameDictatorSpeechV1, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `"}`), Controls: json.RawMessage(`{"detect_language":true}`)},
-		{Capability: llmproxycontract.MediaCapabilityAudioTranscribe, Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `","future":true}`), Controls: json.RawMessage(`{"detect_language":true}`)},
-		{Capability: llmproxycontract.MediaCapabilityAudioTranscribe, Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `"}`), Controls: json.RawMessage(`{"detect_language":true,"text_format":"plain"}`)},
-		{Capability: llmproxycontract.MediaCapabilityAudioSpeechGenerate, Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Input: json.RawMessage(`{"text":"hello","voice_id":"` + voiceID + `"}`), Controls: json.RawMessage(`{"language":"en","text_format":"ssml","sample_rate_hz":16000}`)},
+		{Capability: llmproxycontract.MediaCapabilityAudioTranscribe, Provider: ProviderNameDictator, Model: ModelNameDictatorWhisperMedium, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `"}`), Controls: json.RawMessage(`{`)},
+		{Capability: "future", Provider: ProviderNameDictator, Model: ModelNameDictatorWhisperMedium, Input: json.RawMessage(`{}`), Controls: json.RawMessage(`{}`)},
+		{Capability: llmproxycontract.MediaCapabilityAudioTranscribe, Provider: ProviderNameOpenAI, Model: ModelNameDictatorWhisperMedium, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `"}`), Controls: json.RawMessage(`{"detect_language":true}`)},
+		{Capability: llmproxycontract.MediaCapabilityAudioTranscribe, Provider: ProviderNameDictator, Model: ModelNameDictatorWhisperMedium, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `","future":true}`), Controls: json.RawMessage(`{"detect_language":true}`)},
+		{Capability: llmproxycontract.MediaCapabilityAudioTranscribe, Provider: ProviderNameDictator, Model: ModelNameDictatorWhisperMedium, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `"}`), Controls: json.RawMessage(`{"detect_language":true,"text_format":"plain"}`)},
+		{Capability: llmproxycontract.MediaCapabilityAudioSpeechGenerate, Provider: ProviderNameDictator, Model: ModelNameDictatorQwen3TTS, Input: json.RawMessage(`{"text":"hello","voice_id":"` + voiceID + `"}`), Controls: json.RawMessage(`{"language":"en","text_format":"ssml","sample_rate_hz":16000}`)},
+		{Capability: llmproxycontract.MediaCapabilityAudioDiarize, Provider: ProviderNameDictator, Model: ModelNameDictatorWhisperMedium, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `"}`), Controls: json.RawMessage(`{"language":"en","model_size":"base"}`)},
+		{Capability: llmproxycontract.MediaCapabilityAudioSpeechGenerate, Provider: ProviderNameDictator, Model: ModelNameDictatorWhisperMedium, Input: json.RawMessage(`{"text":"hello","voice_id":"` + voiceID + `"}`), Controls: json.RawMessage(`{"language":"en","text_format":"plain","sample_rate_hz":24000}`)},
 	}
 	for invalidIndex, request := range invalidRequests {
+		adapter := transcriptionAdapter
+		if request.Model == ModelNameDictatorQwen3TTS {
+			adapter = speechAdapter
+		}
 		if _, validationError := adapter.Validate(context.Background(), request); !errors.Is(validationError, errMediaOperationInvalid) {
 			t.Fatalf("invalid request %d error=%v", invalidIndex, validationError)
 		}
@@ -112,11 +127,11 @@ func TestDictatorAdapterPersistsPrivateHandleAndRecovers(t *testing.T) {
 		submit:       dictatorProtocolObservation{State: dictatorProtocolStateRunning, Handle: handle},
 		observations: []dictatorProtocolObservation{{State: dictatorProtocolStateSucceeded, Handle: completedHandle, Outputs: []MediaOperationOutput{{MIMEType: "application/json", Data: []byte(`{"transcript":"hello"}`)}}}},
 	}
-	adapter, adapterError := newDictatorMediaOperationAdapter(ProviderNameDictator, ModelNameDictatorSpeechV1, protocol, fixture.service.assets, fixture.service.store, time.Millisecond)
+	adapter, adapterError := newDictatorMediaOperationAdapter(ProviderNameDictator, ModelNameDictatorWhisperMedium, protocol, fixture.service.assets, fixture.service.store, time.Millisecond)
 	if adapterError != nil {
 		t.Fatal(adapterError)
 	}
-	validated, validationError := adapter.Validate(context.Background(), MediaOperationAdapterRequest{Capability: llmproxycontract.MediaCapabilityAudioTranscribe, Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Input: json.RawMessage(`{"audio_asset_id":"` + asset.AssetID + `"}`), Controls: json.RawMessage(`{"detect_language":true}`)})
+	validated, validationError := adapter.Validate(context.Background(), MediaOperationAdapterRequest{Capability: llmproxycontract.MediaCapabilityAudioTranscribe, Provider: ProviderNameDictator, Model: ModelNameDictatorWhisperMedium, Input: json.RawMessage(`{"audio_asset_id":"` + asset.AssetID + `"}`), Controls: json.RawMessage(`{"detect_language":true}`)})
 	if validationError != nil {
 		t.Fatal(validationError)
 	}
@@ -150,7 +165,7 @@ func TestDictatorVoiceExtractionPublishesOnlyGatewayVoiceIdentity(t *testing.T) 
 	record.Capability = llmproxycontract.MediaCapabilityAudioVoiceExtract
 	record.CatalogOperation = ModelOperationVoiceExtraction
 	record.Provider = ProviderNameDictator
-	record.Model = ModelNameDictatorSpeechV1
+	record.Model = ModelNameDictatorWhisperMedium
 	if saveError := fixture.database.Save(&record).Error; saveError != nil {
 		t.Fatal(saveError)
 	}
@@ -186,11 +201,11 @@ func TestDictatorVoiceExtractionPublishesOnlyGatewayVoiceIdentity(t *testing.T) 
 func TestDictatorAdapterFailureAndPrivacyEdges(t *testing.T) {
 	fixture := newMediaOperationInternalFixture(t)
 	protocol := &controlledDictatorProtocol{voices: []MediaVoiceProviderRecord{{Provider: ProviderNameDictator}}}
-	adapter, adapterError := newDictatorMediaOperationAdapter(ProviderNameDictator, ModelNameDictatorSpeechV1, protocol, fixture.service.assets, fixture.service.store, time.Millisecond)
+	adapter, adapterError := newDictatorMediaOperationAdapter(ProviderNameDictator, ModelNameDictatorWhisperMedium, protocol, fixture.service.assets, fixture.service.store, time.Millisecond)
 	if adapterError != nil {
 		t.Fatal(adapterError)
 	}
-	if _, invalidError := newDictatorMediaOperationAdapter(ProviderNameDictator, ModelNameDictatorSpeechV1, nil, fixture.service.assets, fixture.service.store, time.Millisecond); invalidError == nil {
+	if _, invalidError := newDictatorMediaOperationAdapter(ProviderNameDictator, ModelNameDictatorWhisperMedium, nil, fixture.service.assets, fixture.service.store, time.Millisecond); invalidError == nil {
 		t.Fatal("nil protocol accepted")
 	}
 	if voices, voicesError := adapter.DiscoverMediaVoices(context.Background(), "tenant"); voicesError != nil || len(voices.Voices) != 1 {
@@ -299,19 +314,28 @@ func TestDictatorCanonicalRequestAndHandleEdges(t *testing.T) {
 	assetID := "ast_0123456789abcdef0123456789abcdef"
 	voiceID := "voi_0123456789abcdef0123456789abcdef"
 	invalidRequests := []MediaOperationAdapterRequest{
-		{Capability: llmproxycontract.MediaCapabilityAudioTranscribe, Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `","transcript":"wrong"}`), Controls: json.RawMessage(`{"detect_language":true}`)},
-		{Capability: llmproxycontract.MediaCapabilityAudioDiarize, Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `"}`), Controls: json.RawMessage(`{"language":"en"}`)},
-		{Capability: llmproxycontract.MediaCapabilityAudioAlign, Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `"}`), Controls: json.RawMessage(`{"language":"en"}`)},
-		{Capability: llmproxycontract.MediaCapabilitySubtitlesCreate, Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `"}`), Controls: json.RawMessage(`{"language":"en","granularity":"paragraph","group_size":1}`)},
-		{Capability: llmproxycontract.MediaCapabilityAudioSpeechGenerate, Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Input: json.RawMessage(`{"text":"hello","voice_id":"` + voiceID + `"}`), Controls: json.RawMessage(`{"language":"en","text_format":"plain","sample_rate_hz":24000,"detect_language":true}`)},
-		{Capability: llmproxycontract.MediaCapabilityAudioVoiceExtract, Provider: ProviderNameDictator, Model: ModelNameDictatorSpeechV1, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `","transcript":"hello","display_name":"Narrator","language":"en"}`), Controls: json.RawMessage(`{}`)},
+		{Capability: llmproxycontract.MediaCapabilityAudioTranscribe, Provider: ProviderNameDictator, Model: ModelNameDictatorWhisperMedium, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `","transcript":"wrong"}`), Controls: json.RawMessage(`{"detect_language":true}`)},
+		{Capability: llmproxycontract.MediaCapabilityAudioDiarize, Provider: ProviderNameDictator, Model: ModelNameDictatorWhisperMedium, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `"}`), Controls: json.RawMessage(`{"language":"en","model_size":"base"}`)},
+		{Capability: llmproxycontract.MediaCapabilityAudioAlign, Provider: ProviderNameDictator, Model: ModelNameDictatorWhisperMedium, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `"}`), Controls: json.RawMessage(`{"language":"en"}`)},
+		{Capability: llmproxycontract.MediaCapabilitySubtitlesCreate, Provider: ProviderNameDictator, Model: ModelNameDictatorWhisperMedium, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `"}`), Controls: json.RawMessage(`{"language":"en","granularity":"paragraph","group_size":1}`)},
+		{Capability: llmproxycontract.MediaCapabilityAudioSpeechGenerate, Provider: ProviderNameDictator, Model: ModelNameDictatorWhisperMedium, Input: json.RawMessage(`{"text":"hello","voice_id":"` + voiceID + `"}`), Controls: json.RawMessage(`{"language":"en","text_format":"plain","sample_rate_hz":24000,"detect_language":true}`)},
+		{Capability: llmproxycontract.MediaCapabilityAudioVoiceExtract, Provider: ProviderNameDictator, Model: ModelNameDictatorWhisperMedium, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `","transcript":"hello","display_name":"Narrator","language":"en"}`), Controls: json.RawMessage(`{"model_size":"base"}`)},
+		{Capability: llmproxycontract.MediaCapabilityAudioTranscribe, Provider: ProviderNameDictator, Model: ModelNameDictatorQwen3TTS, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `"}`), Controls: json.RawMessage(`{"detect_language":true}`)},
 	}
 	fixture := newMediaOperationInternalFixture(t)
-	adapter, adapterError := newDictatorMediaOperationAdapter(ProviderNameDictator, ModelNameDictatorSpeechV1, &controlledDictatorProtocol{}, fixture.service.assets, fixture.service.store, time.Millisecond)
-	if adapterError != nil {
-		t.Fatal(adapterError)
+	transcriptionAdapter, transcriptionError := newDictatorMediaOperationAdapter(ProviderNameDictator, ModelNameDictatorWhisperMedium, &controlledDictatorProtocol{}, fixture.service.assets, fixture.service.store, time.Millisecond)
+	if transcriptionError != nil {
+		t.Fatal(transcriptionError)
+	}
+	speechAdapter, speechError := newDictatorMediaOperationAdapter(ProviderNameDictator, ModelNameDictatorQwen3TTS, &controlledDictatorProtocol{}, fixture.service.assets, fixture.service.store, time.Millisecond)
+	if speechError != nil {
+		t.Fatal(speechError)
 	}
 	for index, request := range invalidRequests {
+		adapter := transcriptionAdapter
+		if request.Model == ModelNameDictatorQwen3TTS {
+			adapter = speechAdapter
+		}
 		if _, validationError := adapter.Validate(context.Background(), request); !errors.Is(validationError, errMediaOperationInvalid) {
 			t.Fatalf("invalid request %d error=%v", index, validationError)
 		}
@@ -339,7 +363,7 @@ func TestDictatorCanonicalRequestAndHandleEdges(t *testing.T) {
 
 func TestDictatorSpeechVoiceResolutionIsTenantAndProviderBound(t *testing.T) {
 	fixture := newMediaOperationInternalFixture(t)
-	adapter, adapterError := newDictatorMediaOperationAdapter(ProviderNameDictator, ModelNameDictatorSpeechV1, &controlledDictatorProtocol{}, fixture.service.assets, fixture.service.store, time.Millisecond)
+	adapter, adapterError := newDictatorMediaOperationAdapter(ProviderNameDictator, ModelNameDictatorQwen3TTS, &controlledDictatorProtocol{}, fixture.service.assets, fixture.service.store, time.Millisecond)
 	if adapterError != nil {
 		t.Fatal(adapterError)
 	}
@@ -350,7 +374,7 @@ func TestDictatorSpeechVoiceResolutionIsTenantAndProviderBound(t *testing.T) {
 		t.Fatal("missing voice accepted")
 	}
 	for _, provider := range []string{ProviderNameXAI, ProviderNameDictator} {
-		voice := MediaVoiceProviderRecord{Provider: provider, Model: ModelNameDictatorSpeechV1, Mode: MediaVoiceModePreset, Language: "en", DisplayName: provider, SampleRates: []int{24000}, DefaultSampleRate: 24000, ProviderVoiceReference: "native-" + provider}
+		voice := MediaVoiceProviderRecord{Provider: provider, Model: ModelNameDictatorQwen3TTS, Mode: MediaVoiceModePreset, Language: "en", DisplayName: provider, SampleRates: []int{24000}, DefaultSampleRate: 24000, ProviderVoiceReference: "native-" + provider}
 		if persistError := fixture.service.store.persistMediaVoices(context.Background(), fixture.tenant.identifier.string(), provider, []MediaVoiceProviderRecord{voice}); persistError != nil {
 			t.Fatal(persistError)
 		}

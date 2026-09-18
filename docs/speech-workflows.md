@@ -38,7 +38,7 @@ This extraction request preserves the MediaOps duration control:
 {
   "capability": "audio.voice.extract",
   "provider": "dictator",
-  "model": "dictator-speech-v1",
+  "model": "whisper-base",
   "input": {
     "audio_asset_id": "ast_0123456789abcdef0123456789abcdef",
     "transcript": "hello world",

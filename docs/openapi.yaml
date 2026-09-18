@@ -5042,7 +5042,7 @@ components:
             provider:
               const: dictator
             model:
-              const: dictator-speech-v1
+              enum: [whisper-tiny, whisper-base, whisper-small, whisper-medium, whisper-large-v3]
             input:
               $ref: '#/components/schemas/DictatorAudioInput'
             controls:
@@ -5057,13 +5057,12 @@ components:
             provider:
               const: dictator
             model:
-              const: dictator-speech-v1
+              enum: [whisper-tiny, whisper-base, whisper-small, whisper-medium, whisper-large-v3]
             input:
               $ref: '#/components/schemas/DictatorAudioInput'
             controls:
               type: object
               additionalProperties: false
-              required: [model_size]
               properties:
                 language:
                   type: string
@@ -5094,7 +5093,7 @@ components:
             provider:
               const: dictator
             model:
-              const: dictator-speech-v1
+              enum: [whisper-tiny, whisper-base, whisper-small, whisper-medium, whisper-large-v3]
             input:
               type: object
               additionalProperties: false
@@ -5126,7 +5125,7 @@ components:
             provider:
               const: dictator
             model:
-              const: dictator-speech-v1
+              enum: [whisper-tiny, whisper-base, whisper-small, whisper-medium, whisper-large-v3]
             input:
               type: object
               additionalProperties: false
@@ -5171,7 +5170,7 @@ components:
             provider:
               const: dictator
             model:
-              const: dictator-speech-v1
+              enum: [qwen3-tts, silero-ru]
             input:
               type: object
               additionalProperties: false
@@ -5212,7 +5211,7 @@ components:
             provider:
               const: dictator
             model:
-              const: dictator-speech-v1
+              enum: [whisper-tiny, whisper-base, whisper-small, whisper-medium, whisper-large-v3]
             input:
               type: object
               additionalProperties: false
@@ -5233,7 +5232,6 @@ components:
             controls:
               type: object
               additionalProperties: false
-              required: [model_size]
               properties:
                 duration_seconds:
                   type: number

@@ -27,160 +27,6 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
-- [x] [B226] (P1) Add browser CORS access to Caddy rate limit responses.
-  Observed: Cross-origin browser requests from `https://llm-proxy.mprlab.com` to `https://llm-proxy-api.mprlab.com` fail with CORS error `net::ERR_FAILED` when the rate limit triggers.
-  Cause: The `caddy_route` resource sets `events: 10, window_seconds: 10`. Normal page loads exceed this budget. When Caddy responds with HTTP 429, the default handler lacks an `access.browser` policy, so Caddy emits no `Access-Control-Allow-Origin` header.
-  Requirements:
-  - Add the `browser` access policy with origin `https://llm-proxy.mprlab.com` and `allow_credentials: true` to the default handler of `public-api`.
-  - Increase the rate limit budget to `events: 120, window_seconds: 60` on the `public-api` route.
-  - Verify manifest canonicality and schema conformance.
-  Resolution: Added `access.browser` with origin `https://llm-proxy.mprlab.com` and credentials enabled to the `public-api` default handler. Increased route rate limit to 120 events in 60 seconds.
-  Deliverables: `.mprlab/deploy/resources.yml`.
-  Validation: Verified YAML syntax and Gateway contract conformance. Repository checks and Governor validation passed.
-
-- [x] [B225] (P1) Keep dashboard connectors attached during inner list scroll.
-  Observed: The tenant-to-connection wire detaches from its connection card after the connections list scrolls. The wire keeps its pre-scroll endpoint while the card moves.
-  Cause: `drawRoutes` computed endpoints once per render. Inner `.cw-list` scroll moves cards without a redraw.
-  Requirements: Redraw wires on inner list scroll. Keep the redraw rAF-throttled.
-  Resolution: Scroll listeners on each `.cw-list` schedule a redraw. Resize observation uses the same schedule. Pending frames cancel on disconnect.
-  Deliverables: `site/assets/llm-proxy/js/ui/connectionDashboard.js`, `tests/e2e/management-ui.spec.js`. Existing event contracts did not change.
-  Validation: The new `dashboard connectors follow connection cards after inner list scroll` test failed with a 143px endpoint error before the fix and passes after. `npm run frontend:lint` passes. Eight dashboard browser tests pass.
-
-- [x] [B224] (P1) Migrate retained asset metadata before production speech acceptance.
-  Observed: Authenticated asset upload returns HTTP 500 with `asset_store_error`.
-  Cause: The deployed store contains 139 version-1 records. The current contract requires version 2 and `content_sha256`.
-  Requirements:
-  - Verify each retained record and its available bytes before the bounded migration.
-  - Back up the original metadata and record per-tenant counts.
-  - Change only the metadata version and digest field name.
-  - Verify upload and download through the public tenant API after migration.
-  - Remove the temporary migration program after acceptance.
-  Resolution (2026-09-16): Migrated all 139 records after byte and digest checks. All were expired and belonged to the Default tenant.
-  Original metadata and the receipt remain in the host data volume under `migrations/B224-20260916`.
-  Validation: The Creative Director live test passed upload, speech execution, download, and receipt reuse in 12.67 seconds.
-  The temporary migration program was removed. Application code and event contracts did not change.
-
-- [x] [B223] (P1) Preserve MCP protocol errors before response conversion.
-  Observed: An authenticated unknown tool call causes a nil pointer panic in `mcpCurrentProtocol`.
-  Requirements: Return the SDK error before conversion of its response. Keep subsequent requests available.
-  Resolution: The middleware returns SDK errors before response conversion. Unknown tool calls no longer terminate the server.
-  Deliverables: `internal/proxy/mcp.go`, `internal/proxy/mcp_media_test.go`, and `docs/mcp.md`. Existing event contracts did not change.
-  Final result: `make test-mcp` passed. Final `make ci` passed all 13 gates in 324 seconds with 100.0 percent Go coverage.
-  Validation: Reproduce the failure with `make test-mcp`. Verify unknown tool rejection and subsequent discovery. Run final `make ci`.
-
-- [x] [B222] (P1) Register speech adapters from the provider catalog.
-  Observed: A second provider with the Dictator speech protocol passes catalog validation. Voice discovery through the official client returns HTTP 400.
-  Requirements: Use the catalog provider, model, endpoint field, and credential field for registration and execution. Use the selected route for voices and worker selection.
-  Initial result: Distinct connection fields caused HTTP 503 with `provider_key_verification_unavailable`.
-  Validation: Run the same public acceptance flow for both providers. Run final `make ci`.
-  Initial result: `make test-dictator` failed in `TestDictatorSecondProviderUsesCatalogRegistration` with `llm_proxy_client_http_failure: status=400`.
-  Resolution: Registration, account binding, voices, and worker selection use the catalog route. Distinct endpoint and credential fields pass verification.
-  Validation: Both providers pass the public flow and browser checks. All six live capabilities passed. Final `make ci` passed 13 gates in 333 seconds with 100.0 percent Go coverage.
-  Production files: `internal/proxy/media_operations.go`, `dictator_account.go`, `dictator_adapter.go`, `dictator_grpc.go`, `dictator_grpc_protocol.go`, and `provider_key_verifier.go`.
-  Test files: `internal/proxy/dictator_grpc_e2e_test.go`, `dictator_live_test.go`, `dictator_grpc_internal_test.go`, `dictator_adapter_internal_test.go`, and `media_operations_edges_internal_test.go`.
-  Browser files: `tests/blackbox/connection-dashboard.spec.js` and `localManagementStack.mjs`.
-  Operator files: `Makefile`, `README.md`, `docs/dictator-live-acceptance.md`, `docs/dictator-migration-audit.md`, and `docs/media-gateway-consolidation.md`.
-  Event contracts did not change. F042 migration requirements remain open.
-
-
-- [x] [B219] (P1) Remove private data from speech timelines.
-  Observed: Tenant timeline assets contain native voice identifiers, engine details, and server paths.
-  Requirements: Validate the native timeline. Publish only public text and timing fields.
-  Validation: Use the public HTTP API with a local Dictator gRPC server. Run final `make ci`.
-  Resolution: The public timeline contains only validated text segments. Malformed native timelines produce no tenant assets.
-  Deliverables: `internal/proxy/dictator_grpc_protocol.go`, `internal/proxy/dictator_grpc_e2e_test.go`, `docs/media-gateway-consolidation.md`.
-  Validation: Focused tests passed. Final local `make ci` passed all 13 gates with 100.0 percent Go statement coverage.
-  Event contracts did not change.
-
-- [x] [B220] (P2) Exclude voices with obsolete connection authority.
-  Observed: Voice discovery returns obsolete voices after connection changes. Accepted work with these voices becomes uncertain.
-  Requirements: Return only current voices. Reject obsolete voice references before acceptance.
-  Validation: Change the connection address and token through HTTP. Run final `make ci`.
-  Resolution: Discovery uses current connection authority. Obsolete voices receive HTTP 400 before acceptance. Current voices complete synthesis after address and token changes.
-  Deliverables: `internal/proxy/media_voices.go`, `internal/proxy/media_operations.go`, `internal/proxy/dictator_account.go`, `internal/proxy/dictator_adapter.go`, `internal/proxy/dictator_grpc_protocol.go`, and their integration tests.
-  Validation: Focused tests passed. Final local `make ci` passed all 13 gates with 100.0 percent Go statement coverage.
-  Event contracts did not change.
-
-- [x] [B221] (P2) Keep an explicit zero diarization gap.
-  Observed: A zero `utterance_gap_seconds` value disappears before the gRPC request.
-  Requirements: Keep zero and omission as distinct control values.
-  Validation: Inspect gRPC requests from public HTTP operations. Run final `make ci`.
-  Resolution: The optional control retains its presence through storage and gRPC. Tests distinguish zero, omission, and a positive value.
-  Deliverables: `internal/proxy/dictator_adapter.go`, `internal/proxy/dictator_grpc_protocol.go`, `internal/proxy/dictator_grpc_e2e_test.go`, `docs/openapi.yaml`, `site/docs/index.html`, `docs/media-gateway-consolidation.md`.
-  Validation: Focused tests passed. Final local `make ci` passed all 13 gates with 100.0 percent Go statement coverage.
-  Event contracts did not change.
-
-- [x] [B218] (P1) Use the canonical Python media capability resource.
-  Observed: The Python client requests `/model/v1/media-capabilities`. The server exposes `/model/v1/capabilities`.
-  Requirements: Use the canonical server path without an alias.
-  Validation: Read capabilities through the official Python client and a real HTTP listener. Run final `make ci`.
-  Resolution: The HTTP regression first returned 404. The corrected client uses `/model/v1/capabilities` without an alias.
-  Deliverables: `python/llm_proxy_client/client.py`, `python/tests/test_client.py`.
-  Validation: Python and package-install tests passed. Final `make ci` passed all 13 gates with 100 percent Go coverage.
-
-- [x] [B217] (P2) Keep both dashboard prompt drafts after a failed save.
-  Observed: A provider prompt draft is lost after HTTP 500 when both prompt forms are visible.
-  Requirements: Keep both prompt drafts for retry.
-  Validation: Use browser tests for failed saves and successful retry. Run final `make ci`.
-  Resolution: Failed saves now keep both form drafts. Browser tests passed for both failed save actions and the successful provider prompt retry.
-  Deliverables: `site/assets/llm-proxy/js/ui/connectionDashboard.js`, `tests/blackbox/connection-dashboard.spec.js`.
-  Validation: Final `make ci` passed all 13 gates with 100.0 percent Go statement coverage.
-  Event contracts did not change.
-
-- [x] [B216] (P2) Limit Python media status requests to the wait deadline.
-  Observed: A stalled HTTP status response can keep the Python wait active without a timeout.
-  Requirements: Examine the deadline before each poll. Supply the remaining timeout to the HTTP transport.
-  Validation: Use HTTP tests for stalled headers, stalled response bytes, and the final poll interval. Run final `make ci`.
-  Resolution: Each status request receives the remaining timeout. The loop starts no request after its deadline. HTTP tests passed for stalled headers, stalled response bytes, and the final poll interval.
-  Deliverables: `python/llm_proxy_client/client.py`, `python/tests/test_client.py`, `docs/client-protocols.md`.
-  Validation: Final `make ci` passed all 13 gates with 100.0 percent Go statement coverage.
-  Event contracts did not change.
-
-- [x] [B215] (P2) Remove base URL query credentials from Go asset uploads.
-  Observed: The upload URL retains an existing query key. The server rejects that key with HTTP 403.
-  Requirements: Remove each query key and send the configured bearer key.
-  Validation: Use HTTP tests for the public Go client. Run client tests and final `make ci`.
-  Resolution: Go upload URLs now exclude query keys. HTTP client tests passed with duplicate query keys in the base URL.
-  Deliverables: `pkg/llmproxyclient/assets.go`, `pkg/llmproxyclient/media_test.go`, `Makefile`, `docs/client-protocols.md`.
-  Validation: Final `make ci` passed all 13 gates with 100.0 percent Go statement coverage.
-  Event contracts did not change.
-
-- [x] [B214] (P2) Keep active media inputs after upload expiry.
-  Observed: Asset expiry can remove bytes that an accepted operation still requires.
-  Requirements: Use active references for cleanup and reads. Keep uncertain inputs until operation completion.
-  Validation: Use HTTP asset tests with controlled time, cleanup, restart, and operation completion. Run final `make ci`.
-  Resolution: Asset reads and cleanup use active references. Uncertain operations keep their inputs. Completion releases input references. HTTP tests passed for expiry, startup, cleanup errors, and cancellation.
-  Deliverables: `internal/proxy/assets.go`, `internal/proxy/media_operations.go`, `internal/proxy/media_operations_edges_internal_test.go`, `Makefile`, `docs/media-gateway-consolidation.md`.
-  Validation: Final `make ci` passed all 13 gates with 100.0 percent Go statement coverage. The focused media tests also passed with the race detector.
-  Event contracts did not change.
-
-- [x] [B213] (P2) Return one operation for concurrent duplicate requests.
-  Observed: Concurrent duplicate requests can return HTTP 500 with `SQLITE_BUSY`.
-  Requirements: Return one operation for the same tenant, key, and intent. Keep capacity limits.
-  Validation: Use concurrent HTTP requests and SQLite. Run `make test-media-operations` and final `make ci`.
-  Resolution: An acceptance mutex now permits one creation transaction at a time. Concurrent HTTP duplicates returned one operation with SQLite runtime settings.
-  Deliverables: `internal/proxy/media_operations.go`, `internal/proxy/media_operations_edges_internal_test.go`.
-  Validation: Final `make ci` passed all 13 gates with 100.0 percent Go statement coverage. The focused media tests also passed with the race detector.
-  Event contracts did not change.
-
-- [x] [B212] (P1) Enforce connection authority before media execution.
-  Observed: A worker dispatches accepted work after connection removal.
-  Requirements: Compare the accepted credential reference with the current reference before dispatch and recovery. Keep uncertain provider evidence.
-  Validation: Use public HTTP resources with controlled worker execution. Run `make test-media-operations` and final `make ci`.
-  Resolution: The worker now compares the accepted credential reference with current authority before dispatch or recovery. Invalid authority prevents adapter execution. Dispatched work stays uncertain. The adapter receives the credential reference. Connection removal, replacement, and credential changes caused no adapter call in HTTP tests.
-  Deliverables: `internal/proxy/media_operations.go`, `internal/proxy/media_operations_edges_internal_test.go`, `docs/media-gateway-consolidation.md`.
-  Validation: Final `make ci` passed all 13 gates with 100.0 percent Go statement coverage. The focused media tests also passed with the race detector.
-  Event contracts did not change.
-
-- [x] [B211] (P1) Send bearer authentication for Python asset uploads.
-  Observed: The Python client sends a query key. The asset route returns HTTP 403.
-  Requirements: Remove query credentials. Send the tenant bearer key in the Authorization header.
-  Validation: Use an HTTP server to do a test of the public Python client. Run `make python-test` and final `make ci`.
-  Resolution: The client now sends the bearer key and removes query keys. HTTP tests passed with and without query keys in the base URL.
-  Deliverables: `python/llm_proxy_client/client.py`, `python/tests/test_client.py`, `docs/client-protocols.md`.
-  Validation: Final `make ci` passed all 13 gates with 100.0 percent Go statement coverage.
-  Event contracts did not change.
-
 - [!] [B210] (P1) Restore local startup with the current TAuth image contract.
   Goal: Start local TAuth with the current OAuth configuration.
   Observed: `ghcr.io/tyemirov/tauth:latest` rejected both OAuth blocks with `field oauth not found` and exited with status 1.
@@ -200,34 +46,6 @@ retain satisfied historical dependencies.
   The changed prose has no mechanical findings. Existing guide differences and 71 findings in unchanged tracker text remain.
   Blocked: TAuth publication must supply an image with the current OAuth contract through the `latest` tag.
 
-- [x] [B209] (P1) Restore the API container build.
-  Goal: Build the API image for local startup.
-  Observed: `docker build` reproduced HTTP 404 for `curl_7.74.0-1.3+deb11u16_arm64.deb` after `apt-get update`.
-  The package installation exited with status 100 on `debian:bullseye-slim`.
-  Requirements: Use `debian:bookworm-slim` for the runtime, consistent with the builder.
-  Keep curl and CA certificates in the runtime image.
-  Validation: Build the image. Make sure that the container returns HTTP 200 from `/api/public/capabilities`. Run `make ci`.
-  Resolution: The runtime now uses `debian:bookworm-slim`. The ARM64 image build passed with curl and CA certificates.
-  The container returned HTTP 200 from `/api/public/capabilities`. `make ci` passed all 13 gates in 318 seconds.
-  Go statement coverage was 100.0 percent. The changed prose has no mechanical findings.
-  The Governor check reported existing differences in `.mprlab/AGENTS.DOCKER.md` and `.mprlab/POLICY.md`.
-  The language check reported 71 findings in unchanged tracker text. API and event contracts did not change.
-
-- [x] [B208] (P1) Keep database error details out of management responses.
-  Goal: Return a stable error code when a management database operation fails.
-  Observed: F063 failure tests reproduced database details in tenant deletion responses.
-  Requirements:
-  - Return a stable code for unexpected management store failures.
-  - Keep database details and credentials out of HTTP responses.
-  - Preserve the saved tenant and connection state after a failed transaction.
-  Validation:
-  - Use HTTP tests with injected database failures.
-  - Complete repository validation after the correction.
-  Resolution: Management responses return stable error codes without database details.
-  HTTP failure tests verify transaction rollback and retry behavior.
-  Validation: `make ci` passed all 12 gates with 100.0 percent Go coverage.
-
-
 - [!] [B207] (P1) {I260} Restore production login with matching shared UI assets.
   Goal: Restore Google login on the production website.
   Observed: On September 10, 2026, the live API supplies `auth.providers.google.clientId` with a nonempty Google client ID.
@@ -244,57 +62,18 @@ retain satisfied historical dependencies.
   - The CDN response declares `max-age=604800, s-maxage=43200`.
   Blocked: The operator must publish the qualified shared UI assets and complete cache convergence under mpr-ui I009.
 
-- [x] [B206] (P1) Clear the application transition after session recovery.
-  Goal:
-  Keep the authenticated application usable after shared session recovery.
-  Requirements:
-  - Dispatch the configured completion event when an authenticated application receives another authenticated event.
-  - Preserve the existing application state and tenant selection.
-  Validation:
-  - The I260 browser regression completed read and mutation recovery, then the shared transition blocked the user menu.
-  - The failure log is `/tmp/llm-proxy-i260-browser-green.log`.
-  - Verify visible user-menu access and logout after recovery at both viewport widths and auth origins.
-  Resolution:
-  The authenticated application now dispatches its configured completion event after shared session recovery.
-  All four recovery scenarios passed with visible user-menu access and logout.
-  Final native CI passed all 12 gates, including 100 percent Go coverage.
-
-
-- [x] [B205] (P2) Sequence the key persistence test across router reloads.
-  Observed: GitHub run `34264915879` failed at commit `b2731cb`.
-  `TestManagementProviderKeyRevealPersistsUpdatedKey` expected two usage records but observed one before its one-second deadline.
-  The test sent requests through two database runtimes before either usage write completed.
-  The second write continued after test cleanup started.
-  Requirements: Verify each usage record before the next test phase.
-  Construct the second router after the first request and its usage write complete.
-  Retain the key, response, usage, and corrupt-record assertions. Keep the current timeout.
-  Validation: Run focused HTTP tests with coverage and the race detector. Run `make ci`.
-  Resolution: The test now verifies the first usage record before it constructs the second router.
-  It verifies both records after the second request. All previous assertions remain in place.
-  Added `make test-management-persistence` for the related HTTP tests.
-  Focused tests passed with coverage and the race detector.
-  `make ci` passed all 12 gates with 100% Go statement coverage.
-  The Governor check and changed-prose review passed. Application and event contracts did not change.
-  The changes remain uncommitted. GitHub did not run the fix.
-
-- [x] [B204] (P2) Bound MCP request uploads in time.
-  Observed: An authenticated client can leave an incomplete `/mcp` upload open indefinitely.
-  The SDK waits for the body before the F021 generation timeout starts.
-  The initial HTTP regression exceeded the one-second server budget and failed
-  with `stalled MCP upload did not terminate within the server budget`.
-  Requirements: Apply the server default timeout before SDK body processing.
-  Stop reads on cancellation. Clear the upload deadline before generation.
-  Return HTTP `408` for an upload timeout and retain the byte limit.
-  Validation: Use real HTTP uploads and SDK calls. Run `make test-mcp` and `make ci`.
-  Resolution: Added a cancellable socket read deadline before SDK dispatch.
-  Cleared that deadline before generation. Retained the request byte limit.
-  Verified stalled uploads, cancellation, read errors, deadline errors, and longer generation budgets.
-  `make test-mcp` and `GOFLAGS=-race make test-mcp` passed.
-  `make ci` passed all 12 gates with 100% Go coverage.
-  Updated the MCP guide and OpenAPI reference. Usage event contracts did not change.
-  The initial Governor check reported format template drift. I254 records its correction.
-
 ## Improvements
+
+- [!] [I270] (P2) Auto-refresh dashboard summaries and show the tenant label.
+  Goal: Keep dashboard summaries current without a manual refresh control.
+  Requirements:
+  - Show `Tenant` beside the usage scope selector on desktop and mobile.
+  - Refresh the active usage or administrator summary every 30 seconds while authenticated.
+  - Remove the manual `Refresh` control.
+  - Preserve the selected tenant and interval during automatic refresh.
+  Deliverables: Shared management markup, styling, refresh lifecycle, and browser coverage.
+  Validation: Run the focused management browser tests, frontend lint, and final `make ci`.
+  Blocked: Browser tests and `make ci` stop during Go compilation because current checkout edits reference absent `TenantDefaults.DictationProvider` and `TenantDefaults.DictationModel` fields. This blocker is outside the UI change.
 
 - [ ] [I269] (P2) Isolate temporary Python repositories from retained uv Git caches.
   Observed: Three selected-version installation tests returned `0.0.post1.dev2` versions during I268 validation.
@@ -305,98 +84,7 @@ retain satisfied historical dependencies.
   Validation: Reproduce installation with retained Git cache data. Run `make python-package-install-test` and final `make ci`.
   Evidence: `/tmp/llm-proxy-i268-ci.log` and `/tmp/llm-proxy-i268-package-recheck.log`.
 
-- [x] [I268] (P1) Give each Dictator operation wait its own timeout.
-  Observed: Hosted run `35159126469` failed in `TestDictatorAccountConnectionUsesAuthenticatedGRPC` with `context deadline exceeded`.
-  The final diarization check used the same ten-second context as earlier speech, recovery, cancellation, and credential checks.
-  The frontend job passed. The aggregate job failed because the backend job failed.
-  Goal: Prevent earlier test scenarios from consuming the timeout of a later operation wait.
-  Requirements: Keep each operation wait and HTTP request bounded. Keep all public result assertions.
-  Deliverables: `internal/proxy/dictator_grpc_e2e_test.go`.
-  Validation: Run `make test-dictator`. Run final `make ci`.
-  Change: Each operation wait now has a ten-second context from `t.Context()`. Each HTTP client also has a ten-second request timeout.
-  Cancellation scenarios have separate bounded contexts. The shared scenario deadlines were removed.
-  Focused result: `make test-dictator` passed before and after the change.
-  `GOMAXPROCS=1 GOFLAGS='-race -v' make test-dictator` passed. The two complete speech flows took 10.65 and 11.17 seconds.
-  Application and event contracts did not change.
-  Initial CI result: Go integration passed. Three Python package version assertions failed. I269 records the retained-cache mismatch.
-  The unchanged package target then passed all five tests.
-  Resolution: Each operation wait uses a new ten-second context. Each HTTP client uses a ten-second request timeout.
-  Final result: `make test-dictator` passed in 21 seconds. `make ci` passed all 13 gates in 331 seconds with 100.0 percent Go statement coverage.
-
-- [x] [I267] (P1) Wait for dashboard startup before the session recovery test.
-  Observed: The shared UI test receives one more GET during application startup. This failure stops `make ci`.
-  Goal: Start recovery checks after the dashboard completes its initial requests.
-  Requirements: Keep the recovery request sequence assertion. Make sure that the requests create only one tenant.
-  Deliverables: `tests/blackbox/shared-ui-migration.spec.js`.
-  Validation: Run the four browser scenarios ten times through `make test-shared-ui`. Run final `make ci`.
-  Initial result: The supplied CI failure expected `GET, GET, POST, POST, GET` but received `GET, GET, GET, POST, POST, GET`.
-  The saved trace shows an account request during dashboard startup after the recovery test starts. All 40 initial rerun scenarios passed.
-  Resolution: The test waits for the authenticated application, selected Default tenant, and dashboard `aria-busy="false"` before recovery checks.
-  Focused result: All 40 scenarios passed after the change. Application and event contracts did not change.
-  Final result: `make ci` passed all 13 gates in 329 seconds with 100.0 percent Go statement coverage.
-  All 121 frontend browser tests and seven authentication scenarios passed. The CI log is `/tmp/llm-proxy-i267-ci.log`.
-
-- [x] [I265] (P2) Select account usage from the Usage overview title.
-  Observed: The tenants column carries an `Account usage` button while the top card already presents a `Usage overview` title for the same account scope.
-  Resolution (2026-09-16): Superseded by I266 before implementation. The dashboard keeps an explicit tenant selection instead of an account view, so the title button is not built. The tenants-column account button is removed under I266.
-
-- [x] [I266] (P1) Keep a dashboard tenant selected at all times.
-  Observed: The dashboard can sit with no tenant selected. The tenants column offers an `Account usage` button and the footer reads `Account · Select a connection`.
-  Requirements: Remove the tenants-column account button. Select the `Default` tenant on load, or the first tenant when none is named `Default`. Keep the dashboard tenant selected when the usage scope selects all tenants.
-  Resolution: The tenants column has no account button. Loading and tenant deletion select the `Default` tenant, or the first tenant otherwise. The all-tenants usage scope updates only the usage view. The obsolete tenants-column style is removed.
-  Validation: New browser tests cover the missing button, the default-or-first selection, and the decoupled scope. The full `management-ui` suite passes (103 tests). `npm run frontend:lint` passes.
-  Deliverables: `site/assets/llm-proxy/js/ui/connectionDashboard.js`, `site/assets/llm-proxy/js/ui/usageDashboard.js`, `site/assets/llm-proxy/styles.css`, `tests/e2e/management-ui.spec.js`, `docs/tenant-connections.md`.
-
-- [x] [I264] (P2) Cover a model profile with a mismatched delimiter through the public client.
-  Observed: The B222 CI run passed all Go tests but left one uncovered block in `model_profile.go`.
-  Requirements: Exercise a JSON object with a mismatched delimiter through the public client. Verify rejection before HTTP dispatch.
-  Validation: Run `make go-test` and final `make ci`. Keep the complete coverage requirement.
-  Resolution: The public client rejects `{]` before HTTP dispatch. The focused client target includes profile rejection.
-  Deliverables: `pkg/llmproxyclient/client_test.go` and `Makefile`.
-  Validation: The focused coverage record exercises the closing-token error. Final `make ci` passed all 13 gates with 100.0 percent Go coverage.
-  Production client code and event contracts did not change.
-
-
-- [ ] [I263] (P2) Remove the duplicate I261 identifier.
-  Observed: A blocked schema entry and a completed lifecycle entry both use I261 in the active tracker.
-  Requirements: Keep the completed I261 identifier. Give the blocked entry an unused identifier and update its affected dependencies.
-  Validation: Verify unique identifiers and valid dependencies in the active tracker and archive.
-
-- [x] [I262] (P1) Use Alibaba Cloud labels and English API-key setup.
-  Goal:
-  Let users identify Alibaba Cloud as the provider of Qwen models and find English API-key instructions.
-  Requirements:
-  - Use `Alibaba Cloud` for the provider label and API service label.
-  - Use `Alibaba Cloud API key` and `Alibaba Cloud API URL` for connection fields.
-  - Link credential setup to `https://www.alibabacloud.com/help/en/model-studio/get-api-key`.
-  - Keep Qwen as the model family and Alibaba Cloud as the service provider.
-  - Keep the existing `dashscope` provider identifier and adapter contract.
-  - Apply the catalog values to connection setup and public model discovery.
-  - Keep regional expansion and model inventory work in F064.
-  Validation:
-  - Assert the labels and English setup URL through the management HTTP API and browser connection dialog.
-  - Assert Alibaba Cloud text beside Qwen in the public model catalog.
-  - Run the focused catalog and browser targets, then `make ci`.
-  Resolved 2026-09-13:
-  - Changed the catalog provider label, service label, connection field labels, and credential setup URL.
-  - Updated public resource text, its generator, browser fixtures, and current provider documentation.
-  - The initial HTTP assertion returned `label="DashScope"` and the `help.aliyun.com` setup URL.
-  - The initial browser assertion returned `DashScope API` instead of `Alibaba Cloud`.
-  - The catalog target and both focused browser scenarios passed after the change.
-  - Final `make ci` passed all 13 gates in 315 seconds with 100.0% Go statement coverage.
-  - The complete browser suites passed 117 frontend scenarios and seven management black-box scenarios.
-  - CI evidence: `/tmp/llm-proxy-i262-ci.log`.
-  - Changed prose and `git diff --check` passed their scoped checks.
-  - Governor reported existing managed-content differences in `.mprlab/POLICY.md` and `.mprlab/AGENTS.DOCKER.md`.
-  - Existing event and adapter contracts remain current. Production activation remains separate.
-  Changed files:
-  - `configs/providers.yml`, `internal/proxy/provider_catalog_end_to_end_test.go`, and `tests/e2e/management-ui.spec.js`.
-  - `scripts/generate_seo_resources.mjs`, `site/resources/index.html`, and `site/resources/openai-compatible-provider-gateway/index.html`.
-  - `README.md`, `docs/provider-catalog.md`, `docs/provider-model-icons.md`, and `docs/dashscope-responses.md`.
-  Sources:
-  - [English API-key instructions](https://www.alibabacloud.com/help/en/model-studio/get-api-key).
-
-- [!] [I261] (P0) Remove completed migration paths and initialize only the current schema.
+- [!] [I271] (P0) Remove completed migration paths and initialize only the current schema.
   Goal:
   Remove obsolete database migrations, predecessor records, and migration-only provider rules after their data transfer is completed.
   Keep one current schema for normal application startup and all new databases.
@@ -513,105 +201,7 @@ retain satisfied historical dependencies.
   - The migration record contains asset digests, public observations, and activation instructions.
   Blocked: Complete central mpr-ui I009 final-candidate qualification, coordinated publication, cache convergence, and real Google acceptance.
 
-
-- [x] [I256] (P1) Add shared public scenarios for protocol acceptance.
-  Goal:
-  Add reusable acceptance evidence before changes to the provider catalog and protocol adapters.
-  Requirements:
-  - Extend the current catalog tests and provider HTTP fixtures through the real service and official Go client.
-  - Cover Chat Completions, Responses, Anthropic Messages, Google native protocols, and current dictation adapters.
-  - Record each supported operation, control, protocol variation, and lifecycle in the test cases.
-  - Exercise text, media input, caller tools, structured output, errors, usage, and continuation where the current route supports them.
-  - Prove rejected requests cause zero dispatch for unsupported controls and invalid credentials.
-  - Use controlled external protocols for timeout, cancellation, visibility retry, and terminal-state tests.
-  - Add a second provider definition for each executable protocol adapter through disposable catalog data and connection values.
-  - Use the same executable and clients for both provider definitions.
-  - Use public tests for discovery, connection forms, secret protection, routing, restart persistence, tenant isolation, and usage.
-  - Keep provider constants and production registrations outside the second-provider fixture change.
-  - Keep live-provider qualification separate from local protocol acceptance.
-  Deliverables:
-  - Shared protocol tests, a repository Make target, and inclusion in the applicable CI gate.
-  - A documented procedure to qualify another provider through catalog data.
-  Validation:
-  - Run existing public tests before extraction. Add characterization tests where public coverage is absent.
-  - Prove that the suite detects a wrong endpoint, unsupported field, malformed result, and incorrect usage total.
-  - Run the focused target and applicable repository checks.
-  - Keep all current runtime and public API behavior unchanged.
-  Resolution:
-  - Added disposable provider definitions for each current text and dictation adapter.
-  - Recorded each fixture operation, protocol, lifecycle, request profile, control, and media input.
-  - Used the real service and official Go client for public discovery, routing, result, and usage checks.
-  - Added negative controls for endpoint, field, result, credential, and usage drift.
-  - Added `make test-protocol-acceptance` to the Go integration gate.
-  - Documented the catalog-only provider qualification procedure.
-  Validation: `make test-protocol-acceptance` passed. `make ci` passed all 13 gates in 312 seconds with 100.0 percent Go statement coverage.
-
-- [x] [I257] (P1) {I256} Remove duplicated protocol facts from provider catalog records.
-  Goal:
-  Give each protocol invariant one authoritative definition and reduce provider additions to their required data.
-  The catalog currently repeats adapter constants that `validateProviderCatalogAdapterContract` compares with Go definitions.
-  Requirements:
-  - Keep `configs/providers.yml` as the sole provider catalog.
-  - Select one protocol definition per transport instead of three identifiers that must be equal.
-  - Give each codec one definition for its fixed response fields, finish rules, error rules, and usage mapping.
-  - Derive validation and runtime metadata from that definition.
-  - Keep endpoints, credential fields, settings, offerings, controls, limits, prices, and supported protocol variations in provider data.
-  - Keep every retained variation typed and validate it at the catalog boundary.
-  - Remove repeated invariant values from all provider records and test catalogs in one coordinated schema change.
-  - Reject obsolete fields and shapes. Keep one accepted schema without aliases, dual reads, or compatibility parsers.
-  - Keep provider identities, tenant connections, route defaults, and historical usage.
-  - Rebuild all discovery, management, and live-harness projections from the normalized registry.
-  - Update the catalog reference, onboarding procedure, and affected configuration examples.
-  Deliverables:
-  - A reduced catalog schema, authoritative codec definitions, and converted catalog consumers.
-  Validation:
-  - Run I256 characterization tests before production changes.
-  - First prove rejection of the new catalog shape, then implement its loader and conversion.
-  - Prove rejection of obsolete shapes, unknown variations, missing references, and invalid combinations.
-  - Prove equivalent public discovery, credentials, requests, responses, and usage for every active route.
-  - Run the focused catalog target and applicable repository checks.
-  Resolution:
-  - Replaced request, response, usage, and parameter copies with one protocol reference.
-  - Added typed variations for Chat Completions and multipart transcription.
-  - Moved fixed request, response, finish, continuation, error, and usage facts into codec definitions.
-  - Converted the production catalog, test catalogs, registry, router, CLI tests, and provider tests to schema version 2.
-  - Extended shared acceptance to all 15 retained protocol variations and lifecycles.
-  Validation: `make test-provider-catalog` and `make test-protocol-acceptance` passed.
-
-- [x] [I258] (P1) {I257} Separate protocol codecs, authentication, and execution lifecycles.
-  Goal:
-  Let provider transports combine reusable components through validated catalog data.
-  The current adapter validator couples protocol selection to exact authentication headers and permitted lifecycle values.
-  Requirements:
-  - Use separate typed components for request and response codecs, authentication, and execution lifecycles.
-  - Select those components through each catalog transport and construct one validated route at startup.
-  - Reject unsupported combinations through explicit component contracts.
-  - Keep provider identity as route data instead of a selector for shared execution code.
-  - Keep tenant secrets and settings in their existing connection stores.
-  - Keep bearer authentication, direct-header authentication, required static headers, and credential verification behavior.
-  - Keep synchronous completion, resource polling, visibility rules, deadlines, cancellation, and usage accounting.
-  - Share lifecycle code where the execution contract is equal. Retain explicit protocol requirements where behavior differs.
-  - Keep Google credential expansion and media staging under F043.
-  - Keep durable media workers and recovery under F022, and network fairness under I046.
-  - Update the provider catalog reference and media architecture with the final component ownership.
-  Deliverables:
-  - Catalog-selected transport components and one startup composition path for current routes.
-  Validation:
-  - Run I256 tests before extraction and after each component change.
-  - Prove that two catalog-defined providers share a codec with different supported authentication configurations.
-  - Prove that supported synchronous and pollable routes share codec logic without changing their execution behavior.
-  - Prove invalid combinations stop startup and rejected requests cause zero upstream dispatch.
-  - Keep public errors, credential isolation, continuation, timeout budgets, and usage totals.
-  - Run focused transport tests and applicable repository checks.
-  Resolution:
-  - Added schema version 3 with separate request codec, response codec, authentication, and execution component references.
-  - Added one startup composer that rejects unknown components, invalid variations, incompatible pairs, required-header drift, and unsupported lifecycles.
-  - Converted the production catalog, test catalogs, provider registry, router, CLI tests, and provider tests to the component contract.
-  - Proved each retained text and dictation codec through a second provider with a different supported authentication kind.
-  - Preserved synchronous and pollable behavior, credential isolation, public errors, continuation, cancellation, timeout budgets, and usage totals.
-  Validation: `make test-provider-catalog` and `make test-protocol-acceptance` passed.
-
-- [ ] [I259] (P2) {I258} Use one Responses codec with explicit protocol variations.
+- [ ] [I259] (P2) Use one Responses codec with explicit protocol variations.
   Goal:
   Reduce repeated request construction and result parsing across OpenAI, xAI, and DashScope Responses routes.
   This refactor follows the catalog and transport improvements. It is not a prerequisite for F022.
@@ -655,17 +245,6 @@ retain satisfied historical dependencies.
   Validation:
   Prove the different outcomes for invalid credentials and unsupported operations through public management HTTP requests.
   Prove that both failures preserve the previous connection and its settings.
-
-
-- [x] [I254] (P2) Use the Governor template for the managed issue format.
-  Goal: Remove the format template drift reported during B204 validation.
-  Requirements: Keep the cross-repository dependency specification in a separate document.
-  Link that document from the tracker. Use the canonical template for the managed format guide.
-  Validation: Run the Governor check, changed-prose review, identifier checks, and `git diff --check`.
-  Resolution: Restored the managed format guide from the current Governor template.
-  Moved the complete dependency specification to `DEPENDENCY-REFERENCES.md` and linked it from this tracker.
-  The Governor check passed with no drift or warnings. Changed-prose checks and identifier checks passed.
-  No application or event contract changed.
 
 - [ ] [I244] (P1) {F024,F025,F026,F027,F039,F040,F041,F042} Remove the completed MediaOps operation-import bridge.
   Goal:
@@ -1356,32 +935,6 @@ retain satisfied historical dependencies.
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
 
-
-- [x] [I261] (P1) Use the installed Gateway for application lifecycle commands.
-  Goal:
-  Application release, publication, and deployment operate independently of Gateway development source.
-
-  Requirements:
-  - Replace sibling delegation with the installed `mprlab-gateway` command.
-  - Preserve `make release && make publish && make deploy` and the application Git root argument.
-  - Support `MPRLAB_GATEWAY_EXECUTABLE` for an explicit installed command.
-  - Preserve application source checks, release policy, resources, private inputs, and receipts.
-  - Report an unavailable runtime with an installation instruction.
-  - Keep production activation separate from development completion.
-
-  Validation:
-  - Verify the real Make targets with no sibling Gateway checkout.
-  - Verify argument order, operator environment, explicit command selection, and native failure output.
-  - Run applicable repository CI after the final change.
-
-  Coordination:
-  This is the selected application follow-up for Gateway I244.
-
-  Completion:
-  - The installed wrapper passed its public Make tests without a sibling Gateway checkout.
-  - Full CI passed all 13 gates in 320 seconds with 100.0% Go statement coverage.
-  - Source implementation is completed. Production activation remains operator-controlled.
-
 ## Maintenance
 
 - [ ] [M004R] (P1) Dependency and security audit.
@@ -1482,13 +1035,12 @@ retain satisfied historical dependencies.
   - Re-read `ISSUES.md` after edits and confirm every issue is under the right section with a unique section-aware ID.
   - Confirm recurring entries remain open and keep the `R` suffix.
   - Confirm no active, blocked, recurring, or planning work was archived.
-  Last run: 2026-09-08.
-  Maintenance, and six Features. Kept all 59 unresolved entries visible.
-  Kept all nine Planning entries visible. Confirmed eight recurring
-  Maintenance entries remain open with the `R` suffix. Removed one satisfied
-  I252 dependency marker. Found no duplicate active IDs, broken local
-  dependency markers, invalid priorities, or blocked entries without a
-  `Blocked:` line. Filed no follow-up issues.
+  Last run: 2026-09-18. Audited the active tracker and archive after the
+  durable-documentation review. Moved 41 resolved non-recurring entries to the
+  archive: 22 BugFixes, 12 Improvements, two Features, and five Planning
+  entries. Renamed the blocked schema issue to I271 and archived the identifier
+  repair as I263. Kept active, blocked, planning, and recurring entries in the
+  active tracker. No duplicate issue identifiers remain.
 - [ ] [M002R] (P2) Polish open issues.
   Goal:
   Keep unresolved work executable by making each open issue concrete, ordered, and testable.
@@ -1547,21 +1099,259 @@ retain satisfied historical dependencies.
   - A short `Last run:` note listing docs inspected and changes made.
   - Cross-references from archived issue history to durable docs when useful.
   Validation:
-  - Check links, command names, paths, and public contract descriptions touched by the pass.
+  - Examine links, command names, paths, and public contract descriptions touched by the pass.
   - Confirm docs describe the current canonical path only.
   - Confirm issue archive and active tracker references remain consistent.
-  Last run: 2026-08-10. Reviewed README, OpenAPI, provider routing, dictation,
-  CHANGELOG, and generated resources against 80 resolved issues. Added missing
-  Unreleased summaries for current public, provider, media, and client
-  contracts. Replaced the obsolete dictation implementation plan with its
-  current endpoint contract. Regenerated 46 SEO resources. Their content
-  already matched the current source. `PRD.md` and `ARCHITECTURE.md` remain
-  absent, and M013 tracks that decision.
-
+  Last run: 2026-09-18. Reviewed README, docs/openapi.yaml,
+  docs/client-protocols.md, docs/mcp.md, docs/media-gateway-consolidation.md,
+  docs/tenant-connections.md, docs/provider-catalog.md,
+  docs/provider-model-icons.md, docs/managed-schema-transition.md,
+  docs/dictator-live-acceptance.md, and docs/dictator-migration-audit.md.
+  Updated schema-transition references from I261 to I271. The current
+  documents match the 41 archived contracts. No further documentation update
+  was required.
 
 ## Features
 
-- [ ] [F071] (P1) {F022} Migrate remaining MediaOps application functionality into LLM Proxy.
+- [ ] [F075] (P1) Expose provider routes through the Anthropic Messages client protocol.
+  Goal:
+  Let a customer use an Anthropic-compatible client with any catalog provider route.
+  Make the public Anthropic interface a protocol adapter over the existing provider-neutral completion coordinator.
+  Keep this issue independent from F074. This issue does not add Jev or change the Jev typed-decision contract.
+  Research:
+  - The current public client registry exposes OpenAI Chat Completions, OpenAI Responses, model listing, and transcription routes.
+  - The current public registry does not expose `POST /v1/messages`.
+  - The current `anthropic_messages` implementation is an upstream provider codec.
+  - An upstream codec does not provide an Anthropic-shaped public client interface.
+  - The public adapter must translate one Anthropic request into the canonical completion request.
+  - The public adapter must translate one canonical result into an Anthropic Message response.
+  - The Anthropic Messages API uses `model`, `max_tokens`, and `messages` as core request fields.
+  - The Anthropic Messages API returns `id`, `type`, `role`, `content`, `model`, `stop_reason`, and `usage` fields.
+  - The Messages API is stateless. The caller sends the conversation history with each request.
+  - The official Messages documentation defines content blocks, tools, streaming events, and error behavior.
+  - Source reference: `https://platform.claude.com/docs/en/build-with-claude/working-with-messages`.
+  Requirements:
+  - Add a public `POST /v1/messages` route.
+  - Register the route through the existing `ClientProtocolAdapter` registry.
+  - Add a dedicated Anthropic client protocol adapter near the current public client adapters.
+  - Keep public protocol translation separate from upstream provider transport selection.
+  - Reuse the existing tenant authentication, request identifiers, limits, timeout, usage, and accounting flow.
+  - Accept the authentication headers required by the selected Anthropic client contract.
+  - Map public Anthropic authentication to the existing tenant authentication policy.
+  - Never use a customer authentication value as an upstream provider credential.
+  - Parse the request into a typed Anthropic request model.
+  - Require `model`, `max_tokens`, and a non-empty `messages` list.
+  - Use the current provider and model selection contract without adding provider-specific selection branches.
+  - Support user and assistant messages with string or typed content blocks.
+  - Support text blocks in the first release.
+  - Support image, tool-use, and tool-result blocks only when the canonical route declares each capability.
+  - Support the top-level `system` field only when the selected route accepts system instructions.
+  - Map `temperature`, `top_p`, `top_k`, and `stop_sequences` through explicit canonical fields.
+  - Reject an unsupported request field before provider dispatch.
+  - Do not silently drop an Anthropic request field.
+  - Map `tools` and `tool_choice` to the canonical tool contract.
+  - Return tool calls as Anthropic `tool_use` content blocks.
+  - Accept caller tool results as Anthropic `tool_result` content blocks.
+  - Keep tool execution in the caller. The proxy only transports and normalizes tool calls.
+  - Map structured output controls only when the canonical route declares structured output support.
+  - Map reasoning controls only when the canonical route declares reasoning support.
+  - Reject media, tools, structured output, reasoning, and other controls that the route does not declare.
+  - Use provider catalog capabilities as the single feature support matrix.
+  - Dispatch the canonical request through the existing completion coordinator.
+  - Keep the existing upstream `anthropic_messages` codec separate from the public adapter.
+  - Return the canonical Anthropic Message shape for `stream: false`.
+  - Include a proxy-owned message identifier and the selected model identifier.
+  - Preserve content block order and stable tool-use identifiers.
+  - Normalize available input and output token usage into the Anthropic usage shape.
+  - Define one result for routes that cannot report a required usage field.
+  - Return the proxy request identifier in the response headers.
+  - Encode failures as the canonical Anthropic error envelope.
+  - Map validation, authentication, authorization, model, rate-limit, provider, and timeout failures to Anthropic error types.
+  - Keep provider credentials, raw provider payloads, and internal routing data out of customer responses.
+  - Keep provider credentials, raw provider payloads, and internal routing data out of request logs.
+  - Support `stream: true` with the documented Anthropic server-sent event shape.
+  - Emit the documented `message_start`, content-block, `message_delta`, and `message_stop` events in order.
+  - Encode text deltas and tool-input JSON deltas with the documented event fields.
+  - Emit an Anthropic error event when a stream fails after headers are sent.
+  - Use the existing buffered-SSE behavior for routes without native upstream streaming.
+  - Document buffered streaming so clients do not expect token-level latency from every route.
+  - Return an `Allow` header and the canonical Anthropic error for unsupported methods.
+  - Keep the existing OpenAI client routes unchanged.
+  - Do not add a legacy `/v1/complete` route, compatibility alias, or provider fallback.
+  - Keep model discovery on the existing model-list route unless a separate Anthropic model-list contract is approved.
+  Deliverables:
+  - A typed Anthropic client request, content block, tool, response, stream event, and error model.
+  - A public Anthropic protocol adapter that uses the canonical completion coordinator.
+  - A registered `POST /v1/messages` route with method and error handling.
+  - OpenAPI schemas for the request, response, stream events, and error envelope.
+  - Documentation for Anthropic SDK configuration, authentication, model selection, supported fields, and buffered streaming.
+  - A capability table that maps Anthropic request controls to catalog capabilities.
+  - Integration fixtures for each active upstream provider protocol family.
+  - Integration tests that send the same Anthropic request through multiple provider routes.
+  - Integration tests for text, tools, media, structured output, reasoning, streaming, and error paths.
+  - Tests that prove unsupported capabilities fail before an upstream request is sent.
+  - Tests that prove the existing OpenAI client routes remain operational.
+  - A provider qualification procedure for every enabled route that uses this client protocol.
+  Validation:
+  - Run the repository test target with the public HTTP server and real route registry.
+  - Run the repository lint target.
+  - Run the repository CI target.
+  - Send a non-streaming Anthropic request through each active provider protocol family.
+  - Verify the response has the Anthropic Message type, role, content, stop reason, and usage fields.
+  - Send a streaming Anthropic request through each route that declares streaming support.
+  - Verify the event order and final usage in the Anthropic stream.
+  - Send a tool request and verify the returned `tool_use` block.
+  - Send the matching tool result and verify the next completion includes the caller result.
+  - Send an unsupported capability and verify no upstream request occurs.
+  - Send invalid, unauthenticated, unauthorized, unknown-model, rate-limited, and provider-failure requests.
+  - Verify each failure has the Anthropic status and error shape.
+  - Verify customer credentials and raw provider payloads do not appear in logs or responses.
+  - Verify OpenAI Chat Completions and OpenAI Responses acceptance tests still pass.
+  - Run provider qualification against the live provider routes required by the deployment policy.
+  Open Decisions:
+  - Select the first supported Anthropic API version and the accepted `anthropic-version` and beta headers.
+  - Select the first-release content-block set beyond text, image, tool-use, and tool-result blocks.
+  - Select whether structured output uses the current Anthropic format or a later separate contract.
+  - Select the usage result when an upstream route cannot report one required Anthropic usage field.
+  - Confirm that buffered SSE is the first-release behavior for routes without native streaming.
+  - Confirm that Files, Batches, token counting, prompt caching, citations, and computer-use endpoints stay out of scope.
+
+- [ ] [F074] (P1) Add Jev typed-decision offerings with provider protocol adapters.
+  Goal:
+  Add Jev as a provider-independent model family with one canonical typed-decision contract and explicit provider transports.
+  Preserve Jev's typed Choice, Score, and Noul semantics when a tenant selects the direct TypeSafe route or a broker route.
+  Do not present a general text model or a model-backed System One emulator as Jev.
+  Research:
+  - The TypeSafe HTTP contract uses `POST https://api.typesafe.ai/v1/systemone` with a bearer key, `state`, `model`, and typed `questions`.
+  - The TypeSafe quickstart creates the key in `https://console.typesafe.ai/settings/keys` after account access.
+  - Vercel exposes Jev through `experimental_evaluate` with model `typesafe-ai/jev`.
+  - OpenRouter lists Jev as `~typesafe/jev-latest` through its OpenAI-compatible API at `https://openrouter.ai/api/v1`.
+  - The official TypeSafe System One Adapter keeps the typed `system_one` interface while executing against OpenAI or Anthropic.
+  - The System One Adapter is a separate model-backed evaluator. It is not the Jev model and must not be registered as a Jev provider offering.
+  - Source references: `https://docs.typesafe.ai/introduction/quickstart`, `https://vercel.com/ai-gateway/models/jev`, `https://openrouter.ai/typesafe`, and `https://github.com/typesafe-ai/system-one-adapter-python`.
+  Requirements:
+  - Add one closed provider-catalog operation for typed decisions. Use one canonical internal name for the operation and document its relation to TypeSafe's `system_one` protocol.
+  - Define one canonical request type with an exact model, one structured `state` value, and named questions.
+  - Define a closed question union for Choice, Score, and Noul. Reject unknown question kinds and unknown fields at the public boundary.
+  - Validate question identifiers, required instructions, Choice labels, Score criteria, and Noul criteria before provider dispatch.
+  - Define one canonical response type with the exact model and answers keyed by question identifier.
+  - Include typed answer values, provider probabilities or confidence data, and normalized usage.
+  - Keep typed answers as typed values. Do not parse a free-text completion to reconstruct a Jev answer in the canonical direct route.
+  - Add a narrow decision protocol adapter interface.
+  - Make the interface accept the canonical request and return the canonical response or a typed provider error.
+  - Add a TypeSafe transport for synchronous bearer-authenticated `POST /v1/systemone` requests with the `jev-latest` upstream model.
+  - Add an OpenRouter transport only after a request and response fixture proves the `~typesafe/jev-latest` route.
+  - Use the fixture to verify canonical typed-decision semantics through the OpenAI-compatible endpoint.
+  - Add a Vercel transport only after the raw gateway request, response, authentication, usage, and error contract is verified. Do not infer a Go transport from the Vercel SDK example alone.
+  - Keep the TypeSafe, OpenRouter, and Vercel routes as separate provider definitions.
+  - Give each route separate credentials, endpoints, terms, prices, usage mapping, and provider identity.
+  - Keep provider identity as catalog data. Select adapter code from the declared provider transport and protocol components.
+  - Do not route Jev through the current text route adapter or structured-output text contract.
+  - Use a generic OpenAI Chat Completions composition only after an exact fixture proves that composition is verified.
+  - Do not add an automatic provider fallback, a legacy Jev alias, or a compatibility read for an obsolete request shape.
+  - Add one canonical resource-oriented REST representation to `docs/openapi.yaml` and the native client contract. Do not overload chat message paths with Jev question objects.
+  - Return typed errors for invalid questions, unsupported operations, authentication failures, provider failures, malformed answers, and missing required usage fields.
+  - Keep provider secrets and raw provider responses out of tenant responses, logs, and usage views.
+  - Keep private broker metadata out of public capability projections.
+  - Add provider connection fields and key-acquisition links for each route without storing credential values in `configs/providers.yml`.
+  - Register the TypeSafe publisher, Jev model family, exact model records, provider offerings, operation defaults, limits, and prices.
+  - Register each route only after its transport contract is verified.
+  - Treat official and community SDKs as client libraries. Do not create provider definitions for SDK implementations.
+  Deliverables:
+  - Canonical typed-decision request, response, question, answer, usage, and error types.
+  - Decision protocol adapters and provider transports for the qualified TypeSafe route and each approved broker route.
+  - Provider catalog definitions in `configs/providers.yml` and startup composition support in `internal/proxy/provider_catalog_schema.go`, `internal/proxy/catalog_service.go`, and `internal/proxy/provider_protocol_definitions.go`.
+  - Decision routing integration separate from `textRouteAdapter` in `internal/proxy/provider_router.go` and the current text request types.
+  - OpenAPI schemas, native Go and Python client support, model discovery, public capability output, management connection forms, and provider setup documentation.
+  - A provider-specific Jev/System One integration document.
+  - Record account registration, credential fields, endpoint ownership, upstream model identifiers, usage fields, error mapping, and live-qualification evidence.
+  - Explicit documentation for the boundary between direct Jev, brokered Jev, and the non-Jev System One Adapter.
+  Validation:
+  - Add public-entrypoint integration tests before production changes. Use injected upstream HTTP servers for deterministic protocol tests.
+  - Verify that valid Choice, Score, and Noul requests produce the canonical typed response through the TypeSafe adapter fixture.
+  - Verify that invalid question kinds, unknown fields, invalid criteria, unsupported models, and unsupported provider operations fail before any upstream request.
+  - Verify request serialization, bearer authentication, model selection, and response parsing for each adapter.
+  - Verify usage normalization, provider error mapping, malformed-answer handling, and request identifiers for each adapter.
+  - Verify equivalent typed answers through each qualified route for identical canonical requests.
+  - Preserve distinct provider and upstream model identity in each result.
+  - Verify that a provider failure does not call another provider and does not invoke the System One Adapter.
+  - Verify tenant credential isolation, management connection creation, and management connection update.
+  - Verify key verification, route discovery, and public capability output for every registered provider.
+  - Verify the native REST contract, client behavior, status codes, and typed errors through a real HTTP listener.
+  - Verify generated or checked OpenAPI artifacts through the same listener.
+  - Run `make test-provider-catalog` and `make test-protocol-acceptance` after catalog and adapter changes.
+  - Run one separate authorized live qualification for each route with its own account and key. Record the exact model, endpoint, request, response, usage, and provider evidence.
+  - Run final `make ci` after the last source, catalog, client, documentation, and test change.
+  Open Decisions:
+  - Select the canonical operation identifier and public REST path before implementation.
+  - Use `typed_decision` to describe the capability. Use `system_one` to match the TypeSafe protocol name.
+  - Confirm whether the first release includes Vercel and OpenRouter, or only direct TypeSafe access.
+  - Confirm whether `state` accepts arbitrary JSON or one closed state shape in the public contract.
+  - Confirm whether broker routes must expose provider-selected upstream metadata to tenants or only retain it in private usage records.
+  - Open a separate feature if the product needs the TypeSafe System One Adapter.
+  - Define that feature as a model-backed evaluator over OpenAI or Anthropic.
+
+- [ ] [F072] (P1) Expose granular Dictator models for Whisper transcription and Qwen3 and Silero synthesis.
+  Goal:
+  Replace the monolithic `dictator-speech-v1` catalog entry with distinct, purpose-built models for Dictator's underlying Whisper transcription and Qwen3/Silero speech synthesis engines.
+  Requirements:
+  - Remove the umbrella `dictator-speech-v1` model definition from `configs/providers.yml` under forward-only contract discipline.
+  - Register distinct Whisper transcription models by size: `whisper-tiny`, `whisper-base`, `whisper-small`, `whisper-medium`, and `whisper-large-v3` under publisher `openai` and family `whisper`.
+  - Bind each Whisper model offering to Dictator's speech transport supporting operations `audio_transcription`, `audio_diarization`, `audio_alignment`, `subtitle_creation`, and `voice_extraction`.
+  - Register distinct speech synthesis models: `qwen3-tts` (family `qwen3`) and `silero-ru` (family `silero`) under Dictator's speech transport supporting `speech_generation`.
+  - Update `internal/proxy/dictator_grpc_protocol.go` and `dictator_adapter.go` to derive `model_size` directly from the selected Whisper model identifier without requiring out-of-band control parameters.
+  - Update synthesis requests in the Dictator gRPC protocol to automatically set `SynthesisEngine_SYNTHESIS_ENGINE_QWEN3` for `qwen3-tts` and `SynthesisEngine_SYNTHESIS_ENGINE_SILERO_RU` for `silero-ru`.
+  - Update official Go and Python client tests and contract fixtures to exercise the granular models.
+  - Coordinate downstream caller migration in `CreativeDirector` to pass the canonical granular model (e.g. `whisper-large-v3` or `whisper-base`) instead of `dictator-speech-v1`.
+  Deliverables:
+  - Updated `configs/providers.yml` catalog models and provider offerings.
+  - Updated Dictator protocol adapter in `internal/proxy/dictator_grpc_protocol.go` and `dictator_adapter.go`.
+  - Updated test fixtures, OpenAPI schemas, and documentation in `docs/speech-workflows.md` and `docs/tenant-connections.md`.
+  Validation:
+  - `make test-dictator` passes for all granular Whisper and synthesis routes.
+  - Public HTTP integration tests verify job submission, cancellation, and artifact delivery for each granular model.
+  - Live acceptance tests pass through `make test-dictator-live`.
+  - Final local `make ci` passes with 100% statement coverage.
+
+- [ ] [F073] (P1) {F072} Deconstruct umbrella Media capability into specific Transcription and Speech taxonomy.
+  Goal:
+  Replace the catch-all "Media" capability in the management dashboard and public capabilities catalog with first-class domain capabilities for Transcription, Speech synthesis, and visual media.
+  Requirements:
+  - Split the umbrella `media` capability group into explicit, domain-specific capability buckets: `text`, `transcription` (unifying `dictation`, `audio_transcription`, `audio_diarization`, `audio_alignment`, and `subtitle_creation`), `speech` (unifying `speech_generation` and `voice_extraction`), `image`, and `video`.
+  - Unify transcription models across all providers (`whisper-*`, `gpt-transcribe`, `gemini-3.5-transcribe`, `xai-stt`, `sensevoice-small`) under the `Transcription` capability tab in `connectionDashboard.js`.
+  - Surface speech synthesis models (`qwen3-tts`, `silero-ru`) under a dedicated `Speech` (TTS) capability tab.
+  - Implement dynamic capability tab fallback: when a tenant or connection is selected, if the currently active tab has no models for that connection, automatically select the first capability tab that contains available models.
+  - Document and enforce canonical model card visual states:
+    - Default state: `.cw-node.selected` with solid teal border, teal background (`#18302d`), `★ Default model` badge (`.cw-connected`), and solid teal SVG Bezier wire from the active connection card.
+    - Preview state: `.cw-node.preview` with dashed amber border (`#e8b75e`), dashed amber SVG Bezier wire (`stroke-dasharray: 5 4`), and footer route text reflecting `Preview: <model-id>`.
+    - Unselected state: `.cw-node` with brand icon (`brand-icon`) and monospace code identifier (`<code>`).
+    - Disabled state: Model buttons disabled when `this.busy` is true or when the active connection is not ready.
+  - Document and enforce model card click and preview interaction lifecycle:
+    - Clicking an unselected model card puts it into preview mode and renders the capability-specific configuration form (`[data-default-form]`) in the details panel (`[data-details]`).
+    - Model selection remains in preview until confirmed via explicit save button (`Save text default`, `Save transcription default`, `Save speech default`).
+    - Switching tenants or connections immediately clears unsaved model card previews and form drafts without mutating tenant defaults.
+    - Preserving other capability defaults: saving a default in one capability domain (e.g. Transcription) must preserve the existing saved defaults of other domains (e.g. Text or Speech).
+  - Implement domain-specific configuration forms (`[data-default-form]`) upon model card selection:
+    - Text: system prompt textarea, reasoning effort selector (when supported by model), and `Save text default` button.
+    - Transcription: language selection and timestamp controls (when supported), and `Save transcription default` button persisting `defaults.transcription_provider` and `defaults.transcription_model`.
+    - Speech (TTS): voice preset selection (Silero presets vs Qwen3 reference voices), sample rate / format controls, and `Save speech default` button persisting `defaults.speech_provider` and `defaults.speech_model`.
+    - Visual media (Image / Video): model offering details and capability badges.
+  - Enforce model column empty states:
+    - `"Connect to choose models. Use a Connect button in the middle column."` when connection is unattached.
+    - `"Add credentials to choose models. Edit this connection to complete its setup."` when connection credentials are missing.
+    - `"No models for this capability."` when the connection has no offerings for the active capability tab.
+  - Update `site/assets/llm-proxy/js/constants.js` and `types.d.js` to define the canonical capability domain constants and labels.
+  - Update public capability catalog projection in `internal/proxy/public_capabilities.go` to publish normalized capability domain classifications.
+  Deliverables:
+  - Updated capability catalog projection in `internal/proxy/public_capabilities.go`.
+  - Updated dashboard component in `site/assets/llm-proxy/js/ui/connectionDashboard.js` and capability constants in `constants.js`.
+  - Playwright integration tests covering capability tab rendering, automatic tab fallback, and model card lifecycle (preview, save default, wire rendering, domain forms) across providers.
+  Validation:
+  - `npx playwright test tests/e2e/management-ui.spec.js -g "dashboard|connection"` passes.
+  - `npm run frontend:lint` passes without type or syntax errors.
+  - Final local `make ci` passes all quality and coverage gates.
+
+- [ ] [F071] (P1) Migrate remaining MediaOps application functionality into LLM Proxy.
   Goal:
   Retain only the TelePrompter application in MediaOps. Move its other functionality into LLM Proxy.
   Requirements:
@@ -1980,25 +1770,6 @@ retain satisfied historical dependencies.
   - [DeepSeek API and US East Chat Completions](https://help.aliyun.com/en/model-studio/deepseek-api).
   - [Regional model pricing](https://help.aliyun.com/en/model-studio/model-pricing).
 
-- [x] [F063] (P1) Implement the tenant, connection, and model dashboard from P001.
-  Resolution: Implemented account connections, tenant assignments, explicit dashboard controls, and the approved bounded migration.
-  Connection creation supports durable retries. Tenant usage, access keys, routes, and prompts remain separate.
-  Validation: `make ci` passed all 12 gates, including 100.0 percent Go coverage, 117 frontend tests, and seven authenticated browser tests.
-  Goal: Implement the full P001 design approved by the user on September 10, 2026.
-  Requirements:
-  - Implement all P001 requirements and its approved routing and migration decisions.
-  - Keep one connection per provider per tenant and permit connection reuse within the account.
-  - Preserve tenant access, default routes, prompts, and usage during the bounded migration.
-  - Require explicit detach operations before connection deletion.
-  - Clear dependent defaults atomically when the user confirms a detach operation.
-  - Preserve the existing last-tenant deletion constraint.
-  - Provide searchable lists and scrollable columns for large dashboard inventories.
-  Deliverables:
-  - Implement connection storage, management APIs, the dashboard, migration, and current contract documentation.
-  Validation:
-  - Verify all P001 acceptance scenarios through management API and browser tests.
-  - Complete the current repository validation sequence after the last application change.
-
 - [!] [F061] (P1) Add GPT-6 Astra through the existing OpenAI provider.
   Goal:
   Add the requested exact `gpt-6-astra` model to current public text interfaces.
@@ -2138,7 +1909,7 @@ retain satisfied historical dependencies.
   Blocked:
   The existing key is available as `MUSE_API_KEY` in `configs/.env`.
   File retention evidence, the exact provider request bound, and paid acceptance at both sample rates remain required before activation.
-- [ ] [F055] (P1) {F022,F054} Add Meta file transcription controls and speaker results.
+- [ ] [F055] (P1) {F054} Add Meta file transcription controls and speaker results.
   Goal:
   Complete the structured file transcription scope approved under P009 on 2026-09-06.
   Requirements:
@@ -2176,7 +1947,7 @@ retain satisfied historical dependencies.
   - Qualify both sample rates, all modes, terminal events, and provider usage with real audio.
   Source:
   `docs/meta-media-assessment.md`.
-- [ ] [F057] (P1) {F022,I046} Add Meta image generation and edit operations.
+- [ ] [F057] (P1) {I046} Add Meta image generation and edit operations.
   Goal:
   Implement the full image endpoint scope approved under P009 on 2026-09-06.
   Requirements:
@@ -2612,7 +2383,7 @@ retain satisfied historical dependencies.
   - Prove current OpenAI generate/edit parity through real handlers and controlled provider fixtures.
   - Prove tenant-isolated response chains, partial output order, cancellation, and final artifact integrity.
   - Run current repository validation and separately record explicitly authorized live acceptance.
-- [ ] [F040] (P1) {F022,F043} Add Vertex image operations through tenant provider connections.
+- [ ] [F040] (P1) {F043} Add Vertex image operations through tenant provider connections.
   Goal:
   Move the current Vertex image provider contract behind the shared gateway.
   Requirements:
@@ -2629,7 +2400,7 @@ retain satisfied historical dependencies.
   - Complete the P011 second-provider acceptance procedure for each protocol adapter added or changed in this slice.
   - Prove exact route controls, tenant isolation, staging ownership, duplicate prevention, and artifact integrity.
   - Run current repository validation and separately record explicitly authorized live acceptance.
-- [ ] [F041] (P1) {F022} Add FAL image operations and queue recovery.
+- [ ] [F041] (P1) Add FAL image operations and queue recovery.
   Goal:
   Move current FAL image generation and recoverable queue state behind the shared gateway.
   Requirements:
@@ -2779,7 +2550,7 @@ retain satisfied historical dependencies.
   - Its public homepage already displays the pause notice. Its README and product document record the same status.
   - Exclude WriterBlock code, credentials, resource transfer, and consumer acceptance from this migration.
   - WriterBlock does not gate F042 acceptance, publication, or deployment.
-- [ ] [F043] (P1) {F022} Add provider-readable media staging and Google credential profiles.
+- [ ] [F043] (P1) Add provider-readable media staging and Google credential profiles.
   Goal:
   Let gateway providers read tenant media through the exact storage and credential contracts they require.
   Requirements:
@@ -2939,59 +2710,7 @@ retain satisfied historical dependencies.
   - Prove reduced motion removes nonessential chart movement.
   - Prove the price review command classifies each freshness state.
   - Run `make ci` after the last application change.
-- [x] [F022] (P1) {I258} Add durable tenant-owned media operations to the existing gateway.
-  Goal:
-  Extend the existing tenant API with durable media execution and result artifacts.
-  Use P011 and `docs/media-gateway-consolidation.md` as the current implementation contract.
-  Requirements:
-  - Extend the catalog and transport components completed by I257 and I258.
-  - Extend I256 public protocol tests with durable operations, artifacts, cancellation, and restart recovery.
-  - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
-  - Reuse managed tenant keys and bearer authentication for media resources.
-  - Extend the existing asset contract and official Go client in the same API change.
-  - Add capabilities, operations, cancellation resources, asset metadata reads, and bounded byte downloads under `/model/v1`.
-  - Validate and accept each request in one operation creation call.
-  - Keep the accepted intent, route, and catalog revision in the operation record.
-  - Keep a separate public plan resource outside this release.
-  - Return explicit unavailable cost evidence when exact catalog pricing is absent.
-  - Require a tenant-bound idempotency key and enforce a unique database constraint.
-  - Return the same operation for the same key and intent, including terminal and uncertain states.
-  - Reject changed intent with `409` before dispatch.
-  - Resolve an accepted request before current catalog validation.
-  - Add operation, claim, asset-reference, and usage-delivery tables in the existing managed SQLite database.
-  - Use bounded in-process workers for the first deployment.
-  - Persist acceptance, input references, and dispatch intent before provider execution.
-  - Use claim generations and transactional updates to reject stale workers.
-  - Resume undispatched work after restart. Recover dispatched work through recorded provider evidence.
-  - Keep accepted work independent from the initiating HTTP connection.
-  - Keep provider execution evidence separate from public operation state and cancellation observations.
-  - Use the state schemas, deadlines, retention, and initial capacity values specified by P011.
-  - Keep native handles and byte digests private.
-  - Coordinate asset publication and deletion with durable active references.
-  - Return output assets through authenticated metadata and content reads.
-  - Keep minimal idempotency tombstones for the tenant lifetime after terminal data expiry.
-  - Keep unresolved operation evidence until reconciliation or explicit disposition.
-  - Deduplicate execution usage by operation identifier through a durable delivery record.
-  - Keep status reads and downloads separate from generation charges.
-  - Coordinate network capacity with I046. Keep provider-specific staging in F043.
-  - Add migration tools only when an actual retained-record inventory requires them.
-  Deliverables:
-  - A reusable second-provider acceptance harness with catalog-selected adapters and controlled external protocols.
-  - Operation service, SQLite tables, worker, asset lifecycle, OpenAPI contract, and official Go client methods.
-  - A real-service client example with controlled provider protocols.
-  Validation:
-  - Exercise the P011 second-provider procedure through the shared service harness.
-  - Start with a failing integration test through the real HTTP listener, SQLite database, and filesystem.
-  - Prove duplicate convergence, intent conflicts, tenant isolation, and zero dispatch for rejected requests.
-  - Prove restart recovery, stale-worker rejection, explicit uncertainty, and truthful cancellation.
-  - Prove active references, interrupted downloads, output expiry, tombstones, and deduplicated usage after restart.
-  - Preserve current text behavior through integration tests before shared-code extraction.
-  - Run the current repository checks. Record provider and hosted acceptance separately.
-  Resolution:
-  - Added the durable operation service, SQLite records, worker claims, asset resources, OpenAPI contract, and official Go client.
-  - Added controlled-provider tests for tenant isolation, idempotency, cancellation, restart recovery, retention, usage delivery, and invalid results.
-  - Added a real-service client example. Live-provider acceptance remains with each provider capability issue.
-- [ ] [F024] (P1) {F022,I046} Deliver the first OpenAI image-generation capability.
+- [ ] [F024] (P1) {I046} Deliver the first OpenAI image-generation capability.
   Goal:
   Let a backend tenant generate an image and retrieve verified bytes through the official LLM Proxy client.
   FamilyHome is the first independent consumer. It uses its existing tenant credential.
@@ -3020,7 +2739,7 @@ retain satisfied historical dependencies.
   - Prove interactive text retains bounded capacity during image saturation, including the same provider origin.
   - Run the current repository checks after implementation.
   - Record published-client, deployed-service, and explicitly authorized live-provider acceptance separately.
-- [ ] [F025] (P1) {F022,F043} Add durable video generation to model operations.
+- [ ] [F025] (P1) {F043} Add durable video generation to model operations.
   Goal:
   Make LLM Proxy the sole provider boundary for Vertex Veo, Vertex Gemini Omni,
   Runway, FAL, Kling, and xAI video generation.
@@ -3060,7 +2779,7 @@ retain satisfied historical dependencies.
   - Keep each current capability available under its single owner until its verified cutover.
   - Add import validators only for records identified by the migration inventory.
   - Use the current repository validation policy instead of older baseline CI instructions.
-- [ ] [F026] (P1) {F022} Add ElevenLabs speech, music, and alignment operations.
+- [ ] [F026] (P1) Add ElevenLabs speech, music, and alignment operations.
   Goal:
   Move the current ElevenLabs capability into LLM Proxy. Preserve shared narration and audio assembly in the destination.
   Cross-repository sequence:
@@ -3098,7 +2817,7 @@ retain satisfied historical dependencies.
   - Keep each migrated capability on one execution path and preserve current consumer behavior.
   - Add import validators only for actual recoverable records.
   - Use the current repository validation policy instead of older baseline CI instructions.
-- [ ] [F027] (P1) {F022} Add provider account mutations, avatars, translation, and lip-sync.
+- [ ] [F027] (P1) Add provider account mutations, avatars, translation, and lip-sync.
   Goal:
   Complete gateway ownership of external media-provider credentials and
   provider-native task recovery for HeyGen and Kling account operations.
@@ -3678,23 +3397,9 @@ retain satisfied historical dependencies.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
-
 ## Planning
 *do not implement yet*
 
-- [x] [P013] (P2) Plan provider and model logos for management and the public catalog.
-  Goal: Define small logos that distinguish API connections from model families on both surfaces.
-  Requirements:
-  - Record exact provider and family mappings with asset sources.
-  - Preserve the API connection and model family separation from I237.
-  - Specify icon placement, dimensions, accessibility, and shared asset ownership.
-  - Record uncertain brand identities and the implementation acceptance criteria.
-  Deliverable: `docs/provider-model-icons.md`.
-  Scope: This issue defines the plan. It does not authorize application implementation.
-  Resolution (2026-09-07): Recorded 13 provider mappings and 29 family mappings with 18 candidate SVG assets.
-  The proposal gives SenseVoice an explicit text-only presentation and records the current Moonshot identity decision.
-  The visual comparison passed a theme-switch check and a 390px layout check.
-  The plan passed the prose checker and Governor check. No application or event contract changed.
 - [!] [P012] (P1) Plan reliable Gemini access through independent customer connections.
   Goal:
   Eliminate impractical connection scenarios and select the best supported Gemini access for customers who connect and manage their providers independently.
@@ -3839,64 +3544,6 @@ retain satisfied historical dependencies.
   - https://docs.cloud.google.com/vertex-ai/generative-ai/docs/start/api-keys
   - https://docs.cloud.google.com/docs/authentication/api-keys
   - https://docs.cloud.google.com/vertex-ai/generative-ai/docs/start/express-mode/vertex-ai-express-mode-api-reference
-- [x] [P010] (P2) Plan current SiliconFlow model expansion.
-  Goal:
-  Define the route mappings and acceptance sequence for the six SiliconFlow gaps in the provider audit.
-  Requirements:
-  - Verify exact upstream IDs for GLM-5.3, DeepSeek V4 Pro and Flash, Kimi K3, Hy3, and LongCat 2.0.
-  - Inspect provider-specific controls, conflicting limits, and existing model identities.
-  - Define independent qualification without exposing an unaccepted offering through an enabled shared model.
-  - Examine the existing repository credential inputs before declaring a paid acceptance blocker.
-  Deliverable:
-  `docs/siliconflow-expansion.md` records the proposed identities, provider evidence, source conflicts, and ordered acceptance sequence.
-  Scope:
-  This assessment records the expansion plan. It does not register or activate provider offerings.
-  Resolution (2026-09-05):
-  Verified all six upstream model strings and recorded the proposed public identities in the assessment.
-  The DeepSeek releases use separate dated selectors. The earlier audit's undated-update interpretation was incorrect.
-  Recorded conflicting Kimi K3 and LongCat output limits as unresolved provider evidence.
-  Defined disposable-catalog acceptance before canonical registration to preserve shared model activation behavior.
-  The SiliconFlow key is absent from the process and all six repository private environment files.
-  Paid discovery and acceptance remain pending. No provider offering or event contract changed.
-  Documentation checks and the Governor check passed.
-  Approval (2026-09-06):
-  The user approved the full P010 implementation scope.
-  F059 owns all six offerings, provider-specific controls, Kimi image assessment, and qualification.
-- [x] [P009] (P2) Assess new Meta image and transcription models.
-  Goal:
-  Define the integration scope for current Meta media models before implementation.
-  Evidence (2026-09-05):
-  - Meta lists hosted `muse-image-1.0` for image generation and image edits.
-  - Its documented endpoints include `/v1/images/generations`, `/v1/images/edits`, and Responses.
-  - Meta lists hosted `muse-voice-transcribe-1.0` for file and realtime transcription.
-  - Its documented endpoints are `POST /v1/asr/transcribe` and `wss://api.meta.ai/v1/asr/realtime`.
-  - Published prices are USD 0.01 per generated image and USD 0.18 per audio hour.
-  - Muse Glimmer requires self-hosting and belongs to the local-inference scope in P008.
-  Requirements:
-  - Read the exact request, response, limit, retention, and error contracts for each hosted model.
-  - Assess image generation and edits against the media operation design in F022.
-  - Assess file transcription against the current dictation interface.
-  - Treat realtime transcription as a separate public interface decision.
-  - Split approved implementation outcomes into Features after this assessment.
-  Sources:
-  - https://dev.meta.ai/docs/models
-  - https://dev.meta.ai/docs/pricing-rate-limits
-  - https://research.meta.ai/blog/introducing-muse-voice-transcribe
-  Scope:
-  This issue records newly discovered provider capabilities.
-  It does not authorize media adapter implementation.
-  Resolution (2026-09-05):
-  Recorded the assessment in `docs/meta-media-assessment.md`.
-  Defined native file dictation requirements and image operation dependencies on F022.
-  Recorded the separate realtime interface decision, request limits, retention gaps, and acceptance requirements.
-  Implementation approval remains pending, so no Feature issues were created.
-  The Meta key is absent from the process and all six repository private environment files.
-  Paid provider acceptance remains pending. No runtime offering or event contract changed.
-  Changed documentation passed the language review and repository checks.
-  Approval (2026-09-06):
-  The user approved the full P009 implementation scope.
-  F054, F055, F056, F057, and F058 own file dictation, structured file results, realtime sessions, images, and image conversations.
-  This approval supersedes the earlier implementation hold.
 - [ ] [P008] (P1) Plan unified local inference and `computercat` GPU control.
   Goal:
   Make LLM Proxy the sole public inference API for cloud and local operations.
@@ -4107,131 +3754,6 @@ retain satisfied historical dependencies.
   - Qwen, SAM, and GPU residency work are not blanket prerequisites for F042 or cloud media operations.
   - Reuse F022 operation storage and F042 speech resource contracts instead of defining competing public lifecycles.
   - Require measured evidence before making a controller change a prerequisite for a retained Dictator capability.
-- [x] [P001] (P1) Design the tenant, connection, and model dashboard.
-  Resolution: F063 implemented the approved design and routing and migration decisions.
-  The current contract is in `docs/tenant-connections.md` and `docs/openapi.yaml`.
-  Validation: The full repository CI passed all 12 gates.
-  Goal:
-  Give account owners one dashboard to create tenants, connect providers, select models, and examine tenant usage.
-  The user approved the revised visual direction on September 10, 2026.
-  This planning issue records that design and the decisions required before implementation.
-  It replaces the earlier Settings-only setup proposal in P001.
-  Context:
-  Tenant management is in Settings, while provider configuration uses separate cards.
-  The user cannot easily discover how to connect a tenant to an existing provider configuration.
-  FamilyHome can use existing provider credentials while its proxy access, token totals, and usage remain separate.
-  Proposed resource model:
-  An account owns multiple tenants and named provider connections.
-  In this design, a provider connection contains a provider identity, credentials, and required provider settings.
-  A tenant can reference one connection per provider. A provider can remain unconfigured for a tenant.
-  Multiple tenants in the same account can reference one connection.
-  Tenant identity, proxy access keys, default routes, system prompts, and usage remain tenant properties.
-  This proposal changes the current tenant-owned definition of `provider connection` when implementation occurs.
-  Requirements:
-  - Keep the name `tenant` for the tenant resource.
-  - Use `connection` for the named provider resource.
-  - Present the dashboard in this order: tenants, connections, models.
-  - Make tenant creation and connection management available directly from the dashboard.
-  - Let a new tenant use existing connections, create a connection, or complete configuration later.
-  - Keep the dashboard available when a tenant has no provider credentials.
-  - Show connection names, provider identities, and the number of assigned tenants on connection cards.
-  - Calculate `Used by N tenants` from current assignments, independently of recent request traffic.
-  - Show an unassigned state when the assignment count is zero.
-  - Treat shared and dedicated as descriptions of assignment counts, rather than selectable connection types.
-  - Keep tenant usage separate when multiple tenants use the same connection.
-  Dashboard layout:
-  - Preserve the current compact dark surfaces, thin borders, typography, and provider and model logos.
-  - Place the tenant, connection, and model columns in one central relationship map.
-  - Use explicit `Create tenant` and `Create connection` actions.
-  - Keep one visible tenant context for configuration, model defaults, and tenant usage.
-  - Provide a clearly labeled account usage view.
-  - Preserve Requests, Tokens, Success rate, and Providers metrics, plus request and token charts.
-  - Keep rejected requests distinct from failed executions.
-  - Show the selected tenant's relationships by default to reduce crossed lines.
-  - Use solid teal lines for saved assignments and dashed amber lines for proposed model changes.
-  - Mark saved default models with a star and a text label.
-  - Distinguish a selected card from a saved relationship through text and visual state.
-  - Keep the map usable with a keyboard and on narrow screens.
-  Connection interaction:
-  - When a tenant is selected, show a visible `Connect` button on each available connection card.
-  - After a successful connection, replace the button with `Connected` and show the saved relationship line.
-  - Update the tenant connection count and the connection assignment count from the saved result.
-  - Show available models after the tenant connects to the selected connection.
-  - Require a separate action to save a default model.
-  - For a tenant without connections, show `Connect to choose models` in the model column.
-  - Keep connection selection empty when the selected tenant has no connections.
-  - When a user examines an unattached connection, show `Not connected` beside the tenant context.
-  - Show a route in the footer only when the corresponding relationship exists.
-  - Show explicit progress and error states for connection changes.
-  - If a change fails, preserve the previous saved assignment and show the error.
-  Detail controls:
-  - Open connection details below the map when the user selects a connection.
-  - Show its name, provider, masked credentials, required settings, and assigned tenants.
-  - Provide connection edit and tenant detach actions in the same detail area.
-  - Before a shared connection changes, identify each affected tenant beside the save action.
-  - When a tenant detaches, preserve the connection and its other tenant assignments.
-  - Show affected default routes before a detach operation.
-  - Require explicit resolution of affected defaults without selecting another route automatically.
-  - Show models and capabilities from the provider catalog for the selected connection.
-  - Provide Text and Dictation controls with explicit actions to save tenant defaults.
-  - Keep reasoning controls and system prompts with the applicable tenant configuration.
-  - Keep model previews separate from saved defaults.
-  - Provide adjacent tenant access controls with one-time secret display and copyable route examples.
-  Credential setup:
-  - Let the user name a new connection and select its provider before entering required credentials and settings.
-  - Offer attachment to the selected tenant during connection creation.
-  - Use the provider catalog for field definitions, capabilities, model choices, and verified official credential URLs.
-  - Open official credential pages with `target="_blank"` and `rel="noopener noreferrer"`.
-  - Keep account data, tenant identifiers, and credentials out of external links.
-  - Preserve the form while the user obtains credentials in another window.
-  - Validate credentials and settings through the canonical management contract before reporting successful configuration.
-  - Keep stored credentials encrypted and saved values masked.
-  - Keep upstream credentials out of management responses, generated examples, and public proxy requests.
-  - Enforce account ownership for connection access and tenant assignments.
-  Approved routing and migration decisions:
-  The user approved these decisions on September 10, 2026.
-  - Limit each tenant to one assigned connection per provider.
-  - Use that connection for the tenant's requests to the provider.
-  - Permit the same connection to serve multiple tenants in its account.
-  - Create one account-owned connection for each existing provider configuration during the bounded migration.
-  - Attach each migrated connection to the configuration's current tenant.
-  - Keep migrated connections separate even when their credential values are equal.
-  - Preserve tenant access keys, default routes, system prompts, and usage history during migration.
-  Implementation decisions:
-  - Require all tenant assignments to be detached before connection deletion.
-  - Clear dependent defaults atomically after explicit detach confirmation.
-  - Preserve the existing last-tenant deletion constraint.
-  - Use searchable lists and scrollable columns when inventories exceed the visible map.
-  Implementation owner: F063 implements the full approved P001 scope under the user's September 10 instruction.
-  Deliverables:
-  - Complete the open decisions with one resource, ownership, and route-selection contract.
-  - Specify management API operations for connection creation, edits, assignments, detach operations, and deletion.
-  - Record the final dashboard states, responsive layout, keyboard behavior, and accessible labels.
-  - Specify the bounded migration and the removal of obsolete tenant credential paths.
-  - Define implementation work for storage, management APIs, the dashboard, and public-entrypoint acceptance.
-  - Include updates to OpenAPI, typed frontend contracts, examples, and repository terminology in the implementation scope.
-  - Retain P012 as the provider-specific access decision owner and P001 as the shared interface design owner.
-  Validation:
-  - Walk through Social Threader with no connections and no selected connection.
-  - Verify that the Production card presents an obvious `Connect` action.
-  - Connect Production and verify `Connected`, the new line, assignment counts, and available models.
-  - Verify that connection creation or attachment does not silently select a default model.
-  - Walk through FamilyHome creation with existing credentials and with a new connection.
-  - Verify that tenant creation can finish before provider configuration.
-  - Walk through model previews, explicit default saves, tenant switches, connection edits, detach operations, and failures.
-  - Specify browser acceptance for keyboard use, narrow layouts, masked secrets, and consistent tenant context.
-  - Specify management API acceptance for account isolation, assignment persistence, migration, and atomic changes to dependent defaults.
-  - Verify separate tenant usage when two tenants use the same connection.
-  - Verify that a tenant cannot have two assigned connections for the same provider.
-  - Verify that provider requests use the tenant's assigned connection.
-  - Verify one migrated connection per existing provider configuration and attachment to its original tenant.
-  - Verify that equal credentials in separate configurations produce separate migrated connections.
-  - Verify that migration preserves tenant access keys, default routes, system prompts, and usage history.
-  - Apply the current repository validation policy when the implementation issues execute.
-  Design reference:
-  The accepted local prototype is `dashboard-connections-design.html`, revised with explicit Connect buttons and Social Threader selected.
-  Local path: `/Users/tyemirov/.codex/visualizations/2026/09/10/01a08a31-cc66-7da2-a881-ed1babc4fcfe/dashboard-connections-design.html`.
-  This prototype uses sample data and illustrative credentials. The requirements above are the durable design record.
 - [ ] [P006] (P2) Define provider lifecycle, model onboarding, and hosted service SLA terms.
   Goal:
   Turn the proposed long-term provider support, model-addition timing, and
@@ -4324,23 +3846,3 @@ retain satisfied historical dependencies.
     integrity before publication.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
-- [x] [P011] (P1) Specify the MediaOps gateway migration.
-  Goal:
-  Define one shared gateway product and a complete first consumer delivery.
-  Deliverables:
-  - Specify catalog ownership, protocol adapter selection, and acceptance through a second provider definition.
-  - Record API, storage, worker, authentication, capacity, and resource ownership decisions.
-  - Specify the provider sequence, paired consumer changes, data receipts, and release evidence.
-  - Align F022 and related migration issues with one idempotent operation creation contract.
-  - Preserve unrelated provider-audit work.
-  Validation:
-  - Verify source paths, issue references, API consistency, and changed documentation language.
-  - Verify that staged changes exclude unrelated provider work.
-  Resolution:
-  - Added the provider catalog and protocol adapter contract on 2026-09-08.
-  - Required a second provider to use the same executable and clients through catalog data and connection values.
-  - Assigned the harness to F022 and the first image proof to F024.
-  - Applied the acceptance requirement to each affected media slice.
-  - Recorded the concrete contract in `docs/media-gateway-consolidation.md`.
-  - Paired the consumer delivery with MediaOps P006.
-  - Kept implementation issues open and identified the required FamilyHome P003 revision.

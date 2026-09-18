@@ -337,7 +337,7 @@ Prove that a Dictator outage leaves unrelated cloud requests usable.
 P008 GPU expansion has a separate delivery boundary.
 
 The gateway accepts the following exact Dictator operation inputs. Each request
-also supplies `provider: dictator`, `model: dictator-speech-v1`, and the named
+also supplies `provider: dictator`, `model: whisper-base`, and the named
 capability. Unknown and irrelevant fields are invalid.
 
 | Capability | Input | Controls |

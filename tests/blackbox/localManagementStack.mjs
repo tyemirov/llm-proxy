@@ -87,7 +87,7 @@ export async function startLocalManagementStack(authRouting = "frontend") {
     }
     const speechCatalog = yaml.load(providerCatalog);
     const speechProvider = structuredClone(speechCatalog.providers.find(provider => provider.id === "dictator"));
-    const speechModel = structuredClone(speechCatalog.models.find(model => model.id === "dictator-speech-v1"));
+    const speechModel = structuredClone(speechCatalog.models.find(model => model.id === "whisper-base"));
     speechProvider.id = "speech-fixture";
     speechProvider.label = "Second speech provider";
     speechProvider.api_service_label = "Second speech service";

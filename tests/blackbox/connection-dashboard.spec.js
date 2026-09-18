@@ -191,7 +191,7 @@ test('account connection dashboard links Social Threader explicitly and preserve
   await expect(speech).toContainText('Connected');
   await expect(dashboard.locator('[data-provider-profile]')).toHaveCount(0);
   await dashboard.getByRole('button',{name:'Media',exact:true}).click();
-  await dashboard.locator('[data-model="dictator-speech-v1"]').click();
+  await dashboard.locator('[data-model="whisper-base"]').click();
   await expect(dashboard.locator('[data-media-details]')).toContainText('Speech synthesis');
   await expect(dashboard.locator('[data-media-details]')).toContainText('Voice extraction');
   await expect(dashboard).not.toContainText('browser-dictator-token');

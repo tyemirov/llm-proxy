@@ -34,8 +34,10 @@ const EMPTY_STRING = "";
  *   clearNotice: () => void,
  *   clearUsageState: () => void,
  *   resetUsageBreakdownViews: () => void,
+ *   startAutoRefresh: () => void,
+ *   stopAutoRefresh: () => void,
  *   handleUserMenuItem: (event: Event) => void,
- *   loadUsageSummary: (showSuccessNotice: boolean) => Promise<void>,
+ *   loadUsageSummary: () => Promise<void>,
  *   setNotice: (kind: string, message: string, surface: string) => void,
  *   setPageNotice: (kind: string, message: string) => void
  * }} AuthenticationLifecycleHost */
@@ -132,7 +134,8 @@ export function createAuthenticationLifecycleResponsibility() {
         applyUserMenuItems(Boolean(loadedAccount.user.is_admin));
         this.authState = AUTH_STATES.AUTHENTICATED;
         if (this.authState === AUTH_STATES.AUTHENTICATED) {
-          await this.loadUsageSummary(false);
+          await this.loadUsageSummary();
+          this.startAutoRefresh();
         }
       } catch (requestError) {
         if (!isAbortError(requestError) && this.canApplyAuthenticatedApp(appVersion)) {
@@ -180,6 +183,7 @@ export function createAuthenticationLifecycleResponsibility() {
 
     clearAuthenticatedState() {
       this.appVersion += 1;
+      this.stopAutoRefresh();
       if (this.accountRequestController) {
         this.accountRequestController.abort();
         this.accountRequestController = null;

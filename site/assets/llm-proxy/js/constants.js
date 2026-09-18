@@ -56,6 +56,7 @@ export const USAGE_INTERVALS = Object.freeze([
 
 export const DEFAULT_USAGE_INTERVAL = "30d";
 export const USAGE_DETAIL_PAGE_LIMIT = 25;
+export const MANAGEMENT_AUTO_REFRESH_INTERVAL_MILLISECONDS = 30_000;
 
 export const USAGE_DETAIL_KINDS = Object.freeze({
   FAILURES: "failures",
@@ -131,6 +132,35 @@ export const PROVIDER_CAPABILITY_LABELS = Object.freeze({
   subtitle_creation: "Subtitles",
   speech_generation: "Speech synthesis",
   voice_extraction: "Voice extraction",
+});
+
+export const CAPABILITY_DOMAINS = Object.freeze({
+  TEXT: "text",
+  TRANSCRIPTION: "transcription",
+  SPEECH: "speech",
+  IMAGE: "image",
+  VIDEO: "video",
+});
+
+export const CAPABILITY_DOMAIN_LABELS = Object.freeze({
+  text: "Text",
+  transcription: "Transcription",
+  speech: "Speech",
+  image: "Image",
+  video: "Video",
+});
+
+export const OPERATION_CAPABILITY_DOMAINS = Object.freeze({
+  text: "text",
+  dictation: "transcription",
+  audio_transcription: "transcription",
+  audio_diarization: "transcription",
+  audio_alignment: "transcription",
+  subtitle_creation: "transcription",
+  speech_generation: "speech",
+  voice_extraction: "speech",
+  image_input: "image",
+  video_generation: "video",
 });
 
 export const USER_MENU_ITEMS = Object.freeze([
@@ -218,8 +248,6 @@ export const COPY = Object.freeze({
   dashboardTitle: "Usage overview",
   adminDashboardEyebrow: "Admin",
   adminDashboardTitle: "All users",
-  refreshUsage: "Refresh",
-  refreshAdmin: "Refresh",
   openUsageDashboard: "Usage overview",
   usageRequests: "Requests",
   usageTokens: "Tokens",
@@ -344,7 +372,6 @@ export const COPY = Object.freeze({
   cancelProviderKeyRemoval: "Cancel",
   confirmProviderKeyRemoval: "Remove key",
   profileLoaded: "App ready",
-  usageRefreshed: "Usage refreshed",
   providerSettingsSaved: "Provider settings saved",
   providerKeyVerifying: "Checking key...",
   providerKeyVerified: "Provider key verified and settings saved",

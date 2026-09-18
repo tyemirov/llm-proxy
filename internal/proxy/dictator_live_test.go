@@ -104,7 +104,11 @@ func exerciseDictatorGatewayAcceptance(t *testing.T, client llmproxyclient.Clien
 	}
 	routes := map[string]bool{}
 	for _, route := range capabilities.Routes {
-		if route.Provider == proxy.ProviderNameDictator && route.Model == proxy.ModelNameDictatorSpeechV1 {
+		if route.Provider != proxy.ProviderNameDictator {
+			continue
+		}
+		switch route.Model {
+		case proxy.ModelNameDictatorWhisperBase, proxy.ModelNameDictatorWhisperLargeV3, proxy.ModelNameDictatorQwen3TTS, proxy.ModelNameDictatorSileroRU:
 			routes[route.Capability] = true
 		}
 	}
@@ -123,12 +127,18 @@ func exerciseDictatorGatewayAcceptance(t *testing.T, client llmproxyclient.Clien
 		}
 		return encoded
 	}
+	dictatorModelForCapability := func(capability string) string {
+		if capability == "audio.speech.generate" {
+			return proxy.ModelNameDictatorQwen3TTS
+		}
+		return proxy.ModelNameDictatorWhisperBase
+	}
 	execute := func(capability string, input json.RawMessage, controls string) [][]byte {
 		t.Helper()
 		if !routes[capability] {
 			t.Fatalf("missing advertised capability %s", capability)
 		}
-		request := llmproxyclient.MediaOperationInput{Provider: proxy.ProviderNameDictator, Model: proxy.ModelNameDictatorSpeechV1, Capability: capability, Input: input, Controls: json.RawMessage(controls)}
+		request := llmproxyclient.MediaOperationInput{Provider: proxy.ProviderNameDictator, Model: dictatorModelForCapability(capability), Capability: capability, Input: input, Controls: json.RawMessage(controls)}
 		operation, err := client.CreateMediaOperation(ctx, "gateway-acceptance-"+capability, request)
 		if err != nil {
 			t.Fatalf("%s admission: %v", capability, err)

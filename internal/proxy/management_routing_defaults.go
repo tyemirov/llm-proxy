@@ -25,9 +25,13 @@ func newManagedRoutingDefaults(providers *providerRegistry, rawDefaults TenantDe
 	if textError != nil {
 		return managedRoutingDefaults{}, textError
 	}
-	dictationProvider, dictationModel, hasDictationDefault, dictationError := resolveManagedDictationRoutingDefaultPair(providers, rawDefaults.DictationProvider, rawDefaults.DictationModel)
-	if dictationError != nil {
-		return managedRoutingDefaults{}, dictationError
+	transcriptionProvider, transcriptionModel, hasTranscriptionDefault, transcriptionError := resolveManagedDictationRoutingDefaultPair(providers, rawDefaults.TranscriptionProvider, rawDefaults.TranscriptionModel)
+	if transcriptionError != nil {
+		return managedRoutingDefaults{}, transcriptionError
+	}
+	speechProvider, speechModel, hasSpeechDefault, speechError := resolveManagedSpeechRoutingDefaultPair(providers, rawDefaults.SpeechProvider, rawDefaults.SpeechModel)
+	if speechError != nil {
+		return managedRoutingDefaults{}, speechError
 	}
 	reasoningEffort := rawDefaults.ReasoningEffort
 	if !hasTextDefault {
@@ -43,19 +47,27 @@ func newManagedRoutingDefaults(providers *providerRegistry, rawDefaults TenantDe
 		textProviderIdentifier = textProvider.identifier.string()
 		textModelIdentifier = textModel.string()
 	}
-	dictationProviderIdentifier := constants.EmptyString
-	dictationModelIdentifier := constants.EmptyString
-	if hasDictationDefault {
-		dictationProviderIdentifier = dictationProvider.string()
-		dictationModelIdentifier = dictationModel.string()
+	transcriptionProviderIdentifier := constants.EmptyString
+	transcriptionModelIdentifier := constants.EmptyString
+	if hasTranscriptionDefault {
+		transcriptionProviderIdentifier = transcriptionProvider.string()
+		transcriptionModelIdentifier = transcriptionModel.string()
+	}
+	speechProviderIdentifier := constants.EmptyString
+	speechModelIdentifier := constants.EmptyString
+	if hasSpeechDefault {
+		speechProviderIdentifier = speechProvider.string()
+		speechModelIdentifier = speechModel.string()
 	}
 	return managedRoutingDefaults{tenantDefaults: TenantDefaults{
-		Provider:          textProviderIdentifier,
-		Model:             textModelIdentifier,
-		DictationProvider: dictationProviderIdentifier,
-		DictationModel:    dictationModelIdentifier,
-		SystemPrompt:      rawDefaults.SystemPrompt,
-		ReasoningEffort:   reasoningEffort,
+		Provider:              textProviderIdentifier,
+		Model:                 textModelIdentifier,
+		TranscriptionProvider: transcriptionProviderIdentifier,
+		TranscriptionModel:    transcriptionModelIdentifier,
+		SpeechProvider:        speechProviderIdentifier,
+		SpeechModel:           speechModelIdentifier,
+		SystemPrompt:          rawDefaults.SystemPrompt,
+		ReasoningEffort:       reasoningEffort,
 	}}, nil
 }
 
@@ -75,8 +87,11 @@ func validateCanonicalManagedRoutingDefaults(providers *providerRegistry, rawDef
 	if strings.TrimSpace(rawDefaults.Provider) != defaults.tenantDefaults.Provider || strings.TrimSpace(rawDefaults.Model) != defaults.tenantDefaults.Model {
 		return managedRoutingDefaults{}, managedRoutingDefaultsCanonicalError(endpointKindText, rawDefaults.Provider, rawDefaults.Model)
 	}
-	if strings.TrimSpace(rawDefaults.DictationProvider) != defaults.tenantDefaults.DictationProvider || strings.TrimSpace(rawDefaults.DictationModel) != defaults.tenantDefaults.DictationModel {
-		return managedRoutingDefaults{}, managedRoutingDefaultsCanonicalError(endpointKindDictation, rawDefaults.DictationProvider, rawDefaults.DictationModel)
+	if strings.TrimSpace(rawDefaults.TranscriptionProvider) != defaults.tenantDefaults.TranscriptionProvider || strings.TrimSpace(rawDefaults.TranscriptionModel) != defaults.tenantDefaults.TranscriptionModel {
+		return managedRoutingDefaults{}, managedRoutingDefaultsCanonicalError(endpointKindDictation, rawDefaults.TranscriptionProvider, rawDefaults.TranscriptionModel)
+	}
+	if strings.TrimSpace(rawDefaults.SpeechProvider) != defaults.tenantDefaults.SpeechProvider || strings.TrimSpace(rawDefaults.SpeechModel) != defaults.tenantDefaults.SpeechModel {
+		return managedRoutingDefaults{}, managedRoutingDefaultsCanonicalError(endpointKindDictation, rawDefaults.SpeechProvider, rawDefaults.SpeechModel)
 	}
 	return defaults, nil
 }
@@ -97,10 +112,15 @@ func validatePersistedManagedRoutingDefaults(providers *providerRegistry, provid
 		reconciledValue.Model = constants.EmptyString
 		reconciledValue.ReasoningEffort = constants.EmptyString
 	}
-	// An unset dictation pair stays valid when the catalog adds a new capability.
-	if currentValue.DictationProvider == constants.EmptyString {
-		reconciledValue.DictationProvider = constants.EmptyString
-		reconciledValue.DictationModel = constants.EmptyString
+	// An unset transcription pair stays valid when the catalog adds a new capability.
+	if currentValue.TranscriptionProvider == constants.EmptyString {
+		reconciledValue.TranscriptionProvider = constants.EmptyString
+		reconciledValue.TranscriptionModel = constants.EmptyString
+	}
+	// An unset speech pair stays valid when the catalog adds a new capability.
+	if currentValue.SpeechProvider == constants.EmptyString {
+		reconciledValue.SpeechProvider = constants.EmptyString
+		reconciledValue.SpeechModel = constants.EmptyString
 	}
 	if currentValue != reconciledValue {
 		return managedRoutingDefaults{}, fmt.Errorf("%w: reason=provider_key_ineligible", errManagedRoutingDefaultsInvalid)
@@ -159,15 +179,27 @@ func reconcileManagedRoutingDefaultsWithProviders(current managedRoutingDefaults
 			reconciled.Model = routingProviders[0].textModel.string()
 		}
 	}
-	if !providerIsKeyed(reconciled.DictationProvider) {
-		reconciled.DictationProvider = constants.EmptyString
-		reconciled.DictationModel = constants.EmptyString
+	if !providerIsKeyed(reconciled.TranscriptionProvider) {
+		reconciled.TranscriptionProvider = constants.EmptyString
+		reconciled.TranscriptionModel = constants.EmptyString
 		for _, routingProvider := range routingProviders {
 			if !routingProvider.definition.supportsDictation {
 				continue
 			}
-			reconciled.DictationProvider = routingProvider.definition.identifier.string()
-			reconciled.DictationModel = routingProvider.definition.defaultTranscriptionModel.string()
+			reconciled.TranscriptionProvider = routingProvider.definition.identifier.string()
+			reconciled.TranscriptionModel = routingProvider.definition.defaultTranscriptionModel.string()
+			break
+		}
+	}
+	if !providerIsKeyed(reconciled.SpeechProvider) {
+		reconciled.SpeechProvider = constants.EmptyString
+		reconciled.SpeechModel = constants.EmptyString
+		for _, routingProvider := range routingProviders {
+			if !routingProvider.definition.supportsSpeech {
+				continue
+			}
+			reconciled.SpeechProvider = routingProvider.definition.identifier.string()
+			reconciled.SpeechModel = routingProvider.definition.defaultSpeechModel.string()
 			break
 		}
 	}
@@ -202,6 +234,22 @@ func resolveManagedTextRoutingDefaultPair(providers *providerRegistry, rawProvid
 		return providerDefinition{}, textModelDefinition{}, false, managedRoutingDefaultsPairError(endpointKindText, rawProvider, rawModel, resolutionError)
 	}
 	return definition, resolvedModel, true, nil
+}
+
+func resolveManagedSpeechRoutingDefaultPair(providers *providerRegistry, rawProvider string, rawModel string) (providerID, modelID, bool, error) {
+	provider := strings.TrimSpace(rawProvider)
+	model := strings.TrimSpace(rawModel)
+	if provider == constants.EmptyString && model == constants.EmptyString {
+		return providerID(""), modelID(""), false, nil
+	}
+	if provider == constants.EmptyString || model == constants.EmptyString {
+		return providerID(""), modelID(""), false, managedRoutingDefaultsPairError(endpointKindDictation, rawProvider, rawModel, errManagedRoutingDefaultsInvalid)
+	}
+	definition, resolvedModel, resolutionError := providers.resolveSpeechModel(provider, model, constants.EmptyString, constants.EmptyString)
+	if resolutionError != nil {
+		return providerID(""), modelID(""), false, managedRoutingDefaultsPairError(endpointKindDictation, rawProvider, rawModel, resolutionError)
+	}
+	return definition.identifier, resolvedModel, true, nil
 }
 
 func resolveManagedDictationRoutingDefaultPair(providers *providerRegistry, rawProvider string, rawModel string) (providerID, modelID, bool, error) {

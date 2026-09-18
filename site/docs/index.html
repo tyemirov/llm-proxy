@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="c3c94694a54ceabf0449f4079eba7062ad5ba1916a2a7ae55441528897051fc3">
+    <meta name="openapi-source-sha256" content="cf4fbc1a384469065bef80ef15515326c32a55e1caa959c7ebe8b392426adaaf">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="c3c94694a54ceabf0449f4079eba7062ad5ba1916a2a7ae55441528897051fc3">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="cf4fbc1a384469065bef80ef15515326c32a55e1caa959c7ebe8b392426adaaf">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>c3c94694a54ceabf0449f4079eba7062ad5ba1916a2a7ae55441528897051fc3</code></span>
+          <span>Source SHA-256 <code>cf4fbc1a384469065bef80ef15515326c32a55e1caa959c7ebe8b392426adaaf</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -5105,7 +5105,7 @@ components:
             provider:
               const: dictator
             model:
-              const: dictator-speech-v1
+              enum: [whisper-tiny, whisper-base, whisper-small, whisper-medium, whisper-large-v3]
             input:
               $ref: &#39;#/components/schemas/DictatorAudioInput&#39;
             controls:
@@ -5120,13 +5120,12 @@ components:
             provider:
               const: dictator
             model:
-              const: dictator-speech-v1
+              enum: [whisper-tiny, whisper-base, whisper-small, whisper-medium, whisper-large-v3]
             input:
               $ref: &#39;#/components/schemas/DictatorAudioInput&#39;
             controls:
               type: object
               additionalProperties: false
-              required: [model_size]
               properties:
                 language:
                   type: string
@@ -5157,7 +5156,7 @@ components:
             provider:
               const: dictator
             model:
-              const: dictator-speech-v1
+              enum: [whisper-tiny, whisper-base, whisper-small, whisper-medium, whisper-large-v3]
             input:
               type: object
               additionalProperties: false
@@ -5189,7 +5188,7 @@ components:
             provider:
               const: dictator
             model:
-              const: dictator-speech-v1
+              enum: [whisper-tiny, whisper-base, whisper-small, whisper-medium, whisper-large-v3]
             input:
               type: object
               additionalProperties: false
@@ -5234,7 +5233,7 @@ components:
             provider:
               const: dictator
             model:
-              const: dictator-speech-v1
+              enum: [qwen3-tts, silero-ru]
             input:
               type: object
               additionalProperties: false
@@ -5275,7 +5274,7 @@ components:
             provider:
               const: dictator
             model:
-              const: dictator-speech-v1
+              enum: [whisper-tiny, whisper-base, whisper-small, whisper-medium, whisper-large-v3]
             input:
               type: object
               additionalProperties: false
@@ -5296,7 +5295,6 @@ components:
             controls:
               type: object
               additionalProperties: false
-              required: [model_size]
               properties:
                 duration_seconds:
                   type: number

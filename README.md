@@ -822,7 +822,7 @@ Fresh databases create the current tables directly, without a schema number or i
 Current account-connection databases validate their records without a version query or a repeated transfer.
 The bounded connection transfer remains necessary for the retained production database.
 The transfer preserves tenant assignments, access keys, defaults, prompts, timestamps, and usage.
-See the [schema transition record](docs/managed-schema-transition.md) for I261 inventory evidence and the remaining transfer requirements.
+See the [schema transition record](docs/managed-schema-transition.md) for I271 inventory evidence and the remaining transfer requirements.
 
 The packaged configuration requires every `LLM_PROXY_MANAGEMENT_*` placeholder to have a value.
 Local `make up` projects these values from `configs/.env.local` into `configs/.env.api.local`.
@@ -863,7 +863,8 @@ Authenticated users land on the tenant dashboard and usage overview.
 Selecting a tenant in the map also selects its usage.
 **Account usage** shows totals across all owned tenants.
 The usage selector can narrow the charts independently.
-The interval defaults to `30 days` and retains the selected usage scope during refresh.
+The interval defaults to `30 days` and retains the selected usage scope during automatic refresh.
+Usage summaries refresh automatically every 30 seconds while the user is authenticated.
 Execution metrics include succeeded and failed requests.
 The separate `rejected_requests` count identifies requests rejected before provider dispatch. The
 success-rate metric renders an **N failed requests** action only when the selected
@@ -889,7 +890,7 @@ starts with a `Bar graph` that ranks exact request counts against the largest
 row. Its toggle changes only that card to a `Donut chart`. The donut presents
 the same ordered request counts as shares with a count-and-percentage legend.
 Rounded shares total 100 percent, and every category remains separate. Each
-selection survives interval, Refresh, and Usage tenant changes. Authentication
+selection survives interval, automatic usage refresh, and Usage tenant changes. Authentication
 reset or page reload resets both cards to bars. A toggle makes no request.
 Requests and Tokens remain separate line charts. Their
 visible X axes use the summary's UTC hour or date buckets. Their zero-based,

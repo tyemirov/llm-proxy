@@ -1,6 +1,6 @@
 # Managed schema transition
 
-I261 owns removal of completed managed-database transfers.
+I271 owns removal of completed managed-database transfers.
 The user selected a versionless current schema on September 13, 2026.
 Historical schema numbers describe predecessor inputs only.
 They do not control fresh creation or current account-connection validation.
@@ -79,7 +79,7 @@ Keep canonical provider URL validation in the provider catalog.
 The application operator owns the production transfer and its completion receipt.
 The production input is the exact retained volume and file identified above.
 The local input requires an ownership or disposal decision first.
-I261 implementation does not authorize an application deployment or disposal of retained data.
+I271 implementation does not authorize an application deployment or disposal of retained data.
 
 1. Resolve the local retention and ownership decision.
 2. Identify every retained backup that must remain usable after bridge removal.

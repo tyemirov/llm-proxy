@@ -21,6 +21,7 @@ The dashboard presents tenants, connections, and models in that order.
 The dashboard always keeps one tenant selected. It selects the `Default` tenant, or the first tenant when none is named `Default`.
 The selected tenant also controls the usage view.
 Account-wide usage remains available through the usage scope selector.
+Usage summaries refresh automatically every 30 seconds while the user is authenticated.
 Search filters the visible lists. Each column scrolls when its list exceeds the available space.
 
 1. Create a tenant with a descriptive name.
@@ -59,8 +60,8 @@ Enter the server address and bearer token. Select the required TLS setting.
 Connection creation checks the token through voice discovery without a speech job.
 The token remains encrypted in the backend credential store.
 Assign the saved connection to the required tenant.
-Select the Media tab to inspect `dictator-speech-v1` and its speech capabilities.
-Media models do not use text defaults or provider system prompts.
+Select the Transcription tab to inspect `whisper-base` and its transcription capabilities. Select the Speech tab to inspect `qwen3-tts` and `silero-ru` synthesis capabilities.
+Transcription and speech models use their own capability defaults.
 
 Operations, output assets, and voice identifiers belong to the tenant.
 Execution and recovery require the accepted connection identity and version.
@@ -103,7 +104,7 @@ The migration encrypts each secret with its new connection identity as authentic
 It preserves tenant access keys, default routes, system prompts, and usage records.
 The transaction removes the predecessor credential table after the transfer.
 A restart uses the current schema and preserves the migrated connection identifiers.
-I261 retains this transfer until the production database has current account connections.
+I271 retains this transfer until the production database has current account connections.
 The [schema transition record](managed-schema-transition.md) contains the inventory, local ownership prerequisite, and completion requirements.
 
 ## Connection inventory

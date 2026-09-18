@@ -112,7 +112,7 @@ func (adapter *dictatorMediaOperationAdapter) Validate(_ context.Context, reques
 	if request.Provider != adapter.provider || request.Model != adapter.model {
 		return MediaOperationValidatedRequest{}, errMediaOperationInvalid
 	}
-	input, controls, validationError := validateDictatorOperation(request.Capability, request.Input, request.Controls)
+	input, controls, validationError := validateDictatorOperation(adapter.model, request.Capability, request.Input, request.Controls)
 	if validationError != nil {
 		return MediaOperationValidatedRequest{}, validationError
 	}
@@ -236,7 +236,7 @@ func (adapter *dictatorMediaOperationAdapter) protocolRequest(requestContext con
 	}
 	if input.VoiceID != "" {
 		voice, voiceError := adapter.store.providerMediaVoice(requestContext, request.TenantID, input.VoiceID)
-		if voiceError != nil || voice.Provider != adapter.provider || voice.Model != adapter.model {
+		if voiceError != nil || voice.Provider != adapter.provider {
 			return dictatorProtocolRequest{}, errors.New(llmproxycontract.ErrorCodeMediaVoiceNotFound)
 		}
 		protocolRequest.Voice = &voice
@@ -244,7 +244,24 @@ func (adapter *dictatorMediaOperationAdapter) protocolRequest(requestContext con
 	return protocolRequest, nil
 }
 
-func validateDictatorOperation(capability string, rawInput json.RawMessage, rawControls json.RawMessage) (dictatorCanonicalInput, dictatorCanonicalControls, error) {
+func dictatorWhisperSizeForModel(model string) (string, bool) {
+	size, found := strings.CutPrefix(model, "whisper-")
+	if !found || size == "" {
+		return "", false
+	}
+	switch size {
+	case "tiny", "base", "small", "medium", "large-v3":
+		return size, true
+	default:
+		return "", false
+	}
+}
+
+func dictatorIsSpeechSynthesisModel(model string) bool {
+	return model == "qwen3-tts" || model == "silero-ru"
+}
+
+func validateDictatorOperation(model string, capability string, rawInput json.RawMessage, rawControls json.RawMessage) (dictatorCanonicalInput, dictatorCanonicalControls, error) {
 	var input dictatorCanonicalInput
 	var controls dictatorCanonicalControls
 	if capability == llmproxycontract.MediaCapabilityAudioVoiceExtract {
@@ -273,27 +290,57 @@ func validateDictatorOperation(capability string, rawInput json.RawMessage, rawC
 	}
 	switch capability {
 	case llmproxycontract.MediaCapabilityAudioTranscribe:
+		if dictatorIsSpeechSynthesisModel(model) {
+			return input, controls, errMediaOperationInvalid
+		}
 		if !validAudio || !dictatorInputOnlyAudio(input) || !validDictatorLanguageSelection(controls) || !dictatorControlsOnlyLanguage(controls) {
 			return input, controls, errMediaOperationInvalid
 		}
 	case llmproxycontract.MediaCapabilityAudioDiarize:
-		if !validAudio || !dictatorInputOnlyAudio(input) || !validDictatorLanguageSelection(controls) || controls.ModelSize == "" || (controls.UtteranceGapSeconds != nil && *controls.UtteranceGapSeconds < 0) || controls.RemovePunctuation || controls.Granularity != "" || controls.GroupSize != 0 || controls.TextFormat != "" || controls.SampleRateHz != 0 || controls.MaxDurationSeconds != 0 || controls.IncludeTimeline {
+		if _, sizeOK := dictatorWhisperSizeForModel(model); sizeOK {
+			if controls.ModelSize == "" {
+				controls.ModelSize, _ = dictatorWhisperSizeForModel(model)
+			} else if derived, _ := dictatorWhisperSizeForModel(model); controls.ModelSize != derived {
+				return input, controls, errMediaOperationInvalid
+			}
+		} else if dictatorIsSpeechSynthesisModel(model) || controls.ModelSize == "" {
+			return input, controls, errMediaOperationInvalid
+		}
+		if !validAudio || !dictatorInputOnlyAudio(input) || !validDictatorLanguageSelection(controls) || (controls.UtteranceGapSeconds != nil && *controls.UtteranceGapSeconds < 0) || controls.RemovePunctuation || controls.Granularity != "" || controls.GroupSize != 0 || controls.TextFormat != "" || controls.SampleRateHz != 0 || controls.MaxDurationSeconds != 0 || controls.IncludeTimeline {
 			return input, controls, errMediaOperationInvalid
 		}
 	case llmproxycontract.MediaCapabilityAudioAlign:
+		if dictatorIsSpeechSynthesisModel(model) {
+			return input, controls, errMediaOperationInvalid
+		}
 		if !validAudio || input.Transcript == "" || input.Text != "" || input.VoiceID != "" || input.DisplayName != "" || input.Language != "" || controls.DetectLanguage || controls.Language == "" || controls.Granularity != "" || controls.GroupSize != 0 || controls.ModelSize != "" || controls.UtteranceGapSeconds != nil || controls.TextFormat != "" || controls.SampleRateHz != 0 || controls.MaxDurationSeconds != 0 || controls.IncludeTimeline {
 			return input, controls, errMediaOperationInvalid
 		}
 	case llmproxycontract.MediaCapabilitySubtitlesCreate:
+		if dictatorIsSpeechSynthesisModel(model) {
+			return input, controls, errMediaOperationInvalid
+		}
 		if !validAudio || input.Text != "" || input.VoiceID != "" || input.DisplayName != "" || input.Language != "" || !validDictatorLanguageSelection(controls) || (controls.Granularity != "word" && controls.Granularity != "sentence") || controls.GroupSize <= 0 || controls.RemovePunctuation || controls.ModelSize != "" || controls.UtteranceGapSeconds != nil || controls.TextFormat != "" || controls.SampleRateHz != 0 || controls.MaxDurationSeconds != 0 || controls.IncludeTimeline {
 			return input, controls, errMediaOperationInvalid
 		}
 	case llmproxycontract.MediaCapabilityAudioSpeechGenerate:
+		if _, sizeOK := dictatorWhisperSizeForModel(model); sizeOK {
+			return input, controls, errMediaOperationInvalid
+		}
 		if input.AudioAssetID != "" || input.Transcript != "" || input.Text == "" || !mediaVoiceIdentifierPattern.MatchString(input.VoiceID) || input.DisplayName != "" || input.Language != "" || (controls.TextFormat != "plain" && controls.TextFormat != "ssml") || (controls.SampleRateHz != 24000 && controls.SampleRateHz != 48000) || controls.MaxDurationSeconds < 0 || controls.Language == "" || controls.DetectLanguage || controls.RemovePunctuation || controls.Granularity != "" || controls.GroupSize != 0 || controls.ModelSize != "" || controls.UtteranceGapSeconds != nil {
 			return input, controls, errMediaOperationInvalid
 		}
 	case llmproxycontract.MediaCapabilityAudioVoiceExtract:
-		if controls.DurationSeconds == nil || *controls.DurationSeconds <= 0 || !validAudio || input.Transcript == "" || input.Text != "" || input.VoiceID != "" || input.DisplayName == "" || input.Language == "" || controls.Language != "" || controls.DetectLanguage || controls.ModelSize == "" || controls.RemovePunctuation || controls.Granularity != "" || controls.GroupSize != 0 || controls.UtteranceGapSeconds != nil || controls.TextFormat != "" || controls.SampleRateHz != 0 || controls.MaxDurationSeconds != 0 || controls.IncludeTimeline {
+		if _, sizeOK := dictatorWhisperSizeForModel(model); sizeOK {
+			if controls.ModelSize == "" {
+				controls.ModelSize, _ = dictatorWhisperSizeForModel(model)
+			} else if derived, _ := dictatorWhisperSizeForModel(model); controls.ModelSize != derived {
+				return input, controls, errMediaOperationInvalid
+			}
+		} else if dictatorIsSpeechSynthesisModel(model) || controls.ModelSize == "" {
+			return input, controls, errMediaOperationInvalid
+		}
+		if controls.DurationSeconds == nil || *controls.DurationSeconds <= 0 || !validAudio || input.Transcript == "" || input.Text != "" || input.VoiceID != "" || input.DisplayName == "" || input.Language == "" || controls.Language != "" || controls.DetectLanguage || controls.RemovePunctuation || controls.Granularity != "" || controls.GroupSize != 0 || controls.UtteranceGapSeconds != nil || controls.TextFormat != "" || controls.SampleRateHz != 0 || controls.MaxDurationSeconds != 0 || controls.IncludeTimeline {
 			return input, controls, errMediaOperationInvalid
 		}
 	default:

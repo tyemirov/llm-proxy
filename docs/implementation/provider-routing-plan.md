@@ -735,7 +735,7 @@ starts with a Bar graph and retains every ordered request-count row. Its toggle
 changes only that card to a Donut chart. Each donut derives its segments and
 count-and-percentage legend from the same request counts. The rounded shares
 total 100 percent. Each donut keeps every category and does not create an Other
-tail. The browser keeps both selections through interval, Refresh, and Usage
+tail. The browser keeps both selections through interval, automatic usage refresh, and Usage
 tenant changes. Authentication reset and page reload reset both cards to bars.
 A toggle performs no request and changes no tenant or interval state.
 
@@ -907,7 +907,7 @@ buckets. Account-wide aggregation runs once at the database boundary across
 every owned tenant. It calculates totals and average latency from the complete
 execution event set. The browser never fans out per-tenant summaries.
 
-Refresh and interval changes retain the Usage tenant selection. Settings
+Automatic usage refresh and interval changes retain the Usage tenant selection. Settings
 changes do not affect it. Loading disables the Usage controls. Request identity
 prevents a stale scope or interval response from replacing the selected
 snapshot. The admin API remains a distinct 30-day daily contract.

@@ -126,7 +126,7 @@ func (fixture *dictatorGRPCFixture) ListSynthesisVoices(ctx context.Context, _ *
 }
 
 func TestDictatorAccountConnectionUsesAuthenticatedGRPC(t *testing.T) {
-	exerciseDictatorAccountConnection(t, proxy.ProviderNameDictator, proxy.ModelNameDictatorSpeechV1, testfixtures.ProviderCatalog(t))
+	exerciseDictatorAccountConnection(t, proxy.ProviderNameDictator, proxy.ModelNameDictatorWhisperBase, testfixtures.ProviderCatalog(t))
 }
 
 func TestDictatorSecondProviderUsesCatalogRegistration(t *testing.T) {
@@ -134,7 +134,7 @@ func TestDictatorSecondProviderUsesCatalogRegistration(t *testing.T) {
 	const modelID = "speech-fixture-v1"
 	schema := testfixtures.ProviderCatalog(t).Schema()
 	for _, model := range schema.Models {
-		if model.ID == proxy.ModelNameDictatorSpeechV1 {
+		if model.ID == proxy.ModelNameDictatorWhisperBase {
 			model.ID = modelID
 			schema.Models = append(schema.Models, model)
 			break
@@ -158,8 +158,12 @@ func TestDictatorSecondProviderUsesCatalogRegistration(t *testing.T) {
 			provider.Transports[0].Endpoint.SettingField = "speech_endpoint"
 			provider.Transports[0].Components.Authentication.Field = "speech_bearer"
 			provider.Offerings = append([]proxy.ProviderCatalogOffering(nil), provider.Offerings...)
-			provider.Offerings[0].Model = modelID
-			provider.Offerings[0].UpstreamModel = "private-speech-fixture"
+			for index := range provider.Offerings {
+				if provider.Offerings[index].Model == proxy.ModelNameDictatorWhisperBase {
+					provider.Offerings[index].Model = modelID
+					provider.Offerings[index].UpstreamModel = "private-speech-fixture"
+				}
+			}
 			schema.Providers = append(schema.Providers, provider)
 			break
 		}
@@ -254,13 +258,26 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 		t.Fatal(err)
 	}
 	advertised := 0
+	advertisedSilero := 0
+	advertisedQwen := 0
 	for _, route := range capabilities.Routes {
-		if route.Provider == provider && route.Model == model {
+		if route.Provider != provider {
+			continue
+		}
+		switch route.Model {
+		case model:
 			advertised++
+		case proxy.ModelNameDictatorSileroRU:
+			advertisedSilero++
+		case proxy.ModelNameDictatorQwen3TTS:
+			advertisedQwen++
 		}
 	}
-	if advertised != 6 {
-		t.Fatalf("advertised speech capabilities=%d", advertised)
+	if advertised != 5 {
+		t.Fatalf("advertised transcription capabilities=%d", advertised)
+	}
+	if advertisedSilero != 1 || advertisedQwen != 1 {
+		t.Fatalf("advertised speech capabilities silero=%d qwen=%d", advertisedSilero, advertisedQwen)
 	}
 	_, rejectedError := client.CreateMediaOperation(ctx, "unsupported-controls", llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: "audio.transcribe", Input: json.RawMessage(`{"audio_asset_id":"` + asset.AssetID + `"}`), Controls: json.RawMessage(`{"unknown_control":true}`)})
 	if httpFailureStatus(rejectedError) != http.StatusBadRequest || fixture.submissions.Load() != 0 {
@@ -291,18 +308,18 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 		t.Fatalf("transcript=%s error=%v", content, err)
 	}
 	scenarios := []struct {
-		capability, input, controls string
-		outputs                     int
+		capability, input, controls, scenarioModel string
+		outputs                                   int
 	}{
-		{"audio.diarize", `{"audio_asset_id":"` + asset.AssetID + `"}`, `{"language":"en","model_size":"base","utterance_gap_seconds":0.5}`, 1},
-		{"audio.align", `{"audio_asset_id":"` + asset.AssetID + `","transcript":"A clear transcript."}`, `{"language":"en","remove_punctuation":true}`, 2},
-		{"subtitles.create", `{"audio_asset_id":"` + asset.AssetID + `","transcript":"A clear transcript."}`, `{"language":"en","granularity":"sentence","group_size":2}`, 1},
-		{"audio.speech.generate", `{"text":"<speak>Привет</speak>","voice_id":"` + voices[0].VoiceID + `"}`, `{"language":"ru","text_format":"ssml","sample_rate_hz":48000,"include_timeline":true,"max_duration_seconds":5}`, 2},
-		{"audio.voice.extract", `{"audio_asset_id":"` + asset.AssetID + `","transcript":"A clear transcript.","display_name":"My voice","language":"en"}`, `{"model_size":"base","duration_seconds":0.5}`, 1},
+		{"audio.diarize", `{"audio_asset_id":"` + asset.AssetID + `"}`, `{"language":"en","model_size":"base","utterance_gap_seconds":0.5}`, model, 1},
+		{"audio.align", `{"audio_asset_id":"` + asset.AssetID + `","transcript":"A clear transcript."}`, `{"language":"en","remove_punctuation":true}`, model, 2},
+		{"subtitles.create", `{"audio_asset_id":"` + asset.AssetID + `","transcript":"A clear transcript."}`, `{"language":"en","granularity":"sentence","group_size":2}`, model, 1},
+		{"audio.speech.generate", `{"text":"<speak>Привет</speak>","voice_id":"` + voices[0].VoiceID + `"}`, `{"language":"ru","text_format":"ssml","sample_rate_hz":48000,"include_timeline":true,"max_duration_seconds":5}`, proxy.ModelNameDictatorSileroRU, 2},
+		{"audio.voice.extract", `{"audio_asset_id":"` + asset.AssetID + `","transcript":"A clear transcript.","display_name":"My voice","language":"en"}`, `{"model_size":"base","duration_seconds":0.5}`, model, 1},
 	}
 	for _, scenario := range scenarios {
 		t.Run(scenario.capability, func(t *testing.T) {
-			operation, err := client.CreateMediaOperation(ctx, "dictator-"+scenario.capability, llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: scenario.capability, Input: json.RawMessage(scenario.input), Controls: json.RawMessage(scenario.controls)})
+			operation, err := client.CreateMediaOperation(ctx, "dictator-"+scenario.capability, llmproxyclient.MediaOperationInput{Provider: provider, Model: scenario.scenarioModel, Capability: scenario.capability, Input: json.RawMessage(scenario.input), Controls: json.RawMessage(scenario.controls)})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -388,7 +405,7 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 	if extractedID == "" {
 		t.Fatal("extracted voice absent")
 	}
-	generated, err := client.CreateMediaOperation(ctx, "extracted-synthesis", llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: "audio.speech.generate", Input: json.RawMessage(`{"text":"Hello","voice_id":"` + extractedID + `"}`), Controls: json.RawMessage(`{"language":"en","text_format":"plain","sample_rate_hz":24000}`)})
+	generated, err := client.CreateMediaOperation(ctx, "extracted-synthesis", llmproxyclient.MediaOperationInput{Provider: provider, Model: proxy.ModelNameDictatorQwen3TTS, Capability: "audio.speech.generate", Input: json.RawMessage(`{"text":"Hello","voice_id":"` + extractedID + `"}`), Controls: json.RawMessage(`{"language":"en","text_format":"plain","sample_rate_hz":24000}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -459,15 +476,15 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 	client = recoveredClient
 
 	scenarios = append(scenarios, struct {
-		capability, input, controls string
-		outputs                     int
-	}{"audio.transcribe", `{"audio_asset_id":"` + asset.AssetID + `"}`, `{"language":"en"}`, 1})
+		capability, input, controls, scenarioModel string
+		outputs                                   int
+	}{"audio.transcribe", `{"audio_asset_id":"` + asset.AssetID + `"}`, `{"language":"en"}`, model, 1})
 	fixture.pending.Store(true)
 	for _, scenario := range scenarios {
 		t.Run("cancel-"+scenario.capability, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), dictatorAcceptanceTimeout)
 			defer cancel()
-			accepted, err := client.CreateMediaOperation(ctx, "cancel-"+scenario.capability, llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: scenario.capability, Input: json.RawMessage(scenario.input), Controls: json.RawMessage(scenario.controls)})
+			accepted, err := client.CreateMediaOperation(ctx, "cancel-"+scenario.capability, llmproxyclient.MediaOperationInput{Provider: provider, Model: scenario.scenarioModel, Capability: scenario.capability, Input: json.RawMessage(scenario.input), Controls: json.RawMessage(scenario.controls)})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -553,7 +570,7 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 	fixture.stopped.Delete("private-synthesis")
 	for index, document := range []string{`{`, `null`, `[]`, `{"textSegments":[]}`, `{"textSegments":[{"content":"Hello","end":1}]}`, `{"textSegments":[{"content":"Hello","start":-1,"end":1}]}`, `{"textSegments":[{"content":"Hello","start":2,"end":1}]}`, `{"textSegments":[{"content":"Hello","start":0,"end":1,"file":"/private/path"}]}`} {
 		fixture.timelineOverride.Store(document)
-		invalid, err := client.CreateMediaOperation(ctx, fmt.Sprintf("invalid-timeline-%d", index), llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: scenarios[3].capability, Input: json.RawMessage(scenarios[3].input), Controls: json.RawMessage(scenarios[3].controls)})
+		invalid, err := client.CreateMediaOperation(ctx, fmt.Sprintf("invalid-timeline-%d", index), llmproxyclient.MediaOperationInput{Provider: provider, Model: scenarios[3].scenarioModel, Capability: scenarios[3].capability, Input: json.RawMessage(scenarios[3].input), Controls: json.RawMessage(scenarios[3].controls)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -571,7 +588,7 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 		current := accountConnectionExchange(t, router, owner, http.MethodGet, "/connections/"+connection.ID, nil, http.StatusOK)
 		accountConnectionExchange(t, router, owner, http.MethodPut, "/connections/"+connection.ID, map[string]any{"name": "Changed speech server", "provider": provider, "version": current["version"], "fields": fields}, http.StatusOK)
 		for _, staleID := range []string{voices[0].VoiceID, extractedID} {
-			stale, err := client.CreateMediaOperation(ctx, fmt.Sprintf("stale-voice-%d-%s", index, staleID), llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: "audio.speech.generate", Input: json.RawMessage(`{"text":"Hello","voice_id":"` + staleID + `"}`), Controls: json.RawMessage(`{"language":"en","text_format":"plain","sample_rate_hz":24000}`)})
+			stale, err := client.CreateMediaOperation(ctx, fmt.Sprintf("stale-voice-%d-%s", index, staleID), llmproxyclient.MediaOperationInput{Provider: provider, Model: proxy.ModelNameDictatorSileroRU, Capability: "audio.speech.generate", Input: json.RawMessage(`{"text":"Hello","voice_id":"` + staleID + `"}`), Controls: json.RawMessage(`{"language":"en","text_format":"plain","sample_rate_hz":24000}`)})
 			var failure *llmproxyclient.HTTPFailure
 			if !errors.As(err, &failure) || failure.StatusCode() != http.StatusBadRequest {
 				t.Errorf("obsolete voice was not rejected before discovery: operation=%+v error=%v", stale, err)
@@ -581,7 +598,7 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 		if err != nil || len(currentVoices) != 1 || currentVoices[0].VoiceID == voices[0].VoiceID {
 			t.Fatalf("voices after connection change: %+v error=%v", currentVoices, err)
 		}
-		currentInput := llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: scenarios[3].capability, Input: json.RawMessage(`{"text":"<speak>Привет</speak>","voice_id":"` + currentVoices[0].VoiceID + `"}`), Controls: json.RawMessage(scenarios[3].controls)}
+		currentInput := llmproxyclient.MediaOperationInput{Provider: provider, Model: scenarios[3].scenarioModel, Capability: scenarios[3].capability, Input: json.RawMessage(`{"text":"<speak>Привет</speak>","voice_id":"` + currentVoices[0].VoiceID + `"}`), Controls: json.RawMessage(scenarios[3].controls)}
 		currentOperation, err := client.CreateMediaOperation(ctx, fmt.Sprintf("current-voice-%d", index), currentInput)
 		if err != nil {
 			t.Fatal(err)
@@ -593,7 +610,7 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 		voices = currentVoices
 	}
 
-	validSpeech := llmproxyclient.MediaOperationInput{Provider: provider, Model: model, Capability: scenarios[3].capability, Input: json.RawMessage(`{"text":"<speak>Привет</speak>","voice_id":"` + voices[0].VoiceID + `"}`), Controls: json.RawMessage(scenarios[3].controls)}
+	validSpeech := llmproxyclient.MediaOperationInput{Provider: provider, Model: scenarios[3].scenarioModel, Capability: scenarios[3].capability, Input: json.RawMessage(`{"text":"<speak>Привет</speak>","voice_id":"` + voices[0].VoiceID + `"}`), Controls: json.RawMessage(scenarios[3].controls)}
 	admissionFailure.Store(true)
 	_, err = client.CreateMediaOperation(ctx, "lost-admission-assignment", validSpeech)
 	admissionFailure.Store(false)
