@@ -2338,7 +2338,31 @@ test("dashboard connectors follow connection cards after inner list scroll", asy
   await expect.poll(async () => pathEndpointError(dashboard)).toBeLessThanOrEqual(2);
 });
 
-test("usage intervals load every dashboard surface, remain active on refresh, and fit mobile", async ({ page }) => {
+test("clicking within a connection card selects the connection", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { savedProviderIDs: ["openai", "siliconflow"] });
+  await page.goto(`${baseURL}${applicationPath}`);
+  const dashboard = page.locator("connection-dashboard");
+  const openAINode = dashboard.locator('[data-connection-node]').filter({ hasText: "Default OpenAI" });
+  const siliconFlowNode = dashboard.locator('[data-connection-node]').filter({ hasText: "Default SiliconFlow" });
+  await expect(openAINode).toHaveClass(/selected/);
+  await expect(siliconFlowNode).not.toHaveClass(/selected/);
+
+  // Click on the <small> element inside the card, outside of button.cw-name
+  await siliconFlowNode.locator("small").first().click();
+  await expect(siliconFlowNode).toHaveClass(/selected/);
+  await expect(openAINode).not.toHaveClass(/selected/);
+  await expect(dashboard.locator("[data-details]")).toContainText("Default SiliconFlow");
+
+  // Click on the status badge inside the openAI card
+  await openAINode.locator(".cw-connected").click();
+  await expect(openAINode).toHaveClass(/selected/);
+  await expect(siliconFlowNode).not.toHaveClass(/selected/);
+  await expect(dashboard.locator("[data-details]")).toContainText("Default OpenAI");
+});
+
+test("usage intervals stay selected, show the tenant label, and auto-refresh on desktop and mobile", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-07-21T12:00:00Z") });
   const requestedIntervals = [];
   page.on("request", (request) => {
     const requestURL = new URL(request.url());
@@ -2354,6 +2378,10 @@ test("usage intervals load every dashboard surface, remain active on refresh, an
   const intervalGroup = page.getByRole("group", { name: "Usage interval" });
   const intervalButtons = intervalGroup.getByRole("button");
   await expect(intervalButtons).toHaveCount(usageIntervals.length);
+  const tenantControl = page.locator(".usage-tenant-control");
+  const tenantLabel = tenantControl.getByText("Tenant", { exact: true });
+  await expect(tenantLabel).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh", exact: true })).toHaveCount(0);
   await expect(intervalButtons).toHaveText(usageIntervals.map((interval) => interval.label));
   const activeIntervalButton = intervalGroup.getByRole("button", { name: "30 days" });
   await expect(activeIntervalButton).toHaveAttribute("aria-pressed", "true");
@@ -2405,7 +2433,9 @@ test("usage intervals load every dashboard surface, remain active on refresh, an
   if (!selectedInterval) {
     throw new Error("usage_interval_fixture_missing");
   }
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  const requestCountBeforeAutoRefresh = requestedIntervals.length;
+  await page.clock.fastForward(30_001);
+  await expect.poll(() => requestedIntervals.length).toBe(requestCountBeforeAutoRefresh + 1);
   expect(requestedIntervals.at(-1)).toBe(selectedInterval.id);
   await expect(intervalGroup.getByRole("button", { name: selectedInterval.label, exact: true })).toHaveAttribute(
     "aria-pressed",
@@ -2414,6 +2444,13 @@ test("usage intervals load every dashboard surface, remain active on refresh, an
 
   await page.setViewportSize({ width: 390, height: 780 });
   await expect(intervalGroup).toBeVisible();
+  await expect(tenantLabel).toBeVisible();
+  const tenantLabelBox = await tenantLabel.boundingBox();
+  const tenantSelectBox = await tenantControl.locator("select").boundingBox();
+  if (!tenantLabelBox || !tenantSelectBox) {
+    throw new Error("tenant_control_geometry_missing");
+  }
+  expect(tenantLabelBox.x + tenantLabelBox.width).toBeLessThanOrEqual(tenantSelectBox.x);
   const intervalGroupBox = await intervalGroup.boundingBox();
   if (!intervalGroupBox) {
     throw new Error("usage_interval_group_missing");
@@ -2496,7 +2533,6 @@ test("provider and model cards switch presentation independently without fetchin
   await expect(providerToggle).toHaveAccessibleName("Show bar graph");
   await expect(modelToggle).toHaveAccessibleName("Show bar graph");
   expect((await providerLegend.getByRole("listitem").innerText()).replace(/\s/gu, "")).toBe("provider-7d7requests·100%");
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(providerToggle).toHaveAccessibleName("Show bar graph");
   await expect(modelToggle).toHaveAccessibleName("Show bar graph");
   await page.getByRole("combobox", { name: "Usage tenant" }).selectOption("tenant_2");
@@ -2592,6 +2628,7 @@ test("Usage time series expose UTC and metric-specific integer axes", async ({ p
 });
 
 test("usage interval loading blocks controls, ignores stale responses, and clears failed selections", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-07-21T12:00:00Z") });
   await installAssetRoutes(page);
   await installManagementRoutes(page);
   await page.goto(`${baseURL}${applicationPath}`);
@@ -2618,7 +2655,6 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
     for (const intervalButton of await intervalGroup.getByRole("button").all()) {
       await expect(intervalButton).toBeDisabled();
     }
-    await expect(page.getByRole("button", { name: "Refresh", exact: true })).toBeDisabled();
     await expect(sevenDayButton).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
     await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
@@ -2644,7 +2680,7 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
   await page.route(usageRequestPattern(), async (route) => {
     await route.fulfill({ status: httpInternalServerError, json: { error: "usage_failed" } });
   });
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await page.clock.fastForward(30_001);
   await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Request failed");
   await expect(intervalGroup.getByRole("button", { name: "1 day" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
@@ -3622,7 +3658,8 @@ test("API access dialogs fit supported widths and copy one-time keys with safe e
   }
 });
 
-test("management notices occupy the header aux slot immediately before the avatar", async ({ page }) => {
+test("automatic refresh errors keep the header notice geometry", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-07-21T12:00:00Z") });
   await installAssetRoutes(page);
   await installManagementRoutes(page);
 
@@ -3635,25 +3672,12 @@ test("management notices occupy the header aux slot immediately before the avata
     await expect(notificationRegion).toHaveAttribute("role", "status");
     await expect(notificationRegion).toHaveAttribute("aria-live", "polite");
     await expect(notificationRegion).toHaveAttribute("aria-atomic", "true");
-    await page.getByRole("button", {name:"Refresh",exact:true}).click();
-    await expect(notice).toHaveText("Usage refreshed");
-    await expect(notice).toHaveAttribute("data-kind", "success");
-    await expectHeaderNoticeGeometry(page);
-
-    await page.getByRole("button", { name: "Refresh" }).click();
-    await expect(notice).toHaveText("Usage refreshed");
-    await expect(notice).toHaveAttribute("data-kind", "success");
-    await expectHeaderNoticeGeometry(page);
-
+    await expect(page.getByRole("button", { name: "Refresh", exact: true })).toHaveCount(0);
+    await expect(notificationRegion).toBeHidden();
     await installUsageResponse(page, httpInternalServerError);
-    await page.getByRole("button", { name: "Refresh" }).click();
+    await page.clock.fastForward(30_001);
     await expect(notice).toHaveText("Request failed");
     await expect(notice).toHaveAttribute("data-kind", "error");
-    await expectHeaderNoticeGeometry(page);
-
-    await installUsageResponse(page, httpOK);
-    await page.getByRole("button", { name: "Refresh" }).click();
-    await expect(notice).toHaveText("Usage refreshed");
     await expectHeaderNoticeGeometry(page);
   }
 });
@@ -3672,7 +3696,7 @@ test("public Log In stays keyboard accessible at every supported width", async (
   }
 });
 
-test("management notices auto-dismiss after ten seconds and replacement notices own a new deadline", async ({ page }) => {
+test("automatic refresh clears stale usage after a temporary summary failure", async ({ page }) => {
   await page.clock.install({ time: new Date("2026-07-21T12:00:00Z") });
   await installAssetRoutes(page);
   await installManagementRoutes(page);
@@ -3680,41 +3704,21 @@ test("management notices auto-dismiss after ten seconds and replacement notices 
 
   const notificationRegion = page.locator("#llm-proxy-header notification-region");
   const notice = notificationRegion.locator(".notice");
-  const refresh = page.getByRole("button", { name: "Refresh" });
   const requests = page.locator("usage-metrics usage-card").first().locator("strong");
-  await refresh.click();
-  await expect(notice).toHaveText("Usage refreshed");
-  await page.clock.fastForward(9_000);
-  await expect(notificationRegion).toBeVisible();
-  await page.clock.fastForward(1_000);
+  await installUsageResponse(page, httpInternalServerError);
+  await page.clock.fastForward(30_001);
+  await expect(notice).toHaveText("Request failed");
+  await expect(requests).toHaveText("0");
+  await page.clock.fastForward(10_000);
   await expect(notificationRegion).toBeHidden();
 
-  await refresh.click();
-  await expect(notice).toHaveText("Usage refreshed");
-  await page.clock.fastForward(5_000);
   await installUsageResponse(page, httpOK, managementUsage("30d", {
     requests: 38,
     successful_requests: 36,
     text_requests: 36,
   }));
-  await refresh.click();
+  await page.clock.fastForward(30_001);
   await expect(requests).toHaveText("38");
-  await expect(notice).toHaveText("Usage refreshed");
-  await page.clock.fastForward(5_000);
-  await expect(notificationRegion).toBeVisible();
-  await page.clock.fastForward(5_000);
-  await expect(notificationRegion).toBeHidden();
-
-  await installUsageResponse(page, httpInternalServerError);
-  await refresh.click();
-  await expect(notice).toHaveText("Request failed");
-  await page.clock.fastForward(5_000);
-  await installUsageResponse(page, httpOK);
-  await refresh.click();
-  await expect(notice).toHaveText("Usage refreshed");
-  await page.clock.fastForward(5_000);
-  await expect(notificationRegion).toBeVisible();
-  await page.clock.fastForward(5_000);
   await expect(notificationRegion).toBeHidden();
 });
 
@@ -3763,8 +3767,7 @@ test("header brand uses the local logo before its title without crowding the not
     await expect(page.getByText("LLM Proxy", { exact: true })).toHaveCount(1);
     await brand.focus();
     await expect(brand).toBeFocused();
-    await page.getByRole("button", { name: "Refresh" }).click();
-    await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Usage refreshed");
+    await expect(page.getByRole("button", { name: "Refresh", exact: true })).toHaveCount(0);
     await expectHeaderBrandGeometry(page);
 
   }
@@ -3780,25 +3783,14 @@ test("tenant configuration stays reachable when usage fails", async ({ page }) =
 });
 
 
-test("usage refresh clears stale metrics when summary reload fails", async ({ page }) => {
-  await installAssetRoutes(page);
-  await installManagementRoutes(page);
-
-  await page.goto(`${baseURL}${applicationPath}`);
-
-  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
-  await page.unroute(usageRequestPattern());
-  await page.route(usageRequestPattern(), async (route) => {
-    await route.fulfill({ status: httpInternalServerError, json: { error: "usage_failed" } });
-  });
-  await page.getByRole("button", { name: "Refresh" }).click();
-
-  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Request failed");
-  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
-  await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
-});
-
 test("admin menu opens all users dashboard", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-07-21T12:00:00Z") });
+  let adminUserRequests = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/management/admin/users") {
+      adminUserRequests += 1;
+    }
+  });
   await installAssetRoutes(page);
   await installManagementRoutes(page, { admin: true });
 
@@ -3811,6 +3803,10 @@ test("admin menu opens all users dashboard", async ({ page }) => {
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
   await expect(page.getByRole("heading", { name: "All users" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh", exact: true })).toHaveCount(0);
+  const adminRequestsBeforeAutoRefresh = adminUserRequests;
+  await page.clock.fastForward(30_001);
+  await expect.poll(() => adminUserRequests).toBe(adminRequestsBeforeAutoRefresh + 1);
   const ownerCard = page.locator("admin-user-card").filter({ hasText: "owner@example.com" });
   await expect(ownerCard).toContainText("2 tenants");
   await expect(ownerCard.locator("admin-tenant-card")).toHaveCount(2);
