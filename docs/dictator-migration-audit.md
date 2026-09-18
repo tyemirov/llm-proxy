@@ -151,7 +151,7 @@ F071 application work outside the Dictator slice is not an F042 completion prere
 - Issue checks preserve all completed identifiers. `git diff --check` passed. Event contracts did not change.
 - The earlier client archive comparison remains valid. No production client file changed. I264 adds one client rejection test.
 - Governor reported existing differences in `.mprlab/AGENTS.DOCKER.md`, `.mprlab/PLANNING.md`, and `.mprlab/POLICY.md`.
-- The existing duplicate I261 remains tracked by I263. No completed issue identifier changed.
+- The schema-transition issue now uses I271. I263 records the identifier repair. No completed issue identifier changed.
 
 ## Open Decisions
 
@@ -272,7 +272,7 @@ Preserve uncertain outcomes until evidence establishes their state. Do not submi
 - The coverage target passed with no uncovered blocks.
 - Final `make ci` passed all 13 gates in 324 seconds with 100.0 percent Go coverage.
 - Changed prose has no mechanical language findings. Existing tracker and README findings remain unchanged.
-- The existing duplicate I261 remains unchanged. B223 has one unique identifier.
+- The schema-transition issue now uses I271. B223 has one unique identifier.
 - No publication, deployment, or production resource transfer occurred.
 
 ## Reconciliation And Connection: 2026-09-16
@@ -378,7 +378,7 @@ The Governor check still reports existing managed-content differences.
 LLM Proxy has differences in `.mprlab/AGENTS.DOCKER.md`, `.mprlab/PLANNING.md`, and `.mprlab/POLICY.md`.
 Creative Director has differences in `.mprlab/PLANNING.md` and `.mprlab/POLICY.md`.
 These documents remain unchanged by this execution.
-The existing duplicate I261 remains under I263. No new issue ID is duplicated.
+The schema-transition issue now uses I271 under the identifier repair recorded by I263. No new issue ID is duplicated.
 Changed-prose review and both whitespace checks passed.
 
 ## Consumer File Summary
