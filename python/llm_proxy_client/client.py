@@ -26,6 +26,7 @@ MEDIA_CAPABILITIES_ENDPOINT_PATH = "/model/v1/capabilities"
 MEDIA_OPERATIONS_ENDPOINT_PATH = "/model/v1/operations"
 MEDIA_VOICES_ENDPOINT_PATH = "/model/v1/voices"
 PROVIDER_DIAGNOSTICS_ENDPOINT_PATH = "/model/v1/provider-diagnostics"
+PROVIDER_RESOURCES_ENDPOINT_PATH = "/model/v1/provider-resources"
 DIAGNOSTIC_PROVIDER_PATTERN = re.compile(r"^[a-z][a-z0-9_-]*$")
 DIAGNOSTIC_COUNTER_FIELDS = ("operations_total", "queued", "running", "succeeded", "failed", "cancelled", "uncertain")
 PROVIDER_QUERY_KEY = "provider"
@@ -694,12 +695,12 @@ class ClientMediaOperationInput:
 
     capability: str
     provider: str
-    model: str
+    model: str | None
     input: dict[str, Any]
     controls: dict[str, Any]
 
     def __post_init__(self) -> None:
-        if not self.capability.strip() or not self.provider.strip() or not self.model.strip():
+        if not self.capability.strip() or not self.provider.strip() or (self.model is not None and (not isinstance(self.model, str) or not self.model.strip())):
             raise LLMProxyClientError("llm_proxy_client_invalid_request: incomplete media operation")
         if self.provider != self.provider.strip().lower():
             raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid media operation provider")
@@ -716,10 +717,37 @@ class ClientMediaOperationInput:
         return {
             "capability": self.capability.strip(),
             "provider": self.provider,
-            "model": self.model.strip(),
+            **({"model": self.model.strip()} if self.model is not None else {}),
             "input": self.input,
             "controls": self.controls,
         }
+
+
+@dataclass(frozen=True)
+class ClientAspectRatioImageInput:
+    """Image generation controls defined by the selected catalog route."""
+
+    provider: str
+    model: str
+    prompt: str
+    aspect_ratio: str
+    output_format: str
+    output_count: int
+
+    def operation(self) -> ClientMediaOperationInput:
+        """Build the canonical media request for image generation."""
+
+        return ClientMediaOperationInput(
+            capability="image.generate",
+            provider=self.provider,
+            model=self.model,
+            input={"prompt": self.prompt},
+            controls={
+                "aspect_ratio": self.aspect_ratio,
+                "output_format": self.output_format,
+                "output_count": self.output_count,
+            },
+        )
 
 
 @dataclass(frozen=True)
@@ -750,7 +778,7 @@ class ClientMediaOperation:
     operation_id: str
     capability: str
     provider: str
-    model: str
+    model: str | None
     catalog_revision: str
     state: str
     cancellation_state: str
@@ -777,11 +805,90 @@ class ClientMediaCapabilityRoute:
 
 
 @dataclass(frozen=True)
+class ClientMediaCapabilityService:
+    """One tenant-available provider service without a model."""
+
+    capability: str
+    provider: str
+    controls: tuple[dict[str, Any], ...]
+    limits: tuple[dict[str, Any], ...]
+
+
+PROVIDER_RESOURCE_KINDS = frozenset({"voices", "voice_library", "history", "pronunciation_dictionaries", "metadata", "quotas", "elements"})
+
+
+@dataclass(frozen=True)
+class ClientProviderResource:
+    """One account resource available through a provider connection."""
+
+    provider: str
+    kind: str
+
+
+@dataclass(frozen=True)
 class ClientMediaCapabilities:
     """Tenant-available durable media routes and their catalog revision."""
 
     catalog_revision: str
     routes: tuple[ClientMediaCapabilityRoute, ...]
+    resources: tuple[ClientProviderResource, ...]
+    services: tuple[ClientMediaCapabilityService, ...]
+
+
+@dataclass(frozen=True)
+class ClientMediaVoiceQuery:
+    """Select one provider voice page or continue an opaque cursor."""
+
+    provider: str
+    cursor: str = ""
+    search: str = ""
+    page_size: int | None = None
+    sort: str = ""
+    sort_direction: str = ""
+    voice_type: str = ""
+    category: str = ""
+    include_total_count: bool | None = None
+
+    def __post_init__(self) -> None:
+        strings = (self.provider, self.cursor, self.search, self.sort, self.sort_direction, self.voice_type, self.category)
+        if (
+            any(not isinstance(value, str) for value in strings)
+            or not self.provider or self.provider != self.provider.strip().lower()
+            or any(value and not value.strip() for value in strings)
+            or len(self.cursor) > 16384 or len(self.search) > 1000
+            or any(0xD800 <= ord(character) <= 0xDFFF for character in self.search)
+            or self.page_size is not None and (type(self.page_size) is not int or not 1 <= self.page_size <= 100)
+            or self.include_total_count is not None and type(self.include_total_count) is not bool
+            or self.sort not in {"", "name", "created_at_unix"}
+            or self.sort_direction not in {"", "asc", "desc"}
+            or self.voice_type not in {"", "personal", "community", "default", "account", "non-default", "non-community", "saved"}
+            or self.category not in {"", "premade", "cloned", "generated", "professional"}
+            or self.cursor and (any(strings[2:]) or self.page_size is not None or self.include_total_count is not None)
+        ):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid media voice query")
+
+    def _query(self) -> dict[str, str]:
+        values = {"provider": self.provider}
+        for name in ("cursor", "search", "sort", "sort_direction", "voice_type", "category"):
+            value = getattr(self, name)
+            if value:
+                values[name] = value
+        if self.page_size is not None:
+            values["page_size"] = str(self.page_size)
+        if self.include_total_count is not None:
+            values["include_total_count"] = str(self.include_total_count).lower()
+        return values
+
+
+@dataclass(frozen=True)
+class ClientMediaVoiceLanguage:
+    """One verified language observation and local preview link."""
+
+    language: str
+    model_id: str
+    accent: str | None
+    locale: str | None
+    preview: str | None
 
 
 @dataclass(frozen=True)
@@ -791,11 +898,29 @@ class ClientMediaVoice:
     voice_id: str
     provider: str
     mode: str
-    language: str
+    language: str | None
     display_name: str
     default: bool
     sample_rates: tuple[int, ...]
-    default_sample_rate: int
+    default_sample_rate: int | None
+
+
+    description: str | None
+    category: str | None
+    labels: dict[str, str]
+    high_quality_base_model_ids: tuple[str, ...]
+    verified_languages: tuple[ClientMediaVoiceLanguage, ...]
+    preview: str | None
+
+
+@dataclass(frozen=True)
+class ClientMediaVoicePage:
+    """One voice page with opaque continuation and optional total count."""
+
+    voices: tuple[ClientMediaVoice, ...]
+    has_more: bool
+    total_count: int | None
+    next_cursor: str | None
 
 
 @dataclass(frozen=True)
@@ -811,6 +936,67 @@ class ClientProviderDiagnostics:
     failed: int
     cancelled: int
     uncertain: int
+
+
+@dataclass(frozen=True)
+class ClientProviderModelMetadata:
+    """An upstream observation that does not create a catalog offering."""
+
+    model_id: str
+    name: str
+    can_do_text_to_speech: bool | None
+    can_do_voice_conversion: bool | None
+    maximum_text_length_per_request: int | None
+    max_characters_request_free_user: int | None
+    max_characters_request_subscribed_user: int | None
+
+
+@dataclass(frozen=True)
+class ClientProviderMetadata:
+    """Account-visible model metadata."""
+
+    provider: str
+    models: tuple[ClientProviderModelMetadata, ...]
+
+
+@dataclass(frozen=True)
+class ClientProviderCreditExtension:
+    """Unlimited usage or a bounded credit count."""
+
+    unlimited: bool
+    value: int | None
+
+
+@dataclass(frozen=True)
+class ClientProviderOverage:
+    """The provider's decimal monetary observation."""
+
+    amount: str
+    currency: str
+
+
+@dataclass(frozen=True)
+class ClientProviderSubscription:
+    """Current account quota, independent of catalog prices."""
+
+    tier: str
+    status: str
+    character_count: int
+    character_limit: int
+    credit_extension: ClientProviderCreditExtension
+    can_extend_credit_limit: bool
+    current_overage: ClientProviderOverage | None
+    has_open_invoices: bool
+    currency: str | None
+    next_character_count_reset_unix: int | None
+
+
+@dataclass(frozen=True)
+class ClientProviderQuotas:
+    """One provider's current subscription observation."""
+
+    provider: str
+    subscription: ClientProviderSubscription
 
 
 @dataclass(frozen=True)
@@ -979,15 +1165,46 @@ class Client:
         response = self._media_json_request("GET", MEDIA_CAPABILITIES_ENDPOINT_PATH)
         return _decode_media_capabilities(response)
 
-    def get_media_voices(self, provider: str) -> tuple[ClientMediaVoice, ...]:
-        """Discover and return tenant-owned voices for one provider."""
+    def get_media_voices(self, query: ClientMediaVoiceQuery) -> ClientMediaVoicePage:
+        """Read one tenant-owned voice page with its continuation cursor."""
 
-        if not provider or provider != provider.strip().lower():
-            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid media voice provider")
-        response = self._media_json_request("GET", MEDIA_VOICES_ENDPOINT_PATH, query={"provider": provider})
-        if set(response) != {"voices"} or not isinstance(response["voices"], list):
+        response = self._media_json_request("GET", MEDIA_VOICES_ENDPOINT_PATH, query=query._query())
+        if (
+            set(response) != {"voices", "has_more", "total_count", "next_cursor"}
+            or not isinstance(response["voices"], list)
+            or type(response["has_more"]) is not bool
+            or response["total_count"] is not None and (type(response["total_count"]) is not int or response["total_count"] < 0)
+            or response["has_more"] != (response["next_cursor"] is not None)
+            or response["next_cursor"] is not None and (not isinstance(response["next_cursor"], str) or not response["next_cursor"].strip())
+        ):
             raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media voice collection")
-        return tuple(_decode_media_voice(voice) for voice in response["voices"])
+        voices = tuple(_decode_media_voice(voice) for voice in response["voices"])
+        if len({voice.voice_id for voice in voices}) != len(voices) or any(voice.provider != query.provider for voice in voices):
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media voice collection")
+        return ClientMediaVoicePage(voices, response["has_more"], response["total_count"], response["next_cursor"])
+
+    def get_provider_metadata(self, provider: str) -> ClientProviderMetadata:
+        """Read model observations without adding executable catalog routes."""
+
+        if not DIAGNOSTIC_PROVIDER_PATTERN.fullmatch(provider):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid resource provider")
+        response = self._media_json_request("GET", f"{PROVIDER_RESOURCES_ENDPOINT_PATH}/{provider}/metadata")
+        if set(response) != {"provider", "models"} or response["provider"] != provider or not isinstance(response["models"], list):
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid provider metadata")
+        models = tuple(_decode_provider_model(model) for model in response["models"])
+        if len({model.model_id for model in models}) != len(models):
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: duplicate provider model")
+        return ClientProviderMetadata(provider, models)
+
+    def get_provider_quotas(self, provider: str) -> ClientProviderQuotas:
+        """Read account quota separately from published catalog prices."""
+
+        if not DIAGNOSTIC_PROVIDER_PATTERN.fullmatch(provider):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid resource provider")
+        response = self._media_json_request("GET", f"{PROVIDER_RESOURCES_ENDPOINT_PATH}/{provider}/quotas")
+        if set(response) != {"provider", "subscription"} or response["provider"] != provider:
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid provider quotas")
+        return ClientProviderQuotas(provider, _decode_provider_subscription(response["subscription"]))
 
     def get_media_voice(self, voice_id: str) -> ClientMediaVoice:
         """Read one tenant-owned media voice."""
@@ -1112,7 +1329,6 @@ def _decode_media_operation(response: dict[str, Any]) -> ClientMediaOperation:
         "operation_id",
         "capability",
         "provider",
-        "model",
         "catalog_revision",
         "state",
         "cancellation_state",
@@ -1122,13 +1338,14 @@ def _decode_media_operation(response: dict[str, Any]) -> ClientMediaOperation:
         "updated_at",
         "deadline_at",
     }
-    if not required_fields <= response.keys() or response.keys() - required_fields - {"error", "partial_outputs", "previous_operation_id"}:
+    if not required_fields <= response.keys() or response.keys() - required_fields - {"error", "partial_outputs", "previous_operation_id", "model"}:
         raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media operation response")
-    string_fields = ("capability", "provider", "model", "catalog_revision")
+    string_fields = ("capability", "provider", "catalog_revision")
     if (
         not isinstance(response["operation_id"], str)
         or not MEDIA_OPERATION_ID_PATTERN.fullmatch(response["operation_id"])
         or any(not isinstance(response[field], str) or not response[field] for field in string_fields)
+        or ("model" in response and (not isinstance(response["model"], str) or not response["model"].strip()))
         or not isinstance(response["state"], str)
         or response["state"] not in {"queued", "running", "succeeded", "failed", "cancelled", "uncertain"}
         or not isinstance(response["cancellation_state"], str)
@@ -1171,7 +1388,7 @@ def _decode_media_operation(response: dict[str, Any]) -> ClientMediaOperation:
         operation_id=response["operation_id"],
         capability=response["capability"],
         provider=response["provider"],
-        model=response["model"],
+        model=response.get("model"),
         catalog_revision=response["catalog_revision"],
         state=response["state"],
         cancellation_state=response["cancellation_state"],
@@ -1237,16 +1454,56 @@ def _decode_media_capabilities(value: Any) -> ClientMediaCapabilities:
 
     if (
         not isinstance(value, dict)
-        or set(value) != {"catalog_revision", "routes"}
+        or set(value) != {"catalog_revision", "routes", "resources", "services"}
         or not isinstance(value["catalog_revision"], str)
         or not value["catalog_revision"]
         or not isinstance(value["routes"], list)
+        or not isinstance(value["resources"], list)
+        or not isinstance(value["services"], list)
     ):
         raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media capabilities response")
+    resources = tuple(_decode_provider_resource(resource) for resource in value["resources"])
+    if len(set(resources)) != len(resources):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: duplicate provider resource")
+    services = tuple(_decode_media_capability_service(service) for service in value["services"])
+    if len({(service.provider, service.capability) for service in services}) != len(services):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: duplicate provider service")
     return ClientMediaCapabilities(
         catalog_revision=value["catalog_revision"],
         routes=tuple(_decode_media_capability_route(route) for route in value["routes"]),
+        resources=resources,
+        services=services,
     )
+
+
+def _decode_media_capability_service(value: Any) -> ClientMediaCapabilityService:
+    """Decode one explicit model-free service."""
+
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"capability", "provider", "controls", "limits"}
+        or value["capability"] not in ("audio.align", "audio.dictionary.create")
+        or not isinstance(value["provider"], str)
+        or not value["provider"]
+        or any(not isinstance(value[field], list) or not all(isinstance(item, dict) for item in value[field]) for field in ("controls", "limits"))
+    ):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid provider service")
+    return ClientMediaCapabilityService(capability=value["capability"], provider=value["provider"], controls=tuple(value["controls"]), limits=tuple(value["limits"]))
+
+
+def _decode_provider_resource(value: Any) -> ClientProviderResource:
+    """Decode the exact provider-resource discovery contract."""
+
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"provider", "kind"}
+        or not isinstance(value["provider"], str)
+        or not value["provider"]
+        or not isinstance(value["kind"], str)
+        or value["kind"] not in PROVIDER_RESOURCE_KINDS
+    ):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid provider resource")
+    return ClientProviderResource(provider=value["provider"], kind=value["kind"])
 
 
 def _decode_media_capability_route(value: Any) -> ClientMediaCapabilityRoute:
@@ -1286,6 +1543,7 @@ def _decode_media_voice(value: Any) -> ClientMediaVoice:
         "default",
         "sample_rates",
         "default_sample_rate",
+        "description", "category", "labels", "high_quality_base_model_ids", "verified_languages", "preview",
     }
     if (
         not isinstance(value, dict)
@@ -1295,19 +1553,32 @@ def _decode_media_voice(value: Any) -> ClientMediaVoice:
         or not isinstance(value["provider"], str)
         or not value["provider"]
         or value["mode"] not in {"preset", "extracted"}
-        or not isinstance(value["language"], str)
-        or not value["language"]
+        or value["language"] is not None and (not isinstance(value["language"], str) or not value["language"].strip())
         or not isinstance(value["display_name"], str)
         or not value["display_name"]
         or not isinstance(value["default"], bool)
         or not isinstance(value["sample_rates"], list)
-        or not value["sample_rates"]
         or any(isinstance(rate, bool) or not isinstance(rate, int) or rate <= 0 for rate in value["sample_rates"])
         or len(set(value["sample_rates"])) != len(value["sample_rates"])
-        or isinstance(value["default_sample_rate"], bool)
-        or value["default_sample_rate"] not in value["sample_rates"]
+        or (value["default_sample_rate"] is None) != (len(value["sample_rates"]) == 0)
+        or value["default_sample_rate"] is not None and (type(value["default_sample_rate"]) is not int or value["default_sample_rate"] not in value["sample_rates"])
+        or any(value[key] is not None and not isinstance(value[key], str) for key in ("description", "category"))
+        or not isinstance(value["labels"], dict) or any(not isinstance(key, str) or not isinstance(label, str) for key, label in value["labels"].items())
+        or not isinstance(value["high_quality_base_model_ids"], list) or any(not isinstance(model, str) or not model.strip() for model in value["high_quality_base_model_ids"])
+        or not isinstance(value["verified_languages"], list)
+        or not _valid_voice_preview(value["preview"], value["voice_id"], 0)
     ):
         raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media voice response")
+    languages = []
+    for index, language in enumerate(value["verified_languages"]):
+        if (
+            not isinstance(language, dict) or set(language) != {"language", "model_id", "accent", "locale", "preview"}
+            or any(not isinstance(language[key], str) or not language[key].strip() for key in ("language", "model_id"))
+            or any(language[key] is not None and not isinstance(language[key], str) for key in ("accent", "locale"))
+            or not _valid_voice_preview(language["preview"], value["voice_id"], index + 1)
+        ):
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media voice language")
+        languages.append(ClientMediaVoiceLanguage(**language))
     return ClientMediaVoice(
         voice_id=value["voice_id"],
         provider=value["provider"],
@@ -1317,7 +1588,13 @@ def _decode_media_voice(value: Any) -> ClientMediaVoice:
         default=value["default"],
         sample_rates=tuple(value["sample_rates"]),
         default_sample_rate=value["default_sample_rate"],
+        description=value["description"], category=value["category"], labels=dict(value["labels"]),
+        high_quality_base_model_ids=tuple(value["high_quality_base_model_ids"]), verified_languages=tuple(languages), preview=value["preview"],
     )
+
+
+def _valid_voice_preview(value: Any, voice_id: str, index: int) -> bool:
+    return value is None or value == f"{MEDIA_VOICES_ENDPOINT_PATH}/{voice_id}/previews/{index}"
 
 
 def _media_timestamp(value: Any) -> datetime:
@@ -1380,3 +1657,53 @@ def default_response_opener(request: urllib.request.Request, *, timeout: float |
     with urllib.request.urlopen(request, timeout=timeout) as response:
         response_body = cast(bytes, response.read())
         return response_body.decode("utf-8")
+
+
+def _provider_optional_integer(value: Any) -> bool:
+    return value is None or (type(value) is int and value >= 0)
+
+
+def _decode_provider_model(value: Any) -> ClientProviderModelMetadata:
+    fields = {"model_id", "name", "can_do_text_to_speech", "can_do_voice_conversion", "maximum_text_length_per_request", "max_characters_request_free_user", "max_characters_request_subscribed_user"}
+    if (
+        not isinstance(value, dict) or set(value) != fields
+        or any(not isinstance(value[key], str) or not value[key].strip() for key in ("model_id", "name"))
+        or any(value[key] is not None and type(value[key]) is not bool for key in ("can_do_text_to_speech", "can_do_voice_conversion"))
+        or any(not _provider_optional_integer(value[key]) for key in ("maximum_text_length_per_request", "max_characters_request_free_user", "max_characters_request_subscribed_user"))
+    ):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid provider model")
+    return ClientProviderModelMetadata(**value)
+
+
+def _decode_provider_subscription(value: Any) -> ClientProviderSubscription:
+    fields = {"tier", "status", "character_count", "character_limit", "credit_extension", "can_extend_credit_limit", "current_overage", "has_open_invoices", "currency", "next_character_count_reset_unix"}
+    if (
+        not isinstance(value, dict) or set(value) != fields
+        or any(not isinstance(value[key], str) or not value[key].strip() for key in ("tier", "status"))
+        or any(type(value[key]) is not int or value[key] < 0 for key in ("character_count", "character_limit"))
+        or any(type(value[key]) is not bool for key in ("can_extend_credit_limit", "has_open_invoices"))
+        or not _provider_optional_integer(value["next_character_count_reset_unix"])
+        or (value["currency"] is not None and (not isinstance(value["currency"], str) or not value["currency"]))
+    ):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid provider subscription")
+    extension = value["credit_extension"]
+    if (
+        not isinstance(extension, dict) or set(extension) != {"unlimited", "value"}
+        or type(extension["unlimited"]) is not bool
+        or (extension["unlimited"] and extension["value"] is not None)
+        or (not extension["unlimited"] and (type(extension["value"]) is not int or extension["value"] < 0))
+    ):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid provider credit extension")
+    overage = value["current_overage"]
+    if overage is not None and (
+        not isinstance(overage, dict) or set(overage) != {"amount", "currency"}
+        or not isinstance(overage["amount"], str) or re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", overage["amount"]) is None
+        or not isinstance(overage["currency"], str) or not overage["currency"]
+    ):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid provider overage")
+    return ClientProviderSubscription(
+        tier=value["tier"], status=value["status"], character_count=value["character_count"], character_limit=value["character_limit"],
+        credit_extension=ClientProviderCreditExtension(**extension), can_extend_credit_limit=value["can_extend_credit_limit"],
+        current_overage=ClientProviderOverage(**overage) if overage is not None else None,
+        has_open_invoices=value["has_open_invoices"], currency=value["currency"], next_character_count_reset_unix=value["next_character_count_reset_unix"],
+    )

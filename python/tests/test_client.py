@@ -20,9 +20,11 @@ import yaml
 from llm_proxy_client import (
     Client,
     ClientConfig,
+    ClientAspectRatioImageInput,
     ClientMessage,
     ClientMessagesRequest,
     ClientMediaOperationInput,
+    ClientMediaVoiceQuery,
     ClientStructuredOutput,
     LLMProxyClientError,
     LLMProxyHTTPError,
@@ -230,7 +232,8 @@ def test_client_uses_typed_durable_media_and_voice_resources() -> None:
             ),
             json.dumps(
                 {
-                    "voices": [
+                    "has_more": False, "next_cursor": None, "total_count": None,
+ "voices": [
                         {
                             "voice_id": "voi_0123456789abcdef0123456789abcdef",
                             "provider": "dictator",
@@ -240,6 +243,7 @@ def test_client_uses_typed_durable_media_and_voice_resources() -> None:
                             "default": True,
                             "sample_rates": [24000],
                             "default_sample_rate": 24000,
+ "description": None, "category": None, "labels": {}, "high_quality_base_model_ids": [], "verified_languages": [], "preview": None,
                         }
                     ]
                 }
@@ -254,6 +258,7 @@ def test_client_uses_typed_durable_media_and_voice_resources() -> None:
                     "default": True,
                     "sample_rates": [24000],
                     "default_sample_rate": 24000,
+ "description": None, "category": None, "labels": {}, "high_quality_base_model_ids": [], "verified_languages": [], "preview": None,
                 }
             ),
         )
@@ -275,7 +280,7 @@ def test_client_uses_typed_durable_media_and_voice_resources() -> None:
             controls={"language": "ru"},
         ),
     )
-    voices = client.get_media_voices("dictator")
+    voices = client.get_media_voices(ClientMediaVoiceQuery(provider="dictator")).voices
     voice = client.get_media_voice(voices[0].voice_id)
 
     assert operation.state == "queued"
@@ -295,7 +300,16 @@ def test_client_uses_typed_durable_media_and_voice_resources() -> None:
     assert requests[2].full_url.endswith("/model/v1/voices/voi_0123456789abcdef0123456789abcdef")
 
 
-def test_media_capabilities_uses_server_resource_path() -> None:
+@pytest.mark.parametrize("resources,valid", [
+    ([], True),
+    ([{"provider": "speech", "kind": "voices"}], True),
+    (None, False),
+    ([{"provider": "speech", "kind": "unknown"}], False),
+    ([{"provider": "", "kind": "voices"}], False),
+    ([{"provider": "speech", "kind": "voices", "transport": "private"}], False),
+    ([{"provider": "speech", "kind": "voices"}] * 2, False),
+])
+def test_provider_resources_use_server_resource_path(resources: Any, valid: bool) -> None:
     """The official client reads the resource declared by the server contract."""
 
     contract = yaml.safe_load((Path(__file__).resolve().parents[2] / "docs/openapi.yaml").read_text())
@@ -304,7 +318,7 @@ def test_media_capabilities_uses_server_resource_path() -> None:
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
             valid = self.path == "/model/v1/capabilities" and self.headers.get("Authorization") == "Bearer tenant-secret"
-            body = json.dumps({"catalog_revision": "current", "routes": []}).encode()
+            body = json.dumps({"catalog_revision": "current", "routes": [], "services": [], "resources": resources}).encode()
             self.send_response(200 if valid else 404)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
@@ -319,7 +333,13 @@ def test_media_capabilities_uses_server_resource_path() -> None:
     worker.start()
     try:
         client = Client(ClientConfig(base_url=f"http://127.0.0.1:{server.server_port}/v2", secret="tenant-secret"))
-        assert client.get_media_capabilities().catalog_revision == "current"
+        if valid:
+            result = client.get_media_capabilities()
+            assert result.catalog_revision == "current"
+            assert len(result.resources) == len(resources)
+        else:
+            with pytest.raises(LLMProxyTransportError):
+                client.get_media_capabilities()
     finally:
         server.shutdown()
         server.server_close()
@@ -349,6 +369,8 @@ def test_client_reads_media_capabilities_and_waits_for_terminal_operation() -> N
             json.dumps(
                 {
                     "catalog_revision": "sha256-revision",
+                    "services": [],
+                    "resources": [{"provider": "dictator", "kind": "voices"}],
                     "routes": [
                         {
                             "capability": "audio.transcribe",
@@ -372,6 +394,8 @@ def test_client_reads_media_capabilities_and_waits_for_terminal_operation() -> N
 
     client = Client(ClientConfig(base_url="https://proxy.example/v2", secret="sekret"), opener=opener)
     capabilities = client.get_media_capabilities()
+    assert capabilities.resources[0].provider == "dictator"
+    assert capabilities.resources[0].kind == "voices"
     completed = client.wait_media_operation(
         operation["operation_id"], poll_interval_seconds=0.0001, timeout_seconds=1
     )
@@ -1213,3 +1237,172 @@ def test_media_wait_bounds_status_requests_by_deadline(stall: str) -> None:
         server.shutdown()
         server.server_close()
         thread.join()
+
+
+def test_aspect_ratio_image_uses_canonical_operation_over_http() -> None:
+    """Typed image controls use the shared operation endpoint and tenant credential."""
+
+    captured: list[dict[str, Any]] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            assert self.path == "/model/v1/operations"
+            assert self.headers["Authorization"] == "Bearer tenant-key"
+            assert self.headers["Idempotency-Key"] == "image-one"
+            payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            captured.append(payload)
+            response = {
+                "operation_id": "mop_0123456789abcdef0123456789abcdef",
+                "capability": "image.generate",
+                "provider": payload["provider"],
+                "model": payload["model"],
+                "catalog_revision": "sha256-revision",
+                "state": "queued",
+                "cancellation_state": "not_requested",
+                "outputs": [],
+                "cost": {"available": False, "reason": "exact_price_unavailable"},
+                "accepted_at": "2026-09-20T00:00:00Z",
+                "updated_at": "2026-09-20T00:00:00Z",
+                "deadline_at": "2026-09-20T00:15:00Z",
+            }
+            self.send_response(202)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+
+        def log_message(self, format: str, *args: Any) -> None:
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever)
+    thread.start()
+    try:
+        client = Client(ClientConfig(base_url=f"http://127.0.0.1:{server.server_port}", secret="tenant-key"))
+        image = ClientAspectRatioImageInput("fal", "reve-2.1", "A lighthouse", "1:1", "png", 2)
+        operation = client.create_media_operation("image-one", image.operation())
+        assert operation.provider == "fal"
+        assert captured == [{
+            "capability": "image.generate", "provider": "fal", "model": "reve-2.1",
+            "input": {"prompt": "A lighthouse"},
+            "controls": {"aspect_ratio": "1:1", "output_format": "png", "output_count": 2},
+        }]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
+def test_elevenlabs_account_resources_use_typed_http_contract() -> None:
+    model = {"model_id": "eleven_v3", "name": "Eleven v3", "can_do_text_to_speech": True, "can_do_voice_conversion": False,
+             "maximum_text_length_per_request": 5000, "max_characters_request_free_user": None, "max_characters_request_subscribed_user": 5000}
+    subscription = {"tier": "creator", "status": "active", "character_count": 100, "character_limit": 10000,
+                    "credit_extension": {"unlimited": True, "value": None}, "can_extend_credit_limit": True,
+                    "current_overage": {"amount": "1.25", "currency": "usd"}, "has_open_invoices": False,
+                    "currency": "usd", "next_character_count_reset_unix": 1790000000}
+    payload: dict[str, Any] = {"provider": "elevenlabs", "models": [model]}
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            assert self.headers.get("Authorization") == "Bearer tenant-secret"
+            assert self.path in {"/model/v1/provider-resources/elevenlabs/metadata", "/model/v1/provider-resources/elevenlabs/quotas"}
+            body = json.dumps(payload).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, format: str, *args: Any) -> None:
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    try:
+        client = Client(ClientConfig(base_url=f"http://127.0.0.1:{server.server_port}/v2", secret="tenant-secret"))
+        result = client.get_provider_metadata("elevenlabs")
+        assert result.models[0].model_id == "eleven_v3"
+        assert result.models[0].maximum_text_length_per_request == 5000
+        payload = {"provider": "elevenlabs", "subscription": subscription}
+        quota = client.get_provider_quotas("elevenlabs")
+        assert quota.subscription.credit_extension.unlimited
+        assert quota.subscription.current_overage is not None
+        assert quota.subscription.current_overage.amount == "1.25"
+        for invalid in ({}, {"provider": "other", "subscription": subscription}, {"provider": "elevenlabs", "subscription": {}}):
+            payload = invalid
+            with pytest.raises(LLMProxyTransportError):
+                client.get_provider_quotas("elevenlabs")
+        subscription["credit_extension"] = {"unlimited": False, "value": 0}
+        subscription["current_overage"] = None
+        payload = {"provider": "elevenlabs", "subscription": subscription}
+        assert client.get_provider_quotas("elevenlabs").subscription.credit_extension.value == 0
+        subscription["credit_extension"] = {"unlimited": True, "value": 1}
+        with pytest.raises(LLMProxyTransportError):
+            client.get_provider_quotas("elevenlabs")
+        for invalid in ({}, {"provider": "elevenlabs", "models": [{}]}, {"provider": "elevenlabs", "models": [model, model]}):
+            payload = invalid
+            with pytest.raises(LLMProxyTransportError):
+                client.get_provider_metadata("elevenlabs")
+        for provider in ("", "ElevenLabs", "elevenlabs/other"):
+            with pytest.raises(LLMProxyClientError):
+                client.get_provider_metadata(provider)
+            with pytest.raises(LLMProxyClientError):
+                client.get_provider_quotas(provider)
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join()
+
+
+@pytest.mark.parametrize("capability", ["audio.align", "audio.dictionary.create"])
+def test_client_model_free_alignment_uses_exact_service_contract(capability: str) -> None:
+    """One provider service omits the model in requests and responses."""
+
+    service = {"capability": capability, "provider": "elevenlabs", "controls": [], "limits": []}
+    operation = {
+        "operation_id": "mop_0123456789abcdef0123456789abcdef",
+        "capability": capability, "provider": "elevenlabs", "catalog_revision": "current",
+        "state": "succeeded", "cancellation_state": "not_requested", "outputs": [],
+        "cost": {"available": False, "reason": "exact_price_unavailable"},
+        "accepted_at": "2026-09-20T10:00:00Z", "updated_at": "2026-09-20T10:01:00Z",
+        "deadline_at": "2026-09-20T10:15:00Z",
+    }
+    discovery = {"catalog_revision": "current", "routes": [], "resources": [], "services": [service]}
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            data = json.dumps(discovery).encode()
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(data)
+
+        def do_POST(self) -> None:
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            assert "model" not in body
+            self.send_response(202)
+            self.end_headers()
+            self.wfile.write(json.dumps(operation).encode())
+
+        def log_message(self, format: str, *args: Any) -> None:
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    try:
+        client = Client(ClientConfig(base_url=f"http://127.0.0.1:{server.server_port}", secret="tenant"))
+        intent = ClientMediaOperationInput(capability=capability, provider="elevenlabs", model=None, input={}, controls={})
+        assert client.get_media_capabilities().services[0].provider == "elevenlabs"
+        assert client.create_media_operation("alignment", intent).model is None
+        for services in (None, [service, service], [{**service, "model": "fake"}], [{**service, "provider": ""}], [{**service, "capability": "future"}]):
+            discovery["services"] = services
+            with pytest.raises(LLMProxyTransportError):
+                client.get_media_capabilities()
+        for model in (None, "", " ", 3):
+            operation["model"] = model
+            with pytest.raises(LLMProxyTransportError):
+                client.create_media_operation("alignment", intent)
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join()
