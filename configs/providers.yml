@@ -137,6 +137,12 @@ operations:
         - audio
       output_artifacts:
         - audio
+    - id: image_generation
+      input_artifacts: [text]
+      output_artifacts: [image]
+    - id: image_editing
+      input_artifacts: [text, image]
+      output_artifacts: [image]
 publishers:
     - id: baidu
       label: Baidu
@@ -293,6 +299,10 @@ families:
       publisher: mprlab
       label: Silero
       weight_access: open_weights
+    - id: gpt-image
+      publisher: openai
+      label: GPT Image
+      weight_access: proprietary
 models:
     - id: gpt-6-astra
       enabled: true
@@ -1066,6 +1076,13 @@ models:
       operations:
         - speech_generation
       media_inputs: []
+    - id: gpt-image-2
+      enabled: true
+      publisher: openai
+      family: gpt-image
+      version: gpt-image-2
+      operations: [image_generation, image_editing]
+      media_inputs: []
 providers:
     - id: openai
       connection_ownership: tenant
@@ -1120,6 +1137,42 @@ providers:
               variation: model
             response_codec:
               id: multipart_transcription
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
+        - id: image
+          endpoint:
+            protocol: http
+            method: POST
+            default_base_url: https://api.openai.com/v1
+            path: /images/generations
+          components:
+            request_codec:
+              id: openai_images
+            response_codec:
+              id: openai_images
+            authentication:
+              kind: bearer
+              field: api_key
+              header: Authorization
+              prefix: 'Bearer '
+            execution:
+              id: synchronous_completion
+        - id: image-edit
+          endpoint:
+            protocol: http
+            method: POST
+            default_base_url: https://api.openai.com/v1
+            path: /images/edits
+          components:
+            request_codec:
+              id: openai_images
+            response_codec:
+              id: openai_images
             authentication:
               kind: bearer
               field: api_key
@@ -1819,6 +1872,87 @@ providers:
                   unit: USD/minute
                   conditions:
                     billing_mode: standard
+        - model: gpt-image-2
+          created: 1789776000
+          upstream_model: gpt-image-2
+          transport: image
+          image_routes:
+            editing: image-edit
+            responses: text
+          operations: [image_generation, image_editing]
+          default_operations: [image_generation, image_editing]
+          controls:
+            - id: quality
+              kind: enum
+              values: [low, medium, high, auto]
+            - id: size
+              kind: image_size
+              image_size:
+                automatic: true
+                dimension_multiple: 16
+                maximum_edge: 3840
+                minimum_pixels: 655360
+                maximum_pixels: 8294400
+                maximum_aspect_ratio: 3
+            - id: background
+              kind: enum
+              values: [opaque, transparent, auto]
+            - id: output_format
+              kind: enum
+              values: [png, jpeg, webp]
+            - id: output_compression
+              kind: integer
+              minimum: 0
+              maximum: 100
+            - id: output_count
+              kind: integer
+              minimum: 1
+              maximum: 10
+            - id: stream
+              kind: boolean
+            - id: partial_images
+              kind: integer
+              minimum: 0
+              maximum: 3
+            - id: surface
+              kind: enum
+              values: [images, responses]
+            - id: responses_model
+              kind: enum
+              values: [gpt-5]
+          limits:
+            - id: prompt_characters
+              value: 32000
+              unit: characters
+            - id: output_bytes
+              value: 67108864
+              unit: bytes
+            - id: input_images
+              value: 16
+              unit: images
+            - id: input_image_bytes
+              value: 49999999
+              unit: bytes
+            - id: input_image_pixels
+              value: 67108864
+              unit: pixels
+            - id: stream_output_images
+              value: 1
+              unit: images
+            - id: responses_output_images
+              value: 1
+              unit: images
+          prices:
+            - operation: image_generation
+              available: false
+              source: https://developers.openai.com/api/docs/models/gpt-image-2
+              last_verified: '2026-09-19'
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
+            - operation: image_editing
+              available: false
+              source: https://developers.openai.com/api/docs/models/gpt-image-2
+              last_verified: '2026-09-19'
+              unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: deepseek
       connection_ownership: tenant
       label: DeepSeek
