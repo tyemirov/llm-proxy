@@ -5540,7 +5540,7 @@ providers:
       enabled: true
       label: Vertex AI
       api_service_label: Google Cloud Vertex AI
-      key_acquisition_url: https://console.cloud.google.com/vertex-ai
+      key_acquisition_url: https://console.cloud.google.com/agent-platform/studio/settings/api-keys
       fields:
         - id: api_key
           label: API key
