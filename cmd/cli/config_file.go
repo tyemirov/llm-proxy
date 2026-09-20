@@ -42,25 +42,24 @@ type fileConfiguration struct {
 }
 
 type serverConfiguration struct {
-	Port                              int                              `mapstructure:"port"`
-	LogLevel                          string                           `mapstructure:"log_level"`
-	Workers                           int                              `mapstructure:"workers"`
-	QueueSize                         int                              `mapstructure:"queue_size"`
-	RequestTimeoutSeconds             *int                             `mapstructure:"request_timeout_seconds"`
-	MaxRequestTimeoutSeconds          *int                             `mapstructure:"max_request_timeout_seconds"`
-	MaxPromptBytes                    int64                            `mapstructure:"max_prompt_bytes"`
-	MaxAssetBytes                     int64                            `mapstructure:"max_asset_bytes"`
-	AssetRetentionSeconds             int                              `mapstructure:"asset_retention_seconds"`
-	AssetStorePath                    string                           `mapstructure:"asset_store_path"`
-	MaxInputAudioBytes                int64                            `mapstructure:"max_input_audio_bytes"`
-	MediaOperationWorkers             *int                             `mapstructure:"media_operation_workers"`
-	DictatorMediaOperationWorkers     *int                             `mapstructure:"dictator_media_operation_workers"`
-	MediaOperationCapacity            *int                             `mapstructure:"media_operation_capacity"`
-	TenantMediaOperationCapacity      *int                             `mapstructure:"tenant_media_operation_capacity"`
-	MediaOperationLifetimeSeconds     *int                             `mapstructure:"media_operation_lifetime_seconds"`
-	MediaOperationClaimSeconds        *int                             `mapstructure:"media_operation_claim_seconds"`
-	MediaOperationClaimRenewalSeconds *int                             `mapstructure:"media_operation_claim_renewal_seconds"`
-	UpstreamRateLimits                []upstreamRateLimitConfiguration `mapstructure:"upstream_rate_limits"`
+	Port                              int                                 `mapstructure:"port"`
+	LogLevel                          string                              `mapstructure:"log_level"`
+	UpstreamCapacity                  proxy.UpstreamCapacityConfiguration `mapstructure:"upstream_capacity"`
+	RequestTimeoutSeconds             *int                                `mapstructure:"request_timeout_seconds"`
+	MaxRequestTimeoutSeconds          *int                                `mapstructure:"max_request_timeout_seconds"`
+	MaxPromptBytes                    int64                               `mapstructure:"max_prompt_bytes"`
+	MaxAssetBytes                     int64                               `mapstructure:"max_asset_bytes"`
+	AssetRetentionSeconds             int                                 `mapstructure:"asset_retention_seconds"`
+	AssetStorePath                    string                              `mapstructure:"asset_store_path"`
+	MaxInputAudioBytes                int64                               `mapstructure:"max_input_audio_bytes"`
+	MediaOperationWorkers             *int                                `mapstructure:"media_operation_workers"`
+	DictatorMediaOperationWorkers     *int                                `mapstructure:"dictator_media_operation_workers"`
+	MediaOperationCapacity            *int                                `mapstructure:"media_operation_capacity"`
+	TenantMediaOperationCapacity      *int                                `mapstructure:"tenant_media_operation_capacity"`
+	MediaOperationLifetimeSeconds     *int                                `mapstructure:"media_operation_lifetime_seconds"`
+	MediaOperationClaimSeconds        *int                                `mapstructure:"media_operation_claim_seconds"`
+	MediaOperationClaimRenewalSeconds *int                                `mapstructure:"media_operation_claim_renewal_seconds"`
+	UpstreamRateLimits                []upstreamRateLimitConfiguration    `mapstructure:"upstream_rate_limits"`
 }
 
 type upstreamRateLimitConfiguration struct {
@@ -264,8 +263,7 @@ func (configuration fileConfiguration) toProxyConfiguration(providerCatalog *pro
 		ProviderConnectionValues:          providerConnectionValues,
 		Port:                              configuration.Server.Port,
 		LogLevel:                          configuration.Server.LogLevel,
-		WorkerCount:                       configuration.Server.Workers,
-		QueueSize:                         configuration.Server.QueueSize,
+		UpstreamCapacity:                  configuration.Server.UpstreamCapacity,
 		RequestTimeoutSeconds:             requestTimeoutSeconds,
 		MaxRequestTimeoutSeconds:          maxRequestTimeoutSeconds,
 		MaxPromptBytes:                    configuration.Server.MaxPromptBytes,
