@@ -27,8 +27,8 @@ func DefaultTenantDefaults() TenantDefaults {
 	return TenantDefaults{
 		Provider:              DefaultProvider,
 		Model:                 DefaultModel,
-		TranscriptionProvider: DefaultDictationProvider,
-		TranscriptionModel:    DefaultDictationModel,
+		TranscriptionProvider: DefaultTranscriptionProvider,
+		TranscriptionModel:    DefaultTranscriptionModel,
 	}
 }
 
@@ -71,6 +71,7 @@ func normalizedTenantDefaults(rawDefaults TenantDefaults) tenantDefaults {
 }
 
 type managedProviderSettings struct {
+	connectionID     string
 	connectionValues map[string]string
 	configuredFields map[string]bool
 	textModel        string

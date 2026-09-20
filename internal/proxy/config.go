@@ -15,16 +15,12 @@ import (
 const (
 	// DefaultPort is the TCP port used by the HTTP server when no explicit port is provided.
 	DefaultPort = 8080
-	// DefaultWorkers is the maximum number of concurrent upstream HTTP operations.
-	DefaultWorkers = 4
-	// DefaultQueueSize is the number of upstream HTTP operations that may wait for a worker.
-	DefaultQueueSize = 100
 	// DefaultModel is the model identifier used when the client does not supply one.
 	DefaultModel = ModelNameGPT41
 	// DefaultProvider is the provider identifier used when the client does not supply one.
 	DefaultProvider = ProviderNameOpenAI
-	// DefaultDictationProvider is the provider used when /dictate does not supply one.
-	DefaultDictationProvider = ProviderNameOpenAI
+	// DefaultTranscriptionProvider is the provider used when /dictate does not supply one.
+	DefaultTranscriptionProvider = ProviderNameOpenAI
 
 	// DefaultRequestTimeoutSeconds is the request work budget used when the client omits one.
 	DefaultRequestTimeoutSeconds = 360
@@ -54,7 +50,7 @@ const (
 	DefaultMediaOperationWorkers = 2
 	// DefaultDictatorMediaOperationWorkers is the isolated Dictator worker count.
 	DefaultDictatorMediaOperationWorkers = 1
-	DefaultDictationModel                = "gpt-transcribe"
+	DefaultTranscriptionModel            = "gpt-transcribe"
 	DefaultMaxInputAudioBytes            = 25 * 1024 * 1024
 	DefaultManagementJWTIssuer           = "tauth"
 	// DefaultManagementUsageQueueSize is the number of managed usage events retained for asynchronous persistence.
@@ -67,8 +63,7 @@ type Configuration struct {
 	Management                        ManagementConfiguration
 	Port                              int
 	LogLevel                          string
-	WorkerCount                       int
-	QueueSize                         int
+	UpstreamCapacity                  UpstreamCapacityConfiguration
 	RequestTimeoutSeconds             int
 	MaxRequestTimeoutSeconds          int
 	MaxPromptBytes                    int64
@@ -91,6 +86,7 @@ type Configuration struct {
 	MediaOperationClaimSeconds        int
 	MediaOperationClaimRenewalSeconds int
 	upstreamRateLimits                upstreamRateLimits
+	upstreamCapacity                  upstreamCapacity
 	managementSessionValidator        *managementSessionValidator
 	requestTimeoutPolicy              requestTimeoutPolicy
 	validated                         bool
@@ -142,11 +138,19 @@ func NewConfiguration(configuration Configuration) (Configuration, error) {
 	if validationError := validateConfig(configuration); validationError != nil {
 		return Configuration{}, validationError
 	}
+	capacity, capacityError := newUpstreamCapacity(configuration.UpstreamCapacity, upstreamRateLimits)
+	if capacityError != nil {
+		return Configuration{}, capacityError
+	}
+	if originError := validateUpstreamCapacityOrigins(configuration, configuration.UpstreamCapacity, capacity); originError != nil {
+		return Configuration{}, originError
+	}
 	sessionValidator, sessionValidationError := newManagementSessionValidator(configuration.Management)
 	if sessionValidationError != nil {
 		return Configuration{}, sessionValidationError
 	}
 	configuration.upstreamRateLimits = upstreamRateLimits
+	configuration.upstreamCapacity = capacity
 	configuration.managementSessionValidator = sessionValidator
 	configuration.requestTimeoutPolicy = timeoutPolicy
 	configuration.validated = true
@@ -202,12 +206,6 @@ var errQueueFull = errors.New(errorQueueFull)
 // ApplyTunables ensures tunable configuration values have sensible defaults.
 func (configuration *Configuration) ApplyTunables() {
 	configuration.Management.ApplyTunables()
-	if configuration.WorkerCount <= 0 {
-		configuration.WorkerCount = DefaultWorkers
-	}
-	if configuration.QueueSize <= 0 {
-		configuration.QueueSize = DefaultQueueSize
-	}
 	if configuration.RequestTimeoutSeconds == 0 {
 		configuration.RequestTimeoutSeconds = DefaultRequestTimeoutSeconds
 	}

@@ -120,7 +120,7 @@ func TestProviderCatalogProjectsProviderCardTaxonomy(testingInstance *testing.T)
 		families        []string
 		capabilities    []string
 	}{
-		proxy.ProviderNameOpenAI:      {apiServiceLabel: "OpenAI API", families: []string{"GPT-6", "GPT-4", "GPT-5", "GPT Transcribe"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.ModelOperationDictation}},
+		proxy.ProviderNameOpenAI:      {apiServiceLabel: "OpenAI API", families: []string{"GPT-6", "GPT-4", "GPT-5", "GPT Transcribe", "GPT Image"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.ModelOperationDictation, proxy.ModelOperationImageGeneration, proxy.ModelOperationImageEditing}},
 		proxy.ProviderNameDashScope:   {apiServiceLabel: "Alibaba Cloud", families: []string{"Qwen"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput}},
 		proxy.ProviderNameGemini:      {apiServiceLabel: "Gemini API", families: []string{"Gemini"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityAudioInput, proxy.ModelOperationDictation}},
 		proxy.ProviderNameMeta:        {apiServiceLabel: "Meta API", families: []string{"Muse Spark"}, capabilities: []string{proxy.ModelOperationText}},
@@ -191,7 +191,9 @@ func TestCatalogDefinedProviderFlowsThroughEveryGenericConsumer(testingInstance 
 		testingInstance.Fatalf("catalog environment bindings=%v", environmentBindings[testCatalogProviderID])
 	}
 	databasePath := filepath.Join(testingInstance.TempDir(), "managed-tenants.db")
-	configuration := proxy.Configuration{ProviderCatalog: providerCatalog}
+	configuration := testfixtures.WithUpstreamCapacity(testingInstance, proxy.Configuration{ProviderCatalog: providerCatalog})
+	limit := configuration.UpstreamCapacity.Tenant
+	configuration.UpstreamCapacity.Origins = append(configuration.UpstreamCapacity.Origins, proxy.UpstreamOriginCapacity{Origin: upstreamServer.URL, Provider: testCatalogProviderID, Active: limit.Active, Queued: limit.Admitted - limit.Active})
 	router := newManagementRouterWithDatabasePath(testingInstance, configuration, databasePath)
 	sessionCookie := managementSessionCookie(testingInstance, "tauth-catalog-provider-owner")
 	tenantPath := managementDefaultTenantTestPath(testingInstance, router, sessionCookie, "")
@@ -226,7 +228,7 @@ func TestCatalogDefinedProviderFlowsThroughEveryGenericConsumer(testingInstance 
 	if strings.Contains(string(profileBytes), testCatalogProviderCredential) {
 		testingInstance.Fatal("management response exposed credential")
 	}
-	accountConnectionExchange(testingInstance, router, sessionCookie, http.MethodPut, "/tenants/"+tenantID+"/defaults", map[string]string{"provider": testCatalogProviderID, "model": testCatalogModelID, "dictation_provider": "", "dictation_model": "", "system_prompt": "", "reasoning_effort": ""}, http.StatusOK)
+	accountConnectionExchange(testingInstance, router, sessionCookie, http.MethodPut, "/tenants/"+tenantID+"/defaults", map[string]string{"provider": testCatalogProviderID, "model": testCatalogModelID, "transcription_provider": "", "transcription_model": "", "system_prompt": "", "reasoning_effort": ""}, http.StatusOK)
 	fixtureDatabase := openManagedFixtureDatabase(testingInstance, databasePath)
 	var credentialRecord struct{ Value string }
 	if err := fixtureDatabase.Table("managed_connection_field_records").Where("connection_id = ? AND field_id = ?", connectionID, testCatalogCredentialField).Take(&credentialRecord).Error; err != nil {

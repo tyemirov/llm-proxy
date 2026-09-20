@@ -8,9 +8,64 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"go.uber.org/zap"
 )
+
+func TestProviderRequestCodecsRejectMalformedEndpointsBeforeDispatch(t *testing.T) {
+	const malformed = "http://[::1"
+	logger := zap.NewNop().Sugar()
+	doer := geminiEdgeDoer(func(*http.Request) (*http.Response, error) {
+		t.Fatal("malformed endpoint reached provider")
+		return nil, nil
+	})
+	endpoints := NewEndpoints()
+	endpoints.SetResponsesURL(malformed)
+	client := NewOpenAIClient(doer, endpoints)
+	ctx := requestContextWithTelemetry(context.Background(), newRequestTelemetry("malformed-provider-url", "/v2"))
+	model := textModelDefinition{providerIdentifier: newModelID("provider-model"), requestProfile: requestProfileOpenAIResponsesTemperature, outputTokenLimit: 32}
+	messages := chatMessages{{role: chatRoleUser, content: "inspect"}}
+	checks := []struct {
+		name    string
+		request func() error
+	}{
+		{"Responses", func() error {
+			_, err := client.openAIRequest(ctx, "key", model, messages, false, nil, "", nil, nil, logger)
+			return err
+		}},
+		{"transcription", func() error {
+			_, err := client.transcribeAudioWithURL(context.Background(), "key", malformed, "model", "whisper-1", "audio.wav", strings.NewReader("audio"), logger)
+			return err
+		}},
+		{"Anthropic", func() error {
+			_, err := newAnthropicMessagesClient(doer).generateText(context.Background(), "key", malformed, model, messages, nil, "", nil, logger)
+			return err
+		}},
+		{"Chat Completions", func() error {
+			_, err := newOpenAICompatibleChatClient(doer).generateText(context.Background(), "key", malformed, model, messages, nil, chatCompletionTokenLimitMaxTokens, "", nil, nil, logger)
+			return err
+		}},
+		{"Gemini", func() error {
+			_, err := newGeminiInteractionsClient(doer).performInteractionRequest(ctx, http.MethodPost, malformed, "key", nil, logger)
+			return err
+		}},
+	}
+	for _, check := range checks {
+		t.Run(check.name, func(t *testing.T) {
+			if err := check.request(); err == nil {
+				t.Fatal("malformed endpoint accepted")
+			}
+		})
+	}
+	provider := providerDefinition{textEndpointURL: malformed}
+	model.wireContract = textWireContractAnthropicMessages
+	model.executionLifecycle = textExecutionLifecycleSynchronousCompletion
+	verifier := newOperationalProviderKeyVerifier(doer, endpoints, time.Second, logger)
+	if err := verifier.verify(context.Background(), provider, model, "key"); !errors.Is(err, errProviderKeyVerificationUnavailable) {
+		t.Fatalf("verification error=%v", err)
+	}
+}
 
 func TestProviderImageSerializationAndLimitFailureContracts(t *testing.T) {
 	logger := zap.NewNop().Sugar()

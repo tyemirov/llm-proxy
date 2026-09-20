@@ -169,6 +169,10 @@ func TestDictatorJobAndVoiceBindingAtSDKBoundary(t *testing.T) {
 		}
 	}
 	reference, _ := json.Marshal(dictatorVoiceReference{Binding: protocol.binding, Engine: dictator.SynthesisEngine_SYNTHESIS_ENGINE_SILERO_RU, Preset: "baya"})
+	if _, err := protocol.synthesisRequest(dictatorCanonicalInput{}, dictatorCanonicalControls{TextFormat: "plain"}, &mediaVoiceRecord{ProviderVoiceReference: string(reference)}); err == nil {
+		t.Fatal("used a voice engine for a model without synthesis support")
+	}
+	protocol.model = ModelNameDictatorSileroRU
 	if _, err := protocol.synthesisRequest(dictatorCanonicalInput{}, dictatorCanonicalControls{}, &mediaVoiceRecord{ProviderVoiceReference: string(reference)}); err == nil {
 		t.Fatal("accepted unspecified text format")
 	}

@@ -65,6 +65,7 @@ func BuildRouterWithManagedTenantsForTest(testingInstance testing.TB, configurat
 	}
 	configuration.Endpoints = managedRouterTestEndpointOverrides(configuration)
 	configuration.Management = managedRouterTestManagementConfiguration()
+	configuration = withInternalUpstreamCapacity(testingInstance, configuration)
 	return buildRouter(configuration, structuredLogger, func(_ ManagementConfiguration, providers *providerRegistry) (*managedTenantStore, error) {
 		return newManagedRouterTestStore(configuration, providers, tenantConfigurations)
 	})
@@ -124,19 +125,19 @@ func newManagedRouterTestStore(configuration Configuration, providers *providerR
 		secretDigestText := hex.EncodeToString(secretDigest[:])
 		ownerUserID := fmt.Sprintf("managed-router-test-user-%d", tenantIndex+1)
 		record := managedTenantRecord{
-			TenantID:                 identifier,
-			OwnerUserID:              ownerUserID,
-			Name:                     fmt.Sprintf("Test %d", tenantIndex+1),
-			NameKey:                  fmt.Sprintf("test-%d", tenantIndex+1),
-			SecretDigest:             &secretDigestText,
-			DefaultProvider:          defaults.Provider,
-			DefaultModel:             defaults.Model,
-			DefaultDictationProvider: defaults.DictationProvider,
-			DefaultDictationModel:    defaults.DictationModel,
-			DefaultSystemPrompt:      defaults.SystemPrompt,
-			DefaultReasoningEffort:   defaults.ReasoningEffort,
-			CreatedAt:                now,
-			UpdatedAt:                now,
+			TenantID:                     identifier,
+			OwnerUserID:                  ownerUserID,
+			Name:                         fmt.Sprintf("Test %d", tenantIndex+1),
+			NameKey:                      fmt.Sprintf("test-%d", tenantIndex+1),
+			SecretDigest:                 &secretDigestText,
+			DefaultProvider:              defaults.Provider,
+			DefaultModel:                 defaults.Model,
+			DefaultTranscriptionProvider: defaults.TranscriptionProvider,
+			DefaultTranscriptionModel:    defaults.TranscriptionModel,
+			DefaultSystemPrompt:          defaults.SystemPrompt,
+			DefaultReasoningEffort:       defaults.ReasoningEffort,
+			CreatedAt:                    now,
+			UpdatedAt:                    now,
 		}
 		for providerIdentifier, apiKey := range tenantConfiguration.ProviderKeys {
 			providerIDValue, providerError := providers.canonicalProviderID(providerIdentifier)

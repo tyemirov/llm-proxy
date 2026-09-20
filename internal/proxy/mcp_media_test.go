@@ -90,6 +90,16 @@ func TestMCPDictatorWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var presetVoice llmproxyclient.MediaVoice
+	for _, voice := range voices {
+		if voice.Mode == proxy.MediaVoiceModePreset {
+			presetVoice = voice
+			break
+		}
+	}
+	if presetVoice.VoiceID == "" {
+		t.Fatal("preset synthesis voice missing")
+	}
 	for index, scenario := range []struct {
 		capability      string
 		model           string
@@ -99,12 +109,12 @@ func TestMCPDictatorWorkflow(t *testing.T) {
 		{"audio.diarize", "whisper-base", map[string]any{"audio_asset_id": asset.AssetID}, map[string]any{"language": "en", "utterance_gap_seconds": 0.0}},
 		{"audio.align", "whisper-base", map[string]any{"audio_asset_id": asset.AssetID, "transcript": "A clear transcript."}, map[string]any{"language": "en", "remove_punctuation": true}},
 		{"subtitles.create", "whisper-base", map[string]any{"audio_asset_id": asset.AssetID, "transcript": "A clear transcript."}, map[string]any{"language": "en", "granularity": "sentence", "group_size": 2}},
-		{"audio.speech.generate", "silero-ru", map[string]any{"text": "Hello", "voice_id": voices[0].VoiceID}, map[string]any{"language": voices[0].Language, "text_format": "plain", "sample_rate_hz": 48000, "include_timeline": true}},
+		{"audio.speech.generate", "silero-ru", map[string]any{"text": "<speak>Привет</speak>", "voice_id": presetVoice.VoiceID}, map[string]any{"language": presetVoice.Language, "text_format": "ssml", "sample_rate_hz": 48000, "include_timeline": true, "max_duration_seconds": 5}},
 	} {
 		operation := call("llm_proxy.create_media_operation", map[string]any{"tenant_id": tenantID, "idempotency_key": fmt.Sprintf("speech-%d", index), "capability": scenario.capability, "provider": "dictator", "model": scenario.model, "input": scenario.input, "controls": scenario.controls})
 		completed, err := httpClient.WaitMediaOperation(t.Context(), operation.OperationID, 10*time.Millisecond)
 		if err != nil || completed.State != "succeeded" {
-			t.Fatalf("%s: %+v error=%v", scenario.capability, completed, err)
+			t.Fatalf("%s: %+v operation_error=%+v error=%v", scenario.capability, completed, completed.Error, err)
 		}
 		for _, output := range completed.Outputs {
 			metadata, err := httpClient.GetAsset(t.Context(), output.AssetID)

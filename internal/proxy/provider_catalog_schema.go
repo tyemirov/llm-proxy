@@ -39,6 +39,7 @@ const (
 	CatalogEndpointProtocolGRPC           = "grpc"
 	CatalogEndpointMethodPost             = "POST"
 	CatalogProtocolOpenAIResponses        = "openai_responses"
+	CatalogProtocolOpenAIImages           = "openai_images"
 	CatalogProtocolDashScopeResponses     = "dashscope_responses"
 	CatalogProtocolXAIResponses           = "xai_responses"
 	CatalogProtocolOpenAIChatCompletions  = "openai_chat_completions"
@@ -220,6 +221,7 @@ type ProviderCatalogOffering struct {
 	Model             string                     `yaml:"model"`
 	UpstreamModel     string                     `yaml:"upstream_model"`
 	Transport         string                     `yaml:"transport"`
+	ImageRoutes       CatalogImageRoutes         `yaml:"image_routes,omitempty"`
 	Operations        []string                   `yaml:"operations"`
 	DefaultOperations []string                   `yaml:"default_operations,omitempty"`
 	RequestProfile    string                     `yaml:"request_profile,omitempty"`
@@ -574,6 +576,9 @@ func validateProviderCatalogSchema(schema ProviderCatalogSchema) error {
 			if _, found := transports[offering.Transport]; !found {
 				return fmt.Errorf("%w: field=%s.transport transport=%s reason=dangling_reference", ErrInvalidModelCatalog, offeringField, offering.Transport)
 			}
+			if routeError := validateCatalogImageRoutes(offering, provider.Offerings, modelActivations, transports, offeringField); routeError != nil {
+				return routeError
+			}
 			if offering.Created <= 0 {
 				return fmt.Errorf("%w: field=%s.created", ErrInvalidModelCatalog, offeringField)
 			}
@@ -868,6 +873,7 @@ func compileProviderCatalogSchema(schema ProviderCatalogSchema, revision string)
 				Model:                   rawOffering.Model,
 				ProviderModel:           rawOffering.UpstreamModel,
 				Transport:               rawOffering.Transport,
+				ImageRoutes:             rawOffering.ImageRoutes,
 				Operations:              append([]string(nil), rawOffering.Operations...),
 				DefaultOperations:       append([]string(nil), rawOffering.DefaultOperations...),
 				WireContract:            composition.requestCodec,

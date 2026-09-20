@@ -144,7 +144,7 @@ func TestMediaOperationLifecycleUsesDurableTenantResources(testingInstance *test
 		testingInstance.Fatal(clientError)
 	}
 	capabilities, capabilitiesError := client.GetMediaCapabilities(context.Background())
-	if capabilitiesError != nil || capabilities.CatalogRevision == "" || len(capabilities.Routes) != 1 || capabilities.Routes[0].Capability != llmproxycontract.MediaCapabilityVideoGenerate {
+	if capabilitiesError != nil || capabilities.CatalogRevision == "" || len(capabilities.Routes) != 3 || capabilities.Routes[0].Capability != llmproxycontract.MediaCapabilityImageEdit || capabilities.Routes[1].Capability != llmproxycontract.MediaCapabilityImageGenerate || capabilities.Routes[2].Capability != llmproxycontract.MediaCapabilityVideoGenerate {
 		testingInstance.Fatalf("capabilities=%+v error=%v", capabilities, capabilitiesError)
 	}
 

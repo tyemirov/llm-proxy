@@ -156,15 +156,38 @@ func internalTestProviderCatalog(modelCatalog ModelCatalog) *ProviderCatalog {
 			transport := internalTestProviderTransport(transportID, offering)
 			provider.Transports = append(provider.Transports, transport)
 		}
+		imageRoutes := CatalogImageRoutes{Responses: offering.ImageRoutes.Responses}
+		if offering.ImageRoutes.Editing != "" {
+			editKey := transportKey + "\x00editing"
+			editID, exists := transportIDs[editKey]
+			if !exists {
+				editID = transportID + "-editing"
+				transportIDs[editKey] = editID
+				editTransport := internalTestProviderTransport(editID, offering)
+				editTransport.Endpoint.Path = "/images/edits"
+				provider.Transports = append(provider.Transports, editTransport)
+			}
+			imageRoutes.Editing = editID
+		}
 		provider.Offerings = append(provider.Offerings, ProviderCatalogOffering{
 			Model: offering.Model, UpstreamModel: offering.ProviderModel, Transport: transportID,
-			Operations: offering.Operations, DefaultOperations: offering.DefaultOperations,
+			ImageRoutes: imageRoutes,
+			Operations:  offering.Operations, DefaultOperations: offering.DefaultOperations,
 			RequestProfile: offering.RequestProfile, WebSearch: offering.WebSearch, CallerTools: offering.CallerTools, Created: offering.Created,
 			OutputTokenLimit: offering.OutputTokenLimit, ReasoningEffort: offering.ReasoningEffort,
 			MediaInputs: offering.MediaInputs, MediaLimits: offering.MediaLimits,
 			Controls: offering.Controls, Limits: offering.Limits,
 			Prices: prices[offering.Provider+"\x00"+offering.Model],
 		})
+	}
+	for providerIndex := range schema.Providers {
+		provider := &schema.Providers[providerIndex]
+		for offeringIndex := range provider.Offerings {
+			offering := &provider.Offerings[offeringIndex]
+			if offering.ImageRoutes.Responses != "" {
+				offering.ImageRoutes.Responses = transportIDs[provider.ID+"\x00"+CatalogProtocolOpenAIResponses+"\x00pollable_resource"]
+			}
+		}
 	}
 	catalog, catalogError := NewProviderCatalog(schema)
 	if catalogError != nil {

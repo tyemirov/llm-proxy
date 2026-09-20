@@ -891,7 +891,7 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 	defaultsRequest := authenticatedJSONRequest(
 		http.MethodPut,
 		tenantPath+"/defaults",
-		managementDefaultsRequestBody(t, proxy.ProviderNameDeepSeek, proxy.ModelNameDeepSeekV4Flash, proxy.ProviderNameOpenAI, proxy.DefaultDictationModel, ""),
+		managementDefaultsRequestBody(t, proxy.ProviderNameDeepSeek, proxy.ModelNameDeepSeekV4Flash, proxy.ProviderNameOpenAI, proxy.DefaultTranscriptionModel, ""),
 		ownerCookie,
 	)
 	defaultsResponse := httptest.NewRecorder()

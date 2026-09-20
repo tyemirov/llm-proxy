@@ -197,7 +197,7 @@ func TestManagedTenantSQLiteOwnershipMigrationCanonicalizesConfirmedRouteIdentit
 	legacyTenant := legacyManagedTenantRecord{
 		UserID: "native-model-owner", TenantID: "native-model-tenant",
 		DefaultProvider: ProviderNameMiniMax, DefaultModel: managedMiniMaxNativeModel,
-		DefaultDictationProvider: ProviderNameSiliconFlow, DefaultDictationModel: managedSenseVoiceNativeModel,
+		DefaultTranscriptionProvider: ProviderNameSiliconFlow, DefaultTranscriptionModel: managedSenseVoiceNativeModel,
 		DefaultSystemPrompt: "preserve native prompt", CreatedAt: fixedTime, UpdatedAt: fixedTime.Add(time.Minute),
 	}
 	if createError := legacyDatabase.Table(managedTenantTable).Create(&legacyTenant).Error; createError != nil {
@@ -246,7 +246,7 @@ func TestManagedTenantSQLiteOwnershipMigrationCanonicalizesConfirmedRouteIdentit
 	}
 	expectedDefaults := TenantDefaults{
 		Provider: ProviderNameMiniMax, Model: ModelNameMiniMaxM27,
-		DictationProvider: ProviderNameSiliconFlow, DictationModel: "sensevoice-small",
+		TranscriptionProvider: ProviderNameSiliconFlow, TranscriptionModel: "sensevoice-small",
 		SystemPrompt: "preserve native prompt",
 	}
 	if migratedTenant.defaults() != expectedDefaults || len(migratedTenant.ConnectionAssignments) != 2 || len(migratedTenant.ProviderProfiles) != 2 || !migratedTenant.UpdatedAt.Equal(legacyTenant.UpdatedAt) {
@@ -381,7 +381,7 @@ func TestManagedTenantModelIdentityMigrationCanonicalizesCurrentRoutesAndPreserv
 	nativeTenant.UpdatedAt = now.Add(2 * time.Minute)
 	nativeTenant.applyRoutingDefaults(managedRoutingDefaults{tenantDefaults: TenantDefaults{
 		Provider: ProviderNameMiniMax, Model: managedMiniMaxNativeModel,
-		DictationProvider: ProviderNameSiliconFlow, DictationModel: managedSenseVoiceNativeModel,
+		TranscriptionProvider: ProviderNameSiliconFlow, TranscriptionModel: managedSenseVoiceNativeModel,
 		SystemPrompt: "preserve native tenant prompt",
 	}})
 	canonicalTenant := fakeTenantRecord(users[1].UserID, "canonical-model-tenant", "Default", now.Add(time.Minute))
@@ -437,7 +437,7 @@ func TestManagedTenantModelIdentityMigrationCanonicalizesCurrentRoutesAndPreserv
 	migratedNativeTenant := migratedTenants[1]
 	expectedNativeDefaults := TenantDefaults{
 		Provider: ProviderNameMiniMax, Model: ModelNameMiniMaxM27,
-		DictationProvider: ProviderNameSiliconFlow, DictationModel: "sensevoice-small",
+		TranscriptionProvider: ProviderNameSiliconFlow, TranscriptionModel: "sensevoice-small",
 		SystemPrompt: "preserve native tenant prompt",
 	}
 	if migratedNativeTenant.defaults() != expectedNativeDefaults || !migratedNativeTenant.UpdatedAt.Equal(nativeTenant.UpdatedAt) || len(migratedNativeTenant.ConnectionAssignments) != 2 || len(migratedNativeTenant.ProviderProfiles) != 2 {
@@ -504,12 +504,12 @@ func TestManagedTenantQwenCloudRetirementMigrationReconcilesCurrentTenants(t *te
 		UpdatedAt:    now.Add(2 * time.Minute),
 	}
 	qwenOnlyTenant.applyRoutingDefaults(managedRoutingDefaults{tenantDefaults: TenantDefaults{
-		Provider:          retiredQwenCloudProviderIdentifier,
-		Model:             retiredQwenCloudModelIdentifier,
-		SystemPrompt:      "retain tenant prompt",
-		ReasoningEffort:   "high",
-		DictationProvider: "",
-		DictationModel:    "",
+		Provider:              retiredQwenCloudProviderIdentifier,
+		Model:                 retiredQwenCloudModelIdentifier,
+		SystemPrompt:          "retain tenant prompt",
+		ReasoningEffort:       "high",
+		TranscriptionProvider: "",
+		TranscriptionModel:    "",
 	}})
 	mixedTenant := managedTenantRecord{
 		TenantID:    "mixed-tenant",
@@ -611,12 +611,18 @@ func TestManagedTenantQwenCloudRetirementMigrationReconcilesCurrentTenants(t *te
 	endpoints := NewEndpoints()
 	endpoints.SetResponsesURL(upstreamServer.URL)
 	configuration := Configuration{
-		Management:  ManagementConfiguration{TAuthURL: "http://localhost", ProxyOrigin: "http://localhost"},
-		WorkerCount: 1, QueueSize: 1, MaxPromptBytes: 1024,
-		Endpoints: endpoints, ProviderCatalog: internalTestProviderCatalog(internalManagedUsageWriterProviderModels()), ModelCatalog: internalManagedUsageWriterProviderModels(),
+		Management:       ManagementConfiguration{TAuthURL: "http://localhost", ProxyOrigin: "http://localhost"},
+		UpstreamCapacity: testUpstreamCapacity(1, 1), MaxPromptBytes: 1024,
+		Endpoints: endpoints, ProviderCatalog: internalCanonicalProviderCatalog(),
 		upstreamRateLimits:   upstreamRateLimits{rules: map[string]upstreamRateLimitRule{}},
 		requestTimeoutPolicy: timeoutPolicy, validated: true,
 	}
+	configuration = withInternalUpstreamCapacity(t, configuration)
+	compiledCapacity, capacityError := newUpstreamCapacity(configuration.UpstreamCapacity, configuration.upstreamRateLimits)
+	if capacityError != nil {
+		t.Fatal(capacityError)
+	}
+	configuration.upstreamCapacity = compiledCapacity
 	router, buildError := buildRouter(configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
 		store.routingDefaults = newProviderRegistry(configuration)
 		return store, nil
@@ -835,8 +841,8 @@ func (record *legacyManagedTenantRecord) applyDefaults(defaults managedRoutingDe
 	validatedDefaults := defaults.value()
 	record.DefaultProvider = validatedDefaults.Provider
 	record.DefaultModel = validatedDefaults.Model
-	record.DefaultDictationProvider = validatedDefaults.DictationProvider
-	record.DefaultDictationModel = validatedDefaults.DictationModel
+	record.DefaultTranscriptionProvider = validatedDefaults.TranscriptionProvider
+	record.DefaultTranscriptionModel = validatedDefaults.TranscriptionModel
 	record.DefaultSystemPrompt = validatedDefaults.SystemPrompt
 	record.DefaultReasoningEffort = validatedDefaults.ReasoningEffort
 }

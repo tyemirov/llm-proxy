@@ -710,7 +710,7 @@ func TestMediaLimitAndMessageMediaEdgeContracts(t *testing.T) {
 	if configError := validateConfig(Configuration{AssetStorePath: "relative"}); configError == nil {
 		t.Fatal("relative asset store path accepted")
 	}
-	validConfiguration, configError := NewConfiguration(Configuration{ProviderCatalog: internalCanonicalProviderCatalog(), AssetStorePath: t.TempDir(), Management: ManagedRouterTestManagementConfiguration()})
+	validConfiguration, configError := NewConfiguration(withInternalUpstreamCapacity(t, Configuration{ProviderCatalog: internalCanonicalProviderCatalog(), AssetStorePath: t.TempDir(), Management: ManagedRouterTestManagementConfiguration()}))
 	if configError != nil {
 		t.Fatal(configError)
 	}
@@ -907,7 +907,7 @@ func TestMediaTenantAuthenticationReportsCancelledLookup(t *testing.T) {
 	response := httptest.NewRecorder()
 	ginContext, _ := gin.CreateTestContext(response)
 	ginContext.Request = request
-	ginContext.Set(contextKeyRequestID, "cancelled-authentication")
+	ginContext.Request = ginContext.Request.WithContext(requestContextWithIdentifier(ginContext.Request.Context(), "cancelled-authentication"))
 	mediaTenantAuthenticatedHandler(authenticator, zap.NewNop().Sugar(), func(ginContext *gin.Context) { ginContext.Status(http.StatusOK) })(ginContext)
 	if ginContext.Writer.Status() != statusClientClosedRequest {
 		t.Fatalf("status=%d", ginContext.Writer.Status())

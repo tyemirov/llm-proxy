@@ -114,8 +114,8 @@ func TestClientProtocolsSharedAdapterExecution(t *testing.T) {
 				defaults.Model = fixture.Model
 				textModels[fixture.Provider] = fixture.Model
 			} else {
-				defaults.DictationProvider = fixture.Provider
-				defaults.DictationModel = fixture.Model
+				defaults.TranscriptionProvider = fixture.Provider
+				defaults.TranscriptionModel = fixture.Model
 			}
 			tenant := proxy.ManagedTenantTestConfiguration{
 				ID: fixture.Provider, Secret: tenantSecret, Defaults: defaults,

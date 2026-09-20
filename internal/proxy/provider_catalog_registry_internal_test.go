@@ -29,14 +29,14 @@ func TestProviderCatalogEndpointOverridesCoverEveryScope(t *testing.T) {
 
 func TestProviderRegistryConsumesValidatedConnectionsAndSettingEndpoints(t *testing.T) {
 	catalog := internalCanonicalProviderCatalog()
-	configuration, configurationError := NewConfiguration(Configuration{
+	configuration, configurationError := NewConfiguration(withInternalUpstreamCapacity(t, Configuration{
 		ProviderCatalog: catalog,
 		ProviderConnectionValues: map[string]map[string]string{
 			ProviderNameOpenAI: {CatalogCredentialAPIKey: "static-openai-key"},
 		},
 		AssetStorePath: t.TempDir(),
 		Management:     ManagedRouterTestManagementConfiguration(),
-	})
+	}))
 	if configurationError != nil {
 		t.Fatalf("validate catalog registry configuration: %v", configurationError)
 	}

@@ -262,6 +262,7 @@ func (service *managementService) saveConnectionHandler(create bool) gin.Handler
 		}
 		if verify {
 			provider := definition
+			provider.upstreamScope = upstreamRequestScope{tenant: upstreamManagementTenant + ":" + principal.userID, account: record.ID, class: upstreamInteractive}
 			model := definition.textModels[definition.defaultTextModel.string()]
 			provider.connectionValues = cloneStringMap(values)
 			if model.transportIdentifier != "" {

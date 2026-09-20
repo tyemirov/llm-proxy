@@ -98,25 +98,25 @@ type managementTenantDefaultsResponse struct {
 }
 
 type managementProviderResponse struct {
-	ID                    string                              `json:"id"`
-	Label                 string                              `json:"label"`
-	APIServiceLabel       string                              `json:"api_service_label"`
-	KeyAcquisitionURL     string                              `json:"key_acquisition_url"`
-	Aliases               []string                            `json:"aliases"`
-	Capabilities          []string                            `json:"capabilities"`
-	ModelFamilies         []managementCatalogIdentityResponse `json:"model_families"`
-	Configured            bool                                `json:"configured"`
-	Fields                []managementProviderFieldResponse   `json:"fields"`
-	TextModel             string                              `json:"text_model"`
-	SystemPrompt          string                              `json:"system_prompt"`
-	TextDefaultModel          string                        `json:"text_default_model"`
-	TextModels                []managementTextModelResponse `json:"text_models"`
-	SupportsDictation         bool                          `json:"supports_dictation"`
-	TranscriptionDefaultModel string                        `json:"transcription_default_model,omitempty"`
-	TranscriptionModels       []string                      `json:"transcription_models"`
-	SupportsSpeech            bool                          `json:"supports_speech"`
-	SpeechDefaultModel        string                        `json:"speech_default_model,omitempty"`
-	SpeechModels              []string                      `json:"speech_models"`
+	ID                        string                              `json:"id"`
+	Label                     string                              `json:"label"`
+	APIServiceLabel           string                              `json:"api_service_label"`
+	KeyAcquisitionURL         string                              `json:"key_acquisition_url"`
+	Aliases                   []string                            `json:"aliases"`
+	Capabilities              []string                            `json:"capabilities"`
+	ModelFamilies             []managementCatalogIdentityResponse `json:"model_families"`
+	Configured                bool                                `json:"configured"`
+	Fields                    []managementProviderFieldResponse   `json:"fields"`
+	TextModel                 string                              `json:"text_model"`
+	SystemPrompt              string                              `json:"system_prompt"`
+	TextDefaultModel          string                              `json:"text_default_model"`
+	TextModels                []managementTextModelResponse       `json:"text_models"`
+	SupportsDictation         bool                                `json:"supports_dictation"`
+	TranscriptionDefaultModel string                              `json:"transcription_default_model,omitempty"`
+	TranscriptionModels       []string                            `json:"transcription_models"`
+	SupportsSpeech            bool                                `json:"supports_speech"`
+	SpeechDefaultModel        string                              `json:"speech_default_model,omitempty"`
+	SpeechModels              []string                            `json:"speech_models"`
 }
 
 type managementCatalogIdentityResponse struct {
@@ -790,25 +790,25 @@ func (service *managementService) providerResponses(providerSettings map[provide
 			modelFamilies = append(modelFamilies, managementCatalogIdentityResponse{ID: family.ID, Label: family.Label})
 		}
 		response := managementProviderResponse{
-			ID:                    summary.identifier,
-			Label:                 summary.label,
-			APIServiceLabel:       summary.apiServiceLabel,
-			KeyAcquisitionURL:     summary.keyAcquisitionURL,
-			Aliases:               append([]string{}, summary.aliases...),
-			Capabilities:          append([]string{}, summary.capabilities...),
-			ModelFamilies:         modelFamilies,
-			Configured:            configured && settings.hasRequiredConnectionFields(definition),
-			Fields:                make([]managementProviderFieldResponse, 0, len(definition.fieldOrder)),
-			TextModel:             summary.textDefaultModel,
-			SystemPrompt:          constants.EmptyString,
-			TextDefaultModel:      summary.textDefaultModel,
-			TextModels:            textModels,
-			SupportsDictation:       summary.supportsDictation,
+			ID:                        summary.identifier,
+			Label:                     summary.label,
+			APIServiceLabel:           summary.apiServiceLabel,
+			KeyAcquisitionURL:         summary.keyAcquisitionURL,
+			Aliases:                   append([]string{}, summary.aliases...),
+			Capabilities:              append([]string{}, summary.capabilities...),
+			ModelFamilies:             modelFamilies,
+			Configured:                configured && settings.hasRequiredConnectionFields(definition),
+			Fields:                    make([]managementProviderFieldResponse, 0, len(definition.fieldOrder)),
+			TextModel:                 summary.textDefaultModel,
+			SystemPrompt:              constants.EmptyString,
+			TextDefaultModel:          summary.textDefaultModel,
+			TextModels:                textModels,
+			SupportsDictation:         summary.supportsDictation,
 			TranscriptionDefaultModel: summary.transcriptionDefaultModel,
-			TranscriptionModels:   summary.transcriptionModels,
-			SupportsSpeech:        summary.supportsSpeech,
-			SpeechDefaultModel:    summary.speechDefaultModel,
-			SpeechModels:          summary.speechModels,
+			TranscriptionModels:       summary.transcriptionModels,
+			SupportsSpeech:            summary.supportsSpeech,
+			SpeechDefaultModel:        summary.speechDefaultModel,
+			SpeechModels:              summary.speechModels,
 		}
 		for _, fieldIdentifier := range definition.fieldOrder {
 			field := definition.fields[fieldIdentifier]

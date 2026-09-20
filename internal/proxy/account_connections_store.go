@@ -224,7 +224,7 @@ func (database *gormManagedTenantDatabase) detachAccountConnection(ctx context.C
 			}
 			return err
 		}
-		affected := tenant.DefaultProvider == providerID || tenant.DefaultDictationProvider == providerID
+		affected := tenant.DefaultProvider == providerID || tenant.DefaultTranscriptionProvider == providerID || tenant.DefaultSpeechProvider == providerID
 		if affected && !clearDefaults {
 			return errManagedConnectionConflict
 		}
@@ -233,9 +233,13 @@ func (database *gormManagedTenantDatabase) detachAccountConnection(ctx context.C
 			tenant.DefaultModel = ""
 			tenant.DefaultReasoningEffort = ""
 		}
-		if tenant.DefaultDictationProvider == providerID {
-			tenant.DefaultDictationProvider = ""
-			tenant.DefaultDictationModel = ""
+		if tenant.DefaultTranscriptionProvider == providerID {
+			tenant.DefaultTranscriptionProvider = ""
+			tenant.DefaultTranscriptionModel = ""
+		}
+		if tenant.DefaultSpeechProvider == providerID {
+			tenant.DefaultSpeechProvider = ""
+			tenant.DefaultSpeechModel = ""
 		}
 		if err := tx.Where("tenant_id = ? AND provider_id = ?", tenantID, providerID).Delete(&managedTenantConnectionRecord{}).Error; err != nil {
 			return err
@@ -243,7 +247,7 @@ func (database *gormManagedTenantDatabase) detachAccountConnection(ctx context.C
 		if err := advanceManagedConnectionVersion(tx, assignment.ConnectionID, now); err != nil {
 			return err
 		}
-		return tx.Model(&managedTenantRecord{}).Where("tenant_id = ?", tenantID).Updates(map[string]any{"default_provider": tenant.DefaultProvider, "default_model": tenant.DefaultModel, "default_reasoning_effort": tenant.DefaultReasoningEffort, "default_dictation_provider": tenant.DefaultDictationProvider, "default_dictation_model": tenant.DefaultDictationModel, "updated_at": now}).Error
+		return tx.Model(&managedTenantRecord{}).Where("tenant_id = ?", tenantID).Updates(map[string]any{"default_provider": tenant.DefaultProvider, "default_model": tenant.DefaultModel, "default_reasoning_effort": tenant.DefaultReasoningEffort, "default_transcription_provider": tenant.DefaultTranscriptionProvider, "default_transcription_model": tenant.DefaultTranscriptionModel, "default_speech_provider": tenant.DefaultSpeechProvider, "default_speech_model": tenant.DefaultSpeechModel, "updated_at": now}).Error
 	})
 }
 
@@ -252,7 +256,7 @@ func (store *managedTenantStore) accountConnectionSettings(record managedAccount
 	if !exists {
 		return managedProviderSettings{}, errManagedConnectionInvalid
 	}
-	settings := managedProviderSettings{connectionValues: map[string]string{}, configuredFields: map[string]bool{}, textModel: definition.defaultTextModel.string()}
+	settings := managedProviderSettings{connectionID: record.ID, connectionValues: map[string]string{}, configuredFields: map[string]bool{}, textModel: definition.defaultTextModel.string()}
 	for id, field := range definition.fields {
 		settings.connectionValues[id] = *field.Default
 	}
@@ -319,6 +323,9 @@ func (database *gormManagedTenantDatabase) saveTenantProviderProfile(ctx context
 }
 
 func validateAccountConnectionSchema(database *gorm.DB, keyCipher managedProviderKeyCipher, providers *providerRegistry) error {
+	if err := validateManagedCapabilityDefaultsSchema(database); err != nil {
+		return err
+	}
 	for _, model := range []any{&managedAccountConnectionRecord{}, &managedConnectionFieldRecord{}, &managedTenantConnectionRecord{}, &managedConnectionCreationRecord{}} {
 		if !database.Migrator().HasTable(model) {
 			return fmt.Errorf("%w: account connection table missing", errManagedTenantSchemaMigration)
@@ -382,4 +389,30 @@ func validateAccountConnectionSchema(database *gorm.DB, keyCipher managedProvide
 		}
 	}
 	return nil
+}
+
+func validateManagedCapabilityDefaultsSchema(database *gorm.DB) error {
+	for _, column := range []string{"default_transcription_provider", "default_transcription_model", "default_speech_provider", "default_speech_model"} {
+		if !managedTableHasColumn(database.Migrator(), managedTenantTable, column) {
+			return fmt.Errorf("%w: operation=validate_current_schema missing_default_column=%s", errManagedTenantSchemaMigration, column)
+		}
+	}
+	for _, column := range []string{"default_dictation_provider", "default_dictation_model"} {
+		if managedTableHasColumn(database.Migrator(), managedTenantTable, column) {
+			return fmt.Errorf("%w: operation=validate_current_schema obsolete_default_column=%s", errManagedTenantSchemaMigration, column)
+		}
+	}
+	return nil
+}
+
+func (database *gormManagedTenantDatabase) streamAccountConnections(ctx context.Context, visit func(managedAccountConnectionRecord) error) error {
+	var records []managedAccountConnectionRecord
+	return database.database.WithContext(ctx).Preload("Fields").FindInBatches(&records, managementConnectionPageMaximum, func(_ *gorm.DB, _ int) error {
+		for _, record := range records {
+			if err := visit(record); err != nil {
+				return err
+			}
+		}
+		return nil
+	}).Error
 }

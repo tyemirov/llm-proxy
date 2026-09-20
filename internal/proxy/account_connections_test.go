@@ -3,6 +3,7 @@ package proxy_test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -284,7 +285,7 @@ func TestAccountConnectionConcurrentVerifiedEdits(t *testing.T) {
 	}))
 	t.Cleanup(func() { releaseVerification(); upstream.Close() })
 	configuration := managementConfigurationWithDatabasePath(providerKeyVerificationConfiguration(upstream.URL), filepath.Join(t.TempDir(), "connections.db"))
-	configuration.WorkerCount = 2
+	configuration.UpstreamCapacity = testfixtures.UpstreamCapacity(2, 1)
 	router, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatal(buildError)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -44,8 +45,7 @@ func TestRequestLogsExcludeQueryContent(testingInstance *testing.T) {
 	testingInstance.Cleanup(func() { _ = loggerInstance.Sync() })
 	router, buildError := buildRouterWithManagedTenant(testingInstance, proxy.Configuration{
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 		Endpoints:             endpoints,
 	}, loggerInstance.Sugar(), proxy.StandardManagedTenantTestConfiguration(tenantSecretQueryValue))
@@ -211,8 +211,7 @@ func TestChatHandlersApplyPublicReasoningEffortOverTenantDefault(testingInstance
 	tenantConfiguration.Defaults = defaults
 	router, buildError := buildRouterWithManagedTenant(testingInstance, proxy.Configuration{
 		LogLevel:              proxy.LogLevelDebug,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 		Endpoints:             endpoints,
 	}, zap.NewNop().Sugar(), tenantConfiguration)
@@ -397,8 +396,7 @@ func TestChatHandlerCompletesIncompleteGPT55JSONBody(testingInstance *testing.T)
 	tenantConfiguration.Defaults = defaults
 	router, buildRouterError := buildRouterWithManagedTenant(testingInstance, proxy.Configuration{
 		LogLevel:              proxy.LogLevelDebug,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 		Endpoints:             endpoints,
 	}, zap.NewNop().Sugar(), tenantConfiguration)
@@ -434,8 +432,7 @@ func TestChatHandlerRejectsOversizedJSONBody(testingInstance *testing.T) {
 	logger := zap.NewNop()
 	router, buildRouterError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 		MaxPromptBytes:        32,
 		Endpoints:             endpoints,

@@ -81,7 +81,7 @@ type dictationRequestParameters struct {
 	audioReader io.Reader
 }
 
-// BuildRouter constructs the HTTP router used by the proxy. configuration supplies management, routing, queue, worker, and timeout settings. structuredLogger records structured log messages during routing.
+// BuildRouter constructs the HTTP router used by the proxy. configuration supplies management, routing, upstream capacity, and timeout settings. structuredLogger records structured log messages during routing.
 func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogger) (*gin.Engine, error) {
 	return buildRouter(configuration, structuredLogger, newManagedTenantStore)
 }
@@ -93,10 +93,10 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	if validationError != nil {
 		return nil, validationError
 	}
-	upstreamHTTPClient := newLimitedHTTPDoer(HTTPClient, configuration.WorkerCount, configuration.QueueSize, configuration.upstreamRateLimits, structuredLogger, systemUpstreamRateLimitClock{})
 	if structuredLogger == nil {
 		structuredLogger = zap.NewNop().Sugar()
 	}
+	upstreamHTTPClient := newAdmissionHTTPDoer(HTTPClient, configuration.upstreamCapacity, configuration.upstreamRateLimits, structuredLogger, systemUpstreamAdmissionClock{})
 
 	providers := newProviderRegistry(configuration)
 	capabilityCatalog := newPublicCapabilityCatalog(configuration)
@@ -123,9 +123,12 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	if storeError != nil {
 		return nil, storeError
 	}
+	if err := validateSavedUpstreamCapacityOrigins(context.Background(), managedTenants, providers, configuration.upstreamCapacity); err != nil {
+		return nil, err
+	}
 	tenantAuthenticator := newTenantAuthenticator(managedTenants)
 	assetStore := newTenantAssetStore(configuration.AssetStorePath, configuration.MaxAssetBytes, configuration.AssetRetentionSeconds)
-	mediaOperations, mediaOperationError := newMediaOperationService(configuration, managedTenants, assetStore, providers)
+	mediaOperations, mediaOperationError := newMediaOperationService(configuration, managedTenants, assetStore, providers, upstreamHTTPClient)
 	if mediaOperationError != nil {
 		return nil, mediaOperationError
 	}
@@ -630,8 +633,8 @@ func dictateHandler(upstreamProviders *providerRouter, providers *providerRegist
 		providerDefinition, modelIdentifier, verificationError := validator.ResolveDictation(
 			ginContext.Query(queryParameterProvider),
 			ginContext.Query(queryParameterModel),
-			requestTenant.defaults.dictationProvider,
-			requestTenant.defaults.dictationModel,
+			requestTenant.defaults.transcriptionProvider,
+			requestTenant.defaults.transcriptionModel,
 		)
 		if verificationError != nil {
 			if errors.Is(verificationError, ErrProviderNotConfigured) {

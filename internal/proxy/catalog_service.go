@@ -16,18 +16,31 @@ const (
 	CatalogControlInteger = "integer"
 	// CatalogControlBoolean identifies a Boolean control.
 	CatalogControlBoolean = "boolean"
+	// CatalogControlImageSize identifies constrained WIDTHxHEIGHT or automatic sizing.
+	CatalogControlImageSize = "image_size"
 	// CatalogCurrencyUSD identifies published United States dollar prices.
 	CatalogCurrencyUSD = "USD"
 )
 
 // CatalogControl declares one route-specific request control.
 type CatalogControl struct {
-	ID               string   `json:"id" mapstructure:"id" yaml:"id"`
-	Kind             string   `json:"kind" mapstructure:"kind" yaml:"kind"`
-	Values           []string `json:"values" mapstructure:"values" yaml:"values,omitempty"`
-	Minimum          *int     `json:"minimum" mapstructure:"minimum" yaml:"minimum,omitempty"`
-	Maximum          *int     `json:"maximum" mapstructure:"maximum" yaml:"maximum,omitempty"`
-	AccountDependent bool     `json:"account_dependent" mapstructure:"account_dependent" yaml:"account_dependent,omitempty"`
+	ID               string                       `json:"id" mapstructure:"id" yaml:"id"`
+	Kind             string                       `json:"kind" mapstructure:"kind" yaml:"kind"`
+	Values           []string                     `json:"values" mapstructure:"values" yaml:"values,omitempty"`
+	Minimum          *int                         `json:"minimum" mapstructure:"minimum" yaml:"minimum,omitempty"`
+	Maximum          *int                         `json:"maximum" mapstructure:"maximum" yaml:"maximum,omitempty"`
+	ImageSize        *CatalogImageSizeConstraints `json:"image_size,omitempty" mapstructure:"image_size" yaml:"image_size,omitempty"`
+	AccountDependent bool                         `json:"account_dependent" mapstructure:"account_dependent" yaml:"account_dependent,omitempty"`
+}
+
+// CatalogImageSizeConstraints bounds generated image dimensions and pixel count.
+type CatalogImageSizeConstraints struct {
+	Automatic          bool `json:"automatic" mapstructure:"automatic" yaml:"automatic"`
+	DimensionMultiple  int  `json:"dimension_multiple" mapstructure:"dimension_multiple" yaml:"dimension_multiple"`
+	MaximumEdge        int  `json:"maximum_edge" mapstructure:"maximum_edge" yaml:"maximum_edge"`
+	MinimumPixels      int  `json:"minimum_pixels" mapstructure:"minimum_pixels" yaml:"minimum_pixels"`
+	MaximumPixels      int  `json:"maximum_pixels" mapstructure:"maximum_pixels" yaml:"maximum_pixels"`
+	MaximumAspectRatio int  `json:"maximum_aspect_ratio" mapstructure:"maximum_aspect_ratio" yaml:"maximum_aspect_ratio"`
 }
 
 // CatalogLimit declares one fixed or account-dependent route limit.
@@ -209,6 +222,10 @@ func cloneProviderOffering(offering ProviderOffering) ProviderOffering {
 		cloned.Controls[controlIndex].Values = append([]string(nil), control.Values...)
 		cloned.Controls[controlIndex].Minimum = cloneInteger(control.Minimum)
 		cloned.Controls[controlIndex].Maximum = cloneInteger(control.Maximum)
+		if control.ImageSize != nil {
+			size := *control.ImageSize
+			cloned.Controls[controlIndex].ImageSize = &size
+		}
 	}
 	cloned.Limits = make([]CatalogLimit, len(offering.Limits))
 	for limitIndex, limit := range offering.Limits {
@@ -312,7 +329,7 @@ func validateCatalogControls(controls []CatalogControl, field string) error {
 		}
 		switch control.Kind {
 		case CatalogControlEnum:
-			if len(control.Values) == 0 || control.Minimum != nil || control.Maximum != nil {
+			if len(control.Values) == 0 || control.Minimum != nil || control.Maximum != nil || control.ImageSize != nil {
 				return fmt.Errorf("%w: field=%s[%d] kind=%s", ErrInvalidModelCatalog, field, controlIndex, control.Kind)
 			}
 			values := map[string]struct{}{}
@@ -326,12 +343,20 @@ func validateCatalogControls(controls []CatalogControl, field string) error {
 				values[value] = struct{}{}
 			}
 		case CatalogControlInteger:
-			if len(control.Values) != 0 || control.Minimum == nil || control.Maximum == nil || *control.Minimum < 0 || *control.Maximum < 0 || *control.Minimum > *control.Maximum {
+			if len(control.Values) != 0 || control.Minimum == nil || control.Maximum == nil || *control.Minimum < 0 || *control.Maximum < 0 || *control.Minimum > *control.Maximum || control.ImageSize != nil {
 				return fmt.Errorf("%w: field=%s[%d] kind=%s", ErrInvalidModelCatalog, field, controlIndex, control.Kind)
 			}
 		case CatalogControlBoolean:
-			if len(control.Values) != 0 || control.Minimum != nil || control.Maximum != nil {
+			if len(control.Values) != 0 || control.Minimum != nil || control.Maximum != nil || control.ImageSize != nil {
 				return fmt.Errorf("%w: field=%s[%d] kind=%s", ErrInvalidModelCatalog, field, controlIndex, control.Kind)
+			}
+		case CatalogControlImageSize:
+			size := control.ImageSize
+			if len(control.Values) != 0 || control.Minimum != nil || control.Maximum != nil || size == nil || control.AccountDependent {
+				return fmt.Errorf("%w: field=%s[%d] kind=%s", ErrInvalidModelCatalog, field, controlIndex, control.Kind)
+			}
+			if size.DimensionMultiple <= 0 || size.MaximumEdge <= 0 || size.MaximumEdge > 32768 || size.DimensionMultiple > size.MaximumEdge || size.MinimumPixels <= 0 || size.MaximumPixels < size.MinimumPixels || size.MaximumPixels > size.MaximumEdge*size.MaximumEdge || size.MaximumAspectRatio < 1 || size.MaximumAspectRatio > size.MaximumEdge {
+				return fmt.Errorf("%w: field=%s[%d].image_size", ErrInvalidModelCatalog, field, controlIndex)
 			}
 		default:
 			return fmt.Errorf("%w: field=%s[%d].kind kind=%s", ErrInvalidModelCatalog, field, controlIndex, control.Kind)

@@ -542,8 +542,7 @@ func geminiInteractionsTestRouterWithCatalogAndLogger(testingInstance testing.TB
 		Endpoints:             providerEndpoints(baseURL, proxy.ProviderNameGemini),
 		ProviderCatalog:       providerCatalog,
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, structuredLogger)
 	if buildError != nil {

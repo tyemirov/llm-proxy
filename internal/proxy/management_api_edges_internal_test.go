@@ -157,7 +157,7 @@ func TestManagementTenantHandlersRejectInvalidAndFailedRequests(t *testing.T) {
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("defaults decode status=%d", response.Code)
 	}
-	response = executeInternalManagementHandler(service.updateDefaultsHandler(), http.MethodPut, "/api/management/tenants/managed-default/defaults", `{"provider":"openai","model":"`+ModelNameGPT41+`","dictation_provider":"openai","dictation_model":"`+DefaultDictationModel+`","system_prompt":""}`, tenantParams, principal)
+	response = executeInternalManagementHandler(service.updateDefaultsHandler(), http.MethodPut, "/api/management/tenants/managed-default/defaults", `{"provider":"openai","model":"`+ModelNameGPT41+`","transcription_provider":"openai","transcription_model":"`+DefaultTranscriptionModel+`","system_prompt":""}`, tenantParams, principal)
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("defaults reasoning status=%d", response.Code)
 	}
@@ -174,7 +174,7 @@ func TestManagementTenantHandlersRejectInvalidAndFailedRequests(t *testing.T) {
 	noKeyProviders := newInternalTestProviderRegistry(Configuration{
 		ModelCatalog: internalTestModelCatalog(
 			internalTestOffering(ProviderNameOpenAI, ModelNameGPT41, []string{ModelOperationText}, []string{ModelOperationText}),
-			internalTestOffering(ProviderNameOpenAI, DefaultDictationModel, []string{ModelOperationDictation}, []string{ModelOperationDictation}),
+			internalTestOffering(ProviderNameOpenAI, DefaultTranscriptionModel, []string{ModelOperationDictation}, []string{ModelOperationDictation}),
 		),
 	})
 	database = newFakeManagedTenantDatabase()
@@ -322,5 +322,5 @@ func executeInternalManagementHandlerWithContext(handler gin.HandlerFunc, method
 }
 
 func managementDefaultsBody(provider string, model string) string {
-	return `{"provider":"` + provider + `","model":"` + model + `","dictation_provider":"openai","dictation_model":"` + DefaultDictationModel + `","system_prompt":"","reasoning_effort":""}`
+	return `{"provider":"` + provider + `","model":"` + model + `","transcription_provider":"openai","transcription_model":"` + DefaultTranscriptionModel + `","system_prompt":"","reasoning_effort":""}`
 }

@@ -162,6 +162,9 @@ func providerRequestCodecDefinitionFor(reference ProviderCatalogCodecReference, 
 		return definition, nil
 	case CatalogProtocolXAIVideosGenerations:
 		definition.modelField = "model"
+	case CatalogProtocolOpenAIImages:
+		definition.modelField = "model"
+		definition.mediaExecutionLifecycle = textExecutionLifecycleSynchronousCompletion
 	case CatalogProtocolDictatorSpeechV1:
 		definition.mediaExecutionLifecycle = textExecutionLifecycle(CatalogExecutionAsynchronousJob)
 	default:
@@ -236,6 +239,11 @@ func providerResponseCodecDefinitionFor(reference ProviderCatalogCodecReference,
 		definition.outputFields = []string{"tenant_assets"}
 		definition.finishRules = providerProtocolFinishRules{Complete: []string{"succeeded"}, Continue: []string{"queued", "running"}}
 		definition.errorRules = []string{"failed", "cancelled", "uncertain"}
+	case CatalogProtocolOpenAIImages:
+		definition.outputFields = []string{"data[].b64_json"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"http_200"}}
+		definition.errorRules = []string{"provider_error", "malformed_response", "uncertain"}
+		definition.usageFields = providerProtocolUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens"}
 	default:
 		return providerResponseCodecDefinition{}, unsupportedProviderCodec(reference, field)
 	}
@@ -255,7 +263,7 @@ func requestCodecSupportsLifecycle(codec string, lifecycle textExecutionLifecycl
 		return lifecycle == textExecutionLifecycle(CatalogExecutionAsynchronousJob)
 	case CatalogProtocolDashScopeResponses, CatalogProtocolXAIResponses, CatalogProtocolOpenAIChatCompletions,
 		CatalogProtocolAnthropicMessages, CatalogProtocolVertexGenerateContent,
-		CatalogProtocolMetaTranscription, CatalogProtocolMultipartTranscription:
+		CatalogProtocolMetaTranscription, CatalogProtocolMultipartTranscription, CatalogProtocolOpenAIImages:
 		return lifecycle == textExecutionLifecycleSynchronousCompletion
 	default:
 		return false

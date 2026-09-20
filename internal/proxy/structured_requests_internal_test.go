@@ -692,7 +692,7 @@ func structuredSubmitContext(testingInstance testing.TB, requestContext context.
 	contextValue, _ := gin.CreateTestContext(response)
 	request := httptest.NewRequest(http.MethodPost, "/v2", nil).WithContext(requestContextWithTelemetry(requestContext, newRequestTelemetry("proxy-submit", "/v2")))
 	contextValue.Request = request
-	contextValue.Set(contextKeyRequestID, "proxy-submit")
+	contextValue.Request = contextValue.Request.WithContext(requestContextWithIdentifier(contextValue.Request.Context(), "proxy-submit"))
 	contextValue.Set(contextKeyRequestTimeoutState, &requestTimeoutState{budget: newRequestTimeoutBudget(10)})
 	return contextValue, response
 }

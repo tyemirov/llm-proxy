@@ -44,7 +44,7 @@ func TestGeminiTranscriptionPreservesEmptyDictationAtRestart(t *testing.T) {
 		t.Fatalf("initial provider status=%d", response.Code)
 	}
 	before := requestProviderKeyVerificationProfile(t, previous, cookie, tenantID)
-	if before.Tenant.Defaults.DictationProvider != "" {
+	if before.Tenant.Defaults.TranscriptionProvider != "" {
 		t.Fatal("expected empty initial dictation")
 	}
 	current := newManagementRouterWithDatabasePath(t, proxy.Configuration{}, databasePath)
@@ -139,7 +139,7 @@ func TestGeminiTranscriptionManagement(t *testing.T) {
 		t.Fatalf("defaults: %d %s", response.Code, response.Body)
 	}
 	profile := requestProviderKeyVerificationProfile(t, router, cookie, tenantID)
-	if profile.Tenant.Defaults.Provider != before.Tenant.Defaults.Provider || profile.Tenant.Defaults.Model != before.Tenant.Defaults.Model || profile.Tenant.Defaults.DictationProvider != "gemini" || profile.Tenant.Defaults.DictationModel != geminiTranscriptionModel {
+	if profile.Tenant.Defaults.Provider != before.Tenant.Defaults.Provider || profile.Tenant.Defaults.Model != before.Tenant.Defaults.Model || profile.Tenant.Defaults.TranscriptionProvider != "gemini" || profile.Tenant.Defaults.TranscriptionModel != geminiTranscriptionModel {
 		t.Fatalf("saved defaults=%+v", profile.Tenant.Defaults)
 	}
 	secretRequest := authenticatedJSONRequest(http.MethodPost, tenantPath+"/secrets", `{}`, cookie)

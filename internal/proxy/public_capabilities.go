@@ -130,7 +130,7 @@ func PublicCapabilityDomainForOperation(operation string) string {
 	case "speech_generation",
 		"voice_extraction":
 		return PublicCapabilityDomainSpeech
-	case PublicModelCapabilityImageInput:
+	case PublicModelCapabilityImageInput, ModelOperationImageGeneration, ModelOperationImageEditing:
 		return PublicCapabilityDomainImage
 	case PublicModelCapabilityVideo:
 		return PublicCapabilityDomainVideo
@@ -154,6 +154,14 @@ func PublicCapabilityDomainsForOperations(operations []string) []string {
 	}
 	sort.Strings(result)
 	return result
+}
+
+func publicCapabilityDomains(operations, mediaInputs []string) []string {
+	capabilities := append([]string(nil), operations...)
+	for _, input := range mediaInputs {
+		capabilities = append(capabilities, mediaInputCapability(input))
+	}
+	return PublicCapabilityDomainsForOperations(capabilities)
 }
 
 // NewPublicCapabilityCatalog validates and projects the runtime catalog into a
@@ -230,7 +238,7 @@ func newPublicCapabilityCatalog(configuration Configuration) PublicCapabilityCat
 			Operations:        append([]string{}, model.Operations...),
 			MediaInputs:       append([]string{}, model.MediaInputs...),
 			Capabilities:      capabilities,
-			Domains:           PublicCapabilityDomainsForOperations(model.Operations),
+			Domains:           publicCapabilityDomains(model.Operations, model.MediaInputs),
 			ProviderOfferings: modelOfferings,
 		})
 	}
@@ -293,7 +301,7 @@ func publicProviderOffering(offering ProviderOffering) PublicProviderOffering {
 		Provider:                offering.Provider,
 		Model:                   offering.Model,
 		Capabilities:            capabilities,
-		Domains:                 PublicCapabilityDomainsForOperations(offering.Operations),
+		Domains:                 publicCapabilityDomains(offering.Operations, offering.MediaInputs),
 		WireContract:            offering.WireContract,
 		ExecutionLifecycle:      offering.ExecutionLifecycle,
 		MediaExecutionLifecycle: mediaExecutionLifecycle,

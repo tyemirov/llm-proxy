@@ -95,6 +95,11 @@ func TestDictatorAdapterValidatesEveryRetainedCapability(t *testing.T) {
 	}
 
 	invalidRequests := []MediaOperationAdapterRequest{
+		{Capability: llmproxycontract.MediaCapabilityAudioDiarize, Provider: ProviderNameDictator, Model: ModelNameDictatorQwen3TTS, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `"}`), Controls: json.RawMessage(`{"language":"en"}`)},
+		{Capability: llmproxycontract.MediaCapabilityAudioDiarize, Provider: ProviderNameDictator, Model: ModelNameDictatorWhisperMedium, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `"}`), Controls: json.RawMessage(`{"language":"en","utterance_gap_seconds":-1}`)},
+		{Capability: llmproxycontract.MediaCapabilityAudioAlign, Provider: ProviderNameDictator, Model: ModelNameDictatorQwen3TTS, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `","transcript":"hello"}`), Controls: json.RawMessage(`{"language":"en"}`)},
+		{Capability: llmproxycontract.MediaCapabilitySubtitlesCreate, Provider: ProviderNameDictator, Model: ModelNameDictatorQwen3TTS, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `"}`), Controls: json.RawMessage(`{"language":"en","granularity":"word","group_size":2}`)},
+		{Capability: llmproxycontract.MediaCapabilityAudioVoiceExtract, Provider: ProviderNameDictator, Model: ModelNameDictatorQwen3TTS, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `","transcript":"hello","display_name":"Narrator","language":"en"}`), Controls: json.RawMessage(`{}`)},
 		{Capability: llmproxycontract.MediaCapabilityAudioTranscribe, Provider: ProviderNameDictator, Model: ModelNameDictatorWhisperMedium, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `"}`), Controls: json.RawMessage(`{`)},
 		{Capability: "future", Provider: ProviderNameDictator, Model: ModelNameDictatorWhisperMedium, Input: json.RawMessage(`{}`), Controls: json.RawMessage(`{}`)},
 		{Capability: llmproxycontract.MediaCapabilityAudioTranscribe, Provider: ProviderNameOpenAI, Model: ModelNameDictatorWhisperMedium, Input: json.RawMessage(`{"audio_asset_id":"` + assetID + `"}`), Controls: json.RawMessage(`{"detect_language":true}`)},
@@ -111,6 +116,19 @@ func TestDictatorAdapterValidatesEveryRetainedCapability(t *testing.T) {
 		}
 		if _, validationError := adapter.Validate(context.Background(), request); !errors.Is(validationError, errMediaOperationInvalid) {
 			t.Fatalf("invalid request %d error=%v", invalidIndex, validationError)
+		}
+	}
+}
+
+func TestDictatorWhisperModelSizeContract(t *testing.T) {
+	for _, size := range []string{"tiny", "base", "small", "medium", "large-v3"} {
+		if actual, supported := dictatorWhisperSizeForModel("whisper-" + size); !supported || actual != size {
+			t.Fatalf("size=%s actual=%s supported=%t", size, actual, supported)
+		}
+	}
+	for _, model := range []string{"whisper-", "whisper-unsupported", "silero-ru"} {
+		if size, supported := dictatorWhisperSizeForModel(model); supported || size != "" {
+			t.Fatalf("model=%s size=%s supported=%t", model, size, supported)
 		}
 	}
 }

@@ -142,6 +142,7 @@ func newManagedRoutingProviders(providers *providerRegistry, providerSettings ma
 	for _, providerIdentifier := range keyedProviderIdentifiers {
 		settings := providerSettings[providerIdentifier]
 		if definition, exists := providers.definitions[providerIdentifier]; exists && len(definition.textModels) == 0 && settings.textModel == "" {
+			routingProviders = append(routingProviders, managedRoutingProvider{definition: definition})
 			continue
 		}
 		definition, model, resolutionError := providers.resolveTextModel(providerIdentifier.string(), settings.textModel, constants.EmptyString, constants.EmptyString, false)
@@ -174,9 +175,13 @@ func reconcileManagedRoutingDefaultsWithProviders(current managedRoutingDefaults
 		reconciled.Provider = constants.EmptyString
 		reconciled.Model = constants.EmptyString
 		reconciled.ReasoningEffort = constants.EmptyString
-		if len(routingProviders) != 0 {
-			reconciled.Provider = routingProviders[0].definition.identifier.string()
-			reconciled.Model = routingProviders[0].textModel.string()
+		for _, routingProvider := range routingProviders {
+			if len(routingProvider.definition.textModels) == 0 {
+				continue
+			}
+			reconciled.Provider = routingProvider.definition.identifier.string()
+			reconciled.Model = routingProvider.textModel.string()
+			break
 		}
 	}
 	if !providerIsKeyed(reconciled.TranscriptionProvider) {
@@ -245,7 +250,7 @@ func resolveManagedSpeechRoutingDefaultPair(providers *providerRegistry, rawProv
 	if provider == constants.EmptyString || model == constants.EmptyString {
 		return providerID(""), modelID(""), false, managedRoutingDefaultsPairError(endpointKindDictation, rawProvider, rawModel, errManagedRoutingDefaultsInvalid)
 	}
-	definition, resolvedModel, resolutionError := providers.resolveSpeechModel(provider, model, constants.EmptyString, constants.EmptyString)
+	definition, resolvedModel, resolutionError := providers.resolveSpeechModel(provider, model)
 	if resolutionError != nil {
 		return providerID(""), modelID(""), false, managedRoutingDefaultsPairError(endpointKindDictation, rawProvider, rawModel, resolutionError)
 	}

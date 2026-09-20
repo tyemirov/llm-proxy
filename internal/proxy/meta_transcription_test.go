@@ -389,7 +389,7 @@ func TestMetaTranscriptionManagement(t *testing.T) {
 		t.Fatalf("defaults: %d %s", response.Code, response.Body)
 	}
 	profile := requestProviderKeyVerificationProfile(t, router, cookie, tenantID)
-	if profile.Tenant.Defaults.Provider != before.Tenant.Defaults.Provider || profile.Tenant.Defaults.Model != before.Tenant.Defaults.Model || profile.Tenant.Defaults.DictationProvider != "meta" || profile.Tenant.Defaults.DictationModel != metaTranscriptionModel {
+	if profile.Tenant.Defaults.Provider != before.Tenant.Defaults.Provider || profile.Tenant.Defaults.Model != before.Tenant.Defaults.Model || profile.Tenant.Defaults.TranscriptionProvider != "meta" || profile.Tenant.Defaults.TranscriptionModel != metaTranscriptionModel {
 		t.Fatalf("saved defaults=%+v", profile.Tenant.Defaults)
 	}
 	secretRequest := authenticatedJSONRequest(http.MethodPost, tenantPath+"/secrets", `{}`, cookie)

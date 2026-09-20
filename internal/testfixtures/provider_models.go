@@ -218,7 +218,7 @@ func WithModelCatalog(testingInstance testing.TB, configuration proxy.Configurat
 	if configuration.ProviderCatalog == nil {
 		configuration.ProviderCatalog = ProviderCatalog(testingInstance)
 	}
-	return configuration
+	return WithUpstreamCapacity(testingInstance, configuration)
 }
 
 // ProviderCatalogFromModelCatalog compiles a strict test catalog from a normalized projection.
@@ -292,15 +292,38 @@ func NewProviderCatalogFromModelCatalog(modelCatalog proxy.ModelCatalog) (*proxy
 			transportIDs[transportKey] = transportID
 			provider.Transports = append(provider.Transports, testProviderTransport(transportID, offering))
 		}
+		imageRoutes := proxy.CatalogImageRoutes{Responses: offering.ImageRoutes.Responses}
+		if offering.ImageRoutes.Editing != "" {
+			editKey := transportKey + "\x00editing"
+			editID, exists := transportIDs[editKey]
+			if !exists {
+				editID = transportID + "-editing"
+				transportIDs[editKey] = editID
+				editTransport := testProviderTransport(editID, offering)
+				editTransport.Endpoint.Path = "/images/edits"
+				provider.Transports = append(provider.Transports, editTransport)
+			}
+			imageRoutes.Editing = editID
+		}
 		provider.Offerings = append(provider.Offerings, proxy.ProviderCatalogOffering{
 			Model: offering.Model, UpstreamModel: offering.ProviderModel, Transport: transportID,
-			Operations: offering.Operations, DefaultOperations: offering.DefaultOperations,
+			ImageRoutes: imageRoutes,
+			Operations:  offering.Operations, DefaultOperations: offering.DefaultOperations,
 			RequestProfile: offering.RequestProfile, WebSearch: offering.WebSearch, CallerTools: offering.CallerTools, Created: offering.Created,
 			OutputTokenLimit: offering.OutputTokenLimit, ReasoningEffort: offering.ReasoningEffort,
 			MediaInputs: offering.MediaInputs, MediaLimits: offering.MediaLimits,
 			Controls: offering.Controls, Limits: offering.Limits,
 			Prices: prices[offering.Provider+"\x00"+offering.Model],
 		})
+	}
+	for providerIndex := range schema.Providers {
+		provider := &schema.Providers[providerIndex]
+		for offeringIndex := range provider.Offerings {
+			offering := &provider.Offerings[offeringIndex]
+			if offering.ImageRoutes.Responses != "" {
+				offering.ImageRoutes.Responses = transportIDs[provider.ID+"\x00"+proxy.CatalogProtocolOpenAIResponses+"\x00pollable_resource"]
+			}
+		}
 	}
 	return proxy.NewProviderCatalog(schema)
 }
@@ -372,6 +395,8 @@ func testProviderProtocolPath(protocol string) string {
 		return "/audio/transcriptions"
 	case proxy.CatalogProtocolXAIVideosGenerations:
 		return "/videos/generations"
+	case proxy.CatalogProtocolOpenAIImages:
+		return "/images/generations"
 	default:
 		return "/unsupported"
 	}

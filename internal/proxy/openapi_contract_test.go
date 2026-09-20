@@ -221,6 +221,99 @@ func TestOpenAPIContractEnforcesV2MediaRelationships(t *testing.T) {
 	}
 }
 
+func TestImageGenerationOpenAPIMatchesPublicControls(t *testing.T) {
+	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, scenario := range []struct {
+		name     string
+		controls string
+		valid    bool
+	}{
+		{"png", `{"surface":"images","quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":2}`, true},
+		{"jpeg zero", `{"surface":"images","quality":"high","size":"auto","background":"auto","output_format":"jpeg","output_compression":0,"output_count":1}`, true},
+		{"webp transparent", `{"surface":"images","quality":"medium","size":"1536x1024","background":"transparent","output_format":"webp","output_compression":100,"output_count":1}`, true},
+		{"png compression", `{"surface":"images","quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_compression":0,"output_count":1}`, false},
+		{"missing compression", `{"surface":"images","quality":"low","size":"1024x1024","background":"opaque","output_format":"jpeg","output_count":1}`, false},
+		{"jpeg transparency", `{"surface":"images","quality":"low","size":"auto","background":"transparent","output_format":"jpeg","output_compression":80,"output_count":1}`, false},
+		{"missing controls", `{}`, false},
+		{"unknown control", `{"surface":"images","quality":"low","size":"auto","background":"opaque","output_format":"png","output_count":1,"seed":1}`, false},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			body := []byte(`{"capability":"image.generate","provider":"openai","model":"gpt-image-2","input":{"prompt":"A small lighthouse"},"controls":` + scenario.controls + `}`)
+			request := httptest.NewRequest(http.MethodPost, llmproxycontract.MediaOperationsPath, bytes.NewReader(body))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Idempotency-Key", "openapi-image")
+			err := contract.ValidateRequest(llmproxycontract.MediaOperationsPath, request.Method, request, body)
+			if (err == nil) != scenario.valid {
+				t.Fatalf("valid=%v error=%v", scenario.valid, err)
+			}
+		})
+	}
+}
+
+func TestImageGenerationEditingOpenAPIAcceptsOnlyAssetReferences(t *testing.T) {
+	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const assetID = "ast_0123456789abcdef0123456789abcdef"
+	for _, scenario := range []struct {
+		name, input string
+		valid       bool
+	}{
+		{"ordered images", `{"prompt":"Edit","image_asset_ids":["` + assetID + `","` + assetID + `"]}`, true},
+		{"mask", `{"prompt":"Edit","image_asset_ids":["` + assetID + `"],"mask_asset_id":"` + assetID + `"}`, true},
+		{"no images", `{"prompt":"Edit","image_asset_ids":[]}`, false},
+		{"native file", `{"prompt":"Edit","image_asset_ids":["file_native"]}`, false},
+		{"external URL", `{"prompt":"Edit","image_asset_ids":["https://example.com/image.png"]}`, false},
+		{"provider field", `{"prompt":"Edit","image_asset_ids":["` + assetID + `"],"image_url":"https://example.com/image.png"}`, false},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			body := []byte(`{"capability":"image.edit","provider":"openai","model":"gpt-image-2","input":` + scenario.input + `,"controls":{"surface":"images","quality":"low","size":"auto","background":"opaque","output_format":"png","output_count":1}}`)
+			request := httptest.NewRequest(http.MethodPost, llmproxycontract.MediaOperationsPath, bytes.NewReader(body))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Idempotency-Key", "openapi-image-edit")
+			err := contract.ValidateRequest(llmproxycontract.MediaOperationsPath, request.Method, request, body)
+			if (err == nil) != scenario.valid {
+				t.Fatalf("valid=%v error=%v", scenario.valid, err)
+			}
+		})
+	}
+}
+
+func TestImageGenerationStreamingOpenAPIControls(t *testing.T) {
+	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, scenario := range []struct {
+		name, controls string
+		valid          bool
+	}{
+		{"previews", `"output_count":1,"stream":true,"partial_images":3`, true},
+		{"final event only", `"output_count":1,"stream":true,"partial_images":0`, true},
+		{"non streaming", `"output_count":2,"stream":false,"partial_images":0`, true},
+		{"too many previews", `"output_count":1,"stream":true,"partial_images":4`, false},
+		{"negative previews", `"output_count":1,"stream":true,"partial_images":-1`, false},
+		{"ambiguous outputs", `"output_count":2,"stream":true,"partial_images":3`, false},
+		{"no stream", `"output_count":1,"partial_images":1`, false},
+		{"disabled stream", `"output_count":1,"stream":false,"partial_images":1`, false},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			body := []byte(`{"capability":"image.generate","provider":"openai","model":"gpt-image-2","input":{"prompt":"Preview"},"controls":{"surface":"images","quality":"low","size":"auto","background":"opaque","output_format":"png",` + scenario.controls + `}}`)
+			request := httptest.NewRequest(http.MethodPost, llmproxycontract.MediaOperationsPath, bytes.NewReader(body))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Idempotency-Key", "openapi-stream")
+			err := contract.ValidateRequest(llmproxycontract.MediaOperationsPath, request.Method, request, body)
+			if (err == nil) != scenario.valid {
+				t.Fatalf("valid=%v error=%v", scenario.valid, err)
+			}
+		})
+	}
+}
+
 func TestOpenAPIContractEnforcesExactDictatorMediaOperations(t *testing.T) {
 	contract, loadError := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
 	if loadError != nil {
@@ -323,6 +416,7 @@ func openAPIProviderOffering(capabilities []any, mediaExecutionLifecycle string)
 		"identifier":          "provider:model",
 		"provider":            "provider",
 		"model":               "model",
+		"domains":             []any{"text"},
 		"capabilities":        capabilities,
 		"wire_contract":       "provider_contract",
 		"execution_lifecycle": "pollable_resource",
@@ -618,4 +712,49 @@ func openAPIPath(ginPath string) string {
 		}
 	}
 	return strings.Join(pathSegments, "/")
+}
+
+func TestImageGenerationResponsesOpenAPIMatchesSurfaceAndChainContract(t *testing.T) {
+	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, scenario := range []struct {
+		name       string
+		surface    string
+		model      string
+		capability string
+		input      string
+		count      int
+		valid      bool
+	}{
+		{"generation", "responses", "gpt-5", "image.generate", `{"prompt":"Generate"}`, 1, true},
+		{"ordered editing", "responses", "gpt-5", "image.edit", `{"prompt":"Edit","image_asset_ids":["ast_0123456789abcdef0123456789abcdef"]}`, 1, true},
+		{"chain edit", "responses", "gpt-5", "image.edit", `{"prompt":"Edit","previous_operation_id":"mop_0123456789abcdef0123456789abcdef"}`, 1, true},
+		{"missing text model", "responses", "", "image.generate", `{"prompt":"Generate"}`, 1, false},
+		{"missing surface", "", "", "image.generate", `{"prompt":"Generate"}`, 1, false},
+		{"Images text model", "images", "gpt-5", "image.generate", `{"prompt":"Generate"}`, 1, false},
+		{"Responses mask", "responses", "gpt-5", "image.edit", `{"prompt":"Edit","image_asset_ids":["ast_0123456789abcdef0123456789abcdef"],"mask_asset_id":"ast_0123456789abcdef0123456789abcdef"}`, 1, false},
+		{"native chain", "responses", "gpt-5", "image.edit", `{"prompt":"Edit","previous_operation_id":"resp_native"}`, 1, false},
+		{"Images chain", "images", "", "image.edit", `{"prompt":"Edit","previous_operation_id":"mop_0123456789abcdef0123456789abcdef"}`, 1, false},
+		{"multiple Responses outputs", "responses", "gpt-5", "image.generate", `{"prompt":"Generate"}`, 2, false},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			controls := map[string]any{"quality": "low", "size": "auto", "background": "opaque", "output_format": "png", "output_count": scenario.count}
+			if scenario.surface != "" {
+				controls["surface"] = scenario.surface
+			}
+			if scenario.model != "" {
+				controls["responses_model"] = scenario.model
+			}
+			body, _ := json.Marshal(map[string]any{"capability": scenario.capability, "provider": "openai", "model": "gpt-image-2", "input": json.RawMessage(scenario.input), "controls": controls})
+			request := httptest.NewRequest(http.MethodPost, llmproxycontract.MediaOperationsPath, bytes.NewReader(body))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Idempotency-Key", "responses-contract")
+			err := contract.ValidateRequest(llmproxycontract.MediaOperationsPath, request.Method, request, body)
+			if (err == nil) != scenario.valid {
+				t.Fatalf("valid=%v error=%v", scenario.valid, err)
+			}
+		})
+	}
 }

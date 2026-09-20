@@ -15,6 +15,10 @@ const (
 	ModelOperationDictation = "dictation"
 	// ModelOperationVideoGeneration identifies provider-backed video generation.
 	ModelOperationVideoGeneration = "video_generation"
+	// ModelOperationImageGeneration identifies durable image generation.
+	ModelOperationImageGeneration = "image_generation"
+	// ModelOperationImageEditing identifies durable image editing.
+	ModelOperationImageEditing = "image_editing"
 	// ModelOperationAudioTranscription identifies durable speech transcription.
 	ModelOperationAudioTranscription = "audio_transcription"
 	// ModelOperationAudioDiarization identifies durable speaker diarization.
@@ -109,6 +113,7 @@ type ProviderOffering struct {
 	Model                   string                     `mapstructure:"model"`
 	ProviderModel           string                     `mapstructure:"provider_model"`
 	Transport               string                     `mapstructure:"transport"`
+	ImageRoutes             CatalogImageRoutes         `mapstructure:"image_routes"`
 	Operations              []string                   `mapstructure:"operations"`
 	DefaultOperations       []string                   `mapstructure:"default_operations"`
 	WireContract            string                     `mapstructure:"wire_contract"`
@@ -375,6 +380,8 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 				routeError = validateTextOffering(offering, fieldPrefix)
 			case ModelOperationVideoGeneration:
 				routeError = validateVideoOffering(offering, fieldPrefix)
+			case ModelOperationImageGeneration, ModelOperationImageEditing:
+				routeError = validateImageGenerationOffering(offering, fieldPrefix)
 			case ModelOperationDictation:
 				routeError = validateDictationOffering(offering, fieldPrefix)
 			}
@@ -580,6 +587,8 @@ func supportedModelOperation(operation string) bool {
 	case ModelOperationText,
 		ModelOperationDictation,
 		ModelOperationVideoGeneration,
+		ModelOperationImageGeneration,
+		ModelOperationImageEditing,
 		ModelOperationAudioTranscription,
 		ModelOperationAudioDiarization,
 		ModelOperationAudioAlignment,

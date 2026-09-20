@@ -101,7 +101,7 @@ func newMediaOperationInternalFixture(testingInstance *testing.T) mediaOperation
 	if databaseError != nil {
 		testingInstance.Fatal(databaseError)
 	}
-	if migrationError := database.AutoMigrate(&mediaOperationRecord{}, &mediaOperationClaimRecord{}, &mediaOperationAssetReferenceRecord{}, &mediaOperationUsageDeliveryRecord{}, &mediaOperationTombstoneRecord{}, &mediaVoiceRecord{}, &managedUsageEventRecord{}, &managedAccountConnectionRecord{}, &managedTenantConnectionRecord{}); migrationError != nil {
+	if migrationError := database.AutoMigrate(&mediaOperationRecord{}, &mediaOperationClaimRecord{}, &mediaOperationAssetReferenceRecord{}, &mediaOperationPartialReferenceRecord{}, &mediaOperationUsageDeliveryRecord{}, &mediaOperationTombstoneRecord{}, &mediaVoiceRecord{}, &managedUsageEventRecord{}, &managedAccountConnectionRecord{}, &managedTenantConnectionRecord{}); migrationError != nil {
 		testingInstance.Fatal(migrationError)
 	}
 	providerCatalog := internalCanonicalProviderCatalog()
@@ -388,14 +388,13 @@ func TestMediaOperationServiceRejectsInvalidAdapterCatalog(testingInstance *test
 		MediaOperationWorkers: 1, MediaOperationCapacity: 1, TenantMediaOperationCapacity: 1,
 		MediaOperationLifetimeSeconds: 60, MediaOperationClaimSeconds: 10, MediaOperationClaimRenewalSeconds: 1, AssetRetentionSeconds: 60,
 	}
-	if service, serviceError := newMediaOperationService(configuration, managedTenants, fixture.service.assets, fixture.service.providers); service != nil || serviceError == nil {
+	if service, serviceError := newMediaOperationService(configuration, managedTenants, fixture.service.assets, fixture.service.providers, HTTPClient); service != nil || serviceError == nil {
 		testingInstance.Fatalf("service=%v error=%v", service, serviceError)
 	}
 	configuration.validated = true
 	configuration.Endpoints = NewEndpoints()
 	configuration.ProviderCatalog = internalCanonicalProviderCatalog()
-	configuration.WorkerCount = 1
-	configuration.QueueSize = 1
+	configuration.UpstreamCapacity = testUpstreamCapacity(1, 1)
 	configuration.AssetStorePath = testingInstance.TempDir()
 	if router, routerError := buildRouter(configuration, zap.NewNop().Sugar(), func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error) {
 		return managedTenants, nil

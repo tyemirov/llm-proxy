@@ -78,7 +78,7 @@ func TestParseTranscriptionText(t *testing.T) {
 
 func TestTranscribeAudioWithURLReturnsReaderError(t *testing.T) {
 	client := NewOpenAIClient(http.DefaultClient, NewEndpoints())
-	_, transcriptionError := client.transcribeAudioWithURL(context.Background(), "key", "http://example.test", keyModel, DefaultDictationModel, "audio.webm", transcriptionFailingReader{}, nil)
+	_, transcriptionError := client.transcribeAudioWithURL(context.Background(), "key", "http://example.test", keyModel, DefaultTranscriptionModel, "audio.webm", transcriptionFailingReader{}, nil)
 	if transcriptionError == nil {
 		t.Fatalf("transcriptionError=nil want non-nil")
 	}

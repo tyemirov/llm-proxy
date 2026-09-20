@@ -20,17 +20,23 @@ func requestLogPath(requestURL *url.URL) string {
 	return requestURL.EscapedPath()
 }
 
+type requestIdentifierContextKey struct{}
+
+func requestContextWithIdentifier(ctx context.Context, identifier string) context.Context {
+	return context.WithValue(ctx, requestIdentifierContextKey{}, identifier)
+}
+
 func requestIdentifierHandler() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		requestID := rand.Text()
-		ginContext.Set(contextKeyRequestID, requestID)
+		ginContext.Request = ginContext.Request.WithContext(requestContextWithIdentifier(ginContext.Request.Context(), requestID))
 		ginContext.Header(llmproxycontract.HeaderRequestID, requestID)
 		ginContext.Next()
 	}
 }
 
 func requestIDFromContext(ginContext *gin.Context) string {
-	return ginContext.MustGet(contextKeyRequestID).(string)
+	return ginContext.Request.Context().Value(requestIdentifierContextKey{}).(string)
 }
 
 // requestResponseLogger emits structured request and response metadata for traceability.

@@ -34,8 +34,7 @@ func TestV2RoutesExactOrderedImageAndAudioAttachmentsThroughGemini(testingInstan
 	router, buildError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini, proxy.ProviderNameXAI),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
@@ -207,8 +206,7 @@ func TestV2RoutesExactOrderedImagesThroughProviderAdapters(testingInstance *test
 			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
 				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameOpenAI, proxy.ProviderNameAnthropic, proxy.ProviderNameMoonshot, proxy.ProviderNameDashScope, proxy.ProviderNameXAI),
 				LogLevel:              proxy.LogLevelInfo,
-				WorkerCount:           1,
-				QueueSize:             1,
+				UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 				RequestTimeoutSeconds: TestTimeout,
 			}, zap.NewNop().Sugar())
 			if buildError != nil {
@@ -302,8 +300,7 @@ func TestV2AppliesNewProviderMediaLimitsAtTheBoundary(testingInstance *testing.T
 				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameOpenAI, proxy.ProviderNameAnthropic, proxy.ProviderNameMoonshot, proxy.ProviderNameXAI),
 				ModelCatalog:          catalog,
 				LogLevel:              proxy.LogLevelInfo,
-				WorkerCount:           1,
-				QueueSize:             1,
+				UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 				RequestTimeoutSeconds: TestTimeout,
 			}, zap.NewNop().Sugar())
 			if buildError != nil {
@@ -438,8 +435,7 @@ func TestV2RejectsInvalidOrUnsupportedMediaBeforeUpstreamWork(testingInstance *t
 	router, buildError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek, proxy.ProviderNameDashScope, proxy.ProviderNameGemini, proxy.ProviderNameMoonshot, proxy.ProviderNameXAI),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
@@ -518,8 +514,7 @@ func TestCompatibilityMessagesRejectMediaAndV2IgnoresCompatibilityBodyLimit(test
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
 		MaxPromptBytes:        512,
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
@@ -598,7 +593,7 @@ func TestModelCatalogRejectsInvalidMediaInputDeclarations(testingInstance *testi
 		{
 			name: "unsupported endpoint",
 			configure: func(catalogs proxy.ModelCatalog) {
-				offeringIndex := catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, proxy.DefaultDictationModel)
+				offeringIndex := catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, proxy.DefaultTranscriptionModel)
 				catalogs.Offerings[offeringIndex].MediaInputs = []string{"image"}
 			},
 		},

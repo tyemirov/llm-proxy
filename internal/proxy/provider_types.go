@@ -353,6 +353,7 @@ func (definition textModelDefinition) supportsMediaInput(mediaInput messageMedia
 }
 
 type providerDefinition struct {
+	upstreamScope             upstreamRequestScope
 	identifier                providerID
 	connectionOwnership       string
 	label                     string

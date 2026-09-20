@@ -229,8 +229,8 @@ func TestManagedUsageWriterKeepsPublicResponsesIndependentFromPersistence(t *tes
 	tenantRecord.SecretDigest = &secretDigestText
 	tenantRecord.DefaultProvider = ProviderNameOpenAI
 	tenantRecord.DefaultModel = ModelNameGPT41
-	tenantRecord.DefaultDictationProvider = ProviderNameOpenAI
-	tenantRecord.DefaultDictationModel = DefaultDictationModel
+	tenantRecord.DefaultTranscriptionProvider = ProviderNameOpenAI
+	tenantRecord.DefaultTranscriptionModel = DefaultTranscriptionModel
 	tenantRecord.ConnectionAssignments = []managedTenantConnectionRecord{{
 		TenantID: tenantIDValue, ProviderID: ProviderNameOpenAI, ConnectionID: tenantIDValue,
 		Connection: managedAccountConnectionRecord{ID: tenantIDValue, OwnerUserID: ownerUserID, ProviderID: ProviderNameOpenAI,
@@ -269,8 +269,7 @@ func TestManagedUsageWriterKeepsPublicResponsesIndependentFromPersistence(t *tes
 	endpoints.SetResponsesURL(upstreamServer.URL)
 	configuration := Configuration{
 		Management:                 managementConfiguration,
-		WorkerCount:                1,
-		QueueSize:                  1,
+		UpstreamCapacity:           testUpstreamCapacity(1, 1),
 		MaxPromptBytes:             1024,
 		Endpoints:                  endpoints,
 		ProviderCatalog:            internalTestProviderCatalog(internalManagedUsageWriterProviderModels()),
@@ -280,6 +279,12 @@ func TestManagedUsageWriterKeepsPublicResponsesIndependentFromPersistence(t *tes
 		requestTimeoutPolicy:       timeoutPolicy,
 		validated:                  true,
 	}
+	configuration = withInternalUpstreamCapacity(t, configuration)
+	compiledCapacity, capacityError := newUpstreamCapacity(configuration.UpstreamCapacity, configuration.upstreamRateLimits)
+	if capacityError != nil {
+		t.Fatal(capacityError)
+	}
+	configuration.upstreamCapacity = compiledCapacity
 	observedCore, observedLogs := observer.New(zapcore.InfoLevel)
 	router, buildError := buildRouter(configuration, zap.New(observedCore).Sugar(), func(_ ManagementConfiguration, providers *providerRegistry) (*managedTenantStore, error) {
 		store.routingDefaults = providers
@@ -378,6 +383,6 @@ func waitForObservedLogCount(t *testing.T, observedLogs *observer.ObservedLogs, 
 func internalManagedUsageWriterProviderModels() ModelCatalog {
 	return internalTestModelCatalog(
 		internalTestOffering(ProviderNameOpenAI, ModelNameGPT41, []string{ModelOperationText}, []string{ModelOperationText}),
-		internalTestOffering(ProviderNameOpenAI, DefaultDictationModel, []string{ModelOperationDictation}, []string{ModelOperationDictation}),
+		internalTestOffering(ProviderNameOpenAI, DefaultTranscriptionModel, []string{ModelOperationDictation}, []string{ModelOperationDictation}),
 	)
 }

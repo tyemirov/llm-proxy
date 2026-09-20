@@ -3,6 +3,7 @@ package proxy_test
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -327,8 +328,7 @@ func TestProviderErrorContractLogsOnlySafeCorrelationMetadata(t *testing.T) {
 func providerErrorTestConfiguration() proxy.Configuration {
 	return proxy.Configuration{
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 		Endpoints:             proxy.NewEndpoints(),
 	}

@@ -223,6 +223,7 @@ func newManagedTenantName(value string) (managedTenantName, error) {
 type managedUsageEventVisitor func(managedUsageEventRecord) error
 
 type managedTenantDatabase interface {
+	streamAccountConnections(context.Context, func(managedAccountConnectionRecord) error) error
 	saveTenantProviderProfile(context.Context, string, managedProviderProfileRecord) error
 	accountConnections(context.Context, string, managedConnectionPage) ([]managedAccountConnectionRecord, error)
 	accountConnection(context.Context, string, string) (managedAccountConnectionRecord, error)
@@ -274,21 +275,19 @@ type managedUserRecord struct {
 }
 
 type managedTenantRecord struct {
-	TenantID                 string  `gorm:"primaryKey"`
-	OwnerUserID              string  `gorm:"not null;index:idx_managed_tenant_owner_created,priority:1;uniqueIndex:idx_managed_tenant_owner_name,priority:1"`
-	Name                     string  `gorm:"not null"`
-	NameKey                  string  `gorm:"not null;uniqueIndex:idx_managed_tenant_owner_name,priority:2"`
-	SecretDigest             *string `gorm:"uniqueIndex"`
-	DefaultProvider             string
-	DefaultModel                string
-	DefaultDictationProvider    string
-	DefaultDictationModel       string
+	TenantID                     string  `gorm:"primaryKey"`
+	OwnerUserID                  string  `gorm:"not null;index:idx_managed_tenant_owner_created,priority:1;uniqueIndex:idx_managed_tenant_owner_name,priority:1"`
+	Name                         string  `gorm:"not null"`
+	NameKey                      string  `gorm:"not null;uniqueIndex:idx_managed_tenant_owner_name,priority:2"`
+	SecretDigest                 *string `gorm:"uniqueIndex"`
+	DefaultProvider              string
+	DefaultModel                 string
 	DefaultTranscriptionProvider string
 	DefaultTranscriptionModel    string
-	DefaultSpeechProvider       string
-	DefaultSpeechModel          string
-	DefaultSystemPrompt         string
-	DefaultReasoningEffort      string
+	DefaultSpeechProvider        string
+	DefaultSpeechModel           string
+	DefaultSystemPrompt          string
+	DefaultReasoningEffort       string
 	// ProviderAPIKeys is populated only by bounded predecessor-schema migrations.
 	ProviderAPIKeys       []managedProviderAPIKeyRecord     `gorm:"-"`
 	ConnectionAssignments []managedTenantConnectionRecord   `gorm:"foreignKey:TenantID;references:TenantID;constraint:OnDelete:CASCADE"`
@@ -1209,7 +1208,7 @@ func migrateManagedModelSelectionRecords(database *gorm.DB, table string, migrat
 func migrateManagedTenantModelSelection(database *gorm.DB, migration managedModelMigration) error {
 	providerColumn, modelColumn := "default_provider", "default_model"
 	if migration.operation == ModelOperationDictation {
-		providerColumn, modelColumn = "default_dictation_provider", "default_dictation_model"
+		providerColumn, modelColumn = "default_transcription_provider", "default_transcription_model"
 	}
 	updates := map[string]any{modelColumn: migration.target}
 	if migration.targetReasoningEffort != "" {
@@ -2455,24 +2454,20 @@ func managedTableHasColumn(migrator gorm.Migrator, tableName string, columnName 
 }
 
 type legacyManagedTenantRecord struct {
-	UserID                   string `gorm:"primaryKey"`
-	UserEmail                string
-	UserDisplayName          string
-	UserAvatarURL            string
-	TenantID                 string `gorm:"uniqueIndex"`
-	SecretDigest               string `gorm:"index"`
-	DefaultProvider            string
-	DefaultModel               string
-	DefaultDictationProvider   string
-	DefaultDictationModel      string
-	DefaultTranscriptionProvider string
-	DefaultTranscriptionModel    string
-	DefaultSpeechProvider      string
-	DefaultSpeechModel         string
-	DefaultSystemPrompt        string
-	DefaultReasoningEffort     string
-	CreatedAt                  time.Time
-	UpdatedAt                  time.Time
+	UserID                       string `gorm:"primaryKey"`
+	UserEmail                    string
+	UserDisplayName              string
+	UserAvatarURL                string
+	TenantID                     string `gorm:"uniqueIndex"`
+	SecretDigest                 string `gorm:"index"`
+	DefaultProvider              string
+	DefaultModel                 string
+	DefaultTranscriptionProvider string `gorm:"column:default_dictation_provider"`
+	DefaultTranscriptionModel    string `gorm:"column:default_dictation_model"`
+	DefaultSystemPrompt          string
+	DefaultReasoningEffort       string
+	CreatedAt                    time.Time
+	UpdatedAt                    time.Time
 }
 
 type legacyManagedProviderAPIKeyRecord struct {
@@ -2689,19 +2684,19 @@ func preflightLegacyManagedTenantSchema(database *gorm.DB, providerKeyCipher man
 			UpdatedAt:       legacyTenant.UpdatedAt,
 		})
 		dataset.tenants = append(dataset.tenants, managedTenantRecord{
-			TenantID:                 legacyTenant.TenantID,
-			OwnerUserID:              legacyTenant.UserID,
-			Name:                     defaultName.display,
-			NameKey:                  defaultName.key,
-			SecretDigest:             secretDigest,
-			DefaultProvider:          canonicalDefaults.Provider,
-			DefaultModel:             canonicalDefaults.Model,
-			DefaultDictationProvider: canonicalDefaults.DictationProvider,
-			DefaultDictationModel:    canonicalDefaults.DictationModel,
-			DefaultSystemPrompt:      canonicalDefaults.SystemPrompt,
-			DefaultReasoningEffort:   canonicalDefaults.ReasoningEffort,
-			CreatedAt:                legacyTenant.CreatedAt,
-			UpdatedAt:                legacyTenant.UpdatedAt,
+			TenantID:                     legacyTenant.TenantID,
+			OwnerUserID:                  legacyTenant.UserID,
+			Name:                         defaultName.display,
+			NameKey:                      defaultName.key,
+			SecretDigest:                 secretDigest,
+			DefaultProvider:              canonicalDefaults.Provider,
+			DefaultModel:                 canonicalDefaults.Model,
+			DefaultTranscriptionProvider: canonicalDefaults.TranscriptionProvider,
+			DefaultTranscriptionModel:    canonicalDefaults.TranscriptionModel,
+			DefaultSystemPrompt:          canonicalDefaults.SystemPrompt,
+			DefaultReasoningEffort:       canonicalDefaults.ReasoningEffort,
+			CreatedAt:                    legacyTenant.CreatedAt,
+			UpdatedAt:                    legacyTenant.UpdatedAt,
 		})
 	}
 	for _, legacyProviderKey := range legacyProviderKeys {
@@ -2877,12 +2872,12 @@ func verifyManagedTenantMigration(database *gorm.DB, providerKeyCipher managedPr
 
 func (record legacyManagedTenantRecord) defaults() TenantDefaults {
 	return TenantDefaults{
-		Provider:          record.DefaultProvider,
-		Model:             record.DefaultModel,
-		DictationProvider: record.DefaultDictationProvider,
-		DictationModel:    record.DefaultDictationModel,
-		SystemPrompt:      record.DefaultSystemPrompt,
-		ReasoningEffort:   record.DefaultReasoningEffort,
+		Provider:              record.DefaultProvider,
+		Model:                 record.DefaultModel,
+		TranscriptionProvider: record.DefaultTranscriptionProvider,
+		TranscriptionModel:    record.DefaultTranscriptionModel,
+		SystemPrompt:          record.DefaultSystemPrompt,
+		ReasoningEffort:       record.DefaultReasoningEffort,
 	}
 }
 
@@ -2995,16 +2990,18 @@ func (database *gormManagedTenantDatabase) saveTenant(record managedTenantRecord
 	result := database.database.Model(&managedTenantRecord{}).
 		Where(&managedTenantRecord{OwnerUserID: record.OwnerUserID, TenantID: record.TenantID}).
 		Updates(map[string]interface{}{
-			"name":                       record.Name,
-			"name_key":                   record.NameKey,
-			"secret_digest":              record.SecretDigest,
-			"default_provider":           record.DefaultProvider,
-			"default_model":              record.DefaultModel,
-			"default_dictation_provider": record.DefaultDictationProvider,
-			"default_dictation_model":    record.DefaultDictationModel,
-			"default_system_prompt":      record.DefaultSystemPrompt,
-			"default_reasoning_effort":   record.DefaultReasoningEffort,
-			"updated_at":                 record.UpdatedAt,
+			"name":                           record.Name,
+			"name_key":                       record.NameKey,
+			"secret_digest":                  record.SecretDigest,
+			"default_provider":               record.DefaultProvider,
+			"default_model":                  record.DefaultModel,
+			"default_transcription_provider": record.DefaultTranscriptionProvider,
+			"default_transcription_model":    record.DefaultTranscriptionModel,
+			"default_speech_provider":        record.DefaultSpeechProvider,
+			"default_speech_model":           record.DefaultSpeechModel,
+			"default_system_prompt":          record.DefaultSystemPrompt,
+			"default_reasoning_effort":       record.DefaultReasoningEffort,
+			"updated_at":                     record.UpdatedAt,
 		})
 	if result.Error != nil {
 		return result.Error
@@ -3056,13 +3053,15 @@ func (database *gormManagedTenantDatabase) deleteTenant(ownerUserID string, tena
 func managedRoutingDefaultsDatabaseUpdates(defaults managedRoutingDefaults, updatedAt time.Time) map[string]interface{} {
 	values := defaults.value()
 	return map[string]interface{}{
-		"default_provider":           values.Provider,
-		"default_model":              values.Model,
-		"default_dictation_provider": values.DictationProvider,
-		"default_dictation_model":    values.DictationModel,
-		"default_system_prompt":      values.SystemPrompt,
-		"default_reasoning_effort":   values.ReasoningEffort,
-		"updated_at":                 updatedAt,
+		"default_provider":               values.Provider,
+		"default_model":                  values.Model,
+		"default_transcription_provider": values.TranscriptionProvider,
+		"default_transcription_model":    values.TranscriptionModel,
+		"default_speech_provider":        values.SpeechProvider,
+		"default_speech_model":           values.SpeechModel,
+		"default_system_prompt":          values.SystemPrompt,
+		"default_reasoning_effort":       values.ReasoningEffort,
+		"updated_at":                     updatedAt,
 	}
 }
 
@@ -3557,8 +3556,10 @@ func (record *managedTenantRecord) applyRoutingDefaults(defaults managedRoutingD
 	validatedDefaults := defaults.value()
 	record.DefaultProvider = validatedDefaults.Provider
 	record.DefaultModel = validatedDefaults.Model
-	record.DefaultDictationProvider = validatedDefaults.DictationProvider
-	record.DefaultDictationModel = validatedDefaults.DictationModel
+	record.DefaultTranscriptionProvider = validatedDefaults.TranscriptionProvider
+	record.DefaultTranscriptionModel = validatedDefaults.TranscriptionModel
+	record.DefaultSpeechProvider = validatedDefaults.SpeechProvider
+	record.DefaultSpeechModel = validatedDefaults.SpeechModel
 	record.DefaultSystemPrompt = validatedDefaults.SystemPrompt
 	record.DefaultReasoningEffort = validatedDefaults.ReasoningEffort
 }
@@ -3612,12 +3613,14 @@ func (record managedTenantRecord) summary() managedTenantSummary {
 
 func (record managedTenantRecord) defaults() TenantDefaults {
 	return TenantDefaults{
-		Provider:          record.DefaultProvider,
-		Model:             record.DefaultModel,
-		DictationProvider: record.DefaultDictationProvider,
-		DictationModel:    record.DefaultDictationModel,
-		SystemPrompt:      record.DefaultSystemPrompt,
-		ReasoningEffort:   record.DefaultReasoningEffort,
+		Provider:              record.DefaultProvider,
+		Model:                 record.DefaultModel,
+		TranscriptionProvider: record.DefaultTranscriptionProvider,
+		TranscriptionModel:    record.DefaultTranscriptionModel,
+		SpeechProvider:        record.DefaultSpeechProvider,
+		SpeechModel:           record.DefaultSpeechModel,
+		SystemPrompt:          record.DefaultSystemPrompt,
+		ReasoningEffort:       record.DefaultReasoningEffort,
 	}
 }
 

@@ -31,7 +31,7 @@ func TestPublicHealthChecksDatastoreWithoutUsage(t *testing.T) {
 	}
 	models := internalManagedUsageWriterProviderModels()
 	config := Configuration{
-		Management: management, WorkerCount: 1, QueueSize: 1, MaxPromptBytes: 1024,
+		Management: management, UpstreamCapacity: testUpstreamCapacity(1, 1), MaxPromptBytes: 1024,
 		Endpoints: NewEndpoints(), ProviderCatalog: internalTestProviderCatalog(models),
 		ModelCatalog: models, LogLevel: LogLevelInfo, AssetStorePath: t.TempDir(),
 		upstreamRateLimits:         upstreamRateLimits{rules: map[string]upstreamRateLimitRule{}},

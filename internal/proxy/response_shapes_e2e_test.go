@@ -1,6 +1,7 @@
 package proxy_test
 
 import (
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -43,8 +44,7 @@ func withStubbedProxy(t *testing.T, initialResponse, finalResponse string) http.
 	t.Cleanup(func() { _ = logger.Sync() })
 	router, err := buildRouterWithCatalogs(t, proxy.Configuration{
 		LogLevel:              proxy.LogLevelDebug,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 		Endpoints:             endpoints,
 	}, logger.Sugar())

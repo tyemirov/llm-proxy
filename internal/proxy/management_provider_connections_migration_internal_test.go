@@ -46,8 +46,8 @@ func newManagedProviderConnectionsMigrationFixture(t *testing.T, providerIdentif
 	tenant.DefaultProvider = providerIdentifier
 	tenant.DefaultModel = textModel
 	if providerIdentifier == ProviderNameOpenAI {
-		tenant.DefaultDictationProvider = ProviderNameOpenAI
-		tenant.DefaultDictationModel = DefaultDictationModel
+		tenant.DefaultTranscriptionProvider = ProviderNameOpenAI
+		tenant.DefaultTranscriptionModel = DefaultTranscriptionModel
 	}
 	if createError := database.Create(&tenant).Error; createError != nil {
 		t.Fatalf("seed provider connections tenant: %v", createError)
