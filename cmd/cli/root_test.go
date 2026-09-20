@@ -454,8 +454,8 @@ management:
 	if capturedConfiguration.Port != 9191 || capturedConfiguration.LogLevel != proxy.LogLevelDebug {
 		t.Fatalf("public API server=%+v", capturedConfiguration)
 	}
-	if len(capturedConfiguration.Catalog.Providers) != 14 {
-		t.Fatalf("provider count=%d want=14", len(capturedConfiguration.Catalog.Providers))
+	if len(capturedConfiguration.Catalog.Providers) != 16 {
+		t.Fatalf("provider count=%d want=15", len(capturedConfiguration.Catalog.Providers))
 	}
 	if capturedConfiguration.Catalog.MaxPromptBytes != 3 || capturedConfiguration.Catalog.MaxInputAudioBytes != 25*1024*1024 {
 		t.Fatalf("public limits=%+v", capturedConfiguration.Catalog)
@@ -536,7 +536,7 @@ func TestRootCommandPrintsCatalogDerivedLiveDiscovery(t *testing.T) {
 	if !metaFound {
 		t.Fatal("Meta live discovery must require MUSE_API_KEY")
 	}
-	if discovery.SchemaVersion != proxy.ProviderCatalogSchemaVersion || len(discovery.Providers) != 14 {
+	if discovery.SchemaVersion != proxy.ProviderCatalogSchemaVersion || len(discovery.Providers) != 16 {
 		t.Fatalf("provider discovery=%+v", discovery)
 	}
 	if !dashScopeFound || !baiduFound {
@@ -869,14 +869,14 @@ func TestRootCommandRejectsInvalidProviderCatalog(t *testing.T) {
 		{
 			name: "unsupported schema version",
 			mutate: func(document string) string {
-				return strings.Replace(document, "schema_version: 4", "schema_version: 5", 1)
+				return strings.Replace(document, "schema_version: 5", "schema_version: 6", 1)
 			},
-			expectedError: "field=schema_version value=5",
+			expectedError: "field=schema_version value=6",
 		},
 		{
 			name: "unknown field",
 			mutate: func(document string) string {
-				return strings.Replace(document, "schema_version: 4", "schema_version: 4\nfuture_option: true", 1)
+				return strings.Replace(document, "schema_version: 5", "schema_version: 5\nfuture_option: true", 1)
 			},
 			expectedError: "field future_option not found",
 		},
