@@ -27,6 +27,31 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B234] (P2) Reject media-only models at dictation endpoints.
+  Evidence: A saved `dictator/whisper-base` default causes HTTP 502 from `/dictate` without a gRPC submission.
+  Requirements: Reject offerings without the `dictation` operation before provider execution.
+  Requirements: Keep Dictator transcription discovery and defaults available for the media API.
+  Validation: Exercise both dictation endpoints through HTTP with a local Dictator server.
+  Progress: The initial tests produced HTTP 502 for all three requests.
+  Progress: The capability-default tests and `make test-dictator` pass after the operation check.
+  Files: `internal/proxy/provider_types.go`, `internal/proxy/provider_registry.go`, `internal/proxy/management_capability_defaults_test.go`, `docs/speech-workflows.md`.
+  Event contracts: No changes.
+  Resolution: Both dictation endpoints reject media-only models with HTTP 400 before provider execution. Dictator remains available through the media API.
+  Final `make ci` passes all 14 gates with 100.0 percent Go coverage.
+
+- [x] [B235] (P2) Distinguish image admission rejection from an unknown provider outcome.
+  Evidence: Local capacity rejection produces `uncertain` with zero provider calls.
+  Requirements: Set a definite failure when local admission rejects an image submission.
+  Requirements: Keep unknown provider outcomes separate from requests without provider execution.
+  Validation: Exercise both image surfaces, idempotency, and input asset release through the public API.
+  Progress: The initial tests produced `uncertain` for all four rejected requests without another provider call.
+  Progress: `make test-image-generation` and `make test-upstream-admission` pass after the error classification change.
+  Files: `internal/proxy/upstream_admission_http.go`, `internal/proxy/image_generation.go`, `internal/proxy/image_responses.go`, `internal/proxy/image_admission_e2e_test.go`, `README.md`.
+  Event contracts: No changes.
+  Resolution: Local image admission rejection produces `failed` with `media_operation_unavailable` and releases input assets. Repeated idempotency keys identify the same failed operation.
+  Resolution: Requests with an unknown provider outcome remain `uncertain` after dispatch.
+  Final `make ci` passes all 14 gates with 100.0 percent Go coverage.
+
 - [x] [B229] (P1) Send the selected Whisper size to Dictator.
   Evidence: Transcription and subtitle requests omit the model size.
   Requirements: Send the selected size for each Whisper model.
