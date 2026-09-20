@@ -69,6 +69,9 @@ func validateCatalogImageRoutes(offering ProviderCatalogOffering, offerings []Pr
 }
 
 func validateImageGenerationOffering(offering ProviderOffering, field string) error {
+	if offering.WireContract == CatalogProtocolFALQueueImages {
+		return validateQueueImageOffering(offering, field)
+	}
 	if offering.WireContract != CatalogProtocolOpenAIImages || offering.ExecutionLifecycle != string(textExecutionLifecycleSynchronousCompletion) {
 		return fmt.Errorf("%w: field=%s reason=unsupported_image_route", ErrInvalidModelCatalog, field)
 	}

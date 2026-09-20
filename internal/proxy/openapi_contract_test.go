@@ -107,7 +107,7 @@ func TestOpenAPIContractDocumentsActualAuthenticationBoundaries(t *testing.T) {
 			expectedSecurity = [][]string{}
 		case "/", "/v2", llmproxycontract.TenantIdentityPath, "/v2/requests", "/dictate":
 			expectedSecurity = [][]string{{"TenantClientKey"}}
-		case "/v1/chat/completions", "/v1/responses", "/v1/models", "/v1/audio/transcriptions", llmproxycontract.AssetPath, "/model/v1/assets/{asset_id}", "/model/v1/assets/{asset_id}/content", llmproxycontract.MediaCapabilitiesPath, llmproxycontract.MediaOperationsPath, "/model/v1/operations/{operation_id}", "/model/v1/operations/{operation_id}/cancellation", llmproxycontract.MediaVoicesPath, "/model/v1/voices/{voice_id}", llmproxycontract.ProviderDiagnosticsPath + "/{provider}":
+		case "/v1/chat/completions", "/v1/responses", "/v1/models", "/v1/audio/transcriptions", llmproxycontract.AssetPath, "/model/v1/assets/{asset_id}", "/model/v1/assets/{asset_id}/content", llmproxycontract.MediaCapabilitiesPath, llmproxycontract.MediaOperationsPath, "/model/v1/operations/{operation_id}", "/model/v1/operations/{operation_id}/cancellation", llmproxycontract.MediaVoicesPath, "/model/v1/voices/{voice_id}", "/model/v1/voices/{voice_id}/previews/{preview}", llmproxycontract.ProviderDiagnosticsPath + "/{provider}", llmproxycontract.ProviderResourcesPath + "/{provider}/{kind}":
 			expectedSecurity = [][]string{{"TenantBearerKey"}}
 		case "/healthz", proxy.ManagementConfigUIPath, proxy.PublicCapabilitiesPath:
 			expectedSecurity = [][]string{}
@@ -491,8 +491,8 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 	if decodeError := json.Unmarshal(capabilitiesResponse.Body.Bytes(), &capabilityCatalog); decodeError != nil {
 		t.Fatalf("decode public capability catalog: %v", decodeError)
 	}
-	if len(capabilityCatalog.Providers) != 14 {
-		t.Fatalf("public capability providers=%d want=14", len(capabilityCatalog.Providers))
+	if len(capabilityCatalog.Providers) != 16 {
+		t.Fatalf("public capability providers=%d want=16", len(capabilityCatalog.Providers))
 	}
 
 	configRequest := httptest.NewRequest(http.MethodGet, proxy.ManagementConfigUIPath, nil)
@@ -756,5 +756,22 @@ func TestImageGenerationResponsesOpenAPIMatchesSurfaceAndChainContract(t *testin
 				t.Fatalf("valid=%v error=%v", scenario.valid, err)
 			}
 		})
+	}
+}
+
+func TestProviderServicesOpenAPI(t *testing.T) {
+	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, model := range []string{"", `,"model":null`, `,"model":""`, `,"model":"invented"`} {
+		body := []byte(`{"capability":"audio.align","provider":"elevenlabs"` + model + `,"input":{"audio_asset_id":"ast_0123456789abcdef0123456789abcdef","transcript":"hello"},"controls":{}}`)
+		request := httptest.NewRequest(http.MethodPost, llmproxycontract.MediaOperationsPath, bytes.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Idempotency-Key", "alignment")
+		err := contract.ValidateRequest(llmproxycontract.MediaOperationsPath, request.Method, request, body)
+		if (err == nil) != (model == "") {
+			t.Fatalf("model=%q error=%v", model, err)
+		}
 	}
 }

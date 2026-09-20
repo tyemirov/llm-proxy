@@ -32,6 +32,8 @@ type providerSummary struct {
 	keyAcquisitionURL         string
 	aliases                   []string
 	capabilities              []string
+	resources                 []ProviderCatalogResource
+	services                  []ProviderCatalogService
 	modelFamilies             []ModelFamily
 	textDefaultModel          string
 	textModels                []textModelSummary
@@ -102,6 +104,9 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			fieldOrder:          make([]string, 0, len(provider.Fields)),
 			connectionValues:    make(map[string]string, len(provider.Fields)),
 			transports:          make(map[string]providerTransportDefinition, len(provider.Transports)),
+			verification:        provider.Verification,
+			resources:           append([]ProviderCatalogResource(nil), provider.Resources...),
+			services:            cloneProviderServices(provider.Services),
 			textModels:          map[string]textModelDefinition{},
 			transcriptionModels: map[string]dictationModelDefinition{},
 			speechModels:        map[string]dictationModelDefinition{},
@@ -120,6 +125,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			composition, _ := composeProviderTransport(transport, "")
 			definition.transports[transport.ID] = providerTransportDefinition{
 				identifier:         transport.ID,
+				artifactOrigins:    append([]string(nil), transport.ArtifactOrigins...),
 				endpoint:           transport.Endpoint,
 				authentication:     composition.authentication,
 				headers:            append([]ProviderCatalogHeader(nil), transport.Headers...),
@@ -340,6 +346,8 @@ func (registry *providerRegistry) providerSummaries() []providerSummary {
 			keyAcquisitionURL:         definition.keyAcquisitionURL,
 			aliases:                   aliases,
 			capabilities:              append([]string(nil), definition.capabilities...),
+			resources:                 append([]ProviderCatalogResource(nil), definition.resources...),
+			services:                  cloneProviderServices(definition.services),
 			modelFamilies:             append([]ModelFamily(nil), definition.modelFamilies...),
 			textDefaultModel:          definition.defaultTextModel.string(),
 			textModels:                sortedTextModelSummaries(definition.textModels),

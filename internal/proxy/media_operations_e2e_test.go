@@ -104,7 +104,7 @@ type invalidSuccessMediaOperationAdapter struct{}
 
 type controlledMediaVoiceProvider struct{}
 
-func (*controlledMediaVoiceProvider) DiscoverMediaVoices(context.Context, string) (proxy.MediaVoiceDiscovery, error) {
+func (*controlledMediaVoiceProvider) DiscoverMediaVoices(context.Context, string, proxy.MediaVoiceQuery) (proxy.MediaVoiceDiscovery, error) {
 	return proxy.MediaVoiceDiscovery{Voices: []proxy.MediaVoiceProviderRecord{{
 		Provider: "xai", Model: "private-model", Mode: proxy.MediaVoiceModePreset,
 		Language: "en-US", DisplayName: "Narrator", Default: true,
@@ -219,8 +219,10 @@ func TestMediaVoiceResourcesAreTenantOwnedAndProviderPrivate(testingInstance *te
 	clientConfiguration, _ := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{BaseURL: server.URL, Secret: tenantSecret})
 	client, _ := llmproxyclient.NewClient(clientConfiguration, server.Client())
 
-	voices, voicesError := client.GetMediaVoices(context.Background(), "xai")
-	if voicesError != nil || len(voices) != 1 || voices[0].Provider != "xai" || voices[0].Mode != proxy.MediaVoiceModePreset || voices[0].DisplayName != "Narrator" || voices[0].DefaultSampleRate != 24000 {
+	voicesPage, voicesError := client.GetMediaVoices(context.Background(), llmproxyclient.MediaVoiceQuery{Provider: "xai"})
+
+	voices := voicesPage.Voices
+	if voicesError != nil || len(voices) != 1 || voices[0].Provider != "xai" || voices[0].Mode != proxy.MediaVoiceModePreset || voices[0].DisplayName != "Narrator" || (voices[0].DefaultSampleRate == nil || *voices[0].DefaultSampleRate != 24000) {
 		testingInstance.Fatalf("voices=%+v error=%v", voices, voicesError)
 	}
 	voiceID := voices[0].VoiceID
@@ -228,7 +230,15 @@ func TestMediaVoiceResourcesAreTenantOwnedAndProviderPrivate(testingInstance *te
 		testingInstance.Fatalf("voice id=%q", voiceID)
 	}
 
-	configuration.MediaVoiceProviders = nil
+	database, migrationError := gorm.Open(configuration.Management.DatabaseDialector, &gorm.Config{})
+	if migrationError != nil {
+		testingInstance.Fatal(migrationError)
+	}
+	for _, column := range []string{"metadata", "preview_urls"} {
+		if err := database.Exec("ALTER TABLE media_voice_records DROP COLUMN " + column).Error; err != nil {
+			testingInstance.Fatal(err)
+		}
+	}
 	restartedRouter, restartError := proxy.BuildRouter(configuration, zap.NewNop().Sugar())
 	if restartError != nil {
 		testingInstance.Fatal(restartError)
@@ -463,4 +473,8 @@ func httpFailureStatus(errorValue error) int {
 		return 0
 	}
 	return failure.StatusCode()
+}
+
+func (*controlledMediaVoiceProvider) MediaVoiceAuthority(context.Context, string) (string, error) {
+	return "", nil
 }

@@ -182,6 +182,7 @@ func internalTestProviderCatalog(modelCatalog ModelCatalog) *ProviderCatalog {
 	}
 	for providerIndex := range schema.Providers {
 		provider := &schema.Providers[providerIndex]
+		internalTestVerificationBinding(provider)
 		for offeringIndex := range provider.Offerings {
 			offering := &provider.Offerings[offeringIndex]
 			if offering.ImageRoutes.Responses != "" {
@@ -228,6 +229,8 @@ func internalTestProviderTransport(identifier string, offering ProviderOffering)
 
 func internalTestProviderProtocolPath(protocol string) string {
 	switch protocol {
+	case CatalogProtocolFALQueueImages:
+		return "/{model}"
 	case CatalogProtocolOpenAIResponses:
 		return "/responses"
 	case CatalogProtocolOpenAIChatCompletions:
@@ -288,4 +291,32 @@ func internalConfigureTextOffering(offering *ProviderOffering) {
 			offering.MediaExecutionLifecycle = string(textExecutionLifecycleSynchronousCompletion)
 		}
 	}
+}
+
+func internalTestVerificationBinding(provider *ProviderCatalogProvider) {
+	for _, offering := range provider.Offerings {
+		if slices.Contains(offering.Operations, ModelOperationText) && (provider.Verification.Transport == "" || slices.Contains(offering.DefaultOperations, ModelOperationText)) {
+			provider.Verification = ProviderCatalogVerification{Transport: offering.Transport, Model: offering.Model}
+		}
+	}
+	if provider.Verification.Transport != "" {
+		return
+	}
+	for _, transport := range provider.Transports {
+		if transport.Components.RequestCodec.ID == CatalogProtocolDictatorSpeechV1 {
+			provider.Verification = ProviderCatalogVerification{Transport: transport.ID}
+			provider.Resources = []ProviderCatalogResource{{Kind: "voices", Transport: transport.ID}}
+			return
+		}
+	}
+	transport := provider.Transports[0]
+	transport.ID = "verification"
+	transport.Endpoint = ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodGet, DefaultBaseURL: "https://provider.example", Path: "/account"}
+	transport.Headers = nil
+	transport.ArtifactOrigins = nil
+	transport.Components.RequestCodec = ProviderCatalogCodecReference{ID: CatalogProtocolJSONResource}
+	transport.Components.ResponseCodec = ProviderCatalogCodecReference{ID: CatalogProtocolJSONResource}
+	transport.Components.Execution = ProviderCatalogExecutionReference{ID: CatalogExecutionReadOnly}
+	provider.Transports = append(provider.Transports, transport)
+	provider.Verification = ProviderCatalogVerification{Transport: transport.ID}
 }

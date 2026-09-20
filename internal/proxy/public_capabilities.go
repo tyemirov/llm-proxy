@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 )
 
 // PublicCapabilitiesPath is the canonical unauthenticated capability catalog
@@ -40,9 +41,11 @@ type PublicCapabilityCounts struct {
 
 // PublicProviderCapability identifies one selectable provider.
 type PublicProviderCapability struct {
-	Identifier      string   `json:"identifier"`
-	Label           string   `json:"label"`
-	CredentialKinds []string `json:"credential_kinds"`
+	Services        []ProviderCatalogService                `json:"services"`
+	Identifier      string                                  `json:"identifier"`
+	Label           string                                  `json:"label"`
+	CredentialKinds []string                                `json:"credential_kinds"`
+	Resources       []llmproxycontract.ProviderResourceKind `json:"resources"`
 }
 
 // PublicModelPublisher identifies one model publisher and its exact-model count.
@@ -127,7 +130,7 @@ func PublicCapabilityDomainForOperation(operation string) string {
 		"audio_alignment",
 		"subtitle_creation":
 		return PublicCapabilityDomainTranscription
-	case "speech_generation",
+	case ModelOperationPronunciationDictionaryCreation, "speech_generation",
 		"voice_extraction":
 		return PublicCapabilityDomainSpeech
 	case PublicModelCapabilityImageInput, ModelOperationImageGeneration, ModelOperationImageEditing:
@@ -187,6 +190,8 @@ func newPublicCapabilityCatalog(configuration Configuration) PublicCapabilityCat
 	for _, provider := range configuration.ModelCatalog.Providers {
 		providers = append(providers, PublicProviderCapability{
 			Identifier: provider.ID, Label: provider.Label, CredentialKinds: append([]string{}, provider.CredentialKinds...),
+			Resources: append([]llmproxycontract.ProviderResourceKind{}, provider.Resources...),
+			Services:  cloneProviderServices(provider.Services),
 		})
 	}
 	sort.Slice(providers, func(first int, second int) bool { return providers[first].Identifier < providers[second].Identifier })

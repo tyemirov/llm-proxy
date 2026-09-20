@@ -248,7 +248,8 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 		t.Fatal(err)
 	}
 	ctx := t.Context()
-	voices, err := client.GetMediaVoices(ctx, provider)
+	voicesPage, err := client.GetMediaVoices(ctx, llmproxyclient.MediaVoiceQuery{Provider: provider})
+	voices := voicesPage.Voices
 	if err != nil || len(voices) != 1 {
 		t.Fatalf("Dictator voices=%v error=%v", voices, err)
 	}
@@ -395,7 +396,8 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 			t.Errorf("diarization gap presence lost: controls=%s native=%v", controls, native.UtteranceGapSeconds)
 		}
 	}
-	discovered, err := client.GetMediaVoices(ctx, provider)
+	discoveredPage, err := client.GetMediaVoices(ctx, llmproxyclient.MediaVoiceQuery{Provider: provider})
+	discovered := discoveredPage.Voices
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -534,7 +536,8 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 	if err != nil {
 		t.Fatal(err)
 	}
-	otherVoices, err := otherClient.GetMediaVoices(ctx, provider)
+	otherVoicesPage, err := otherClient.GetMediaVoices(ctx, llmproxyclient.MediaVoiceQuery{Provider: provider})
+	otherVoices := otherVoicesPage.Voices
 	if err != nil || len(otherVoices) != 1 || otherVoices[0].VoiceID == voices[0].VoiceID {
 		t.Fatalf("other voices=%+v error=%v", otherVoices, err)
 	}
@@ -601,7 +604,8 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 				t.Errorf("obsolete voice was not rejected before discovery: operation=%+v error=%v", stale, err)
 			}
 		}
-		currentVoices, err := client.GetMediaVoices(ctx, provider)
+		currentVoicesPage, err := client.GetMediaVoices(ctx, llmproxyclient.MediaVoiceQuery{Provider: provider})
+		currentVoices := currentVoicesPage.Voices
 		if err != nil || len(currentVoices) != 1 || currentVoices[0].VoiceID == voices[0].VoiceID {
 			t.Fatalf("voices after connection change: %+v error=%v", currentVoices, err)
 		}
@@ -839,7 +843,8 @@ func TestDictatorGranularModelsReachUpstream(t *testing.T) {
 func TestDictatorRejectsVoiceFromAnotherSynthesisEngine(t *testing.T) {
 	fixture, listener := newDictatorAcceptanceUpstream(t, proxy.ProviderNameDictator)
 	client := newDictatorGatewayAcceptanceClient(t, listener.Addr().String(), fixture.token, "false")
-	voices, err := client.GetMediaVoices(t.Context(), proxy.ProviderNameDictator)
+	voicesPage, err := client.GetMediaVoices(t.Context(), llmproxyclient.MediaVoiceQuery{Provider: proxy.ProviderNameDictator})
+	voices := voicesPage.Voices
 	if err != nil || len(voices) != 1 {
 		t.Fatalf("voices=%v error=%v", voices, err)
 	}

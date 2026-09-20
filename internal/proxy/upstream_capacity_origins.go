@@ -18,6 +18,9 @@ func (configuration Configuration) ConfiguredUpstreamOrigins() ([]string, error)
 	origins := map[string]struct{}{}
 	for _, definition := range registry.definitions {
 		for identifier, transport := range definition.transports {
+			for _, origin := range transport.artifactOrigins {
+				origins[origin] = struct{}{}
+			}
 			if transport.endpoint.Protocol != CatalogEndpointProtocolHTTP {
 				continue
 			}

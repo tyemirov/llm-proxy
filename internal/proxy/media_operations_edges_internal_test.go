@@ -45,7 +45,7 @@ type internalMediaVoiceProvider struct {
 	err    error
 }
 
-func (provider internalMediaVoiceProvider) DiscoverMediaVoices(context.Context, string) (MediaVoiceDiscovery, error) {
+func (provider internalMediaVoiceProvider) DiscoverMediaVoices(context.Context, string, MediaVoiceQuery) (MediaVoiceDiscovery, error) {
 	return MediaVoiceDiscovery{Voices: provider.voices}, provider.err
 }
 
@@ -1560,4 +1560,8 @@ func TestMediaOperationAssetReferenceFailuresPreserveBytes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (provider internalMediaVoiceProvider) MediaVoiceAuthority(context.Context, string) (string, error) {
+	return "", provider.err
 }

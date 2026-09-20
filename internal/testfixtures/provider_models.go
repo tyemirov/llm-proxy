@@ -130,6 +130,7 @@ func ProviderCatalogWithProtocolFixtures(testingInstance testing.TB) (*proxy.Pro
 							authentication.Prefix = "Bearer "
 						}
 					}
+					testVerificationBinding(&fixtureProvider)
 					schema.Providers = append(schema.Providers, fixtureProvider)
 					components = fixtureProvider.Transports[0].Components
 					controls := make([]string, 0, len(offering.Controls))
@@ -318,6 +319,7 @@ func NewProviderCatalogFromModelCatalog(modelCatalog proxy.ModelCatalog) (*proxy
 	}
 	for providerIndex := range schema.Providers {
 		provider := &schema.Providers[providerIndex]
+		testVerificationBinding(provider)
 		for offeringIndex := range provider.Offerings {
 			offering := &provider.Offerings[offeringIndex]
 			if offering.ImageRoutes.Responses != "" {
@@ -344,6 +346,9 @@ func testProviderTransport(identifier string, offering proxy.ProviderOffering) p
 			Authentication: proxy.ProviderCatalogAuthentication{Kind: proxy.CatalogAuthenticationBearer, Field: proxy.CatalogCredentialAPIKey, Header: "Authorization", Prefix: "Bearer "},
 			Execution:      proxy.ProviderCatalogExecutionReference{ID: offering.ExecutionLifecycle},
 		},
+	}
+	if offering.WireContract == proxy.CatalogProtocolFALQueueImages {
+		transport.ArtifactOrigins = []string{"https://fal.media"}
 	}
 	if offering.WireContract == proxy.CatalogProtocolDictatorSpeechV1 {
 		transport.Endpoint = proxy.ProviderCatalogEndpoint{Protocol: proxy.CatalogEndpointProtocolGRPC, SettingField: "grpc_address"}
@@ -395,9 +400,39 @@ func testProviderProtocolPath(protocol string) string {
 		return "/audio/transcriptions"
 	case proxy.CatalogProtocolXAIVideosGenerations:
 		return "/videos/generations"
+	case proxy.CatalogProtocolFALQueueImages:
+		return "/{model}"
 	case proxy.CatalogProtocolOpenAIImages:
 		return "/images/generations"
 	default:
 		return "/unsupported"
 	}
+}
+
+func testVerificationBinding(provider *proxy.ProviderCatalogProvider) {
+	for _, offering := range provider.Offerings {
+		if slices.Contains(offering.Operations, proxy.ModelOperationText) && (provider.Verification.Transport == "" || slices.Contains(offering.DefaultOperations, proxy.ModelOperationText)) {
+			provider.Verification = proxy.ProviderCatalogVerification{Transport: offering.Transport, Model: offering.Model}
+		}
+	}
+	if provider.Verification.Transport != "" {
+		return
+	}
+	for _, transport := range provider.Transports {
+		if transport.Components.RequestCodec.ID == proxy.CatalogProtocolDictatorSpeechV1 {
+			provider.Verification = proxy.ProviderCatalogVerification{Transport: transport.ID}
+			provider.Resources = []proxy.ProviderCatalogResource{{Kind: "voices", Transport: transport.ID}}
+			return
+		}
+	}
+	transport := provider.Transports[0]
+	transport.ID = "verification"
+	transport.Endpoint = proxy.ProviderCatalogEndpoint{Protocol: proxy.CatalogEndpointProtocolHTTP, Method: proxy.CatalogEndpointMethodGet, DefaultBaseURL: "https://provider.example", Path: "/account"}
+	transport.Headers = nil
+	transport.ArtifactOrigins = nil
+	transport.Components.RequestCodec = proxy.ProviderCatalogCodecReference{ID: proxy.CatalogProtocolJSONResource}
+	transport.Components.ResponseCodec = proxy.ProviderCatalogCodecReference{ID: proxy.CatalogProtocolJSONResource}
+	transport.Components.Execution = proxy.ProviderCatalogExecutionReference{ID: proxy.CatalogExecutionReadOnly}
+	provider.Transports = append(provider.Transports, transport)
+	provider.Verification = proxy.ProviderCatalogVerification{Transport: transport.ID}
 }

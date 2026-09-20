@@ -62,7 +62,12 @@ func TestProviderCatalogAcceptsDeploymentOwnedGRPCTransport(t *testing.T) {
 	if catalogError != nil {
 		t.Fatalf("compile deployment gRPC provider: %v", catalogError)
 	}
-	compiled := catalog.Schema().Providers[len(schema.Providers)-1]
+	var compiled ProviderCatalogProvider
+	for _, candidate := range catalog.Schema().Providers {
+		if candidate.ID == provider.ID {
+			compiled = candidate
+		}
+	}
 	if compiled.ConnectionOwnership != CatalogProviderConnectionDeployment || compiled.KeyAcquisitionURL != "" {
 		t.Fatalf("deployment provider=%+v", compiled)
 	}
@@ -330,7 +335,7 @@ func TestProviderCatalogTransportValidationRejectsEveryInvalidShape(t *testing.T
 			*transports = append(*transports, (*transports)[0])
 		}, expected: "duplicate_identifier="},
 		{name: "endpoint", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
-			(*transports)[0].Endpoint.Method = "GET"
+			(*transports)[0].Endpoint.Method = "PUT"
 		}, expected: ".endpoint"},
 		{name: "authentication field", mutate: func(transports *[]ProviderCatalogTransport, _ map[string]ProviderCatalogField) {
 			(*transports)[0].Components.Authentication.Field = "missing"
@@ -419,7 +424,7 @@ func TestProviderCatalogEndpointAndProtocolEdges(t *testing.T) {
 		endpoint ProviderCatalogEndpoint
 		expected string
 	}{
-		{name: "method", endpoint: ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolHTTP, Method: "GET", DefaultBaseURL: "https://provider.example", Path: "/responses"}, expected: "field=endpoint"},
+		{name: "method", endpoint: ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolHTTP, Method: "PUT", DefaultBaseURL: "https://provider.example", Path: "/responses"}, expected: "field=endpoint"},
 		{name: "source count", endpoint: ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodPost, Path: "/responses"}, expected: "endpoint_source_count"},
 		{name: "setting field", endpoint: ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodPost, SettingField: "missing", Path: "/responses"}, expected: "dangling_reference"},
 		{name: "URL parse", endpoint: ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodPost, DefaultBaseURL: "%", Path: "/responses"}, expected: ".default_base_url"},

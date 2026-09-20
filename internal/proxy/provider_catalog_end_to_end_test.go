@@ -443,8 +443,8 @@ func TestProviderCatalogRejectsStructuralAndComponentContractViolations(testingI
 			name: "invalid control bounds",
 			mutate: func(schema *proxy.ProviderCatalogSchema) {
 				control := firstCatalogControl(testingInstance, schema)
-				minimum := 2
-				maximum := 1
+				minimum := 2.0
+				maximum := 1.0
 				control.Kind = proxy.CatalogControlInteger
 				control.Values = nil
 				control.Minimum = &minimum
@@ -536,7 +536,8 @@ func catalogWithTestProvider(testingInstance *testing.T) *proxy.ProviderCatalog 
 		Operations: []string{proxy.ModelOperationText}, MediaInputs: []string{},
 	}})
 	schema.Providers = append(schema.Providers, proxy.ProviderCatalogProvider{
-		ID: testCatalogProviderID, Label: "Catalog Test", APIServiceLabel: "Catalog Test API", ConnectionOwnership: proxy.CatalogProviderConnectionTenant, KeyAcquisitionURL: "https://provider.example/keys", Aliases: []string{testCatalogProviderAlias},
+		Verification: proxy.ProviderCatalogVerification{Transport: testCatalogTransportID, Model: testCatalogModelID},
+		ID:           testCatalogProviderID, Label: "Catalog Test", APIServiceLabel: "Catalog Test API", ConnectionOwnership: proxy.CatalogProviderConnectionTenant, KeyAcquisitionURL: "https://provider.example/keys", Aliases: []string{testCatalogProviderAlias},
 		Fields: []proxy.ProviderCatalogField{
 			{
 				ID: testCatalogCredentialField, Label: "Access token",

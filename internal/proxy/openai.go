@@ -22,8 +22,8 @@ type HTTPDoer interface {
 }
 
 var (
-	// HTTPClient is the default HTTPDoer implementation that delegates to http.DefaultClient.
-	HTTPClient HTTPDoer = http.DefaultClient
+	// HTTPClient rejects redirects so upstream origin admission applies to every request.
+	HTTPClient HTTPDoer = &http.Client{CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
 )
 
 // OpenAIClient provides access to the OpenAI responses API with configurable

@@ -20,7 +20,7 @@ import (
 
 const (
 	// ProviderCatalogSchemaVersion is the only accepted providers.yml schema.
-	ProviderCatalogSchemaVersion = 4
+	ProviderCatalogSchemaVersion = 5
 
 	CatalogProviderFieldKindCredential = "credential"
 	CatalogProviderFieldKindSetting    = "setting"
@@ -32,12 +32,20 @@ const (
 	CatalogProviderConnectionTenant     = "tenant"
 	CatalogProviderConnectionDeployment = "deployment"
 
+	CatalogAuthenticationKey              = "key"
+	CatalogProtocolFALQueueImages         = "fal_queue_images"
 	CatalogAuthenticationBearer           = "bearer"
 	CatalogAuthenticationHeader           = "header"
 	CatalogAuthenticationGRPCBearer       = "grpc_bearer"
 	CatalogEndpointProtocolHTTP           = "http"
 	CatalogEndpointProtocolGRPC           = "grpc"
 	CatalogEndpointMethodPost             = "POST"
+	CatalogEndpointMethodGet              = "GET"
+	CatalogProtocolJSONResource           = "json_resource"
+	CatalogProtocolElevenLabsVoices       = "elevenlabs_voices"
+	CatalogProtocolElevenLabsModels       = "elevenlabs_models"
+	CatalogProtocolElevenLabsSubscription = "elevenlabs_subscription"
+	CatalogExecutionReadOnly              = "read_only"
 	CatalogProtocolOpenAIResponses        = "openai_responses"
 	CatalogProtocolOpenAIImages           = "openai_images"
 	CatalogProtocolDashScopeResponses     = "dashscope_responses"
@@ -121,17 +129,27 @@ type ProviderCatalogModelMigration struct {
 
 // ProviderCatalogProvider defines one provider and all provider-owned routes.
 type ProviderCatalogProvider struct {
+	Services []ProviderCatalogService `yaml:"services,omitempty"`
 	// Enabled defaults to enabled when omitted. Candidate providers set false explicitly.
-	Enabled             ModelActivation            `yaml:"enabled,omitempty"`
-	ID                  string                     `yaml:"id"`
-	Label               string                     `yaml:"label"`
-	APIServiceLabel     string                     `yaml:"api_service_label"`
-	ConnectionOwnership string                     `yaml:"connection_ownership"`
-	KeyAcquisitionURL   string                     `yaml:"key_acquisition_url,omitempty"`
-	Aliases             []string                   `yaml:"aliases,omitempty"`
-	Fields              []ProviderCatalogField     `yaml:"fields"`
-	Transports          []ProviderCatalogTransport `yaml:"transports"`
-	Offerings           []ProviderCatalogOffering  `yaml:"offerings"`
+	Enabled             ModelActivation             `yaml:"enabled,omitempty"`
+	ID                  string                      `yaml:"id"`
+	Label               string                      `yaml:"label"`
+	APIServiceLabel     string                      `yaml:"api_service_label"`
+	ConnectionOwnership string                      `yaml:"connection_ownership"`
+	KeyAcquisitionURL   string                      `yaml:"key_acquisition_url,omitempty"`
+	Aliases             []string                    `yaml:"aliases,omitempty"`
+	Fields              []ProviderCatalogField      `yaml:"fields"`
+	Verification        ProviderCatalogVerification `yaml:"verification"`
+	Resources           []ProviderCatalogResource   `yaml:"resources,omitempty"`
+	Transports          []ProviderCatalogTransport  `yaml:"transports"`
+	Offerings           []ProviderCatalogOffering   `yaml:"offerings"`
+}
+
+// ProviderCatalogVerification selects one declared credential verification route.
+// Model is required for text verification and absent for resource verification.
+type ProviderCatalogVerification struct {
+	Transport string `yaml:"transport"`
+	Model     string `yaml:"model,omitempty"`
 }
 
 // ProviderCatalogField defines one tenant connection input.
@@ -156,10 +174,11 @@ type ProviderCatalogFieldValidation struct {
 
 // ProviderCatalogTransport defines one provider route from reusable components.
 type ProviderCatalogTransport struct {
-	ID         string                             `yaml:"id"`
-	Endpoint   ProviderCatalogEndpoint            `yaml:"endpoint"`
-	Headers    []ProviderCatalogHeader            `yaml:"headers,omitempty"`
-	Components ProviderCatalogTransportComponents `yaml:"components"`
+	ArtifactOrigins []string                           `yaml:"artifact_origins,omitempty"`
+	ID              string                             `yaml:"id"`
+	Endpoint        ProviderCatalogEndpoint            `yaml:"endpoint"`
+	Headers         []ProviderCatalogHeader            `yaml:"headers,omitempty"`
+	Components      ProviderCatalogTransportComponents `yaml:"components"`
 }
 
 // ProviderCatalogTransportComponents selects the reusable parts of one provider route.
@@ -238,13 +257,13 @@ type ProviderCatalogOffering struct {
 
 // ProviderCatalogPrice defines one operation price inside its provider offering.
 type ProviderCatalogPrice struct {
-	Operation         string                `yaml:"operation"`
-	Available         bool                  `yaml:"available"`
-	Rates             []CatalogPriceRate    `yaml:"rates,omitempty"`
-	MinimumCharge     *CatalogMinimumCharge `yaml:"minimum_charge,omitempty"`
-	Source            string                `yaml:"source"`
-	LastVerified      string                `yaml:"last_verified"`
-	UnavailableReason string                `yaml:"unavailable_reason,omitempty"`
+	Operation         string                `yaml:"operation" json:"operation"`
+	Available         bool                  `yaml:"available" json:"available"`
+	Rates             []CatalogPriceRate    `yaml:"rates,omitempty" json:"rates"`
+	MinimumCharge     *CatalogMinimumCharge `yaml:"minimum_charge,omitempty" json:"minimum_charge"`
+	Source            string                `yaml:"source" json:"source"`
+	LastVerified      string                `yaml:"last_verified" json:"last_verified"`
+	UnavailableReason string                `yaml:"unavailable_reason,omitempty" json:"unavailable_reason"`
 }
 
 // ProviderCatalog is one validated immutable catalog snapshot.
@@ -562,7 +581,13 @@ func validateProviderCatalogSchema(schema ProviderCatalogSchema) error {
 		if transportError != nil {
 			return transportError
 		}
-		if len(provider.Offerings) == 0 {
+		if resourceError := validateProviderCatalogResources(provider.Resources, transports, fieldPrefix+".resources"); resourceError != nil {
+			return resourceError
+		}
+		if serviceError := validateProviderCatalogServices(provider.Services, transports, fieldPrefix+".services"); serviceError != nil {
+			return serviceError
+		}
+		if len(provider.Offerings) == 0 && len(provider.Resources) == 0 && len(provider.Services) == 0 {
 			return fmt.Errorf("%w: field=%s.offerings", ErrInvalidModelCatalog, fieldPrefix)
 		}
 		for offeringIndex, offering := range provider.Offerings {
@@ -593,6 +618,9 @@ func validateProviderCatalogSchema(schema ProviderCatalogSchema) error {
 			if len(offering.Prices) == 0 {
 				return fmt.Errorf("%w: field=%s.prices", ErrInvalidModelCatalog, offeringField)
 			}
+		}
+		if verificationError := validateProviderCatalogVerification(provider, transports, fieldPrefix+".verification"); verificationError != nil {
+			return verificationError
 		}
 	}
 	return nil
@@ -724,6 +752,9 @@ func validateProviderCatalogTransports(rawTransports []ProviderCatalogTransport,
 		if headersError := validateProviderCatalogHeaders(transport.Headers, fieldPrefix+".headers"); headersError != nil {
 			return nil, headersError
 		}
+		if originError := validateArtifactOrigins(transport, fieldPrefix); originError != nil {
+			return nil, originError
+		}
 		if _, compositionError := composeProviderTransport(transport, fieldPrefix); compositionError != nil {
 			return nil, compositionError
 		}
@@ -770,7 +801,7 @@ func validateProviderCatalogEndpoint(endpoint ProviderCatalogEndpoint, fields ma
 		}
 		return nil
 	}
-	if endpoint.Protocol != CatalogEndpointProtocolHTTP || endpoint.Method != CatalogEndpointMethodPost || !strings.HasPrefix(endpoint.Path, "/") || endpoint.Path != strings.TrimSpace(endpoint.Path) {
+	if endpoint.Protocol != CatalogEndpointProtocolHTTP || (endpoint.Method != CatalogEndpointMethodPost && endpoint.Method != CatalogEndpointMethodGet) || !strings.HasPrefix(endpoint.Path, "/") || endpoint.Path != strings.TrimSpace(endpoint.Path) {
 		return fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
 	}
 	if (endpoint.DefaultBaseURL == constants.EmptyString) == (endpoint.SettingField == constants.EmptyString) {
@@ -804,6 +835,10 @@ func providerCatalogLoopbackHost(host string) bool {
 
 func validateProviderCatalogAuthentication(authentication ProviderCatalogAuthentication, field string) error {
 	switch authentication.Kind {
+	case CatalogAuthenticationKey:
+		if authentication.Header != "Authorization" || authentication.Prefix != "Key " {
+			return fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
+		}
 	case CatalogAuthenticationBearer:
 		if authentication.Header != "Authorization" || authentication.Prefix != "Bearer " {
 			return fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
@@ -860,6 +895,8 @@ func compileProviderCatalogSchema(schema ProviderCatalogSchema, revision string)
 		}
 		modelCatalog.Providers = append(modelCatalog.Providers, CatalogProvider{
 			ID: provider.ID, Label: provider.Label, CredentialKinds: []string{credentialKind},
+			Resources: providerResourceKinds(provider.Resources),
+			Services:  cloneProviderServices(provider.Services),
 		})
 		transports := make(map[string]ProviderCatalogTransport, len(provider.Transports))
 		for _, transport := range provider.Transports {

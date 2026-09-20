@@ -86,7 +86,8 @@ func TestMCPDictatorWorkflow(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	voices, err := httpClient.GetMediaVoices(t.Context(), "dictator")
+	voicesPage, err := httpClient.GetMediaVoices(t.Context(), llmproxyclient.MediaVoiceQuery{Provider: "dictator"})
+	voices := voicesPage.Voices
 	if err != nil {
 		t.Fatal(err)
 	}

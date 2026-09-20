@@ -226,7 +226,7 @@ func TestDictatorAdapterFailureAndPrivacyEdges(t *testing.T) {
 	if _, invalidError := newDictatorMediaOperationAdapter(ProviderNameDictator, ModelNameDictatorWhisperMedium, nil, fixture.service.assets, fixture.service.store, time.Millisecond); invalidError == nil {
 		t.Fatal("nil protocol accepted")
 	}
-	if voices, voicesError := adapter.DiscoverMediaVoices(context.Background(), "tenant"); voicesError != nil || len(voices.Voices) != 1 {
+	if voices, voicesError := adapter.DiscoverMediaVoices(context.Background(), "tenant", MediaVoiceQuery{}); voicesError != nil || len(voices.Voices) != 1 {
 		t.Fatalf("voices=%v error=%v", voices, voicesError)
 	}
 

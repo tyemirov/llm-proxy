@@ -104,11 +104,20 @@ func (adapter *accountDictatorAdapter) Cancel(ctx context.Context, request Media
 	return bound.Cancel(ctx, request)
 }
 
-func (adapter *accountDictatorAdapter) DiscoverMediaVoices(ctx context.Context, tenantID string) (MediaVoiceDiscovery, error) {
+func (adapter *accountDictatorAdapter) DiscoverMediaVoices(ctx context.Context, tenantID string, query MediaVoiceQuery) (MediaVoiceDiscovery, error) {
 	bound, closeConnection, err := adapter.bind(ctx, tenantID, "")
 	if err != nil {
 		return MediaVoiceDiscovery{}, err
 	}
 	defer closeConnection()
-	return bound.DiscoverMediaVoices(ctx, tenantID)
+	return bound.DiscoverMediaVoices(ctx, tenantID, query)
+}
+
+func (adapter *accountDictatorAdapter) MediaVoiceAuthority(ctx context.Context, tenant string) (string, error) {
+	protocol, closeConnection, err := adapter.bindProtocol(ctx, tenant, "")
+	if err != nil {
+		return "", err
+	}
+	defer closeConnection()
+	return protocol.binding, nil
 }

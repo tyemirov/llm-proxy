@@ -10,9 +10,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"regexp"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -147,6 +147,7 @@ type MediaOperationPartialOutput struct {
 
 // MediaOperationExecutionResult is the adapter's terminal or recoverable observation.
 type MediaOperationExecutionResult struct {
+	dictionary     *mediaDictionaryRecord
 	State          string
 	ProviderHandle string
 	ErrorCode      string
@@ -162,7 +163,7 @@ type MediaOperationCancellationResult struct {
 type mediaOperationCreatePayload struct {
 	Capability string          `json:"capability"`
 	Provider   string          `json:"provider"`
-	Model      string          `json:"model"`
+	Model      string          `json:"model,omitempty"`
 	Input      json.RawMessage `json:"input"`
 	Controls   json.RawMessage `json:"controls"`
 }
@@ -246,7 +247,7 @@ type mediaOperationResponse struct {
 	PreviousOperationID string                          `json:"previous_operation_id,omitempty"`
 	Capability          string                          `json:"capability"`
 	Provider            string                          `json:"provider"`
-	Model               string                          `json:"model"`
+	Model               string                          `json:"model,omitempty"`
 	CatalogRevision     string                          `json:"catalog_revision"`
 	State               string                          `json:"state"`
 	CancellationState   string                          `json:"cancellation_state"`
@@ -280,6 +281,8 @@ type mediaOperationStore struct {
 }
 
 type mediaOperationService struct {
+	voiceCursorCipher managedProviderKeyCipher
+	voiceCursorRandom io.Reader
 	httpClient        HTTPDoer
 	store             *mediaOperationStore
 	assets            *tenantAssetStore
@@ -318,6 +321,7 @@ func newMediaOperationStore(managedTenants *managedTenantStore) (*mediaOperation
 		&mediaOperationUsageDeliveryRecord{},
 		&mediaOperationTombstoneRecord{},
 		&mediaVoiceRecord{},
+		&mediaDictionaryRecord{},
 	); migrationError != nil {
 		return nil, fmt.Errorf("%w: migrate", errMediaOperationStore)
 	}
@@ -337,11 +341,15 @@ func newMediaOperationService(configuration Configuration, managedTenants *manag
 		if transport.requestCodec == CatalogProtocolDictatorSpeechV1 {
 			dictatorOfferings = append(dictatorOfferings, offering)
 		}
-		if transport.requestCodec == CatalogProtocolOpenAIImages {
+		if transport.requestCodec == CatalogProtocolOpenAIImages || transport.requestCodec == CatalogProtocolFALQueueImages {
 			imageOfferings = append(imageOfferings, offering)
 		}
 	}
-	if len(configuration.MediaOperationAdapters) != 0 || len(dictatorOfferings) != 0 || len(imageOfferings) != 0 {
+	hasServices := false
+	for _, provider := range configuration.ModelCatalog.Providers {
+		hasServices = hasServices || len(provider.Services) > 0
+	}
+	if len(configuration.MediaOperationAdapters) != 0 || len(dictatorOfferings) != 0 || len(imageOfferings) != 0 || hasServices {
 		var catalogError error
 		catalog, catalogError = NewCatalogService(configuration.ModelCatalog)
 		if catalogError != nil {
@@ -349,8 +357,10 @@ func newMediaOperationService(configuration Configuration, managedTenants *manag
 		}
 	}
 	service := &mediaOperationService{
-		httpClient: httpClient,
-		store:      store, assets: assets, adapters: configuration.MediaOperationAdapters, voiceProviders: configuration.MediaVoiceProviders,
+		voiceCursorCipher: managedTenants.providerKeyCipher,
+		voiceCursorRandom: managedTenants.randomReader,
+		httpClient:        httpClient,
+		store:             store, assets: assets, adapters: maps.Clone(configuration.MediaOperationAdapters), voiceProviders: maps.Clone(configuration.MediaVoiceProviders),
 		catalog: catalog, providers: providers,
 		queue:             make(chan string, configuration.MediaOperationCapacity),
 		dictatorQueue:     make(chan string, configuration.MediaOperationCapacity),
@@ -368,7 +378,12 @@ func newMediaOperationService(configuration Configuration, managedTenants *manag
 		service.adapters = map[string]MediaOperationAdapter{}
 	}
 	for _, offering := range imageOfferings {
-		adapter := newImageGenerationAdapter(offering, providers.definitions[providerID(offering.Provider)], managedTenants, store, assets, catalog)
+		var adapter MediaOperationAdapter
+		if offering.WireContract == CatalogProtocolFALQueueImages {
+			adapter = newQueueImageAdapter(offering, providers.definitions[providerID(offering.Provider)], managedTenants, store, assets)
+		} else {
+			adapter = newImageGenerationAdapter(offering, providers.definitions[providerID(offering.Provider)], managedTenants, store, assets, catalog)
+		}
 		for _, operation := range offering.Operations {
 			key := mediaOperationAdapterKey(mediaCapabilityForCatalogOperation(operation), offering.Provider, offering.Model)
 			service.adapters[key] = adapter
@@ -376,16 +391,37 @@ func newMediaOperationService(configuration Configuration, managedTenants *manag
 	}
 	for _, offering := range dictatorOfferings {
 		adapter := &accountDictatorAdapter{tenants: managedTenants, store: store, assets: assets, provider: offering.Provider, model: offering.Model, transport: providers.definitions[providerID(offering.Provider)].transports[offering.Transport]}
-		if service.voiceProviders == nil {
-			service.voiceProviders = map[string]MediaVoiceProvider{}
-		}
 		for _, operation := range offering.Operations {
 			key := mediaOperationAdapterKey(mediaCapabilityForCatalogOperation(operation), offering.Provider, offering.Model)
 			service.adapters[key] = adapter
 			service.dictatorRoutes[key] = true
 		}
-		if slices.Contains(offering.DefaultOperations, ModelOperationSpeechGeneration) {
-			service.voiceProviders[offering.Provider] = adapter
+	}
+
+	for _, provider := range providers.definitions {
+		for _, route := range provider.services {
+			key := mediaOperationAdapterKey(mediaCapabilityForCatalogOperation(route.Operation), provider.identifier.string(), "")
+			switch provider.transports[route.Transport].requestCodec {
+			case CatalogProtocolElevenLabsDictionary:
+				service.adapters[key] = newProviderDictionaryAdapter(route, provider, managedTenants, store)
+			case CatalogProtocolElevenLabsAlignment:
+				service.adapters[key] = newProviderAlignmentAdapter(route, provider, managedTenants, store, assets)
+			}
+		}
+		for _, resource := range provider.resources {
+			if resource.Kind != llmproxycontract.ProviderResourceVoices {
+				continue
+			}
+			if service.voiceProviders == nil {
+				service.voiceProviders = map[string]MediaVoiceProvider{}
+			}
+			if provider.transports[resource.Transport].requestCodec == CatalogProtocolElevenLabsVoices {
+				service.voiceProviders[provider.identifier.string()] = &elevenLabsVoiceProvider{provider: provider, transport: resource.Transport, tenants: managedTenants, store: store, client: httpClient, revision: catalog.Revision()}
+				continue
+			}
+			service.voiceProviders[provider.identifier.string()] = &accountDictatorAdapter{
+				tenants: managedTenants, store: store, assets: assets, provider: provider.identifier.string(), transport: provider.transports[resource.Transport],
+			}
 		}
 	}
 
@@ -418,7 +454,9 @@ func registerMediaOperationRoutes(router *gin.Engine, authenticator tenantAuthen
 	router.POST(llmproxycontract.MediaOperationsPath, mediaTenantAuthenticatedHandler(authenticator, structuredLogger, service.createHandler()))
 	router.GET(llmproxycontract.MediaOperationsPath+"/:operation_id", mediaTenantAuthenticatedHandler(authenticator, structuredLogger, service.statusHandler()))
 	router.PUT(llmproxycontract.MediaOperationsPath+"/:operation_id/cancellation", mediaTenantAuthenticatedHandler(authenticator, structuredLogger, service.cancellationHandler()))
+	router.GET(llmproxycontract.ProviderResourcesPath+"/:provider/:kind", mediaTenantAuthenticatedHandler(authenticator, structuredLogger, service.providerMetadataHandler()))
 	router.GET(llmproxycontract.MediaVoicesPath, mediaTenantAuthenticatedHandler(authenticator, structuredLogger, service.mediaVoiceCollectionHandler()))
+	router.GET(llmproxycontract.MediaVoicesPath+"/:voice_id/previews/:preview", mediaTenantAuthenticatedHandler(authenticator, structuredLogger, service.mediaVoicePreviewHandler()))
 	router.GET(llmproxycontract.MediaVoicesPath+"/:voice_id", mediaTenantAuthenticatedHandler(authenticator, structuredLogger, service.mediaVoiceHandler()))
 }
 
@@ -450,7 +488,28 @@ func (service *mediaOperationService) capabilitiesHandler() gin.HandlerFunc {
 		sort.Slice(routes, func(first, second int) bool {
 			return mediaOperationAdapterKey(routes[first].Capability, routes[first].Provider, routes[first].Model) < mediaOperationAdapterKey(routes[second].Capability, routes[second].Provider, routes[second].Model)
 		})
-		ginContext.JSON(http.StatusOK, gin.H{"catalog_revision": service.catalog.Revision(), "routes": routes})
+		type capabilityService struct {
+			Capability string           `json:"capability"`
+			Provider   string           `json:"provider"`
+			Controls   []CatalogControl `json:"controls"`
+			Limits     []CatalogLimit   `json:"limits"`
+		}
+		services := make([]capabilityService, 0)
+		resources := make([]llmproxycontract.ProviderResource, 0)
+		for _, identifier := range service.providers.order {
+			provider := service.providers.definitions[identifier]
+			settings, configured := requestTenant.providerSettings[identifier]
+			if !configured || !settings.hasRequiredConnectionFields(provider) {
+				continue
+			}
+			for _, route := range provider.services {
+				services = append(services, capabilityService{Capability: mediaCapabilityForCatalogOperation(route.Operation), Provider: identifier.string(), Controls: route.Controls, Limits: route.Limits})
+			}
+			for _, resource := range provider.resources {
+				resources = append(resources, llmproxycontract.ProviderResource{Provider: identifier.string(), Kind: resource.Kind})
+			}
+		}
+		ginContext.JSON(http.StatusOK, gin.H{"catalog_revision": service.catalog.Revision(), "routes": routes, "resources": resources, "services": services})
 	}
 }
 
@@ -461,10 +520,18 @@ func (service *mediaOperationService) createHandler() gin.HandlerFunc {
 			writeMediaOperationError(ginContext, errMediaOperationInvalid)
 			return
 		}
-		var payload mediaOperationCreatePayload
+		var wire struct {
+			mediaOperationCreatePayload
+			Model json.RawMessage `json:"model"`
+		}
 		decoder := json.NewDecoder(io.LimitReader(ginContext.Request.Body, DefaultMaxPromptBytes+1))
 		decoder.DisallowUnknownFields()
-		if decodeError := decoder.Decode(&payload); decodeError != nil || decoder.Decode(&struct{}{}) != io.EOF {
+		if decodeError := decoder.Decode(&wire); decodeError != nil || decoder.Decode(&struct{}{}) != io.EOF {
+			writeMediaOperationError(ginContext, errMediaOperationInvalid)
+			return
+		}
+		payload := wire.mediaOperationCreatePayload
+		if len(wire.Model) != 0 && (json.Unmarshal(wire.Model, &payload.Model) != nil || strings.TrimSpace(payload.Model) == "") {
 			writeMediaOperationError(ginContext, errMediaOperationInvalid)
 			return
 		}
@@ -495,7 +562,7 @@ func (service *mediaOperationService) create(requestContext context.Context, req
 	payload.Provider = strings.ToLower(strings.TrimSpace(payload.Provider))
 	payload.Model = strings.TrimSpace(payload.Model)
 	catalogOperation := catalogOperationForMediaCapability(payload.Capability)
-	if catalogOperation == "" || payload.Provider == "" || payload.Model == "" {
+	if catalogOperation == "" || payload.Provider == "" {
 		return mediaOperationRecord{}, false, errMediaOperationInvalid
 	}
 	canonicalInput, inputError := canonicalJSONObject(payload.Input)
@@ -528,9 +595,15 @@ func (service *mediaOperationService) create(requestContext context.Context, req
 	if !errors.Is(tombstoneError, gorm.ErrRecordNotFound) {
 		return mediaOperationRecord{}, false, errMediaOperationStore
 	}
-	offering, offeringError := service.catalog.ResolveOffering(payload.Provider, payload.Model)
-	if offeringError != nil || !offeringSupportsOperation(offering, catalogOperation) {
-		return mediaOperationRecord{}, false, errMediaOperationUnavailable
+	if payload.Model == "" {
+		if _, err := service.catalog.ResolveService(payload.Provider, catalogOperation); err != nil {
+			return mediaOperationRecord{}, false, errMediaOperationUnavailable
+		}
+	} else {
+		offering, offeringError := service.catalog.ResolveOffering(payload.Provider, payload.Model)
+		if offeringError != nil || !offeringSupportsOperation(offering, catalogOperation) {
+			return mediaOperationRecord{}, false, errMediaOperationUnavailable
+		}
 	}
 	provider, providerError := service.providers.forTenant(requestTenant).resolveProvider(payload.Provider, "")
 	if providerError != nil {
@@ -733,7 +806,7 @@ func (service *mediaOperationService) cancel(requestContext context.Context, req
 			if confirmationError != nil {
 				return mediaOperationResponse{}, errMediaOperationStore
 			}
-		} else {
+		} else if result.State != MediaCancellationRequested {
 			now := service.store.now()
 			if updateError := service.store.database.WithContext(requestContext).Model(&mediaOperationRecord{}).Where("operation_id = ? AND tenant_id = ? AND public_state = ?", operationID, requestTenant.identifier.string(), MediaOperationStateRunning).Updates(map[string]any{"cancellation_state": MediaCancellationUnsupported, "updated_at": now}).Error; updateError != nil {
 				return mediaOperationResponse{}, errMediaOperationStore
@@ -1020,6 +1093,13 @@ func (service *mediaOperationService) finish(operationID string, generation uint
 		if publicState == MediaOperationStateSucceeded {
 			requestTenant := tenant{identifier: tenantID(record.TenantID)}
 			outputs := append([]MediaOperationOutput(nil), result.Outputs...)
+			if result.dictionary != nil {
+				if err := transaction.Create(result.dictionary).Error; err != nil {
+					publicState = MediaOperationStateUncertain
+					providerState = MediaProviderExecutionSucceeded
+					publicError = "provider_result_invalid"
+				}
+			}
 			if result.Voice != nil {
 				if record.Capability != llmproxycontract.MediaCapabilityAudioVoiceExtract {
 					publicState = MediaOperationStateFailed
@@ -1217,6 +1297,8 @@ func catalogOperationForMediaCapability(capability string) string {
 		return ModelOperationAudioTranscription
 	case llmproxycontract.MediaCapabilityAudioDiarize:
 		return ModelOperationAudioDiarization
+	case llmproxycontract.MediaCapabilityAudioDictionaryCreate:
+		return ModelOperationPronunciationDictionaryCreation
 	case llmproxycontract.MediaCapabilityAudioAlign:
 		return ModelOperationAudioAlignment
 	case llmproxycontract.MediaCapabilitySubtitlesCreate:
@@ -1242,6 +1324,8 @@ func mediaCapabilityForCatalogOperation(operation string) string {
 		return llmproxycontract.MediaCapabilityAudioTranscribe
 	case ModelOperationAudioDiarization:
 		return llmproxycontract.MediaCapabilityAudioDiarize
+	case ModelOperationPronunciationDictionaryCreation:
+		return llmproxycontract.MediaCapabilityAudioDictionaryCreate
 	case ModelOperationAudioAlignment:
 		return llmproxycontract.MediaCapabilityAudioAlign
 	case ModelOperationSubtitleCreation:

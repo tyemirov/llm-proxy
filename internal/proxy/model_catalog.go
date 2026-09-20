@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/tyemirov/llm-proxy/internal/constants"
+	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 )
 
 const (
@@ -23,6 +24,8 @@ const (
 	ModelOperationAudioTranscription = "audio_transcription"
 	// ModelOperationAudioDiarization identifies durable speaker diarization.
 	ModelOperationAudioDiarization = "audio_diarization"
+	// ModelOperationPronunciationDictionaryCreation identifies dictionary creation.
+	ModelOperationPronunciationDictionaryCreation = "pronunciation_dictionary_creation"
 	// ModelOperationAudioAlignment identifies durable transcript alignment.
 	ModelOperationAudioAlignment = "audio_alignment"
 	// ModelOperationSubtitleCreation identifies durable subtitle creation.
@@ -68,9 +71,11 @@ type ModelOperationKind struct {
 
 // CatalogProvider declares one provider that can own provider offerings.
 type CatalogProvider struct {
-	ID              string   `mapstructure:"id"`
-	Label           string   `mapstructure:"label"`
-	CredentialKinds []string `mapstructure:"credential_kinds"`
+	Services        []ProviderCatalogService                `mapstructure:"services"`
+	ID              string                                  `mapstructure:"id"`
+	Label           string                                  `mapstructure:"label"`
+	CredentialKinds []string                                `mapstructure:"credential_kinds"`
+	Resources       []llmproxycontract.ProviderResourceKind `mapstructure:"resources"`
 }
 
 // ModelPublisher declares the organization or community that publishes models.
@@ -178,6 +183,9 @@ func validateModelCatalogStructure(catalog ModelCatalog) (validatedModelCatalog,
 	}
 	if catalogError := validateCatalogProviders(catalog.Providers, validated.providers); catalogError != nil {
 		return validatedModelCatalog{}, catalogError
+	}
+	if err := validateCatalogServices(catalog.Providers, validated.operations); err != nil {
+		return validatedModelCatalog{}, err
 	}
 	if catalogError := validateModelPublishers(catalog.Publishers, validated.publishers); catalogError != nil {
 		return validatedModelCatalog{}, catalogError
@@ -592,6 +600,7 @@ func supportedModelOperation(operation string) bool {
 		ModelOperationAudioTranscription,
 		ModelOperationAudioDiarization,
 		ModelOperationAudioAlignment,
+		ModelOperationPronunciationDictionaryCreation,
 		ModelOperationSubtitleCreation,
 		ModelOperationSpeechGeneration,
 		ModelOperationVoiceExtraction:

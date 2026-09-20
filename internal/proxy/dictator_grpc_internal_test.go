@@ -264,7 +264,10 @@ func TestDictatorConnectionAuthorityAtExecutionBoundary(t *testing.T) {
 	if result := adapter.Cancel(context.Background(), request); result.State != MediaCancellationUnsupported {
 		t.Fatalf("cancelled without authority: %+v", result)
 	}
-	if _, err := adapter.DiscoverMediaVoices(context.Background(), request.TenantID); err == nil {
+	if _, err := adapter.MediaVoiceAuthority(context.Background(), request.TenantID); err == nil {
+		t.Fatal("voice authority accepted an absent assignment")
+	}
+	if _, err := adapter.DiscoverMediaVoices(context.Background(), request.TenantID, MediaVoiceQuery{}); err == nil {
 		t.Fatal("discovered without assignment")
 	}
 	if err := fixture.database.Model(&managedTenantConnectionRecord{}).Where("tenant_id = ?", request.TenantID).Update("provider_id", ProviderNameDictator).Error; err != nil {

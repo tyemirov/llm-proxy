@@ -149,6 +149,7 @@ func imageEditingSecondProvider(t *testing.T) imageEditingFixture {
 			continue
 		}
 		provider.ID = providerID
+		provider.Verification.Transport = "fixture-responses"
 		provider.Fields = append([]proxy.ProviderCatalogField(nil), provider.Fields...)
 		provider.Fields[0].ID = "edit_token"
 		provider.Fields[0].Environment = ""

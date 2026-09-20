@@ -103,7 +103,7 @@ func newDictatorMediaOperationAdapter(provider, model string, protocol dictatorP
 	return &dictatorMediaOperationAdapter{provider: provider, model: model, protocol: protocol, assets: assets, store: store, pollInterval: pollInterval}, nil
 }
 
-func (adapter *dictatorMediaOperationAdapter) DiscoverMediaVoices(requestContext context.Context, _ string) (MediaVoiceDiscovery, error) {
+func (adapter *dictatorMediaOperationAdapter) DiscoverMediaVoices(requestContext context.Context, _ string, _ MediaVoiceQuery) (MediaVoiceDiscovery, error) {
 	voices, err := adapter.protocol.DiscoverVoices(requestContext)
 	return MediaVoiceDiscovery{Authority: adapter.voiceAuthority, Voices: voices}, err
 }

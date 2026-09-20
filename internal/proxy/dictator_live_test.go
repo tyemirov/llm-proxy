@@ -112,7 +112,8 @@ func exerciseDictatorGatewayAcceptance(t *testing.T, client llmproxyclient.Clien
 			routes[route.Capability] = true
 		}
 	}
-	voices, err := client.GetMediaVoices(ctx, proxy.ProviderNameDictator)
+	voicesPage, err := client.GetMediaVoices(ctx, llmproxyclient.MediaVoiceQuery{Provider: proxy.ProviderNameDictator})
+	voices := voicesPage.Voices
 	if err != nil || len(voices) == 0 {
 		t.Fatalf("voice discovery: count=%d error=%v", len(voices), err)
 	}
@@ -197,7 +198,8 @@ func exerciseDictatorGatewayAcceptance(t *testing.T, client llmproxyclient.Clien
 	if len(extracted) != 1 {
 		t.Fatal("voice extraction lacks its public result")
 	}
-	voices, err = client.GetMediaVoices(ctx, proxy.ProviderNameDictator)
+	voicesPage, err = client.GetMediaVoices(ctx, llmproxyclient.MediaVoiceQuery{Provider: proxy.ProviderNameDictator})
+	voices = voicesPage.Voices
 	if err != nil {
 		t.Fatal(err)
 	}

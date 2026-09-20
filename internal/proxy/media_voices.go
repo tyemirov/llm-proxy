@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,18 +27,31 @@ var mediaVoiceIdentifierPattern = regexp.MustCompile(`^voi_[0-9a-f]{32}$`)
 // MediaVoiceProvider discovers native voices through one private provider
 // connection. The shared service assigns tenant-owned gateway identifiers.
 type MediaVoiceProvider interface {
-	DiscoverMediaVoices(context.Context, string) (MediaVoiceDiscovery, error)
+	MediaVoiceAuthority(context.Context, string) (string, error)
+	DiscoverMediaVoices(context.Context, string, MediaVoiceQuery) (MediaVoiceDiscovery, error)
 }
 
 // MediaVoiceDiscovery contains voices and the current private connection authority.
-type MediaVoiceDiscovery struct {
-	Authority string
-	Voices    []MediaVoiceProviderRecord
+// MediaVoiceQuery is the validated source query. PageToken is private.
+type MediaVoiceQuery struct {
+	llmproxycontract.MediaVoiceQuery
+	PageToken string
 }
 
-// MediaVoiceProviderRecord is a validated private voice observation. Model and
-// provider reference values are retained privately and never returned publicly.
+type MediaVoiceDiscovery struct {
+	NativePage    bool
+	NextPageToken string
+	TotalCount    *int
+	Authority     string
+	Voices        []MediaVoiceProviderRecord
+}
+
+// MediaVoiceProviderRecord is a private voice observation. Model records
+// extraction provenance. Account-discovered presets do not require a model.
+// Model and provider reference values are never returned publicly.
 type MediaVoiceProviderRecord struct {
+	Metadata               llmproxycontract.MediaVoiceMetadata
+	PreviewURLs            []string
 	Authority              string
 	Provider               string
 	Model                  string
@@ -51,6 +65,8 @@ type MediaVoiceProviderRecord struct {
 }
 
 type mediaVoiceRecord struct {
+	Metadata               []byte `gorm:"not null;default:'{\"description\":null,\"category\":null,\"labels\":{},\"high_quality_base_model_ids\":[],\"verified_languages\":[],\"preview\":null}'"`
+	PreviewURLs            []byte `gorm:"not null;default:'[]'"`
 	Authority              string
 	VoiceID                string `gorm:"primaryKey"`
 	TenantID               string `gorm:"not null;uniqueIndex:idx_media_voice_native,priority:1;index:idx_media_voice_tenant,priority:1"`
@@ -68,51 +84,33 @@ type mediaVoiceRecord struct {
 }
 
 type mediaVoiceResponse struct {
-	VoiceID           string `json:"voice_id"`
-	Provider          string `json:"provider"`
-	Mode              string `json:"mode"`
-	Language          string `json:"language"`
-	DisplayName       string `json:"display_name"`
-	Default           bool   `json:"default"`
-	SampleRates       []int  `json:"sample_rates"`
-	DefaultSampleRate int    `json:"default_sample_rate"`
+	llmproxycontract.MediaVoiceMetadata
+	VoiceID           string  `json:"voice_id"`
+	Provider          string  `json:"provider"`
+	Mode              string  `json:"mode"`
+	Language          *string `json:"language"`
+	DisplayName       string  `json:"display_name"`
+	Default           bool    `json:"default"`
+	SampleRates       []int   `json:"sample_rates"`
+	DefaultSampleRate *int    `json:"default_sample_rate"`
 }
 
 type mediaVoiceCollectionResponse struct {
-	Voices []mediaVoiceResponse `json:"voices"`
-}
-
-func (service *mediaOperationService) mediaVoiceCollectionHandler() gin.HandlerFunc {
-	return func(ginContext *gin.Context) {
-		provider := strings.TrimSpace(ginContext.Query("provider"))
-		voiceProvider := service.voiceProviders[provider]
-		if provider == "" || provider != strings.ToLower(provider) || voiceProvider == nil {
-			writeMediaVoiceError(ginContext, errors.New(llmproxycontract.ErrorCodeMediaVoiceInvalid))
-			return
-		}
-		requestTenant := authenticatedTenantFromContext(ginContext)
-		discovered, discoveryError := voiceProvider.DiscoverMediaVoices(ginContext.Request.Context(), requestTenant.identifier.string())
-		if discoveryError != nil {
-			writeMediaVoiceError(ginContext, errors.New(llmproxycontract.ErrorCodeMediaVoiceProvider))
-			return
-		}
-		if persistError := service.store.persistMediaVoices(ginContext.Request.Context(), requestTenant.identifier.string(), provider, discovered.Voices); persistError != nil {
-			writeMediaVoiceError(ginContext, persistError)
-			return
-		}
-		voices, listError := service.store.listMediaVoices(ginContext.Request.Context(), requestTenant.identifier.string(), provider, discovered.Authority)
-		if listError != nil {
-			writeMediaVoiceError(ginContext, listError)
-			return
-		}
-		ginContext.JSON(http.StatusOK, mediaVoiceCollectionResponse{Voices: voices})
-	}
+	Voices     []mediaVoiceResponse `json:"voices"`
+	HasMore    bool                 `json:"has_more"`
+	TotalCount *int                 `json:"total_count"`
+	NextCursor *string              `json:"next_cursor"`
 }
 
 func (service *mediaOperationService) mediaVoiceHandler() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
+		ginContext.Header("Cache-Control", "no-store")
 		requestTenant := authenticatedTenantFromContext(ginContext)
-		voice, voiceError := service.store.mediaVoice(ginContext.Request.Context(), requestTenant.identifier.string(), ginContext.Param("voice_id"))
+		record, voiceError := service.currentMediaVoice(ginContext.Request.Context(), requestTenant.identifier.string(), ginContext.Param("voice_id"))
+		var voice mediaVoiceResponse
+		if voiceError == nil {
+			voice, voiceError = publicMediaVoice(record)
+		}
 		if voiceError != nil {
 			writeMediaVoiceError(ginContext, voiceError)
 			return
@@ -143,7 +141,7 @@ func persistMediaVoice(transaction *gorm.DB, tenantID string, provider string, v
 	}
 	conflict := clause.OnConflict{
 		Columns:   []clause.Column{{Name: "tenant_id"}, {Name: "provider"}, {Name: "provider_voice_reference"}},
-		DoUpdates: clause.AssignmentColumns([]string{"authority", "model", "mode", "language", "display_name", "default", "sample_rates", "default_sample_rate", "updated_at"}),
+		DoUpdates: clause.AssignmentColumns([]string{"authority", "model", "mode", "language", "display_name", "default", "sample_rates", "default_sample_rate", "metadata", "preview_urls", "updated_at"}),
 	}
 	if createError := transaction.Clauses(conflict).Create(&record).Error; createError != nil {
 		return mediaVoiceResponse{}, createError
@@ -178,10 +176,10 @@ func newMediaVoiceRecord(tenantID string, provider string, voice MediaVoiceProvi
 	voice.DisplayName = strings.TrimSpace(voice.DisplayName)
 	voice.ProviderVoiceReference = strings.TrimSpace(voice.ProviderVoiceReference)
 	sort.Ints(voice.SampleRates)
-	if tenantID == "" || provider == "" || voice.Provider != provider || voice.Model == "" || (voice.Mode != MediaVoiceModePreset && voice.Mode != MediaVoiceModeExtracted) || voice.Language == "" || voice.DisplayName == "" || voice.ProviderVoiceReference == "" || len(voice.SampleRates) == 0 || voice.DefaultSampleRate <= 0 {
+	if tenantID == "" || provider == "" || voice.Provider != provider || (voice.Mode == MediaVoiceModeExtracted && voice.Model == "") || (voice.Mode != MediaVoiceModePreset && voice.Mode != MediaVoiceModeExtracted) || (voice.Mode == MediaVoiceModeExtracted && voice.Language == "") || voice.DisplayName == "" || voice.ProviderVoiceReference == "" || (len(voice.SampleRates) == 0 && voice.DefaultSampleRate != 0) {
 		return mediaVoiceRecord{}, errors.New(llmproxycontract.ErrorCodeMediaVoiceProvider)
 	}
-	defaultFound := false
+	defaultFound := len(voice.SampleRates) == 0
 	for index, sampleRate := range voice.SampleRates {
 		if sampleRate <= 0 || (index > 0 && sampleRate == voice.SampleRates[index-1]) {
 			return mediaVoiceRecord{}, errors.New(llmproxycontract.ErrorCodeMediaVoiceProvider)
@@ -191,8 +189,26 @@ func newMediaVoiceRecord(tenantID string, provider string, voice MediaVoiceProvi
 	if !defaultFound {
 		return mediaVoiceRecord{}, errors.New(llmproxycontract.ErrorCodeMediaVoiceProvider)
 	}
+	if voice.SampleRates == nil {
+		voice.SampleRates = []int{}
+	}
+	if voice.Metadata.Labels == nil {
+		voice.Metadata.Labels = map[string]string{}
+	}
+	if voice.Metadata.HighQualityBaseModelIDs == nil {
+		voice.Metadata.HighQualityBaseModelIDs = []string{}
+	}
+	if voice.Metadata.VerifiedLanguages == nil {
+		voice.Metadata.VerifiedLanguages = []llmproxycontract.MediaVoiceLanguage{}
+	}
+	if voice.PreviewURLs == nil {
+		voice.PreviewURLs = []string{}
+	}
+	metadata, _ := json.Marshal(voice.Metadata)
+	previews, _ := json.Marshal(voice.PreviewURLs)
 	sampleRates, _ := json.Marshal(voice.SampleRates)
 	return mediaVoiceRecord{
+		Metadata: metadata, PreviewURLs: previews,
 		VoiceID: newMediaVoiceIdentifier(), TenantID: tenantID, Provider: provider,
 		Authority: voice.Authority, ProviderVoiceReference: voice.ProviderVoiceReference, Model: voice.Model, Mode: voice.Mode,
 		Language: voice.Language, DisplayName: voice.DisplayName, Default: voice.Default,
@@ -233,12 +249,45 @@ func (store *mediaOperationStore) mediaVoice(requestContext context.Context, ten
 
 func publicMediaVoice(record mediaVoiceRecord) (mediaVoiceResponse, error) {
 	var sampleRates []int
-	if decodeError := json.Unmarshal(record.SampleRates, &sampleRates); decodeError != nil || len(sampleRates) == 0 {
+	if decodeError := json.Unmarshal(record.SampleRates, &sampleRates); decodeError != nil || sampleRates == nil {
 		return mediaVoiceResponse{}, errors.New(llmproxycontract.ErrorCodeMediaVoiceStore)
 	}
+	var metadata llmproxycontract.MediaVoiceMetadata
+	if err := json.Unmarshal(record.Metadata, &metadata); err != nil || metadata.Labels == nil || metadata.HighQualityBaseModelIDs == nil || metadata.VerifiedLanguages == nil || metadata.Preview != nil {
+		return mediaVoiceResponse{}, errors.New(llmproxycontract.ErrorCodeMediaVoiceStore)
+	}
+	for _, language := range metadata.VerifiedLanguages {
+		if language.Preview != nil {
+			return mediaVoiceResponse{}, errors.New(llmproxycontract.ErrorCodeMediaVoiceStore)
+		}
+	}
+	var previews []string
+	if json.Unmarshal(record.PreviewURLs, &previews) != nil || previews == nil || (len(previews) > 0 && len(previews) != len(metadata.VerifiedLanguages)+1) {
+		return mediaVoiceResponse{}, errors.New(llmproxycontract.ErrorCodeMediaVoiceStore)
+	}
+	for index, preview := range previews {
+		if preview == "" {
+			continue
+		}
+		link := llmproxycontract.MediaVoicesPath + "/" + record.VoiceID + "/previews/" + strconv.Itoa(index)
+		if index == 0 {
+			metadata.Preview = &link
+		} else {
+			metadata.VerifiedLanguages[index-1].Preview = &link
+		}
+	}
+	var language *string
+	if record.Language != "" {
+		language = &record.Language
+	}
+	var rate *int
+	if record.DefaultSampleRate != 0 {
+		rate = &record.DefaultSampleRate
+	}
 	return mediaVoiceResponse{
-		VoiceID: record.VoiceID, Provider: record.Provider, Mode: record.Mode, Language: record.Language,
-		DisplayName: record.DisplayName, Default: record.Default, SampleRates: sampleRates, DefaultSampleRate: record.DefaultSampleRate,
+		MediaVoiceMetadata: metadata,
+		VoiceID:            record.VoiceID, Provider: record.Provider, Mode: record.Mode, Language: language,
+		DisplayName: record.DisplayName, Default: record.Default, SampleRates: sampleRates, DefaultSampleRate: rate,
 	}, nil
 }
 

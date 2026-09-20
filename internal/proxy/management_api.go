@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tyemirov/llm-proxy/internal/constants"
+	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 	"go.uber.org/zap"
 )
 
@@ -98,25 +99,27 @@ type managementTenantDefaultsResponse struct {
 }
 
 type managementProviderResponse struct {
-	ID                        string                              `json:"id"`
-	Label                     string                              `json:"label"`
-	APIServiceLabel           string                              `json:"api_service_label"`
-	KeyAcquisitionURL         string                              `json:"key_acquisition_url"`
-	Aliases                   []string                            `json:"aliases"`
-	Capabilities              []string                            `json:"capabilities"`
-	ModelFamilies             []managementCatalogIdentityResponse `json:"model_families"`
-	Configured                bool                                `json:"configured"`
-	Fields                    []managementProviderFieldResponse   `json:"fields"`
-	TextModel                 string                              `json:"text_model"`
-	SystemPrompt              string                              `json:"system_prompt"`
-	TextDefaultModel          string                              `json:"text_default_model"`
-	TextModels                []managementTextModelResponse       `json:"text_models"`
-	SupportsDictation         bool                                `json:"supports_dictation"`
-	TranscriptionDefaultModel string                              `json:"transcription_default_model,omitempty"`
-	TranscriptionModels       []string                            `json:"transcription_models"`
-	SupportsSpeech            bool                                `json:"supports_speech"`
-	SpeechDefaultModel        string                              `json:"speech_default_model,omitempty"`
-	SpeechModels              []string                            `json:"speech_models"`
+	Services                  []ProviderCatalogService                `json:"services"`
+	ID                        string                                  `json:"id"`
+	Label                     string                                  `json:"label"`
+	APIServiceLabel           string                                  `json:"api_service_label"`
+	KeyAcquisitionURL         string                                  `json:"key_acquisition_url"`
+	Aliases                   []string                                `json:"aliases"`
+	Capabilities              []string                                `json:"capabilities"`
+	Resources                 []llmproxycontract.ProviderResourceKind `json:"resources"`
+	ModelFamilies             []managementCatalogIdentityResponse     `json:"model_families"`
+	Configured                bool                                    `json:"configured"`
+	Fields                    []managementProviderFieldResponse       `json:"fields"`
+	TextModel                 string                                  `json:"text_model"`
+	SystemPrompt              string                                  `json:"system_prompt"`
+	TextDefaultModel          string                                  `json:"text_default_model"`
+	TextModels                []managementTextModelResponse           `json:"text_models"`
+	SupportsDictation         bool                                    `json:"supports_dictation"`
+	TranscriptionDefaultModel string                                  `json:"transcription_default_model,omitempty"`
+	TranscriptionModels       []string                                `json:"transcription_models"`
+	SupportsSpeech            bool                                    `json:"supports_speech"`
+	SpeechDefaultModel        string                                  `json:"speech_default_model,omitempty"`
+	SpeechModels              []string                                `json:"speech_models"`
 }
 
 type managementCatalogIdentityResponse struct {
@@ -796,6 +799,8 @@ func (service *managementService) providerResponses(providerSettings map[provide
 			KeyAcquisitionURL:         summary.keyAcquisitionURL,
 			Aliases:                   append([]string{}, summary.aliases...),
 			Capabilities:              append([]string{}, summary.capabilities...),
+			Resources:                 providerResourceKinds(summary.resources),
+			Services:                  cloneProviderServices(summary.services),
 			ModelFamilies:             modelFamilies,
 			Configured:                configured && settings.hasRequiredConnectionFields(definition),
 			Fields:                    make([]managementProviderFieldResponse, 0, len(definition.fieldOrder)),

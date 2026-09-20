@@ -91,11 +91,11 @@ func (adapter *imageGenerationAdapter) Validate(ctx context.Context, request Med
 		return MediaOperationValidatedRequest{}, errMediaOperationInvalid
 	}
 	count := adapter.controls[imageControlCount]
-	if controls.OutputCount < *count.Minimum || controls.OutputCount > *count.Maximum || (controls.Background == "transparent" && controls.OutputFormat == "jpeg") {
+	if controls.OutputCount < int(*count.Minimum) || controls.OutputCount > int(*count.Maximum) || (controls.Background == "transparent" && controls.OutputFormat == "jpeg") {
 		return MediaOperationValidatedRequest{}, errMediaOperationInvalid
 	}
 	partials := adapter.controls[imageControlPartials]
-	if controls.PartialImages < *partials.Minimum || controls.PartialImages > *partials.Maximum || (!controls.Stream && controls.PartialImages != 0) || (controls.Stream && controls.OutputCount > adapter.limits[imageLimitStreamOutputs]) {
+	if controls.PartialImages < int(*partials.Minimum) || controls.PartialImages > int(*partials.Maximum) || (!controls.Stream && controls.PartialImages != 0) || (controls.Stream && controls.OutputCount > adapter.limits[imageLimitStreamOutputs]) {
 		return MediaOperationValidatedRequest{}, errMediaOperationInvalid
 	}
 	if controls.OutputFormat == "png" {
@@ -104,7 +104,7 @@ func (adapter *imageGenerationAdapter) Validate(ctx context.Context, request Med
 		}
 	} else {
 		compression := adapter.controls[imageControlCompression]
-		if controls.OutputCompression == nil || *controls.OutputCompression < *compression.Minimum || *controls.OutputCompression > *compression.Maximum {
+		if controls.OutputCompression == nil || *controls.OutputCompression < int(*compression.Minimum) || *controls.OutputCompression > int(*compression.Maximum) {
 			return MediaOperationValidatedRequest{}, errMediaOperationInvalid
 		}
 	}
@@ -154,16 +154,20 @@ func (adapter *imageGenerationAdapter) Execute(ctx context.Context, request Medi
 }
 
 func (adapter *imageGenerationAdapter) resolveImageProvider(ctx context.Context, request MediaOperationExecutionRequest, transportID string) (providerDefinition, error) {
+	return resolveMediaProvider(ctx, request, adapter.offering.Provider, transportID, adapter.provider, adapter.tenants, adapter.store)
+}
+
+func resolveMediaProvider(ctx context.Context, request MediaOperationExecutionRequest, providerID, transportID string, definition providerDefinition, tenants *managedTenantStore, store *mediaOperationStore) (providerDefinition, error) {
 	var assignment managedTenantConnectionRecord
-	err := adapter.store.database.WithContext(ctx).Preload("Connection.Fields").Where("tenant_id = ? AND provider_id = ?", request.TenantID, adapter.offering.Provider).First(&assignment).Error
+	err := store.database.WithContext(ctx).Preload("Connection.Fields").Where("tenant_id = ? AND provider_id = ?", request.TenantID, providerID).First(&assignment).Error
 	if err != nil || assignment.ConnectionID+":v"+strconv.FormatUint(assignment.Connection.Version, 10) != request.CredentialReference {
 		return providerDefinition{}, errMediaOperationUnavailable
 	}
-	settings, err := adapter.tenants.accountConnectionSettings(assignment.Connection)
+	settings, err := tenants.accountConnectionSettings(assignment.Connection)
 	if err != nil {
 		return providerDefinition{}, errMediaOperationUnavailable
 	}
-	provider := adapter.provider
+	provider := definition
 	provider.connectionValues = cloneStringMap(provider.connectionValues)
 	for field, value := range settings.connectionValues {
 		provider.connectionValues[field] = value

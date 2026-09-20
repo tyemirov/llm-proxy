@@ -366,6 +366,9 @@ type providerDefinition struct {
 	fieldOrder                []string
 	connectionValues          map[string]string
 	transports                map[string]providerTransportDefinition
+	verification              ProviderCatalogVerification
+	resources                 []ProviderCatalogResource
+	services                  []ProviderCatalogService
 	activeTransport           providerTransportDefinition
 	textAPIKey                string
 	textBaseURL               string
@@ -393,6 +396,7 @@ type dictationModelDefinition struct {
 }
 
 type providerTransportDefinition struct {
+	artifactOrigins     []string
 	identifier          string
 	endpoint            ProviderCatalogEndpoint
 	authentication      ProviderCatalogAuthentication
