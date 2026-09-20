@@ -20,6 +20,10 @@ GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 fmt:
 	$(GOFMT) -w $(GO_SOURCES)
 
+.PHONY: go-dependencies
+go-dependencies:
+	$(GO) mod tidy
+
 check-format:
 	@formatted="$$($(GOFMT) -l $(GO_SOURCES))"; \
 	if [ -n "$$formatted" ]; then \
@@ -91,9 +95,23 @@ test-account-connections:
 test-management-contracts:
 	$(GO) test ./internal/proxy -run '$(if $(MANAGEMENT_TEST_PATTERN),$(MANAGEMENT_TEST_PATTERN),^TestManagement)' -timeout=2m -count=1
 
+.PHONY: test-upstream-admission test-upstream-admission-race test-upstream-admission-accounts
+test-upstream-admission-accounts:
+	$(GO) test -race ./internal/proxy -run '^TestUpstreamAdmissionSharesAccountCapacityAcrossTenants$$' -count=3
+
+test-upstream-admission:
+	$(GO) test ./tests/integration ./internal/proxy ./cmd/cli -run '$(if $(ADMISSION_TEST_PATTERN),$(ADMISSION_TEST_PATTERN),Test.*(UpstreamAdmission|UpstreamCapacity|UpstreamRateLimit|RateLimit|HighLoadQueue|BackgroundPollSleep|LimitedHTTP))' -count=1
+
+test-upstream-admission-race:
+	$(GO) test -race ./tests/integration ./internal/proxy -run '$(if $(ADMISSION_TEST_PATTERN),$(ADMISSION_TEST_PATTERN),Test.*(UpstreamAdmission|UpstreamCapacity|UpstreamRateLimit|RateLimit|HighLoadQueue|BackgroundPollSleep|LimitedHTTP))' -count=1
+
 .PHONY: test-operational-live-contracts
 test-operational-live-contracts:
 	$(GO) test ./tests -run '^TestOperational.*Live' -count=1
+
+.PHONY: test-ci-runner
+test-ci-runner:
+	$(GO) test ./tests -run '^TestOperationalCIRunnerRequiresCurrentCompletionEvidence$$' -count=1
 
 test-live-provider-harness:
 	@GO="$(GO)" ./scripts/test_live_providers.sh --preflight
@@ -148,7 +166,7 @@ ci:
 		PYTHON_PROJECT_DIR="$(PYTHON_PROJECT_DIR)" ./scripts/run_ci.sh
 
 .PHONY: ci-backend ci-frontend
-ci-backend: test-release-policy check-format go-lint python-lint test-protocol-acceptance go-test python-test test-live-provider-harness
+ci-backend: test-release-policy check-format go-lint python-lint test-protocol-acceptance test-upstream-admission-race go-test python-test test-live-provider-harness
 
 ci-frontend: frontend-lint frontend-test test-openapi-pages-artifact test-management-auth-blackbox
 
@@ -192,6 +210,14 @@ test-protocol-acceptance: frontend-dependencies
 test-media-operations: frontend-dependencies
 	$(GO) test ./internal/proxy -run '^Test(MediaOperation|TenantAsset|DictatorWorkerIsolation)' -count=1
 
+.PHONY: test-image-generation
+test-image-generation: frontend-dependencies
+	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run '^TestImageGeneration' -count=1 $(IMAGE_TEST_ARGS)
+
+.PHONY: test-image-discovery
+test-image-discovery: frontend-dependencies
+	$(NPM) run frontend:test -- tests/e2e/public-site-renderer.spec.js tests/e2e/management-ui.spec.js --grep 'image generation'
+
 .PHONY: test-media-cli
 test-media-cli:
 	$(GO) test ./llm-proxy-client -run '^TestMedia' -count=1
@@ -222,7 +248,7 @@ test-release-policy:
 
 .PHONY: test-provider-catalog
 test-provider-catalog: frontend-dependencies
-	$(GO) test ./internal/proxy ./tests ./cmd/cli -run 'Test(ProviderCatalog|CatalogDefined|ModelActivation|RootCommandPrintsCatalogDerivedLiveDiscovery)' -count=1
+	$(GO) test ./internal/proxy ./tests ./cmd/cli -run 'Test(ProviderCatalog|PublicCapabilityCatalog|CatalogDefined|ModelActivation|RootCommandPrintsCatalogDerivedLiveDiscovery)' -count=1
 
 .PHONY: test-deepseek-retirement
 test-deepseek-retirement: frontend-dependencies
