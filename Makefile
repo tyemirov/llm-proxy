@@ -246,6 +246,11 @@ test-installed-gateway:
 test-release-policy:
 	$(GO) test ./tests -run '^TestOperationalReleaseDecisionUsesGixVersion$$' -count=1
 
+.PHONY: test-provider-resources
+test-provider-resources: frontend-dependencies
+	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run '^TestProvider(CatalogResources|Resources)' -count=1
+	cd $(PYTHON_PROJECT_DIR) && $(UV) run --group dev pytest tests/test_client.py -k provider_resources
+
 .PHONY: test-provider-catalog
 test-provider-catalog: frontend-dependencies
 	$(GO) test ./internal/proxy ./tests ./cmd/cli -run 'Test(ProviderCatalog|PublicCapabilityCatalog|CatalogDefined|ModelActivation|RootCommandPrintsCatalogDerivedLiveDiscovery)' -count=1
@@ -386,3 +391,23 @@ generate-public-pages:
 # Supply the selected upstream credentials and a spoken 'hello world' WAV fixture.
 test-dictator-live: frontend-dependencies
 	LLM_PROXY_DICTATOR_LIVE_ENABLED=1 $(GO) test ./internal/proxy -run '^TestDictatorGatewayLiveAcceptance$$' -count=1 -v -timeout=20m
+
+.PHONY: test-fal-images
+test-fal-images: frontend-dependencies
+	$(GO) test ./internal/proxy -run "^TestFALImages" -count=1 $(FAL_TEST_ARGS)
+
+.PHONY: test-catalog-controls
+test-catalog-controls: frontend-dependencies
+	$(GO) test ./internal/proxy -run 'TestProviderCatalogNumberControls' -count=1 $(CATALOG_CONTROL_TEST_ARGS)
+
+.PHONY: test-elevenlabs-resources
+test-elevenlabs-resources: frontend-dependencies
+	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run '^TestElevenLabsAccountResources' -count=1 $(ELEVENLABS_TEST_ARGS)
+
+.PHONY: test-provider-services
+test-provider-services: frontend-dependencies
+	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run '^TestProviderServices' -count=1 $(PROVIDER_SERVICE_TEST_ARGS)
+
+.PHONY: test-provider-voices
+test-provider-voices: frontend-dependencies
+	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run '^Test(ElevenLabsVoices|MediaVoice)' -count=1 $(VOICE_TEST_ARGS)
