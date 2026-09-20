@@ -479,34 +479,34 @@ done`,
   page({
     slug: "upstream-worker-queue-limits",
     category: "Reliability",
-    modifiedDate: PROVIDER_CATALOG_RESOURCE_MODIFIED_DATE,
+    modifiedDate: "2026-09-19",
     primaryKeyword: "upstream worker queue limits",
     title: "Upstream worker and queue limits for LLM traffic",
-    description: "Use shared worker and queue controls to bound upstream HTTP operations for text and dictation.",
+    description: "Set explicit capacity for each upstream origin, tenant, account, and work class.",
     audience: "Operators who need predictable capacity limits for provider HTTP calls.",
-    problem: "Unlimited upstream calls can exhaust provider quotas or local resources, while long OpenAI polling sleeps should not occupy scarce worker capacity.",
-    solution: "LLM Proxy combines server.workers and server.queue_size concurrency bounds with server.upstream_rate_limits rolling-window rules applied at actual upstream admission.",
+    problem: "A slow upstream origin can occupy capacity that other origins need. Media traffic also needs bounded capacity and reserved interactive capacity.",
+    solution: "LLM Proxy uses server.upstream_capacity to allocate capacity by origin. The scheduler applies server.upstream_rate_limits when each HTTP request starts.",
     steps: [
-      "Set server.workers for active upstream HTTP concurrency.",
-      "Set server.queue_size for pending upstream operations.",
-      "Set server.upstream_rate_limits rules for strict call budgets keyed by normalized upstream origin.",
-      "Let OpenAI background poll sleeps release worker capacity between polls.",
-      "Handle 503 request queue full and 504 timeout responses at the caller boundary.",
+      "Set server.upstream_capacity.global ceilings for active and admitted HTTP requests.",
+      "Declare active and queued capacity for each exact upstream origin.",
+      "Set tenant, account, media, status, and transfer limits. Set an interactive reserve.",
+      "Set server.upstream_rate_limits for the call budget of each upstream origin.",
+      "Close each response body before the next poll. Handle HTTP 503 overload and HTTP 504 timeout responses.",
     ],
     features: [
-      ["Shared limiter", "Text providers and dictation use the same upstream HTTP operation limit.", "Capacity policy is centralized."],
-      ["Queue pressure signal", "A full queue returns service-unavailable behavior.", "Callers can distinguish overload from provider failure."],
-      ["Polling separation", "OpenAI poll sleeps do not occupy worker slots.", "Other requests can proceed while a background response waits."],
+      ["Origin allocation", "Each origin has an explicit admission allocation.", "A slow origin cannot consume another origin's queue allocation."],
+      ["Interactive reserve", "Bulk media work leaves reserved capacity for interactive requests.", "Text can proceed during media saturation."],
+      ["Response ownership", "An active request holds capacity until its response body closes.", "Poll sleeps do not hold active HTTP capacity."],
     ],
     examples: [
-      ["Low-capacity environment", "A local deployment sets one worker and a small queue to keep provider traffic controlled."],
-      ["Mixed text and audio", "Dictation and text calls share the same upstream HTTP admission boundary."],
-      ["Operational debugging", "A queue-full status points to proxy-side capacity, not a malformed request."],
+      ["Local deployment", "The configuration declares each local provider origin before startup."],
+      ["Shared account", "Tenants that use one saved connection share its account limit within each origin."],
+      ["Operation telemetry", "Admission events carry a request ID or an operation ID without credentials or prompts."],
     ],
     limitations: [
-      "These controls limit upstream HTTP operations, not the number of connected client requests.",
-      "They do not replace provider-side rate limits.",
-      "Rate rules are keyed by exact normalized HTTP(S) origin, so providers sharing an origin share the configured budget.",
+      "Accepted durable jobs have separate capacity limits.",
+      "Provider rate limits also apply.",
+      "Transports that use the same exact origin share its capacity and rate budget.",
     ],
   }),
   page({
@@ -2638,7 +2638,7 @@ Generated: ${currentResourceModifiedDate}
 | API-served runtime config | Browser config comes from backend /config-ui.yaml, not a static Pages config artifact. | README hosted split-origin section | High | Current | Yes |
 | Bundled v2-only clients | Go package, Go CLI, and Python package send canonical /v2 messages for text. | README clients section | High | Current | Yes |
 | Public-page telemetry | Public static pages load Google Analytics and LoopAware page-view scripts. | site/index.html, resource generator | High | Current | Yes, with privacy caveat |
-| Worker/queue controls | server.workers limits upstream HTTP operations and queue_size limits pending operations. | README REST contract and config section | High | Current | Yes |
+| Upstream capacity | server.upstream_capacity bounds active and admitted requests by origin, tenant, account, and work class. | README REST contract and config section | High | Current | Yes |
 
 ### Non-Capabilities, Limits, and Cautions
 

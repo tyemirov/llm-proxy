@@ -15,6 +15,8 @@ const binaryBytesPerMiB = 1024 * 1024;
 
 const capabilityDefinitions = Object.freeze([
   { identifier: "text", label: "Text generation", routeLabel: "Text", className: "capability-badge--primary" },
+  { identifier: "image_generation", label: "Image generation", routeLabel: "Image", className: "capability-badge--info" },
+  { identifier: "image_editing", label: "Image editing", routeLabel: "Edit", className: "capability-badge--info" },
   { identifier: "dictation", label: "Dictation", routeLabel: "Dictation", className: "capability-badge--info" },
   { identifier: "video_generation", label: "Video generation", routeLabel: "Video", className: "capability-badge--info" },
   { identifier: "audio_transcription", label: "Audio transcription", routeLabel: "Transcription", className: "capability-badge--info" },
@@ -33,10 +35,11 @@ const capabilityDefinitionsByIdentifier = new Map(
   capabilityDefinitions.map((definition) => [definition.identifier, definition]),
 );
 const modelOperationIdentifiers = new Set([
-  "text", "dictation", "video_generation", "audio_transcription", "audio_diarization",
+  "text", "dictation", "image_generation", "image_editing", "video_generation", "audio_transcription", "audio_diarization",
   "audio_alignment", "subtitle_creation", "speech_generation", "voice_extraction",
 ]);
 const providerCredentialKinds = new Set(["api_key", "deployment"]);
+const capabilityDomainIdentifiers = new Set(["text", "transcription", "speech", "image", "video"]);
 const executionLifecycleIdentifiers = new Set(["synchronous_completion", "pollable_resource", "asynchronous_job"]);
 const weightAccessDefinitions = Object.freeze([
   { identifier: "proprietary", label: "Proprietary" },
@@ -71,6 +74,7 @@ await renderPublicSite(options);
  *   operations: string[],
  *   media_inputs: string[],
  *   capabilities: string[],
+ *   domains: string[],
  *   provider_offerings: string[],
  * }} PublicExactModelCapability
  */
@@ -80,6 +84,7 @@ await renderPublicSite(options);
  *   provider: string,
  *   model: string,
  *   capabilities: string[],
+ *   domains: string[],
  *   wire_contract: string,
  *   execution_lifecycle: string,
  *   media_execution_lifecycle: string,
@@ -91,7 +96,8 @@ await renderPublicSite(options);
  *   image_mime_types?: string[],
  * }} PublicProviderOffering
  */
-/** @typedef {{id: string, kind: string, values: string[], minimum: number | null, maximum: number | null, account_dependent: boolean}} PublicCatalogControl */
+/** @typedef {{automatic: boolean, dimension_multiple: number, maximum_edge: number, minimum_pixels: number, maximum_pixels: number, maximum_aspect_ratio: number}} PublicImageSizeConstraints */
+/** @typedef {{id: string, kind: string, values: string[], minimum: number | null, maximum: number | null, account_dependent: boolean, image_size?: PublicImageSizeConstraints}} PublicCatalogControl */
 /** @typedef {{id: string, value: number | null, unit: string, account_dependent: boolean}} PublicCatalogLimit */
 /** @typedef {{id: string, media_type: string, transport: string, status: string, value: number | null, unit: string, scope: string, source: string, last_verified: string}} PublicCatalogMediaLimit */
 /** @typedef {{resolution: string, generated_audio: string, input_media: string, output_media: string, duration: string, quantity: string, quality: string, mode: string, api_version: string, avatar_type: string, billing_mode: string, billing_outcome: string}} PublicPriceConditions */
@@ -288,7 +294,7 @@ function parseCapabilityCatalog(rawCatalog) {
     const field = `catalog.models[${modelIndex}]`;
     const model = requiredRecord(rawModel, field);
     requireExactKeys(model, [
-      "identifier", "publisher", "family", "version", "operations", "media_inputs", "capabilities", "provider_offerings",
+      "identifier", "publisher", "family", "version", "operations", "media_inputs", "capabilities", "domains", "provider_offerings",
     ], field);
     const operations = requiredNonemptyStringArray(model.operations, `${field}.operations`);
     for (const operation of operations) {
@@ -310,6 +316,7 @@ function parseCapabilityCatalog(rawCatalog) {
       operations,
       media_inputs: mediaInputs,
       capabilities: parseCapabilities(model.capabilities, `${field}.capabilities`),
+      domains: parseCapabilityDomains(model.domains, `${field}.domains`),
       provider_offerings: requiredNonemptyStringArray(model.provider_offerings, `${field}.provider_offerings`),
     };
   });
@@ -320,7 +327,7 @@ function parseCapabilityCatalog(rawCatalog) {
     const capabilities = parseCapabilities(offering.capabilities, `${field}.capabilities`);
     const hasMedia = capabilities.includes("image_input") || capabilities.includes("audio_input");
     const offeringKeys = [
-      "identifier", "provider", "model", "capabilities", "wire_contract", "execution_lifecycle",
+      "identifier", "provider", "model", "capabilities", "domains", "wire_contract", "execution_lifecycle",
       "output_token_limit", "reasoning_efforts", "controls", "limits", "media_limits",
     ];
     if (hasMedia) {
@@ -341,6 +348,7 @@ function parseCapabilityCatalog(rawCatalog) {
       provider: requiredString(offering.provider, `${field}.provider`),
       model: requiredString(offering.model, `${field}.model`),
       capabilities,
+      domains: parseCapabilityDomains(offering.domains, `${field}.domains`),
       ...(Object.hasOwn(offering, "image_mime_types") ? {image_mime_types: requiredStringArray(offering.image_mime_types, `${field}.image_mime_types`)} : {}),
       wire_contract: requiredString(offering.wire_contract, `${field}.wire_contract`, true),
       execution_lifecycle: requiredExecutionLifecycle(offering.execution_lifecycle, `${field}.execution_lifecycle`),
@@ -494,9 +502,11 @@ function requiredExecutionLifecycle(rawLifecycle, field) {
  */
 function parseCatalogControl(rawControl, field) {
   const control = requiredRecord(rawControl, field);
-  requireExactKeys(control, ["id", "kind", "values", "minimum", "maximum", "account_dependent"], field);
   const kind = requiredString(control.kind, `${field}.kind`);
-  if (kind !== "enum" && kind !== "integer" && kind !== "boolean") {
+  const keys = ["id", "kind", "values", "minimum", "maximum", "account_dependent"];
+  if (kind === "image_size") keys.push("image_size");
+  requireExactKeys(control, keys, field);
+  if (kind !== "enum" && kind !== "integer" && kind !== "boolean" && kind !== "image_size") {
     throw new Error(`public_capabilities_invalid: ${field}.kind value=${kind}`);
   }
   return {
@@ -506,6 +516,25 @@ function parseCatalogControl(rawControl, field) {
     minimum: nullableNonnegativeInteger(control.minimum, `${field}.minimum`),
     maximum: nullableNonnegativeInteger(control.maximum, `${field}.maximum`),
     account_dependent: requiredBoolean(control.account_dependent, `${field}.account_dependent`),
+    ...(kind === "image_size" ? { image_size: parseImageSizeConstraints(control.image_size, `${field}.image_size`) } : {}),
+  };
+}
+
+/**
+ * @param {unknown} rawConstraints
+ * @param {string} field
+ * @returns {PublicImageSizeConstraints}
+ */
+function parseImageSizeConstraints(rawConstraints, field) {
+  const size = requiredRecord(rawConstraints, field);
+  requireExactKeys(size, ["automatic", "dimension_multiple", "maximum_edge", "minimum_pixels", "maximum_pixels", "maximum_aspect_ratio"], field);
+  return {
+    automatic: requiredBoolean(size.automatic, `${field}.automatic`),
+    dimension_multiple: requiredPositiveInteger(size.dimension_multiple, `${field}.dimension_multiple`),
+    maximum_edge: requiredPositiveInteger(size.maximum_edge, `${field}.maximum_edge`),
+    minimum_pixels: requiredPositiveInteger(size.minimum_pixels, `${field}.minimum_pixels`),
+    maximum_pixels: requiredPositiveInteger(size.maximum_pixels, `${field}.maximum_pixels`),
+    maximum_aspect_ratio: requiredPositiveInteger(size.maximum_aspect_ratio, `${field}.maximum_aspect_ratio`),
   };
 }
 
@@ -1090,6 +1119,19 @@ function requiredNonemptyStringArray(value, field) {
     throw new Error(`public_capabilities_invalid: ${field} must not be empty`);
   }
   return entries;
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} field
+ * @returns {string[]}
+ */
+function parseCapabilityDomains(value, field) {
+  const domains = requiredNonemptyStringArray(value, field);
+  if (new Set(domains).size !== domains.length || domains.some((domain) => !capabilityDomainIdentifiers.has(domain))) {
+    throw new Error(`public_capabilities_invalid: ${field}`);
+  }
+  return domains;
 }
 
 /**

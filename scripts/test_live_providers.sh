@@ -470,7 +470,14 @@ replacement = f"            default_base_url: {sys.argv[2]}\n            path: /
 if document.count(needle) != 1:
     raise SystemExit("OpenAI preflight transport is not unique")
 catalog_path.write_text(document.replace(needle, replacement, 1), encoding="utf-8")
-' "${PROVIDER_CATALOG_PATH}" "${PREFLIGHT_PROVIDER_URL}"
+config_path = pathlib.Path(sys.argv[3])
+configuration = config_path.read_text(encoding="utf-8")
+capacity_origin_list = "    origins:\n"
+if configuration.count(capacity_origin_list) != 1:
+    raise SystemExit("upstream capacity origin list is not unique")
+preflight_capacity = f"      - {{origin: {sys.argv[2]}, active: 4, queued: 24}}\n"
+config_path.write_text(configuration.replace(capacity_origin_list, capacity_origin_list + preflight_capacity, 1), encoding="utf-8")
+' "${PROVIDER_CATALOG_PATH}" "${PREFLIGHT_PROVIDER_URL}" "${CONFIG_PATH}"
   fi
 }
 
