@@ -11,7 +11,8 @@ that input capability.
 
 The public [LLM Proxy landing page](https://llm-proxy.mprlab.com/) explains the
 current provider, model, dictation, web-search, request-limit, and integration
-surface. Its route explorer filters model families by weight access and
+surface. Its route explorer initially shows all model families and capability types.
+Both weight access types are selected. Visitors can filter model families by weight access and
 provider-offering capabilities. It then selects a model family, an exact model,
 and a provider offering. Its model matrix has one row for each exact model and
 shows all current provider offerings for that model. Both interfaces use the
@@ -1608,6 +1609,9 @@ configuration without building or starting the proxy. Inspect that config with
 /tmp/llm-proxy-live.yml`. Unless `LLM_PROXY_LIVE_PORT` explicitly selects a
 port, each harness run allocates a fresh loopback port. Cleanup removes only the
 temporary proxy and provider children that it starts.
+The preflight divides the OpenAI capacity allocation between its native origin and the loopback origin.
+This division preserves the total origin allocation and the global capacity budget.
+The production configuration does not change.
 
 ### Production Default-tenant live test
 
