@@ -78,6 +78,7 @@ export async function startLocalManagementStack(authRouting = "frontend") {
       throw new Error("llm_proxy_blackbox_port_contract_missing");
     }
     const capacityConfig = yaml.load(llmProxyConfig);
+    capacityConfig.server.upstream_capacity.origins = capacityConfig.server.upstream_capacity.origins.filter(rule => rule.origin !== "https://api.fal.ai");
     capacityConfig.server.upstream_capacity.origins.push({origin: frontendOrigin, active: 4, queued: 24});
     llmProxyConfig = yaml.dump(capacityConfig);
     const packagedProviderCatalog = await readFile(path.join(repoRoot, "configs/providers.yml"), "utf8");
@@ -89,6 +90,8 @@ export async function startLocalManagementStack(authRouting = "frontend") {
       throw new Error("llm_proxy_blackbox_openai_transport_contract_missing");
     }
     const speechCatalog = yaml.load(providerCatalog);
+    speechCatalog.providers.find(provider => provider.id === "fal").transports.find(transport => transport.id === "account").endpoint.default_base_url = frontendOrigin;
+    speechCatalog.providers.find(provider => provider.id === "elevenlabs").transports.find(transport => transport.id === "subscription").endpoint.default_base_url = frontendOrigin;
     const speechProvider = structuredClone(speechCatalog.providers.find(provider => provider.id === "dictator"));
     const speechModel = structuredClone(speechCatalog.models.find(model => model.id === "whisper-base"));
     speechProvider.id = "speech-fixture";
@@ -105,6 +108,34 @@ export async function startLocalManagementStack(authRouting = "frontend") {
     speechProvider.offerings[0].upstream_model = "private-speech-fixture";
     speechCatalog.models.push(speechModel);
     speechCatalog.providers.push(speechProvider);
+    const resourceProvider = structuredClone(speechProvider);
+    resourceProvider.id = "resource-fixture";
+    resourceProvider.label = "Resource fixture";
+    resourceProvider.offerings = [];
+    speechCatalog.providers.push(resourceProvider);
+    const mediaProvider = structuredClone(speechCatalog.providers.find(provider => provider.id === "xai"));
+    mediaProvider.id = "media-fixture";
+    mediaProvider.label = "Media fixture";
+    mediaProvider.api_service_label = "Media fixture API";
+    mediaProvider.aliases = [];
+    mediaProvider.fields = [mediaProvider.fields[0]];
+    mediaProvider.fields[0].id = "media_token";
+    mediaProvider.fields[0].label = "Media account token";
+    delete mediaProvider.fields[0].environment;
+    mediaProvider.offerings = mediaProvider.offerings.filter(offering => offering.operations.includes("video_generation"));
+    mediaProvider.transports = mediaProvider.transports.filter(transport => transport.id === mediaProvider.offerings[0].transport);
+    mediaProvider.transports[0].components.authentication.field = "media_token";
+    mediaProvider.transports.push({
+      id: "account",
+      endpoint: {protocol: "http", method: "GET", default_base_url: frontendOrigin, path: "/provider-account"},
+      components: {
+        request_codec: {id: "json_resource"}, response_codec: {id: "json_resource"},
+        authentication: {kind: "header", field: "media_token", header: "X-Media-Token", prefix: ""},
+        execution: {id: "read_only"},
+      },
+    });
+    mediaProvider.verification = {transport: "account"};
+    speechCatalog.providers.push(mediaProvider);
     const llmProxyConfigPath = path.join(temporaryDirectory, "llm-proxy-config.yml");
     await writeFile(llmProxyConfigPath, llmProxyConfig, { mode: 0o600 });
     await writeFile(path.join(temporaryDirectory, "providers.yml"), yaml.dump(speechCatalog), { mode: 0o600 });
@@ -274,7 +305,7 @@ async function handleFrontendRequest(request, response, managementAPIOrigin, tAu
     if (requestURL.pathname === "/assets/llm-proxy/js/brandIconManifest.js") {
       const manifest = await readFile(path.join(siteRoot, "assets/llm-proxy/js/brandIconManifest.js"), "utf8");
       response.writeHead(200, {"content-type": "application/javascript"});
-      response.end(`${manifest}\nbrandIconManifest.providers["speech-fixture"] = null;\n`);
+      response.end(`${manifest}\nbrandIconManifest.providers["speech-fixture"] = null;\nbrandIconManifest.providers["media-fixture"] = null;\nbrandIconManifest.providers["resource-fixture"] = null;\n`);
       return;
     }
     if (requestURL.pathname === "/config-ui.yaml") {
@@ -293,6 +324,23 @@ async function handleFrontendRequest(request, response, managementAPIOrigin, tAu
         throw new Error("tauth_origin_not_ready");
       }
       await proxyFrontendRequest(request, response, tAuthOrigin);
+      return;
+    }
+    if (requestURL.pathname === "/v1/models/pricing") {
+      response.writeHead(request.headers.authorization === "Key local-fal-key" ? 200 : 401, {"Content-Type": "application/json"});
+      response.end(JSON.stringify({prices: []}));
+      return;
+    }
+    if (requestURL.pathname === "/v1/user/subscription") {
+      const accepted = request.method === "GET" && request.headers["xi-api-key"] === "local-eleven-key";
+      response.writeHead(accepted ? 200 : 401, {"Content-Type": "application/json"});
+      response.end(JSON.stringify({tier: "creator", status: "active"}));
+      return;
+    }
+    if (requestURL.pathname === "/provider-account") {
+      const accepted = request.method === "GET" && request.headers["x-media-token"] === "browser-media-token";
+      response.writeHead(accepted ? 200 : 401, { "content-type": mimeTypes[".json"] });
+      response.end(accepted ? '{"subscription":"active"}' : '{}');
       return;
     }
     if (request.method === "POST" && requestURL.pathname === "/v1/responses") {

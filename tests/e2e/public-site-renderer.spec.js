@@ -13,6 +13,37 @@ const executeFile = promisify(execFile);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const publicCapabilitiesPath = "/api/public/capabilities";
 
+test("public site renders catalog number controls with decimal bounds", async ({ page }) => {
+  const capabilities = normalizedCapabilityFixture();
+  capabilities.offerings[0].controls = [{ id: "speed", kind: "number", values: [], minimum: 0.7, maximum: 1.2, account_dependent: false }];
+  await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+    const fixture = await siteFixture();
+    try {
+      await renderFixture(fixture, capabilitiesURL);
+      await page.setContent(await readFile(path.join(fixture.output, "index.html"), "utf8"));
+      await expect(page.locator('[data-route-model="example-model"]')).toBeVisible();
+      await expect(page.locator('[data-route-provider="deepseek"]')).toBeVisible();
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+});
+
+for (const [kind, minimum, maximum] of [["number", 1.2, 0.7], ["integer", 0.7, 1.2], ["integer", -1, 2], ["number", null, 1.2]]) {
+  test(`public site rejects invalid number controls: ${kind} ${minimum} ${maximum}`, async () => {
+    const capabilities = normalizedCapabilityFixture();
+    capabilities.offerings[0].controls = [{ id: "speed", kind, values: [], minimum, maximum, account_dependent: false }];
+    await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+      const fixture = await siteFixture();
+      try {
+        await expect(renderFixture(fixture, capabilitiesURL)).rejects.toThrow(/controls/u);
+      } finally {
+        await rm(fixture.root, { recursive: true, force: true });
+      }
+    });
+  });
+}
+
 test("public site renders image generation with catalog dimension controls", async () => {
   const capabilities = normalizedCapabilityFixture();
   capabilities.operations.push({ id: "image_generation", input_artifacts: ["text"], output_artifacts: ["image"] });
@@ -204,10 +235,10 @@ test("public site rendering writes the normalized exact model catalog", async ()
       const renderedLanding = await readFile(path.join(fixture.output, "index.html"), "utf8");
       expect(renderedLanding).toContain("1 family · 1 exact model · 1 offering");
       expect(renderedLanding).toContain('data-route-weight-access="proprietary" aria-pressed="true"');
-      expect(renderedLanding).toContain('data-route-weight-access="open_weights" aria-pressed="false"');
+      expect(renderedLanding).toContain('data-route-weight-access="open_weights" aria-pressed="true"');
       expect(renderedLanding).toContain('role="group" aria-label="Choose one or both weight access types"');
       expect(renderedLanding).toContain('role="group" aria-label="Choose one capability"');
-      expect(renderedLanding).toContain('data-route-capability="text" aria-label="Text generation" title="Text generation" aria-pressed="true"');
+      expect(renderedLanding).toContain('data-route-capability="all" aria-label="All capabilities" title="All capabilities" aria-pressed="true"');
       expect(renderedLanding).toContain('data-route-family-weight-access="proprietary"');
       expect(renderedLanding).toContain('data-route-provider-capabilities="text"');
       expect(renderedLanding).toContain('data-route-family="deepseek-v4"');
@@ -248,7 +279,7 @@ function normalizedCapabilityFixture() {
       { id: "dictation", input_artifacts: ["audio"], output_artifacts: ["text"] },
       { id: "video_generation", input_artifacts: ["text", "image"], output_artifacts: ["video"] },
     ],
-    providers: [{ identifier: "deepseek", label: "Example Provider", credential_kinds: ["api_key"] }],
+    providers: [{ identifier: "deepseek", label: "Example Provider", credential_kinds: ["api_key"], resources: /** @type {string[]} */ ([]), services: [] }],
     publishers: [{ identifier: "example-publisher", label: "Example Publisher", model_count: 1 }],
     families: [{
       identifier: "deepseek-v4",
@@ -368,3 +399,50 @@ async function withCapabilityServer(statusCode, responseBody, assertion) {
     });
   }
 }
+
+for (const resources of [undefined, null, ["unknown"], ["voices", "voices"]]) {
+  test(`public site rejects invalid provider resources: ${JSON.stringify(resources)}`, async () => {
+    const capabilities = normalizedCapabilityFixture();
+    Object.assign(capabilities.providers[0], {resources});
+    await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+      const fixture = await siteFixture();
+      try {
+        await expect(renderFixture(fixture, capabilitiesURL)).rejects.toThrow(/public_capabilities_invalid: catalog.providers\[0\]/u);
+      } finally {
+        await rm(fixture.root, {recursive: true, force: true});
+      }
+    });
+  });
+}
+
+test("public site accepts catalog provider resources", async () => {
+  const capabilities = normalizedCapabilityFixture();
+  capabilities.providers[0].resources = ["voices"];
+  await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+    const fixture = await siteFixture();
+    try {
+      await renderFixture(fixture, capabilitiesURL);
+      expect(await readFile(path.join(fixture.output, "index.html"), "utf8")).toContain('data-route-provider="deepseek"');
+    } finally {
+      await rm(fixture.root, {recursive: true, force: true});
+    }
+  });
+});
+
+test("public site shows provider services without extra models", async ({page}) => {
+  const capabilities=normalizedCapabilityFixture();
+  Object.assign(capabilities.providers[0], {services:[{operation:'audio_alignment',controls:[],limits:[{id:'input_audio_bytes',value:1000000000,unit:'bytes',account_dependent:false}],price:{operation:'audio_alignment',available:false,rates:[],minimum_charge:null,source:'https://example.com/pricing',last_verified:'2026-09-20',unavailable_reason:'Exact price is unavailable.'}}]});
+  capabilities.providers[0].services.push({operation:'pronunciation_dictionary_creation',controls:[],limits:[],price:{operation:'pronunciation_dictionary_creation',available:false,rates:[],minimum_charge:null,source:'https://example.com/pricing',last_verified:'2026-09-20',unavailable_reason:'Exact price is unavailable.'}});
+  await withCapabilityServer(200,capabilities,async capabilitiesURL=>{
+    const fixture=await siteFixture();
+    try {
+      await renderFixture(fixture,capabilitiesURL);
+      await page.setContent(await readFile(path.join(fixture.output,'index.html'),'utf8'));
+      await expect(page.locator('[data-provider-services]')).toContainText('Example Provider');
+      await expect(page.locator('[data-provider-services]')).toContainText('Audio alignment');
+      await expect(page.locator('[data-provider-services]')).toContainText('Pronunciation dictionary');
+      await expect(page.locator('[data-provider-services]')).toContainText('Exact price is unavailable.');
+      await expect(page.locator('[data-route-model]')).toHaveCount(1);
+    } finally {await rm(fixture.root,{recursive:true,force:true});}
+  });
+});
