@@ -8,7 +8,7 @@ model migrations, controls, limits, and prices.
 
 The loader reads `providers.yml` from the directory of the selected
 `config.yml`. It parses the provider catalog before it validates service
-configuration. The loader accepts only schema version 4.
+configuration. The loader accepts only schema version 5.
 
 The current provider catalog has these records:
 
@@ -187,6 +187,30 @@ A setting with a default can omit its environment binding.
 Every deployment-owned field is required and has an environment binding.
 Deployment-owned providers do not appear in tenant connection management.
 
+## Connection verification
+
+Each provider declares one `verification` binding in the provider catalog.
+The binding references a transport in that provider definition.
+Text verification also references a declared exact model through `verification.model`.
+If that model or offering is disabled, connection verification returns an unavailable error without an upstream request.
+Resource verification omits the model field.
+The loader rejects absent bindings, dangling references, and unsupported protocol combinations.
+
+Connection creation and credential replacement use this binding.
+All capability branches retain the same provider fields and tenant assignments.
+A text default change does not change the declared verification model.
+
+The `json_resource` codec uses HTTP GET and the `read_only` lifecycle.
+Its response must have a successful HTTP status and contain one JSON object.
+The request uses the transport's declared authentication and the shared account credential.
+The verifier bounds response size and request duration.
+Provider rejection, rate limits, and transport errors use the existing connection error contract.
+The Dictator binding uses its existing authenticated gRPC discovery check.
+New media-only providers do not require text offerings or paid generation for connection verification.
+
+Schema version 5 replaces version 4. The loader rejects the previous schema.
+Provider resource APIs remain separate from model offerings. F077 owns their typed catalog bindings.
+
 ## Provider transport mapping
 
 Each item in `providers[].transports` is one provider transport.
@@ -355,6 +379,13 @@ Each media limit uses these fields:
 Each control uses `id`, `kind`, `values`, `minimum`, `maximum`, and
 `account_dependent`. Each limit uses `id`, `value`, `unit`, and
 `account_dependent`.
+The `number` control kind permits decimal bounds, such as a speed range from `0.7` to `1.2`.
+Both numeric bounds must be finite, and the minimum must not exceed the maximum.
+The `integer` kind requires nonnegative whole-number bounds.
+Fractional integer bounds are invalid and must not be rounded or truncated.
+Number and integer controls use empty `values` arrays in public discovery.
+Provider adapters must use the declared bounds when they validate operation controls.
+
 
 Each price record uses these fields:
 
@@ -511,3 +542,53 @@ The `vertex_generate_content` protocol uses synchronous completion with a custom
 Its authentication kind is `header`, and its public credential kind is `api_key`.
 The catalog selects `x-goog-api-key` and the key-only model endpoint.
 The [Vertex contract](vertex-gemini.md) defines tenant connections, request mapping, limits, and the operator-profile transition.
+
+## Provider Resources
+
+`providers[].resources[]` binds account resources to declared transports.
+Each binding contains `kind` and `transport`. It has no model field.
+A provider can declare resources without model offerings.
+The provider fields and account connection remain shared across all bindings.
+
+The resource vocabulary contains `voices`, `voice_library`, `history`, `pronunciation_dictionaries`, `metadata`, `quotas`, and `elements`.
+The catalog rejects unknown kinds, duplicate kinds, and dangling transport references.
+It also rejects a kind and codec pair without an implemented adapter.
+The current `voices` binding uses `dictator_speech_v1` and the existing tenant voice API.
+The `metadata` binding uses `elevenlabs_models`.
+The `quotas` binding uses `elevenlabs_subscription`.
+Both resources use authenticated HTTP GET requests through the same provider connection.
+See [ElevenLabs account resources](elevenlabs-account-resources.md) for the public representations and limits.
+F026 and F027 retain the remaining native resource adapters.
+A vocabulary entry alone does not advertise an implemented resource.
+
+Public and management provider discovery include a `resources` array of declared resource kinds.
+Connection details show these resources even when the provider has no model offerings.
+Tenant media discovery includes `resources` entries with `provider` and `kind`.
+Tenant discovery includes only resources with the required connection fields.
+These representations exclude private transport names, credentials, and upstream identifiers.
+The Go and Python clients require the current resource discovery shape.
+
+Voice discovery uses the declared transport without a default speech model.
+Preset voices do not require model provenance. Extracted voices retain their source model privately.
+Native synthesis-engine checks remain inside the speech adapter.
+
+## Queue Image Transport
+
+The `fal_queue_images` codec uses the `asynchronous_job` lifecycle.
+Its endpoint path is `/{model}`. The offering supplies the native model path.
+Its `artifact_origins` list declares exact HTTP origins for result downloads.
+Use HTTPS origins, except for loopback origins in local tests.
+Other codecs reject this field until they implement its transfer contract.
+The shared admission configuration must assign capacity to every declared origin.
+
+The `key` authentication component requires the `Authorization` header and the `Key ` prefix.
+It references a shared credential field inside the provider definition.
+The account verification transport and image transport use this same field.
+See [FAL image operations](fal-image-operations.md) for request, recovery, and artifact contracts.
+
+## Model-Free Services
+
+`providers[].services[]` declares operations that do not select a model.
+Each entry references a transport in the same provider and declares controls, limits, and a price observation.
+Public, tenant, and management discovery expose these services without additional model identities.
+See [Provider services](provider-services.md) for forced alignment, client requests, and recovery.

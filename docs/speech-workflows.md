@@ -15,7 +15,7 @@ Keep provider credentials in the account connection.
 | Command | Input | Result |
 | --- | --- | --- |
 | `capabilities` | Tenant configuration | Available media routes |
-| `voices --provider dictator` | Provider ID | Tenant voice collection |
+| `voices --provider dictator` | Provider ID and page query | Tenant voice page with an opaque continuation cursor |
 | `upload --file sample.wav --mime-type audio/wav` | Local audio file | Tenant asset metadata |
 | `submit --idempotency-key extraction-001` | One operation JSON object on stdin | Accepted operation |
 | `status --operation-id mop_...` | Saved operation ID | Current operation |
@@ -23,6 +23,8 @@ Keep provider credentials in the account connection.
 | `cancel --operation-id mop_...` | Saved operation ID | Observed cancellation result |
 | `download --asset-id ast_...` | Output asset ID | Exact bytes on stdout |
 
+Use [voice query flags](provider-voices.md) to filter the first page.
+Use only `--provider` and `--cursor` to request each subsequent page.
 Save upload metadata and the accepted operation response.
 Use the saved asset ID in the operation input.
 Reuse the same idempotency key only with the same complete request.
