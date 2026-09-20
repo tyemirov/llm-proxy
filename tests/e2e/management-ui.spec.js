@@ -1,6 +1,7 @@
 // @ts-check
 
 import { expect, test } from "@playwright/test";
+import { load as loadYAML } from "js-yaml";
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
@@ -3146,6 +3147,31 @@ test("image generation discovery reuses the OpenAI connection and catalog fields
   await dialog.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
   await expect(dialog.locator("[data-credential-fields] input")).toHaveCount(1);
   await expect(dialog.getByLabel("OpenAI API key", { exact: true })).toHaveAttribute("type", "password");
+});
+
+test("Vertex connection setup opens the catalog API Keys page", async ({ page }) => {
+  const catalog = loadYAML(await readFile(path.join(repoRoot, "configs/providers.yml"), "utf8"));
+  const vertex = catalog.providers.find((provider) => provider.id === "vertex");
+  const profile = managementProfile();
+  const gemini = profile.providers.find((provider) => provider.id === "gemini");
+  profile.providers.push({
+    ...gemini,
+    id: vertex.id,
+    label: vertex.label,
+    api_service_label: vertex.api_service_label,
+    key_acquisition_url: vertex.key_acquisition_url,
+    fields: vertex.fields.map((field) => ({ ...field, configured: false })),
+  });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { profile });
+  await page.goto(baseURL + applicationPath);
+  await page.locator("connection-dashboard").getByRole("button", { name: "Create connection", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Create connection" });
+  await dialog.getByRole("combobox", { name: "Provider", exact: true }).selectOption("vertex");
+  const link = dialog.getByRole("link", { name: "Get Vertex AI credentials ↗", exact: true });
+  await expect(link).toHaveAttribute("href", "https://console.cloud.google.com/agent-platform/studio/settings/api-keys");
+  await expect(link).toHaveAttribute("target", "_blank");
+  await expect(link).toHaveAttribute("rel", "noopener noreferrer");
 });
 
 test("connection setup uses each provider's required catalog fields", async ({ page }) => {
