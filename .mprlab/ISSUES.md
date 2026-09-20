@@ -27,6 +27,21 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [!] [B242] (P2) Open the Vertex API Keys page from connection setup.
+  Evidence: The catalog link opens the general Vertex page instead of the API Keys page.
+  Requirements: Use the direct Google API Keys URL without a fixed account or project.
+  Requirements: Document project selection and the Google controls for key creation and retrieval.
+  Validation: Chrome shows **Create API Key** and **Show key** at the new destination.
+  Validation: The browser test fails with the old URL and passes with the new URL.
+  Progress: Updated the catalog URL and the Vertex setup procedure. No event contract changed.
+  Validation: All 147 frontend browser tests pass. Frontend static analysis and `git diff --check` pass.
+  Blocked: Final CI requires correction of the existing operation-count assertion described below.
+  Validation: `make ci` stops at `TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry` in `tests/capabilities_test.go:137`.
+  Evidence: The unchanged test expects 11 operations. The catalog contains 12 operations. This URL change preserves operation counts.
+  Evidence: `vertex-ci.log` in the task work directory records the failure.
+  Validation: The changed prose passes the mechanical language check. Existing tracker text has 72 findings.
+  Validation: Governor reports existing template differences in `AGENTS.DOCKER.md`, `PLANNING.md`, and `POLICY.md`.
+
 - [x] [B241] (P2) Reserve executable capacity for voice preview downloads.
   Evidence: The new preview origin has one active slot and an interactive reserve of one slot.
   Evidence: The public preview test returns `502` when it uses this production allocation.
