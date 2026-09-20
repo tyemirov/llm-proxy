@@ -27,6 +27,80 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B229] (P1) Send the selected Whisper size to Dictator.
+  Evidence: Transcription and subtitle requests omit the model size.
+  Requirements: Send the selected size for each Whisper model.
+  Validation: Run the public HTTP and gRPC integration tests for all five sizes.
+  Progress: All ten model and operation combinations pass through a real gateway and a local gRPC server.
+  Files: `internal/proxy/dictator_grpc_protocol.go`, `internal/proxy/dictator_grpc_e2e_test.go`, `docs/speech-workflows.md`.
+  Resolution: All five Whisper sizes reach the upstream transcription and subtitle requests. Final CI passes.
+
+- [x] [B230] (P1) Reject speech voices with an incompatible synthesis engine.
+  Evidence: A Qwen3 request accepts a Silero voice at admission.
+  Requirements: Reject the incompatible voice before upstream submission.
+  Validation: Run the public speech admission tests.
+  Progress: Admission rejects Silero presets for Qwen3 and extracted Qwen3 voices for Silero.
+  Files: `internal/proxy/dictator_grpc_protocol.go`, `internal/proxy/dictator_grpc_e2e_test.go`, `internal/proxy/dictator_grpc_internal_test.go`.
+  Resolution: Both incompatible voice types fail before submission. Valid preset and extracted voices pass. Final CI passes.
+
+- [x] [B231] (P1) Restrict speech defaults to synthesis models.
+  Evidence: The speech model list includes voice extraction models without synthesis support.
+  Requirements: Keep extraction models in discovery and exclude them from synthesis defaults.
+  Validation: Run the management API tests with an assigned Dictator connection.
+  Progress: The API exposes only Qwen3 and Silero synthesis defaults and rejects Whisper as a speech default.
+  Files: `internal/proxy/provider_registry.go`, `internal/proxy/management_capability_defaults_test.go`, `docs/openapi.yaml`, `site/docs/index.html`.
+  Resolution: Synthesis defaults exclude Whisper and persist after restart. The schema describes the current list. Final CI passes.
+
+- [x] [B232] (P2) Include image inputs in public capability domains.
+  Evidence: GPT-4.1 has image inputs but only the text domain.
+  Requirements: Include the image domain for models and offerings with image inputs.
+  Validation: Run the public catalog tests.
+  Progress: Public models and offerings include image inputs in their domain lists.
+  Files: `internal/proxy/public_capabilities.go`, `internal/proxy/public_capability_domains_test.go`.
+  Resolution: The public catalog tests prove the image domain for models and offerings. Final CI passes.
+
+- [x] [B233] (P1) Use capability domains in the connection dashboard.
+  Evidence: The dashboard has obsolete Dictation and Media tabs and no speech default form.
+  Requirements: Use the five public domains and preserve defaults across domain changes.
+  Validation: Run desktop and mobile browser tests through the management application.
+  Progress: All 133 frontend tests pass. The real-server flow passes at 320, 390, and 1440 pixels.
+  Files: `connectionDashboard.js`, `backendClient.js`, `types.d.js`, `styles.css`, `tests/e2e/management-ui.spec.js`, `tests/blackbox/connection-dashboard.spec.js`, `docs/tenant-connections.md`.
+  Event contracts: The connection context event keeps its current name and payload fields.
+  Resolution: All five domains work on desktop and mobile. Explicit saves preserve other defaults.
+  Final `make ci` passes all 14 gates with 100.0 percent Go coverage.
+  The result includes 133 frontend tests and seven real-server browser tests. The log is `/tmp/x9c2-ci-complete.log`.
+
+- [x] [B228] (P1) Repair capability-domain routing defaults across the current application.
+  Goal:
+  Restore the current backend build and preserve the separate text, transcription, and speech defaults introduced by F073.
+  Evidence:
+  - The current branch fails compilation at commit `6aee2ae366d6b46c06924164a23bd8f3b46980e0`.
+  - `TenantDefaults` defines transcription and speech fields, but the store and callers still use removed dictation fields.
+  - `make test-upstream-admission` cannot execute the I046 regression because these fields do not compile.
+  Requirements:
+  - Use the current domain fields throughout request handling, persistence, and test fixtures.
+  - Preserve all selected capability defaults through reads, writes, and connection removal.
+  - Reject obsolete public fields. Do not restore aliases for removed fields.
+  - Keep the OpenAPI schema consistent with the current capability domains.
+  Validation:
+  - Prove domain-default persistence through the public management API.
+  - Run the applicable backend tests before the I046 regression.
+  - Run final repository validation at the stack completion checkpoint.
+  Progress:
+  - The backend now uses separate transcription and speech defaults in the current database schema.
+  - Public management tests prove persistence after restart and selective removal of connection defaults.
+  - Startup rejects missing current columns and obsolete dictation columns.
+  - Management, account-connection, Dictator, and client-contract tests pass with local HTTP, gRPC, and SQLite fixtures.
+  - The OpenAPI schema now accepts the capability domains that the server publishes.
+  - Final CI found an obsolete `dictator-speech` family in the icon manifest. The current catalog requires `whisper`, `qwen3`, and `silero`.
+  - The icon manifest and site renderer now accept the current catalog. Invalid domain lists cause a build error.
+  - The management browser uses current transcription fields and preserves separate speech defaults through text and transcription changes.
+  - The current catalog counts and browser fixtures pass their focused checks.
+  Resolution:
+  - Current defaults persist through the API, database, and management browser.
+  - Final `make ci` passes all 14 gates with 100.0 percent Go coverage.
+  - Validation uses local HTTP, gRPC, SQLite, and Chromium. The full result is in `/tmp/i046-ci-fifth.log`.
+
 - [!] [B210] (P1) Restore local startup with the current TAuth image contract.
   Goal: Start local TAuth with the current OAuth configuration.
   Observed: `ghcr.io/tyemirov/tauth:latest` rejected both OAuth blocks with `field oauth not found` and exited with status 1.
@@ -64,7 +138,26 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
-- [!] [I270] (P2) Auto-refresh dashboard summaries and show the tenant label.
+- [x] [I272] (P1) Run Python and Go CI checks at the same time.
+  Goal:
+  Complete the full current validation suite within the 350-second command limit.
+  Resolution (2026-09-19):
+  - Python client, Go integration, and admission race checks now run at the same time.
+  - Runner integration tests verify child failures, temporary file retention, and completion evidence.
+  - Final `make ci` passed all 14 gates in 334 seconds, with 100.0% Go statement coverage.
+  Evidence:
+  - F039 validation reached the authentication browser suite before the command terminated at 350 seconds.
+  - Go coverage, 60 Python checks, and 129 browser tests passed before termination.
+  Requirements:
+  - Run Python client checks at the same time as Go integration and admission race checks.
+  - Preserve all gates, failure statuses, output, temporary file removal, and completion receipts.
+  - Wait for each child before removal of temporary files or completion.
+  Validation:
+  - Add a failing runner test for checks that start at the same time.
+  - Verify that child failures prevent a success receipt.
+  - Run `make test-ci-runner` and final `make ci`.
+
+- [x] [I270] (P2) Auto-refresh dashboard summaries and show the tenant label.
   Goal: Keep dashboard summaries current without a manual refresh control.
   Requirements:
   - Show `Tenant` beside the usage scope selector on desktop and mobile.
@@ -73,9 +166,11 @@ retain satisfied historical dependencies.
   - Preserve the selected tenant and interval during automatic refresh.
   Deliverables: Shared management markup, styling, refresh lifecycle, and browser coverage.
   Validation: Run the focused management browser tests, frontend lint, and final `make ci`.
-  Blocked: Browser tests and `make ci` stop during Go compilation because current checkout edits reference absent `TenantDefaults.DictationProvider` and `TenantDefaults.DictationModel` fields. This blocker is outside the UI change.
+  Progress: B228 repairs the compiler failure. The refresh test now resets its response fixture for each viewport.
+  The header test checks geometry with a visible error notice. Both focused browser tests and final CI now pass.
+  Resolution: Desktop and mobile browser tests verify the tenant label and automatic refresh. Final CI passes all 14 gates.
 
-- [ ] [I269] (P2) Isolate temporary Python repositories from retained uv Git caches.
+- [x] [I269] (P2) Isolate temporary Python repositories from retained uv Git caches.
   Observed: Three selected-version installation tests returned `0.0.post1.dev2` versions during I268 validation.
   The cached `v1.5.0` tag pointed to commit `be24384`. The temporary source repository had that tag on commit `ef298f1`.
   Git could not describe the installed commit from the cached tags. All five package tests passed on an unchanged rerun.
@@ -83,6 +178,9 @@ retain satisfied historical dependencies.
   Deliverables: `tests/python_package_contract_test.py`.
   Validation: Reproduce installation with retained Git cache data. Run `make python-package-install-test` and final `make ci`.
   Evidence: `/tmp/llm-proxy-i268-ci.log` and `/tmp/llm-proxy-i268-package-recheck.log`.
+  Progress: The media migration CI run reproduced all three selected-release failures in `/tmp/i046-ci-second.log`.
+  Each temporary source repository now has a unique Git URL. The retained uv cache remains available.
+  Resolution: All five package installation tests pass with the retained cache. Final `make ci` passes all 14 gates.
 
 - [!] [I271] (P0) Remove completed migration paths and initialize only the current schema.
   Goal:
@@ -734,7 +832,7 @@ retain satisfied historical dependencies.
   Blocked: Repository work is complete. Both required `make ci` runs pass.
   The existing key is available as `MUSE_API_KEY` in `configs/.env`.
   Complete exact Muse Spark 1.2 discovery, key verification, and live text acceptance with that file.
-- [ ] [I046] (P1) Make upstream admission fair across provider origins.
+- [x] [I046] (P1) Make upstream admission fair across provider origins.
   Goal:
   Keep upstream work globally bounded while preventing one slow or throttled
   origin from consuming the active and queued capacity needed by unrelated
@@ -808,6 +906,25 @@ retain satisfied historical dependencies.
   - Release active HTTP capacity between remote-job polls.
   - Include tenant fairness and shared provider-account limits in the chosen capacity contract.
   - Make this acceptance part of F024 before general media availability.
+  Progress:
+  - The public HTTP regression reproduces HTTP 503 for an independent origin during saturation.
+  - The new scheduler core passes local HTTP and race tests for capacity ownership, cancellation, and fair selection.
+  - The router now uses explicit origin capacity. The obsolete worker settings and limiter are removed.
+  - Public HTTP tests prove text progress during media submission, status, and transfer saturation on the same origin and account.
+  - The expanded race tests pass. Public HTTP tests prove tenant turns and shared-account limits.
+  - The obsolete fixtures and CI receipt expectations are corrected. Their focused tests and Go static analysis pass.
+  - Saved connections now require declared origins at startup. Public tests verify this rejection and request-correlated admission events.
+  - Management verification shares the saved connection's account capacity and request correlation. Its public HTTP regression passes.
+  - All tests pass in the final full Go run with 100.0 percent statement coverage.
+  - Additional contract tests pass for invalid speech defaults, cancellation before dispatch, and invalid startup inputs.
+  - B228 repairs the obsolete family icon manifest and current browser contracts.
+  - The CI runner executes the admission race tests and full Go tests concurrently. Both results are required.
+  - The local provider preflight declares its temporary origin in the capacity configuration.
+  Resolution:
+  - Explicit capacity now bounds each origin, tenant, account, and work class. The obsolete worker settings are removed.
+  - The `upstream HTTP admission` event records safe request or operation correlation and bounded capacity counts.
+  - Final `make ci` passes all 14 gates in 340 seconds, including 100.0 percent Go coverage and race checks.
+  - All 127 browser tests and seven TAuth browser tests pass. The full result is in `/tmp/i046-ci-fifth.log`.
 - [!] [I038] (P2) Adopt DashScope's synchronous Responses API without background mode.
   Goal:
   Move eligible DashScope Qwen models from Chat Completions to Alibaba's newer
@@ -1351,30 +1468,34 @@ retain satisfied historical dependencies.
   - `npm run frontend:lint` passes without type or syntax errors.
   - Final local `make ci` passes all quality and coverage gates.
 
-- [ ] [F071] (P1) Migrate remaining MediaOps application functionality into LLM Proxy.
+- [ ] [F071] (P1) Align MediaOps model access with the provider gateway boundary.
   Goal:
-  Retain only the TelePrompter application in MediaOps. Move its other functionality into LLM Proxy.
+  Move model and provider access to LLM Proxy while all MediaOps applications and local processing stay in MediaOps.
   Requirements:
-  - Inventory Tube and YouTube workflows, Subtitles, Audio QC, Text Video, Frame Picker, shared CLI/MCP operations, and shared composition execution.
-  - Preserve each required workflow in its destination. Do not replace migration with feature deletion.
-  - Keep TelePrompter project editing, interface behavior, and user access in MediaOps.
-  - Move shared narration, rendering, validation, artifact recovery, and provider diagnostics to their LLM Proxy owners.
-  - Keep tenant metrics in LLM Proxy. Do not add a MediaOps metrics consumer without a concrete TelePrompter requirement.
-  - Define application resource authorization before each migration. A tenant key must not expose another user's records.
-  - Map actual data, accepted jobs, artifacts, external callers, and credentials before each runtime switch.
-  - Preserve paid-operation authority, cancellation, idempotency, and recovery without replaying accepted work.
-  - Move functionality and its behavior tests together. Remove obsolete MediaOps routes and workers after destination acceptance.
-  - Reuse provider capability issues. Do not make F042 completion depend on unrelated application migration.
-  - Coordinate MediaOps I092 for application retirement and F021 for required TelePrompter composition integration.
+  - Keep TelePrompter, Tube, Subtitles, Audio QC, Text Video, Frame Picker, CLI, and MCP product workflows in MediaOps.
+  - Keep narration plans, composition, local workers, media inspection, validation, and application data in MediaOps.
+  - Move model-provider adapters, credentials, native request handling, provider recovery, and provider artifacts through the existing capability issues.
+  - Keep provider operation metrics in LLM Proxy. Do not add a MediaOps metrics client without a product requirement.
+  - Use the official gateway client from retained MediaOps callers.
+  - Keep user authorization, explicit spend authority, dry runs, product intent, and local path containment in MediaOps.
+  - Map actual provider records before a bounded import. Keep application records and local artifacts at their current owner.
+  - Remove only direct provider paths and obsolete provider credentials after consumer acceptance.
+  - Coordinate MediaOps I009, I088, and I092 without a separate application migration sequence.
   Deliverables:
-  - An application migration inventory, destination implementations, required consumer changes, and bounded data migration receipts.
-  - A verified MediaOps runtime with only TelePrompter and its required support services.
+  - A current ownership contract, provider issue sequence, caller inventory, and provider migration receipts.
   Validation:
-  - Verify each migrated workflow through the destination public interface and its actual consumer.
-  - Prove tenant and user isolation, retained-data integrity, and zero obsolete MediaOps entry points after each accepted migration.
-  - Record source validation, publication, deployment, and live acceptance separately.
+  - Verify each capability through the gateway and each affected MediaOps public entry point.
+  - Prove tenant isolation, duplicate recovery, cancellation, and artifact integrity without another paid submission.
+  - Record source validation, publication, activation, and consumer acceptance separately.
   Status:
-  - The operator confirmed this scope on 2026-09-14. Application implementation remains open.
+  - On 2026-09-19, the operator limited the migration to model access. This replaces the earlier application migration scope.
+  - Frame Picker stays entirely in MediaOps, including its browser workflow, storage, and worker.
+  - Removed the proposed LLM Proxy Frame Picker backend and browser before publication or activation.
+  - Regenerated the API reference. The OpenAPI/static-page checks and all 129 frontend browser cases pass after removal.
+  - Full CI passed behavioral tests but failed the strict coverage gate at `dictator_grpc_protocol.go:253` with current synthesis-model changes.
+  - Final stack CI, provider cutovers, publication, and actual consumer acceptance remain open.
+  - See `docs/mediaops-model-access-boundary.md`. Provider capability work remains in scope.
+  - No MediaOps application routes, workers, or data were removed.
 
 - [ ] [F065] (P1) Add platform connections and explicit hosted access grants.
   Goal:
@@ -2365,9 +2486,24 @@ retain satisfied historical dependencies.
   `make test-live-minimax-m3 LIVE_ENV_FILE=configs/.env` stopped before a provider call with this error:
   `error: minimax requested but required catalog environment is not set: MINIMAX_API_KEY`.
   Live text and image acceptance remains open. M3 remains disabled until both checks pass.
-- [ ] [F039] (P1) {F024} Complete OpenAI image editing and progressive output.
+- [x] [F039] (P1) {F024,I272} Complete OpenAI image editing and progressive output.
   Goal:
   Preserve the current MediaOps OpenAI image contract before its complete provider cutover.
+  Progress:
+  - Added Images editing through ordered tenant assets, PNG masks, catalog transport references, and the official Go client.
+  - Public HTTP tests verify two provider definitions, output bytes, duplicate convergence, changed-intent rejection, and invalid or foreign input rejection.
+  - Added durable progressive assets for Images generation and editing. Public tests verify partial order, duplicate events, result integrity, tenant isolation, restart, worker replacement, and retention.
+  - The browser shows editing through the existing connection. The Go and Python clients expose typed progressive assets.
+  - Added Responses generation, editing, private chain handles, route and connection binding, background retrieval, cancellation, and verified previews.
+  - Public tests cover two providers, foreign or invalid parents, restart recovery, stream interruption, parent retention, and corrupt provider output.
+  - The bounded source audit found zero native handles in 561 image records and 713 provider snapshots. It retained all ten uncertain source records without a provider call.
+  Resolution (2026-09-19):
+  - Completed source implementation, official clients, OpenAPI, examples, and source recovery evidence.
+  - Final `make ci` passed all 14 gates in 334 seconds, with 100.0% Go statement coverage.
+  - Validation included 60 Python checks, 129 frontend browser tests, and seven authentication browser tests.
+  - Protocol fixtures verified storage failures, stream limits, authority changes, and private response chains without another provider submission.
+  - Changed prose has no new mechanical findings in the reviewed scope.
+  - Client publication, service activation, and MediaOps I084 consumer acceptance remain separate pending work.
   Requirements:
   - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
   - Add image editing, ordered multi-image inputs, masks, and the current Images and Responses controls.
@@ -2462,7 +2598,7 @@ retain satisfied historical dependencies.
   - Extend official Go and Python clients and current public caller interfaces in the selected capability release.
   - Inventory retained voices and jobs before activation. Require explicit tenant and provider-account ownership mapping.
   - Coordinate MediaOps I087 source migration and each actual consumer in one bounded cutover.
-  - Retain only TelePrompter in MediaOps. Move shared Dictator workflows into LLM Proxy.
+  - Keep MediaOps applications and local workflows in MediaOps. Move only Dictator provider access to LLM Proxy.
   - Do not require a replacement MediaOps metrics client. Keep tenant metrics in LLM Proxy.
   - Remove obsolete public runtime routing and direct caller credentials after the cutover acceptance.
   Deliverables:
@@ -2505,7 +2641,7 @@ retain satisfied historical dependencies.
   - `make test-dictator` passed after the adapter published exact aligned SRT bytes as the second tenant asset.
   - Final `make ci` passed all 13 gates in 331 seconds after the SRT change. Go coverage is 100 percent.
   - Validation includes 59 Python checks, 117 frontend browser tests, and the real TAuth management browser suite.
-  - The caller inventory is in `docs/media-gateway-consolidation.md`. Active scope includes MediaOps source migration and required TelePrompter flows.
+  - The caller inventory is in `docs/media-gateway-consolidation.md`. Active scope includes the MediaOps provider cutover and all affected product flows.
   - The operator replaced server metrics with tenant metrics. MediaOps must not collect or expose server totals.
   - `GET /model/v1/provider-diagnostics/dictator` returns retained tenant operation counts without a provider call.
   - Counts exclude other tenants and providers. Terminal detail expiry removes its count.
@@ -2533,8 +2669,8 @@ retain satisfied historical dependencies.
   - `make test-dictator-live` passed transcription, diarization, alignment, subtitles, extraction, and synthesis in 22.94 seconds.
   - `docs/dictator-live-acceptance.md` records required inputs, fixture duration, and the live result.
   - Final `make ci` passed 13 gates in 333 seconds, with 100.0 percent Go coverage. B222 and I264 are resolved.
-  - Shared MediaOps workflows and production resource ownership remain open. WriterBlock remains excluded.
-  - MediaOps extraction exposes a duration control. Preserve this control when the shared voice workflow moves.
+  - MediaOps provider-call replacement and production resource ownership remain open. WriterBlock remains excluded.
+  - MediaOps extraction exposes a duration control. Keep this control when its provider call moves.
   Shared workflows and ownership (2026-09-15):
   - Destination CLI and MCP tools now use the durable media operation lifecycle. Extraction preserves the positive duration control and default.
   - Public tests and live acceptance passed all six speech capabilities. Final `make ci` passed 13 gates with 100.0 percent Go coverage.
@@ -2710,7 +2846,24 @@ retain satisfied historical dependencies.
   - Prove reduced motion removes nonessential chart movement.
   - Prove the price review command classifies each freshness state.
   - Run `make ci` after the last application change.
-- [ ] [F024] (P1) {I046} Deliver the first OpenAI image-generation capability.
+- [x] [F024] (P1) Deliver the first OpenAI image-generation capability.
+  Resolution:
+  - Added terminal `image.generate` through the catalog-selected `openai_images` codec and the existing OpenAI connection.
+  - Preserved explicit generation controls and verified ordered PNG, JPEG, and WebP artifacts through private integrity metadata.
+  - Added `CreateImageGeneration`, its official Go example, API schemas, and browser discovery.
+  - Proved the same codec with a second catalog provider, distinct authentication fields, and explicit zero compression.
+  - Verified duplicate convergence, tenant isolation, restart uncertainty, cancellation, rejected controls, and text progress during image saturation.
+  - Source validation: Final `make ci` passed all 14 gates in 342 seconds with 100.0 percent Go coverage.
+  - Browser validation: 129 frontend tests and seven TAuth tests passed in local Chromium.
+  - Python validation: 54 client tests and five package installation tests passed.
+  - Initial validation found obsolete catalog counts, a duplicate initializer, and asynchronous test cleanup. All corrections passed final CI.
+  - Client publication: The new typed method awaits its release. Independent consumer integration still requires that release.
+  - Service activation: Not performed for this slice.
+  - Live acceptance: Not performed. Controlled local providers supplied the protocol evidence.
+  - Source files: `internal/proxy/image_generation*.go`, `media_operations.go`, catalog and protocol definitions, and `configs/providers.yml`.
+  - Client and interface files: `pkg/llmproxyclient/image_generation.go`, `pkg/llmproxycontract/contract.go`, `examples/image-generation/main.go`, and `docs/openapi.yaml`.
+  - Discovery and documentation: Public catalog projection, site renderer, browser capability metadata, browser tests, README, and consolidation contract.
+  - Event contracts: Reused the existing durable operation and tenant asset contracts. No new event type was added.
   Goal:
   Let a backend tenant generate an image and retrieve verified bytes through the official LLM Proxy client.
   FamilyHome is the first independent consumer. It uses its existing tenant credential.
@@ -2727,7 +2880,7 @@ retain satisfied historical dependencies.
   - Keep OpenAI editing, response-chain controls, and progressive image output in F039.
   - Keep Vertex and FAL image adapters in F040 and F041.
   - Release the official Go client before the independent consumer integration.
-  - F039 preserves the complete OpenAI image contract. MediaOps I084 supplies source migration and required TelePrompter acceptance.
+  - F039 preserves the complete OpenAI image contract. MediaOps I084 supplies the provider cutover and acceptance through affected MediaOps callers.
   Deliverables:
   - OpenAI image adapter, catalog route, operation schema, artifact results, and official-client example.
   - A backend-to-gateway acceptance fixture with the same tenant model as text calls.
@@ -2744,7 +2897,7 @@ retain satisfied historical dependencies.
   Make LLM Proxy the sole provider boundary for Vertex Veo, Vertex Gemini Omni,
   Runway, FAL, Kling, and xAI video generation.
   Cross-repository sequence:
-  - MediaOps I010 owns source migration and required TelePrompter acceptance for this video slice.
+  - MediaOps I010 owns the provider cutover and acceptance through affected MediaOps callers for this video slice.
   Requirements:
   - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
   - Add a typed `video.generate` contract for prompt, start/end frame, source
@@ -2781,9 +2934,9 @@ retain satisfied historical dependencies.
   - Use the current repository validation policy instead of older baseline CI instructions.
 - [ ] [F026] (P1) Add ElevenLabs speech, music, and alignment operations.
   Goal:
-  Move the current ElevenLabs capability into LLM Proxy. Preserve shared narration and audio assembly in the destination.
+  Move ElevenLabs provider access into LLM Proxy. Keep narration plans and local audio assembly in MediaOps.
   Cross-repository sequence:
-  - MediaOps I011 owns source migration and required TelePrompter acceptance for this audio slice.
+  - MediaOps I011 owns the provider cutover and acceptance through affected MediaOps callers for this audio slice.
   Requirements:
   - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
   - Add typed operations for speech generation, speech conversion, voice
@@ -2793,8 +2946,8 @@ retain satisfied historical dependencies.
   - Preserve exact voice/model settings, pronunciation dictionaries,
     continuity context, timestamps, seed, normalization, pacing/speed
     translation, formats, provider concurrency, and history identifiers.
-  - Preserve render-plan chunking, narrative cadence, deterministic chunk reuse, stitching, and final composite validation in the migrated workflows.
-  - F071 owns shared workflow migration. Keep only TelePrompter project controls in MediaOps.
+  - Keep render plans, narrative cadence, chunk reuse, stitching, and final composite validation in MediaOps.
+  - F071 defines the model access boundary. Keep all application workflows and project controls in MediaOps.
   - Represent each provider request as one durable gateway operation.
   - Materialize provider audio and JSON outputs as typed artifacts and retain
     history or song identifiers as internal recovery evidence.
@@ -2822,7 +2975,7 @@ retain satisfied historical dependencies.
   Complete gateway ownership of external media-provider credentials and
   provider-native task recovery for HeyGen and Kling account operations.
   Cross-repository sequence:
-  - MediaOps I012 owns source migration and required TelePrompter acceptance for this account-operation slice.
+  - MediaOps I012 owns the provider cutover and acceptance through affected MediaOps callers for this account-operation slice.
   Requirements:
   - Apply the provider catalog and protocol adapter contract in P011 before each capability release.
   - Add typed operations for HeyGen translation, existing-video lip-sync,

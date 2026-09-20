@@ -121,3 +121,11 @@ Give each term one meaning. Use the same term for the same concept in all docume
 - `reconciliation case`: A durable record of a difference or uncertainty between local financial records and external evidence.
 - `chargeback`: A payment reversal initiated through a card issuer or payment network.
 - `rating`: The calculation of a customer charge or provider cost from measured quantities and an applicable price snapshot.
+
+## Upstream Capacity Technical Nouns
+
+- `admission allocation`: The bounded capacity for active and queued requests assigned to one upstream origin.
+- `interactive reserve`: Capacity reserved for interactive requests within a shared limit.
+- `upstream origin`: The normalized scheme, hostname, and optional port of an upstream HTTP endpoint.
+- `work class`: The interactive, media submission, status, or transfer category of an upstream HTTP request.
+- `admission telemetry`: Safe events that record admission decisions, capacity counts, and request or operation identifiers.
