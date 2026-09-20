@@ -4,7 +4,8 @@
 
 This audit records F042 source and migration evidence on 2026-09-15.
 The [media consolidation contract](media-gateway-consolidation.md) defines the required ownership and acceptance rules.
-F042 remains open. MediaOps I087 owns the source migration. F071 owns the other application migrations.
+F042 remains open. MediaOps I087 owns the provider-access cutover. F071 verifies the model-access boundary.
+The operator limited migration to model access on 2026-09-19. All applications and local processing stay in MediaOps.
 
 The operator confirmed WriterBlock's paused status after this audit on 2026-09-15.
 WriterBlock is not an active project. Its source observations below are historical evidence only.
@@ -13,7 +14,7 @@ The [public homepage](https://writer.mprlab.com/) already displays the pause not
 
 The production adapter and account connection interface exist.
 The released Go client contains the required media methods.
-The remaining work includes shared workflow migration, resource ownership, and deployed consumer acceptance.
+The remaining work includes provider-call replacement, provider-resource ownership, and deployed consumer acceptance.
 The initial audit changed documentation only. The subsequent B222 execution changes the protocol registration and acceptance tests.
 No service activation or record transfer occurred.
 
@@ -67,12 +68,12 @@ Paths in this table belong to the named source repository.
 
 | Source caller | Evidence | Destination and required acceptance |
 | --- | --- | --- |
-| MediaOps speech CLI and MCP | `internal/media/cli/audio_speech.go`, `audio_align.go`, and `internal/media/mcp/service_adapters.go` | Move required shared workflows into LLM Proxy under F042 and I087. Preserve controls, outputs, cancellation, and recovery. |
+| MediaOps speech CLI and MCP | `internal/media/cli/audio_speech.go`, `audio_align.go`, and `internal/media/mcp/service_adapters.go` | Keep workflows in MediaOps. Replace direct provider calls under F042 and I087. Keep controls, outputs, cancellation, and recovery. |
 | MediaOps voices | `internal/media/audio/voice_resource.go` and `internal/media/mcp/voice_resources.go` | Map retained extracted voices to tenant voices. Keep preset discovery in LLM Proxy. Preserve product references to retained voices. |
-| MediaOps subtitles and browser jobs | `internal/webapp/mediajobs_runtime.go`, `internal/mediajobs/api/dictator_speech_service.go`, and `subtitles_create.go` | Move shared execution into LLM Proxy. Preserve word timings and exact aligned SRT. F071 owns the remaining application interface migration. |
-| MediaOps narration and assembly | `internal/media/cli/audio_speech_render_plan.go` and `internal/media/mcp/service_adapters.go` | Move shared execution and artifact recovery. Keep TelePrompter project behavior in MediaOps. |
-| MediaOps diagnostic | `internal/media/doctor/dictator/service.go` and `internal/media/mcp/dictator_diagnostics.go` | Retire the obsolete diagnostic with its migrated callers. Do not add a MediaOps metrics client. |
-| TelePrompter preview and export | MediaOps F021 and LLM Proxy F071 define the destination composition contract. | Identify each required project flow before its client integration. General composition delivery remains with F071. |
+| MediaOps subtitles and browser jobs | `internal/webapp/mediajobs_runtime.go`, `internal/mediajobs/api/dictator_speech_service.go`, and `subtitles_create.go` | Keep browser jobs and local execution in MediaOps. Replace Dictator requests through the official client. Keep word timings and exact aligned SRT. |
+| MediaOps narration and assembly | `internal/media/cli/audio_speech_render_plan.go` and `internal/media/mcp/service_adapters.go` | Keep narration plans, assembly, artifact validation, and project behavior in MediaOps. Move only provider requests and native recovery. |
+| MediaOps diagnostic | `internal/media/doctor/dictator/service.go` and `internal/media/mcp/dictator_diagnostics.go` | Replace direct provider health access with gateway route readiness where required. Do not add a MediaOps metrics client. |
+| TelePrompter preview and export | MediaOps F021 verifies the existing local composition contract. | Keep composition in MediaOps. Use the gateway only for model-generated inputs. |
 | WriterBlock dictation, excluded | `internal/app/app.go`, `handleDictate`, and `transcribeWithDictator` | The project is paused. No client replacement is required by F042. |
 
 WriterBlock still imports Dictator SDK `v1.10.0`.
@@ -92,8 +93,8 @@ No private transcript, credential, native identifier, or artifact content is inc
 | --- | --- | --- |
 | Extracted and preset voices | `<workspace_root>/.mediaops/voices/*.json`, schema `mediaops.voice.v1` | Explicit tenant and provider connection. Private mapping of voice references, source artifacts, and reference transcripts. |
 | MCP operations | `<workspace_root>/.mediaops/mcp/operations/*.json`, `operationRecord` in `internal/media/mcp/types.go` | Counts by provider and state. Native recovery evidence for accepted work. Product references and destination operation identities. |
-| Subtitle jobs | `<ReelDataDir>/jobs.json` and each job directory | Job state, input bytes, aligned SRT, owner, and target application resource. |
-| Text Video jobs | `<ReelDataDir>/text-video/jobs.json` and each job directory | The same ownership and artifact evidence for the shared execution migration. |
+| Subtitle jobs | `<ReelDataDir>/jobs.json` and each job directory | Keep application job state, inputs, aligned SRT, and owner in MediaOps. Transfer only required provider references. |
+| Text Video jobs | `<ReelDataDir>/text-video/jobs.json` and each job directory | Keep local rendering, job ownership, and artifacts in MediaOps. No application-data migration is required. |
 | Published artifacts | MCP artifact links, recovery metadata, and job output paths | Verified bytes and source digests. A retained local result can remain without another provider submission. |
 | Runtime credentials | MediaOps Dictator configuration | Account connection and tenant assignment. Removal of the old credentials after their final active consumer moves. |
 
@@ -119,7 +120,7 @@ Current gateway recovery tests do not prove import of a MediaOps record.
 
 ## Next Implementation Steps
 
-1. Move the shared Dictator workflows and behavior tests into LLM Proxy under F042 and MediaOps I087.
+1. Replace MediaOps Dictator calls through the official client under F042 and I087. Keep workflows and product behavior tests in MediaOps.
 2. Record every active workspace and deployed store before the runtime switch.
 3. If retained records require transfer, implement a bounded import with explicit owner mappings and recovery evidence.
 4. Verify the deployed destination and each active consumer with its assigned tenant connection.
@@ -131,10 +132,10 @@ Public tests verify fractional values, omission, and rejection of nonpositive va
 The live harness passed with the original short fixture and an explicit 0.5-second extraction duration.
 
 The second-provider test and live gateway acceptance now pass.
-Shared workflow source changes can proceed before the complete production inventory exists.
+Provider-adapter source changes can proceed before the complete production inventory exists.
 Consumer activation requires the deployed gateway contract, account connection, and tenant assignment.
 Release, publication, deployment, and live acceptance remain separate evidence records.
-F071 application work outside the Dictator slice is not an F042 completion prerequisite.
+F071 final boundary acceptance is separate from the F042 provider slice.
 
 ## Validation
 
@@ -157,7 +158,7 @@ F071 application work outside the Dictator slice is not an F042 completion prere
 
 - Creative Director uses an external MediaOps store in Kamu. Its retained records require reconciliation before transfer.
 - The operator selected the MediaOps tenant. Each retained record needs a provider connection before transfer.
-- Required TelePrompter composition flows remain with F021 and F071.
+- TelePrompter composition stays in MediaOps. F021 verifies it after affected provider cutovers.
 
 ## Production Inventory: 2026-09-15
 

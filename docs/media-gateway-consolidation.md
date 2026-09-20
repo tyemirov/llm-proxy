@@ -3,15 +3,18 @@
 ## Decision And Status
 
 LLM Proxy becomes the shared gateway for text, images, video, speech, and other media capabilities.
-MediaOps retains only the TelePrompter application. Other MediaOps functionality moves to LLM Proxy.
-The operator confirmed this boundary on 2026-09-14. It replaces the earlier creator-product boundary.
+Only model-provider access moves from MediaOps to LLM Proxy.
+The operator confirmed this boundary on 2026-09-19. It replaces the earlier application-migration scope.
+All MediaOps applications, browser workflows, CLI/MCP operations, local processing, and application data stay in MediaOps.
+Frame Picker, thumbnails, and hover zoom stay in MediaOps.
 FamilyHome uses the gateway through its backend.
 Dictator remains a private runtime behind the gateway.
 
 P011 records this implementation plan on 2026-09-06.
 The 2026-09-08 revision adds provider catalog, protocol adapter, and second-provider acceptance requirements.
-MediaOps P006 records the earlier plan. This ownership revision supersedes its broader MediaOps retention decision.
-F071 owns the remaining application migration. Provider capability issues retain their separate delivery boundaries.
+MediaOps P006 records the original provider gateway plan.
+F071 owns the final model-access boundary audit. Provider capability issues keep their separate delivery boundaries.
+The [model-access boundary](mediaops-model-access-boundary.md) records ownership and the provider issue sequence.
 F022 delivered the common durable media service through controlled provider
 protocols. It establishes local runtime acceptance for the shared lifecycle.
 Live provider acceptance remains with each provider capability issue.
@@ -25,8 +28,9 @@ Dictator continues to run in its existing process.
 flowchart LR
     A[FamilyHome Android] --> B[FamilyHome backend]
     B --> G[LLM Proxy gateway]
-    T[MediaOps TelePrompter] --> G
-    M[Other MediaOps functionality] -. migrate .-> G
+    M[MediaOps apps, CLI, MCP] --> P[MediaOps provider adapter]
+    P --> G
+    M --> L[MediaOps local processing and application data]
     C[Other backend clients] --> G
     G --> L[Text providers]
     G --> P[Cloud media providers]
@@ -38,8 +42,9 @@ flowchart LR
 | Concern | Owner |
 | --- | --- |
 | Parent login, family access, calendars, child interface, product budgets | FamilyHome |
-| TelePrompter interface, project editing, and user access | MediaOps |
-| Other applications, shared narration, composition execution, review, and YouTube workflows | LLM Proxy under F071 |
+| All applications, browser workflows, project editing, user access, CLI, and MCP | MediaOps |
+| Narration orchestration, local composition, inspection, validation, review, and YouTube workflows | MediaOps |
+| Frame Picker upload, storage, FFmpeg execution, download, thumbnails, and hover zoom | MediaOps |
 | Tenant authentication, provider connections, routes, execution, usage | LLM Proxy |
 | Speech engines, native jobs, GPU execution | Dictator |
 
@@ -47,8 +52,8 @@ Use an existing managed tenant and client key for each calling backend.
 Use separate tenants where environments need independent credentials and usage.
 An operator can manage multiple tenants through the existing management interface.
 FamilyHome stores its gateway key in backend configuration.
-TelePrompter uses a gateway tenant for its required backend operations.
-Do not add gateway consumers to MediaOps for functionality that moves into LLM Proxy.
+MediaOps uses a gateway tenant for model requests through its backend and shared provider adapter.
+Affected browser, CLI, and MCP calls use the official gateway client.
 The parent does not configure provider services.
 
 Reuse the existing bearer authentication adapter for the new media routes.
@@ -62,8 +67,9 @@ Keep provider credentials in managed provider connections or private runtime con
 FamilyHome maps its own product job to a gateway operation.
 It checks family access before it returns status or bytes to Android.
 A gateway tenant represents a calling backend. It does not replace family or project authorization.
-F071 owns the migrated composition API and its resource authorization.
-MediaOps F021 owns only the TelePrompter integration with that API.
+MediaOps keeps composition tasks and their resource authorization.
+MediaOps F021 verifies local preview and export after model-generated inputs use the gateway.
+F071 does not create a gateway composition API.
 
 ## Verified Source And Reuse
 
@@ -82,9 +88,9 @@ The following paths define the existing foundation or the source to move.
 | `pkg/llmproxycontract`, `docs/openapi.yaml` | Define the canonical media resources and error shapes. |
 | `pkg/llmproxyclient` | Add media methods to the existing official Go client. |
 | MediaOps `internal/media/provider` | Move provider request translation, native recovery, and provider-specific tests by capability. |
-| MediaOps `internal/media/mcp` | Move shared tool contracts and workflows to LLM Proxy. Retain only helpers required by TelePrompter. |
-| MediaOps `internal/mediajobs/api` | Move shared jobs and execution to LLM Proxy. Preserve TelePrompter project references. |
-| MediaOps `internal/timelineexport` | Move shared composition and export execution to LLM Proxy. Keep TelePrompter controls in MediaOps. |
+| MediaOps `internal/media/mcp` | Keep tool contracts, product authorization, and workflows in MediaOps. Replace model-provider dependencies through the official client. |
+| MediaOps `internal/mediajobs/api` | Keep application jobs and local execution in MediaOps. Replace model-provider calls only. |
+| MediaOps `internal/timelineexport` | Keep composition and export execution in MediaOps. |
 
 The asset store provides authenticated upload, metadata, content, and deletion.
 Durable active references prevent deletion while an operation owns an input or
@@ -109,7 +115,7 @@ Executable components implement the supported API behavior.
 | Authentication components | Reusable code owns credential injection. Credential values remain in managed connection or private runtime storage. |
 | Execution components | Reusable code owns synchronous completion, submission, observation, cancellation, and provider recovery. |
 | Shared media service | F022 owns tenant authorization, operation storage, worker claims, duplicate prevention, assets, retention, and usage delivery. I046 owns network capacity. |
-| Consumer services | TelePrompter, FamilyHome, and other active consumers use official gateway clients for their required operations. |
+| Consumer services | MediaOps, FamilyHome, and other active consumers use official gateway clients for model operations. |
 
 Keep credential values and tenant settings in their existing stores outside the catalog.
 Use catalog projections for provider discovery, connection forms, capability validation, routing, and price metadata.
@@ -291,15 +297,15 @@ Implementation starts with a failing test through the relevant public API or pro
 | 2 | I046 | Prove bounded text progress during media saturation, including a shared origin and provider account. |
 | 3 | F024 | Move terminal OpenAI image generation behind the tenant API. Qualify one image through the official client. |
 | 4 | FamilyHome P003 and its implementation issue | Revise the product plan to call LLM Proxy. Complete backend and Android image acceptance. |
-| 5 | MediaOps I009, F039, MediaOps I084 | Inventory source resources, connect required TelePrompter operations, and move the complete OpenAI image capability. |
-| 6 | F042, MediaOps I087 | Move Dictator capabilities and retained resources. Migrate shared callers and connect required TelePrompter operations. |
+| 5 | MediaOps I009, F039, MediaOps I084 | Inventory provider resources, connect affected MediaOps callers, and move the complete OpenAI image provider capability. |
+| 6 | F042, MediaOps I087 | Move Dictator provider access and required provider records. Connect affected MediaOps callers. |
 | 7 | F043, F040, MediaOps I085 | Add required Google credentials and staging. Move Vertex image operations. |
 | 8 | F041, MediaOps I086 | Move FAL image operations and their result recovery. |
 | 9 | F025, MediaOps I010 | Move video capabilities in the provider order below. |
 | 10 | F026, MediaOps I011 | Move ElevenLabs speech, music, voices, history, and alignment. |
 | 11 | F027, MediaOps I012 | Move HeyGen and remaining Kling account/resource capabilities. |
 | 12 | MediaOps I088, I244 | Reconcile provider migration receipts and remove obsolete provider dependencies and temporary import tools. |
-| 13 | F071, MediaOps I092 and F021 | Move remaining applications and shared workflows. Verify that MediaOps retains only TelePrompter. |
+| 13 | F071, MediaOps I092 and F021 | Verify the model-access boundary and all retained MediaOps applications and local workflows. |
 
 Complete the provider catalog and protocol adapter acceptance above before each capability's consumer switch.
 Keep its evidence with the same slice's migration receipt.
@@ -312,6 +318,121 @@ The OpenAI switch includes generation, editing, masks, ordered references, progr
 F043 is a prerequisite only for a route that requires its staging or Google credential support.
 An existing provider-readable HTTP route can use its qualified storage contract.
 The first OpenAI generation slice uses the current tenant asset store directly.
+
+### Terminal image generation
+
+F024 registers `image.generate` and the `image_generation` catalog operation.
+The `openai_images` codec uses the synchronous execution component and the
+selected connection authentication component. The catalog owns the endpoint,
+upstream model, controls, and limits. The adapter has no provider-name branch.
+
+The selected `gpt-image-2` route requires an explicit surface, quality, size, background,
+output format, and output count. JPEG and WebP require explicit compression.
+Compression value `0` remains present in the provider request. PNG must omit
+compression. Transparent output requires PNG or WebP.
+
+The `image_size` catalog control declares automatic sizing, dimension multiples,
+edge limits, pixel limits, and the maximum aspect ratio. The gateway validates
+these limits before acceptance. It checks output count, base64 data, image
+format, dimensions, and complete image decoding before it publishes artifacts.
+PNG, JPEG, and WebP outputs use the existing private integrity metadata.
+
+The gateway submits each accepted image intent once. The Images API has no
+retrieval handle for this route. A lost response or recovery after dispatch
+produces `uncertain`. Queued cancellation prevents dispatch.
+Cancellation after dispatch is unsupported and does not claim provider stop.
+
+The official Go client provides `CreateImageGeneration`. The image example
+reads caller configuration and downloads outputs in order. Product dimensions,
+formats, prompts, and budgets remain in the consumer. Record client publication,
+service deployment, and authorized live acceptance separately from source tests.
+
+### Image editing development
+
+The first F039 phase adds `image.edit` and the `image_editing` catalog operation.
+The image offering selects its editing transport through `image_routes.editing`.
+That transport declares its endpoint and authentication. It uses the same `openai_images` codec and synchronous lifecycle as generation.
+The official Go client provides `CreateImageEditing`.
+
+The input contains ordered `image_asset_ids` and an optional `mask_asset_id`.
+The gateway verifies ownership, stored bytes, format, dimensions, and complete image decoding before acceptance.
+The mask must be a PNG with an alpha channel and the dimensions of the first input image.
+The catalog bounds input count, bytes per image, and decoded pixels per image.
+The pixel bound limits gateway memory use. It does not describe an upstream model limit.
+Multipart submission reads one retained asset at a time.
+
+The [official image guide](https://developers.openai.com/api/docs/guides/image-generation) defines masks and current image controls.
+The [editing reference](https://developers.openai.com/api/reference/resources/images/methods/edit) defines the provider operation and input count.
+The selected `gpt-image-2` route omits `input_fidelity` because that model applies high fidelity automatically.
+Public tests cover two provider definitions with different transport identifiers, endpoints, authentication headers, and upstream model values.
+They verify ordered inputs, mask bytes, output integrity, duplicate convergence, and rejection of invalid or foreign assets before dispatch.
+
+The public site and management dashboard show generation and editing through the existing provider connection.
+
+### Progressive image development
+
+The `stream` control selects provider streaming for generation or editing.
+The `partial_images` control bounds the requested previews from zero through three.
+The provider can return fewer previews than requested.
+The current Images stream has no output-image identifier.
+The catalog sets `stream_output_images` to one. Terminal generation retains its output-count range.
+The [generation event reference](https://developers.openai.com/api/reference/resources/images/generation-streaming-events) and [editing event reference](https://developers.openai.com/api/reference/resources/images/edit-streaming-events) define the selected wire events.
+
+Operation reads include `partial_outputs` when previews exist.
+Each entry contains an asset identifier, MIME type, byte count, `output_ordinal`, and `partial_ordinal`.
+Entries use output order, then partial order.
+The gateway verifies each image before it stores and publishes the preview.
+Identical duplicate events retain the same asset. Changed bytes at an existing position fail the operation.
+The final image remains in `outputs` and receives the same integrity checks as terminal generation.
+
+The Go and Python clients expose typed preview references.
+Use `GetMediaOperation` in Go or `get_media_operation` in Python to read progress.
+Download each new asset through the existing authenticated asset methods.
+Preview assets remain protected while their operation is retained.
+Terminal retention removes their references. Uncertain operations retain their previews.
+Restart recovery never submits Images work again.
+A worker must hold the current unexpired claim before it can publish another preview.
+Images cancellation after provider dispatch remains unsupported.
+
+Public tests cover both provider definitions, generation, editing, partial order, duplicate events, corrupt results, tenant isolation, restart, worker replacement, and retention.
+### Responses image execution
+
+Select `surface=responses` and an allowed `responses_model`.
+The image offering selects `image_routes.responses` and retains one exact image model identity.
+The catalog resolves the text model, image model, transport, endpoint, and authentication.
+The adapter sends a stored background response and forces one image tool call.
+The image capability selects the explicit `generate` or `edit` action.
+Editing accepts ordered tenant image assets. It rejects masks on this surface.
+
+A follow-up supplies `previous_operation_id` from a successful Responses operation.
+The gateway requires the same tenant, provider connection version, route, image model, and text model.
+It translates the operation reference to the private native response handle.
+The accepted execution stores a private route binding. Configuration changes cannot move an accepted handle to another endpoint or upstream model.
+A parent remains retained while its child is queued, running, or uncertain.
+Parent expiry locks the parent before it checks for an outstanding child.
+
+The adapter stores the native handle before polling or publishing previews.
+A worker restart retrieves that resource without another submission.
+A stream interruption also retrieves the stored resource.
+An interruption before handle persistence remains uncertain.
+Background cancellation changes the public state only after provider confirmation.
+
+Responses streams use item identifiers and output indexes to identify the image call.
+The gateway maps that image call to output ordinal zero, even when a reasoning item precedes it.
+It verifies event order, preview order, duplicate bytes, terminal identity, and image integrity.
+Native response and item identifiers never enter public operation responses.
+The [Responses event reference](https://developers.openai.com/api/reference/resources/responses/streaming-events) defines the selected events.
+The [background guide](https://developers.openai.com/api/docs/guides/background) defines retrieval and cancellation.
+
+Public tests cover generation, editing, ordered inputs, and streaming through two provider definitions.
+They also cover tenant isolation, invalid parents, connection binding, changed endpoints, restart recovery, interrupted streams, cancellation, and parent retention.
+The [OpenAI source audit](openai-image-migration-audit.md) records zero native handles in the bounded local source scope.
+Final `make ci` passed all 14 gates in 334 seconds, with 100.0% Go statement coverage.
+The checks include 60 Python cases, 129 frontend browser cases, and seven authentication browser cases.
+Client publication, service activation, and MediaOps consumer acceptance remain separate pending records.
+
+
+### Private speech runtime
 
 F042 keeps `dictator` as the provider identity.
 Move MediaOps `internal/media/provider/dictator/audio` into LLM Proxy's private provider implementation.
@@ -376,7 +497,7 @@ For each consumer switch, remove direct execution for that capability in the sam
 Keep one active provider execution owner for that capability during the scheduled runtime switch.
 Drain accepted direct work or import its proven recovery records before activation.
 Remove a shared provider credential after its last direct capability switches.
-Shared MediaOps workflows move to LLM Proxy. TelePrompter calls only the gateway operations required by its user flows.
+All MediaOps workflows stay in MediaOps. Only their model-provider requests use LLM Proxy.
 
 ### Dictator protocol acceptance
 
@@ -405,18 +526,18 @@ This inventory does not establish production resource counts or complete activat
 
 | Caller | Source evidence | Required replacement |
 | --- | --- | --- |
-| MediaOps CLI and MCP | `internal/media/provider/dictator/audio/service.go` | Move retained shared functionality to LLM Proxy. Retire obsolete MediaOps entry points after caller acceptance. |
-| MediaOps browser jobs | `internal/webapp/mediajobs_runtime.go`, `internal/mediajobs/api/dictator_speech_service.go` | Move shared execution to LLM Proxy. Connect required TelePrompter flows and preserve word timings and aligned SRT. |
-| MediaOps diagnostics | `internal/media/doctor/dictator/service.go` | Retire the provider diagnostic surface after migration. Do not add a MediaOps tenant metrics client. |
+| MediaOps CLI and MCP | `internal/media/provider/dictator/audio/service.go` | Keep CLI and MCP workflows in MediaOps. Replace direct Dictator calls with the official gateway client. |
+| MediaOps browser jobs | `internal/webapp/mediajobs_runtime.go`, `internal/mediajobs/api/dictator_speech_service.go` | Keep browser jobs and local processing in MediaOps. Replace Dictator calls and keep word timings and aligned SRT. |
+| MediaOps diagnostics | `internal/media/doctor/dictator/service.go` | Replace direct provider health access with gateway route readiness where needed. Do not add a MediaOps tenant metrics client. |
 | WriterBlock dictation, excluded | `internal/app/app.go`, `transcribeWithDictator` | WriterBlock is paused. No caller replacement is required by this migration. |
 
 The audit used MediaOps commit `547234ddecd7bee8daffa2dfa6ab980029c8bacd` and WriterBlock commit `b6d731411ed8135f13f43c1543d71c5a0bc860a3`.
-MediaOps I087 owns the Dictator source migration, retained-data transfer, and required TelePrompter integration.
+MediaOps I087 owns the Dictator provider cutover, required provider-record transfer, and affected caller integration.
 The operator confirmed WriterBlock's paused status on 2026-09-15. WriterBlock is not an active project.
 Its public homepage, README, and product document already record this status.
 WriterBlock code, credentials, resources, and consumer acceptance are outside the active migration scope.
 WriterBlock does not gate F042 acceptance, publication, or deployment.
-Preserve required timeline conversion in the migrated workflow. TelePrompter retains its project presentation and editing behavior.
+Keep timeline conversion and all project presentation and editing behavior in MediaOps.
 Its extracted voice records are in `<workspace_root>/.mediaops/voices`.
 MCP operation records are in `<workspace_root>/.mediaops/mcp/operations`.
 The MCP server selects its workspace through `--workspace-root` or its process directory.
@@ -492,7 +613,7 @@ Record source digests and gateway identifiers in private operator evidence.
 I088 reconciles all receipts and proves zero remaining direct provider execution.
 I244 removes only the import tools actually introduced by these migrations.
 Remove obsolete adapters, provider secrets, recovery code, catalog copies, and provider tests after their new owner passes acceptance.
-Move behavior and provider protocol tests with their functionality. Keep TelePrompter interaction tests in MediaOps.
+Move provider protocol tests with their adapters. Keep all application interaction and local-processing tests in MediaOps.
 
 ## Validation And Release Gates
 
@@ -514,7 +635,7 @@ Record a failed acceptance against its owning slice before the next capability s
 ## Product Position And Remaining Decisions
 
 Position the combined service as one gateway for AI capabilities.
-MediaOps retains only TelePrompter. F071 owns migration of its other application functionality into LLM Proxy.
+MediaOps keeps all applications and local processing. F071 verifies the model-access boundary.
 Keep the existing LLM Proxy name through the first consumer release.
 A broader brand is a later product decision.
 
@@ -529,12 +650,12 @@ The remaining decisions have explicit owners:
 - FamilyHome P003: image format, dimensions, input method, save behavior, family limits, and its implementation issue.
 - F043: exact staging routes, Google credential mode, and provider-readable URL lifetime.
 - F042: capability schemas and the disposition of existing transcription routes before its public release.
-- F071: application resource ownership, composition API, and the remaining application migration.
-- MediaOps F021: concrete TelePrompter composition flows through the gateway.
+- F071: final model-access boundary and affected caller inventory.
+- MediaOps F021: local preview and export acceptance after model-provider cutovers.
 - Each activation: credentials, runtime values, retained-data inventory, and measured provider acceptance.
 
 F028, F029, and F030 cover later AvatarV, MiniMax, and Speechify integrations.
-MediaOps F022, F023, and F024 apply only to required TelePrompter exposure. Shared capability delivery belongs to LLM Proxy.
-F071 inventories remaining creator workflow work, including MediaOps I027, I030, I031, P003, and P005.
-Classify each requirement as a TelePrompter concern or functionality to migrate.
-MediaOps I089 supplies source acceptance evidence for the temporary HTTP store. Its final owner follows the migrated execution service.
+MediaOps F022, F023, and F024 keep their product exposure requirements. Provider capability delivery belongs to LLM Proxy.
+MediaOps I027, I030, and I031 remain creator workflow work in MediaOps. P003 and P005 remain planning work.
+F071 checks that provider cutovers leave these product responsibilities in MediaOps.
+MediaOps I089 supplies acceptance evidence for provider input staging under F043. It does not move local media execution.

@@ -34,6 +34,12 @@ Search filters the visible lists. Each column scrolls when its list exceeds the 
 A dashed amber line identifies a model preview.
 A star and a text label identify a saved default.
 Model selection alone does not save a default.
+The model tabs are Text, Transcription, Speech, Image, and Video.
+If the selected connection has no models for the current tab, the dashboard selects the first available domain.
+A connection or tenant change removes unsaved model previews.
+The text, transcription, and speech save actions preserve the other saved defaults.
+Image and video cards show offering details without a default save action.
+Models with image inputs appear in the Image tab, including models with text operations.
 An unattached connection has a `Not connected` label.
 A connection without required credentials retains its assignments and shows `Credentials needed`.
 The model list remains empty until its required credentials are configured.
@@ -62,6 +68,16 @@ The token remains encrypted in the backend credential store.
 Assign the saved connection to the required tenant.
 Select the Transcription tab to inspect `whisper-base` and its transcription capabilities. Select the Speech tab to inspect `qwen3-tts` and `silero-ru` synthesis capabilities.
 Transcription and speech models use their own capability defaults.
+The Speech tab also shows voice extraction models.
+Only synthesis models have a speech default save action.
+Language, voice, sample rate, and output format remain operation request controls.
+The default resource saves provider and model selections.
+
+The defaults resource has separate provider and model pairs for text, transcription, and speech.
+API requests use `transcription_provider`, `transcription_model`, `speech_provider`, and `speech_model` for the two audio domains.
+The service rejects the obsolete `dictation_provider` and `dictation_model` fields.
+A default update replaces the resource. The client includes the unchanged pairs to preserve other selections.
+Each selected pair remains intact after a restart.
 
 Operations, output assets, and voice identifiers belong to the tenant.
 Execution and recovery require the accepted connection identity and version.
@@ -79,6 +95,7 @@ A detach operation removes only the selected tenant's assignment.
 The connection remains available to its other tenants.
 When a default depends on that assignment, the operation requires explicit confirmation to clear the default.
 The assignment removal and default updates occur in one database transaction.
+The transaction clears only defaults that use the removed connection.
 The service rejects connection deletion while assignments remain.
 The existing final-tenant deletion constraint remains in effect.
 
@@ -90,6 +107,11 @@ Current account-connection databases validate their records on startup.
 Historical version records do not control this validation and remain unchanged.
 Startup rejects predecessor credential and temporary transfer tables beside the current account connections.
 It preserves the rejected records for operator action.
+
+Current tenant records require separate transcription and speech columns.
+Startup rejects missing columns and obsolete `default_dictation_provider` or `default_dictation_model` columns.
+An existing database requires an explicit data transfer before this source revision can replace its runtime.
+Preserve its selected routes and record the transfer separately from local code validation.
 
 New product fields and tables extend the declared current schema.
 Each change must define how existing records receive any required values.

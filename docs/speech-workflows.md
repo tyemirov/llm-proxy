@@ -54,6 +54,11 @@ Other speech capabilities reject this control.
 The [OpenAPI contract](openapi.yaml) defines all six operation requests.
 Extraction returns a tenant voice resource through an output asset.
 Use its `voice_id` for subsequent synthesis.
+Use `qwen3-tts` with an extracted reference voice.
+Use `silero-ru` with a Silero preset voice.
+The service rejects a voice from an incompatible synthesis engine before upstream submission.
+The selected Whisper model sets the model size for transcription, diarization, subtitles, and voice extraction.
+For example, `whisper-large-v3` selects `large-v3` without a separate size control.
 Download each output separately. Its MIME type and ordinal identify its result role.
 
 ## MCP
@@ -73,7 +78,8 @@ That test also compiles the CLI and verifies extraction, wait, and download agai
 `make test-dictator-live` qualifies all six HTTP capabilities against the selected live provider.
 
 These checks establish destination execution. They do not establish a production consumer switch.
-MediaOps I087 still owns source caller retirement after the bounded switch and consumer acceptance.
-F071 owns the remaining application migration, including browser interfaces and general composition.
-The ElevenLabs render-plan workflow belongs to that separate provider and application scope.
+MediaOps I087 owns direct Dictator transport removal after the bounded switch and consumer acceptance.
+All browser interfaces, CLI/MCP workflows, narration plans, and local composition stay in MediaOps.
+F071 verifies that only model-provider access moves.
+F026 and MediaOps I011 cover ElevenLabs provider access; its render-plan orchestration stays in MediaOps.
 The [migration audit](dictator-migration-audit.md) records production ownership and store evidence.

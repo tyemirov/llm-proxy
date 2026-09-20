@@ -283,6 +283,7 @@ Each item in `providers[].offerings` is one provider offering.
 | Exact model reference | `offerings[].model` | References one root exact model. |
 | Provider model identifier | `offerings[].upstream_model` | Supplies the private upstream model value. |
 | Transport reference | `offerings[].transport` | Selects one transport in the provider definition. |
+| Image editing transport | `offerings[].image_routes.editing` | Selects the Images editing transport for the same image offering. |
 | Supported operations | `offerings[].operations` | Declares the operations for this route. |
 | Provider defaults | `offerings[].default_operations` | Selects the default offering for each provider operation. |
 | Request profile | `offerings[].request_profile` | Selects one stable protocol-specific payload profile. |
@@ -295,6 +296,24 @@ Each item in `providers[].offerings` is one provider offering.
 | Request controls | `offerings[].controls` | Declares route-specific request controls. |
 | Route limits | `offerings[].limits` | Declares fixed or account-dependent limits. |
 | Operation prices | `offerings[].prices` | Owns one price record for each offering operation. |
+
+An image offering with `image_editing` must declare `image_routes.editing`.
+The reference must select a synchronous `openai_images` transport in the same provider.
+The offering also declares `input_images`, `input_image_bytes`, and `input_image_pixels` limits.
+The last limit bounds decoded input memory in the gateway.
+The loader rejects absent references, incompatible components, and image routes without the corresponding operation.
+Image offerings declare the Boolean `stream` control and the integer `partial_images` control.
+The current codec accepts zero through three previews and one streamed output.
+The `stream_output_images` limit declares that output bound.
+Requests with previews must enable streaming. Terminal requests retain the separate `output_count` range.
+The required `surface` enum declares `images` and any configured `responses` route.
+`image_routes.responses` selects an `openai_responses` transport with the `pollable_resource` lifecycle.
+Its `responses_model` enum references enabled text offerings with image input support on that transport.
+The codec resolves each selected text model to its catalog upstream model.
+The `responses_output_images` limit is one. The request forces one image tool call.
+Responses masks are not part of the current image contract.
+The loader rejects unknown models, disabled models, wrong transports, and inconsistent surface declarations.
+
 
 The accepted request profiles are
 `openai_responses_temperature`,

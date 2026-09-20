@@ -1,6 +1,6 @@
 # LLM Proxy SEO Resource Cluster Report
 
-Generated: 2026-09-10
+Generated: 2026-09-19
 
 ## Repo Analysis Report
 
@@ -38,7 +38,7 @@ Generated: 2026-09-10
 | API-served runtime config | Browser config comes from backend /config-ui.yaml, not a static Pages config artifact. | README hosted split-origin section | High | Current | Yes |
 | Bundled v2-only clients | Go package, Go CLI, and Python package send canonical /v2 messages for text. | README clients section | High | Current | Yes |
 | Public-page telemetry | Public static pages load Google Analytics and LoopAware page-view scripts. | site/index.html, resource generator | High | Current | Yes, with privacy caveat |
-| Worker/queue controls | server.workers limits upstream HTTP operations and queue_size limits pending operations. | README REST contract and config section | High | Current | Yes |
+| Upstream capacity | server.upstream_capacity bounds active and admitted requests by origin, tenant, account, and work class. | README REST contract and config section | High | Current | Yes |
 
 ### Non-Capabilities, Limits, and Cautions
 
@@ -91,7 +91,7 @@ Generated: 2026-09-10
 | 8 | Audio transcription proxy API behind tenant secrets | Teams adding voice input or dictation to internal tools without a separate provider credential path. | Dictation integrations often grow a separate security and provider configuration path from text generation, even when the same apps need both. | audio transcription proxy API | Dictation | /resources/audio-transcription-proxy-api/ | Low | Maintain existing resource |
 | 9 | Switch OpenAI, Claude, and Gemini behind one endpoint | Startups and product teams comparing native model families without maintaining three product integrations. | OpenAI Responses, Anthropic Messages, and Gemini Interactions use different authentication, payload, model-limit, lifecycle, and response contracts. | OpenAI Claude Gemini one endpoint | Provider routing | /resources/openai-claude-gemini-one-endpoint/ | Low | Refresh as cornerstone |
 | 10 | OpenAI background response polling without client loops | Backend teams with long OpenAI prompts that should not require client polling logic. | Long OpenAI Responses work can push polling, resume tokens, or streaming complexity into every caller if the gateway does not own the lifecycle. | OpenAI background response polling | Reliability | /resources/openai-background-response-polling/ | Low | Maintain existing resource |
-| 11 | Upstream worker and queue limits for LLM traffic | Operators who need predictable capacity limits for provider HTTP calls. | Unlimited upstream calls can exhaust provider quotas or local resources, while long OpenAI polling sleeps should not occupy scarce worker capacity. | upstream worker queue limits | Reliability | /resources/upstream-worker-queue-limits/ | Low | Maintain existing resource |
+| 11 | Upstream worker and queue limits for LLM traffic | Operators who need predictable capacity limits for provider HTTP calls. | A slow upstream origin can occupy capacity that other origins need. Media traffic also needs bounded capacity and reserved interactive capacity. | upstream worker queue limits | Reliability | /resources/upstream-worker-queue-limits/ | Low | Maintain existing resource |
 | 12 | LLM provider catalog configuration in providers.yml | Operators maintaining provider model availability without changing application code. | Model lists change faster than client release cycles. Hardcoded model IDs in callers make provider updates brittle. | LLM model catalog configuration | Configuration | /resources/model-catalog-configuration/ | Low | Maintain existing resource |
 | 13 | Provider default model selection for omitted models | Client developers and operators who want explicit defaults without hardcoding a model in every request. | If clients omit model, each provider route needs a clear rule. Otherwise requests can accidentally inherit a stale model from the wrong provider. | provider default model selection | Configuration | /resources/provider-default-model-selection/ | Low | Maintain existing resource |
 | 14 | OpenAI web search guardrails in an LLM proxy | Teams that need controlled search-enabled model calls without making web search a universal flag. | A generic web_search flag can be misleading when only some providers and models support a search tool. | OpenAI web search guardrails | API contract | /resources/openai-web-search-guardrails/ | Low | Maintain existing resource |
@@ -165,7 +165,7 @@ Generated: 2026-09-10
 
 ## Evaluation Report
 
-Independent quality and risk evaluation: 2026-09-10
+Independent quality and risk evaluation: 2026-09-19
 
 | Category | Score | Notes |
 |---|---:|---|
