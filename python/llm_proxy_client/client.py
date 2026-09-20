@@ -733,6 +733,17 @@ class ClientMediaOperationOutput:
 
 
 @dataclass(frozen=True)
+class ClientMediaOperationPartialOutput:
+    """One verified preview available before operation completion."""
+
+    asset_id: str
+    mime_type: str
+    size_bytes: int
+    output_ordinal: int
+    partial_ordinal: int
+
+
+@dataclass(frozen=True)
 class ClientMediaOperation:
     """One durable tenant media operation."""
 
@@ -744,6 +755,8 @@ class ClientMediaOperation:
     state: str
     cancellation_state: str
     outputs: tuple[ClientMediaOperationOutput, ...]
+    partial_outputs: tuple[ClientMediaOperationPartialOutput, ...]
+    previous_operation_id: str | None
     error_code: str | None
     cost_available: bool
     cost_reason: str | None
@@ -1109,7 +1122,7 @@ def _decode_media_operation(response: dict[str, Any]) -> ClientMediaOperation:
         "updated_at",
         "deadline_at",
     }
-    if frozenset(response) not in {frozenset(required_fields), frozenset(required_fields | {"error"})}:
+    if not required_fields <= response.keys() or response.keys() - required_fields - {"error", "partial_outputs", "previous_operation_id"}:
         raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media operation response")
     string_fields = ("capability", "provider", "model", "catalog_revision")
     if (
@@ -1125,6 +1138,18 @@ def _decode_media_operation(response: dict[str, Any]) -> ClientMediaOperation:
     ):
         raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media operation response")
     outputs = tuple(_decode_media_operation_output(output) for output in response["outputs"])
+    previous_operation_id = response.get("previous_operation_id")
+    if "previous_operation_id" in response and (
+        not isinstance(previous_operation_id, str) or not MEDIA_OPERATION_ID_PATTERN.fullmatch(previous_operation_id)
+    ):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media operation parent")
+    partial_values = response.get("partial_outputs", [])
+    if not isinstance(partial_values, list):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media operation previews")
+    partial_outputs = tuple(_decode_media_operation_partial(output) for output in partial_values)
+    positions = [(output.output_ordinal, output.partial_ordinal) for output in partial_outputs]
+    if any(current <= previous for previous, current in zip(positions, positions[1:])):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media operation preview order")
     cost = response["cost"]
     if set(cost) not in ({"available"}, {"available", "reason"}) or not isinstance(cost["available"], bool):
         raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media operation response")
@@ -1151,6 +1176,8 @@ def _decode_media_operation(response: dict[str, Any]) -> ClientMediaOperation:
         state=response["state"],
         cancellation_state=response["cancellation_state"],
         outputs=outputs,
+        partial_outputs=partial_outputs,
+        previous_operation_id=previous_operation_id,
         error_code=error_code,
         cost_available=cost["available"],
         cost_reason=cost_reason,
@@ -1158,6 +1185,25 @@ def _decode_media_operation(response: dict[str, Any]) -> ClientMediaOperation:
         updated_at=response["updated_at"],
         deadline_at=response["deadline_at"],
     )
+
+
+def _decode_media_operation_partial(value: Any) -> ClientMediaOperationPartialOutput:
+    """Decode one exact progressive asset reference."""
+
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"asset_id", "mime_type", "size_bytes", "output_ordinal", "partial_ordinal"}
+        or not isinstance(value["asset_id"], str)
+        or not ASSET_ID_PATTERN.fullmatch(value["asset_id"])
+        or not isinstance(value["mime_type"], str)
+        or not value["mime_type"]
+        or any(isinstance(value[field], bool) or not isinstance(value[field], int) for field in ("size_bytes", "output_ordinal", "partial_ordinal"))
+        or value["size_bytes"] <= 0
+        or value["output_ordinal"] < 0
+        or value["partial_ordinal"] < 0
+    ):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid media operation preview")
+    return ClientMediaOperationPartialOutput(**value)
 
 
 def _decode_media_operation_output(value: Any) -> ClientMediaOperationOutput:

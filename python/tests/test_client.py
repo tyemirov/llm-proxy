@@ -150,6 +150,63 @@ def test_client_upload_asset_uses_bearer_authentication_over_http(query: str) ->
         thread.join()
 
 
+def test_image_preview_resources_over_http() -> None:
+    """The client reads previews and rejects invalid preview references."""
+
+    response: dict[str, Any] = {
+        "operation_id": "mop_0123456789abcdef0123456789abcdef",
+        "capability": "image.generate", "provider": "openai", "model": "gpt-image-2",
+        "catalog_revision": "fixture", "state": "running", "cancellation_state": "not_requested",
+        "outputs": [], "cost": {"available": False},
+        "accepted_at": "2026-09-10T20:00:00Z", "updated_at": "2026-09-10T20:00:00Z", "deadline_at": "2026-09-10T20:15:00Z",
+    }
+    preview = {"asset_id": "ast_0123456789abcdef0123456789abcdef", "mime_type": "image/png", "size_bytes": 100, "output_ordinal": 0, "partial_ordinal": 0}
+    response["partial_outputs"] = [preview]
+
+    class PreviewHandler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            assert self.headers.get("Authorization") == "Bearer preview-client"
+            assert self.path == "/model/v1/operations/mop_0123456789abcdef0123456789abcdef"
+            body = json.dumps(response).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), PreviewHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        client = Client(ClientConfig(base_url=f"http://127.0.0.1:{server.server_port}", secret="preview-client"))
+        operation = client.get_media_operation(response["operation_id"])
+        assert len(operation.partial_outputs) == 1
+        assert operation.partial_outputs[0].asset_id == preview["asset_id"]
+        assert operation.partial_outputs[0].output_ordinal == 0
+        assert operation.partial_outputs[0].partial_ordinal == 0
+        response["previous_operation_id"] = "mop_abcdef0123456789abcdef0123456789"
+        assert client.get_media_operation(response["operation_id"]).previous_operation_id == response["previous_operation_id"]
+        for parent in ("resp_native", "", None, True):
+            response["previous_operation_id"] = parent
+            with pytest.raises(LLMProxyTransportError):
+                client.get_media_operation(response["operation_id"])
+        del response["previous_operation_id"]
+        for change in ({"asset_id": "file_native"}, {"size_bytes": 0}, {"size_bytes": True}, {"output_ordinal": -1}, {"partial_ordinal": -1}, {"partial_ordinal": True}, {"provider_id": "private"}):
+            response["partial_outputs"] = [preview | change]
+            with pytest.raises(LLMProxyTransportError):
+                client.get_media_operation(response["operation_id"])
+        response["partial_outputs"] = [preview, preview]
+        with pytest.raises(LLMProxyTransportError):
+            client.get_media_operation(response["operation_id"])
+        response["partial_outputs"] = "invalid"
+        with pytest.raises(LLMProxyTransportError):
+            client.get_media_operation(response["operation_id"])
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
 def test_client_uses_typed_durable_media_and_voice_resources() -> None:
     """The Python client uses authenticated canonical media resources."""
 
