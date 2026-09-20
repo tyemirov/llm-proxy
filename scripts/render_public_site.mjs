@@ -3,6 +3,7 @@
 import { cp, lstat, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { renderBrandIcon } from "../site/assets/llm-proxy/js/brandIcons.js";
+import { ROUTE_CAPABILITY_ALL, PROVIDER_RESOURCE_LABELS } from "../site/assets/llm-proxy/js/constants.js";
 import { validateBrandAssets } from "./brand_icon_validation.mjs";
 
 const publicCapabilitiesPath = "/api/public/capabilities";
@@ -15,17 +16,18 @@ const binaryBytesPerMiB = 1024 * 1024;
 
 const capabilityDefinitions = Object.freeze([
   { identifier: "text", label: "Text generation", routeLabel: "Text", className: "capability-badge--primary" },
-  { identifier: "image_generation", label: "Image generation", routeLabel: "Image", className: "capability-badge--info" },
-  { identifier: "image_editing", label: "Image editing", routeLabel: "Edit", className: "capability-badge--info" },
+  { identifier: "image_generation", label: "Image generation", routeLabel: "Generate images", className: "capability-badge--info" },
+  { identifier: "image_editing", label: "Image editing", routeLabel: "Edit images", className: "capability-badge--info" },
   { identifier: "dictation", label: "Dictation", routeLabel: "Dictation", className: "capability-badge--info" },
   { identifier: "video_generation", label: "Video generation", routeLabel: "Video", className: "capability-badge--info" },
   { identifier: "audio_transcription", label: "Audio transcription", routeLabel: "Transcription", className: "capability-badge--info" },
   { identifier: "audio_diarization", label: "Audio diarization", routeLabel: "Diarization", className: "capability-badge--info" },
+  { identifier: "pronunciation_dictionary_creation", label: "Pronunciation dictionary", routeLabel: "Dictionary", className: "capability-badge--info" },
   { identifier: "audio_alignment", label: "Audio alignment", routeLabel: "Alignment", className: "capability-badge--info" },
   { identifier: "subtitle_creation", label: "Subtitle creation", routeLabel: "Subtitles", className: "capability-badge--info" },
   { identifier: "speech_generation", label: "Speech generation", routeLabel: "Speech", className: "capability-badge--info" },
   { identifier: "voice_extraction", label: "Voice extraction", routeLabel: "Voice", className: "capability-badge--info" },
-  { identifier: "image_input", label: "Image input", routeLabel: "Image", className: "capability-badge--info" },
+  { identifier: "image_input", label: "Image input", routeLabel: "Image input", className: "capability-badge--info" },
   { identifier: "audio_input", label: "Audio message input", routeLabel: "Audio", className: "capability-badge--info" },
   { identifier: "caller_tools", label: "Caller tools", routeLabel: "Tools", className: "capability-badge--success" },
   { identifier: "web_search", label: "Web search", routeLabel: "Web search", className: "capability-badge--success" },
@@ -36,9 +38,10 @@ const capabilityDefinitionsByIdentifier = new Map(
 );
 const modelOperationIdentifiers = new Set([
   "text", "dictation", "image_generation", "image_editing", "video_generation", "audio_transcription", "audio_diarization",
-  "audio_alignment", "subtitle_creation", "speech_generation", "voice_extraction",
+  "pronunciation_dictionary_creation", "audio_alignment", "subtitle_creation", "speech_generation", "voice_extraction",
 ]);
 const providerCredentialKinds = new Set(["api_key", "deployment"]);
+const providerResourceKinds = new Set(Object.keys(PROVIDER_RESOURCE_LABELS));
 const capabilityDomainIdentifiers = new Set(["text", "transcription", "speech", "image", "video"]);
 const executionLifecycleIdentifiers = new Set(["synchronous_completion", "pollable_resource", "asynchronous_job"]);
 const weightAccessDefinitions = Object.freeze([
@@ -62,7 +65,7 @@ await renderPublicSite(options);
  */
 
 /** @typedef {{id: string, input_artifacts: string[], output_artifacts: string[]}} PublicModelOperation */
-/** @typedef {{identifier: string, label: string, credential_kinds: string[]}} PublicProviderCapability */
+/** @typedef {{identifier: string, label: string, credential_kinds: string[], resources: string[], services: PublicProviderService[]}} PublicProviderCapability */
 /** @typedef {{identifier: string, label: string, model_count: number}} PublicModelPublisher */
 /** @typedef {{identifier: string, publisher: string, label: string, weight_access: string}} PublicModelFamily */
 /**
@@ -251,7 +254,11 @@ function parseCapabilityCatalog(rawCatalog) {
   const providers = requiredNonemptyArray(catalog.providers, "catalog.providers").map((rawProvider, providerIndex) => {
     const field = `catalog.providers[${providerIndex}]`;
     const provider = requiredRecord(rawProvider, field);
-    requireExactKeys(provider, ["identifier", "label", "credential_kinds"], field);
+    requireExactKeys(provider, ["identifier", "label", "credential_kinds", "resources", "services"], field);
+    const resources = requiredStringArray(provider.resources, `${field}.resources`);
+    if (new Set(resources).size !== resources.length || resources.some((kind) => !providerResourceKinds.has(kind))) {
+      throw new Error(`public_capabilities_invalid: ${field}.resources`);
+    }
     const credentialKinds = requiredNonemptyStringArray(provider.credential_kinds, `${field}.credential_kinds`);
     if (credentialKinds.length !== 1 || !providerCredentialKinds.has(credentialKinds[0])) {
       throw new Error(`public_capabilities_invalid: ${field}.credential_kinds`);
@@ -260,6 +267,8 @@ function parseCapabilityCatalog(rawCatalog) {
       identifier: requiredString(provider.identifier, `${field}.identifier`),
       label: requiredString(provider.label, `${field}.label`),
       credential_kinds: credentialKinds,
+      resources,
+      services: requiredArray(provider.services, `${field}.services`).map((service,index)=>parseProviderService(service, `${field}.services[${index}]`)),
     };
   });
 
@@ -506,15 +515,20 @@ function parseCatalogControl(rawControl, field) {
   const keys = ["id", "kind", "values", "minimum", "maximum", "account_dependent"];
   if (kind === "image_size") keys.push("image_size");
   requireExactKeys(control, keys, field);
-  if (kind !== "enum" && kind !== "integer" && kind !== "boolean" && kind !== "image_size") {
+  if (kind !== "enum" && kind !== "integer" && kind !== "boolean" && kind !== "image_size" && kind !== "number") {
     throw new Error(`public_capabilities_invalid: ${field}.kind value=${kind}`);
+  }
+  const minimum = kind === "number" ? requiredFiniteNumber(control.minimum, `${field}.minimum`) : nullableNonnegativeInteger(control.minimum, `${field}.minimum`);
+  const maximum = kind === "number" ? requiredFiniteNumber(control.maximum, `${field}.maximum`) : nullableNonnegativeInteger(control.maximum, `${field}.maximum`);
+  if ((kind === "number" || kind === "integer") && (minimum === null || maximum === null || minimum > maximum || requiredArray(control.values, `${field}.values`).length !== 0)) {
+    throw new Error(`public_capabilities_invalid: ${field} has invalid numeric bounds`);
   }
   return {
     id: requiredString(control.id, `${field}.id`),
     kind,
     values: requiredStringArray(control.values, `${field}.values`),
-    minimum: nullableNonnegativeInteger(control.minimum, `${field}.minimum`),
-    maximum: nullableNonnegativeInteger(control.maximum, `${field}.maximum`),
+    minimum,
+    maximum,
     account_dependent: requiredBoolean(control.account_dependent, `${field}.account_dependent`),
     ...(kind === "image_size" ? { image_size: parseImageSizeConstraints(control.image_size, `${field}.image_size`) } : {}),
   };
@@ -613,10 +627,26 @@ function parseCatalogMediaLimit(rawLimit, field) {
  * @returns {PublicPriceDescriptor}
  */
 function parsePriceDescriptor(rawPrice, field) {
-  const price = requiredRecord(rawPrice, field);
-  requireExactKeys(price, [
-    "provider", "model", "operation", "available", "rates", "minimum_charge", "source", "last_verified", "unavailable_reason",
-  ], field);
+ const price = requiredRecord(rawPrice, field);
+ requireExactKeys(price, ["provider", "model", "operation", "available", "rates", "minimum_charge", "source", "last_verified", "unavailable_reason"], field);
+ const {provider,model,...values} = price;
+ return {provider: requiredString(provider, `${field}.provider`), model: requiredString(model, `${field}.model`), ...parsePriceValues(values,field)};
+}
+
+/** @typedef {{operation:string, controls:PublicCatalogControl[], limits:PublicCatalogLimit[], price:Omit<PublicPriceDescriptor,"provider"|"model">}} PublicProviderService */
+/** @param {unknown} raw @param {string} field @returns {PublicProviderService} */
+function parseProviderService(raw,field) {
+ const service=requiredRecord(raw,field);
+ requireExactKeys(service,["operation","controls","limits","price"],field);
+ const operation=requiredString(service.operation,`${field}.operation`);
+ const price=parsePriceValues(service.price,`${field}.price`);
+ if(!modelOperationIdentifiers.has(operation) || price.operation!==operation) throw new Error(`public_capabilities_invalid: ${field}.operation`);
+ return {operation,price,controls:requiredArray(service.controls,`${field}.controls`).map((item,index)=>parseCatalogControl(item,`${field}.controls[${index}]`)),limits:requiredArray(service.limits,`${field}.limits`).map((item,index)=>parseCatalogLimit(item,`${field}.limits[${index}]`))};
+}
+/** @param {unknown} rawPrice @param {string} field @returns {Omit<PublicPriceDescriptor,"provider"|"model">} */
+function parsePriceValues(rawPrice,field) {
+ const price=requiredRecord(rawPrice,field);
+ requireExactKeys(price,["operation", "available", "rates", "minimum_charge", "source", "last_verified", "unavailable_reason"],field);
   const rates = requiredArray(price.rates, `${field}.rates`).map((rawRate, rateIndex) => {
     const rateField = `${field}.rates[${rateIndex}]`;
     const rate = requiredRecord(rawRate, rateField);
@@ -640,8 +670,6 @@ function parsePriceDescriptor(rawPrice, field) {
     };
   }
   return {
-    provider: requiredString(price.provider, `${field}.provider`),
-    model: requiredString(price.model, `${field}.model`),
     operation: requiredString(price.operation, `${field}.operation`),
     available: requiredBoolean(price.available, `${field}.available`),
     rates,
@@ -717,8 +745,6 @@ function renderRoutingTree(catalog) {
   for (const model of catalog.models) {
     modelsByFamily.get(model.family)?.push(model);
   }
-  const defaultWeightAccess = "proprietary";
-  const defaultCapability = "text";
   /** @type {Map<string, PublicProviderOffering[]>} */
   const defaultOfferingsByModel = new Map(catalog.models.map((model) => [
     model.identifier,
@@ -726,14 +752,13 @@ function renderRoutingTree(catalog) {
       offeringsByIdentifier,
       offeringIdentifier,
       `model=${model.identifier} offering`,
-    )).filter((offering) => offering.capabilities.includes(defaultCapability)),
+    )),
   ]));
   const selectedFamily = catalog.families.find((family) => (
-    family.weight_access === defaultWeightAccess
-    && (modelsByFamily.get(family.identifier) ?? []).some((model) => (defaultOfferingsByModel.get(model.identifier)?.length ?? 0) > 0)
+    (modelsByFamily.get(family.identifier) ?? []).some((model) => (defaultOfferingsByModel.get(model.identifier)?.length ?? 0) > 0)
   ));
   if (!selectedFamily) {
-    throw new Error(`public_capabilities_invalid: weight_access=${defaultWeightAccess} capability=${defaultCapability} has no model family`);
+    throw new Error("public_capabilities_invalid: catalog has no model family with an offering");
   }
   const selectedModel = modelsByFamily.get(selectedFamily.identifier)?.find(
     (model) => (defaultOfferingsByModel.get(model.identifier)?.length ?? 0) > 0,
@@ -751,15 +776,15 @@ function renderRoutingTree(catalog) {
   }
   const availableCapabilities = new Set(catalog.offerings.flatMap((offering) => offering.capabilities));
   const accessButtons = weightAccessDefinitions.map((definition) => (
-    `<button type="button" class="routing-tree__filter" data-route-weight-access="${escapeAttribute(definition.identifier)}" aria-pressed="${definition.identifier === defaultWeightAccess ? "true" : "false"}" disabled>${escapeHTML(definition.label)}</button>`
+    `<button type="button" class="routing-tree__filter" data-route-weight-access="${escapeAttribute(definition.identifier)}" aria-pressed="true" disabled>${escapeHTML(definition.label)}</button>`
   )).join("");
-  const capabilityButtons = capabilityDefinitions.filter((definition) => availableCapabilities.has(definition.identifier)).map((definition) => (
-    `<button type="button" class="routing-tree__filter" data-route-capability="${escapeAttribute(definition.identifier)}" aria-label="${escapeAttribute(definition.label)}" title="${escapeAttribute(definition.label)}" aria-pressed="${definition.identifier === defaultCapability ? "true" : "false"}" disabled>${escapeHTML(definition.routeLabel)}</button>`
+  const capabilityButtons = `<button type="button" class="routing-tree__filter" data-route-capability="${ROUTE_CAPABILITY_ALL}" aria-label="All capabilities" title="All capabilities" aria-pressed="true" disabled>All capabilities</button>` + capabilityDefinitions.filter((definition) => availableCapabilities.has(definition.identifier)).map((definition) => (
+    `<button type="button" class="routing-tree__filter" data-route-capability="${escapeAttribute(definition.identifier)}" aria-label="${escapeAttribute(definition.label)}" title="${escapeAttribute(definition.label)}" aria-pressed="false" disabled>${escapeHTML(definition.routeLabel)}</button>`
   )).join("");
   const familyButtons = catalog.families.map((family) => {
     const familyModels = modelsByFamily.get(family.identifier) ?? [];
     const matchingModels = familyModels.filter((model) => (defaultOfferingsByModel.get(model.identifier)?.length ?? 0) > 0);
-    const visible = family.weight_access === defaultWeightAccess && matchingModels.length > 0;
+    const visible = matchingModels.length > 0;
     return `        <button type="button" class="routing-tree__branch routing-tree__family" data-route-family="${escapeAttribute(family.identifier)}" data-route-family-weight-access="${escapeAttribute(family.weight_access)}" aria-controls="routing-tree-models-${escapeAttribute(family.identifier)}" aria-pressed="${family.identifier === selectedFamily.identifier ? "true" : "false"}"${visible ? "" : " hidden"} disabled>
           <strong class="brand-label">${renderBrandIcon("family", family.identifier)}${escapeHTML(family.label)}</strong><small data-route-family-model-count>${countLabel(matchingModels.length, "model")}</small>
         </button>`;
@@ -768,7 +793,7 @@ function renderRoutingTree(catalog) {
     const familyModels = modelsByFamily.get(family.identifier) ?? [];
     const matchingModels = familyModels.filter((model) => (defaultOfferingsByModel.get(model.identifier)?.length ?? 0) > 0);
     const modelButtons = familyModels.map((model) => {
-      const visible = family.weight_access === defaultWeightAccess && (defaultOfferingsByModel.get(model.identifier)?.length ?? 0) > 0;
+      const visible = (defaultOfferingsByModel.get(model.identifier)?.length ?? 0) > 0;
       return `<button type="button" class="routing-tree__branch routing-tree__model" data-route-model="${escapeAttribute(model.identifier)}" data-route-model-family="${escapeAttribute(model.family)}" aria-pressed="${model.identifier === selectedModel.identifier ? "true" : "false"}"${visible ? "" : " hidden"} disabled><code>${escapeHTML(model.identifier)}</code><small>${escapeHTML(model.operations.join(" + "))}</small></button>`;
     }).join("");
     return `      <section id="routing-tree-models-${escapeAttribute(family.identifier)}" class="routing-tree__model-group" data-route-model-group="${escapeAttribute(family.identifier)}" aria-label="${escapeAttribute(family.label)} exact models"${family.identifier === selectedFamily.identifier ? "" : " hidden"}>
@@ -787,8 +812,7 @@ function renderRoutingTree(catalog) {
     const matchingOfferings = defaultOfferingsByModel.get(model.identifier) ?? [];
     const providerButtons = modelOfferings.map((offering) => {
       const provider = providersByIdentifier.get(offering.provider);
-      const visible = offering.capabilities.includes(defaultCapability);
-      return `<button type="button" class="routing-tree__branch routing-tree__provider" data-route-provider="${escapeAttribute(offering.provider)}" data-route-offering="${escapeAttribute(offering.identifier)}" data-route-provider-capabilities="${escapeAttribute(offering.capabilities.join(" "))}" aria-pressed="${offering.identifier === selectedOffering.identifier ? "true" : "false"}"${visible ? "" : " hidden"} disabled><strong class="brand-label">${renderBrandIcon("provider", offering.provider)}${escapeHTML(provider?.label ?? offering.provider)}</strong><small>${escapeHTML(offering.capabilities.join(" · "))}</small></button>`;
+      return `<button type="button" class="routing-tree__branch routing-tree__provider" data-route-provider="${escapeAttribute(offering.provider)}" data-route-offering="${escapeAttribute(offering.identifier)}" data-route-provider-capabilities="${escapeAttribute(offering.capabilities.join(" "))}" aria-pressed="${offering.identifier === selectedOffering.identifier ? "true" : "false"}" disabled><strong class="brand-label">${renderBrandIcon("provider", offering.provider)}${escapeHTML(provider?.label ?? offering.provider)}</strong><small>${escapeHTML(offering.capabilities.join(" · "))}</small></button>`;
     }).join("");
     return `      <section class="routing-tree__provider-group" data-route-provider-group="${escapeAttribute(model.identifier)}" aria-label="Providers offering ${escapeAttribute(model.identifier)}"${model.identifier === selectedModel.identifier ? "" : " hidden"}>
         <p><strong>Provider offerings</strong><span data-route-provider-count>${matchingOfferings.length} route${matchingOfferings.length === 1 ? "" : "s"}</span></p>
@@ -797,12 +821,11 @@ function renderRoutingTree(catalog) {
         </div>
       </section>`;
   }).join("");
-  const defaultFamilies = catalog.families.filter((family) => family.weight_access === defaultWeightAccess && (
+  const defaultFamilies = catalog.families.filter((family) => (
     modelsByFamily.get(family.identifier) ?? []
   ).some((model) => (defaultOfferingsByModel.get(model.identifier)?.length ?? 0) > 0));
   const defaultModels = catalog.models.filter((model) => (
-    catalog.families.find((family) => family.identifier === model.family)?.weight_access === defaultWeightAccess
-    && (defaultOfferingsByModel.get(model.identifier)?.length ?? 0) > 0
+    (defaultOfferingsByModel.get(model.identifier)?.length ?? 0) > 0
   ));
   const defaultOfferings = defaultModels.flatMap((model) => defaultOfferingsByModel.get(model.identifier) ?? []);
   return `<routing-tree class="routing-tree" data-enhanced="false" aria-label="Interactive LLM routing map">
@@ -916,6 +939,11 @@ function renderCapabilityCatalog(catalog) {
     <p class="catalog-empty" data-catalog-empty hidden>No models match the selected filters.</p>
   </div>
 </capability-catalog>
+<section data-provider-services aria-label="Provider services">
+  <h3>Provider services</h3>
+  <p>These services use the same provider connection. No model selection is required.</p>
+  <div class="catalog-table-wrap"><table class="catalog-table"><thead><tr><th scope="col">Provider</th><th scope="col">Service</th><th scope="col">Input limit</th><th scope="col">Price</th></tr></thead><tbody>${catalog.providers.flatMap(provider=>provider.services.map(service=>`<tr><th scope="row">${escapeHTML(provider.label)}</th><td>${escapeHTML(requireReference(capabilityDefinitionsByIdentifier,service.operation,"service operation").label)}</td><td>${service.limits.map(limit=>`${escapeHTML(limit.id)}: ${limit.value === null ? 'Account dependent' : escapeHTML(String(limit.value))} ${escapeHTML(limit.unit)}`).join('<br>')}</td><td>${escapeHTML(service.price.available ? service.price.rates.map(rate=>`${rate.rate} ${rate.currency}/${rate.unit}`).join(', ') : service.price.unavailable_reason)}</td></tr>`)).join('')}</tbody></table></div>
+</section>
 <div class="catalog-limits" aria-label="Proxy request limits">
   <p><strong>${formatBinarySize(catalog.max_prompt_bytes)}</strong>Maximum JSON request body</p>
   <p><strong>${formatBinarySize(catalog.max_input_audio_bytes)}</strong>Maximum input audio</p>
@@ -1166,6 +1194,17 @@ function nullableNonnegativeInteger(value, field) {
     return null;
   }
   return requiredNonnegativeInteger(value, field);
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} field
+ */
+function requiredFiniteNumber(value, field) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`public_capabilities_invalid: ${field} must be a finite number`);
+  }
+  return value;
 }
 
 /**
