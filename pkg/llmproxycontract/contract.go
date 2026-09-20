@@ -18,6 +18,10 @@ const (
 	ErrorCodeProviderDiagnosticsNotFound = "provider_diagnostics_not_found"
 	// MediaCapabilityVideoGenerate identifies durable video generation.
 	MediaCapabilityVideoGenerate = "video.generate"
+	// MediaCapabilityImageGenerate identifies durable image generation.
+	MediaCapabilityImageGenerate = "image.generate"
+	// MediaCapabilityImageEdit identifies durable image editing.
+	MediaCapabilityImageEdit = "image.edit"
 	// MediaCapabilityAudioTranscribe identifies durable speech transcription.
 	MediaCapabilityAudioTranscribe = "audio.transcribe"
 	// MediaCapabilityAudioDiarize identifies durable speaker diarization.

@@ -60,6 +60,7 @@ const (
 	publicWireContractMetaTranscription      = "meta_transcription"
 	publicWireContractOpenAIChatCompletions  = "openai_chat_completions"
 	publicWireContractOpenAIResponses        = "openai_responses"
+	publicWireContractOpenAIImages           = "openai_images"
 	publicWireContractDashScopeResponses     = "dashscope_responses"
 	publicWireContractXAIResponses           = "xai_responses"
 	publicWireContractXAIVideosGenerations   = "xai_videos_generations"
@@ -98,7 +99,7 @@ const (
 
 var publicCapabilityValues = map[string]struct{}{
 	publicCapabilityAudioInput: {}, "dictation": {}, publicCapabilityImageInput: {}, "reasoning": {},
-	"text": {}, "video_generation": {}, "web_search": {}, "caller_tools": {},
+	"text": {}, "image_generation": {}, "image_editing": {}, "video_generation": {}, "web_search": {}, "caller_tools": {},
 	"audio_transcription": {}, "audio_diarization": {}, "audio_alignment": {},
 	"subtitle_creation": {}, "speech_generation": {}, "voice_extraction": {},
 }
@@ -109,6 +110,7 @@ type publicOfferingRoute struct {
 }
 
 var publicOfferingMediaTransports = map[publicOfferingRoute]string{
+	{wireContract: publicWireContractOpenAIImages, executionLifecycle: publicExecutionLifecycleSynchronous}:           "",
 	{wireContract: publicWireContractVertexGenerateContent, executionLifecycle: publicExecutionLifecycleSynchronous}:  publicMediaTransportInline,
 	{wireContract: publicWireContractGeminiInteractions, executionLifecycle: publicExecutionLifecycleSynchronous}:     publicMediaTransportFile,
 	{wireContract: publicWireContractAnthropicMessages, executionLifecycle: publicExecutionLifecycleSynchronous}:      publicMediaTransportInline,

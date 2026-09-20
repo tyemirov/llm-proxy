@@ -17,6 +17,8 @@ import (
 
 const mediaResourceMaximumBytes = 8 * 1024 * 1024
 
+var mediaOperationIdentifierPattern = regexp.MustCompile(`^mop_[0-9a-f]{32}$`)
+
 var mediaVoiceIdentifierPattern = regexp.MustCompile(`^voi_[0-9a-f]{32}$`)
 
 // MediaOperationInput is one complete media-generation intent.
@@ -30,19 +32,21 @@ type MediaOperationInput struct {
 
 // MediaOperation describes one durable tenant-owned generation.
 type MediaOperation struct {
-	OperationID       string                 `json:"operation_id"`
-	Capability        string                 `json:"capability"`
-	Provider          string                 `json:"provider"`
-	Model             string                 `json:"model"`
-	CatalogRevision   string                 `json:"catalog_revision"`
-	State             string                 `json:"state"`
-	CancellationState string                 `json:"cancellation_state"`
-	Outputs           []MediaOperationOutput `json:"outputs"`
-	Error             *MediaOperationError   `json:"error,omitempty"`
-	Cost              MediaOperationCost     `json:"cost"`
-	AcceptedAt        time.Time              `json:"accepted_at"`
-	UpdatedAt         time.Time              `json:"updated_at"`
-	DeadlineAt        time.Time              `json:"deadline_at"`
+	OperationID         string                        `json:"operation_id"`
+	PreviousOperationID string                        `json:"previous_operation_id,omitempty"`
+	Capability          string                        `json:"capability"`
+	Provider            string                        `json:"provider"`
+	Model               string                        `json:"model"`
+	CatalogRevision     string                        `json:"catalog_revision"`
+	State               string                        `json:"state"`
+	CancellationState   string                        `json:"cancellation_state"`
+	Outputs             []MediaOperationOutput        `json:"outputs"`
+	PartialOutputs      []MediaOperationPartialOutput `json:"partial_outputs,omitempty"`
+	Error               *MediaOperationError          `json:"error,omitempty"`
+	Cost                MediaOperationCost            `json:"cost"`
+	AcceptedAt          time.Time                     `json:"accepted_at"`
+	UpdatedAt           time.Time                     `json:"updated_at"`
+	DeadlineAt          time.Time                     `json:"deadline_at"`
 }
 
 // MediaOperationOutput identifies one ordered result asset.
@@ -51,6 +55,15 @@ type MediaOperationOutput struct {
 	MIMEType  string `json:"mime_type"`
 	SizeBytes int64  `json:"size_bytes"`
 	Ordinal   int    `json:"ordinal"`
+}
+
+// MediaOperationPartialOutput identifies a preview available before completion.
+type MediaOperationPartialOutput struct {
+	AssetID        string `json:"asset_id"`
+	MIMEType       string `json:"mime_type"`
+	SizeBytes      int64  `json:"size_bytes"`
+	OutputOrdinal  int    `json:"output_ordinal"`
+	PartialOrdinal int    `json:"partial_ordinal"`
 }
 
 // MediaOperationError is caller-safe terminal error evidence.
@@ -383,8 +396,22 @@ func decodeExactJSON(body []byte, destination any) error {
 }
 
 func validMediaOperation(operation MediaOperation) bool {
+	if operation.PreviousOperationID != "" && !mediaOperationIdentifierPattern.MatchString(operation.PreviousOperationID) {
+		return false
+	}
 	if !strings.HasPrefix(operation.OperationID, "mop_") || operation.Capability == "" || operation.Provider == "" || operation.Model == "" || operation.CatalogRevision == "" || operation.AcceptedAt.IsZero() || operation.UpdatedAt.Before(operation.AcceptedAt) || !operation.DeadlineAt.After(operation.AcceptedAt) || operation.Outputs == nil {
 		return false
+	}
+	for index, partial := range operation.PartialOutputs {
+		if !assetIdentifierPattern.MatchString(partial.AssetID) || !supportedClientMediaMIME(partial.MIMEType) || partial.SizeBytes <= 0 || partial.OutputOrdinal < 0 || partial.PartialOrdinal < 0 {
+			return false
+		}
+		if index > 0 {
+			previous := operation.PartialOutputs[index-1]
+			if partial.OutputOrdinal < previous.OutputOrdinal || (partial.OutputOrdinal == previous.OutputOrdinal && partial.PartialOrdinal <= previous.PartialOrdinal) {
+				return false
+			}
+		}
 	}
 	switch operation.State {
 	case llmproxycontract.MediaOperationStateQueued, llmproxycontract.MediaOperationStateRunning, llmproxycontract.MediaOperationStateSucceeded, llmproxycontract.MediaOperationStateFailed, llmproxycontract.MediaOperationStateCancelled, llmproxycontract.MediaOperationStateUncertain:
