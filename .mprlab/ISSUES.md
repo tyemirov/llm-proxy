@@ -27,6 +27,64 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B241] (P2) Reserve executable capacity for voice preview downloads.
+  Evidence: The new preview origin has one active slot and an interactive reserve of one slot.
+  Evidence: The public preview test returns `502` when it uses this production allocation.
+  Requirements: Allocate an active transfer slot without exceeding the global admission budget.
+  Validation: Use the production allocation in the public preview test. Preserve the initial failure and final CI result.
+  Evidence: `/tmp/llm-proxy-f026-voices-capacity-initial.log` records the initial failure.
+  Progress: The corrected allocation passes the public preview test. Total origin admission is 508 of 512 slots.
+  Resolution: Allocated two active preview slots within the unchanged global budget.
+  Validation: Final CI passes all 14 gates with 100.0 percent Go coverage.
+  Evidence: `/tmp/llm-proxy-f026-voices-verified-ci.log` records the final 347-second run.
+  Files: `configs/config.yml` and `internal/proxy/elevenlabs_voices_test.go`.
+  Contracts: No new event contract.
+
+- [x] [B240] (P2) Reject explicit empty and null media models at the CLI boundary.
+  Evidence: CLI JSON decoding converts an empty or null model to the same Go value as an omitted model.
+  Evidence: The client then omits that field and can submit a model-free service request.
+  Requirements: Preserve model presence during CLI decoding. Reject null, empty, whitespace-only, and non-string values before HTTP submission.
+  Requirements: Preserve valid exact model values and omitted service models.
+  Validation: Use the real CLI entry point with a local HTTP server. Verify invalid input sends no request.
+  Validation: The initial public CLI test reported `invalid model sent: exit=0 calls=1` for null and empty models.
+  Resolution: The CLI preserves model presence and rejects invalid values before HTTP submission.
+  Files: `llm-proxy-client/media.go`, `llm-proxy-client/media_test.go`, and `docs/provider-services.md`.
+  Contract: The CLI enforces the existing media model contract. No new event contract is required.
+  Validation: Focused CLI tests and all 14 CI gates pass with 100.0 percent Go coverage.
+  Evidence: `/tmp/llm-proxy-b240-ci.log` records the final result.
+
+- [x] [B239] (P2) Preserve the global capacity budget in the local provider preflight.
+  Evidence: The preflight adds an origin allocation to the unchanged production allocation list.
+  Evidence: With the ElevenLabs origin, startup fails with `invalid_upstream_capacity: field=global.admitted reason=origin_allocations_exceed_global`.
+  Requirements: Divide the existing OpenAI allocation between its native origin and the local preflight origin.
+  Requirements: Keep the total origin allocation and production configuration unchanged.
+  Validation: `make test-live-provider-harness` and `make test-operational-live-contracts` pass.
+  Files: `scripts/test_live_providers.sh` and `README.md`.
+  Resolution: The preflight preserves the capacity budget and verifies saved credentials through the local provider.
+  Final CI: All 14 gates pass with 100.0 percent Go coverage. The log is `/tmp/llm-proxy-b239-f026-ci-final.log`.
+
+
+- [x] [B238] (P1) Reject fractional bounds on integer catalog controls.
+  Evidence: Public catalog tests accepted integer controls with minimum `0.7` and maximum `1.2`.
+  Cause: YAML decoding converted fractional values into integer fields before validation.
+  Requirements: Preserve numeric bounds at the YAML boundary. Reject fractional, negative, or non-finite integer bounds.
+  Validation: Verify the public catalog parser rejects these declarations and preserves valid integer ranges.
+  Resolution: Numeric fields preserve YAML decimals. Integer validation rejects fractional and non-finite bounds before registry construction.
+  Validation: Public rejection tests and final CI passed with F078.
+
+- [x] [B237] (P1) Wait for document startup before shared UI readiness.
+  Evidence: Two full CI runs reported an authenticated header with `data-auth-state="error"` on the application.
+  Evidence: The trace contains no account request. The failure occurs before authenticated data loading.
+  Cause: Document state `interactive` can precede `DOMContentLoaded`, which starts shared UI orchestration.
+  Requirements: Wait for the document startup event before reading the shared UI readiness promise.
+  Requirements: Keep the shared UI loader as the authentication owner. Do not add retries or increase timeouts.
+  Validation: Run management browser tests, the local TAuth black-box suite, and final `make ci`.
+  Progress: A delayed-document browser test reproduced the failure before the code change and passed after the change.
+  Resolution: The application captures document readiness before asynchronous configuration reads. It then awaits shared UI orchestration.
+  Validation: Final `make ci` passed all 14 gates in 342 seconds with 100.0 percent Go statement coverage.
+  Files: `site/assets/llm-proxy/js/core/mprShell.js` and `tests/e2e/management-ui.spec.js`.
+  Event contracts: No changes.
+
 - [x] [B236] (P1) Transfer retained capability defaults before startup validation.
   Evidence: Local Compose exits with `missing_default_column=default_transcription_provider` when the database has the previous dictation columns.
   Goal: Start the current application with retained tenant data after the capability schema change.
@@ -184,6 +242,37 @@ retain satisfied historical dependencies.
   Blocked: The operator must publish the qualified shared UI assets and complete cache convergence under mpr-ui I009.
 
 ## Improvements
+
+- [x] [I273] (P1) Show all catalog families before route filters are selected.
+  Goal: Let visitors discover text and media models from the same initial view.
+  Evidence: The route explorer selects Text and Proprietary at first load. Media families remain hidden.
+  Requirements: Select all capabilities and both weight access types at first load.
+  Requirements: Derive every family, exact model, and provider offering from the validated catalog.
+  Requirements: Keep explicit capability filters and show distinct image generation and image input labels.
+  Validation: Verify initial visibility, filter changes, media route selection, and the page without JavaScript through browser tests.
+  Resolution: The initial view selects all capabilities and both weight access types. Explicit filters remain available.
+  Validation: Final `make ci` passed all 14 gates, including 135 frontend tests and seven local TAuth browser tests.
+  Files: `scripts/render_public_site.mjs`, `site/assets/llm-proxy/js/constants.js`, `site/assets/llm-proxy/js/ui/routingTree.js`, browser tests, and `README.md`.
+  Event contracts: No changes.
+
+- [ ] [I274] (P1) {F040,F042,F043,F025,F026,F027,I244,F071} Verify all MediaOps capabilities.
+  Goal: Complete the requested provider migration without missing capabilities.
+  Source: `docs/media-provider-completeness.md` records all nine providers and their source capabilities.
+  Requirements: Include OpenAI, Vertex, FAL, Runway, xAI, ElevenLabs, HeyGen, Kling, and Dictator.
+  Requirements: Account for each active source model, public provider method, supported control, and recovery path.
+  Requirements: Include discovery, account resources, histories, pronunciation dictionaries, uploads, quotas, and provider mutations.
+  Requirements: Keep `configs/providers.yml` as the only runtime provider and model inventory.
+  Requirements: Keep one definition per upstream provider. Extend existing OpenAI, Vertex, and xAI definitions for their media capabilities.
+  Requirements: Put capability branches in provider transports and offerings. Reuse existing connection fields and tenant assignments.
+  Requirements: Reject duplicate provider identities. Do not add capability-specific provider aliases or separate media credentials for the same account.
+  Requirements: Use the same registry for routing, discovery, connection forms, and public interfaces.
+  Requirements: Keep MediaOps applications, local processing, product authorization, and application data in MediaOps.
+  Requirements: Reuse the existing capability issues and complete them sequentially.
+  Validation: Prove provider protocols through public tests and the P011 second-provider procedure.
+  Validation: Prove one provider entry and one shared connection contract across text and media capability branches.
+  Validation: Prove affected MediaOps entry points through the official client before source retirement.
+  Validation: Record each capability as accepted or still open. Do not close this issue with an absent capability.
+  Release state: Client publication, service activation, website publication, and paid acceptance remain separate operational records.
 
 - [x] [I272] (P1) Run Python and Go CI checks at the same time.
   Goal:
@@ -391,7 +480,7 @@ retain satisfied historical dependencies.
   Prove the different outcomes for invalid credentials and unsupported operations through public management HTTP requests.
   Prove that both failures preserve the previous connection and its settings.
 
-- [ ] [I244] (P1) {F024,F025,F026,F027,F039,F040,F041,F042} Remove the completed MediaOps operation-import bridge.
+- [ ] [I244] (P1) {F024,F025,F026,F027,F039,F040,F042} Remove the completed MediaOps operation-import bridge.
   Goal:
   Leave only the canonical model-operation contract after migration of every
   selected MediaOps provider record.
@@ -1276,6 +1365,132 @@ retain satisfied historical dependencies.
   was required.
 
 ## Features
+
+- [ ] [F080] (P1) Add Kimi web search through the current Moonshot search APIs.
+  Goal: Let callers use `web_search=true` with supported Moonshot model offerings.
+  Evidence (2026-09-20): `README.md` defines search as an optional Boolean request field. Only selected OpenAI offerings support it.
+  Evidence: `configs/providers.yml` declares four Kimi offerings without `web_search: true`.
+  Evidence: `internal/proxy/provider_registry.go` rejects search requests when the selected offering has no search capability.
+  Evidence: `internal/proxy/openai_compatible_chat.go` returns caller function calls. It has no search execution path.
+  Evidence: This investigation checked source code and official documentation. It made no live Moonshot API calls.
+  Evidence: The current Kimi guide describes separate REST endpoints for Web Search Basic, Web Search Pro, and URL Fetch.
+  Evidence: The built-in search guide gives October 20, 2026 as the retirement date for `$web_search`.
+  Sources:
+  - https://platform.kimi.ai/docs/guide/best-practices-for-web-search
+  - https://platform.kimi.ai/docs/guide/use-web-search
+  - https://platform.kimi.ai/docs/pricing/websearch
+  Requirements:
+  - Keep `web_search` as the canonical Boolean request field. Keep omission and `false` disabled.
+  - Use the current standalone REST APIs under the existing Moonshot provider connection.
+  - Select one search execution contract before implementation. Use `/v1/tools/search_pro` as the proposed default for answers with sources.
+  - Define how the proxy produces search queries and supplies results to the selected Kimi model.
+  - Declare transports, credentials, limits, and supported offerings in the provider catalog.
+  - Reuse the model-free service contract from F079 when the search endpoints need service declarations.
+  - Keep provider search execution separate from caller tools. Retain caller ownership of caller function execution.
+  - Define request controls for result count, timeout, sites, and date range where the selected endpoint supports them.
+  - Define total call and context limits. Keep source titles and URLs in the model input and final answer.
+  - Define empty-result, malformed-response, authentication, rate-limit, timeout, and cancellation behavior.
+  - Record search charges separately from model token usage across all calls for one request.
+  - Use current REST contracts only. Exclude the retiring built-in tool and alternative compatibility paths.
+  - Update capability discovery, request documentation, and client examples together.
+  - Define supported combinations with caller tools, structured output, and image input before capability activation.
+  Open Decisions:
+  - Confirm the search endpoint, query policy, public controls, and supported Kimi offerings during implementation design.
+  - Decide whether URL Fetch is necessary for the initial answer workflow.
+  Cost evidence: Basic costs USD 0.002 per successful call with results. Pro costs USD 0.003 under the same condition.
+  Cost evidence: Fetch costs USD 0.002 per successful call with nonempty content. Failed or empty responses have no search charge.
+  Cost evidence: Model token charges remain separate. Examine current provider prices before implementation.
+  Deliverables: Catalog declarations, search execution, usage records, public documentation, and integration tests.
+  Validation:
+  - Start with failing HTTP integration tests through `POST /v2` and a local Moonshot protocol server.
+  - Examine enabled search, disabled search, unsupported offerings, source links, error responses, cancellation, and usage totals.
+  - Make sure that disabled search causes no search API calls.
+  - Make sure that search execution obeys call limits and preserves caller tools and reasoning messages.
+  - Run `make ci` after the final application change.
+  - Record live provider qualification separately when paid calls are authorized. Keep source acceptance separate from deployment.
+
+- [x] [F079] (P1) Declare model-free provider services in the shared catalog.
+  Goal: Execute provider services that do not select a model through the current durable operation API.
+  Evidence: MediaOps alignment, dictionary creation, composition upload, stem separation, and account mutations include requests without a model.
+  Evidence: The current operation API requires a model and resolves only model offerings.
+  Requirements: Add typed service bindings within the existing provider definition in `configs/providers.yml`.
+  Requirements: Reuse provider fields, connection authority, transports, controls, limits, admission, artifacts, and recovery.
+  Requirements: Select a declared service only when the request omits a model. Reject undeclared routes and invalid model combinations.
+  Requirements: Do not add fake model identifiers or a second provider definition.
+  Requirements: Define exact operation, input, output, and price contracts before each native adapter.
+  Requirements: Include available service bindings in public, tenant, and management discovery without adding model families.
+  Requirements: Update both official clients, OpenAPI, and the browser resource presentation.
+  Deliverables: Implement ElevenLabs forced alignment as the first native service through the existing provider connection.
+  Resolution: Added model-free service bindings under the existing provider hierarchy and native ElevenLabs forced alignment.
+  Resolution: Public, tenant, and management discovery, both clients, MCP, and browser views use this catalog contract.
+  Resolution: Alignment preserves timing and loss artifacts, shared account authority, provider usage, cancellation state, and recovery without resubmission.
+  Validation: Initial tests rejected omitted models and missing service discovery. HTTP, MCP, client, and browser corrections pass.
+  Validation: CI exposed adapter-map mutation during router construction and one uncovered decoder rejection. Both corrections pass.
+  Validation: Final CI passes all 14 gates in 345 seconds with 100.0 percent Go coverage, 146 frontend tests, and seven real-server browser tests.
+  Evidence: `/tmp/llm-proxy-f079-ci-complete.log` records final source validation.
+  Files: `configs/providers.yml`, provider service and alignment modules, durable operation and usage modules, both clients, OpenAPI, browser views, and public tests.
+  Contract: An omitted operation model selects only a declared service. Discovery includes `services`. Model routes retain exact model selection.
+  Contract: This source result does not establish deployment, client publication, native provider qualification, or MediaOps consumer acceptance.
+  Validation: Start with failing public HTTP and browser tests.
+  Validation: Prove one connection across model offerings and services, a second catalog identity, exact dispatch, and no retry of uncertain mutations.
+  Validation: Complete local CI and preserve separate native provider and consumer acceptance records.
+
+
+- [x] [F078] (P1) Add decimal controls to the provider catalog.
+  Goal: Describe bounded voice settings in the same YAML contract as integer, Boolean, and enum controls.
+  Requirements: Add the `number` control kind with finite minimum and maximum values.
+  Requirements: Preserve integer constraints for integer controls. Reject invalid ranges before runtime construction.
+  Requirements: Project exact decimal bounds through public discovery, tenant discovery, and the website build.
+  Validation: Start with failing public catalog and website tests. Verify the generated OpenAPI contract and final CI.
+  Deliverables: Typed control bounds, catalog validation, public contract, renderer, and tests.
+  Initial results: The catalog and website rejected the new number kind. Integer controls silently truncated decimal bounds under B238.
+  Progress: Focused HTTP, tenant-client, immutable-snapshot, and browser tests now pass.
+  Initial results: CI required Go formatting in two files. Formatting is corrected.
+  Resolution: One control schema now supports decimal ranges through YAML, HTTP discovery, the tenant client, and the website build.
+  Validation: Final `make ci` passed all 14 gates in 354 seconds with 100.0 percent Go statement coverage.
+  Validation: All 145 frontend tests and seven local browser tests passed. No new event contract was added.
+
+- [x] [F077] (P1) Add catalog bindings for provider resources.
+  Goal: Expose provider resources through the same provider definition and account connection as model operations.
+  Requirements: Add typed resource bindings for voices, history, dictionaries, metadata, quotas, and reusable elements.
+  Requirements: Reference provider transports and shared fields. Reject dangling references and unsupported compositions at YAML load time.
+  Requirements: Keep model offerings separate from provider resources. Do not invent model identifiers for account operations.
+  Requirements: Define each public resource schema before its adapter implementation under F026 or F027.
+  Validation: Verify discovery, tenant isolation, credential replacement, and a second provider identity through public entry points.
+  Deliverables: Typed YAML bindings, registry projection, public resource contracts, and integration tests.
+  Progress: Typed resource bindings now share provider transports and connection fields. Resource-only providers need no model offering.
+  Progress: Voice discovery uses the explicit binding. Public and tenant catalogs expose declared resource kinds.
+  Progress: Public tests prove connection replacement, detachment, tenant isolation, and a second provider identity.
+  Progress: OpenAPI and both official clients use the current discovery shape. Resource, catalog, Dictator, media, and client-contract tests pass.
+  Initial results: Two CLI fixtures omitted the new resource array. Corrected fixtures pass the CLI component.
+  Initial results: The website parser rejected the resource array. Updated parsing passes 140 frontend tests.
+  Initial results: A resource-only browser fixture exposed a model-family requirement in connection setup.
+  Progress: The corrected form saves a resource-only connection, shows Voices, and preserves it after reload without fake models.
+  Resolution: Resource bindings use shared provider transports and connections. Discovery and connection setup support resources without model offerings.
+  Validation: Final `make ci` passed all 14 gates in 347 seconds with 100.0 percent Go statement coverage.
+  Validation: All 140 frontend tests and seven local browser tests passed. No new event contract was added.
+
+- [x] [F076] (P1) Add catalog verification for media-only providers.
+  Goal: Support media-only account connections without duplicate providers or fake text models.
+  Evidence: The account verifier selects a text route or the separate Dictator protocol case.
+  Requirements: Add one typed verification binding inside each existing provider definition.
+  Requirements: Reference declared transports and shared connection fields. Reject dangling references and unsupported compositions at YAML load time.
+  Requirements: Use read-only upstream verification where available. Keep paid generation outside routine connection verification.
+  Requirements: Keep provider identity independent of capability type. Do not create separate media provider aliases.
+  Requirements: Keep model offerings separate from provider resources. Do not invent model identifiers for account operations.
+  Validation: Exercise account creation, credential replacement, revocation, tenant isolation, and browser discovery through public entry points.
+  Validation: Prove a second provider identity through catalog data and connection values without production code changes.
+  Deliverables: Typed YAML schema, shared registry projection, connection verification, and public integration tests.
+  Progress: Schema version 5 requires an explicit verification binding for every provider. Version 4 is rejected.
+  Progress: The `json_resource` codec uses authenticated GET with bounded response size and request duration.
+  Progress: Public HTTP tests prove two media-only provider identities, credential rotation, rejection, and owner isolation.
+  Progress: A real browser creates and reloads a media-only connection through the catalog-defined field and verification route.
+  Initial results: CI exposed stale protocol, Gemini, and image fixture bindings. The corrected fixtures pass their component targets.
+  Initial results: A later CI run lost a Go standard-library cache file. The MCP component and final CI passed on repeat.
+  Resolution: Explicit verification now shares each provider definition, credential fields, and connection lifecycle.
+  Validation: Final `make ci` passed all gates with 100.0 percent Go statement coverage, 135 frontend tests, and seven local browser tests.
+  Files: Provider catalog schema, registry, protocol definitions, account verifier, shared fixtures, HTTP tests, browser tests, and catalog documentation.
+  Event contracts: No changes.
 
 - [ ] [F075] (P1) Expose provider routes through the Anthropic Messages client protocol.
   Goal:
@@ -2583,7 +2798,20 @@ retain satisfied historical dependencies.
   - Complete the P011 second-provider acceptance procedure for each protocol adapter added or changed in this slice.
   - Prove exact route controls, tenant isolation, staging ownership, duplicate prevention, and artifact integrity.
   - Run current repository validation and separately record explicitly authorized live acceptance.
-- [ ] [F041] (P1) Add FAL image operations and queue recovery.
+- [x] [F041] (P1) Add FAL image operations and queue recovery.
+  Progress: One FAL provider now declares shared credentials, read-only verification, and the Reve image transport.
+  Progress: Public tests cover a second provider identity, ordered artifacts, uncertain outcomes, queue recovery, and cancellation acknowledgements.
+  Initial results: Catalog tests assumed 14 providers and a final Dictator entry. Updated fixtures select the intended identity.
+  Initial results: The Go discovery client rejected the queue codec. Its current contract now includes that codec.
+  Progress: A browser saves and reloads the FAL connection and shows Reve.
+  Initial results: Corrected a fixture compile error and added queue authority rejection tests for complete statement coverage.
+  Initial results: CI passed Go and Python checks, then found stale browser catalog totals. Updated assertions include Reve and FAL.
+  Inventory: A bounded audit found no FAL generation record or native handle in 1,233 operation records and 667 sidecar files.
+  Inventory: One FAL catalog result requires no import. The private receipt is `.git/f041-fal-source-inventory.json`.
+  Resolution: Development completion includes the queue adapter, recovery, catalog, official clients, API contract, browser discovery, and bounded source inventory.
+  Validation: Final `make ci` passed all 14 gates in 341 seconds with 100.0 percent Go statement coverage.
+  Validation: All 140 frontend tests and seven local browser tests passed. No new event contract was added.
+  Remaining: Client publication, service activation, and MediaOps I086 consumer acceptance remain separate.
   Goal:
   Move current FAL image generation and recoverable queue state behind the shared gateway.
   Requirements:
@@ -2980,6 +3208,31 @@ retain satisfied historical dependencies.
   - Add import validators only for records identified by the migration inventory.
   - Use the current repository validation policy instead of older baseline CI instructions.
 - [ ] [F026] (P1) Add ElevenLabs speech, music, and alignment operations.
+  Progress (2026-09-20): One YAML provider now defines shared credentials, account verification, model metadata, and subscription quotas.
+  Progress: The gateway and both official clients expose typed account resources through the assigned connection.
+  Validation: Public HTTP tests cover a second provider identity, account capacity, credential replacement, tenant separation, and malformed native responses.
+  Validation: The initial test reported `catalog must contain one ElevenLabs provider, found 0`.
+  Validation: The client test rejected the initial decoder because incomplete model metadata was accepted. The corrected resource tests pass.
+  Validation: CI exposed stale authentication and documentation assertions, plus the capacity defect in B239. All corrections pass.
+  Validation: Final CI passes all 14 gates with 100.0 percent Go coverage, 145 frontend tests, and seven real-server browser tests.
+  Evidence: `/tmp/llm-proxy-b239-f026-ci-final.log` records the account resource checkpoint. It does not close the remaining F026 scope.
+  Progress: F079 completes the native forced-alignment service through the same provider and account connection.
+  Progress: Voice discovery now preserves native pages, filters, metadata, and private account-bound preview access.
+  Validation: Voice discovery initially returned `400 media_voice_invalid`. The new public page and preview tests pass.
+  Progress: The common page contract preserves Dictator discovery and retained extracted voices.
+  Validation: The voice checkpoint passes all 14 CI gates with 100.0 percent Go coverage, 146 frontend tests, and seven service-backed browser tests.
+  Evidence: `/tmp/llm-proxy-f026-voices-verified-ci.log` records the final voice checkpoint.
+  Contracts: Voice collections use typed queries and page results. Owned voice previews use the common voice resource.
+  Progress: Dictionary creation now uses the shared service branch with alias and phoneme rules, private references, and saved native recovery evidence.
+  Validation: Public dictionary tests cover both provider identities, storage failures, cancellation, restart, and operation expiry. Final CI remains open.
+  Evidence: `/tmp/llm-proxy-f026-dictionaries-initial.log` records the initial `400 media_operation_invalid` result.
+  Remaining: Speech, conversion, voice-library operations, history, all seven music methods, imports, and consumer acceptance remain open.
+  Files: `configs/providers.yml`, `internal/proxy/provider_metadata.go`, `pkg/llmproxycontract/provider_metadata.go`, both official clients, OpenAPI, and public integration tests.
+  Contract: `GET /model/v1/provider-resources/{provider}/{kind}` adds typed `metadata` and `quotas` resources.
+  Scope clarification (2026-09-20): Include every source method listed in `docs/media-provider-completeness.md`.
+  Requirements: Include pronunciation dictionary creation, model and subscription metadata, voice-library search, and voice-library import.
+  Requirements: Include all four speech models, both conversion models, and all seven `music_v1` operations.
+  Requirements: Use canonical provider connections and the shared YAML catalog for all supported routes and resources.
   Goal:
   Move ElevenLabs provider access into LLM Proxy. Keep narration plans and local audio assembly in MediaOps.
   Cross-repository sequence:
@@ -3018,6 +3271,7 @@ retain satisfied historical dependencies.
   - Add import validators only for actual recoverable records.
   - Use the current repository validation policy instead of older baseline CI instructions.
 - [ ] [F027] (P1) Add provider account mutations, avatars, translation, and lip-sync.
+  Scope clarification (2026-09-20): Include every HeyGen and Kling source capability listed in `docs/media-provider-completeness.md`.
   Goal:
   Complete gateway ownership of external media-provider credentials and
   provider-native task recovery for HeyGen and Kling account operations.
