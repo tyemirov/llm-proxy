@@ -100,6 +100,11 @@ connection version, route, image model, and text model. Native identifiers remai
 private. Both surfaces support `stream` and up to three `partial_images`.
 Operation reads expose verified previews in `partial_outputs`.
 
+Local admission rejection before image submission produces `failed` with `media_operation_unavailable`.
+The service releases input assets after this definite failure.
+The same idempotency key identifies the failed operation without another provider call.
+A transport error after provider dispatch can produce `uncertain` because provider execution is not known.
+
 The [typed Go image example](examples/image-generation/main.go) reads all image
 choices from `IMAGE_GENERATION_INPUT_JSON`. Set `LLM_PROXY_BASE_URL`,
 `LLM_PROXY_TENANT_KEY`, `MEDIA_OPERATION_IDEMPOTENCY_KEY`, and an existing
