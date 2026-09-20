@@ -34,11 +34,23 @@ The temporary inspection container was removed after the query.
 The public router opens the managed store through `newGORMManagedTenantDatabase`.
 That function calls `initializeManagedTenantSchema`.
 Empty databases now create current records directly.
-Databases with account connections enter `validateAccountConnectionSchema` without a version query.
+Databases with account connections enter `validateAccountConnectionSchema` without a version query after any required capability transfer.
 The predecessor branch remains necessary for the inventoried data.
+
+B236 corrects the capability transfer omitted from the transcription and speech change.
+The exact input has `owner_user_id`, both `default_dictation_*` columns, and none of the four current transcription and speech columns.
+The GORM migration API renames the dictation columns and adds empty speech defaults within the startup transaction.
+The transfer keeps the other records and tenant timestamps unchanged.
+Current validation occurs before commit, including the account-connection transfer when required.
+Failure rolls back all changes in that transaction.
+Mixed or incomplete capability columns remain invalid.
+The current schema does not execute the transfer again.
+Apply the bounded procedure below to each retained database before deployment.
+Keep the B236 transfer until all retained inputs have completion receipts under I271.
 
 | Source family | Remaining caller and input | Removal condition |
 | --- | --- | --- |
+| `migrateManagedCapabilityDefaults` | The startup transaction reads the exact capability predecessor before account-connection initialization or validation. | Record successful transfers for all retained capability predecessors under I271. |
 | `initializeManagedTenantSchemaRecords` and its historical version switch | The predecessor branch of `initializeManagedTenantSchema`. Both inventoried databases still have predecessor shapes. | Complete each retained transfer. |
 | `migrateAccountConnections`, `migrateAccountConnectionRecords`, and `managedProviderConnectionRecord` | The production tenant-connection transfer. It reads fields and profiles, encrypts credentials for new connection identities, and writes assignments. | Verify the production transfer and resolve the local input. |
 | `migrateLegacyManagedTenantSchema`, its preflight and verification functions, and `legacyManaged*Record` types | The local database still has tenant `user_id` and predecessor usage fields. | Resolve F011 ownership, complete the retained transfer, or record authorized disposal. |

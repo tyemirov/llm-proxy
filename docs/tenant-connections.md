@@ -109,9 +109,14 @@ Startup rejects predecessor credential and temporary transfer tables beside the 
 It preserves the rejected records for operator action.
 
 Current tenant records require separate transcription and speech columns.
-Startup rejects missing columns and obsolete `default_dictation_provider` or `default_dictation_model` columns.
-An existing database requires an explicit data transfer before this source revision can replace its runtime.
-Preserve its selected routes and record the transfer separately from local code validation.
+B236 adds a bounded startup transfer for the previous capability defaults.
+The transfer renames `default_dictation_provider` and `default_dictation_model` to their `default_transcription_*` columns through the GORM migration API.
+It adds empty speech defaults and keeps the saved routes and tenant timestamps.
+The same transaction validates the current records before commit.
+An invalid route or transfer failure rolls back the schema and data changes.
+Startup rejects incomplete or mixed column sets without data changes.
+The current schema does not execute the transfer again.
+Verify a disposable database copy before deployment, as specified in the [schema transition procedure](managed-schema-transition.md#bounded-transfer-procedure).
 
 New product fields and tables extend the declared current schema.
 Each change must define how existing records receive any required values.
