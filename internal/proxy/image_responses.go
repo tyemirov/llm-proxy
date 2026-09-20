@@ -81,7 +81,7 @@ func (adapter *imageGenerationAdapter) executeResponses(ctx context.Context, req
 	providerRequest := (&http.Request{Method: provider.activeTransport.endpoint.Method, URL: requestURL, Header: http.Header{"Content-Type": {"application/json"}}, Body: reader, ContentLength: -1}).WithContext(ctx)
 	response, err := newProviderTransportHTTPDoer(request.HTTP.Submission, provider, provider.textAPIKey).Do(providerRequest)
 	if err != nil {
-		return imageGenerationUncertain()
+		return imageSubmissionFailure(err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusTooManyRequests {

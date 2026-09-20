@@ -183,6 +183,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 					identifier:          modelID(offering.Model),
 					providerIdentifier:  modelID(offering.UpstreamModel),
 					transportIdentifier: offering.Transport,
+					operations:          slices.Clone(offering.Operations),
 				}
 				definition.supportsDictation = true
 				if offeringHasTranscriptionDefault(offering) {
@@ -419,6 +420,10 @@ func (registry *providerRegistry) resolveDictationRequest(rawProvider string, ra
 	definition, resolvedModel, resolutionError := registry.resolveDictationModel(rawProvider, rawModel, defaultProvider, defaultModel)
 	if resolutionError != nil {
 		return providerDefinition{}, modelID(""), resolutionError
+	}
+	model := definition.transcriptionModels[strings.ToLower(resolvedModel.string())]
+	if !slices.Contains(model.operations, ModelOperationDictation) {
+		return definition, resolvedModel, fmt.Errorf("%w: provider=%s model=%s endpoint=%s", ErrUnsupportedEndpoint, definition.identifier.string(), resolvedModel.string(), endpointKindDictation)
 	}
 	if definition.credentialFor(endpointKindDictation) == constants.EmptyString || definition.transcriptionsURL == constants.EmptyString {
 		return definition, resolvedModel, fmt.Errorf("%w: provider=%s endpoint=%s", ErrProviderNotConfigured, definition.identifier.string(), endpointKindDictation)

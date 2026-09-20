@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
@@ -202,7 +203,7 @@ func (adapter *imageGenerationAdapter) executeImages(ctx context.Context, reques
 	}
 	response, err := newProviderTransportHTTPDoer(request.HTTP.Submission, provider, provider.textAPIKey).Do(providerRequest)
 	if err != nil {
-		return imageGenerationUncertain()
+		return imageSubmissionFailure(err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusTooManyRequests {
@@ -258,6 +259,13 @@ func (adapter *imageGenerationAdapter) decodeImage(encoded string, controls imag
 		return MediaOperationOutput{}, errMediaOperationInvalid
 	}
 	return MediaOperationOutput{MIMEType: "image/" + format, Data: data}, nil
+}
+
+func imageSubmissionFailure(err error) MediaOperationExecutionResult {
+	if errors.Is(err, errUpstreamNotDispatched) {
+		return MediaOperationExecutionResult{State: MediaOperationStateFailed, ErrorCode: errMediaOperationUnavailable.Error()}
+	}
+	return imageGenerationUncertain()
 }
 
 func imageGenerationUncertain() MediaOperationExecutionResult {

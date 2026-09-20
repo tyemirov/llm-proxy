@@ -31,7 +31,11 @@ func (body *releasingReadCloser) Close() error {
 	return err
 }
 
-var errUpstreamRequestScope = errors.New("upstream_request_scope_required")
+var (
+	errUpstreamRequestScope = errors.New("upstream_request_scope_required")
+	// Only admission errors carry this marker; the provider transport was not called.
+	errUpstreamNotDispatched = errors.New("upstream_request_not_dispatched")
+)
 
 type upstreamAdmissionClock interface {
 	Now() time.Time
@@ -86,7 +90,7 @@ func requestContextWithUpstreamScope(ctx context.Context, scope upstreamRequestS
 func (doer *admissionHTTPDoer) Do(request *http.Request) (*http.Response, error) {
 	scope, present := request.Context().Value(upstreamScopeContextKey{}).(upstreamRequestScope)
 	if !present || scope.tenant == "" || scope.account == "" || scope.class >= upstreamWorkClassCount {
-		return nil, backoff.Permanent(errUpstreamRequestScope)
+		return nil, backoff.Permanent(errors.Join(errUpstreamNotDispatched, errUpstreamRequestScope))
 	}
 	started := time.Now()
 	origin := upstreamRequestOrigin(request.URL)
@@ -94,11 +98,11 @@ func (doer *admissionHTTPDoer) Do(request *http.Request) (*http.Response, error)
 	addRequestTelemetryPhase(request.Context(), requestTelemetryPhaseUpstreamAdmission, started)
 	if err != nil {
 		doer.logAdmission(request.Context(), origin, scope, upstreamDecisionRejected)
-		return nil, err
+		return nil, errors.Join(errUpstreamNotDispatched, err)
 	}
 	doer.logAdmission(request.Context(), origin, scope, upstreamDecisionAdmitted)
 	if err := doer.acquire(admission, origin); err != nil {
-		return nil, err
+		return nil, errors.Join(errUpstreamNotDispatched, err)
 	}
 	providerStarted := time.Now()
 	response, err := doer.next.Do(request)

@@ -1,9 +1,11 @@
 package proxy_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -15,6 +17,76 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
+
+func TestManagementCapabilityDefaultsRejectMediaOnlyDictation(t *testing.T) {
+	fixture, listener := newDictatorAcceptanceUpstream(t, proxy.ProviderNameDictator)
+	router := newManagementRouterWithDatabasePath(t, proxy.Configuration{}, "file:dictation-capability-"+t.Name()+"?mode=memory&cache=shared")
+	owner := managementSessionCookie(t, "dictation-capability-owner")
+	tenantID := managementDefaultTenantTestID(t, router, owner)
+	connection := accountConnectionExchange(t, router, owner, http.MethodPost, "/connections", map[string]any{
+		"name": "Speech", "provider": proxy.ProviderNameDictator,
+		"fields": map[string]string{"grpc_address": listener.Addr().String(), "grpc_auth_token": fixture.token, "grpc_tls": "false"},
+	}, http.StatusCreated)
+	tenantPath := "/tenants/" + tenantID
+	accountConnectionExchange(t, router, owner, http.MethodPut, tenantPath+"/connections/dictator", map[string]any{"connection_id": connection["id"]}, http.StatusOK)
+	accountConnectionExchange(t, router, owner, http.MethodPut, tenantPath+"/defaults", map[string]string{
+		"transcription_provider": proxy.ProviderNameDictator, "transcription_model": proxy.ModelNameDictatorWhisperBase, "reasoning_effort": "",
+	}, http.StatusOK)
+	secret := generateManagementTenantSecret(t, router, owner, tenantID)
+	server := httptest.NewServer(router)
+	defer server.Close()
+	for _, scenario := range []struct{ name, path, field, model, message string }{
+		{"default", "/dictate", "audio", "", "unsupported provider endpoint"},
+		{"explicit", "/dictate?provider=dictator&model=whisper-base", "audio", "", "unsupported provider endpoint"},
+		{"client protocol", "/v1/audio/transcriptions", "file", "dictator/whisper-base", "Invalid or unavailable transcription route."},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			var body bytes.Buffer
+			form := multipart.NewWriter(&body)
+			if scenario.model != "" {
+				if err := form.WriteField("model", scenario.model); err != nil {
+					t.Fatal(err)
+				}
+			}
+			file, err := form.CreateFormFile(scenario.field, "audio.wav")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := io.WriteString(file, "fixture audio"); err != nil {
+				t.Fatal(err)
+			}
+			if err := form.Close(); err != nil {
+				t.Fatal(err)
+			}
+			request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, server.URL+scenario.path, &body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request.Header.Set("Authorization", "Bearer "+secret)
+			if scenario.field == "audio" {
+				query := request.URL.Query()
+				query.Set("key", secret)
+				request.URL.RawQuery = query.Encode()
+			}
+			request.Header.Set("Content-Type", form.FormDataContentType())
+			response, err := server.Client().Do(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer response.Body.Close()
+			payload, err := io.ReadAll(response.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if response.StatusCode != http.StatusBadRequest || !strings.Contains(string(payload), scenario.message) {
+				t.Fatalf("dictation route: status=%d body=%s", response.StatusCode, payload)
+			}
+		})
+	}
+	if fixture.submissions.Load() != 0 {
+		t.Fatalf("unsupported dictation sent %d gRPC jobs", fixture.submissions.Load())
+	}
+}
 
 func TestManagementCapabilityDefaultsSurviveRestartAndConnectionRemoval(t *testing.T) {
 	for _, removedProvider := range []string{proxy.ProviderNameOpenAI, proxy.ProviderNameDictator} {

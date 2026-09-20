@@ -389,6 +389,7 @@ type dictationModelDefinition struct {
 	identifier          modelID
 	providerIdentifier  modelID
 	transportIdentifier string
+	operations          []string
 }
 
 type providerTransportDefinition struct {
