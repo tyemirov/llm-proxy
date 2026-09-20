@@ -2,6 +2,16 @@
 
 import { ADMIN_USER_MENU_ITEMS, MPR_UI, USER_MENU_ITEMS } from "../constants.js?v=20260903f037";
 
+// The parser-loaded application imports this module before DOMContentLoaded.
+// Capture that event before asynchronous configuration reads can finish.
+const documentReady = new Promise((resolve) => {
+  if (document.readyState === "complete") {
+    resolve(undefined);
+    return;
+  }
+  document.addEventListener("DOMContentLoaded", () => resolve(undefined), { once: true });
+});
+
 /**
  * @returns {void}
  */
@@ -38,23 +48,11 @@ export function readMprUIAuthStatus() {
  * @returns {Promise<void>}
  */
 export async function waitForMprUIAutoOrchestrationReady() {
-  await waitForDocumentReady();
+  await documentReady;
   const runtimeGlobal =
     /** @type {typeof globalThis & { MPRUI?: { whenAutoOrchestrationReady?: () => Promise<unknown> } }} */ (globalThis);
   if (!runtimeGlobal.MPRUI || typeof runtimeGlobal.MPRUI.whenAutoOrchestrationReady !== "function") {
     throw new Error(MPR_UI.ORCHESTRATION_LOADER_MISSING);
   }
   await runtimeGlobal.MPRUI.whenAutoOrchestrationReady();
-}
-
-/**
- * @returns {Promise<void>}
- */
-function waitForDocumentReady() {
-  if (document.readyState !== "loading") {
-    return Promise.resolve();
-  }
-  return new Promise((resolve) => {
-    document.addEventListener("DOMContentLoaded", () => resolve(), { once: true });
-  });
 }

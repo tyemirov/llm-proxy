@@ -1,6 +1,6 @@
 // @ts-check
 
-import { PUBLIC_THEME } from "../constants.js";
+import { PUBLIC_THEME, ROUTE_CAPABILITY_ALL } from "../constants.js";
 
 const ROUTING_TREE_ELEMENT_NAME = "routing-tree";
 const SELECTED_ATTRIBUTE_VALUE = "true";
@@ -182,7 +182,7 @@ class RoutingTreeElement extends HTMLElement {
 
     for (const providerButton of this.providerButtons) {
       const capabilities = new Set(requiredDatasetValue(providerButton, "routeProviderCapabilities").split(" "));
-      providerButton.hidden = !capabilities.has(selectedCapability);
+      providerButton.hidden = selectedCapability !== ROUTE_CAPABILITY_ALL && !capabilities.has(selectedCapability);
     }
 
     let exactModelCount = 0;

@@ -4,6 +4,7 @@ import {
   APP_INTEGRITY_ERROR,
   COPY,
   PROVIDER_CAPABILITY_LABELS,
+  PROVIDER_RESOURCE_LABELS,
   ROUTING_DEFAULTS_INVALID_ERROR,
 } from "../constants.js?v=20260903f037";
 
@@ -258,10 +259,16 @@ export function assertProviderCatalog(provider) {
     typeof provider.key_acquisition_url !== "string" ||
     !provider.key_acquisition_url.startsWith("https://") ||
     !Array.isArray(provider.capabilities) ||
-    provider.capabilities.length === 0 ||
+    !Array.isArray(provider.services) ||
+    !provider.services.every(service => service && Object.hasOwn(PROVIDER_CAPABILITY_LABELS,service.operation) && Array.isArray(service.controls) && Array.isArray(service.limits) && service.price && typeof service.price === "object") ||
+    new Set(provider.services.map(service=>service.operation)).size !== provider.services.length ||
+    !Array.isArray(provider.resources) ||
+    !provider.resources.every((kind) => Object.hasOwn(PROVIDER_RESOURCE_LABELS, kind)) ||
+    new Set(provider.resources).size !== provider.resources.length ||
+    (provider.capabilities.length === 0 && provider.resources.length === 0 && provider.services.length === 0) ||
     !provider.capabilities.every((capability) => Object.hasOwn(PROVIDER_CAPABILITY_LABELS, capability)) ||
     !Array.isArray(provider.model_families) ||
-    provider.model_families.length === 0 ||
+    (provider.capabilities.length > 0 && provider.model_families.length === 0) ||
     typeof provider.configured !== "boolean" ||
     !Array.isArray(provider.fields) ||
     provider.fields.length === 0 ||

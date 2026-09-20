@@ -71,6 +71,8 @@
  *   key_acquisition_url: string,
  *   aliases: string[],
  *   capabilities: string[],
+ *   resources: string[],
+ *   services: {operation:string,controls:object[],limits:object[],price:object}[],
  *   model_families: CatalogIdentityProfile[],
  *   configured: boolean,
  *   fields: ProviderFieldProfile[],

@@ -8,6 +8,7 @@ export const AUTH_STATES = Object.freeze({
 });
 
 export const PUBLIC_SITE_PATH = "/";
+export const ROUTE_CAPABILITY_ALL = "all";
 export const APPLICATION_PATH = "/app/";
 export const LANDING_AUTHENTICATED_REDIRECT_ATTRIBUTE = "data-llm-proxy-authenticated-redirect-url";
 
@@ -131,6 +132,7 @@ export const PROVIDER_CAPABILITY_LABELS = Object.freeze({
   audio_transcription: "Transcription",
   audio_diarization: "Speaker diarization",
   audio_alignment: "Transcript alignment",
+  pronunciation_dictionary_creation: "Pronunciation dictionary",
   subtitle_creation: "Subtitles",
   speech_generation: "Speech synthesis",
   voice_extraction: "Voice extraction",
@@ -160,6 +162,7 @@ export const OPERATION_CAPABILITY_DOMAINS = Object.freeze({
   audio_transcription: "transcription",
   audio_diarization: "transcription",
   audio_alignment: "transcription",
+  pronunciation_dictionary_creation: "speech",
   subtitle_creation: "transcription",
   speech_generation: "speech",
   voice_extraction: "speech",
@@ -401,4 +404,14 @@ export const COPY = Object.freeze({
   authenticationRequired: "Authentication required",
   requestFailed: "Request failed",
   appIntegrityError: "App data integrity error",
+});
+
+export const PROVIDER_RESOURCE_LABELS = Object.freeze({
+  voices: 'Voices',
+  voice_library: 'Voice library',
+  history: 'History',
+  pronunciation_dictionaries: 'Pronunciation dictionaries',
+  metadata: 'Provider information',
+  quotas: 'Quotas',
+  elements: 'Reusable elements',
 });

@@ -116,6 +116,8 @@ export const brandIconManifest = {
     }
   },
   "providers": {
+    "fal": null,
+    "elevenlabs": null,
     "openai": "openai",
     "deepseek": "deepseek-color",
     "dashscope": "alibabacloud-color",
@@ -132,6 +134,7 @@ export const brandIconManifest = {
     "dictator": null
   },
   "families": {
+    "reve": null,
     "gpt-image": "openai",
     "gpt-6": "openai",
     "gpt-4": "openai",
