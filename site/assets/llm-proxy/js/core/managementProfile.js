@@ -15,8 +15,10 @@ export function emptyDefaults() {
   return {
     provider: EMPTY_STRING,
     model: EMPTY_STRING,
-    dictation_provider: EMPTY_STRING,
-    dictation_model: EMPTY_STRING,
+    transcription_provider: EMPTY_STRING,
+    transcription_model: EMPTY_STRING,
+    speech_provider: EMPTY_STRING,
+    speech_model: EMPTY_STRING,
     system_prompt: EMPTY_STRING,
     reasoning_effort: EMPTY_STRING,
   };
@@ -49,16 +51,23 @@ export function createAppRoutingDefaults(profile) {
       throw new Error(APP_INTEGRITY_ERROR);
     }
   }
-  const dictationProviders = keyedTextProviders.filter((provider) => provider.supports_dictation);
-  if (defaults.dictation_provider === EMPTY_STRING || dictationProviders.length === 0) {
-    if (defaults.dictation_provider !== EMPTY_STRING || defaults.dictation_model !== EMPTY_STRING) {
+  const dictationProviders = providers.filter((provider) => provider.configured && provider.supports_dictation);
+  if (defaults.transcription_provider === EMPTY_STRING || dictationProviders.length === 0) {
+    if (defaults.transcription_provider !== EMPTY_STRING || defaults.transcription_model !== EMPTY_STRING) {
       throw new Error(APP_INTEGRITY_ERROR);
     }
   } else {
-    const dictationProvider = profileProvider(dictationProviders, defaults.dictation_provider);
-    if (!dictationProvider.dictation_models.includes(defaults.dictation_model)) {
+    const dictationProvider = profileProvider(dictationProviders, defaults.transcription_provider);
+    if (!dictationProvider.transcription_models.includes(defaults.transcription_model)) {
       throw new Error(APP_INTEGRITY_ERROR);
     }
+  }
+  const speechProviders = providers.filter((provider) => provider.configured && provider.supports_speech);
+  if (defaults.speech_provider === EMPTY_STRING) {
+    if (defaults.speech_model !== EMPTY_STRING) throw new Error(APP_INTEGRITY_ERROR);
+  } else {
+    const speechProvider = profileProvider(speechProviders, defaults.speech_provider);
+    if (!speechProvider.speech_models.includes(defaults.speech_model)) throw new Error(APP_INTEGRITY_ERROR);
   }
   if (
     defaults.reasoning_effort !== EMPTY_STRING &&
@@ -69,8 +78,10 @@ export function createAppRoutingDefaults(profile) {
   return {
     provider: defaults.provider,
     model: defaults.model,
-    dictation_provider: defaults.dictation_provider,
-    dictation_model: defaults.dictation_model,
+    transcription_provider: defaults.transcription_provider,
+    transcription_model: defaults.transcription_model,
+    speech_provider: defaults.speech_provider,
+    speech_model: defaults.speech_model,
     system_prompt: defaults.system_prompt,
     reasoning_effort: defaults.reasoning_effort,
   };
@@ -223,8 +234,12 @@ function routingDefaultsAreStrings(defaults) {
   return (
     typeof defaults.provider === "string" &&
     typeof defaults.model === "string" &&
-    typeof defaults.dictation_provider === "string" &&
-    typeof defaults.dictation_model === "string" &&
+    typeof defaults.transcription_provider === "string" &&
+    typeof defaults.transcription_model === "string" &&
+    typeof defaults.speech_provider === "string" &&
+    typeof defaults.speech_model === "string" &&
+    !Object.hasOwn(defaults, "dictation_provider") &&
+    !Object.hasOwn(defaults, "dictation_model") &&
     typeof defaults.system_prompt === "string" &&
     typeof defaults.reasoning_effort === "string"
   );
@@ -251,6 +266,8 @@ export function assertProviderCatalog(provider) {
     !Array.isArray(provider.fields) ||
     provider.fields.length === 0 ||
     !Array.isArray(provider.text_models) ||
+    typeof provider.supports_speech !== "boolean" ||
+    !Array.isArray(provider.speech_models) ||
     (provider.text_models.length === 0
       ? provider.text_default_model !== EMPTY_STRING || provider.text_model !== EMPTY_STRING || provider.system_prompt !== EMPTY_STRING
       : !provider.text_models.some((model) => model && model.id === provider.text_default_model) ||
@@ -278,10 +295,13 @@ export function assertProviderCatalog(provider) {
   }
   if (
     provider.supports_dictation &&
-    (!Array.isArray(provider.dictation_models) ||
-      typeof provider.dictation_default_model !== "string" ||
-      !provider.dictation_models.includes(provider.dictation_default_model))
+    (!Array.isArray(provider.transcription_models) ||
+      typeof provider.transcription_default_model !== "string" ||
+      !provider.transcription_models.includes(provider.transcription_default_model))
   ) {
+    throw new Error(APP_INTEGRITY_ERROR);
+  }
+  if (provider.supports_speech && (typeof provider.speech_default_model !== "string" || !provider.speech_models.includes(provider.speech_default_model))) {
     throw new Error(APP_INTEGRITY_ERROR);
   }
 }

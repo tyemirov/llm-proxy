@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="cf4fbc1a384469065bef80ef15515326c32a55e1caa959c7ebe8b392426adaaf">
+    <meta name="openapi-source-sha256" content="82d331de6a5d9b1b66a0ff4247e695b0c125c31cfe728f6cf066bd5087c72b90">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="cf4fbc1a384469065bef80ef15515326c32a55e1caa959c7ebe8b392426adaaf">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="82d331de6a5d9b1b66a0ff4247e695b0c125c31cfe728f6cf066bd5087c72b90">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>cf4fbc1a384469065bef80ef15515326c32a55e1caa959c7ebe8b392426adaaf</code></span>
+          <span>Source SHA-256 <code>82d331de6a5d9b1b66a0ff4247e695b0c125c31cfe728f6cf066bd5087c72b90</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -3410,6 +3410,12 @@ components:
         text_model:
           type: string
           minLength: 1
+        speech_provider:
+          type: string
+          description: Selected speech provider. An empty value clears the selection.
+        speech_model:
+          type: string
+          description: Selected speech model. An empty value clears the selection.
         system_prompt:
           type: string
     ConnectionError:
@@ -4404,6 +4410,8 @@ components:
           enum:
             - text
             - dictation
+            - image_generation
+            - image_editing
             - video_generation
             - audio_transcription
             - audio_diarization
@@ -4470,6 +4478,18 @@ components:
           enum:
             - proprietary
             - open_weights
+    PublicCapabilityDomains:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items:
+        type: string
+        enum:
+          - text
+          - transcription
+          - speech
+          - image
+          - video
     PublicExactModelCapability:
       type: object
       additionalProperties: false
@@ -4482,6 +4502,7 @@ components:
         - media_inputs
         - capabilities
         - provider_offerings
+        - domains
       properties:
         identifier:
           type: string
@@ -4504,6 +4525,8 @@ components:
             enum:
               - text
               - dictation
+              - image_generation
+              - image_editing
               - video_generation
               - audio_transcription
               - audio_diarization
@@ -4533,6 +4556,8 @@ components:
               - image_input
               - audio_input
               - reasoning
+              - image_generation
+              - image_editing
               - video_generation
               - audio_transcription
               - audio_diarization
@@ -4547,6 +4572,8 @@ components:
           items:
             type: string
             minLength: 1
+        domains:
+          $ref: &#39;#/components/schemas/PublicCapabilityDomains&#39;
     PublicProviderOffering:
       type: object
       additionalProperties: false
@@ -4577,6 +4604,7 @@ components:
         - controls
         - limits
         - media_limits
+        - domains
       properties:
         identifier:
           type: string
@@ -4609,6 +4637,8 @@ components:
               - image_input
               - audio_input
               - reasoning
+              - image_generation
+              - image_editing
               - video_generation
               - audio_transcription
               - audio_diarization
@@ -4652,6 +4682,8 @@ components:
           type: array
           items:
             $ref: &#39;#/components/schemas/PublicCatalogMediaLimit&#39;
+        domains:
+          $ref: &#39;#/components/schemas/PublicCapabilityDomains&#39;
     PublicCatalogControl:
       type: object
       additionalProperties: false
@@ -4672,6 +4704,7 @@ components:
             - enum
             - integer
             - boolean
+            - image_size
         values:
           type: array
           uniqueItems: true
@@ -4690,6 +4723,41 @@ components:
             - type: &#39;null&#39;
         account_dependent:
           type: boolean
+        image_size:
+          $ref: &#39;#/components/schemas/PublicImageSizeConstraints&#39;
+      allOf:
+        - if:
+            properties:
+              kind:
+                const: image_size
+          then:
+            required: [image_size]
+          else:
+            not:
+              required: [image_size]
+    PublicImageSizeConstraints:
+      type: object
+      additionalProperties: false
+      required: [automatic, dimension_multiple, maximum_edge, minimum_pixels, maximum_pixels, maximum_aspect_ratio]
+      properties:
+        automatic:
+          type: boolean
+        dimension_multiple:
+          type: integer
+          minimum: 1
+        maximum_edge:
+          type: integer
+          minimum: 1
+          maximum: 32768
+        minimum_pixels:
+          type: integer
+          minimum: 1
+        maximum_pixels:
+          type: integer
+          minimum: 1
+        maximum_aspect_ratio:
+          type: integer
+          minimum: 1
     PublicCatalogLimit:
       type: object
       additionalProperties: false
@@ -4798,6 +4866,8 @@ components:
           enum:
             - text
             - dictation
+            - image_generation
+            - image_editing
             - video_generation
             - audio_transcription
             - audio_diarization
@@ -5061,6 +5131,8 @@ components:
                   type: object
     MediaOperationRequest:
       oneOf:
+        - $ref: &#39;#/components/schemas/ImageGenerationOperationRequest&#39;
+        - $ref: &#39;#/components/schemas/ImageEditingOperationRequest&#39;
         - $ref: &#39;#/components/schemas/VideoGenerationOperationRequest&#39;
         - $ref: &#39;#/components/schemas/DictatorTranscriptionOperationRequest&#39;
         - $ref: &#39;#/components/schemas/DictatorDiarizationOperationRequest&#39;
@@ -5088,6 +5160,162 @@ components:
           type: object
         controls:
           type: object
+    ImageGenerationOperationRequest:
+      allOf:
+        - $ref: &#39;#/components/schemas/MediaOperationRequestBase&#39;
+        - $ref: &#39;#/components/schemas/ImageSurfaceOperationRequest&#39;
+        - type: object
+          properties:
+            capability:
+              const: image.generate
+            input:
+              type: object
+              additionalProperties: false
+              required: [prompt]
+              properties:
+                previous_operation_id:
+                  type: string
+                  pattern: &#39;^mop_[a-f0-9]{32}$&#39;
+                prompt:
+                  type: string
+                  minLength: 1
+                  maxLength: 32000
+                  pattern: &#39;\S&#39;
+            controls:
+              $ref: &#39;#/components/schemas/ImageGenerationControls&#39;
+    ImageEditingOperationRequest:
+      allOf:
+        - $ref: &#39;#/components/schemas/MediaOperationRequestBase&#39;
+        - $ref: &#39;#/components/schemas/ImageSurfaceOperationRequest&#39;
+        - type: object
+          properties:
+            capability:
+              const: image.edit
+            input:
+              type: object
+              additionalProperties: false
+              required: [prompt]
+              anyOf:
+                - required: [image_asset_ids]
+                - required: [previous_operation_id]
+              properties:
+                previous_operation_id:
+                  type: string
+                  pattern: &#39;^mop_[a-f0-9]{32}$&#39;
+                prompt:
+                  type: string
+                  minLength: 1
+                  maxLength: 32000
+                  pattern: &#39;\S&#39;
+                image_asset_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 16
+                  items:
+                    type: string
+                    pattern: &#39;^ast_[a-f0-9]{32}$&#39;
+                mask_asset_id:
+                  type: string
+                  pattern: &#39;^ast_[a-f0-9]{32}$&#39;
+            controls:
+              $ref: &#39;#/components/schemas/ImageGenerationControls&#39;
+    ImageSurfaceOperationRequest:
+      if:
+        properties:
+          controls:
+            properties:
+              surface:
+                const: responses
+      then:
+        properties:
+          input:
+            not:
+              required: [mask_asset_id]
+      else:
+        properties:
+          input:
+            not:
+              required: [previous_operation_id]
+    ImageGenerationControls:
+      type: object
+      description: Explicit generation choices. The selected catalog route supplies exact dimension and control limits. JPEG and WebP require compression, including explicit zero. PNG omits compression.
+      additionalProperties: false
+      required: [surface, quality, size, background, output_format, output_count]
+      properties:
+        surface:
+          enum: [images, responses]
+        responses_model:
+          type: string
+          minLength: 1
+          description: Catalog-selected text model for the Responses surface.
+        quality:
+          enum: [low, medium, high, auto]
+        size:
+          type: string
+          pattern: &#39;^(auto|[1-9][0-9]*x[1-9][0-9]*)$&#39;
+        background:
+          enum: [opaque, transparent, auto]
+        output_format:
+          enum: [png, jpeg, webp]
+        output_compression:
+          type: integer
+          minimum: 0
+          maximum: 100
+        output_count:
+          type: integer
+          minimum: 1
+          maximum: 10
+        stream:
+          type: boolean
+          description: Request progressive output. The current Images stream has one final image.
+        partial_images:
+          type: integer
+          minimum: 0
+          maximum: 3
+          description: Maximum preview count. Requires streaming when greater than zero. The provider can return fewer previews.
+      allOf:
+        - if:
+            properties:
+              surface:
+                const: responses
+          then:
+            required: [responses_model]
+            properties:
+              output_count:
+                const: 1
+          else:
+            not:
+              required: [responses_model]
+        - if:
+            required: [stream]
+            properties:
+              stream:
+                const: true
+          then:
+            properties:
+              output_count:
+                const: 1
+          else:
+            properties:
+              partial_images:
+                const: 0
+        - if:
+            properties:
+              output_format:
+                const: png
+          then:
+            not:
+              required: [output_compression]
+          else:
+            required: [output_compression]
+        - if:
+            properties:
+              output_format:
+                const: jpeg
+          then:
+            properties:
+              background:
+                enum: [opaque, auto]
     VideoGenerationOperationRequest:
       allOf:
         - $ref: &#39;#/components/schemas/MediaOperationRequestBase&#39;
@@ -5332,6 +5560,10 @@ components:
       additionalProperties: false
       required: [operation_id, capability, provider, model, catalog_revision, state, cancellation_state, outputs, cost, accepted_at, updated_at, deadline_at]
       properties:
+        previous_operation_id:
+          type: string
+          pattern: ^mop_[0-9a-f]{32}$
+          description: The successful tenant operation used as the Responses chain parent.
         operation_id:
           type: string
           pattern: ^mop_[0-9a-f]{32}$
@@ -5371,6 +5603,30 @@ components:
                 format: int64
                 minimum: 1
               ordinal:
+                type: integer
+                minimum: 0
+        partial_outputs:
+          type: array
+          description: Verified preview assets in output and partial order. Available during execution and retained with the operation.
+          items:
+            type: object
+            additionalProperties: false
+            required: [asset_id, mime_type, size_bytes, output_ordinal, partial_ordinal]
+            properties:
+              asset_id:
+                type: string
+                pattern: ^ast_[0-9a-f]{32}$
+              mime_type:
+                type: string
+                minLength: 1
+              size_bytes:
+                type: integer
+                format: int64
+                minimum: 1
+              output_ordinal:
+                type: integer
+                minimum: 0
+              partial_ordinal:
                 type: integer
                 minimum: 0
         error:
@@ -5689,6 +5945,12 @@ components:
           minLength: 1
         web_search:
           type: boolean
+        speech_provider:
+          type: string
+          description: Selected speech provider. An empty value clears the selection.
+        speech_model:
+          type: string
+          description: Selected speech model. An empty value clears the selection.
         system_prompt:
           type: string
         max_tokens:
@@ -6005,8 +6267,8 @@ components:
       required:
         - provider
         - model
-        - dictation_provider
-        - dictation_model
+        - transcription_provider
+        - transcription_model
         - system_prompt
         - reasoning_effort
       properties:
@@ -6016,12 +6278,18 @@ components:
         model:
           type: string
           description: Canonical model for provider, or empty with provider when no provider connection exists.
-        dictation_provider:
+        transcription_provider:
           type: string
-          description: Canonical configured dictation provider, or empty with dictation_model for an unset selection.
-        dictation_model:
+          description: Canonical configured transcription provider, or empty with transcription_model for an unset selection.
+        transcription_model:
           type: string
-          description: Canonical dictation model, or empty with dictation_provider for an unset selection.
+          description: Canonical transcription model, or empty with transcription_provider for an unset selection.
+        speech_provider:
+          type: string
+          description: Selected speech provider. An empty value clears the selection.
+        speech_model:
+          type: string
+          description: Selected speech model. An empty value clears the selection.
         system_prompt:
           type: string
         reasoning_effort:
@@ -6139,8 +6407,10 @@ components:
       required:
         - provider
         - model
-        - dictation_provider
-        - dictation_model
+        - transcription_provider
+        - transcription_model
+        - speech_provider
+        - speech_model
         - system_prompt
         - reasoning_effort
       properties:
@@ -6150,12 +6420,18 @@ components:
         model:
           type: string
           description: Canonical text model paired with provider, or empty when provider is empty.
-        dictation_provider:
+        transcription_provider:
           type: string
-          description: Canonical configured dictation provider, or empty for an unset selection.
-        dictation_model:
+          description: Canonical configured transcription provider, or empty for an unset selection.
+        transcription_model:
           type: string
-          description: Canonical dictation model paired with dictation_provider, or empty when dictation_provider is empty.
+          description: Canonical transcription model paired with transcription_provider, or empty when transcription_provider is empty.
+        speech_provider:
+          type: string
+          description: Selected speech provider, or an empty value when no selection exists.
+        speech_model:
+          type: string
+          description: Selected speech model, or an empty value when no selection exists.
         system_prompt:
           type: string
         reasoning_effort:
@@ -6178,7 +6454,9 @@ components:
         - text_default_model
         - text_models
         - supports_dictation
-        - dictation_models
+        - transcription_models
+        - supports_speech
+        - speech_models
       properties:
         id:
           type: string
@@ -6207,6 +6485,8 @@ components:
               - image_input
               - audio_input
               - dictation
+              - image_generation
+              - image_editing
               - video_generation
               - audio_transcription
               - audio_diarization
@@ -6238,10 +6518,19 @@ components:
             $ref: &#39;#/components/schemas/TextModel&#39;
         supports_dictation:
           type: boolean
-        dictation_default_model:
+        transcription_default_model:
           type: string
-        dictation_models:
+        transcription_models:
           type: array
+          items:
+            type: string
+        supports_speech:
+          type: boolean
+        speech_default_model:
+          type: string
+        speech_models:
+          type: array
+          description: Models available for speech synthesis defaults. Voice extraction alone does not qualify a model.
           items:
             type: string
     ManagementCatalogIdentity:
@@ -7495,6 +7784,8 @@ components:
 <tr><td><code>messages</code></td><td>No</td><td>array&lt;ChatMessage&gt;</td><td>Each Gemini Interactions route rejects assistant history. Other routes retain their declared message behavior.</td></tr>
 <tr><td><code>model</code></td><td>No</td><td>string</td><td></td></tr>
 <tr><td><code>web_search</code></td><td>No</td><td>boolean</td><td></td></tr>
+<tr><td><code>speech_provider</code></td><td>No</td><td>string</td><td>Selected speech provider. An empty value clears the selection.</td></tr>
+<tr><td><code>speech_model</code></td><td>No</td><td>string</td><td>Selected speech model. An empty value clears the selection.</td></tr>
 <tr><td><code>system_prompt</code></td><td>No</td><td>string</td><td></td></tr>
 <tr><td><code>max_tokens</code></td><td>No</td><td>integer</td><td>Initial output budget. A transport that declares continuation actions reuses it for missing-suffix attempts.</td></tr>
 <tr><td><code>reasoning_effort</code></td><td>No</td><td>string</td><td>Omission selects the tenant or route default. An explicit value must be non-blank and supported by the resolved provider/model route.</td></tr>
@@ -8152,8 +8443,10 @@ components:
               <tbody>
                 <tr><td><code>provider</code></td><td>Yes</td><td>string</td><td>Canonical configured text provider, or empty with model when no provider connection exists.</td></tr>
 <tr><td><code>model</code></td><td>Yes</td><td>string</td><td>Canonical model for provider, or empty with provider when no provider connection exists.</td></tr>
-<tr><td><code>dictation_provider</code></td><td>Yes</td><td>string</td><td>Canonical configured dictation provider, or empty with dictation_model for an unset selection.</td></tr>
-<tr><td><code>dictation_model</code></td><td>Yes</td><td>string</td><td>Canonical dictation model, or empty with dictation_provider for an unset selection.</td></tr>
+<tr><td><code>transcription_provider</code></td><td>Yes</td><td>string</td><td>Canonical configured transcription provider, or empty with transcription_model for an unset selection.</td></tr>
+<tr><td><code>transcription_model</code></td><td>Yes</td><td>string</td><td>Canonical transcription model, or empty with transcription_provider for an unset selection.</td></tr>
+<tr><td><code>speech_provider</code></td><td>No</td><td>string</td><td>Selected speech provider. An empty value clears the selection.</td></tr>
+<tr><td><code>speech_model</code></td><td>No</td><td>string</td><td>Selected speech model. An empty value clears the selection.</td></tr>
 <tr><td><code>system_prompt</code></td><td>Yes</td><td>string</td><td></td></tr>
 <tr><td><code>reasoning_effort</code></td><td>Yes</td><td>string</td><td></td></tr>
               </tbody>
@@ -8207,6 +8500,8 @@ components:
               <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>text_model</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>speech_provider</code></td><td>No</td><td>string</td><td>Selected speech provider. An empty value clears the selection.</td></tr>
+<tr><td><code>speech_model</code></td><td>No</td><td>string</td><td>Selected speech model. An empty value clears the selection.</td></tr>
 <tr><td><code>system_prompt</code></td><td>Yes</td><td>string</td><td></td></tr>
               </tbody>
             </table>

@@ -122,6 +122,8 @@ export const PROVIDER_KEY_VERIFICATION_ERRORS = Object.freeze({
 
 export const PROVIDER_CAPABILITY_LABELS = Object.freeze({
   text: "Text",
+  image_generation: "Image generation",
+  image_editing: "Image editing",
   image_input: "Image analysis",
   audio_input: "Audio analysis",
   dictation: "Dictation",
@@ -152,6 +154,8 @@ export const CAPABILITY_DOMAIN_LABELS = Object.freeze({
 
 export const OPERATION_CAPABILITY_DOMAINS = Object.freeze({
   text: "text",
+  image_generation: "image",
+  image_editing: "image",
   dictation: "transcription",
   audio_transcription: "transcription",
   audio_diarization: "transcription",

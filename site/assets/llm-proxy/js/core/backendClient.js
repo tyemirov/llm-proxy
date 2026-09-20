@@ -2,7 +2,7 @@
 
 import {assertManagementAccount, assertManagementTenantProfile, assertProviderCatalog, assertProviderField} from "./managementProfile.js?v=20260903f037";
 
-import { APP_INTEGRITY_ERROR, MPR_UI } from "../constants.js?v=20260903f037";
+import { APP_INTEGRITY_ERROR, MPR_UI, CAPABILITY_DOMAINS } from "../constants.js?v=20260903f037";
 
 const MANAGEMENT_BASE_PATH = "/api/management";
 const HEADER_CONTENT_TYPE = "Content-Type";
@@ -465,7 +465,7 @@ export function saveTenantProviderProfile(tenantID, provider, body, signal) {
   return requestTenantProfile(`${managementTenantPath(tenantID)}/provider-profiles/${encodeURIComponent(provider)}`, {method:'PUT',body,signal}, tenantID);
 }
 
-/** @param {AbortSignal} [signal] @returns {Promise<{families:Record<string, string>, offerings:{provider:string,model:string,capabilities:string[]}[]}>} */
+/** @param {AbortSignal} [signal] @returns {Promise<{families:Record<string, string>, offerings:import('../types.d.js').DashboardOffering[]}>} */
 export async function fetchDashboardModels(signal) {
   const config = await loadFrontendRuntimeConfig();
   const response = await fetch(`${config.managementApiOrigin}/api/public/capabilities`, {signal, credentials:'omit'});
@@ -480,6 +480,7 @@ export async function fetchDashboardModels(signal) {
   }
   for (const offering of result.offerings) {
     if (!offering || typeof offering.provider !== 'string' || !offering.provider || typeof offering.model !== 'string' || !Object.hasOwn(families, offering.model) || !Array.isArray(offering.capabilities) || !offering.capabilities.every((/** @type {unknown} */ value)=>typeof value==='string')) throw new Error('Invalid provider offering');
+    if (!Array.isArray(offering.domains) || offering.domains.length === 0 || new Set(offering.domains).size !== offering.domains.length || !offering.domains.every((/** @type {unknown} */ value)=>Object.values(CAPABILITY_DOMAINS).some(domain=>domain===value))) throw new Error('Invalid provider offering domains');
   }
   return {families, offerings:result.offerings};
 }
