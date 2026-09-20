@@ -655,6 +655,11 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 			}
 			return nil
 		}
+		if transaction.Migrator().HasTable(managedTenantTable) {
+			if err := migrateManagedCapabilityDefaults(transaction); err != nil {
+				return err
+			}
+		}
 		if transaction.Migrator().HasTable(&managedAccountConnectionRecord{}) {
 			return validateAccountConnectionSchema(transaction, providerKeyCipher, providers)
 		}

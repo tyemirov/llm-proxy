@@ -392,14 +392,9 @@ func validateAccountConnectionSchema(database *gorm.DB, keyCipher managedProvide
 }
 
 func validateManagedCapabilityDefaultsSchema(database *gorm.DB) error {
-	for _, column := range []string{"default_transcription_provider", "default_transcription_model", "default_speech_provider", "default_speech_model"} {
+	for _, column := range []string{managedTranscriptionProviderColumn, managedTranscriptionModelColumn, managedSpeechProviderColumn, managedSpeechModelColumn} {
 		if !managedTableHasColumn(database.Migrator(), managedTenantTable, column) {
 			return fmt.Errorf("%w: operation=validate_current_schema missing_default_column=%s", errManagedTenantSchemaMigration, column)
-		}
-	}
-	for _, column := range []string{"default_dictation_provider", "default_dictation_model"} {
-		if managedTableHasColumn(database.Migrator(), managedTenantTable, column) {
-			return fmt.Errorf("%w: operation=validate_current_schema obsolete_default_column=%s", errManagedTenantSchemaMigration, column)
 		}
 	}
 	return nil
