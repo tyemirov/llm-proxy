@@ -10,6 +10,13 @@ server:
     transfer: {active: 8, admitted: 128}
     interactive_reserve: 1
     origins:
+      - {origin: https://api.fal.ai, active: 4, queued: 24}
+      - {origin: https://api.elevenlabs.io, active: 5, queued: 24}
+      - {origin: https://storage.googleapis.com, active: 2, queued: 1}
+      - {origin: https://queue.fal.run, active: 4, queued: 24}
+      - {origin: https://fal.media, active: 4, queued: 24}
+      - {origin: https://v3.fal.media, active: 4, queued: 24}
+      - {origin: https://v3b.fal.media, active: 4, queued: 24}
       - {origin: https://api.openai.com, active: 4, queued: 24}
       - {origin: https://api.deepseek.com, active: 4, queued: 24}
       - {origin: https://api.moonshot.ai, active: 4, queued: 24}

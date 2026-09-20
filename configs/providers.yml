@@ -1,4 +1,4 @@
-schema_version: 4
+schema_version: 5
 model_migrations:
     - managed_schema_version: 4
       provider: qwencloud
@@ -120,6 +120,9 @@ operations:
         - text
       output_artifacts:
         - text
+    - id: pronunciation_dictionary_creation
+      input_artifacts: [text]
+      output_artifacts: [text]
     - id: subtitle_creation
       input_artifacts:
         - audio
@@ -144,6 +147,8 @@ operations:
       input_artifacts: [text, image]
       output_artifacts: [image]
 publishers:
+    - id: reve
+      label: Reve
     - id: baidu
       label: Baidu
     - id: openai
@@ -171,6 +176,10 @@ publishers:
     - id: mprlab
       label: Marco Polo Research Lab
 families:
+    - id: reve
+      publisher: reve
+      label: Reve
+      weight_access: proprietary
     - id: gpt-6
       publisher: openai
       label: GPT-6
@@ -304,6 +313,13 @@ families:
       label: GPT Image
       weight_access: proprietary
 models:
+    - id: reve-2.1
+      enabled: true
+      publisher: reve
+      family: reve
+      version: "2.1"
+      operations: [image_generation]
+      media_inputs: []
     - id: gpt-6-astra
       enabled: true
       publisher: openai
@@ -1085,6 +1101,9 @@ models:
       media_inputs: []
 providers:
     - id: openai
+      verification:
+        transport: text
+        model: gpt-4.1
       connection_ownership: tenant
       label: OpenAI
       api_service_label: OpenAI API
@@ -1954,6 +1973,9 @@ providers:
               last_verified: '2026-09-19'
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: deepseek
+      verification:
+        transport: text
+        model: deepseek-v4-flash
       connection_ownership: tenant
       label: DeepSeek
       api_service_label: DeepSeek API
@@ -2023,6 +2045,9 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: dashscope
+      verification:
+        transport: text
+        model: qwen-plus
       connection_ownership: tenant
       label: Alibaba Cloud
       api_service_label: Alibaba Cloud
@@ -2584,6 +2609,9 @@ providers:
                     billing_mode: pay_as_you_go_list
                     mode: singapore_international;thinking_or_non_thinking;input_tokens_0_to_1000000
     - id: moonshot
+      verification:
+        transport: text
+        model: kimi-k2.6
       connection_ownership: tenant
       label: Moonshot
       api_service_label: Moonshot API
@@ -2791,6 +2819,9 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: minimax
+      verification:
+        transport: text
+        model: minimax-m2.7
       connection_ownership: tenant
       label: MiniMax
       api_service_label: MiniMax API
@@ -3253,6 +3284,9 @@ providers:
               source: https://platform.minimax.io/docs/guides/pricing-paygo
               last_verified: "2026-08-13"
     - id: siliconflow
+      verification:
+        transport: text
+        model: deepseek-reasoner
       connection_ownership: tenant
       label: SiliconFlow
       api_service_label: SiliconFlow API
@@ -3337,6 +3371,9 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: zai
+      verification:
+        transport: text
+        model: glm-5.1
       connection_ownership: tenant
       label: Z.AI
       api_service_label: Z.AI API
@@ -3582,6 +3619,9 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: gemini
+      verification:
+        transport: text_pollable
+        model: gemini-3.5-flash
       connection_ownership: tenant
       label: Gemini
       api_service_label: Gemini API
@@ -4204,6 +4244,9 @@ providers:
               source: https://ai.google.dev/gemini-api/docs/pricing
               last_verified: "2026-09-05"
     - id: anthropic
+      verification:
+        transport: text
+        model: claude-sonnet-4-6
       connection_ownership: tenant
       label: Anthropic
       api_service_label: Anthropic API
@@ -4775,6 +4818,9 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: meta
+      verification:
+        transport: text
+        model: muse-spark-1.1
       connection_ownership: tenant
       label: Meta
       api_service_label: Meta API
@@ -4919,6 +4965,9 @@ providers:
                   conditions:
                     billing_mode: standard
     - id: xai
+      verification:
+        transport: text_responses
+        model: grok-4.3
       connection_ownership: tenant
       label: xAI
       api_service_label: xAI API
@@ -5319,6 +5368,9 @@ providers:
               last_verified: "2026-08-10"
               unavailable_reason: Exact published pricing has not been imported for this provider offering.
     - id: baidu
+      verification:
+        transport: text
+        model: ernie-5.0
       connection_ownership: tenant
       label: Baidu Qianfan
       api_service_label: Qianfan API
@@ -5481,6 +5533,9 @@ providers:
                   conditions:
                     billing_mode: pay_as_you_go
     - id: vertex
+      verification:
+        transport: generate_content
+        model: gemini-3.5-flash
       connection_ownership: tenant
       enabled: true
       label: Vertex AI
@@ -5813,6 +5868,8 @@ providers:
               source: https://cloud.google.com/vertex-ai/generative-ai/pricing
               last_verified: '2026-09-07'
     - id: dictator
+      verification:
+        transport: speech
       connection_ownership: tenant
       label: Dictator
       api_service_label: Dictator Speech API
@@ -5860,6 +5917,9 @@ providers:
               field: grpc_auth_token
             execution:
               id: asynchronous_job
+      resources:
+        - kind: voices
+          transport: speech
       offerings:
         - model: whisper-tiny
           created: 1788998400
@@ -6078,3 +6138,175 @@ providers:
               unavailable_reason: Dictator server prices are not available from the provider contract.
               source: https://github.com/tyemirov/dictator
               last_verified: '2026-09-10'
+    - id: fal
+      label: FAL
+      api_service_label: FAL API
+      connection_ownership: tenant
+      key_acquisition_url: https://fal.ai/dashboard/keys
+      verification:
+        transport: account
+      fields:
+        - id: api_key
+          label: FAL API key
+          kind: credential
+          type: opaque
+          required: true
+          default: ""
+          secret: true
+          validation: {minimum_length: 1}
+          environment: FAL_KEY
+      transports:
+        - id: account
+          endpoint:
+            protocol: http
+            default_base_url: https://api.fal.ai
+            path: /v1/models/pricing?endpoint_id=reve/2.1/text-to-image
+            method: GET
+          components:
+            request_codec: {id: json_resource}
+            response_codec: {id: json_resource}
+            authentication: {kind: key, field: api_key, header: Authorization, prefix: 'Key '}
+            execution: {id: read_only}
+        - id: image
+          endpoint:
+            protocol: http
+            default_base_url: https://queue.fal.run
+            path: /{model}
+            method: POST
+          artifact_origins: [https://fal.media, https://v3.fal.media, https://v3b.fal.media]
+          components:
+            request_codec: {id: fal_queue_images}
+            response_codec: {id: fal_queue_images}
+            authentication: {kind: key, field: api_key, header: Authorization, prefix: 'Key '}
+            execution: {id: asynchronous_job}
+      offerings:
+        - model: reve-2.1
+          created: 1789862400
+          upstream_model: reve/2.1/text-to-image
+          transport: image
+          operations: [image_generation]
+          default_operations: [image_generation]
+          controls:
+            - id: aspect_ratio
+              kind: enum
+              values: ['auto', '4:1', '3:1', '21:9', '2:1', '17:9', '16:9', '3:2', '4:3', '5:4', '1:1', '4:5', '3:4', '2:3', '9:16', '1:2', '1:3', '1:4']
+            - id: output_format
+              kind: enum
+              values: [png, jpeg, webp]
+            - id: output_count
+              kind: integer
+              minimum: 1
+              maximum: 4
+          limits:
+            - {id: prompt_characters, value: 4000, unit: characters}
+            - {id: output_bytes, value: 67108864, unit: bytes}
+            - {id: output_pixels, value: 67108864, unit: pixels}
+          prices:
+            - operation: image_generation
+              available: false
+              source: https://fal.ai/models/reve/2.1/text-to-image/api
+              last_verified: '2026-09-20'
+              unavailable_reason: Exact provider pricing is not imported.
+
+    - id: elevenlabs
+      label: ElevenLabs
+      api_service_label: ElevenLabs API
+      connection_ownership: tenant
+      key_acquisition_url: https://elevenlabs.io/app/developers/api-keys
+      verification:
+        transport: subscription
+      fields:
+        - id: api_key
+          label: ElevenLabs API key
+          kind: credential
+          type: opaque
+          required: true
+          default: ""
+          secret: true
+          validation: {minimum_length: 1}
+          environment: ELEVENLABS_API_KEY
+      resources:
+        - {kind: voices, transport: voices}
+        - {kind: metadata, transport: models}
+        - {kind: quotas, transport: subscription}
+      services:
+        - operation: audio_alignment
+          transport: alignment
+          controls: []
+          limits:
+            - {id: input_audio_bytes, value: 1000000000, unit: bytes}
+          price:
+            operation: audio_alignment
+            available: false
+            source: https://elevenlabs.io/docs/api-reference/forced-alignment/create
+            last_verified: "2026-09-20"
+            unavailable_reason: Exact forced-alignment pricing has not been imported.
+        - operation: pronunciation_dictionary_creation
+          transport: dictionary_creation
+          controls: []
+          limits: []
+          price:
+            operation: pronunciation_dictionary_creation
+            available: false
+            source: https://elevenlabs.io/docs/api-reference/pronunciation-dictionaries/create-from-rules
+            last_verified: "2026-09-20"
+            unavailable_reason: Exact dictionary creation pricing has not been imported.
+      transports:
+        - id: voices
+          endpoint:
+            protocol: http
+            method: GET
+            default_base_url: https://api.elevenlabs.io
+            path: /v2/voices
+          artifact_origins: [https://storage.googleapis.com]
+          components:
+            request_codec: {id: elevenlabs_voices}
+            response_codec: {id: elevenlabs_voices}
+            authentication: {kind: header, field: api_key, header: xi-api-key}
+            execution: {id: read_only}
+        - id: dictionary_creation
+          endpoint:
+            protocol: http
+            method: POST
+            default_base_url: https://api.elevenlabs.io
+            path: /v1/pronunciation-dictionaries/add-from-rules
+          components:
+            request_codec: {id: elevenlabs_dictionary}
+            response_codec: {id: elevenlabs_dictionary}
+            authentication: {kind: header, field: api_key, header: xi-api-key}
+            execution: {id: synchronous_completion}
+        - id: alignment
+          endpoint:
+            protocol: http
+            method: POST
+            default_base_url: https://api.elevenlabs.io
+            path: /v1/forced-alignment
+          headers: []
+          components:
+            request_codec: {id: elevenlabs_alignment}
+            response_codec: {id: elevenlabs_alignment}
+            authentication: {kind: header, field: api_key, header: xi-api-key, prefix: ""}
+            execution: {id: synchronous_completion}
+        - id: models
+          endpoint:
+            protocol: http
+            default_base_url: https://api.elevenlabs.io
+            path: /v1/models
+            method: GET
+          components:
+            request_codec: {id: elevenlabs_models}
+            response_codec: {id: elevenlabs_models}
+            authentication: {kind: header, field: api_key, header: xi-api-key}
+            execution: {id: read_only}
+        - id: subscription
+          endpoint:
+            protocol: http
+            default_base_url: https://api.elevenlabs.io
+            path: /v1/user/subscription
+            method: GET
+          components:
+            request_codec: {id: elevenlabs_subscription}
+            response_codec: {id: elevenlabs_subscription}
+            authentication: {kind: header, field: api_key, header: xi-api-key}
+            execution: {id: read_only}
+      offerings: []
