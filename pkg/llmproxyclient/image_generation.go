@@ -77,3 +77,27 @@ func imageOperationInput(input ImageGenerationInput) MediaOperationInput {
 		Input: prompt, Controls: controls,
 	}
 }
+
+// AspectRatioImageGenerationInput selects an image route with aspect-ratio controls.
+// Accepted ratios, formats, and counts come from the selected catalog offering.
+type AspectRatioImageGenerationInput struct {
+	Provider     string
+	Model        string
+	Prompt       string
+	AspectRatio  string
+	OutputFormat string
+	OutputCount  int
+}
+
+// CreateAspectRatioImageGeneration accepts an image operation with catalog-defined aspect ratios.
+func (client Client) CreateAspectRatioImageGeneration(ctx context.Context, idempotencyKey string, input AspectRatioImageGenerationInput) (MediaOperation, error) {
+	prompt, _ := json.Marshal(struct {
+		Prompt string `json:"prompt"`
+	}{input.Prompt})
+	controls, _ := json.Marshal(struct {
+		AspectRatio  string `json:"aspect_ratio"`
+		OutputFormat string `json:"output_format"`
+		OutputCount  int    `json:"output_count"`
+	}{input.AspectRatio, input.OutputFormat, input.OutputCount})
+	return client.CreateMediaOperation(ctx, idempotencyKey, MediaOperationInput{Capability: llmproxycontract.MediaCapabilityImageGenerate, Provider: input.Provider, Model: input.Model, Input: prompt, Controls: controls})
+}

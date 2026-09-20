@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,7 +26,7 @@ var mediaVoiceIdentifierPattern = regexp.MustCompile(`^voi_[0-9a-f]{32}$`)
 type MediaOperationInput struct {
 	Capability string          `json:"capability"`
 	Provider   string          `json:"provider"`
-	Model      string          `json:"model"`
+	Model      string          `json:"model,omitempty"`
 	Input      json.RawMessage `json:"input"`
 	Controls   json.RawMessage `json:"controls"`
 }
@@ -36,7 +37,7 @@ type MediaOperation struct {
 	PreviousOperationID string                        `json:"previous_operation_id,omitempty"`
 	Capability          string                        `json:"capability"`
 	Provider            string                        `json:"provider"`
-	Model               string                        `json:"model"`
+	Model               string                        `json:"model,omitempty"`
 	CatalogRevision     string                        `json:"catalog_revision"`
 	State               string                        `json:"state"`
 	CancellationState   string                        `json:"cancellation_state"`
@@ -79,8 +80,18 @@ type MediaOperationCost struct {
 
 // MediaCapabilities lists tenant-available durable routes.
 type MediaCapabilities struct {
-	CatalogRevision string                 `json:"catalog_revision"`
-	Routes          []MediaCapabilityRoute `json:"routes"`
+	Services        []MediaCapabilityService            `json:"services"`
+	CatalogRevision string                              `json:"catalog_revision"`
+	Routes          []MediaCapabilityRoute              `json:"routes"`
+	Resources       []llmproxycontract.ProviderResource `json:"resources"`
+}
+
+// MediaCapabilityService is one tenant-available service without model selection.
+type MediaCapabilityService struct {
+	Capability string            `json:"capability"`
+	Provider   string            `json:"provider"`
+	Controls   []json.RawMessage `json:"controls"`
+	Limits     []json.RawMessage `json:"limits"`
 }
 
 // MediaCapabilityRoute is one tenant-available capability, provider, and model route.
@@ -94,24 +105,32 @@ type MediaCapabilityRoute struct {
 
 // MediaVoice is one tenant-owned public synthesis voice.
 type MediaVoice struct {
-	VoiceID           string `json:"voice_id"`
-	Provider          string `json:"provider"`
-	Mode              string `json:"mode"`
-	Language          string `json:"language"`
-	DisplayName       string `json:"display_name"`
-	Default           bool   `json:"default"`
-	SampleRates       []int  `json:"sample_rates"`
-	DefaultSampleRate int    `json:"default_sample_rate"`
+	llmproxycontract.MediaVoiceMetadata
+	VoiceID           string  `json:"voice_id"`
+	Provider          string  `json:"provider"`
+	Mode              string  `json:"mode"`
+	Language          *string `json:"language"`
+	DisplayName       string  `json:"display_name"`
+	Default           bool    `json:"default"`
+	SampleRates       []int   `json:"sample_rates"`
+	DefaultSampleRate *int    `json:"default_sample_rate"`
 }
 
-type mediaVoiceCollection struct {
-	Voices []MediaVoice `json:"voices"`
+// MediaVoiceQuery selects one provider voice page.
+type MediaVoiceQuery = llmproxycontract.MediaVoiceQuery
+
+// MediaVoicePage preserves the provider page and its opaque continuation cursor.
+type MediaVoicePage struct {
+	Voices     []MediaVoice `json:"voices"`
+	HasMore    bool         `json:"has_more"`
+	TotalCount *int         `json:"total_count"`
+	NextCursor *string      `json:"next_cursor"`
 }
 
 // CreateMediaOperation validates and accepts one durable media operation.
 func (client Client) CreateMediaOperation(contextValue context.Context, idempotencyKey string, input MediaOperationInput) (MediaOperation, error) {
 	idempotencyKey = strings.TrimSpace(idempotencyKey)
-	if idempotencyKey == "" || strings.TrimSpace(input.Capability) == "" || strings.TrimSpace(input.Provider) == "" || strings.TrimSpace(input.Model) == "" || !validJSONObject(input.Input) || !validJSONObject(input.Controls) {
+	if idempotencyKey == "" || strings.TrimSpace(input.Capability) == "" || strings.TrimSpace(input.Provider) == "" || (input.Model != "" && strings.TrimSpace(input.Model) == "") || !validJSONObject(input.Input) || !validJSONObject(input.Controls) {
 		return MediaOperation{}, fmt.Errorf("%w: invalid media operation", ErrInvalidClientRequest)
 	}
 	body, _ := json.Marshal(input)
@@ -187,34 +206,63 @@ func (client Client) GetMediaCapabilities(contextValue context.Context) (MediaCa
 		return MediaCapabilities{}, responseError
 	}
 	var capabilities MediaCapabilities
-	if decodeError := decodeExactJSON(responseBody, &capabilities); decodeError != nil || capabilities.CatalogRevision == "" || capabilities.Routes == nil || !validMediaCapabilityRoutes(capabilities.Routes) {
+	if decodeError := decodeExactJSON(responseBody, &capabilities); decodeError != nil || capabilities.CatalogRevision == "" || capabilities.Routes == nil || !validMediaCapabilityRoutes(capabilities.Routes) || capabilities.Resources == nil || !validProviderResources(capabilities.Resources) || capabilities.Services == nil || !validMediaCapabilityServices(capabilities.Services) {
 		return MediaCapabilities{}, fmt.Errorf("%w: invalid media capabilities response", ErrClientHTTPFailure)
 	}
 	return capabilities, nil
 }
 
+func validMediaCapabilityServices(services []MediaCapabilityService) bool {
+	seen := map[string]bool{}
+	for _, route := range services {
+		key := route.Provider + "|" + route.Capability
+		if route.Provider == "" || (route.Capability != llmproxycontract.MediaCapabilityAudioAlign && route.Capability != llmproxycontract.MediaCapabilityAudioDictionaryCreate) || route.Controls == nil || route.Limits == nil || seen[key] {
+			return false
+		}
+		seen[key] = true
+	}
+	return true
+}
+
+func validProviderResources(resources []llmproxycontract.ProviderResource) bool {
+	seen := map[llmproxycontract.ProviderResource]bool{}
+	for _, resource := range resources {
+		if resource.Provider == "" || !llmproxycontract.ValidProviderResourceKind(resource.Kind) || seen[resource] {
+			return false
+		}
+		seen[resource] = true
+	}
+	return true
+}
+
 // GetMediaVoices discovers and returns tenant-owned voices for one provider.
-func (client Client) GetMediaVoices(contextValue context.Context, provider string) ([]MediaVoice, error) {
-	provider = strings.TrimSpace(provider)
-	if provider == "" || provider != strings.ToLower(provider) {
-		return nil, fmt.Errorf("%w: invalid media voice provider", ErrInvalidClientRequest)
+func (client Client) GetMediaVoices(contextValue context.Context, query MediaVoiceQuery) (MediaVoicePage, error) {
+	values, err := query.Values()
+	if err != nil {
+		return MediaVoicePage{}, fmt.Errorf("%w: invalid media voice query", ErrInvalidClientRequest)
 	}
 	requestURL := client.config.mediaResourceURL(llmproxycontract.MediaVoicesPath)
-	query := requestURL.Query()
-	query.Set("provider", provider)
-	requestURL.RawQuery = query.Encode()
+	requestURL.RawQuery = values.Encode()
 	request := (&http.Request{Method: http.MethodGet, URL: &requestURL, Header: http.Header{}}).WithContext(contextValue)
 	request.Header.Set(headerAccept, "application/json")
 	request.Header.Set("Authorization", "Bearer "+client.config.secret)
-	responseBody, responseError := client.doMediaResource(request, http.StatusOK)
-	if responseError != nil {
-		return nil, responseError
+	body, err := client.doMediaResource(request, http.StatusOK)
+	if err != nil {
+		return MediaVoicePage{}, err
 	}
-	var collection mediaVoiceCollection
-	if decodeError := decodeExactJSON(responseBody, &collection); decodeError != nil || collection.Voices == nil || !validMediaVoices(collection.Voices) {
-		return nil, fmt.Errorf("%w: invalid media voice collection", ErrClientHTTPFailure)
+	var page MediaVoicePage
+	var fields map[string]json.RawMessage
+	if decodeExactJSON(body, &page) != nil || json.Unmarshal(body, &fields) != nil || len(fields) != 4 || string(fields["has_more"]) == "null" || page.Voices == nil || !validMediaVoices(page.Voices) || page.TotalCount != nil && *page.TotalCount < 0 || page.HasMore != (page.NextCursor != nil) || page.NextCursor != nil && strings.TrimSpace(*page.NextCursor) == "" {
+		return MediaVoicePage{}, fmt.Errorf("%w: invalid media voice collection", ErrClientHTTPFailure)
 	}
-	return collection.Voices, nil
+	seen := map[string]bool{}
+	for _, voice := range page.Voices {
+		if voice.Provider != query.Provider || seen[voice.VoiceID] {
+			return MediaVoicePage{}, fmt.Errorf("%w: invalid media voice collection", ErrClientHTTPFailure)
+		}
+		seen[voice.VoiceID] = true
+	}
+	return page, nil
 }
 
 // GetMediaVoice reads one tenant-owned voice without provider discovery.
@@ -247,11 +295,24 @@ func validMediaVoices(voices []MediaVoice) bool {
 }
 
 func validMediaVoice(voice MediaVoice) bool {
-	if !mediaVoiceIdentifierPattern.MatchString(voice.VoiceID) || voice.Provider == "" || (voice.Mode != "preset" && voice.Mode != "extracted") || voice.Language == "" || voice.DisplayName == "" || len(voice.SampleRates) == 0 || voice.DefaultSampleRate <= 0 {
+	if !mediaVoiceIdentifierPattern.MatchString(voice.VoiceID) || voice.Provider == "" || (voice.Mode != "preset" && voice.Mode != "extracted") || (voice.Language != nil && strings.TrimSpace(*voice.Language) == "") || voice.DisplayName == "" || voice.SampleRates == nil || (len(voice.SampleRates) == 0) != (voice.DefaultSampleRate == nil) || voice.Labels == nil || voice.HighQualityBaseModelIDs == nil || voice.VerifiedLanguages == nil {
 		return false
 	}
+	if !validMediaVoicePreview(voice.Preview, voice.VoiceID, 0) {
+		return false
+	}
+	for _, model := range voice.HighQualityBaseModelIDs {
+		if strings.TrimSpace(model) == "" {
+			return false
+		}
+	}
+	for index, language := range voice.VerifiedLanguages {
+		if strings.TrimSpace(language.Language) == "" || strings.TrimSpace(language.ModelID) == "" || !validMediaVoicePreview(language.Preview, voice.VoiceID, index+1) {
+			return false
+		}
+	}
 	seen := make(map[int]struct{}, len(voice.SampleRates))
-	defaultFound := false
+	defaultFound := voice.DefaultSampleRate == nil
 	for _, sampleRate := range voice.SampleRates {
 		if sampleRate <= 0 {
 			return false
@@ -260,7 +321,7 @@ func validMediaVoice(voice MediaVoice) bool {
 			return false
 		}
 		seen[sampleRate] = struct{}{}
-		defaultFound = defaultFound || sampleRate == voice.DefaultSampleRate
+		defaultFound = defaultFound || voice.DefaultSampleRate != nil && sampleRate == *voice.DefaultSampleRate
 	}
 	return defaultFound
 }
@@ -335,8 +396,18 @@ func (client Client) doMediaOperation(request *http.Request, statuses ...int) (M
 	if responseError != nil {
 		return MediaOperation{}, responseError
 	}
-	var operation MediaOperation
-	if decodeError := decodeExactJSON(responseBody, &operation); decodeError != nil || !validMediaOperation(operation) {
+	var wire struct {
+		MediaOperation
+		Model json.RawMessage `json:"model"`
+	}
+	if err := decodeExactJSON(responseBody, &wire); err != nil {
+		return MediaOperation{}, fmt.Errorf("%w: invalid media operation response", ErrClientHTTPFailure)
+	}
+	operation := wire.MediaOperation
+	if len(wire.Model) > 0 && (json.Unmarshal(wire.Model, &operation.Model) != nil || strings.TrimSpace(operation.Model) == "") {
+		return MediaOperation{}, fmt.Errorf("%w: invalid media operation model", ErrClientHTTPFailure)
+	}
+	if !validMediaOperation(operation) {
 		return MediaOperation{}, fmt.Errorf("%w: invalid media operation response", ErrClientHTTPFailure)
 	}
 	return operation, nil
@@ -399,7 +470,7 @@ func validMediaOperation(operation MediaOperation) bool {
 	if operation.PreviousOperationID != "" && !mediaOperationIdentifierPattern.MatchString(operation.PreviousOperationID) {
 		return false
 	}
-	if !strings.HasPrefix(operation.OperationID, "mop_") || operation.Capability == "" || operation.Provider == "" || operation.Model == "" || operation.CatalogRevision == "" || operation.AcceptedAt.IsZero() || operation.UpdatedAt.Before(operation.AcceptedAt) || !operation.DeadlineAt.After(operation.AcceptedAt) || operation.Outputs == nil {
+	if !strings.HasPrefix(operation.OperationID, "mop_") || operation.Capability == "" || operation.Provider == "" || operation.CatalogRevision == "" || operation.AcceptedAt.IsZero() || operation.UpdatedAt.Before(operation.AcceptedAt) || !operation.DeadlineAt.After(operation.AcceptedAt) || operation.Outputs == nil {
 		return false
 	}
 	for index, partial := range operation.PartialOutputs {
@@ -432,4 +503,8 @@ func mediaOperationTerminal(state string) bool {
 
 func validAsset(asset Asset) bool {
 	return assetIdentifierPattern.MatchString(asset.AssetID) && supportedClientMediaMIME(asset.MIMEType) && asset.SizeBytes > 0 && asset.State == "available" && !asset.CreatedAt.IsZero() && asset.ExpiresAt.After(asset.CreatedAt)
+}
+
+func validMediaVoicePreview(preview *string, voiceID string, index int) bool {
+	return preview == nil || *preview == llmproxycontract.MediaVoicesPath+"/"+voiceID+"/previews/"+strconv.Itoa(index)
 }

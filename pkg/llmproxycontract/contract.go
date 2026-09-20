@@ -26,6 +26,8 @@ const (
 	MediaCapabilityAudioTranscribe = "audio.transcribe"
 	// MediaCapabilityAudioDiarize identifies durable speaker diarization.
 	MediaCapabilityAudioDiarize = "audio.diarize"
+	// MediaCapabilityAudioDictionaryCreate identifies pronunciation dictionary creation.
+	MediaCapabilityAudioDictionaryCreate = "audio.dictionary.create"
 	// MediaCapabilityAudioAlign identifies durable transcript alignment.
 	MediaCapabilityAudioAlign = "audio.align"
 	// MediaCapabilitySubtitlesCreate identifies durable subtitle creation.

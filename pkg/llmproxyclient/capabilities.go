@@ -60,6 +60,7 @@ const (
 	publicWireContractMetaTranscription      = "meta_transcription"
 	publicWireContractOpenAIChatCompletions  = "openai_chat_completions"
 	publicWireContractOpenAIResponses        = "openai_responses"
+	publicWireContractFALQueueImages         = "fal_queue_images"
 	publicWireContractOpenAIImages           = "openai_images"
 	publicWireContractDashScopeResponses     = "dashscope_responses"
 	publicWireContractXAIResponses           = "xai_responses"
@@ -110,6 +111,7 @@ type publicOfferingRoute struct {
 }
 
 var publicOfferingMediaTransports = map[publicOfferingRoute]string{
+	{wireContract: publicWireContractFALQueueImages, executionLifecycle: publicExecutionLifecycleAsynchronous}:        "",
 	{wireContract: publicWireContractOpenAIImages, executionLifecycle: publicExecutionLifecycleSynchronous}:           "",
 	{wireContract: publicWireContractVertexGenerateContent, executionLifecycle: publicExecutionLifecycleSynchronous}:  publicMediaTransportInline,
 	{wireContract: publicWireContractGeminiInteractions, executionLifecycle: publicExecutionLifecycleSynchronous}:     publicMediaTransportFile,
