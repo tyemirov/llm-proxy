@@ -13,6 +13,65 @@ const executeFile = promisify(execFile);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const publicCapabilitiesPath = "/api/public/capabilities";
 
+test("public site renders image generation with catalog dimension controls", async () => {
+  const capabilities = normalizedCapabilityFixture();
+  capabilities.operations.push({ id: "image_generation", input_artifacts: ["text"], output_artifacts: ["image"] });
+  capabilities.operations.push({ id: "image_editing", input_artifacts: ["text", "image"], output_artifacts: ["image"] });
+  capabilities.families[0].identifier = "gpt-image";
+  capabilities.models[0].family = "gpt-image";
+  const textModel = structuredClone(capabilities.models[0]);
+  textModel.identifier = "text-model";
+  textModel.provider_offerings = ["deepseek:text-model"];
+  capabilities.models.push(textModel);
+  const textOffering = structuredClone(capabilities.offerings[0]);
+  textOffering.identifier = "deepseek:text-model";
+  textOffering.model = "text-model";
+  capabilities.offerings.push(textOffering);
+  capabilities.prices.push({ ...capabilities.prices[0], model: "text-model" });
+  capabilities.publishers[0].model_count = 2;
+  capabilities.counts.exact_models = 2;
+  capabilities.counts.provider_offerings = 2;
+  capabilities.models[0].operations = ["image_generation", "image_editing"];
+  capabilities.models[0].capabilities = ["image_generation", "image_editing"];
+  capabilities.models[0].domains = ["image"];
+  capabilities.offerings[0].capabilities = ["image_generation", "image_editing"];
+  capabilities.offerings[0].domains = ["image"];
+  capabilities.offerings[0].wire_contract = "openai_images";
+  capabilities.offerings[0].controls = [{ id: "size", kind: "image_size", values: [], minimum: null, maximum: null, account_dependent: false,
+    image_size: { automatic: true, dimension_multiple: 16, maximum_edge: 3840, minimum_pixels: 655360, maximum_pixels: 8294400, maximum_aspect_ratio: 3 } }];
+  capabilities.prices[0].operation = "image_generation";
+  capabilities.prices.push({ ...capabilities.prices[0], operation: "image_editing" });
+  await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+    const fixture = await siteFixture();
+    try {
+      await renderFixture(fixture, capabilitiesURL);
+      const html = await readFile(path.join(fixture.output, "index.html"), "utf8");
+      expect(html).toContain('data-route-capability="image_generation"');
+      expect(html).toContain("Image generation");
+      expect(html).toContain('data-route-capability="image_editing"');
+      expect(html).toContain("Image editing");
+      expect(html).toContain('data-brand-id="gpt-image"');
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+});
+
+for (const scope of ["models", "offerings"]) {
+  for (const domains of [[], ["dictation"], ["speech", "speech"]]) {
+    test(`public site rejects invalid domains for ${scope}: ${JSON.stringify(domains)}`, async () => {
+      const capabilities = normalizedCapabilityFixture();
+      capabilities[scope][0].domains = domains;
+      await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+        const fixture = await siteFixture();
+        try {
+          await expect(renderFixture(fixture, capabilitiesURL)).rejects.toThrow(new RegExp(`catalog\\.${scope}\\[0\\]\\.domains`, "u"));
+        } finally { await rm(fixture.root, { recursive: true, force: true }); }
+      });
+    });
+  }
+}
+
 test("brand icons public renderer rejects an unmapped runtime family", async () => {
   const capabilities = normalizedCapabilityFixture();
   capabilities.families[0].identifier = "new-family";
@@ -205,6 +264,7 @@ function normalizedCapabilityFixture() {
       operations: ["text"],
       media_inputs: [],
       capabilities: ["text"],
+      domains: ["text"],
       provider_offerings: ["deepseek:example-model"],
     }],
     offerings: [{
@@ -212,6 +272,7 @@ function normalizedCapabilityFixture() {
       provider: "deepseek",
       model: "example-model",
       capabilities: ["text"],
+      domains: ["text"],
       wire_contract: "openai_chat_completions",
       execution_lifecycle: "synchronous_completion",
       output_token_limit: 0,

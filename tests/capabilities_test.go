@@ -90,10 +90,9 @@ func TestIntegration_OmitsDisallowedParameters(testingInstance *testing.T) {
 			defer logger.Sync()
 
 			router, buildRouterError := testfixtures.BuildManagedRouter(subTestInstance, proxy.Configuration{
-				LogLevel:    logLevel,
-				WorkerCount: 1,
-				QueueSize:   4,
-				Endpoints:   endpoints,
+				LogLevel:         logLevel,
+				UpstreamCapacity: testfixtures.UpstreamCapacity(1, 4),
+				Endpoints:        endpoints,
 			}, logger.Sugar(), testfixtures.StandardManagedTenant(serviceSecret))
 			if buildRouterError != nil {
 				subTestInstance.Fatalf("BuildRouter error: %v", buildRouterError)
@@ -134,7 +133,7 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 	if catalogError != nil {
 		testingInstance.Fatalf("NewPublicCapabilityCatalog error: %v", catalogError)
 	}
-	if catalog.Revision == "" || len(catalog.Operations) != 9 || len(catalog.Prices) != 80 || catalog.Counts.Providers != 14 || catalog.Counts.ModelPublishers != 13 || catalog.Counts.ModelFamilies != 27 || catalog.Counts.ModelFamilies != len(catalog.Families) || catalog.Counts.ExactModels != 72 || catalog.Counts.ExactModels != len(catalog.Models) || catalog.Counts.ProviderOfferings != 75 || catalog.Counts.ProviderOfferings != len(catalog.Offerings) || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
+	if catalog.Revision == "" || len(catalog.Operations) != 11 || len(catalog.Prices) != 103 || catalog.Counts.Providers != 14 || catalog.Counts.ModelPublishers != 13 || catalog.Counts.ModelFamilies != 30 || catalog.Counts.ModelFamilies != len(catalog.Families) || catalog.Counts.ExactModels != 79 || catalog.Counts.ExactModels != len(catalog.Models) || catalog.Counts.ProviderOfferings != 82 || catalog.Counts.ProviderOfferings != len(catalog.Offerings) || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
 		testingInstance.Fatalf("catalog summary=%+v", catalog)
 	}
 	weightAccessFound := map[string]bool{}
@@ -194,7 +193,7 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 			}
 		}
 		switch model.Identifier {
-		case proxy.DefaultDictationModel:
+		case proxy.DefaultTranscriptionModel:
 			if !slices.Equal(model.Capabilities, []string{proxy.PublicModelCapabilityDictation}) {
 				testingInstance.Fatalf("OpenAI dictation capability=%+v", model)
 			}
@@ -235,7 +234,7 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 		if _, retired := retiredGeminiModels[offering.Model]; retired {
 			testingInstance.Fatalf("public capability catalog exposed retired Gemini offering=%s", offering.Model)
 		}
-		if offering.Provider == proxy.ProviderNameOpenAI && offering.Model == proxy.DefaultDictationModel {
+		if offering.Provider == proxy.ProviderNameOpenAI && offering.Model == proxy.DefaultTranscriptionModel {
 			openAIDictationCapabilityFound = true
 		}
 		if offering.Provider == proxy.ProviderNameMoonshot && offering.Model == proxy.ModelNameMoonshotKimiK3 {

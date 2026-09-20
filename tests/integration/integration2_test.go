@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"bytes"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -32,10 +33,9 @@ func TestClientResponseDelivery(testingInstance *testing.T) {
 			client, captured := makeHTTPClient(subTest, testCase.webSearch, endpoints)
 			configureProxy(subTest, client, endpoints)
 			router, buildRouterError := buildIntegrationRouter(subTest, proxy.Configuration{
-				LogLevel:    logLevelDebug,
-				WorkerCount: 1,
-				QueueSize:   8,
-				Endpoints:   endpoints,
+				LogLevel:         logLevelDebug,
+				UpstreamCapacity: testfixtures.UpstreamCapacity(1, 8),
+				Endpoints:        endpoints,
 			}, newLogger(subTest))
 			if buildRouterError != nil {
 				subTest.Fatalf(buildRouterFailedFormat, buildRouterError)
@@ -83,7 +83,7 @@ func TestIntegrationConfiguration(testingInstance *testing.T) {
 		endpoints := proxy.NewEndpoints()
 		client, _ := makeHTTPClient(subTest, false, endpoints)
 		configureProxy(subTest, client, endpoints)
-		config := proxy.Configuration{LogLevel: logLevelDebug, WorkerCount: 1, QueueSize: 4}
+		config := proxy.Configuration{LogLevel: logLevelDebug, UpstreamCapacity: testfixtures.UpstreamCapacity(1, 4)}
 		config.Endpoints = endpoints
 		router, buildRouterError := buildIntegrationRouter(subTest, config, newLogger(subTest))
 		if buildRouterError != nil {

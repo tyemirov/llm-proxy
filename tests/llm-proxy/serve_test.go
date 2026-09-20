@@ -68,8 +68,7 @@ func newRouterWithStubbedOpenAI(testingInstance *testing.T, modelsBody, response
 	defer logger.Sync()
 	router, buildError := testfixtures.BuildManagedRouter(testingInstance, proxy.Configuration{
 		LogLevel:              "debug",
-		WorkerCount:           workerCount,
-		QueueSize:             queueSize,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(workerCount, queueSize),
 		RequestTimeoutSeconds: requestTimeoutSeconds,
 		Endpoints:             endpoints,
 	}, logger.Sugar(), testfixtures.StandardManagedTenant("sekret"))
@@ -187,8 +186,7 @@ func TestEndpoint_ReturnsServiceUnavailableWhenQueueFull(testingInstance *testin
 	defer logger.Sync()
 	router, buildError := testfixtures.BuildManagedRouter(testingInstance, proxy.Configuration{
 		LogLevel:              "debug",
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: 1,
 		Endpoints:             endpoints,
 	}, logger.Sugar(), testfixtures.StandardManagedTenant("sekret"))
@@ -290,8 +288,7 @@ func TestEndpoint_ReturnsGatewayTimeoutWhenWaitingForUpstreamWorker(testingInsta
 	defer logger.Sync()
 	router, buildError := testfixtures.BuildManagedRouter(testingInstance, proxy.Configuration{
 		LogLevel:              "debug",
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: 1,
 		Endpoints:             endpoints,
 	}, logger.Sugar(), testfixtures.StandardManagedTenant("sekret"))

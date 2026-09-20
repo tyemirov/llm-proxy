@@ -77,6 +77,9 @@ export async function startLocalManagementStack(authRouting = "frontend") {
     if (llmProxyConfig === packagedLLMProxyConfig) {
       throw new Error("llm_proxy_blackbox_port_contract_missing");
     }
+    const capacityConfig = yaml.load(llmProxyConfig);
+    capacityConfig.server.upstream_capacity.origins.push({origin: frontendOrigin, active: 4, queued: 24});
+    llmProxyConfig = yaml.dump(capacityConfig);
     const packagedProviderCatalog = await readFile(path.join(repoRoot, "configs/providers.yml"), "utf8");
     const providerCatalog = packagedProviderCatalog.replace(
       "            default_base_url: https://api.openai.com/v1\n            path: /responses\n",

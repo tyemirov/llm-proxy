@@ -190,10 +190,41 @@ test('account connection dashboard links Social Threader explicitly and preserve
   const speech=dashboard.locator('[data-connection-node]').filter({hasText:'Private speech server'});
   await expect(speech).toContainText('Connected');
   await expect(dashboard.locator('[data-provider-profile]')).toHaveCount(0);
-  await dashboard.getByRole('button',{name:'Media',exact:true}).click();
+  await expect(dashboard.getByRole('button',{name:'Transcription',exact:true})).toHaveAttribute('aria-pressed','true');
   await dashboard.locator('[data-model="whisper-base"]').click();
-  await expect(dashboard.locator('[data-media-details]')).toContainText('Speech synthesis');
+  await expect(dashboard.locator('[data-media-details]')).toContainText('Transcription');
   await expect(dashboard.locator('[data-media-details]')).toContainText('Voice extraction');
+  await expect(dashboard.locator('[data-media-details]')).not.toContainText('Speech synthesis');
+  await expect(dashboard.locator('[data-model="whisper-base"]')).toHaveClass(/preview/);
+  await dashboard.getByRole('button',{name:'Save transcription default',exact:true}).click();
+  await expect(dashboard.locator('[data-model="whisper-base"]')).toHaveClass(/selected/);
+  await dashboard.getByRole('button',{name:'Speech',exact:true}).click();
+  for (const width of [320,390]) {
+   await page.setViewportSize({width,height:844});
+   for (const domain of ['Text','Transcription','Speech','Image','Video']) {
+    const tab=dashboard.getByRole('button',{name:domain,exact:true});
+    await expect(tab).toBeVisible();
+    const bounds=await tab.boundingBox();
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x+bounds.width).toBeLessThanOrEqual(width);
+   }
+  }
+  await dashboard.locator('[data-model="whisper-base"]').click();
+  await expect(dashboard.locator('[data-default-form]')).toHaveCount(0);
+  await dashboard.locator('[data-model="qwen3-tts"]').click();
+  await expect(dashboard.locator('[data-media-details]')).toContainText('Speech synthesis');
+  await expect(dashboard.locator('[data-media-details]')).not.toContainText('Voice extraction');
+  const speechSave=page.waitForResponse(response=>response.request().method()==='PUT' && response.url().endsWith('/defaults'));
+  await dashboard.getByRole('button',{name:'Save speech default',exact:true}).click();
+  const speechProfile=await (await speechSave).json();
+  expect(speechProfile.tenant.defaults.speech_model).toBe('qwen3-tts');
+  expect(speechProfile.tenant.defaults.transcription_model).toBe('whisper-base');
+  await expect(dashboard.locator('[data-model="qwen3-tts"]')).toHaveClass(/selected/);
+  await mkdir('artifacts',{recursive:true});
+  await dashboard.screenshot({path:'artifacts/capability-dashboard-mobile.png'});
+  await page.setViewportSize({width:1440,height:1050});
+  await dashboard.getByRole('button',{name:'Transcription',exact:true}).click();
+  await expect(dashboard.locator('[data-model="whisper-base"]')).toHaveClass(/selected/);
   await expect(dashboard).not.toContainText('browser-dictator-token');
   await page.reload();
   await expect(dashboard.locator('[data-connection-node]').filter({hasText:'Private speech server'})).toBeVisible();
@@ -207,9 +238,9 @@ test('account connection dashboard links Social Threader explicitly and preserve
   await dialog.getByRole('button',{name:'Create connection',exact:true}).click();
   await expect(dialog).not.toBeVisible();
   await expect(dashboard.locator('[data-connection-node]').filter({hasText:'Second speech server'})).toContainText('Connected');
-  await dashboard.getByRole('button',{name:'Media',exact:true}).click();
+  await dashboard.getByRole('button',{name:'Transcription',exact:true}).click();
   await dashboard.locator('[data-model="speech-fixture-v1"]').click();
-  await expect(dashboard.locator('[data-media-details]')).toContainText('Speech synthesis');
+  await expect(dashboard.locator('[data-media-details]')).toContainText('Transcription');
   await expect(dashboard.locator('[data-media-details]')).toContainText('Voice extraction');
   await expect(dashboard).not.toContainText('browser-dictator-token');
  } finally { await dictator.stop(); }

@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -77,6 +78,24 @@ for argument in "$@"; do
   target="${argument}"
 done
 builtin printf '%s\n' "${target}" >>"${CI_TARGET_LOG:?}"
+if [[ -n "${CI_OVERLAP_DIRECTORY:-}" && ( "${target}" == "test-upstream-admission-race" || "${target}" == "go-test" || "${target}" == "python-test" ) ]]; then
+  builtin printf 'started\n' >"${CI_OVERLAP_DIRECTORY}/${target}"
+  for ((attempt = 0; attempt < 200; attempt++)); do
+    if [[ -f "${CI_OVERLAP_DIRECTORY}/go-test" && -f "${CI_OVERLAP_DIRECTORY}/test-upstream-admission-race" && -f "${CI_OVERLAP_DIRECTORY}/python-test" ]]; then
+      break
+    fi
+    sleep 0.01
+  done
+  if [[ ! -f "${CI_OVERLAP_DIRECTORY}/go-test" || ! -f "${CI_OVERLAP_DIRECTORY}/test-upstream-admission-race" || ! -f "${CI_OVERLAP_DIRECTORY}/python-test" ]]; then
+    builtin printf 'independent Go and Python checks did not overlap\n' >&2
+    exit 25
+  fi
+fi
+if [[ "${CI_DELAYED_TARGET:-}" == "${target}" ]]; then
+  sleep 0.1
+  [[ -d "${COVERAGE_FILE%/*}" ]]
+  builtin printf 'delayed child completed before cleanup\n'
+fi
 if [[ "${CI_FAIL_TARGET:-}" == "${target}" ]]; then
   exit "${CI_FAIL_STATUS:-23}"
 fi
@@ -105,6 +124,7 @@ builtin printf 'total:\t(statements)\t%s\n' "${CI_COVERAGE_TOTAL:-100.0%}"
 		"python-lint",
 		"frontend-lint",
 		"test-protocol-acceptance",
+		"test-upstream-admission-race",
 		"go-test",
 		"python-test",
 		"frontend-test",
@@ -112,6 +132,55 @@ builtin printf 'total:\t(statements)\t%s\n' "${CI_COVERAGE_TOTAL:-100.0%}"
 		"test-management-auth-blackbox",
 		"test-live-provider-harness",
 	}, "\n") + "\n"
+	assertTargetOrder := func(t *testing.T, output []byte) {
+		t.Helper()
+		observed := strings.Split(strings.TrimSpace(string(output)), "\n")
+		expected := strings.Split(strings.TrimSpace(expectedTargets), "\n")
+		if len(observed) != len(expected) {
+			t.Fatalf("unexpected CI targets:\n%s", output)
+		}
+		slices.Sort(observed[6:9])
+		slices.Sort(expected[6:9])
+		if !slices.Equal(observed, expected) {
+			t.Fatalf("unexpected CI target order:\n%s", output)
+		}
+	}
+
+	testingInstance.Run("independent-go-and-python-checks-overlap", func(t *testing.T) {
+		command := exec.Command(runnerPath)
+		command.Dir = repositoryRoot
+		command.Env = append(os.Environ(), "MAKE_BIN="+fakeMakePath, "GO="+fakeGoPath,
+			"CI_TARGET_LOG="+filepath.Join(fixtureRoot, "overlap-targets"), "CI_OVERLAP_DIRECTORY="+t.TempDir())
+		output, err := command.CombinedOutput()
+		if err != nil {
+			t.Fatalf("concurrent Go checks failed: %v\n%s", err, output)
+		}
+		if !strings.Contains(string(output), "CI PASSED: all 14 gates completed") {
+			t.Fatalf("concurrent checks omitted completion evidence:\n%s", output)
+		}
+	})
+
+	for _, failure := range []struct {
+		target string
+		stage  string
+	}{
+		{target: "test-upstream-admission-race", stage: "Upstream admission race tests"},
+		{target: "go-test", stage: "Go integration tests"},
+		{target: "python-test", stage: "Python client tests"},
+	} {
+		testingInstance.Run(failure.target+"-failure", func(t *testing.T) {
+			command := exec.Command(runnerPath)
+			command.Dir = repositoryRoot
+			command.Env = append(os.Environ(), "MAKE_BIN="+fakeMakePath, "GO="+fakeGoPath,
+				"CI_TARGET_LOG="+filepath.Join(fixtureRoot, failure.target+"-failure-targets"), "CI_FAIL_TARGET="+failure.target, "CI_FAIL_STATUS=27",
+				"CI_OVERLAP_DIRECTORY="+t.TempDir(), "CI_DELAYED_TARGET=python-test")
+			output, err := command.CombinedOutput()
+			exitError, ok := err.(*exec.ExitError)
+			if !ok || exitError.ExitCode() != 27 || !strings.Contains(string(output), "CI FAILED: stopped during "+failure.stage+" (exit 27).") || !strings.Contains(string(output), "delayed child completed before cleanup") || strings.Contains(string(output), "CI PASSED") {
+				t.Fatalf("Go check failure was not preserved: %v\n%s", err, output)
+			}
+		})
+	}
 
 	testingInstance.Run("complete", func(testingInstance *testing.T) {
 		targetLogPath := filepath.Join(fixtureRoot, "complete-targets")
@@ -132,7 +201,7 @@ builtin printf 'total:\t(statements)\t%s\n' "${CI_COVERAGE_TOTAL:-100.0%}"
 			"CI summary",
 			"Go coverage verification",
 			"100.0%",
-			"CI PASSED: all 13 gates completed; Go statement coverage 100.0%.",
+			"CI PASSED: all 14 gates completed; Go statement coverage 100.0%.",
 		} {
 			if !strings.Contains(outputText, expectedFragment) {
 				testingInstance.Fatalf("complete CI output omitted %q:\n%s", expectedFragment, outputText)
@@ -142,9 +211,7 @@ builtin printf 'total:\t(statements)\t%s\n' "${CI_COVERAGE_TOTAL:-100.0%}"
 		if readError != nil {
 			testingInstance.Fatalf("read complete CI target log: %v", readError)
 		}
-		if string(targetLogBytes) != expectedTargets {
-			testingInstance.Fatalf("unexpected CI target order:\n%s", targetLogBytes)
-		}
+		assertTargetOrder(testingInstance, targetLogBytes)
 	})
 
 	testingInstance.Run("child-failure", func(testingInstance *testing.T) {
@@ -201,9 +268,7 @@ builtin printf 'total:\t(statements)\t%s\n' "${CI_COVERAGE_TOTAL:-100.0%}"
 		if readError != nil {
 			testingInstance.Fatalf("read missing-coverage target log: %v", readError)
 		}
-		if string(targetLogBytes) != expectedTargets {
-			testingInstance.Fatalf("missing-coverage fixture did not return zero from every target:\n%s", targetLogBytes)
-		}
+		assertTargetOrder(testingInstance, targetLogBytes)
 	})
 
 	testingInstance.Run("cleanup-failure", func(testingInstance *testing.T) {
@@ -241,9 +306,7 @@ builtin printf 'total:\t(statements)\t%s\n' "${CI_COVERAGE_TOTAL:-100.0%}"
 		if readError != nil {
 			testingInstance.Fatalf("read cleanup-failure target log: %v", readError)
 		}
-		if string(targetLogBytes) != expectedTargets {
-			testingInstance.Fatalf("cleanup failure did not follow every target:\n%s", targetLogBytes)
-		}
+		assertTargetOrder(testingInstance, targetLogBytes)
 	})
 }
 

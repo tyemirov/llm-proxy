@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"context"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -72,8 +73,7 @@ func TestIntegrationHighLoadQueue(testingInstance *testing.T) {
 	configureProxy(testingInstance, client, endpoints)
 	router, buildRouterError := buildIntegrationRouter(testingInstance, proxy.Configuration{
 		LogLevel:              logLevelDebug,
-		WorkerCount:           singleWorkerCount,
-		QueueSize:             singleQueueSlot,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(singleWorkerCount, singleQueueSlot),
 		RequestTimeoutSeconds: requestTimeoutSeconds,
 		Endpoints:             endpoints,
 	}, newLogger(testingInstance))

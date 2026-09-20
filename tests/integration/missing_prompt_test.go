@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -19,7 +20,7 @@ func TestRequestWithoutPromptReturnsMissingPromptError(testingInstance *testing.
 	endpoints := proxy.NewEndpoints()
 	client, _ := makeHTTPClient(testingInstance, false, endpoints)
 	configureProxy(testingInstance, client, endpoints)
-	router, buildError := buildIntegrationRouter(testingInstance, proxy.Configuration{LogLevel: logLevelDebug, WorkerCount: 1, QueueSize: 8, Endpoints: endpoints}, newLogger(testingInstance))
+	router, buildError := buildIntegrationRouter(testingInstance, proxy.Configuration{LogLevel: logLevelDebug, UpstreamCapacity: testfixtures.UpstreamCapacity(1, 8), Endpoints: endpoints}, newLogger(testingInstance))
 	if buildError != nil {
 		testingInstance.Fatalf("BuildRouter failed: %v", buildError)
 	}

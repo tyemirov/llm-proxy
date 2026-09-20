@@ -3,6 +3,7 @@ package integration_test
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -139,8 +140,7 @@ func TestIntegrationLargeSemanticReviewPostUsesRequestMaxTokens(testingInstance 
 	testingInstance.Cleanup(func() { proxy.HTTPClient = originalClient })
 	router, buildError := buildIntegrationRouter(testingInstance, proxy.Configuration{
 		LogLevel:              logLevelDebug,
-		WorkerCount:           1,
-		QueueSize:             8,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 8),
 		RequestTimeoutSeconds: requestTimeoutSecondsDefault,
 		Endpoints:             endpoints,
 	}, newLogger(testingInstance))
@@ -237,8 +237,7 @@ func TestIntegrationLargeSemanticReviewPostPollsBackgroundOpenAIResponse(testing
 	testingInstance.Cleanup(func() { proxy.HTTPClient = originalClient })
 	router, buildError := buildIntegrationRouter(testingInstance, proxy.Configuration{
 		LogLevel:              logLevelDebug,
-		WorkerCount:           1,
-		QueueSize:             8,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 8),
 		RequestTimeoutSeconds: 3,
 		Endpoints:             endpoints,
 	}, newLogger(testingInstance))
@@ -325,8 +324,7 @@ func TestIntegrationLargeSemanticReviewPostCompletesThroughServerSidePolling(tes
 	testingInstance.Cleanup(func() { proxy.HTTPClient = originalClient })
 	router, buildError := buildIntegrationRouter(testingInstance, proxy.Configuration{
 		LogLevel:              logLevelDebug,
-		WorkerCount:           1,
-		QueueSize:             8,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 8),
 		RequestTimeoutSeconds: 3,
 		Endpoints:             endpoints,
 	}, newLogger(testingInstance))

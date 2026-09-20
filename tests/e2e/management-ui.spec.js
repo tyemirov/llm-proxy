@@ -257,6 +257,7 @@ const mimeTypes = Object.freeze({
 const generatedResourcePageCount = 46;
 const landingModifiedDate = "2026-08-08";
 const seoContentModifiedDate = "2026-07-11";
+const seoCapacityModifiedDate = "2026-09-19";
 const seoCurrentContentModifiedDate = "2026-09-10";
 const connectionDashboardModifiedDate = "2026-09-10";
 const seoResourceIndexModifiedDate = "2026-09-10";
@@ -494,7 +495,7 @@ test("brand icons identify connection providers and available model families", a
   await expect(siliconFlow.locator('img.brand-icon')).toHaveAttribute('src', /\/siliconcloud-color\.svg\?v=/u);
   await siliconFlow.getByRole("button", { name: "Default SiliconFlow", exact: true }).click();
   await expect(dashboard.locator('[data-model] brand-icon[identifier="deepseek-r1"] img')).toHaveAttribute('src', /\/deepseek-color\.svg\?v=/u);
-  await dashboard.getByRole("button", { name: "Dictation", exact: true }).click();
+  await dashboard.getByRole("button", { name: "Transcription", exact: true }).click();
   const senseVoice = dashboard.locator('[data-model="sensevoice-small"]');
   await expect(senseVoice).toBeVisible();
   await expect(senseVoice.locator('brand-icon img')).toHaveCount(0);
@@ -559,9 +560,9 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain('<table class="catalog-table">');
   expect(html).toContain('<strong>14</strong><span>Providers</span>');
   expect(html).toContain('<strong>13</strong><span>Publishers</span>');
-  expect(html).toContain('<strong>27</strong><span>Families</span>');
-  expect(html).toContain('<strong>72</strong><span>Exact models</span>');
-  expect(html).toContain('<strong>75</strong><span>Offerings</span>');
+  expect(html).toContain('<strong>30</strong><span>Families</span>');
+  expect(html).toContain('<strong>79</strong><span>Exact models</span>');
+  expect(html).toContain('<strong>82</strong><span>Offerings</span>');
   expect(html).toContain('data-catalog-sort-header="publisher"');
   expect(html).toContain('data-catalog-sort-header="model"');
   expect(html).toContain('data-catalog-sort-header="capabilities"');
@@ -804,11 +805,12 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await expect(page.locator("#routing-overview routing-tree")).toHaveCount(1);
   await expect(page.locator("#models > routing-tree")).toHaveCount(0);
   await expect(routingTree).toHaveAttribute("data-enhanced", "false");
-  await expect(routingTree.locator("[data-route-family]")).toHaveCount(27);
-  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(75);
-  await expect(routingTree.locator("[data-route-model]")).toHaveCount(72);
+  await expect(routingTree.locator("[data-route-family]")).toHaveCount(30);
+  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(82);
+  await expect(routingTree.locator("[data-route-model]")).toHaveCount(79);
   await expect(routingTree.locator("[data-route-weight-access]")).toHaveCount(2);
-  await expect(routingTree.locator("[data-route-capability]")).toHaveCount(14);
+  await expect(routingTree.locator("[data-route-capability]")).toHaveCount(16);
+  await expect(routingTree.locator('[data-route-capability="image_editing"]')).toHaveCount(1);
   await expect(routingTree.locator('[data-route-weight-access="proprietary"]')).toHaveAttribute("aria-pressed", "true");
   await expect(routingTree.locator('[data-route-weight-access="open_weights"]')).toHaveAttribute("aria-pressed", "false");
   await expect(routingTree.locator('[data-route-capability="text"]')).toHaveAttribute("aria-pressed", "true");
@@ -828,7 +830,7 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await expect(catalog).toHaveAttribute("data-enhanced", "false");
   await expect(catalog.locator("[data-catalog-toolbar]")).toBeHidden();
   await expect(catalog.getByRole("columnheader")).toHaveText(["Publisher", "Model", "Provider offerings and capabilities"]);
-  await expect(catalog.locator("[data-catalog-row]")).toHaveCount(72);
+  await expect(catalog.locator("[data-catalog-row]")).toHaveCount(79);
   await expect(catalog.locator('[data-model="gpt-transcribe"]')).toContainText("Dictation");
   await expect(catalog.locator('[data-model="gpt-4o-mini"]')).toContainText("Image input");
   await expect(catalog.locator('[data-model="claude-fable-5"]')).toContainText("Image input");
@@ -969,11 +971,12 @@ test("visitors can filter and choose a model family, exact model, and provider o
   const webSearchFilter = routingTree.locator('[data-route-capability="web_search"]');
   await expect(routingTree).toHaveAttribute("data-enhanced", "true");
   await expect(routingTree).toHaveAttribute("data-route-lines-rendered", "true");
-  await expect(routingTree.locator("[data-route-family]")).toHaveCount(27);
-  await expect(routingTree.locator("[data-route-model]")).toHaveCount(72);
-  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(75);
+  await expect(routingTree.locator("[data-route-family]")).toHaveCount(30);
+  await expect(routingTree.locator("[data-route-model]")).toHaveCount(79);
+  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(82);
   await expect(routingTree.locator("[data-route-weight-access]")).toHaveCount(2);
-  await expect(routingTree.locator("[data-route-capability]")).toHaveCount(14);
+  await expect(routingTree.locator("[data-route-capability]")).toHaveCount(16);
+  await expect(routingTree.locator('[data-route-capability="image_editing"]')).toHaveCount(1);
   await expect(proprietaryFilter).toHaveAttribute("aria-pressed", "true");
   await expect(openWeightsFilter).toHaveAttribute("aria-pressed", "false");
   await expect(textFilter).toHaveAttribute("aria-pressed", "true");
@@ -1104,6 +1107,7 @@ test("visitors can filter and choose a model family, exact model, and provider o
   await expect(selectedModel).toHaveText("gpt-4.1");
 
   const canonicalCapabilities = [
+    "image_generation",
     "text",
     "dictation",
     "video_generation",
@@ -1222,8 +1226,8 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   const modelHeader = catalog.locator('[data-catalog-sort-header="model"]');
   const capabilitiesHeader = catalog.locator('[data-catalog-sort-header="capabilities"]');
   await expect(catalog).toHaveAttribute("data-enhanced", "true");
-  await expect(rows).toHaveCount(72);
-  await expect(resultCount).toHaveText("72 of 72 models");
+  await expect(rows).toHaveCount(79);
+  await expect(resultCount).toHaveText("79 of 79 models");
   await expect(filterPanel).toBeHidden();
   await expect(searchSubmit).toHaveAttribute("aria-expanded", "false");
 
@@ -1245,56 +1249,56 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   await expect(catalog.locator('[data-catalog-search-text*="synchronous"]')).toHaveCount(0);
   await searchInput.fill("gemini-3.5-flash gemini_interactions image_input audio_input");
   await expect(filterPanel).toBeVisible();
-  await expect(resultCount).toHaveText("1 of 72 model");
+  await expect(resultCount).toHaveText("1 of 79 model");
   await expect(visibleRows).toHaveAttribute("data-model", "gemini-3.5-flash");
 
   await searchInput.fill("muse-spark-1.3 max");
-  await expect(resultCount).toHaveText("1 of 72 model");
+  await expect(resultCount).toHaveText("1 of 79 model");
   await expect(visibleRows).toHaveAttribute("data-model", "muse-spark-1.3");
 
   await searchInput.fill("gpt-6-astra openai_responses max");
-  await expect(resultCount).toHaveText("1 of 72 model");
+  await expect(resultCount).toHaveText("1 of 79 model");
   await expect(visibleRows).toHaveAttribute("data-model", "gpt-6-astra");
 
   await searchInput.fill("gpt-5.5-pro openai_responses xhigh");
-  await expect(resultCount).toHaveText("1 of 72 model");
+  await expect(resultCount).toHaveText("1 of 79 model");
   await expect(visibleRows).toHaveAttribute("data-model", "gpt-5.5-pro");
 
   await searchInput.fill("claude-opus-4-1");
-  await expect(resultCount).toHaveText("0 of 72 models");
+  await expect(resultCount).toHaveText("0 of 79 models");
 
   for (const model of ["minimax-m3", "grok-4.6", "qwen3.8-max", "qwen3.8-max-0902", "qwen3.8-flash", "qwen3.8-2.4t-a95b", "qwen3.8-27b", "glm-5.3", "glm-5.3-flash"]) {
     await searchInput.fill(model);
-    await expect(resultCount).toHaveText("0 of 72 models");
+    await expect(resultCount).toHaveText("0 of 79 models");
   }
 
   for (const model of ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-pro-preview"]) {
     await searchInput.fill(`${model} vertex_generate_content`);
-    await expect(resultCount).toHaveText("1 of 72 model");
+    await expect(resultCount).toHaveText("1 of 79 model");
     await expect(visibleRows).toHaveAttribute("data-model", model);
   }
 
   for (const model of ["claude-fable-5-1", "claude-opus-5"]) {
     await searchInput.fill(`${model} 128000 xhigh`);
-    await expect(resultCount).toHaveText("1 of 72 model");
+    await expect(resultCount).toHaveText("1 of 79 model");
     await expect(visibleRows).toHaveAttribute("data-model", model);
   }
 
   await searchInput.fill("qwen3.7-plus dashscope_responses image_input");
-  await expect(resultCount).toHaveText("1 of 72 model");
+  await expect(resultCount).toHaveText("1 of 79 model");
   await expect(visibleRows).toHaveAttribute("data-model", "qwen3.7-plus");
   await expect(visibleRows).toContainText("Alibaba Cloud");
 
   await searchInput.fill("grok-4.3 xai_responses");
-  await expect(resultCount).toHaveText("2 of 72 models");
+  await expect(resultCount).toHaveText("2 of 79 models");
 
   await searchInput.fill("glm-5.2 131072 token");
-  await expect(resultCount).toHaveText("1 of 72 model");
+  await expect(resultCount).toHaveText("1 of 79 model");
   await expect(visibleRows).toHaveAttribute("data-model", "glm-5.2");
 
   await catalog.getByRole("button", { name: "Reset" }).click();
   await searchInput.fill("dictation");
-  await expect(resultCount).toHaveText("6 of 72 models");
+  await expect(resultCount).toHaveText("6 of 79 models");
   for (const visibleRow of await visibleRows.all()) {
     await expect(visibleRow).toHaveAttribute("data-capabilities", "dictation");
   }
@@ -1302,28 +1306,28 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   await catalog.getByRole("button", { name: "Reset" }).click();
   await catalog.getByRole("checkbox", { name: "Image input" }).check();
   await catalog.getByRole("checkbox", { name: "Audio message input" }).check();
-  await expect(resultCount).toHaveText("7 of 72 models");
+  await expect(resultCount).toHaveText("7 of 79 models");
   await expect(visibleRows).toHaveCount(7);
 
   await searchSubmit.click();
   await expect(filterPanel).toBeHidden();
-  await expect(resultCount).toHaveText("7 of 72 models");
+  await expect(resultCount).toHaveText("7 of 79 models");
   await searchSubmit.click();
   await expect(filterPanel).toBeVisible();
   await expect(catalog.getByRole("checkbox", { name: "Image input" })).toBeChecked();
   await expect(catalog.getByRole("checkbox", { name: "Audio message input" })).toBeChecked();
 
   await catalog.getByRole("checkbox", { name: "Dictation" }).check();
-  await expect(resultCount).toHaveText("0 of 72 models");
+  await expect(resultCount).toHaveText("0 of 79 models");
   await expect(catalog.locator("[data-catalog-empty]")).toBeVisible();
 
   await catalog.getByRole("button", { name: "Reset" }).click();
-  await expect(resultCount).toHaveText("72 of 72 models");
+  await expect(resultCount).toHaveText("79 of 79 models");
   await searchInput.press("Escape");
   await catalog.getByRole("button", { name: "Filter by Dictation" }).first().click();
   await expect(filterPanel).toBeVisible();
   await expect(catalog.getByRole("checkbox", { name: "Dictation" })).toBeChecked();
-  await expect(resultCount).toHaveText("6 of 72 models");
+  await expect(resultCount).toHaveText("6 of 79 models");
 
   await catalog.getByRole("button", { name: "Reset" }).click();
   await expect(publisherHeader).toHaveAttribute("aria-sort", "ascending");
@@ -1920,6 +1924,7 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
     new Set([
       "<lastmod>2026-09-03</lastmod>",
       `<lastmod>${seoContentModifiedDate}</lastmod>`,
+      `<lastmod>${seoCapacityModifiedDate}</lastmod>`,
       `<lastmod>${seoCurrentContentModifiedDate}</lastmod>`,
       `<lastmod>${seoResourceIndexModifiedDate}</lastmod>`,
       `<lastmod>${seoUsageContentModifiedDate}</lastmod>`,
@@ -3061,6 +3066,28 @@ test("connection verification requires submission and retains fields after rejec
 });
 
 
+test("image generation discovery reuses the OpenAI connection and catalog fields", async ({ page }) => {
+  const profile = managementProfile();
+  const provider = profile.providers.find((entry) => entry.id === "openai");
+  provider.capabilities.push("image_generation", "image_editing");
+  provider.model_families.push({ id: "gpt-image", label: "GPT Image" });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { profile, savedProviderIDs: ["openai"] });
+  await page.goto(baseURL + applicationPath);
+  const dashboard = page.locator("connection-dashboard");
+  await dashboard.getByRole("button", { name: "Default OpenAI", exact: true }).click();
+  await dashboard.getByRole("button", { name: "Image", exact: true }).click();
+  await dashboard.locator('[data-model="gpt-image-2"]').click();
+  await expect(dashboard.locator("[data-media-details]")).toContainText("Image generation");
+  await expect(dashboard.locator("[data-media-details]")).toContainText("Image editing");
+  await expect(dashboard.locator("[data-media-details]")).toContainText("Available through this tenant’s API key.");
+  await dashboard.getByRole("button", { name: "Create connection", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Create connection" });
+  await dialog.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
+  await expect(dialog.locator("[data-credential-fields] input")).toHaveCount(1);
+  await expect(dialog.getByLabel("OpenAI API key", { exact: true })).toHaveAttribute("type", "password");
+});
+
 test("connection setup uses each provider's required catalog fields", async ({ page }) => {
   const profile=managementProfile();
   await installAssetRoutes(page);
@@ -3091,9 +3118,19 @@ test("connection setup uses each provider's required catalog fields", async ({ p
 
 test("model previews require an explicit save and preserve the other capability default", async ({ page }) => {
   const mutations = [];
+  const profile = managementProfile();
+  profile.providers.push({
+    id: "dictator", label: "Dictator", api_service_label: "Dictator API", key_acquisition_url: "https://dictator.example/setup",
+    aliases: [], configured: true, capabilities: ["speech_generation"], model_families: [{id:"silero",label:"Silero"}],
+    fields: [{id:"grpc_address",label:"gRPC address",kind:"setting",type:"grpc_target",required:true,default:"",secret:false,validation:{},configured:true,value:"localhost:50051"}],
+    text_model: "", system_prompt: "", text_default_model: "", text_models: [], supports_dictation: false, transcription_models: [],
+    supports_speech: true, speech_default_model: "silero-ru", speech_models: ["silero-ru"],
+  });
+  profile.tenant.defaults.speech_provider = "dictator";
+  profile.tenant.defaults.speech_model = "silero-ru";
   page.on("request", request => { if(request.url().endsWith("/defaults"))mutations.push(request.postDataJSON()); });
   await installAssetRoutes(page);
-  await installManagementRoutes(page,{savedProviderIDs:["openai","deepseek","xai"]});
+  await installManagementRoutes(page,{profile,savedProviderIDs:["openai","deepseek","xai","dictator"]});
   await page.goto(baseURL + applicationPath);
   const dashboard = page.locator("connection-dashboard");
   await dashboard.getByRole("button",{name:"Default DeepSeek",exact:true}).click();
@@ -3104,14 +3141,19 @@ test("model previews require an explicit save and preserve the other capability 
   await expect(dashboard.locator('[data-model="deepseek-v4-flash"]')).not.toContainText("Default model");
   await dashboard.getByRole("button",{name:"Save text default"}).click();
   await expect(dashboard.locator('[data-model="deepseek-v4-flash"]')).toContainText("Default model");
-  expect(mutations[0]).toMatchObject({provider:"deepseek",model:"deepseek-v4-flash",dictation_provider:"openai",dictation_model:"gpt-transcribe",system_prompt:"Use tenant guidance."});
+  expect(mutations[0]).toMatchObject({provider:"deepseek",model:"deepseek-v4-flash",transcription_provider:"openai",transcription_model:"gpt-transcribe",system_prompt:"Use tenant guidance."});
   await dashboard.getByRole("button",{name:"Default xAI",exact:true}).click();
-  await dashboard.getByRole("button",{name:"Dictation",exact:true}).click();
+  await dashboard.getByRole("button",{name:"Transcription",exact:true}).click();
   await dashboard.locator('[data-model="xai-stt"]').click();
   expect(mutations).toHaveLength(1);
-  await dashboard.getByRole("button",{name:"Save dictation default"}).click();
+  await dashboard.getByRole("button",{name:"Save transcription default"}).click();
   await expect(dashboard.locator('[data-model="xai-stt"]')).toContainText("Default model");
-  expect(mutations[1]).toMatchObject({provider:"deepseek",model:"deepseek-v4-flash",dictation_provider:"xai",dictation_model:"xai-stt",system_prompt:"Use tenant guidance."});
+  expect(mutations[1]).toMatchObject({provider:"deepseek",model:"deepseek-v4-flash",transcription_provider:"xai",transcription_model:"xai-stt",system_prompt:"Use tenant guidance."});
+  for (const mutation of mutations) {
+    expect(mutation).toMatchObject({speech_provider:"dictator",speech_model:"silero-ru"});
+    expect(mutation).not.toHaveProperty("dictation_provider");
+    expect(mutation).not.toHaveProperty("dictation_model");
+  }
   await page.reload();
   await dashboard.getByRole("button",{name:"Default DeepSeek",exact:true}).click();
   await expect(dashboard.locator('[data-model="deepseek-v4-flash"]')).toContainText("Default model");
@@ -3125,15 +3167,15 @@ test("Gemini dictation default preserves the text default after reload", async (
   await page.goto(baseURL + applicationPath);
   const dashboard=page.locator("connection-dashboard");
   await dashboard.getByRole("button",{name:"Default Gemini",exact:true}).click();
-  await dashboard.getByRole("button",{name:"Dictation",exact:true}).click();
-  const model=profile.providers.find(provider=>provider.id==="gemini").dictation_models[0];
+  await dashboard.getByRole("button",{name:"Transcription",exact:true}).click();
+  const model=profile.providers.find(provider=>provider.id==="gemini").transcription_models[0];
   await dashboard.locator(`[data-model="${model}"]`).click();
-  await dashboard.getByRole("button",{name:"Save dictation default"}).click();
+  await dashboard.getByRole("button",{name:"Save transcription default"}).click();
   await expect(dashboard.locator(`[data-model="${model}"]`)).toContainText("Default model");
-  expect(profile.tenant.defaults).toMatchObject({provider:"openai",model:"gpt-4.1",dictation_provider:"gemini",dictation_model:model});
+  expect(profile.tenant.defaults).toMatchObject({provider:"openai",model:"gpt-4.1",transcription_provider:"gemini",transcription_model:model});
   await page.reload();
   await dashboard.getByRole("button",{name:"Default Gemini",exact:true}).click();
-  await dashboard.getByRole("button",{name:"Dictation",exact:true}).click();
+  await dashboard.getByRole("button",{name:"Transcription",exact:true}).click();
   await expect(dashboard.locator(`[data-model="${model}"]`)).toContainText("Default model");
 });
 
@@ -3152,9 +3194,9 @@ test("models require a connection and unavailable dictation has no save action",
   await page.goto(baseURL + applicationPath);
   const dashboard=page.locator("connection-dashboard");
   await expect(dashboard.locator("[data-connection]")).toHaveCount(1);
-  await dashboard.getByRole("button",{name:"Dictation",exact:true}).click();
+  await dashboard.getByRole("button",{name:"Transcription",exact:true}).click();
   await expect(dashboard).toContainText("No models for this capability.");
-  await expect(dashboard.getByRole("button",{name:"Save dictation default"})).toHaveCount(0);
+  await expect(dashboard.getByRole("button",{name:"Save transcription default"})).toHaveCount(0);
   await dashboard.locator('[data-tenant="tenant_2"]').click();
   await dashboard.locator("[data-connection]").click();
   await expect(dashboard).toContainText("Connect to choose models.");
@@ -3307,6 +3349,19 @@ for (const [name, corrupt] of [
     await expect(page.locator("connection-dashboard").getByRole("alert")).toHaveText("App data integrity error");
     await expect(page.locator("connection-dashboard [data-connection]")).toHaveCount(0);
     await expect(page.locator("connection-dashboard")).not.toContainText("secret-must-never-render");
+  });
+}
+
+for (const domains of [null, [], ["media"], ["text", "text"]]) {
+  test(`dashboard rejects invalid offering domains ${JSON.stringify(domains)}`, async ({page}) => {
+    await installAssetRoutes(page);
+    await installManagementRoutes(page);
+    const catalog=structuredClone(publicCapabilities);
+    catalog.offerings[0].domains=domains;
+    await page.route(`${baseURL}${publicCapabilitiesPath}`, route=>route.fulfill({json:catalog}));
+    await page.goto(baseURL+applicationPath);
+    await expect(page.locator('connection-dashboard').getByRole('alert')).toBeVisible();
+    await expect(page.locator('connection-dashboard [data-model]')).toHaveCount(0);
   });
 }
 
@@ -3664,6 +3719,7 @@ test("automatic refresh errors keep the header notice geometry", async ({ page }
   await installManagementRoutes(page);
 
   for (const viewport of settingsLayerViewports) {
+    await installUsageResponse(page, httpOK, managementUsage("30d"));
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.goto(`${baseURL}${applicationPath}`);
 
@@ -3747,6 +3803,7 @@ test("the shared footer project catalog opens as a keyboard-dismissible drop-up"
 test("header brand uses the local logo before its title without crowding the notice or avatar", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page);
+  await installUsageResponse(page, httpInternalServerError);
 
   for (const viewport of settingsLayerViewports) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -3768,6 +3825,7 @@ test("header brand uses the local logo before its title without crowding the not
     await brand.focus();
     await expect(brand).toBeFocused();
     await expect(page.getByRole("button", { name: "Refresh", exact: true })).toHaveCount(0);
+    await expect(page.locator("#llm-proxy-header notification-region .notice")).toHaveText("Request failed");
     await expectHeaderBrandGeometry(page);
 
   }
@@ -4505,7 +4563,7 @@ async function installManagementRoutes(page, options = {}) {
       text_default_model: "claude-sonnet-5",
       text_models: [{ id: "claude-sonnet-5" }],
       supports_dictation: false,
-      dictation_models: [],
+      transcription_models: [],
     });
     profile.tenant.defaults.provider = "anthropic";
   }
@@ -4604,12 +4662,12 @@ function reconcileManagementProfileRoutingDefaults(profile) {
   }
   const keyedDictationProviders = keyedProviders.filter((provider) => provider.supports_dictation);
   const currentDictationProvider = keyedDictationProviders.find(
-    (provider) => provider.id === profile.tenant.defaults.dictation_provider,
+    (provider) => provider.id === profile.tenant.defaults.transcription_provider,
   );
   if (!currentDictationProvider) {
     const nextDictationProvider = keyedDictationProviders[0];
-    profile.tenant.defaults.dictation_provider = nextDictationProvider ? nextDictationProvider.id : "";
-    profile.tenant.defaults.dictation_model = nextDictationProvider ? nextDictationProvider.dictation_default_model : "";
+    profile.tenant.defaults.transcription_provider = nextDictationProvider ? nextDictationProvider.id : "";
+    profile.tenant.defaults.transcription_model = nextDictationProvider ? nextDictationProvider.transcription_default_model : "";
   }
 }
 
@@ -4732,6 +4790,9 @@ function dashScopeBaseURLField() {
  * @returns {string}
  */
 function fixtureProviderSettingValue(providerID, field) {
+  if (providerID === "dictator" && field.id === "grpc_address") {
+    return "localhost:50051";
+  }
   if (providerID === "dashscope" && field.id === "base_url") {
     return "https://fixture.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1";
   }
@@ -4789,8 +4850,10 @@ function managementProfile(isAdmin = false, hasSecret = true) {
       defaults: {
         provider: "openai",
         model: "gpt-4.1",
-        dictation_provider: "openai",
-        dictation_model: "gpt-transcribe",
+        transcription_provider: "openai",
+        transcription_model: "gpt-transcribe",
+        speech_provider: "",
+        speech_model: "",
         system_prompt: "",
         reasoning_effort: "",
       },
@@ -4813,7 +4876,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
           })),
         ],
         supports_dictation: false,
-        dictation_models: [],
+        transcription_models: [],
       },
       {
         id: "openai",
@@ -4871,8 +4934,8 @@ function managementProfile(isAdmin = false, hasSecret = true) {
           },
         ],
         supports_dictation: true,
-        dictation_default_model: "gpt-transcribe",
-        dictation_models: ["gpt-transcribe"],
+        transcription_default_model: "gpt-transcribe",
+        transcription_models: ["gpt-transcribe"],
       },
       {
         id: "deepseek",
@@ -4888,7 +4951,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
           { id: "deepseek-v4-pro", reasoning_effort: { adapter: "chat_completions_thinking", efforts: ["none", "low", "high", "max"] } },
         ],
         supports_dictation: false,
-        dictation_models: [],
+        transcription_models: [],
       },
       {
         id: "gemini",
@@ -4905,8 +4968,8 @@ function managementProfile(isAdmin = false, hasSecret = true) {
  { id: "gemini-3.7-flash", reasoning_effort: { adapter: "gemini_interactions", efforts: ["low", "medium", "high"] } },
  ],
         supports_dictation: true,
-        dictation_default_model: "gemini-3.5-transcribe",
-        dictation_models: ["gemini-3.5-transcribe"],
+        transcription_default_model: "gemini-3.5-transcribe",
+        transcription_models: ["gemini-3.5-transcribe"],
       },
       {
         id: "dashscope",
@@ -4924,7 +4987,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
           { id: "qwen3.7-plus" },
         ],
         supports_dictation: false,
-        dictation_models: [],
+        transcription_models: [],
       },
       {
         id: "meta",
@@ -4937,7 +5000,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         text_default_model: "muse-spark-1.1",
         text_models: [{ id: "muse-spark-1.1" }, { id: "muse-spark-1.2" }, { id: "muse-spark-1.3", reasoning_effort: { adapter: "openai_chat_completions", efforts: ["minimal", "low", "medium", "high", "xhigh", "max"] } }],
         supports_dictation: false,
-        dictation_models: [],
+        transcription_models: [],
       },
       {
         id: "minimax",
@@ -4958,7 +5021,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
           { id: "minimax-m2.7-highspeed" },
         ],
         supports_dictation: false,
-        dictation_models: [],
+        transcription_models: [],
       },
       {
         id: "moonshot",
@@ -4982,7 +5045,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
           },
         ],
         supports_dictation: false,
-        dictation_models: [],
+        transcription_models: [],
       },
       {
         id: "xai",
@@ -4995,8 +5058,8 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         text_default_model: "grok-4.3",
         text_models: [{ id: "grok-4.3" }],
         supports_dictation: true,
-        dictation_default_model: "xai-stt",
-        dictation_models: ["xai-stt"],
+        transcription_default_model: "xai-stt",
+        transcription_models: ["xai-stt"],
       },
       {
         id: "zai",
@@ -5009,8 +5072,8 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         text_default_model: "glm-5.1",
         text_models: [{ id: "glm-5.1" }, { id: "glm-5.2" }],
         supports_dictation: true,
-        dictation_default_model: "glm-asr-2512",
-        dictation_models: ["glm-asr-2512"],
+        transcription_default_model: "glm-asr-2512",
+        transcription_models: ["glm-asr-2512"],
       },
     ],
     proxy: {
@@ -5029,7 +5092,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
     }],
     text_model: "ernie-5.0", system_prompt: "", text_default_model: "ernie-5.0",
     text_models: ["ernie-5.0", "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v3.2"].map((id) => ({ id })),
-    supports_dictation: false, dictation_models: [],
+    supports_dictation: false, transcription_models: [],
   });
   profile.providers.push({
     id: "siliconflow",
@@ -5042,8 +5105,8 @@ function managementProfile(isAdmin = false, hasSecret = true) {
     text_default_model: "deepseek-reasoner",
     text_models: [{ id: "deepseek-reasoner" }],
     supports_dictation: true,
-    dictation_default_model: "sensevoice-small",
-    dictation_models: ["sensevoice-small"],
+    transcription_default_model: "sensevoice-small",
+    transcription_models: ["sensevoice-small"],
   });
   /** @type {Record<string, {api_service_label: string, model_families: Array<{id: string, label: string}>}>} */
   const providerIdentities = {
@@ -5153,6 +5216,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
     const identity = providerIdentities[provider.id];
     if (!identity) throw new Error(`management_fixture_provider_identity_missing:${provider.id}`);
     Object.assign(provider, identity);
+    Object.assign(provider, {supports_speech: false, speech_models: []});
     provider.key_acquisition_url = acquisitionURLs[provider.id];
     provider.capabilities = ["text", ...(mediaCapabilities[provider.id] || []), ...(provider.supports_dictation ? ["dictation"] : []), ...(provider.id === "xai" ? ["video_generation"] : [])];
   }
