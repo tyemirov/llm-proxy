@@ -27,6 +27,28 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B236] (P1) Transfer retained capability defaults before startup validation.
+  Evidence: Local Compose exits with `missing_default_column=default_transcription_provider` when the database has the previous dictation columns.
+  Goal: Start the current application with retained tenant data after the capability schema change.
+  Requirements: Use a bounded GORM transfer in the startup transaction before current schema validation.
+  Requirements: Keep saved transcription routes, text defaults, credentials, assignments, access keys, timestamps, and usage records.
+  Requirements: Initialize speech defaults as empty and remove the previous dictation columns.
+  Requirements: Reject incomplete or mixed schemas without data changes. Keep the current schema versionless.
+  Validation: Run public startup, HTTP defaults, restart, and transaction rollback tests for retained databases.
+  Validation: Verify a disposable copy of the local database and run `make ci`.
+  Scope: Production deployment and production data changes require separate authorization.
+  Progress: The initial integration tests reproduced `missing_default_column=default_transcription_provider` and `obsolete_default_column=default_dictation_provider`.
+  Progress: Focused capability tests pass after the bounded transfer. Invalid data and injected failures leave the original schema and records unchanged.
+  Progress: A Linux binary passed HTTP health on first startup and restart with a disposable copy of the local Compose database.
+  Progress: Initial CI passed its assertions but found one uncovered obsolete-column rejection after the new preflight made that check redundant.
+  Progress: The duplicate check was removed. Public rejection tests still pass.
+  Files: `internal/proxy/management_capability_migration.go`, `internal/proxy/management_store.go`, `internal/proxy/account_connections_store.go`, `internal/proxy/management_capability_migration_test.go`, `docs/tenant-connections.md`, `docs/managed-schema-transition.md`.
+  Event contracts: No changes.
+  Resolution: Startup transfers the exact previous capability columns once through GORM, then validates the current schema before commit.
+  Validation: Final `make ci` passed all 14 gates in 352 seconds with 100.0 percent Go statement coverage.
+  Validation: Both starts of the final Linux binary passed HTTP health with the local database copy. The original database remained unchanged.
+  Validation: Changed prose has no mechanical findings. Governor reports existing drift in three unchanged policy files.
+
 - [x] [B234] (P2) Reject media-only models at dictation endpoints.
   Evidence: A saved `dictator/whisper-base` default causes HTTP 502 from `/dictate` without a gRPC submission.
   Requirements: Reject offerings without the `dictation` operation before provider execution.
