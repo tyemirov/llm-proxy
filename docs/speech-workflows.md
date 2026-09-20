@@ -59,6 +59,10 @@ Use `silero-ru` with a Silero preset voice.
 The service rejects a voice from an incompatible synthesis engine before upstream submission.
 The selected Whisper model sets the model size for transcription, diarization, subtitles, and voice extraction.
 For example, `whisper-large-v3` selects `large-v3` without a separate size control.
+Dictator transcription uses `audio.transcribe` through the media API.
+The transcription domain includes media operations and the separate `dictation` operation.
+Only offerings with `dictation` can use `/dictate` or `/v1/audio/transcriptions`.
+These endpoints reject a Dictator selection with HTTP 400 before provider execution, including a saved transcription default.
 Download each output separately. Its MIME type and ordinal identify its result role.
 
 ## MCP
