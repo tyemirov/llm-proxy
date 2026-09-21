@@ -34,6 +34,8 @@ const (
 	MediaCapabilitySubtitlesCreate = "subtitles.create"
 	// MediaCapabilityAudioSpeechGenerate identifies durable speech synthesis.
 	MediaCapabilityAudioSpeechGenerate = "audio.speech.generate"
+	// MediaCapabilityAudioSpeechConvert identifies durable voice conversion.
+	MediaCapabilityAudioSpeechConvert = "audio.speech.convert"
 	// MediaCapabilityAudioVoiceExtract identifies durable voice extraction.
 	MediaCapabilityAudioVoiceExtract = "audio.voice.extract"
 	// MediaOperationStateQueued identifies accepted work awaiting a worker.

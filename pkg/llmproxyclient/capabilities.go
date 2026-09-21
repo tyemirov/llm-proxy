@@ -66,6 +66,8 @@ const (
 	publicWireContractXAIResponses           = "xai_responses"
 	publicWireContractXAIVideosGenerations   = "xai_videos_generations"
 	publicWireContractDictatorSpeechV1       = "dictator_speech_v1"
+	publicWireContractElevenLabsSpeech       = "elevenlabs_speech"
+	publicWireContractElevenLabsConversion   = "elevenlabs_conversion"
 
 	publicExecutionLifecyclePollable     = "pollable_resource"
 	publicExecutionLifecycleSynchronous  = "synchronous_completion"
@@ -102,7 +104,7 @@ var publicCapabilityValues = map[string]struct{}{
 	publicCapabilityAudioInput: {}, "dictation": {}, publicCapabilityImageInput: {}, "reasoning": {},
 	"text": {}, "image_generation": {}, "image_editing": {}, "video_generation": {}, "web_search": {}, "caller_tools": {},
 	"audio_transcription": {}, "audio_diarization": {}, "audio_alignment": {},
-	"subtitle_creation": {}, "speech_generation": {}, "voice_extraction": {},
+	"subtitle_creation": {}, "speech_generation": {}, "speech_conversion": {}, "voice_extraction": {},
 }
 
 type publicOfferingRoute struct {
@@ -111,6 +113,8 @@ type publicOfferingRoute struct {
 }
 
 var publicOfferingMediaTransports = map[publicOfferingRoute]string{
+	{wireContract: publicWireContractElevenLabsSpeech, executionLifecycle: publicExecutionLifecycleSynchronous}:       "",
+	{wireContract: publicWireContractElevenLabsConversion, executionLifecycle: publicExecutionLifecycleSynchronous}:   "",
 	{wireContract: publicWireContractFALQueueImages, executionLifecycle: publicExecutionLifecycleAsynchronous}:        "",
 	{wireContract: publicWireContractOpenAIImages, executionLifecycle: publicExecutionLifecycleSynchronous}:           "",
 	{wireContract: publicWireContractVertexGenerateContent, executionLifecycle: publicExecutionLifecycleSynchronous}:  publicMediaTransportInline,
