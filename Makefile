@@ -103,7 +103,7 @@ test-upstream-admission:
 	$(GO) test ./tests/integration ./internal/proxy ./cmd/cli -run '$(if $(ADMISSION_TEST_PATTERN),$(ADMISSION_TEST_PATTERN),Test.*(UpstreamAdmission|UpstreamCapacity|UpstreamRateLimit|RateLimit|HighLoadQueue|BackgroundPollSleep|LimitedHTTP))' -count=1
 
 test-upstream-admission-race:
-	$(GO) test -race ./tests/integration ./internal/proxy -run '$(if $(ADMISSION_TEST_PATTERN),$(ADMISSION_TEST_PATTERN),Test.*(UpstreamAdmission|UpstreamCapacity|UpstreamRateLimit|RateLimit|HighLoadQueue|BackgroundPollSleep|LimitedHTTP))' -count=1
+	$(GO) test -race ./tests/integration ./internal/proxy -run '$(if $(ADMISSION_TEST_PATTERN),$(ADMISSION_TEST_PATTERN),Test.*(UpstreamAdmission|UpstreamCapacity|UpstreamRateLimit|RateLimit|HighLoadQueue|BackgroundPollSleep|LimitedHTTP))' -count=1 $(ADMISSION_TEST_ARGS)
 
 .PHONY: test-operational-live-contracts
 test-operational-live-contracts:
