@@ -1,8 +1,6 @@
 package integration_test
 
 import (
-	"context"
-	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,23 +12,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 const (
-	// requestTimeoutSeconds is the proxy request timeout used for queue saturation.
-	requestTimeoutSeconds = 1
 	// singleWorkerCount specifies the number of workers used in this test.
 	singleWorkerCount = 1
 	// singleQueueSlot specifies the number of queued requests used in this test.
 	singleQueueSlot = 1
-	// queueSaturationRequestCount is the number of concurrent requests needed to fill one worker, one queue slot, and one rejected request.
-	queueSaturationRequestCount = singleWorkerCount + singleQueueSlot + 1
 	// queueAssertionTimeout bounds synchronization failures without driving the tested behavior.
 	queueAssertionTimeout = 2 * time.Second
-	// queueGatewayTimeout bounds queue-full requests through the inbound request context.
-	queueGatewayTimeout = 25 * time.Millisecond
-	// queueFullCountFormat reports the number of queue-full responses.
-	queueFullCountFormat = "queue_full=%d"
 )
 
 // makeBlockingHTTPClient returns an HTTP client that keeps the first upstream response pending until released.
@@ -63,92 +57,95 @@ func makeBlockingHTTPClient(testingInstance *testing.T, endpoints *proxy.Endpoin
 	})}
 }
 
-// TestIntegrationHighLoadQueue verifies queue saturation handling.
+// TestIntegrationHighLoadQueue verifies queue saturation through real HTTP requests.
 func TestIntegrationHighLoadQueue(testingInstance *testing.T) {
 	gin.SetMode(gin.TestMode)
 	endpoints := proxy.NewEndpoints()
 	upstreamRequestStarted := make(chan struct{})
+	queuedRequestObserved := make(chan struct{})
 	releaseResponses := make(chan struct{})
+	var releaseOnce, queuedOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(releaseResponses) }) }
+	defer release()
+	observedCore, observedLogs := observer.New(zap.InfoLevel)
+	logger := zap.New(observedCore, zap.Hooks(func(entry zapcore.Entry) error {
+		if entry.Message == "upstream HTTP admission" && observedLogs.FilterMessage(entry.Message).FilterField(zap.String("decision", "capacity_wait")).Len() > 0 {
+			queuedOnce.Do(func() { close(queuedRequestObserved) })
+		}
+		return nil
+	})).Sugar()
 	client := makeBlockingHTTPClient(testingInstance, endpoints, upstreamRequestStarted, releaseResponses)
 	configureProxy(testingInstance, client, endpoints)
 	router, buildRouterError := buildIntegrationRouter(testingInstance, proxy.Configuration{
-		LogLevel:              logLevelDebug,
-		UpstreamCapacity:      testfixtures.UpstreamCapacity(singleWorkerCount, singleQueueSlot),
-		RequestTimeoutSeconds: requestTimeoutSeconds,
-		Endpoints:             endpoints,
-	}, newLogger(testingInstance))
+		LogLevel:         logLevelDebug,
+		UpstreamCapacity: testfixtures.UpstreamCapacity(singleWorkerCount, singleQueueSlot),
+		Endpoints:        endpoints,
+	}, logger)
 	if buildRouterError != nil {
 		testingInstance.Fatalf(buildRouterFailedFormat, buildRouterError)
 	}
+	observedLogs.TakeAll()
 	server := httptest.NewServer(router)
 	testingInstance.Cleanup(server.Close)
-	queueServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
-		requestContext, cancelRequest := context.WithTimeout(httpRequest.Context(), queueGatewayTimeout)
-		defer cancelRequest()
-		router.ServeHTTP(responseWriter, httpRequest.WithContext(requestContext))
-	}))
-	testingInstance.Cleanup(queueServer.Close)
+	testingInstance.Cleanup(release)
 	requestURL, _ := url.Parse(server.URL)
 	queryValues := requestURL.Query()
 	queryValues.Set(promptQueryParameter, promptValue)
 	queryValues.Set(keyQueryParameter, serviceSecretValue)
 	requestURL.RawQuery = queryValues.Encode()
-	queueRequestURL, _ := url.Parse(queueServer.URL)
-	queueQueryValues := queueRequestURL.Query()
-	queueQueryValues.Set(promptQueryParameter, promptValue)
-	queueQueryValues.Set(keyQueryParameter, serviceSecretValue)
-	queueRequestURL.RawQuery = queueQueryValues.Encode()
 
-	statuses := make(chan int, queueSaturationRequestCount)
-	var waitGroup sync.WaitGroup
-	waitGroup.Add(queueSaturationRequestCount)
-	go func() {
-		defer waitGroup.Done()
-		statuses <- performQueueRequest(requestURL.String())
-	}()
-	<-upstreamRequestStarted
-	for requestIndex := 1; requestIndex < queueSaturationRequestCount; requestIndex++ {
-		go func() {
-			defer waitGroup.Done()
-			statuses <- performQueueRequest(queueRequestURL.String())
-		}()
+	type result struct {
+		status int
+		body   string
+		err    error
 	}
-	queueFullCount := waitForQueueFullResponse(testingInstance, statuses)
-	close(releaseResponses)
-	waitGroup.Wait()
-	close(statuses)
-
-	for status := range statuses {
-		if status == http.StatusServiceUnavailable {
-			queueFullCount++
+	request := func(results chan<- result) {
+		response, err := server.Client().Get(requestURL.String())
+		if err != nil {
+			results <- result{err: err}
+			return
+		}
+		defer response.Body.Close()
+		body, err := io.ReadAll(response.Body)
+		results <- result{status: response.StatusCode, body: string(body), err: err}
+	}
+	awaitSignal := func(signal <-chan struct{}, description string) {
+		testingInstance.Helper()
+		select {
+		case <-signal:
+		case <-time.After(queueAssertionTimeout):
+			testingInstance.Fatalf("did not observe %s", description)
 		}
 	}
-	if queueFullCount != 1 {
-		testingInstance.Fatalf(queueFullCountFormat, queueFullCount)
-	}
-}
-
-func performQueueRequest(requestURL string) int {
-	httpResponse, requestError := http.Get(requestURL)
-	if requestError != nil {
-		return 0
-	}
-	defer httpResponse.Body.Close()
-	return httpResponse.StatusCode
-}
-
-func waitForQueueFullResponse(testingInstance *testing.T, statuses <-chan int) int {
-	testingInstance.Helper()
-	for receivedStatusCount := 0; receivedStatusCount < queueSaturationRequestCount-1; receivedStatusCount++ {
+	awaitResult := func(results <-chan result, status int) {
+		testingInstance.Helper()
 		select {
-		case status := <-statuses:
-			if status == http.StatusServiceUnavailable {
-				return 1
+		case response := <-results:
+			if response.err != nil || response.status != status {
+				testingInstance.Fatalf("status=%d want=%d body=%s error=%v", response.status, status, response.body, response.err)
+			}
+			if status == http.StatusOK && response.body != integrationOKBody {
+				testingInstance.Fatalf("admitted response=%q want=%q", response.body, integrationOKBody)
 			}
 		case <-time.After(queueAssertionTimeout):
-			testingInstance.Fatal("queue-full response was not observed")
+			testingInstance.Fatalf("did not receive HTTP %d", status)
 		}
 	}
-	testingInstance.Fatal("queue-full response was not observed")
-	return 0
+
+	admitted := make(chan result, singleWorkerCount+singleQueueSlot)
+	go request(admitted)
+	awaitSignal(upstreamRequestStarted, "active upstream request")
+	go request(admitted)
+	awaitSignal(queuedRequestObserved, "queued request")
+
+	excess := make(chan result, 1)
+	go request(excess)
+	awaitResult(excess, http.StatusServiceUnavailable)
+	release()
+	for index := 0; index < singleWorkerCount+singleQueueSlot; index++ {
+		awaitResult(admitted, http.StatusOK)
+	}
+	if rejected := observedLogs.FilterMessage("upstream HTTP admission").FilterField(zap.String("decision", "rejected")).Len(); rejected != 1 {
+		testingInstance.Fatalf("rejected admissions=%d want=1", rejected)
+	}
 }
