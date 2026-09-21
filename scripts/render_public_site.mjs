@@ -25,6 +25,7 @@ const capabilityDefinitions = Object.freeze([
   { identifier: "pronunciation_dictionary_creation", label: "Pronunciation dictionary", routeLabel: "Dictionary", className: "capability-badge--info" },
   { identifier: "audio_alignment", label: "Audio alignment", routeLabel: "Alignment", className: "capability-badge--info" },
   { identifier: "subtitle_creation", label: "Subtitle creation", routeLabel: "Subtitles", className: "capability-badge--info" },
+  { identifier: "speech_conversion", label: "Voice conversion", routeLabel: "Voice conversion", className: "capability-badge--info" },
   { identifier: "speech_generation", label: "Speech generation", routeLabel: "Speech", className: "capability-badge--info" },
   { identifier: "voice_extraction", label: "Voice extraction", routeLabel: "Voice", className: "capability-badge--info" },
   { identifier: "image_input", label: "Image input", routeLabel: "Image input", className: "capability-badge--info" },
@@ -38,7 +39,7 @@ const capabilityDefinitionsByIdentifier = new Map(
 );
 const modelOperationIdentifiers = new Set([
   "text", "dictation", "image_generation", "image_editing", "video_generation", "audio_transcription", "audio_diarization",
-  "pronunciation_dictionary_creation", "audio_alignment", "subtitle_creation", "speech_generation", "voice_extraction",
+  "pronunciation_dictionary_creation", "audio_alignment", "subtitle_creation", "speech_generation", "speech_conversion", "voice_extraction",
 ]);
 const providerCredentialKinds = new Set(["api_key", "deployment"]);
 const providerResourceKinds = new Set(Object.keys(PROVIDER_RESOURCE_LABELS));
