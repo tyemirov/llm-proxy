@@ -7,8 +7,8 @@ import (
 )
 
 func TestCatalogServiceResolvesExactRoutesAndPrices(t *testing.T) {
-	minimum := 1
-	maximum := 15
+	minimum := 1.0
+	maximum := 15.0
 	reasoningOffering := internalTestOffering(ProviderNameOpenAI, ModelNameGPT55, []string{ModelOperationText}, []string{ModelOperationText})
 	reasoningOffering.RequestProfile = string(requestProfileOpenAIResponsesReasoningTools)
 	reasoningOffering.ReasoningEffort = &ReasoningEffortCapability{
@@ -101,6 +101,7 @@ func TestCatalogServiceResolvesExactRoutesAndPrices(t *testing.T) {
 
 func TestCatalogCapabilityValidationRejectsIncompleteContracts(t *testing.T) {
 	integer := func(value int) *int { return &value }
+	number := func(value float64) *float64 { return &value }
 	assertError := func(t *testing.T, validationError error, expected string) {
 		t.Helper()
 		if validationError == nil || !strings.Contains(validationError.Error(), expected) {
@@ -210,9 +211,9 @@ func TestCatalogCapabilityValidationRejectsIncompleteContracts(t *testing.T) {
 		{name: "enum shape", controls: []CatalogControl{{ID: "mode", Kind: CatalogControlEnum}}, expected: "kind=enum"},
 		{name: "enum value", controls: []CatalogControl{{ID: "mode", Kind: CatalogControlEnum, Values: []string{" "}}}, expected: "values[0]"},
 		{name: "enum duplicate", controls: []CatalogControl{{ID: "mode", Kind: CatalogControlEnum, Values: []string{"fast", "fast"}}}, expected: "duplicate=fast"},
-		{name: "integer", controls: []CatalogControl{{ID: "duration", Kind: CatalogControlInteger, Minimum: integer(2), Maximum: integer(1)}}, expected: "kind=integer"},
-		{name: "negative minimum", controls: []CatalogControl{{ID: "duration", Kind: CatalogControlInteger, Minimum: integer(-1), Maximum: integer(1)}}, expected: "kind=integer"},
-		{name: "negative maximum", controls: []CatalogControl{{ID: "duration", Kind: CatalogControlInteger, Minimum: integer(0), Maximum: integer(-1)}}, expected: "kind=integer"},
+		{name: "integer", controls: []CatalogControl{{ID: "duration", Kind: CatalogControlInteger, Minimum: number(2), Maximum: number(1)}}, expected: "kind=integer"},
+		{name: "negative minimum", controls: []CatalogControl{{ID: "duration", Kind: CatalogControlInteger, Minimum: number(-1), Maximum: number(1)}}, expected: "kind=integer"},
+		{name: "negative maximum", controls: []CatalogControl{{ID: "duration", Kind: CatalogControlInteger, Minimum: number(0), Maximum: number(-1)}}, expected: "kind=integer"},
 		{name: "boolean", controls: []CatalogControl{{ID: "audio", Kind: CatalogControlBoolean, Values: []string{"yes"}}}, expected: "kind=boolean"},
 		{name: "kind", controls: []CatalogControl{{ID: "mode", Kind: "future"}}, expected: "kind=future"},
 	}

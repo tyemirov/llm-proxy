@@ -45,8 +45,8 @@ func newManagedZAIProviderMigrationFixture(t *testing.T) managedZAIProviderMigra
 	tenantRecord := fakeTenantRecord(user.UserID, "zai-provider-tenant", "Default", now)
 	tenantRecord.DefaultProvider = retiredZhipuProviderIdentifier
 	tenantRecord.DefaultModel = ModelNameZAIGLM
-	tenantRecord.DefaultDictationProvider = retiredZhipuProviderIdentifier
-	tenantRecord.DefaultDictationModel = "glm-asr-2512"
+	tenantRecord.DefaultTranscriptionProvider = retiredZhipuProviderIdentifier
+	tenantRecord.DefaultTranscriptionModel = "glm-asr-2512"
 	tenantRecord.DefaultSystemPrompt = "preserve tenant prompt"
 	if createError := database.Create(&tenantRecord).Error; createError != nil {
 		t.Fatalf("seed Z.AI provider tenant: %v", createError)
@@ -152,7 +152,7 @@ func TestManagedZAIProviderMigrationCanonicalizesCurrentRoutesAndPreservesUsage(
 	}
 	expectedDefaults := TenantDefaults{
 		Provider: ProviderNameZAI, Model: ModelNameZAIGLM,
-		DictationProvider: ProviderNameZAI, DictationModel: "glm-asr-2512",
+		TranscriptionProvider: ProviderNameZAI, TranscriptionModel: "glm-asr-2512",
 		SystemPrompt: "preserve tenant prompt",
 	}
 	if tenantRecord.defaults() != expectedDefaults || !tenantRecord.UpdatedAt.Equal(fixture.tenant.UpdatedAt) {
@@ -405,7 +405,7 @@ func TestManagedZAICurrentSchemaRejectsRetiredRoutingValues(t *testing.T) {
 		{
 			name: "retired dictation default",
 			configure: func(t *testing.T, fixture managedZAIProviderMigrationFixture) {
-				if updateError := fixture.database.Model(&managedTenantRecord{}).Where(&managedTenantRecord{TenantID: fixture.tenant.TenantID}).Update("default_dictation_provider", retiredZhipuProviderIdentifier).Error; updateError != nil {
+				if updateError := fixture.database.Model(&managedTenantRecord{}).Where(&managedTenantRecord{TenantID: fixture.tenant.TenantID}).Update("default_transcription_provider", retiredZhipuProviderIdentifier).Error; updateError != nil {
 					t.Fatalf("restore retired dictation default: %v", updateError)
 				}
 			},

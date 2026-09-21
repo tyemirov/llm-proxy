@@ -12,22 +12,37 @@ import (
 const (
 	// CatalogControlEnum identifies a control with an exact value vocabulary.
 	CatalogControlEnum = "enum"
+	// CatalogControlNumber identifies a finite bounded numeric control.
+	CatalogControlNumber = "number"
 	// CatalogControlInteger identifies a bounded integer control.
 	CatalogControlInteger = "integer"
 	// CatalogControlBoolean identifies a Boolean control.
 	CatalogControlBoolean = "boolean"
+	// CatalogControlImageSize identifies constrained WIDTHxHEIGHT or automatic sizing.
+	CatalogControlImageSize = "image_size"
 	// CatalogCurrencyUSD identifies published United States dollar prices.
 	CatalogCurrencyUSD = "USD"
 )
 
 // CatalogControl declares one route-specific request control.
 type CatalogControl struct {
-	ID               string   `json:"id" mapstructure:"id" yaml:"id"`
-	Kind             string   `json:"kind" mapstructure:"kind" yaml:"kind"`
-	Values           []string `json:"values" mapstructure:"values" yaml:"values,omitempty"`
-	Minimum          *int     `json:"minimum" mapstructure:"minimum" yaml:"minimum,omitempty"`
-	Maximum          *int     `json:"maximum" mapstructure:"maximum" yaml:"maximum,omitempty"`
-	AccountDependent bool     `json:"account_dependent" mapstructure:"account_dependent" yaml:"account_dependent,omitempty"`
+	ID               string                       `json:"id" mapstructure:"id" yaml:"id"`
+	Kind             string                       `json:"kind" mapstructure:"kind" yaml:"kind"`
+	Values           []string                     `json:"values" mapstructure:"values" yaml:"values,omitempty"`
+	Minimum          *float64                     `json:"minimum" mapstructure:"minimum" yaml:"minimum,omitempty"`
+	Maximum          *float64                     `json:"maximum" mapstructure:"maximum" yaml:"maximum,omitempty"`
+	ImageSize        *CatalogImageSizeConstraints `json:"image_size,omitempty" mapstructure:"image_size" yaml:"image_size,omitempty"`
+	AccountDependent bool                         `json:"account_dependent" mapstructure:"account_dependent" yaml:"account_dependent,omitempty"`
+}
+
+// CatalogImageSizeConstraints bounds generated image dimensions and pixel count.
+type CatalogImageSizeConstraints struct {
+	Automatic          bool `json:"automatic" mapstructure:"automatic" yaml:"automatic"`
+	DimensionMultiple  int  `json:"dimension_multiple" mapstructure:"dimension_multiple" yaml:"dimension_multiple"`
+	MaximumEdge        int  `json:"maximum_edge" mapstructure:"maximum_edge" yaml:"maximum_edge"`
+	MinimumPixels      int  `json:"minimum_pixels" mapstructure:"minimum_pixels" yaml:"minimum_pixels"`
+	MaximumPixels      int  `json:"maximum_pixels" mapstructure:"maximum_pixels" yaml:"maximum_pixels"`
+	MaximumAspectRatio int  `json:"maximum_aspect_ratio" mapstructure:"maximum_aspect_ratio" yaml:"maximum_aspect_ratio"`
 }
 
 // CatalogLimit declares one fixed or account-dependent route limit.
@@ -170,6 +185,8 @@ func cloneModelCatalog(catalog ModelCatalog) ModelCatalog {
 	for providerIndex, provider := range catalog.Providers {
 		cloned.Providers[providerIndex] = provider
 		cloned.Providers[providerIndex].CredentialKinds = append([]string(nil), provider.CredentialKinds...)
+		cloned.Providers[providerIndex].Resources = append(provider.Resources[:0:0], provider.Resources...)
+		cloned.Providers[providerIndex].Services = cloneProviderServices(provider.Services)
 	}
 	cloned.Publishers = append([]ModelPublisher(nil), catalog.Publishers...)
 	cloned.Families = append([]ModelFamily(nil), catalog.Families...)
@@ -207,8 +224,12 @@ func cloneProviderOffering(offering ProviderOffering) ProviderOffering {
 	for controlIndex, control := range offering.Controls {
 		cloned.Controls[controlIndex] = control
 		cloned.Controls[controlIndex].Values = append([]string(nil), control.Values...)
-		cloned.Controls[controlIndex].Minimum = cloneInteger(control.Minimum)
-		cloned.Controls[controlIndex].Maximum = cloneInteger(control.Maximum)
+		cloned.Controls[controlIndex].Minimum = cloneNumber(control.Minimum)
+		cloned.Controls[controlIndex].Maximum = cloneNumber(control.Maximum)
+		if control.ImageSize != nil {
+			size := *control.ImageSize
+			cloned.Controls[controlIndex].ImageSize = &size
+		}
 	}
 	cloned.Limits = make([]CatalogLimit, len(offering.Limits))
 	for limitIndex, limit := range offering.Limits {
@@ -226,6 +247,14 @@ func cloneCatalogPriceDescriptor(descriptor CatalogPriceDescriptor) CatalogPrice
 		cloned.MinimumCharge = &minimumCharge
 	}
 	return cloned
+}
+
+func cloneNumber(value *float64) *float64 {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
 }
 
 func cloneInteger(value *int) *int {
@@ -312,7 +341,7 @@ func validateCatalogControls(controls []CatalogControl, field string) error {
 		}
 		switch control.Kind {
 		case CatalogControlEnum:
-			if len(control.Values) == 0 || control.Minimum != nil || control.Maximum != nil {
+			if len(control.Values) == 0 || control.Minimum != nil || control.Maximum != nil || control.ImageSize != nil {
 				return fmt.Errorf("%w: field=%s[%d] kind=%s", ErrInvalidModelCatalog, field, controlIndex, control.Kind)
 			}
 			values := map[string]struct{}{}
@@ -325,13 +354,24 @@ func validateCatalogControls(controls []CatalogControl, field string) error {
 				}
 				values[value] = struct{}{}
 			}
-		case CatalogControlInteger:
-			if len(control.Values) != 0 || control.Minimum == nil || control.Maximum == nil || *control.Minimum < 0 || *control.Maximum < 0 || *control.Minimum > *control.Maximum {
+		case CatalogControlInteger, CatalogControlNumber:
+			if len(control.Values) != 0 || control.Minimum == nil || control.Maximum == nil || math.IsNaN(*control.Minimum) || math.IsNaN(*control.Maximum) || math.IsInf(*control.Minimum, 0) || math.IsInf(*control.Maximum, 0) || *control.Minimum > *control.Maximum || control.ImageSize != nil {
+				return fmt.Errorf("%w: field=%s[%d] kind=%s", ErrInvalidModelCatalog, field, controlIndex, control.Kind)
+			}
+			if control.Kind == CatalogControlInteger && (*control.Minimum < 0 || *control.Maximum < 0 || math.Trunc(*control.Minimum) != *control.Minimum || math.Trunc(*control.Maximum) != *control.Maximum) {
 				return fmt.Errorf("%w: field=%s[%d] kind=%s", ErrInvalidModelCatalog, field, controlIndex, control.Kind)
 			}
 		case CatalogControlBoolean:
-			if len(control.Values) != 0 || control.Minimum != nil || control.Maximum != nil {
+			if len(control.Values) != 0 || control.Minimum != nil || control.Maximum != nil || control.ImageSize != nil {
 				return fmt.Errorf("%w: field=%s[%d] kind=%s", ErrInvalidModelCatalog, field, controlIndex, control.Kind)
+			}
+		case CatalogControlImageSize:
+			size := control.ImageSize
+			if len(control.Values) != 0 || control.Minimum != nil || control.Maximum != nil || size == nil || control.AccountDependent {
+				return fmt.Errorf("%w: field=%s[%d] kind=%s", ErrInvalidModelCatalog, field, controlIndex, control.Kind)
+			}
+			if size.DimensionMultiple <= 0 || size.MaximumEdge <= 0 || size.MaximumEdge > 32768 || size.DimensionMultiple > size.MaximumEdge || size.MinimumPixels <= 0 || size.MaximumPixels < size.MinimumPixels || size.MaximumPixels > size.MaximumEdge*size.MaximumEdge || size.MaximumAspectRatio < 1 || size.MaximumAspectRatio > size.MaximumEdge {
+				return fmt.Errorf("%w: field=%s[%d].image_size", ErrInvalidModelCatalog, field, controlIndex)
 			}
 		default:
 			return fmt.Errorf("%w: field=%s[%d].kind kind=%s", ErrInvalidModelCatalog, field, controlIndex, control.Kind)
@@ -393,32 +433,8 @@ func validateCatalogPrices(prices []CatalogPriceDescriptor, catalog validatedMod
 		if _, duplicate := catalog.prices[identifier]; duplicate {
 			return fmt.Errorf("%w: field=%s price_conflict=%s", ErrInvalidModelCatalog, field, identifier)
 		}
-		if !strings.HasPrefix(descriptor.Source, "https://") || descriptor.Source != strings.TrimSpace(descriptor.Source) {
-			return fmt.Errorf("%w: field=%s.source", ErrInvalidModelCatalog, field)
-		}
-		if verifiedAt, parseError := time.Parse(time.DateOnly, descriptor.LastVerified); parseError != nil || verifiedAt.Format(time.DateOnly) != descriptor.LastVerified {
-			return fmt.Errorf("%w: field=%s.last_verified", ErrInvalidModelCatalog, field)
-		}
-		if descriptor.Available {
-			if len(descriptor.Rates) == 0 || descriptor.UnavailableReason != constants.EmptyString {
-				return fmt.Errorf("%w: field=%s reason=incomplete_available_price", ErrInvalidModelCatalog, field)
-			}
-		} else if len(descriptor.Rates) != 0 || strings.TrimSpace(descriptor.UnavailableReason) == constants.EmptyString || descriptor.UnavailableReason != strings.TrimSpace(descriptor.UnavailableReason) {
-			return fmt.Errorf("%w: field=%s reason=incomplete_unavailable_price", ErrInvalidModelCatalog, field)
-		}
-		seenRates := map[string]struct{}{}
-		for rateIndex, rate := range descriptor.Rates {
-			if strings.TrimSpace(rate.Component) == constants.EmptyString || rate.Component != strings.TrimSpace(rate.Component) || rate.Currency != CatalogCurrencyUSD || math.IsNaN(rate.Rate) || math.IsInf(rate.Rate, 0) || rate.Rate < 0 || strings.TrimSpace(rate.Unit) == constants.EmptyString || rate.Unit != strings.TrimSpace(rate.Unit) {
-				return fmt.Errorf("%w: field=%s.rates[%d]", ErrInvalidModelCatalog, field, rateIndex)
-			}
-			rateIdentifier := fmt.Sprintf("%s\x00%#v", rate.Component, rate.Conditions)
-			if _, duplicate := seenRates[rateIdentifier]; duplicate {
-				return fmt.Errorf("%w: field=%s.rates[%d] reason=ambiguous", ErrInvalidModelCatalog, field, rateIndex)
-			}
-			seenRates[rateIdentifier] = struct{}{}
-		}
-		if descriptor.MinimumCharge != nil && (descriptor.MinimumCharge.Currency != CatalogCurrencyUSD || math.IsNaN(descriptor.MinimumCharge.Amount) || math.IsInf(descriptor.MinimumCharge.Amount, 0) || descriptor.MinimumCharge.Amount < 0 || strings.TrimSpace(descriptor.MinimumCharge.Unit) == constants.EmptyString || descriptor.MinimumCharge.Unit != strings.TrimSpace(descriptor.MinimumCharge.Unit)) {
-			return fmt.Errorf("%w: field=%s.minimum_charge", ErrInvalidModelCatalog, field)
+		if err := validateCatalogPriceValues(descriptor, field); err != nil {
+			return err
 		}
 		catalog.prices[identifier] = descriptor
 	}
@@ -435,4 +451,35 @@ func validateCatalogPrices(prices []CatalogPriceDescriptor, catalog validatedMod
 
 func catalogPriceIdentifier(provider string, model string, operation string) string {
 	return strings.TrimSpace(provider) + "\x00" + strings.TrimSpace(model) + "\x00" + strings.TrimSpace(operation)
+}
+
+func validateCatalogPriceValues(descriptor CatalogPriceDescriptor, field string) error {
+	if !strings.HasPrefix(descriptor.Source, "https://") || descriptor.Source != strings.TrimSpace(descriptor.Source) {
+		return fmt.Errorf("%w: field=%s.source", ErrInvalidModelCatalog, field)
+	}
+	if verifiedAt, parseError := time.Parse(time.DateOnly, descriptor.LastVerified); parseError != nil || verifiedAt.Format(time.DateOnly) != descriptor.LastVerified {
+		return fmt.Errorf("%w: field=%s.last_verified", ErrInvalidModelCatalog, field)
+	}
+	if descriptor.Available {
+		if len(descriptor.Rates) == 0 || descriptor.UnavailableReason != constants.EmptyString {
+			return fmt.Errorf("%w: field=%s reason=incomplete_available_price", ErrInvalidModelCatalog, field)
+		}
+	} else if len(descriptor.Rates) != 0 || strings.TrimSpace(descriptor.UnavailableReason) == constants.EmptyString || descriptor.UnavailableReason != strings.TrimSpace(descriptor.UnavailableReason) {
+		return fmt.Errorf("%w: field=%s reason=incomplete_unavailable_price", ErrInvalidModelCatalog, field)
+	}
+	seenRates := map[string]struct{}{}
+	for rateIndex, rate := range descriptor.Rates {
+		if strings.TrimSpace(rate.Component) == constants.EmptyString || rate.Component != strings.TrimSpace(rate.Component) || rate.Currency != CatalogCurrencyUSD || math.IsNaN(rate.Rate) || math.IsInf(rate.Rate, 0) || rate.Rate < 0 || strings.TrimSpace(rate.Unit) == constants.EmptyString || rate.Unit != strings.TrimSpace(rate.Unit) {
+			return fmt.Errorf("%w: field=%s.rates[%d]", ErrInvalidModelCatalog, field, rateIndex)
+		}
+		rateIdentifier := fmt.Sprintf("%s\x00%#v", rate.Component, rate.Conditions)
+		if _, duplicate := seenRates[rateIdentifier]; duplicate {
+			return fmt.Errorf("%w: field=%s.rates[%d] reason=ambiguous", ErrInvalidModelCatalog, field, rateIndex)
+		}
+		seenRates[rateIdentifier] = struct{}{}
+	}
+	if descriptor.MinimumCharge != nil && (descriptor.MinimumCharge.Currency != CatalogCurrencyUSD || math.IsNaN(descriptor.MinimumCharge.Amount) || math.IsInf(descriptor.MinimumCharge.Amount, 0) || descriptor.MinimumCharge.Amount < 0 || strings.TrimSpace(descriptor.MinimumCharge.Unit) == constants.EmptyString || descriptor.MinimumCharge.Unit != strings.TrimSpace(descriptor.MinimumCharge.Unit)) {
+		return fmt.Errorf("%w: field=%s.minimum_charge", ErrInvalidModelCatalog, field)
+	}
+	return nil
 }

@@ -120,7 +120,7 @@ func TestProviderCatalogProjectsProviderCardTaxonomy(testingInstance *testing.T)
 		families        []string
 		capabilities    []string
 	}{
-		proxy.ProviderNameOpenAI:      {apiServiceLabel: "OpenAI API", families: []string{"GPT-6", "GPT-4", "GPT-5", "GPT Transcribe"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.ModelOperationDictation}},
+		proxy.ProviderNameOpenAI:      {apiServiceLabel: "OpenAI API", families: []string{"GPT-6", "GPT-4", "GPT-5", "GPT Transcribe", "GPT Image"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.ModelOperationDictation, proxy.ModelOperationImageGeneration, proxy.ModelOperationImageEditing}},
 		proxy.ProviderNameDashScope:   {apiServiceLabel: "Alibaba Cloud", families: []string{"Qwen"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput}},
 		proxy.ProviderNameGemini:      {apiServiceLabel: "Gemini API", families: []string{"Gemini"}, capabilities: []string{proxy.ModelOperationText, proxy.PublicModelCapabilityImageInput, proxy.PublicModelCapabilityAudioInput, proxy.ModelOperationDictation}},
 		proxy.ProviderNameMeta:        {apiServiceLabel: "Meta API", families: []string{"Muse Spark"}, capabilities: []string{proxy.ModelOperationText}},
@@ -191,7 +191,9 @@ func TestCatalogDefinedProviderFlowsThroughEveryGenericConsumer(testingInstance 
 		testingInstance.Fatalf("catalog environment bindings=%v", environmentBindings[testCatalogProviderID])
 	}
 	databasePath := filepath.Join(testingInstance.TempDir(), "managed-tenants.db")
-	configuration := proxy.Configuration{ProviderCatalog: providerCatalog}
+	configuration := testfixtures.WithUpstreamCapacity(testingInstance, proxy.Configuration{ProviderCatalog: providerCatalog})
+	limit := configuration.UpstreamCapacity.Tenant
+	configuration.UpstreamCapacity.Origins = append(configuration.UpstreamCapacity.Origins, proxy.UpstreamOriginCapacity{Origin: upstreamServer.URL, Provider: testCatalogProviderID, Active: limit.Active, Queued: limit.Admitted - limit.Active})
 	router := newManagementRouterWithDatabasePath(testingInstance, configuration, databasePath)
 	sessionCookie := managementSessionCookie(testingInstance, "tauth-catalog-provider-owner")
 	tenantPath := managementDefaultTenantTestPath(testingInstance, router, sessionCookie, "")
@@ -226,7 +228,7 @@ func TestCatalogDefinedProviderFlowsThroughEveryGenericConsumer(testingInstance 
 	if strings.Contains(string(profileBytes), testCatalogProviderCredential) {
 		testingInstance.Fatal("management response exposed credential")
 	}
-	accountConnectionExchange(testingInstance, router, sessionCookie, http.MethodPut, "/tenants/"+tenantID+"/defaults", map[string]string{"provider": testCatalogProviderID, "model": testCatalogModelID, "dictation_provider": "", "dictation_model": "", "system_prompt": "", "reasoning_effort": ""}, http.StatusOK)
+	accountConnectionExchange(testingInstance, router, sessionCookie, http.MethodPut, "/tenants/"+tenantID+"/defaults", map[string]string{"provider": testCatalogProviderID, "model": testCatalogModelID, "transcription_provider": "", "transcription_model": "", "system_prompt": "", "reasoning_effort": ""}, http.StatusOK)
 	fixtureDatabase := openManagedFixtureDatabase(testingInstance, databasePath)
 	var credentialRecord struct{ Value string }
 	if err := fixtureDatabase.Table("managed_connection_field_records").Where("connection_id = ? AND field_id = ?", connectionID, testCatalogCredentialField).Take(&credentialRecord).Error; err != nil {
@@ -441,8 +443,8 @@ func TestProviderCatalogRejectsStructuralAndComponentContractViolations(testingI
 			name: "invalid control bounds",
 			mutate: func(schema *proxy.ProviderCatalogSchema) {
 				control := firstCatalogControl(testingInstance, schema)
-				minimum := 2
-				maximum := 1
+				minimum := 2.0
+				maximum := 1.0
 				control.Kind = proxy.CatalogControlInteger
 				control.Values = nil
 				control.Minimum = &minimum
@@ -534,7 +536,8 @@ func catalogWithTestProvider(testingInstance *testing.T) *proxy.ProviderCatalog 
 		Operations: []string{proxy.ModelOperationText}, MediaInputs: []string{},
 	}})
 	schema.Providers = append(schema.Providers, proxy.ProviderCatalogProvider{
-		ID: testCatalogProviderID, Label: "Catalog Test", APIServiceLabel: "Catalog Test API", ConnectionOwnership: proxy.CatalogProviderConnectionTenant, KeyAcquisitionURL: "https://provider.example/keys", Aliases: []string{testCatalogProviderAlias},
+		Verification: proxy.ProviderCatalogVerification{Transport: testCatalogTransportID, Model: testCatalogModelID},
+		ID:           testCatalogProviderID, Label: "Catalog Test", APIServiceLabel: "Catalog Test API", ConnectionOwnership: proxy.CatalogProviderConnectionTenant, KeyAcquisitionURL: "https://provider.example/keys", Aliases: []string{testCatalogProviderAlias},
 		Fields: []proxy.ProviderCatalogField{
 			{
 				ID: testCatalogCredentialField, Label: "Access token",

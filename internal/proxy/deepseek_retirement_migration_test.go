@@ -59,8 +59,8 @@ func TestDeepSeekRetirementStartup(t *testing.T) {
 					tenant.DefaultReasoningEffort = "max"
 				}
 				if route.provider == ProviderNameSiliconFlow {
-					tenant.DefaultDictationProvider = ProviderNameSiliconFlow
-					tenant.DefaultDictationModel = "sensevoice-small"
+					tenant.DefaultTranscriptionProvider = ProviderNameSiliconFlow
+					tenant.DefaultTranscriptionModel = "sensevoice-small"
 				}
 				if route.model == ModelNameDeepSeekV4Pro {
 					tenant.DefaultReasoningEffort = "low"
@@ -133,7 +133,7 @@ func TestDeepSeekRetirementStartup(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			router, err := BuildRouter(configuration, zap.NewNop().Sugar())
+			router, err := BuildRouter(withInternalUpstreamCapacity(t, configuration), zap.NewNop().Sugar())
 			if scenario == "profile read failure" {
 				if restoreError := database.Exec("ALTER TABLE " + managedProviderProfileTable + " RENAME COLUMN unavailable_text_model TO text_model").Error; restoreError != nil {
 					t.Fatal(restoreError)
@@ -147,7 +147,7 @@ func TestDeepSeekRetirementStartup(t *testing.T) {
 				if err != nil {
 					t.Fatalf("startup=%v", err)
 				}
-				if _, err = BuildRouter(configuration, zap.NewNop().Sugar()); err != nil {
+				if _, err = BuildRouter(withInternalUpstreamCapacity(t, configuration), zap.NewNop().Sugar()); err != nil {
 					t.Fatalf("repeated startup=%v", err)
 				}
 				recorder := httptest.NewRecorder()
@@ -265,7 +265,7 @@ func TestDeepSeekRetirementPredecessorStartup(t *testing.T) {
 			}
 			management := managedRouterTestManagementConfiguration()
 			management.DatabaseDialector = fixture.database.Dialector
-			_, err := BuildRouter(Configuration{ProviderCatalog: internalCanonicalProviderCatalog(), Management: management, AssetStorePath: t.TempDir()}, zap.NewNop().Sugar())
+			_, err := BuildRouter(withInternalUpstreamCapacity(t, Configuration{ProviderCatalog: internalCanonicalProviderCatalog(), Management: management, AssetStorePath: t.TempDir()}), zap.NewNop().Sugar())
 			if conflict {
 				if err == nil || !strings.Contains(err.Error(), "provider_reasoning_decision_required") {
 					t.Fatalf("predecessor conflict=%v", err)

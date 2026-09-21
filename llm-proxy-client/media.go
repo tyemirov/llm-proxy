@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -15,8 +16,10 @@ import (
 const mediaPollInterval = 250 * time.Millisecond
 
 type mediaCommandOptions struct {
-	baseURL, secret, provider, operationID, assetID, file, mimeType, idempotencyKey string
-	timeout                                                                         time.Duration
+	voiceQuery                                                            llmproxyclient.MediaVoiceQuery
+	voiceIncludeTotal                                                     bool
+	baseURL, secret, operationID, assetID, file, mimeType, idempotencyKey string
+	timeout                                                               time.Duration
 }
 
 func newMediaCommand(stdin io.Reader, stdout io.Writer, factory httpClientFactory) *cobra.Command {
@@ -33,14 +36,21 @@ func newMediaCommand(stdin io.Reader, stdout io.Writer, factory httpClientFactor
 		{"submit", "Accept a media request from stdin and return its durable operation ID", func(command *cobra.Command) {
 			command.Flags().StringVar(&options.idempotencyKey, "idempotency-key", "", "Stable key for this complete request")
 		}, func(ctx context.Context, client llmproxyclient.Client) (any, error) {
-			var input llmproxyclient.MediaOperationInput
+			var wire struct {
+				llmproxyclient.MediaOperationInput
+				Model json.RawMessage `json:"model"`
+			}
 			decoder := json.NewDecoder(stdin)
 			decoder.DisallowUnknownFields()
-			if err := decoder.Decode(&input); err != nil {
+			if err := decoder.Decode(&wire); err != nil {
 				return nil, fmt.Errorf("read media request: %w", err)
 			}
 			if err := decoder.Decode(&struct{}{}); err != io.EOF {
 				return nil, fmt.Errorf("media request must contain one JSON object")
+			}
+			input := wire.MediaOperationInput
+			if len(wire.Model) > 0 && (json.Unmarshal(wire.Model, &input.Model) != nil || strings.TrimSpace(input.Model) == "") {
+				return nil, fmt.Errorf("media model must be a nonempty string when present")
 			}
 			return client.CreateMediaOperation(ctx, options.idempotencyKey, input)
 		}},
@@ -60,9 +70,22 @@ func newMediaCommand(stdin io.Reader, stdout io.Writer, factory httpClientFactor
 			return client.CancelMediaOperation(ctx, options.operationID)
 		}},
 		{"voices", "Discover tenant voices", func(command *cobra.Command) {
-			command.Flags().StringVar(&options.provider, flagProvider, "", "Provider ID")
+			command.Flags().StringVar(&options.voiceQuery.Provider, flagProvider, "", "Provider ID")
+			command.Flags().StringVar(&options.voiceQuery.Cursor, "cursor", "", "Opaque cursor from the preceding page")
+			command.Flags().StringVar(&options.voiceQuery.Search, "search", "", "Voice name search")
+			command.Flags().IntVar(&options.voiceQuery.PageSize, "page-size", 0, "Maximum requested page size (1 to 100)")
+			command.Flags().StringVar(&options.voiceQuery.Sort, "sort", "", "Voice order: name or created_at_unix")
+			command.Flags().StringVar(&options.voiceQuery.SortDirection, "sort-direction", "", "Sort direction: asc or desc")
+			command.Flags().StringVar(&options.voiceQuery.VoiceType, "voice-type", "", "Provider voice type")
+			command.Flags().StringVar(&options.voiceQuery.Category, "category", "", "Provider voice category")
+			command.Flags().BoolVar(&options.voiceIncludeTotal, "include-total-count", false, "Request the total voice count")
+			command.PreRun = func(command *cobra.Command, _ []string) {
+				if command.Flags().Changed("include-total-count") {
+					options.voiceQuery.IncludeTotalCount = &options.voiceIncludeTotal
+				}
+			}
 		}, func(ctx context.Context, client llmproxyclient.Client) (any, error) {
-			return client.GetMediaVoices(ctx, options.provider)
+			return client.GetMediaVoices(ctx, options.voiceQuery)
 		}},
 		{"capabilities", "List available media routes", func(*cobra.Command) {}, func(ctx context.Context, client llmproxyclient.Client) (any, error) {
 			return client.GetMediaCapabilities(ctx)

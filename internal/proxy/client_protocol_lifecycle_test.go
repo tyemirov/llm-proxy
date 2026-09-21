@@ -3,6 +3,7 @@ package proxy_test
 import (
 	"context"
 	"encoding/json"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -264,7 +265,7 @@ func TestClientProtocolsCapacity(t *testing.T) {
 			close(release)
 		}
 	}()
-	router, err := buildRouterWithCatalogs(t, proxy.Configuration{WorkerCount: 1, QueueSize: 1, Endpoints: providerEndpointOverrides(map[string]string{proxy.ProviderNameOpenAI: upstream.URL}, nil)}, zap.NewNop().Sugar())
+	router, err := buildRouterWithCatalogs(t, proxy.Configuration{UpstreamCapacity: testfixtures.UpstreamCapacity(1, 1), Endpoints: providerEndpointOverrides(map[string]string{proxy.ProviderNameOpenAI: upstream.URL}, nil)}, zap.NewNop().Sugar())
 	if err != nil {
 		t.Fatal(err)
 	}

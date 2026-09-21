@@ -156,15 +156,39 @@ func internalTestProviderCatalog(modelCatalog ModelCatalog) *ProviderCatalog {
 			transport := internalTestProviderTransport(transportID, offering)
 			provider.Transports = append(provider.Transports, transport)
 		}
+		imageRoutes := CatalogImageRoutes{Responses: offering.ImageRoutes.Responses}
+		if offering.ImageRoutes.Editing != "" {
+			editKey := transportKey + "\x00editing"
+			editID, exists := transportIDs[editKey]
+			if !exists {
+				editID = transportID + "-editing"
+				transportIDs[editKey] = editID
+				editTransport := internalTestProviderTransport(editID, offering)
+				editTransport.Endpoint.Path = "/images/edits"
+				provider.Transports = append(provider.Transports, editTransport)
+			}
+			imageRoutes.Editing = editID
+		}
 		provider.Offerings = append(provider.Offerings, ProviderCatalogOffering{
 			Model: offering.Model, UpstreamModel: offering.ProviderModel, Transport: transportID,
-			Operations: offering.Operations, DefaultOperations: offering.DefaultOperations,
+			ImageRoutes: imageRoutes,
+			Operations:  offering.Operations, DefaultOperations: offering.DefaultOperations,
 			RequestProfile: offering.RequestProfile, WebSearch: offering.WebSearch, CallerTools: offering.CallerTools, Created: offering.Created,
 			OutputTokenLimit: offering.OutputTokenLimit, ReasoningEffort: offering.ReasoningEffort,
 			MediaInputs: offering.MediaInputs, MediaLimits: offering.MediaLimits,
 			Controls: offering.Controls, Limits: offering.Limits,
 			Prices: prices[offering.Provider+"\x00"+offering.Model],
 		})
+	}
+	for providerIndex := range schema.Providers {
+		provider := &schema.Providers[providerIndex]
+		internalTestVerificationBinding(provider)
+		for offeringIndex := range provider.Offerings {
+			offering := &provider.Offerings[offeringIndex]
+			if offering.ImageRoutes.Responses != "" {
+				offering.ImageRoutes.Responses = transportIDs[provider.ID+"\x00"+CatalogProtocolOpenAIResponses+"\x00pollable_resource"]
+			}
+		}
 	}
 	catalog, catalogError := NewProviderCatalog(schema)
 	if catalogError != nil {
@@ -205,6 +229,8 @@ func internalTestProviderTransport(identifier string, offering ProviderOffering)
 
 func internalTestProviderProtocolPath(protocol string) string {
 	switch protocol {
+	case CatalogProtocolFALQueueImages:
+		return "/{model}"
 	case CatalogProtocolOpenAIResponses:
 		return "/responses"
 	case CatalogProtocolOpenAIChatCompletions:
@@ -265,4 +291,32 @@ func internalConfigureTextOffering(offering *ProviderOffering) {
 			offering.MediaExecutionLifecycle = string(textExecutionLifecycleSynchronousCompletion)
 		}
 	}
+}
+
+func internalTestVerificationBinding(provider *ProviderCatalogProvider) {
+	for _, offering := range provider.Offerings {
+		if slices.Contains(offering.Operations, ModelOperationText) && (provider.Verification.Transport == "" || slices.Contains(offering.DefaultOperations, ModelOperationText)) {
+			provider.Verification = ProviderCatalogVerification{Transport: offering.Transport, Model: offering.Model}
+		}
+	}
+	if provider.Verification.Transport != "" {
+		return
+	}
+	for _, transport := range provider.Transports {
+		if transport.Components.RequestCodec.ID == CatalogProtocolDictatorSpeechV1 {
+			provider.Verification = ProviderCatalogVerification{Transport: transport.ID}
+			provider.Resources = []ProviderCatalogResource{{Kind: "voices", Transport: transport.ID}}
+			return
+		}
+	}
+	transport := provider.Transports[0]
+	transport.ID = "verification"
+	transport.Endpoint = ProviderCatalogEndpoint{Protocol: CatalogEndpointProtocolHTTP, Method: CatalogEndpointMethodGet, DefaultBaseURL: "https://provider.example", Path: "/account"}
+	transport.Headers = nil
+	transport.ArtifactOrigins = nil
+	transport.Components.RequestCodec = ProviderCatalogCodecReference{ID: CatalogProtocolJSONResource}
+	transport.Components.ResponseCodec = ProviderCatalogCodecReference{ID: CatalogProtocolJSONResource}
+	transport.Components.Execution = ProviderCatalogExecutionReference{ID: CatalogExecutionReadOnly}
+	provider.Transports = append(provider.Transports, transport)
+	provider.Verification = ProviderCatalogVerification{Transport: transport.ID}
 }

@@ -36,8 +36,7 @@ const (
 
 	dictationMultipartOverheadBytes = int64(2 * 1024 * 1024)
 
-	contextKeyRequestID = "request_id"
-	contextKeyTenant    = "tenant"
+	contextKeyTenant = "tenant"
 
 	mimeApplicationJSON = "application/json"
 	mimeApplicationXML  = "application/xml"

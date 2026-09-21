@@ -178,8 +178,7 @@ Shared config fields:
 
 - `server.port`
 - `server.log_level`
-- `server.workers`
-- `server.queue_size`
+- `server.upstream_capacity`
 - `server.request_timeout_seconds`
 - `server.max_request_timeout_seconds`
 - `server.max_prompt_bytes`
@@ -548,22 +547,21 @@ through each current provider definition. It re-encrypts credentials with the
 provider field identity as associated data. It verifies all values and
 timestamps before it removes the predecessor table.
 
-`server.workers` limits concurrent upstream provider HTTP operations, not whole
-client request lifecycles. `server.queue_size` limits the number of additional
-upstream HTTP operations waiting for that shared worker limit. OpenAI
-background-response sleeps between polls do not occupy worker capacity; only the
-actual upstream create, poll, completed-response synthesis, chat,
-native-provider, or dictation HTTP operation does. The admission queue does not
-persist provider job ids and does not implement retry or resume semantics.
+`server.upstream_capacity` defines explicit global and per-origin limits for upstream HTTP requests.
+Tenant and saved-connection limits apply within each origin.
+Media, status, and artifact-transfer classes share the global ceiling and preserve the configured interactive reserve.
+Ready origins and tenants receive active capacity in turn.
+A request retains its active permit until its response body is closed.
+The scheduler releases active capacity between polls.
+Accepted media jobs have separate durable limits.
+The [README capacity contract](../../README.md#configuration) defines the fields and origin allocation rules.
 
 `server.upstream_rate_limits` is enforced by the same shared HTTP client for
 text and dictation. Each rule is a strict rolling-window budget keyed by exact
 normalized upstream origin (`scheme://host[:port]`), never by provider name.
-Calls waiting for a rate window retain bounded queue admission without
-occupying a worker. A rate slot is reserved only after worker capacity is
-available; a caller that finds the rolling window full releases the worker
-before waiting. Each retry is a new upstream call and therefore consumes a new
-slot. Empty configuration disables rate limiting. Origins with paths,
+Calls waiting for a rate window retain bounded origin admission without active capacity.
+The scheduler reserves a rate slot only when both active capacity and the rate window permit dispatch.
+Each retry consumes a new rate slot. Empty configuration disables rate limiting. Origins with paths,
 queries, fragments, or user info, non-positive maxima or intervals, invalid Go
 duration strings, and duplicate normalized origins fail startup. Delayed calls
 and context-canceled waits emit structured shared-client logs.
@@ -735,7 +733,7 @@ starts with a Bar graph and retains every ordered request-count row. Its toggle
 changes only that card to a Donut chart. Each donut derives its segments and
 count-and-percentage legend from the same request counts. The rounded shares
 total 100 percent. Each donut keeps every category and does not create an Other
-tail. The browser keeps both selections through interval, Refresh, and Usage
+tail. The browser keeps both selections through interval, automatic usage refresh, and Usage
 tenant changes. Authentication reset and page reload reset both cards to bars.
 A toggle performs no request and changes no tenant or interval state.
 
@@ -815,7 +813,20 @@ Account state, tenant names, enabled providers, defaults, and generated-secret d
 
 Schema version 2 gives every managed usage event one nonblank outcome code chosen at the request/error boundary: `success`, `invalid_request`, `payload_too_large`, `rate_limited`, `service_unavailable`, `request_timeout`, or `upstream_error`. The bounded upgrade maps historical successful rows to `success` and exact `400`, `413`, `429`, `499`, `502`, `503`, and `504` statuses to their canonical failure codes before adding the tenant/success/time/id page index; caller cancellation `499` and proxy-budget expiry `504` both become `request_timeout`. An unsupported historical status rejects startup before mutation. Neither current recording nor migration persists or reconstructs raw provider bodies or free-form error messages.
 
-Managed usage persistence is deliberately asynchronous and bounded. After the selected proxy response is written and flushed, the request handler constructs one immutable content-free usage record and performs a non-blocking send to the management runtime's FIFO channel. `management.usage_queue_size` is positive and defaults to `1024`; it is independent from the upstream `server.queue_size`. The first accepted event starts the runtime's sole usage writer goroutine. That writer serializes accepted usage inserts in FIFO order, attempts each insert once under the existing detached five-second budget, and never creates per-event goroutines or retries. A dedicated context-aware database-write gate sequences usage inserts with management mutations without taking the management mutation mutex. Authentication bypasses both and remains an independent caller-scoped read transaction; runtime SQLite WAL journaling and the bounded busy timeout allow that reader to proceed alongside the writer.
+Managed usage persistence is asynchronous and bounded.
+After the proxy response is written and flushed, the handler constructs one immutable usage record without request content.
+The handler sends the record to the management FIFO channel without a wait.
+`management.usage_queue_size` is positive and defaults to `1024`.
+It is independent from upstream network admission.
+
+The first accepted event starts the runtime's single usage writer goroutine.
+The writer inserts accepted events in FIFO order.
+It attempts each insert once with the existing detached five-second budget.
+It creates no event-specific goroutine and does not retry.
+A context-aware database-write gate sequences usage inserts with management changes without the management mutation mutex.
+
+Authentication uses an independent read transaction within the caller's context.
+SQLite WAL journaling and the bounded busy timeout let this reader continue while the writer operates.
 
 If the usage channel is full, the newest event is dropped while previously accepted events remain queued, the public response is unchanged, and one safe warning carries the stable `managed_usage_queue_full` error. Accepted entries are process-local at-most-once work until their insert commits: queued entries are not crash-durable, and an insert failure or process exit can lose uncommitted telemetry. Usage summaries are therefore eventually consistent with completed responses. This contract is appropriate only because managed usage is operational telemetry, not billing, accounting, or a provider-job ledger. Queued records and their warnings exclude prompts, responses, audio, transcripts, tenant secrets, provider keys, raw provider bodies, and free-form upstream errors.
 
@@ -907,7 +918,7 @@ buckets. Account-wide aggregation runs once at the database boundary across
 every owned tenant. It calculates totals and average latency from the complete
 execution event set. The browser never fans out per-tenant summaries.
 
-Refresh and interval changes retain the Usage tenant selection. Settings
+Automatic usage refresh and interval changes retain the Usage tenant selection. Settings
 changes do not affect it. Loading disables the Usage controls. Request identity
 prevents a stale scope or interval response from replacing the selected
 snapshot. The admin API remains a distinct 30-day daily contract.

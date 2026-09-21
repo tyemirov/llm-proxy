@@ -125,10 +125,9 @@ func newIntegrationServer(testingInstance *testing.T, openAIServer *httptest.Ser
 	loggerInstance, _ := zap.NewDevelopment()
 	testingInstance.Cleanup(func() { _ = loggerInstance.Sync() })
 	router, buildRouterError := buildIntegrationRouter(testingInstance, proxy.Configuration{
-		LogLevel:    logLevelDebug,
-		WorkerCount: 1,
-		QueueSize:   4,
-		Endpoints:   endpoints,
+		LogLevel:         logLevelDebug,
+		UpstreamCapacity: testfixtures.UpstreamCapacity(1, 4),
+		Endpoints:        endpoints,
 	}, loggerInstance.Sugar())
 	if buildRouterError != nil {
 		testingInstance.Fatalf(buildRouterErrorFormat, buildRouterError)
@@ -151,10 +150,9 @@ func newIntegrationServerWithDefaults(testingInstance *testing.T, openAIServer *
 	tenant := testfixtures.StandardManagedTenant(integrationServiceSecret)
 	tenant.Defaults = defaults
 	router, buildRouterError := testfixtures.BuildManagedRouter(testingInstance, integrationConfiguration(testingInstance, proxy.Configuration{
-		LogLevel:    logLevelDebug,
-		WorkerCount: 1,
-		QueueSize:   4,
-		Endpoints:   endpoints,
+		LogLevel:         logLevelDebug,
+		UpstreamCapacity: testfixtures.UpstreamCapacity(1, 4),
+		Endpoints:        endpoints,
 	}), loggerInstance.Sugar(), tenant)
 	if buildRouterError != nil {
 		testingInstance.Fatalf(buildRouterErrorFormat, buildRouterError)

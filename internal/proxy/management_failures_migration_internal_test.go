@@ -354,8 +354,8 @@ func newManagedModelIdentityMigrationFixture(t *testing.T) managedModelIdentityM
 	tenantRecord := fakeTenantRecord(user.UserID, "model-identity-tenant", "Default", now)
 	tenantRecord.DefaultProvider = ProviderNameMiniMax
 	tenantRecord.DefaultModel = managedMiniMaxNativeModel
-	tenantRecord.DefaultDictationProvider = ProviderNameSiliconFlow
-	tenantRecord.DefaultDictationModel = managedSenseVoiceNativeModel
+	tenantRecord.DefaultTranscriptionProvider = ProviderNameSiliconFlow
+	tenantRecord.DefaultTranscriptionModel = managedSenseVoiceNativeModel
 	if createError := database.Create(&tenantRecord).Error; createError != nil {
 		t.Fatalf("seed model identity tenant: %v", createError)
 	}
@@ -589,8 +589,8 @@ func newManagedXAIProviderMigrationFixture(t *testing.T) managedXAIProviderMigra
 	tenantRecord := fakeTenantRecord(user.UserID, "xai-provider-tenant", "Default", now)
 	tenantRecord.DefaultProvider = retiredGrokProviderIdentifier
 	tenantRecord.DefaultModel = ModelNameGrok43
-	tenantRecord.DefaultDictationProvider = retiredGrokProviderIdentifier
-	tenantRecord.DefaultDictationModel = "xai-stt"
+	tenantRecord.DefaultTranscriptionProvider = retiredGrokProviderIdentifier
+	tenantRecord.DefaultTranscriptionModel = "xai-stt"
 	tenantRecord.DefaultSystemPrompt = "preserve tenant prompt"
 	if createError := database.Create(&tenantRecord).Error; createError != nil {
 		t.Fatalf("seed xAI provider tenant: %v", createError)
@@ -693,7 +693,7 @@ func TestManagedXAIProviderMigrationCanonicalizesCurrentRoutesAndPreservesUsage(
 	}
 	expectedDefaults := TenantDefaults{
 		Provider: ProviderNameXAI, Model: ModelNameGrok43,
-		DictationProvider: ProviderNameXAI, DictationModel: "xai-stt",
+		TranscriptionProvider: ProviderNameXAI, TranscriptionModel: "xai-stt",
 		SystemPrompt: "preserve tenant prompt",
 	}
 	if tenantRecord.defaults() != expectedDefaults || !tenantRecord.UpdatedAt.Equal(fixture.tenant.UpdatedAt) {
@@ -742,7 +742,7 @@ func TestManagedTenantRouteMigrationsComposeConfirmedPredecessorIdentities(t *te
 			}
 			expectedDefaults := TenantDefaults{
 				Provider: ProviderNameXAI, Model: ModelNameGrok43,
-				DictationProvider: ProviderNameXAI, DictationModel: "xai-stt",
+				TranscriptionProvider: ProviderNameXAI, TranscriptionModel: "xai-stt",
 				SystemPrompt: "preserve tenant prompt",
 			}
 			if tenantRecord.defaults() != expectedDefaults || len(tenantRecord.ConnectionAssignments) != 3 || len(tenantRecord.ProviderProfiles) != 3 {
@@ -1061,7 +1061,7 @@ func TestManagedQwenCloudRetirementMigrationRejectsStageFailures(t *testing.T) {
 		{
 			name: "invalid retained defaults", want: "operation=preflight",
 			configure: func(t *testing.T, fixture managedQwenCloudRetirementFixture) {
-				if updateError := fixture.database.Model(&managedTenantRecord{}).Where(&managedTenantRecord{TenantID: fixture.tenant.TenantID}).Update("default_dictation_provider", "missing").Error; updateError != nil {
+				if updateError := fixture.database.Model(&managedTenantRecord{}).Where(&managedTenantRecord{TenantID: fixture.tenant.TenantID}).Update("default_transcription_provider", "missing").Error; updateError != nil {
 					t.Fatalf("seed invalid retained defaults: %v", updateError)
 				}
 			},

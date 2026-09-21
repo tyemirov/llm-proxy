@@ -262,11 +262,14 @@ func (service *managementService) saveConnectionHandler(create bool) gin.Handler
 		}
 		if verify {
 			provider := definition
-			model := definition.textModels[definition.defaultTextModel.string()]
-			provider.connectionValues = cloneStringMap(values)
-			if model.transportIdentifier != "" {
-				provider, _ = provider.resolvedTransport(model.transportIdentifier)
+			provider.upstreamScope = upstreamRequestScope{tenant: upstreamManagementTenant + ":" + principal.userID, account: record.ID, class: upstreamInteractive}
+			model, modelAvailable := definition.textModels[definition.verification.Model]
+			if definition.verification.Model != "" && !modelAvailable {
+				writeProviderKeyVerificationError(ctx, errProviderKeyVerificationUnavailable)
+				return
 			}
+			provider.connectionValues = cloneStringMap(values)
+			provider, _ = provider.resolvedTransport(definition.verification.Transport)
 			if err := service.keyVerifier.verify(ctx.Request.Context(), provider, model, values[provider.activeTransport.authentication.Field]); err != nil {
 				writeProviderKeyVerificationError(ctx, err)
 				return

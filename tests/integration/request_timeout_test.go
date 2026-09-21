@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -117,8 +118,7 @@ func TestIntegrationGatewayContextTimeoutCancelsUpstreamRequest(testingInstance 
 	testingInstance.Cleanup(func() { _ = loggerInstance.Sync() })
 	router, buildError := buildIntegrationRouter(testingInstance, proxy.Configuration{
 		LogLevel:              logLevelDebug,
-		WorkerCount:           1,
-		QueueSize:             4,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 4),
 		RequestTimeoutSeconds: gatewayContextProxyTimeout,
 		Endpoints:             endpoints,
 		MaxPromptBytes:        proxy.DefaultMaxPromptBytes,
@@ -170,7 +170,7 @@ func TestIntegrationUpstreamRequestTimeoutTriggersGatewayTimeout(testingInstance
 		testingInstance.Run(testCase.name, func(subTest *testing.T) {
 			endpoints := proxy.NewEndpoints()
 			configureProxy(subTest, makeTimeoutHTTPClient(subTest, endpoints), endpoints)
-			router, buildError := buildIntegrationRouter(subTest, proxy.Configuration{LogLevel: logLevelDebug, WorkerCount: 1, QueueSize: 8, RequestTimeoutSeconds: timeoutRequestTimeout, Endpoints: endpoints}, newLogger(subTest))
+			router, buildError := buildIntegrationRouter(subTest, proxy.Configuration{LogLevel: logLevelDebug, UpstreamCapacity: testfixtures.UpstreamCapacity(1, 8), RequestTimeoutSeconds: timeoutRequestTimeout, Endpoints: endpoints}, newLogger(subTest))
 			if buildError != nil {
 				subTest.Fatalf("BuildRouter failed: %v", buildError)
 			}
@@ -226,8 +226,7 @@ func (body *closeAwareBlockingBody) Close() error {
 func timeoutContractConfiguration(defaultSeconds int, maximumSeconds int) proxy.Configuration {
 	return proxy.Configuration{
 		LogLevel:                 proxy.LogLevelInfo,
-		WorkerCount:              1,
-		QueueSize:                4,
+		UpstreamCapacity:         testfixtures.UpstreamCapacity(1, 4),
 		RequestTimeoutSeconds:    defaultSeconds,
 		MaxRequestTimeoutSeconds: maximumSeconds,
 	}

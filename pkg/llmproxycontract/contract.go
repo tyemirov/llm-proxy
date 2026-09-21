@@ -18,16 +18,24 @@ const (
 	ErrorCodeProviderDiagnosticsNotFound = "provider_diagnostics_not_found"
 	// MediaCapabilityVideoGenerate identifies durable video generation.
 	MediaCapabilityVideoGenerate = "video.generate"
+	// MediaCapabilityImageGenerate identifies durable image generation.
+	MediaCapabilityImageGenerate = "image.generate"
+	// MediaCapabilityImageEdit identifies durable image editing.
+	MediaCapabilityImageEdit = "image.edit"
 	// MediaCapabilityAudioTranscribe identifies durable speech transcription.
 	MediaCapabilityAudioTranscribe = "audio.transcribe"
 	// MediaCapabilityAudioDiarize identifies durable speaker diarization.
 	MediaCapabilityAudioDiarize = "audio.diarize"
+	// MediaCapabilityAudioDictionaryCreate identifies pronunciation dictionary creation.
+	MediaCapabilityAudioDictionaryCreate = "audio.dictionary.create"
 	// MediaCapabilityAudioAlign identifies durable transcript alignment.
 	MediaCapabilityAudioAlign = "audio.align"
 	// MediaCapabilitySubtitlesCreate identifies durable subtitle creation.
 	MediaCapabilitySubtitlesCreate = "subtitles.create"
 	// MediaCapabilityAudioSpeechGenerate identifies durable speech synthesis.
 	MediaCapabilityAudioSpeechGenerate = "audio.speech.generate"
+	// MediaCapabilityAudioSpeechConvert identifies durable voice conversion.
+	MediaCapabilityAudioSpeechConvert = "audio.speech.convert"
 	// MediaCapabilityAudioVoiceExtract identifies durable voice extraction.
 	MediaCapabilityAudioVoiceExtract = "audio.voice.extract"
 	// MediaOperationStateQueued identifies accepted work awaiting a worker.

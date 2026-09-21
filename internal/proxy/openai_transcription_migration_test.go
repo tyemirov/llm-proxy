@@ -25,7 +25,7 @@ func TestOpenAITranscriptionRetirementOwnershipMigration(t *testing.T) {
 		t.Run(model, func(t *testing.T) {
 			database := openLegacyManagedTenantDatabase(t, filepath.Join(t.TempDir(), "ownership.db"))
 			now := time.Date(2026, 9, 7, 1, 0, 0, 0, time.UTC)
-			tenant := legacyManagedTenantRecord{UserID: "transcription-owner", TenantID: "managed-transcription", DefaultProvider: ProviderNameOpenAI, DefaultModel: "gpt-4.1", DefaultDictationProvider: ProviderNameOpenAI, DefaultDictationModel: model, DefaultSystemPrompt: "preserve prompt", CreatedAt: now, UpdatedAt: now}
+			tenant := legacyManagedTenantRecord{UserID: "transcription-owner", TenantID: "managed-transcription", DefaultProvider: ProviderNameOpenAI, DefaultModel: "gpt-4.1", DefaultTranscriptionProvider: ProviderNameOpenAI, DefaultTranscriptionModel: model, DefaultSystemPrompt: "preserve prompt", CreatedAt: now, UpdatedAt: now}
 			cipher := internalManagedProviderKeyCipher()
 			encrypted, err := cipher.encrypt(bytes.NewReader(bytes.Repeat([]byte{1}, cipher.aeadCipher.NonceSize())), tenant.UserID, ProviderNameOpenAI, "transcription-test-key")
 			if err != nil {
@@ -44,7 +44,7 @@ func TestOpenAITranscriptionRetirementOwnershipMigration(t *testing.T) {
 			management := managedRouterTestManagementConfiguration()
 			management.DatabaseDialector = database.Dialector
 			configuration := Configuration{ProviderCatalog: internalCanonicalProviderCatalog(), Management: management, AssetStorePath: t.TempDir()}
-			router, err := BuildRouter(configuration, zap.NewNop().Sugar())
+			router, err := BuildRouter(withInternalUpstreamCapacity(t, configuration), zap.NewNop().Sugar())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -61,8 +61,8 @@ func TestOpenAITranscriptionRetirementOwnershipMigration(t *testing.T) {
 			if err := database.First(&current, "tenant_id = ?", tenant.TenantID).Error; err != nil {
 				t.Fatal(err)
 			}
-			if current.DefaultDictationModel != "gpt-transcribe" || current.DefaultModel != tenant.DefaultModel || current.DefaultSystemPrompt != tenant.DefaultSystemPrompt || !current.UpdatedAt.Equal(now) {
-				t.Fatalf("ownership migration dictation=%s text=%s prompt=%q updated=%s expected=%s", current.DefaultDictationModel, current.DefaultModel, current.DefaultSystemPrompt, current.UpdatedAt, now)
+			if current.DefaultTranscriptionModel != "gpt-transcribe" || current.DefaultModel != tenant.DefaultModel || current.DefaultSystemPrompt != tenant.DefaultSystemPrompt || !current.UpdatedAt.Equal(now) {
+				t.Fatalf("ownership migration dictation=%s text=%s prompt=%q updated=%s expected=%s", current.DefaultTranscriptionModel, current.DefaultModel, current.DefaultSystemPrompt, current.UpdatedAt, now)
 			}
 			var historical managedUsageEventRecord
 			if err := database.First(&historical, 1).Error; err != nil {
@@ -71,7 +71,7 @@ func TestOpenAITranscriptionRetirementOwnershipMigration(t *testing.T) {
 			if historical.ModelID != model || historical.ProviderID != ProviderNameOpenAI || historical.TotalTokens != 9 {
 				t.Fatal("ownership migration changed historical usage")
 			}
-			if _, err := BuildRouter(configuration, zap.NewNop().Sugar()); err != nil {
+			if _, err := BuildRouter(withInternalUpstreamCapacity(t, configuration), zap.NewNop().Sugar()); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -109,7 +109,7 @@ func TestOpenAITranscriptionRetirementStartup(t *testing.T) {
 				secret := hex.EncodeToString(digest[:])
 				tenant.SecretDigest = &secret
 				tenant.DefaultProvider, tenant.DefaultModel = ProviderNameOpenAI, "gpt-4.1"
-				tenant.DefaultDictationProvider, tenant.DefaultDictationModel = ProviderNameOpenAI, model
+				tenant.DefaultTranscriptionProvider, tenant.DefaultTranscriptionModel = ProviderNameOpenAI, model
 				tenant.DefaultSystemPrompt = "preserve tenant prompt"
 				profile := managedProviderProfileRecord{TenantID: tenant.TenantID, ProviderID: ProviderNameOpenAI, TextModel: "gpt-4.1", SystemPrompt: "preserve profile prompt", CreatedAt: now, UpdatedAt: now}
 				encrypted, err := cipher.encryptConnection(strings.NewReader(strings.Repeat("n", cipher.aeadCipher.NonceSize())), tenant.TenantID, ProviderNameOpenAI, CatalogCredentialAPIKey, "transcription-test-key")
@@ -152,7 +152,7 @@ func TestOpenAITranscriptionRetirementStartup(t *testing.T) {
 			management := managedRouterTestManagementConfiguration()
 			management.DatabaseDialector = database.Dialector
 			configuration := Configuration{Endpoints: endpoints, ProviderCatalog: internalCanonicalProviderCatalog(), Management: management, AssetStorePath: t.TempDir()}
-			router, err := BuildRouter(configuration, zap.NewNop().Sugar())
+			router, err := BuildRouter(withInternalUpstreamCapacity(t, configuration), zap.NewNop().Sugar())
 			if scenario != "success" {
 				if err == nil || !strings.Contains(err.Error(), "rejected") {
 					t.Fatalf("rollback error=%v", err)
@@ -161,13 +161,13 @@ func TestOpenAITranscriptionRetirementStartup(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if _, err = BuildRouter(configuration, zap.NewNop().Sugar()); err != nil {
+				if _, err = BuildRouter(withInternalUpstreamCapacity(t, configuration), zap.NewNop().Sugar()); err != nil {
 					t.Fatal(err)
 				}
 			}
 			for index, expected := range tenants {
 				if scenario == "success" {
-					expected.DefaultDictationModel = "gpt-transcribe"
+					expected.DefaultTranscriptionModel = "gpt-transcribe"
 				}
 				var actual managedTenantRecord
 				if err := database.First(&actual, "tenant_id = ?", expected.TenantID).Error; err != nil {

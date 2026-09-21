@@ -1,8 +1,34 @@
 server:
   port: 8080
   log_level: info
-  workers: 4
-  queue_size: 32
+  upstream_capacity:
+    global: {active: 32, admitted: 512}
+    tenant: {active: 8, admitted: 32}
+    account: {active: 8, admitted: 32}
+    media: {active: 24, admitted: 256}
+    status: {active: 8, admitted: 128}
+    transfer: {active: 8, admitted: 128}
+    interactive_reserve: 1
+    origins:
+      - {origin: https://api.fal.ai, active: 4, queued: 24}
+      - {origin: https://api.elevenlabs.io, active: 5, queued: 24}
+      - {origin: https://storage.googleapis.com, active: 2, queued: 1}
+      - {origin: https://queue.fal.run, active: 4, queued: 24}
+      - {origin: https://fal.media, active: 4, queued: 24}
+      - {origin: https://v3.fal.media, active: 4, queued: 24}
+      - {origin: https://v3b.fal.media, active: 4, queued: 24}
+      - {origin: https://api.openai.com, active: 4, queued: 24}
+      - {origin: https://api.deepseek.com, active: 4, queued: 24}
+      - {origin: https://api.moonshot.ai, active: 4, queued: 24}
+      - {origin: https://api.minimax.io, active: 4, queued: 24}
+      - {origin: https://api.siliconflow.com, active: 4, queued: 24}
+      - {origin: https://api.z.ai, active: 4, queued: 24}
+      - {origin: https://generativelanguage.googleapis.com, active: 4, queued: 24}
+      - {origin: https://api.anthropic.com, active: 4, queued: 24}
+      - {origin: https://api.meta.ai, active: 4, queued: 24}
+      - {origin: https://api.x.ai, active: 4, queued: 24}
+      - {origin: https://api.baiduqianfan.ai, active: 4, queued: 24}
+      - {origin: https://aiplatform.googleapis.com, active: 4, queued: 24}
   request_timeout_seconds: 360
   max_request_timeout_seconds: 3600
   max_prompt_bytes: 4194304

@@ -202,7 +202,14 @@ The Go and Python asset clients send the tenant bearer key in the Authorization 
 They remove query credentials from the upload URL, including credentials in the configured base URL.
 The asset route rejects query credentials.
 
+Both clients accept every asset MIME type that the gateway declares in OpenAPI.
+These types include JPEG, PNG, WebP, M4A, MPEG audio, WAV, FLAC, Ogg, MP4, WebM, JSON, SubRip, and raw binary audio.
+Asset uploads preserve exact bytes. Message attachments retain their separate type constraints.
+Upload responses include the resolved request-timeout header. Metadata responses do not require that header.
+
 The Python media wait checks its deadline before each status request.
 It supplies the remaining timeout to the HTTP transport and stops polling when the budget expires.
 A custom Python response opener must accept the keyword argument `timeout` and apply it to its HTTP request.
 The argument is a number of seconds or `None` for a request without a client timeout.
+
+Speech generation and conversion use the common media operation API. See [provider speech](provider-speech.md) for inputs and output artifacts.

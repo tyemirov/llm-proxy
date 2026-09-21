@@ -60,10 +60,14 @@ const (
 	publicWireContractMetaTranscription      = "meta_transcription"
 	publicWireContractOpenAIChatCompletions  = "openai_chat_completions"
 	publicWireContractOpenAIResponses        = "openai_responses"
+	publicWireContractFALQueueImages         = "fal_queue_images"
+	publicWireContractOpenAIImages           = "openai_images"
 	publicWireContractDashScopeResponses     = "dashscope_responses"
 	publicWireContractXAIResponses           = "xai_responses"
 	publicWireContractXAIVideosGenerations   = "xai_videos_generations"
 	publicWireContractDictatorSpeechV1       = "dictator_speech_v1"
+	publicWireContractElevenLabsSpeech       = "elevenlabs_speech"
+	publicWireContractElevenLabsConversion   = "elevenlabs_conversion"
 
 	publicExecutionLifecyclePollable     = "pollable_resource"
 	publicExecutionLifecycleSynchronous  = "synchronous_completion"
@@ -98,9 +102,9 @@ const (
 
 var publicCapabilityValues = map[string]struct{}{
 	publicCapabilityAudioInput: {}, "dictation": {}, publicCapabilityImageInput: {}, "reasoning": {},
-	"text": {}, "video_generation": {}, "web_search": {}, "caller_tools": {},
+	"text": {}, "image_generation": {}, "image_editing": {}, "video_generation": {}, "web_search": {}, "caller_tools": {},
 	"audio_transcription": {}, "audio_diarization": {}, "audio_alignment": {},
-	"subtitle_creation": {}, "speech_generation": {}, "voice_extraction": {},
+	"subtitle_creation": {}, "speech_generation": {}, "speech_conversion": {}, "voice_extraction": {},
 }
 
 type publicOfferingRoute struct {
@@ -109,6 +113,10 @@ type publicOfferingRoute struct {
 }
 
 var publicOfferingMediaTransports = map[publicOfferingRoute]string{
+	{wireContract: publicWireContractElevenLabsSpeech, executionLifecycle: publicExecutionLifecycleSynchronous}:       "",
+	{wireContract: publicWireContractElevenLabsConversion, executionLifecycle: publicExecutionLifecycleSynchronous}:   "",
+	{wireContract: publicWireContractFALQueueImages, executionLifecycle: publicExecutionLifecycleAsynchronous}:        "",
+	{wireContract: publicWireContractOpenAIImages, executionLifecycle: publicExecutionLifecycleSynchronous}:           "",
 	{wireContract: publicWireContractVertexGenerateContent, executionLifecycle: publicExecutionLifecycleSynchronous}:  publicMediaTransportInline,
 	{wireContract: publicWireContractGeminiInteractions, executionLifecycle: publicExecutionLifecycleSynchronous}:     publicMediaTransportFile,
 	{wireContract: publicWireContractAnthropicMessages, executionLifecycle: publicExecutionLifecycleSynchronous}:      publicMediaTransportInline,

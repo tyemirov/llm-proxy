@@ -1234,59 +1234,11 @@ func TestManagementProviderKeyVerificationPreservesVerifiedReplacementAndCoversT
 	}
 
 	t.Run("invalid verification URL", func(subTest *testing.T) {
-		configuration := providerKeyVerificationConfiguration("https://provider.invalid")
-		configuration.Endpoints.SetProviderBaseURL(proxy.ProviderNameGemini, "://")
-		router := newOperationalProviderKeyVerificationRouter(
-			subTest,
-			configuration,
-			zap.NewNop().Sugar(),
-			subTest.TempDir()+"/managed-tenants.db",
-			TestTimeout,
-		)
-		sessionCookie := managementSessionCookie(subTest, "verification-invalid-url")
-		tenantID := managementDefaultTenantTestID(subTest, router, sessionCookie)
-		response := putManagementProviderKey(
-			subTest,
-			router,
-			sessionCookie,
-			tenantID,
-			proxy.ProviderNameGemini,
-			"invalid-url-candidate",
-			proxy.ModelNameGemini35Flash,
-			"",
-			context.Background(),
-		)
-		if response.Code != http.StatusServiceUnavailable || strings.TrimSpace(response.Body.String()) != "provider_key_verification_unavailable" {
-			subTest.Fatalf("status=%d body=%q", response.Code, response.Body.String())
-		}
+		assertInvalidUpstreamEndpointStartup(subTest, providerEndpoints("://", proxy.ProviderNameGemini))
 	})
 
 	t.Run("invalid synchronous verification URL", func(subTest *testing.T) {
-		configuration := providerKeyVerificationConfiguration("https://provider.invalid")
-		configuration.Endpoints.SetProviderBaseURL(proxy.ProviderNameAnthropic, "://")
-		router := newOperationalProviderKeyVerificationRouter(
-			subTest,
-			configuration,
-			zap.NewNop().Sugar(),
-			subTest.TempDir()+"/managed-tenants.db",
-			TestTimeout,
-		)
-		sessionCookie := managementSessionCookie(subTest, "verification-invalid-synchronous-url")
-		tenantID := managementDefaultTenantTestID(subTest, router, sessionCookie)
-		response := putManagementProviderKey(
-			subTest,
-			router,
-			sessionCookie,
-			tenantID,
-			proxy.ProviderNameAnthropic,
-			"invalid-url-candidate",
-			proxy.ModelNameClaudeSonnet46,
-			"",
-			context.Background(),
-		)
-		if response.Code != http.StatusServiceUnavailable || strings.TrimSpace(response.Body.String()) != "provider_key_verification_unavailable" {
-			subTest.Fatalf("status=%d body=%q", response.Code, response.Body.String())
-		}
+		assertInvalidUpstreamEndpointStartup(subTest, providerEndpoints("://", proxy.ProviderNameAnthropic))
 	})
 
 	t.Run("missing tenant", func(subTest *testing.T) {
@@ -1335,6 +1287,15 @@ func newOperationalProviderKeyVerificationRouter(t *testing.T, configuration pro
 	t.Helper()
 	configuration = managementConfigurationWithDatabasePath(configuration, databasePath)
 	configuration.RequestTimeoutSeconds = requestTimeoutSeconds
+	var err error
+	configuration, err = configurationWithCatalogs(t, configuration)
+	if err != nil {
+		t.Fatal(err)
+	}
+	limit := configuration.UpstreamCapacity.Tenant
+	for _, origin := range []string{"https://test-workspace.ap-southeast-1.maas.aliyuncs.com", "https://updated-workspace.ap-southeast-1.maas.aliyuncs.com"} {
+		configuration.UpstreamCapacity.Origins = append(configuration.UpstreamCapacity.Origins, proxy.UpstreamOriginCapacity{Origin: origin, Provider: proxy.ProviderNameDashScope, Active: limit.Active, Queued: limit.Admitted - limit.Active})
+	}
 	router, buildError := buildRouterWithCatalogs(t, configuration, logger)
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)

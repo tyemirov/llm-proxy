@@ -5,6 +5,7 @@ import {
   AUTH_STATES,
   COPY,
   DASHBOARD_VIEWS,
+  MANAGEMENT_AUTO_REFRESH_INTERVAL_MILLISECONDS,
   NOTICE_KINDS,
   USAGE_DETAIL_KINDS,
   USAGE_DETAIL_PAGE_LIMIT,
@@ -45,7 +46,8 @@ const HTTP_ERROR_STATUS_MINIMUM = 400;
 /** @typedef {ManagementApplicationState & import("../types.d.js").AlpineMagic & {
  *   hasUsageFailures: boolean,
  *   hasLoadedUsageDetails: boolean,
- *   refreshAdminUsers: () => Promise<void>,
+ *   isAdmin: boolean,
+ *   loadAdminUsers: () => Promise<void>,
  *   setPageNotice: (kind: string, message: string) => void
  * }} UsageDashboardHost */
 
@@ -242,16 +244,38 @@ export function createUsageDashboardResponsibility() {
       renderUsageDonutSegments(target, rows);
     },
 
-    async refreshDashboard() {
-      if (this.dashboardView === DASHBOARD_VIEWS.ADMIN) {
-        await this.refreshAdminUsers();
+    startAutoRefresh() {
+      if (this.autoRefreshTimerID !== null) {
         return;
       }
-      await this.refreshUsage();
+      this.autoRefreshTimerID = window.setInterval(() => {
+        void this.autoRefreshDashboard();
+      }, MANAGEMENT_AUTO_REFRESH_INTERVAL_MILLISECONDS);
     },
 
-    async refreshUsage() {
-      await this.loadUsageSummary(true);
+    stopAutoRefresh() {
+      if (this.autoRefreshTimerID === null) {
+        return;
+      }
+      window.clearInterval(this.autoRefreshTimerID);
+      this.autoRefreshTimerID = null;
+    },
+
+    async autoRefreshDashboard() {
+      if (this.authState !== AUTH_STATES.AUTHENTICATED || this.busy) {
+        return;
+      }
+      if (this.dashboardView === DASHBOARD_VIEWS.ADMIN) {
+        if (!this.isAdmin) {
+          return;
+        }
+        await this.loadAdminUsers();
+        return;
+      }
+      if (this.usageLoading) {
+        return;
+      }
+      await this.loadUsageSummary();
     },
 
     /** @param {import("../types.d.js").UsageInterval} interval */
@@ -263,7 +287,7 @@ export function createUsageDashboardResponsibility() {
       this.selectedUsageInterval = interval;
       this.usage = emptyUsageSummary(interval);
       this.usageProfile = null;
-      await this.loadUsageSummary(false);
+      await this.loadUsageSummary();
     },
 
     /** @param {Event} event */
@@ -282,7 +306,7 @@ export function createUsageDashboardResponsibility() {
         this.clearUsageDetails(false);
         this.selectedUsageTenantID = EMPTY_STRING;
         this.usageProfile = null;
-        await this.loadUsageSummary(false);
+        await this.loadUsageSummary();
         return;
       }
       const dashboard = document.querySelector('connection-dashboard');
@@ -396,8 +420,7 @@ export function createUsageDashboardResponsibility() {
       }
     },
 
-    /** @param {boolean} showSuccessNotice */
-    async loadUsageSummary(showSuccessNotice) {
+    async loadUsageSummary() {
       const tenantID = this.selectedUsageTenantID;
       const interval = this.selectedUsageInterval;
       const loadVersion = this.usageLoadVersion + 1;
@@ -430,9 +453,6 @@ export function createUsageDashboardResponsibility() {
           (this.usageDetailsKind === USAGE_DETAIL_KINDS.REJECTIONS && !this.hasUsageRejections)
         ) {
           this.clearUsageDetails(false);
-        }
-        if (showSuccessNotice) {
-          this.setPageNotice(NOTICE_KINDS.SUCCESS, COPY.usageRefreshed);
         }
       } catch (requestError) {
         if (!isAbortError(requestError) && this.canApplyUsageSummary(tenantID, loadVersion, interval)) {

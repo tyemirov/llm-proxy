@@ -11,7 +11,8 @@ that input capability.
 
 The public [LLM Proxy landing page](https://llm-proxy.mprlab.com/) explains the
 current provider, model, dictation, web-search, request-limit, and integration
-surface. Its route explorer filters model families by weight access and
+surface. Its route explorer initially shows all model families and capability types.
+Both weight access types are selected. Visitors can filter model families by weight access and
 provider-offering capabilities. It then selects a model family, an exact model,
 and a provider offering. Its model matrix has one row for each exact model and
 shows all current provider offerings for that model. Both interfaces use the
@@ -27,9 +28,11 @@ LLM Proxy owns the shared media operation gateway. F022 added the durable
 tenant API, operation store, asset delivery, and official Go client. Provider
 capability issues add adapters to this common service. Private Dictator access
 remains in F042.
-MediaOps retains only the TelePrompter application. Its other functionality moves to LLM Proxy under F071.
-TelePrompter consumes gateway operations only where its user flows require them.
+MediaOps keeps all applications, browser workflows, local processing, and application data.
+Only model and provider access moves to LLM Proxy under the F071 ownership contract.
 See the [consolidation strategy](docs/media-gateway-consolidation.md) for issue ownership, delivery order, and acceptance requirements.
+
+The [provider speech contract](docs/provider-speech.md) defines six ElevenLabs speech and conversion models, source controls, formats, and owned audio artifacts.
 
 ## Features
 
@@ -84,6 +87,38 @@ The [official Go media example](examples/media-operations/main.go) exercises
 capability discovery, operation creation, waiting, metadata reads, and verified
 byte download against a running service. The canonical request and response
 schemas remain in [OpenAPI](docs/openapi.yaml).
+
+OpenAI `gpt-image-2` supports `image.generate` and `image.edit` through the existing
+tenant connection. Select the explicit `images` or `responses` surface.
+Supply the model, prompt, quality, size, background, output
+format, and output count. JPEG and WebP also require explicit compression from
+`0` through `100`. PNG must omit compression. Read exact route limits from
+`GET /model/v1/capabilities`.
+
+Editing accepts ordered tenant `image_asset_ids`. The Images surface also accepts
+a PNG `mask_asset_id`. The Responses surface requires a catalog `responses_model`
+and produces one image. Use `previous_operation_id` for a follow-up request.
+The parent must be a successful Responses operation from the same tenant,
+connection version, route, image model, and text model. Native identifiers remain
+private. Both surfaces support `stream` and up to three `partial_images`.
+Operation reads expose verified previews in `partial_outputs`.
+
+Local admission rejection before image submission produces `failed` with `media_operation_unavailable`.
+The service releases input assets after this definite failure.
+The same idempotency key identifies the failed operation without another provider call.
+A transport error after provider dispatch can produce `uncertain` because provider execution is not known.
+
+The [typed Go image example](examples/image-generation/main.go) reads all image
+choices from `IMAGE_GENERATION_INPUT_JSON`. Set `LLM_PROXY_BASE_URL`,
+`LLM_PROXY_TENANT_KEY`, `MEDIA_OPERATION_IDEMPOTENCY_KEY`, and an existing
+`IMAGE_OUTPUT_DIRECTORY`. The example prints the accepted operation ID and
+saves each verified output. See the [image client examples](examples/image-generation/README.md)
+for surface selection, previews, and follow-up edits. Reuse the same key and intent to recover the
+operation. A lost Images response produces `uncertain`. Stored Responses jobs
+use retrieval after a stream interruption or worker restart. Their background
+cancellation requires provider confirmation. The gateway does not submit accepted
+work again. Source tests use local providers. Client
+publication, deployment, and live provider acceptance require separate evidence.
 
 The media worker settings are explicit under `server`:
 
@@ -319,11 +354,10 @@ an insert failure or process termination can lose an uncommitted event. Managed
 usage is operational telemetry, not a billing, accounting, or provider-job
 ledger; summaries may briefly lag completed proxy responses.
 
-Internally, `server.workers` limits concurrent upstream provider HTTP
-operations and `server.queue_size` limits upstream HTTP operations waiting for a
-worker. Long OpenAI background-response poll sleeps do not occupy a worker slot;
-only the actual upstream HTTP request or poll does. This admission queue stores
-no provider job ids and provides no durable retry or resume behavior.
+`server.upstream_capacity` bounds upstream HTTP requests by origin, tenant, and provider account.
+An active request retains its permit until the caller closes the response body.
+The scheduler releases active capacity between remote-job polls.
+Network admission does not store provider jobs or supply durable recovery.
 
 ## Configuration
 
@@ -347,22 +381,59 @@ The complete service configuration is in
 [provider catalog reference](docs/provider-catalog.md) for its field mapping
 and provider procedure.
 
-`server.workers` is not the number of client requests that may be connected at
-once. It is the upstream provider HTTP concurrency limit shared by text
-generation and dictation. `server.queue_size` is the number of additional
-upstream HTTP operations that may wait for that shared limit before the proxy
-returns `503 request queue full`.
+`server.upstream_capacity` is required. All limits are explicit positive integers.
+An `active` limit bounds requests that hold an upstream response body.
+An `admitted` limit includes active and queued requests.
+Each origin declares its own `active` and `queued` limits.
 
-`server.upstream_rate_limits` applies strict rolling-window call limits in that
-same shared HTTP layer. Rules match an exact normalized upstream origin
-(`scheme://host[:port]`), so providers that use the same origin share one
-budget while different origins are independent. A delayed call remains in the
-bounded upstream queue but does not occupy a worker. Every upstream attempt,
-including transport retries and OpenAI response retries, consumes one call.
-The shared client reserves the slot only after worker capacity is available;
-if the rolling window is still full, it releases that worker before waiting.
-An absent or empty list disables rate limiting; invalid and duplicate rules
-fail startup.
+| Field | Capacity ownership |
+| --- | --- |
+| `global` | All upstream HTTP requests in the process. |
+| `tenant` | One authenticated tenant within one origin. |
+| `account` | One saved provider connection within one origin, including its assigned tenants. |
+| `media` | Media submission requests across all origins. |
+| `status` | Provider status requests across all origins. |
+| `transfer` | Provider artifact transfers across all origins. |
+| `interactive_reserve` | Active and admitted capacity unavailable to media, status, and transfer requests within each shared limit. |
+| `origins` | Exact origin allocations. Each entry requires `origin`, `active`, and `queued`. |
+
+The sum of origin allocations must not exceed `global.admitted`.
+Each allocation contains the origin's active and queued limits.
+Thus, one origin cannot consume another origin's admission allocation.
+Ready origins and tenants receive capacity in turn.
+An exhausted allocation returns `503 request queue full`.
+Accepted media operations retain their separate durable-job limits.
+
+Startup rejects missing, duplicate, unknown, and contradictory origin rules.
+Every saved HTTP connection must resolve to declared origins at startup.
+It also rejects the removed `workers` and `queue_size` fields.
+The checked-in configuration declares the catalog's configured HTTP origins.
+Before you configure a connection URL, add its exact origin to `origins`.
+For a connection-specific origin, also set `provider` to its catalog provider identifier.
+The provider must declare an HTTP endpoint supplied by a connection field.
+For example, a DashScope workspace rule uses `provider: dashscope` and its exact HTTPS origin.
+Restart the service after you change these allocations.
+
+An active request retains capacity until its response body closes.
+A media worker releases HTTP capacity between remote-job polls.
+Accepted jobs use `media_operation_workers` and the durable operation limits.
+HTTP admission does not replace those job limits.
+
+The `upstream HTTP admission` event records each decision and work class.
+It includes the origin, global active and admitted counts, and origin active and queued counts.
+HTTP requests carry a `request_id`. Media workers carry an `operation_id`.
+The event excludes prompts, credentials, connection fields, and provider error bodies.
+
+`server.upstream_rate_limits` applies rolling-window call limits to the shared HTTP layer.
+Rules match an exact normalized origin (`scheme://host[:port]`).
+Providers that use the same origin share one rate budget.
+Different origins have independent budgets.
+
+A delayed call retains its origin's bounded admission but does not occupy active capacity.
+Every upstream attempt, including each retry, consumes one call.
+The scheduler reserves a rate slot only when both active capacity and the rate window permit dispatch.
+An absent or empty list disables rate limits.
+Invalid and duplicate rules fail startup.
 
 ```yaml
 server:
@@ -372,12 +443,12 @@ server:
       interval: "1m"
 ```
 
-`origin` accepts only an exact `http` or `https` origin without user info,
-path, query, or fragment. `max_requests` must be positive, and `interval` must
-be a positive Go duration such as `500ms`, `1s`, or `1m`. When a call must wait,
-the shared client emits a structured info log with the origin, limit, interval,
-and wait duration; context cancellation during the wait emits a warning and
-keeps the existing request-timeout error mapping.
+`origin` accepts an exact `http` or `https` origin without user info, path, query, or fragment.
+`max_requests` must be positive.
+`interval` must be a positive Go duration such as `500ms`, `1s`, or `1m`.
+The delay event records the origin, limit, interval, and wait duration.
+The event also includes the proxy request identifier when the request has telemetry.
+Context cancellation emits a warning and preserves the request-timeout error mapping.
 
 ### Provider support matrix
 
@@ -769,7 +840,7 @@ Required hosted values are profile-specific:
 | `management.jwt_issuer` | JWT issuer, normally `tauth`. |
 | `management.session_cookie_name` | Exact app/environment TAuth session cookie name. |
 | `management.database_path` | Required SQLite location for provider connections, provider profiles, defaults, generated-secret digests, and usage events. |
-| `management.usage_queue_size` | Positive capacity of the process-local FIFO for asynchronous managed usage persistence. Defaults to `1024`; this queue is independent from `server.queue_size`. |
+| `management.usage_queue_size` | Positive capacity of the process-local FIFO for asynchronous managed usage persistence. Defaults to `1024`. This queue is independent from upstream network admission. |
 | `management.provider_key_encryption_key` | Required base64-encoded 32-byte key used for AES-GCM encryption of account connection credentials at rest. Generate with `openssl rand -base64 32` and store it with backend deployment secrets. |
 | `management.management_api_origin` | Browser-facing management API origin served from `/config-ui.yaml` under `llmProxy.managementApiOrigin`. |
 | `management.proxy_origin` | Browser-facing public proxy origin served from `/config-ui.yaml` under `llmProxy.proxyOrigin` for generated examples. |
@@ -822,7 +893,7 @@ Fresh databases create the current tables directly, without a schema number or i
 Current account-connection databases validate their records without a version query or a repeated transfer.
 The bounded connection transfer remains necessary for the retained production database.
 The transfer preserves tenant assignments, access keys, defaults, prompts, timestamps, and usage.
-See the [schema transition record](docs/managed-schema-transition.md) for I261 inventory evidence and the remaining transfer requirements.
+See the [schema transition record](docs/managed-schema-transition.md) for I271 inventory evidence and the remaining transfer requirements.
 
 The packaged configuration requires every `LLM_PROXY_MANAGEMENT_*` placeholder to have a value.
 Local `make up` projects these values from `configs/.env.local` into `configs/.env.api.local`.
@@ -863,7 +934,8 @@ Authenticated users land on the tenant dashboard and usage overview.
 Selecting a tenant in the map also selects its usage.
 **Account usage** shows totals across all owned tenants.
 The usage selector can narrow the charts independently.
-The interval defaults to `30 days` and retains the selected usage scope during refresh.
+The interval defaults to `30 days` and retains the selected usage scope during automatic refresh.
+Usage summaries refresh automatically every 30 seconds while the user is authenticated.
 Execution metrics include succeeded and failed requests.
 The separate `rejected_requests` count identifies requests rejected before provider dispatch. The
 success-rate metric renders an **N failed requests** action only when the selected
@@ -889,7 +961,7 @@ starts with a `Bar graph` that ranks exact request counts against the largest
 row. Its toggle changes only that card to a `Donut chart`. The donut presents
 the same ordered request counts as shares with a count-and-percentage legend.
 Rounded shares total 100 percent, and every category remains separate. Each
-selection survives interval, Refresh, and Usage tenant changes. Authentication
+selection survives interval, automatic usage refresh, and Usage tenant changes. Authentication
 reset or page reload resets both cards to bars. A toggle makes no request.
 Requests and Tokens remain separate line charts. Their
 visible X axes use the summary's UTC hour or date buckets. Their zero-based,
@@ -1332,13 +1404,14 @@ Applications store this value as `LLM_PROXY_DEFAULT_TENANT_KEY`.
 
 This repository exposes the standard local targets used by MPR app repos:
 
-Hosted CI runs backend and frontend qualification in independent jobs.
-Each job has a ten-minute limit.
+Hosted CI runs Go coverage, backend supporting checks, and frontend qualification in three independent jobs.
+The coverage job has a fifteen-minute limit for setup, compilation, and the existing ten-minute Go test limit.
+The other qualification jobs have ten-minute limits.
 Together, the jobs run every gate from local `make ci`.
 Playwright global setup builds the capability binary before browser test workers start.
 The build does not use the 30-second test hook limit.
 Global teardown removes the temporary binary after the browser tests.
-The required `Test / test` check passes only when both jobs succeed.
+The required `Test / test` check passes only when all three jobs succeed.
 A failed, cancelled, skipped, or missing job result prevents success.
 
 | Command | Purpose |
@@ -1346,7 +1419,8 @@ A failed, cancelled, skipped, or missing job result prevents success.
 | `make frontend-dependencies` | Install the pinned npm graph and Chromium into ignored project-local state. Focused frontend validation, `make lint`, `make test`, and `make ci` invoke this target automatically. |
 | `make check-brand-icons` | Validate local SVG assets and all provider and family mappings. See [Provider and model icons](docs/provider-model-icons.md). |
 | `make test-brand-icons` | Run browser and build checks for management and public catalog icons. |
-| `make ci-backend` | Run the release contract, Go formatting and analysis, Python analysis, Go coverage tests, Python tests, and local provider preflight. |
+| `make ci-backend` | Run the complete Go suite and require 100% statement coverage. |
+| `make ci-backend-checks` | Run release checks, Go and Python analysis, protocol acceptance, admission race tests, Python tests, and local provider preflight. |
 | `make ci-frontend` | Run frontend analysis, browser tests, the Pages artifact check, and the management authentication test. |
 | `make up` | Require the ignored private `configs/.env.local`, then build and run the complete local browser orchestration: ghttp static UI and same-origin TAuth routes on `localhost:4179`, plus the API on `localhost:8080`. It waits for Compose startup before verifying the static/config/auth/API boundaries and reporting ready. |
 | `make down` | Stop the exact local Compose project started by `make up`, including orphaned services and its project network, while retaining the named local TAuth and management data volumes. |
@@ -1366,6 +1440,11 @@ A failed, cancelled, skipped, or missing job result prevents success.
 | `make release` | Delegate the validated application checkout to the installed Gateway. The transaction validates its exact prepared or reused decision before CI. |
 | `make publish` | Publish the exact sealed release through the installed Gateway. |
 | `make deploy` | Converge the declared application resources through the installed Gateway. |
+
+Local CI runs Python client checks at the same time as Go integration and admission race checks.
+Each check uses separate temporary state.
+CI waits for all three checks before browser gates or removal of temporary files.
+A failed check prevents a success receipt.
 
 Live provider smoke tests are intentionally not part of `make ci`; they call
 paid upstream APIs and depend on local or CI secret availability. The dynamic
@@ -1428,11 +1507,12 @@ Google documents the [preview model](https://ai.google.dev/gemini-api/docs/model
 [thinking levels](https://ai.google.dev/gemini-api/docs/thinking), and
 [background lifecycle](https://ai.google.dev/gemini-api/docs/background-execution).
 
-`make ci` runs each declared gate sequentially through one top-level runner.
-Coverage is written to a fresh private artifact for that invocation and
-verified again after the final test gate. If orchestration exits before the
-terminal receipt, the command returns nonzero and identifies the active stage;
-an ignored coverage artifact from an earlier run cannot satisfy completion.
+`make ci` runs all declared gates through one runner.
+The admission race tests and full Go tests run concurrently.
+The runner requires both results before it continues to the remaining gates.
+Each invocation writes a new coverage artifact and verifies it after the final test gate.
+An incomplete run returns a nonzero status and identifies the active stage.
+An earlier coverage artifact cannot satisfy the completion check.
 
 | Provider | Key variable | Model override |
 |----------|--------------|----------------|
@@ -1533,6 +1613,9 @@ configuration without building or starting the proxy. Inspect that config with
 /tmp/llm-proxy-live.yml`. Unless `LLM_PROXY_LIVE_PORT` explicitly selects a
 port, each harness run allocates a fresh loopback port. Cleanup removes only the
 temporary proxy and provider children that it starts.
+The preflight divides the OpenAI capacity allocation between its native origin and the loopback origin.
+This division preserves the total origin allocation and the global capacity budget.
+The production configuration does not change.
 
 ### Production Default-tenant live test
 

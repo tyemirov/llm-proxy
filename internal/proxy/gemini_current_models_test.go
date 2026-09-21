@@ -119,6 +119,7 @@ func TestGeminiCurrentModelsSynchronousKeyVerification(t *testing.T) {
 					offering.DefaultOperations = slices.DeleteFunc(offering.DefaultOperations, func(operation string) bool { return operation == proxy.ModelOperationText })
 					if offering.Model == "gemini-3.5-flash-lite" {
 						offering.DefaultOperations = append(offering.DefaultOperations, proxy.ModelOperationText)
+						schema.Providers[index].Verification = proxy.ProviderCatalogVerification{Transport: offering.Transport, Model: offering.Model}
 					}
 				}
 			}

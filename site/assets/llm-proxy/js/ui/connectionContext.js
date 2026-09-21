@@ -4,7 +4,7 @@ import { MENU_ACTIONS } from '../constants.js?v=20260903f037';
 /** @typedef {ReturnType<typeof import('./managementApplicationState.js').createManagementApplicationState> & {
  * openAdminDashboard:()=>Promise<void>,
  * openUsageDashboard:()=>void,
- * loadUsageSummary:(showSuccessNotice:boolean)=>Promise<void>,
+ * loadUsageSummary:()=>Promise<void>,
  * clearUsageDetails:(restoreFocus:boolean)=>void
  * }} ConnectionContextHost */
 /** @template {object} T @param {T & ThisType<ConnectionContextHost & T>} value @returns {T} */
@@ -35,7 +35,7 @@ export function createConnectionContextResponsibility() {
    this.selectedUsageTenantID=tenantID;
    this.usageProfile=profile;
    if(profile)this.applyProfile(profile);
-   await this.loadUsageSummary(false);
+   await this.loadUsageSummary();
   }
  });
 }

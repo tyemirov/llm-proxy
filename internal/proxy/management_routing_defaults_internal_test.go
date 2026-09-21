@@ -5,6 +5,13 @@ import (
 	"testing"
 )
 
+func TestManagedRoutingDefaultsRejectNonCanonicalSpeechPair(t *testing.T) {
+	providers := newProviderRegistry(Configuration{ProviderCatalog: internalCanonicalProviderCatalog(), Endpoints: NewEndpoints()})
+	if _, err := validateCanonicalManagedRoutingDefaults(providers, TenantDefaults{SpeechProvider: "DICTATOR", SpeechModel: "silero-ru"}); !errors.Is(err, errManagedRoutingDefaultsInvalid) {
+		t.Fatalf("non-canonical speech default: %v", err)
+	}
+}
+
 func TestManagedRoutingDefaultsRejectNonCanonicalPairs(t *testing.T) {
 	const (
 		openAITextModel       = "openai-text"
@@ -22,27 +29,27 @@ func TestManagedRoutingDefaultsRejectNonCanonicalPairs(t *testing.T) {
 		),
 	})
 	canonical := TenantDefaults{
-		Provider:          ProviderNameOpenAI,
-		Model:             openAITextModel,
-		DictationProvider: ProviderNameOpenAI,
-		DictationModel:    openAIDictationModel,
+		Provider:              ProviderNameOpenAI,
+		Model:                 openAITextModel,
+		TranscriptionProvider: ProviderNameOpenAI,
+		TranscriptionModel:    openAIDictationModel,
 	}
 	providerSettings := map[providerID]managedProviderSettings{
 		newProviderID(ProviderNameOpenAI): internalManagedProviderSettings("sk-openai", "", openAITextModel, ""),
 	}
 	if _, validationError := validatePersistedManagedRoutingDefaults(providers, providerSettings, TenantDefaults{
-		Provider:          "OPENAI",
-		Model:             openAITextModel,
-		DictationProvider: ProviderNameOpenAI,
-		DictationModel:    openAIDictationModel,
+		Provider:              "OPENAI",
+		Model:                 openAITextModel,
+		TranscriptionProvider: ProviderNameOpenAI,
+		TranscriptionModel:    openAIDictationModel,
 	}); !errors.Is(validationError, errManagedRoutingDefaultsInvalid) {
 		t.Fatalf("non-canonical text error=%v", validationError)
 	}
 	if _, validationError := validatePersistedManagedRoutingDefaults(providers, providerSettings, TenantDefaults{
-		Provider:          ProviderNameOpenAI,
-		Model:             openAITextModel,
-		DictationProvider: "OPENAI",
-		DictationModel:    openAIDictationModel,
+		Provider:              ProviderNameOpenAI,
+		Model:                 openAITextModel,
+		TranscriptionProvider: "OPENAI",
+		TranscriptionModel:    openAIDictationModel,
 	}); !errors.Is(validationError, errManagedRoutingDefaultsInvalid) {
 		t.Fatalf("non-canonical dictation error=%v", validationError)
 	}
@@ -73,10 +80,10 @@ func TestManagedRoutingDefaultsRejectNonCanonicalPairs(t *testing.T) {
 		t.Fatalf("reconcile keyed providers: %v", reconciliationError)
 	}
 	expectedReconciled := TenantDefaults{
-		Provider:          ProviderNameDeepSeek,
-		Model:             deepSeekTextModel,
-		DictationProvider: ProviderNameOpenAI,
-		DictationModel:    openAIDictationModel,
+		Provider:              ProviderNameDeepSeek,
+		Model:                 deepSeekTextModel,
+		TranscriptionProvider: ProviderNameOpenAI,
+		TranscriptionModel:    openAIDictationModel,
 	}
 	if reconciled.value() != expectedReconciled {
 		t.Fatalf("reconciled defaults=%+v want=%+v", reconciled.value(), expectedReconciled)

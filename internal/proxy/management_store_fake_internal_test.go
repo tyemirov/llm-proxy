@@ -488,3 +488,19 @@ type testingT interface {
 	Helper()
 	Fatalf(string, ...interface{})
 }
+
+func (database *fakeManagedTenantDatabase) streamAccountConnections(_ context.Context, visit func(managedAccountConnectionRecord) error) error {
+	seen := map[string]bool{}
+	for _, tenant := range database.tenantsByID {
+		for _, assignment := range tenant.ConnectionAssignments {
+			if seen[assignment.ConnectionID] {
+				continue
+			}
+			seen[assignment.ConnectionID] = true
+			if err := visit(assignment.Connection); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}

@@ -8,6 +8,7 @@ export const AUTH_STATES = Object.freeze({
 });
 
 export const PUBLIC_SITE_PATH = "/";
+export const ROUTE_CAPABILITY_ALL = "all";
 export const APPLICATION_PATH = "/app/";
 export const LANDING_AUTHENTICATED_REDIRECT_ATTRIBUTE = "data-llm-proxy-authenticated-redirect-url";
 
@@ -56,6 +57,7 @@ export const USAGE_INTERVALS = Object.freeze([
 
 export const DEFAULT_USAGE_INTERVAL = "30d";
 export const USAGE_DETAIL_PAGE_LIMIT = 25;
+export const MANAGEMENT_AUTO_REFRESH_INTERVAL_MILLISECONDS = 30_000;
 
 export const USAGE_DETAIL_KINDS = Object.freeze({
   FAILURES: "failures",
@@ -121,6 +123,8 @@ export const PROVIDER_KEY_VERIFICATION_ERRORS = Object.freeze({
 
 export const PROVIDER_CAPABILITY_LABELS = Object.freeze({
   text: "Text",
+  image_generation: "Image generation",
+  image_editing: "Image editing",
   image_input: "Image analysis",
   audio_input: "Audio analysis",
   dictation: "Dictation",
@@ -128,9 +132,44 @@ export const PROVIDER_CAPABILITY_LABELS = Object.freeze({
   audio_transcription: "Transcription",
   audio_diarization: "Speaker diarization",
   audio_alignment: "Transcript alignment",
+  pronunciation_dictionary_creation: "Pronunciation dictionary",
   subtitle_creation: "Subtitles",
   speech_generation: "Speech synthesis",
+  speech_conversion: "Voice conversion",
   voice_extraction: "Voice extraction",
+});
+
+export const CAPABILITY_DOMAINS = Object.freeze({
+  TEXT: "text",
+  TRANSCRIPTION: "transcription",
+  SPEECH: "speech",
+  IMAGE: "image",
+  VIDEO: "video",
+});
+
+export const CAPABILITY_DOMAIN_LABELS = Object.freeze({
+  text: "Text",
+  transcription: "Transcription",
+  speech: "Speech",
+  image: "Image",
+  video: "Video",
+});
+
+export const OPERATION_CAPABILITY_DOMAINS = Object.freeze({
+  text: "text",
+  image_generation: "image",
+  image_editing: "image",
+  dictation: "transcription",
+  audio_transcription: "transcription",
+  audio_diarization: "transcription",
+  audio_alignment: "transcription",
+  pronunciation_dictionary_creation: "speech",
+  subtitle_creation: "transcription",
+  speech_generation: "speech",
+  speech_conversion: "speech",
+  voice_extraction: "speech",
+  image_input: "image",
+  video_generation: "video",
 });
 
 export const USER_MENU_ITEMS = Object.freeze([
@@ -218,8 +257,6 @@ export const COPY = Object.freeze({
   dashboardTitle: "Usage overview",
   adminDashboardEyebrow: "Admin",
   adminDashboardTitle: "All users",
-  refreshUsage: "Refresh",
-  refreshAdmin: "Refresh",
   openUsageDashboard: "Usage overview",
   usageRequests: "Requests",
   usageTokens: "Tokens",
@@ -344,7 +381,6 @@ export const COPY = Object.freeze({
   cancelProviderKeyRemoval: "Cancel",
   confirmProviderKeyRemoval: "Remove key",
   profileLoaded: "App ready",
-  usageRefreshed: "Usage refreshed",
   providerSettingsSaved: "Provider settings saved",
   providerKeyVerifying: "Checking key...",
   providerKeyVerified: "Provider key verified and settings saved",
@@ -370,4 +406,14 @@ export const COPY = Object.freeze({
   authenticationRequired: "Authentication required",
   requestFailed: "Request failed",
   appIntegrityError: "App data integrity error",
+});
+
+export const PROVIDER_RESOURCE_LABELS = Object.freeze({
+  voices: 'Voices',
+  voice_library: 'Voice library',
+  history: 'History',
+  pronunciation_dictionaries: 'Pronunciation dictionaries',
+  metadata: 'Provider information',
+  quotas: 'Quotas',
+  elements: 'Reusable elements',
 });

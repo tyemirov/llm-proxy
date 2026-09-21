@@ -1,6 +1,7 @@
 // @ts-check
 
 import { expect, test } from "@playwright/test";
+import { load as loadYAML } from "js-yaml";
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
@@ -257,6 +258,7 @@ const mimeTypes = Object.freeze({
 const generatedResourcePageCount = 46;
 const landingModifiedDate = "2026-08-08";
 const seoContentModifiedDate = "2026-07-11";
+const seoCapacityModifiedDate = "2026-09-19";
 const seoCurrentContentModifiedDate = "2026-09-10";
 const connectionDashboardModifiedDate = "2026-09-10";
 const seoResourceIndexModifiedDate = "2026-09-10";
@@ -494,7 +496,7 @@ test("brand icons identify connection providers and available model families", a
   await expect(siliconFlow.locator('img.brand-icon')).toHaveAttribute('src', /\/siliconcloud-color\.svg\?v=/u);
   await siliconFlow.getByRole("button", { name: "Default SiliconFlow", exact: true }).click();
   await expect(dashboard.locator('[data-model] brand-icon[identifier="deepseek-r1"] img')).toHaveAttribute('src', /\/deepseek-color\.svg\?v=/u);
-  await dashboard.getByRole("button", { name: "Dictation", exact: true }).click();
+  await dashboard.getByRole("button", { name: "Transcription", exact: true }).click();
   const senseVoice = dashboard.locator('[data-model="sensevoice-small"]');
   await expect(senseVoice).toBeVisible();
   await expect(senseVoice.locator('brand-icon img')).toHaveCount(0);
@@ -541,7 +543,7 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain('<routing-tree class="routing-tree" data-enhanced="false" aria-label="Interactive LLM routing map">');
   expect(html).toContain("One integration. Choose the exact route.");
   expect(html).toContain('<canvas class="routing-tree__connectors" data-route-canvas aria-hidden="true"></canvas>');
-  expect(html).toContain('<output class="routing-tree__counts" aria-live="polite" data-route-counts>14 families · 47 exact models · 48 offerings</output>');
+  expect(html).toContain('<output class="routing-tree__counts" aria-live="polite" data-route-counts>33 families · 86 exact models · 89 offerings</output>');
   expect(html).toContain('data-route-family="deepseek-r1"');
   expect(html).toContain('data-route-family="muse-spark"');
   expect(html).toContain('data-route-model="muse-spark-1.2" data-route-model-family="muse-spark"');
@@ -557,11 +559,11 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).not.toContain("data-route-publisher");
   expect(html).not.toContain("llm-proxy-routing-tree");
   expect(html).toContain('<table class="catalog-table">');
-  expect(html).toContain('<strong>14</strong><span>Providers</span>');
-  expect(html).toContain('<strong>13</strong><span>Publishers</span>');
-  expect(html).toContain('<strong>27</strong><span>Families</span>');
-  expect(html).toContain('<strong>72</strong><span>Exact models</span>');
-  expect(html).toContain('<strong>75</strong><span>Offerings</span>');
+  expect(html).toContain('<strong>16</strong><span>Providers</span>');
+  expect(html).toContain('<strong>15</strong><span>Publishers</span>');
+  expect(html).toContain('<strong>33</strong><span>Families</span>');
+  expect(html).toContain('<strong>86</strong><span>Exact models</span>');
+  expect(html).toContain('<strong>89</strong><span>Offerings</span>');
   expect(html).toContain('data-catalog-sort-header="publisher"');
   expect(html).toContain('data-catalog-sort-header="model"');
   expect(html).toContain('data-catalog-sort-header="capabilities"');
@@ -804,18 +806,19 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await expect(page.locator("#routing-overview routing-tree")).toHaveCount(1);
   await expect(page.locator("#models > routing-tree")).toHaveCount(0);
   await expect(routingTree).toHaveAttribute("data-enhanced", "false");
-  await expect(routingTree.locator("[data-route-family]")).toHaveCount(27);
-  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(75);
-  await expect(routingTree.locator("[data-route-model]")).toHaveCount(72);
+  await expect(routingTree.locator("[data-route-family]")).toHaveCount(33);
+  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(89);
+  await expect(routingTree.locator("[data-route-model]")).toHaveCount(86);
   await expect(routingTree.locator("[data-route-weight-access]")).toHaveCount(2);
-  await expect(routingTree.locator("[data-route-capability]")).toHaveCount(14);
+  await expect(routingTree.locator("[data-route-capability]")).toHaveCount(18);
+  await expect(routingTree.locator('[data-route-capability="image_editing"]')).toHaveCount(1);
   await expect(routingTree.locator('[data-route-weight-access="proprietary"]')).toHaveAttribute("aria-pressed", "true");
-  await expect(routingTree.locator('[data-route-weight-access="open_weights"]')).toHaveAttribute("aria-pressed", "false");
-  await expect(routingTree.locator('[data-route-capability="text"]')).toHaveAttribute("aria-pressed", "true");
-  await expect(routingTree.locator('[data-route-weight-access][aria-pressed="true"]')).toHaveCount(1);
+  await expect(routingTree.locator('[data-route-weight-access="open_weights"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(routingTree.locator('[data-route-capability="all"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(routingTree.locator('[data-route-weight-access][aria-pressed="true"]')).toHaveCount(2);
   await expect(routingTree.locator('[data-route-capability][aria-pressed="true"]')).toHaveCount(1);
-  await expect(routingTree.locator('[data-route-family]:visible')).toHaveCount(14);
-  await expect(routingTree.locator("[data-route-counts]")).toHaveText("14 families · 47 exact models · 48 offerings");
+  await expect(routingTree.locator('[data-route-family]:visible')).toHaveCount(33);
+  await expect(routingTree.locator("[data-route-counts]")).toHaveText("33 families · 86 exact models · 89 offerings");
   await expect(routingTree.locator('[data-route-family="claude-fable"]')).toHaveAttribute("aria-pressed", "true");
   await expect(routingTree.locator('[data-route-model-group="claude-fable"]')).toBeVisible();
   await expect(routingTree.locator('[data-route-model-group="grok"]')).toBeHidden();
@@ -828,7 +831,7 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await expect(catalog).toHaveAttribute("data-enhanced", "false");
   await expect(catalog.locator("[data-catalog-toolbar]")).toBeHidden();
   await expect(catalog.getByRole("columnheader")).toHaveText(["Publisher", "Model", "Provider offerings and capabilities"]);
-  await expect(catalog.locator("[data-catalog-row]")).toHaveCount(72);
+  await expect(catalog.locator("[data-catalog-row]")).toHaveCount(86);
   await expect(catalog.locator('[data-model="gpt-transcribe"]')).toContainText("Dictation");
   await expect(catalog.locator('[data-model="gpt-4o-mini"]')).toContainText("Image input");
   await expect(catalog.locator('[data-model="claude-fable-5"]')).toContainText("Image input");
@@ -866,7 +869,7 @@ test("the route explorer applies each canonical theme palette", async ({ page })
 
   const routingTree = page.locator("routing-tree");
   const routeOverview = page.locator(".route-overview");
-  const routeFilter = routingTree.locator('[data-route-weight-access="open_weights"]');
+  const routeFilter = routingTree.locator('[data-route-capability="text"]');
   const routeBranch = routingTree.locator('.routing-tree__family[aria-pressed="false"]:visible').first();
   const routeProduct = routingTree.locator("[data-route-product]");
   const routeProxy = routingTree.locator("[data-route-proxy]");
@@ -952,6 +955,52 @@ test("the route explorer applies each canonical theme palette", async ({ page })
   expect(new Set(routeCanvasImages).size).toBe(4);
 });
 
+test("the route explorer initially exposes every catalog family and media capability", async ({ page }) => {
+  await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
+  await page.goto(baseURL);
+  const routingTree = page.locator("routing-tree");
+  await expect(routingTree).toHaveAttribute("data-enhanced", "true");
+  await expect(routingTree.getByRole("button", { name: "All capabilities", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(routingTree.locator('[data-route-weight-access][aria-pressed="true"]')).toHaveCount(2);
+  const familyCount = await routingTree.locator("[data-route-family]").count();
+  await expect(routingTree.locator("[data-route-family]:visible")).toHaveCount(familyCount);
+  await expect(routingTree.locator("[data-route-counts]")).toHaveText("33 families · 86 exact models · 89 offerings");
+  for (const family of ["gpt-image", "reve", "whisper", "qwen3", "silero", "grok-imagine", "eleven-voice-conversion", "eleven-speech"]) {
+    await expect(routingTree.locator(`[data-route-family="${family}"]`)).toBeVisible();
+  }
+  await routingTree.locator('[data-route-family="eleven-voice-conversion"]').click();
+  await expect(routingTree.locator('[data-route-model="eleven_english_sts_v2"]')).toBeVisible();
+  await expect(routingTree.locator('[data-route-model="eleven_multilingual_sts_v2"]')).toBeVisible();
+  await routingTree.locator('[data-route-model="eleven_multilingual_sts_v2"]').click();
+  await expect(routingTree.locator("[data-route-selected-model]")).toHaveText("eleven_multilingual_sts_v2");
+  await expect(routingTree.locator("[data-route-selected-provider]")).toHaveText("elevenlabs");
+  await routingTree.locator('[data-route-capability="speech_conversion"]').click();
+  await expect(routingTree.locator("[data-route-counts]")).toHaveText("1 family · 2 exact models · 2 offerings");
+  await routingTree.getByRole("button", { name: "All capabilities", exact: true }).click();
+  await routingTree.locator('[data-route-family="reve"]').click();
+  await expect(routingTree.locator("[data-route-selected-model]")).toHaveText("reve-2.1");
+  await expect(routingTree.locator("[data-route-selected-provider]")).toHaveText("fal");
+  await routingTree.locator('[data-route-family="gpt-image"]').click();
+  await expect(routingTree.locator("[data-route-selected-model]")).toHaveText("gpt-image-2");
+  await expect(routingTree.locator("[data-route-selected-provider]")).toHaveText("openai");
+  await expect(routingTree.locator('[data-route-capability="image_generation"]')).toHaveText("Generate images");
+  await expect(routingTree.locator('[data-route-capability="image_input"]')).toHaveText("Image input");
+  await routingTree.locator('[data-route-capability="speech_generation"]').click();
+  await expect(routingTree.locator('[data-route-family="gpt-image"]')).toBeHidden();
+  await expect(routingTree.locator('[data-route-family="qwen3"]')).toBeVisible();
+  await expect(routingTree.locator('[data-route-family="silero"]')).toBeVisible();
+  await expect(routingTree.locator('[data-route-family="eleven-speech"]')).toBeVisible();
+  await routingTree.locator('[data-route-family="eleven-speech"]').click();
+  for (const model of ["eleven_multilingual_v2", "eleven_flash_v2_5", "eleven_turbo_v2_5", "eleven_v3"]) {
+    await expect(routingTree.locator(`[data-route-model="${model}"]`)).toBeVisible();
+  }
+  await routingTree.locator('[data-route-model="eleven_v3"]').click();
+  await expect(routingTree.locator("[data-route-selected-model]")).toHaveText("eleven_v3");
+  await expect(routingTree.locator("[data-route-selected-provider]")).toHaveText("elevenlabs");
+  await routingTree.getByRole("button", { name: "All capabilities", exact: true }).click();
+  await expect(routingTree.locator("[data-route-family]:visible")).toHaveCount(familyCount);
+});
+
 test("visitors can filter and choose a model family, exact model, and provider offering", async ({ page }) => {
   await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -969,11 +1018,14 @@ test("visitors can filter and choose a model family, exact model, and provider o
   const webSearchFilter = routingTree.locator('[data-route-capability="web_search"]');
   await expect(routingTree).toHaveAttribute("data-enhanced", "true");
   await expect(routingTree).toHaveAttribute("data-route-lines-rendered", "true");
-  await expect(routingTree.locator("[data-route-family]")).toHaveCount(27);
-  await expect(routingTree.locator("[data-route-model]")).toHaveCount(72);
-  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(75);
+  await expect(routingTree.locator("[data-route-family]")).toHaveCount(33);
+  await expect(routingTree.locator("[data-route-model]")).toHaveCount(86);
+  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(89);
   await expect(routingTree.locator("[data-route-weight-access]")).toHaveCount(2);
-  await expect(routingTree.locator("[data-route-capability]")).toHaveCount(14);
+  await expect(routingTree.locator("[data-route-capability]")).toHaveCount(18);
+  await expect(routingTree.locator('[data-route-capability="image_editing"]')).toHaveCount(1);
+  await textFilter.click();
+  await openWeightsFilter.click();
   await expect(proprietaryFilter).toHaveAttribute("aria-pressed", "true");
   await expect(openWeightsFilter).toHaveAttribute("aria-pressed", "false");
   await expect(textFilter).toHaveAttribute("aria-pressed", "true");
@@ -1104,6 +1156,7 @@ test("visitors can filter and choose a model family, exact model, and provider o
   await expect(selectedModel).toHaveText("gpt-4.1");
 
   const canonicalCapabilities = [
+    "image_generation",
     "text",
     "dictation",
     "video_generation",
@@ -1222,8 +1275,8 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   const modelHeader = catalog.locator('[data-catalog-sort-header="model"]');
   const capabilitiesHeader = catalog.locator('[data-catalog-sort-header="capabilities"]');
   await expect(catalog).toHaveAttribute("data-enhanced", "true");
-  await expect(rows).toHaveCount(72);
-  await expect(resultCount).toHaveText("72 of 72 models");
+  await expect(rows).toHaveCount(86);
+  await expect(resultCount).toHaveText("86 of 86 models");
   await expect(filterPanel).toBeHidden();
   await expect(searchSubmit).toHaveAttribute("aria-expanded", "false");
 
@@ -1245,56 +1298,56 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   await expect(catalog.locator('[data-catalog-search-text*="synchronous"]')).toHaveCount(0);
   await searchInput.fill("gemini-3.5-flash gemini_interactions image_input audio_input");
   await expect(filterPanel).toBeVisible();
-  await expect(resultCount).toHaveText("1 of 72 model");
+  await expect(resultCount).toHaveText("1 of 86 model");
   await expect(visibleRows).toHaveAttribute("data-model", "gemini-3.5-flash");
 
   await searchInput.fill("muse-spark-1.3 max");
-  await expect(resultCount).toHaveText("1 of 72 model");
+  await expect(resultCount).toHaveText("1 of 86 model");
   await expect(visibleRows).toHaveAttribute("data-model", "muse-spark-1.3");
 
   await searchInput.fill("gpt-6-astra openai_responses max");
-  await expect(resultCount).toHaveText("1 of 72 model");
+  await expect(resultCount).toHaveText("1 of 86 model");
   await expect(visibleRows).toHaveAttribute("data-model", "gpt-6-astra");
 
   await searchInput.fill("gpt-5.5-pro openai_responses xhigh");
-  await expect(resultCount).toHaveText("1 of 72 model");
+  await expect(resultCount).toHaveText("1 of 86 model");
   await expect(visibleRows).toHaveAttribute("data-model", "gpt-5.5-pro");
 
   await searchInput.fill("claude-opus-4-1");
-  await expect(resultCount).toHaveText("0 of 72 models");
+  await expect(resultCount).toHaveText("0 of 86 models");
 
   for (const model of ["minimax-m3", "grok-4.6", "qwen3.8-max", "qwen3.8-max-0902", "qwen3.8-flash", "qwen3.8-2.4t-a95b", "qwen3.8-27b", "glm-5.3", "glm-5.3-flash"]) {
     await searchInput.fill(model);
-    await expect(resultCount).toHaveText("0 of 72 models");
+    await expect(resultCount).toHaveText("0 of 86 models");
   }
 
   for (const model of ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-pro-preview"]) {
     await searchInput.fill(`${model} vertex_generate_content`);
-    await expect(resultCount).toHaveText("1 of 72 model");
+    await expect(resultCount).toHaveText("1 of 86 model");
     await expect(visibleRows).toHaveAttribute("data-model", model);
   }
 
   for (const model of ["claude-fable-5-1", "claude-opus-5"]) {
     await searchInput.fill(`${model} 128000 xhigh`);
-    await expect(resultCount).toHaveText("1 of 72 model");
+    await expect(resultCount).toHaveText("1 of 86 model");
     await expect(visibleRows).toHaveAttribute("data-model", model);
   }
 
   await searchInput.fill("qwen3.7-plus dashscope_responses image_input");
-  await expect(resultCount).toHaveText("1 of 72 model");
+  await expect(resultCount).toHaveText("1 of 86 model");
   await expect(visibleRows).toHaveAttribute("data-model", "qwen3.7-plus");
   await expect(visibleRows).toContainText("Alibaba Cloud");
 
   await searchInput.fill("grok-4.3 xai_responses");
-  await expect(resultCount).toHaveText("2 of 72 models");
+  await expect(resultCount).toHaveText("2 of 86 models");
 
   await searchInput.fill("glm-5.2 131072 token");
-  await expect(resultCount).toHaveText("1 of 72 model");
+  await expect(resultCount).toHaveText("1 of 86 model");
   await expect(visibleRows).toHaveAttribute("data-model", "glm-5.2");
 
   await catalog.getByRole("button", { name: "Reset" }).click();
   await searchInput.fill("dictation");
-  await expect(resultCount).toHaveText("6 of 72 models");
+  await expect(resultCount).toHaveText("6 of 86 models");
   for (const visibleRow of await visibleRows.all()) {
     await expect(visibleRow).toHaveAttribute("data-capabilities", "dictation");
   }
@@ -1302,28 +1355,28 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   await catalog.getByRole("button", { name: "Reset" }).click();
   await catalog.getByRole("checkbox", { name: "Image input" }).check();
   await catalog.getByRole("checkbox", { name: "Audio message input" }).check();
-  await expect(resultCount).toHaveText("7 of 72 models");
+  await expect(resultCount).toHaveText("7 of 86 models");
   await expect(visibleRows).toHaveCount(7);
 
   await searchSubmit.click();
   await expect(filterPanel).toBeHidden();
-  await expect(resultCount).toHaveText("7 of 72 models");
+  await expect(resultCount).toHaveText("7 of 86 models");
   await searchSubmit.click();
   await expect(filterPanel).toBeVisible();
   await expect(catalog.getByRole("checkbox", { name: "Image input" })).toBeChecked();
   await expect(catalog.getByRole("checkbox", { name: "Audio message input" })).toBeChecked();
 
   await catalog.getByRole("checkbox", { name: "Dictation" }).check();
-  await expect(resultCount).toHaveText("0 of 72 models");
+  await expect(resultCount).toHaveText("0 of 86 models");
   await expect(catalog.locator("[data-catalog-empty]")).toBeVisible();
 
   await catalog.getByRole("button", { name: "Reset" }).click();
-  await expect(resultCount).toHaveText("72 of 72 models");
+  await expect(resultCount).toHaveText("86 of 86 models");
   await searchInput.press("Escape");
   await catalog.getByRole("button", { name: "Filter by Dictation" }).first().click();
   await expect(filterPanel).toBeVisible();
   await expect(catalog.getByRole("checkbox", { name: "Dictation" })).toBeChecked();
-  await expect(resultCount).toHaveText("6 of 72 models");
+  await expect(resultCount).toHaveText("6 of 86 models");
 
   await catalog.getByRole("button", { name: "Reset" }).click();
   await expect(publisherHeader).toHaveAttribute("aria-sort", "ascending");
@@ -1580,7 +1633,7 @@ test("public landing is keyboard navigable and responsive in Chromium", async ({
   await expect(page.getByRole("heading", { name: "One boundary. Three ways to benefit." })).toBeVisible();
   await expect(page.getByRole("button", { name: "Log In" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Exact model provider offering matrix" })).toBeVisible();
-  await expect(page.getByRole("table")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Exact model provider offering matrix" }).getByRole("table")).toBeVisible();
   const reasonerRow = page.locator('[data-publisher="deepseek"][data-model="deepseek-reasoner"]');
   await expect(reasonerRow.locator(".catalog-offerings > li")).toHaveCount(1);
   await expect(reasonerRow).toContainText("DeepSeek");
@@ -1656,7 +1709,9 @@ test("site publishes the exact canonical OpenAPI artifact and its derived refere
   expect(documentationHTML).toContain('id="operation-getMCPResourceMetadata"');
   expect(documentationHTML).toContain('id="operation-getProviderDiagnostics"');
   expect(documentationHTML).toContain('id="operation-getProviderDiagnosticsHeaders"');
-  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(49);
+  expect(documentationHTML).toContain('id="operation-getTenantProviderResource"');
+  expect(documentationHTML).toContain('id="operation-getTenantMediaVoicePreview"');
+  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(51);
 });
 
 test("OpenCode integration opens the bearer-authenticated client API reference", async ({ page }) => {
@@ -1920,6 +1975,7 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
     new Set([
       "<lastmod>2026-09-03</lastmod>",
       `<lastmod>${seoContentModifiedDate}</lastmod>`,
+      `<lastmod>${seoCapacityModifiedDate}</lastmod>`,
       `<lastmod>${seoCurrentContentModifiedDate}</lastmod>`,
       `<lastmod>${seoResourceIndexModifiedDate}</lastmod>`,
       `<lastmod>${seoUsageContentModifiedDate}</lastmod>`,
@@ -2338,7 +2394,31 @@ test("dashboard connectors follow connection cards after inner list scroll", asy
   await expect.poll(async () => pathEndpointError(dashboard)).toBeLessThanOrEqual(2);
 });
 
-test("usage intervals load every dashboard surface, remain active on refresh, and fit mobile", async ({ page }) => {
+test("clicking within a connection card selects the connection", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { savedProviderIDs: ["openai", "siliconflow"] });
+  await page.goto(`${baseURL}${applicationPath}`);
+  const dashboard = page.locator("connection-dashboard");
+  const openAINode = dashboard.locator('[data-connection-node]').filter({ hasText: "Default OpenAI" });
+  const siliconFlowNode = dashboard.locator('[data-connection-node]').filter({ hasText: "Default SiliconFlow" });
+  await expect(openAINode).toHaveClass(/selected/);
+  await expect(siliconFlowNode).not.toHaveClass(/selected/);
+
+  // Click on the <small> element inside the card, outside of button.cw-name
+  await siliconFlowNode.locator("small").first().click();
+  await expect(siliconFlowNode).toHaveClass(/selected/);
+  await expect(openAINode).not.toHaveClass(/selected/);
+  await expect(dashboard.locator("[data-details]")).toContainText("Default SiliconFlow");
+
+  // Click on the status badge inside the openAI card
+  await openAINode.locator(".cw-connected").click();
+  await expect(openAINode).toHaveClass(/selected/);
+  await expect(siliconFlowNode).not.toHaveClass(/selected/);
+  await expect(dashboard.locator("[data-details]")).toContainText("Default OpenAI");
+});
+
+test("usage intervals stay selected, show the tenant label, and auto-refresh on desktop and mobile", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-07-21T12:00:00Z") });
   const requestedIntervals = [];
   page.on("request", (request) => {
     const requestURL = new URL(request.url());
@@ -2354,6 +2434,10 @@ test("usage intervals load every dashboard surface, remain active on refresh, an
   const intervalGroup = page.getByRole("group", { name: "Usage interval" });
   const intervalButtons = intervalGroup.getByRole("button");
   await expect(intervalButtons).toHaveCount(usageIntervals.length);
+  const tenantControl = page.locator(".usage-tenant-control");
+  const tenantLabel = tenantControl.getByText("Tenant", { exact: true });
+  await expect(tenantLabel).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh", exact: true })).toHaveCount(0);
   await expect(intervalButtons).toHaveText(usageIntervals.map((interval) => interval.label));
   const activeIntervalButton = intervalGroup.getByRole("button", { name: "30 days" });
   await expect(activeIntervalButton).toHaveAttribute("aria-pressed", "true");
@@ -2405,7 +2489,9 @@ test("usage intervals load every dashboard surface, remain active on refresh, an
   if (!selectedInterval) {
     throw new Error("usage_interval_fixture_missing");
   }
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  const requestCountBeforeAutoRefresh = requestedIntervals.length;
+  await page.clock.fastForward(30_001);
+  await expect.poll(() => requestedIntervals.length).toBe(requestCountBeforeAutoRefresh + 1);
   expect(requestedIntervals.at(-1)).toBe(selectedInterval.id);
   await expect(intervalGroup.getByRole("button", { name: selectedInterval.label, exact: true })).toHaveAttribute(
     "aria-pressed",
@@ -2414,6 +2500,13 @@ test("usage intervals load every dashboard surface, remain active on refresh, an
 
   await page.setViewportSize({ width: 390, height: 780 });
   await expect(intervalGroup).toBeVisible();
+  await expect(tenantLabel).toBeVisible();
+  const tenantLabelBox = await tenantLabel.boundingBox();
+  const tenantSelectBox = await tenantControl.locator("select").boundingBox();
+  if (!tenantLabelBox || !tenantSelectBox) {
+    throw new Error("tenant_control_geometry_missing");
+  }
+  expect(tenantLabelBox.x + tenantLabelBox.width).toBeLessThanOrEqual(tenantSelectBox.x);
   const intervalGroupBox = await intervalGroup.boundingBox();
   if (!intervalGroupBox) {
     throw new Error("usage_interval_group_missing");
@@ -2496,7 +2589,6 @@ test("provider and model cards switch presentation independently without fetchin
   await expect(providerToggle).toHaveAccessibleName("Show bar graph");
   await expect(modelToggle).toHaveAccessibleName("Show bar graph");
   expect((await providerLegend.getByRole("listitem").innerText()).replace(/\s/gu, "")).toBe("provider-7d7requests·100%");
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(providerToggle).toHaveAccessibleName("Show bar graph");
   await expect(modelToggle).toHaveAccessibleName("Show bar graph");
   await page.getByRole("combobox", { name: "Usage tenant" }).selectOption("tenant_2");
@@ -2592,6 +2684,7 @@ test("Usage time series expose UTC and metric-specific integer axes", async ({ p
 });
 
 test("usage interval loading blocks controls, ignores stale responses, and clears failed selections", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-07-21T12:00:00Z") });
   await installAssetRoutes(page);
   await installManagementRoutes(page);
   await page.goto(`${baseURL}${applicationPath}`);
@@ -2618,7 +2711,6 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
     for (const intervalButton of await intervalGroup.getByRole("button").all()) {
       await expect(intervalButton).toBeDisabled();
     }
-    await expect(page.getByRole("button", { name: "Refresh", exact: true })).toBeDisabled();
     await expect(sevenDayButton).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
     await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
@@ -2644,7 +2736,7 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
   await page.route(usageRequestPattern(), async (route) => {
     await route.fulfill({ status: httpInternalServerError, json: { error: "usage_failed" } });
   });
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await page.clock.fastForward(30_001);
   await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Request failed");
   await expect(intervalGroup.getByRole("button", { name: "1 day" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
@@ -3025,6 +3117,80 @@ test("connection verification requires submission and retains fields after rejec
 });
 
 
+test("application startup waits for shared UI orchestration before DOMContentLoaded", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+  const barrier = Promise.withResolvers();
+  await page.route("**/document-ready-barrier.js", async (route) => {
+    await barrier.promise;
+    await route.fulfill({ contentType: "application/javascript", body: "export {};" });
+  });
+  await page.route(baseURL + applicationPath, async (route) => {
+    const response = await route.fetch();
+    const body = (await response.text()).replace("</head>", '<script type="module" src="/document-ready-barrier.js"></script></head>');
+    await route.fulfill({ response, body });
+  });
+  try {
+    await page.goto(baseURL + applicationPath, { waitUntil: "commit" });
+    await expect(page.locator("html")).toHaveAttribute("data-llm-proxy-application", "ready");
+    await page.evaluate(async () => {
+      const client = await import("/assets/llm-proxy/js/core/backendClient.js?v=20260903f037");
+      await client.loadFrontendRuntimeConfig();
+      await new Promise(requestAnimationFrame);
+    });
+  } finally {
+    barrier.resolve();
+  }
+  await expect(page.locator("llm-proxy-management-application")).toHaveAttribute("data-auth-state", "authenticated");
+});
+
+test("image generation discovery reuses the OpenAI connection and catalog fields", async ({ page }) => {
+  const profile = managementProfile();
+  const provider = profile.providers.find((entry) => entry.id === "openai");
+  provider.capabilities.push("image_generation", "image_editing");
+  provider.model_families.push({ id: "gpt-image", label: "GPT Image" });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { profile, savedProviderIDs: ["openai"] });
+  await page.goto(baseURL + applicationPath);
+  const dashboard = page.locator("connection-dashboard");
+  await dashboard.getByRole("button", { name: "Default OpenAI", exact: true }).click();
+  await dashboard.getByRole("button", { name: "Image", exact: true }).click();
+  await dashboard.locator('[data-model="gpt-image-2"]').click();
+  await expect(dashboard.locator("[data-media-details]")).toContainText("Image generation");
+  await expect(dashboard.locator("[data-media-details]")).toContainText("Image editing");
+  await expect(dashboard.locator("[data-media-details]")).toContainText("Available through this tenant’s API key.");
+  await dashboard.getByRole("button", { name: "Create connection", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Create connection" });
+  await dialog.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
+  await expect(dialog.locator("[data-credential-fields] input")).toHaveCount(1);
+  await expect(dialog.getByLabel("OpenAI API key", { exact: true })).toHaveAttribute("type", "password");
+});
+
+test("Vertex connection setup opens the catalog API Keys page", async ({ page }) => {
+  const catalog = loadYAML(await readFile(path.join(repoRoot, "configs/providers.yml"), "utf8"));
+  const vertex = catalog.providers.find((provider) => provider.id === "vertex");
+  const profile = managementProfile();
+  const gemini = profile.providers.find((provider) => provider.id === "gemini");
+  profile.providers.push({
+    ...gemini,
+    id: vertex.id,
+    label: vertex.label,
+    api_service_label: vertex.api_service_label,
+    key_acquisition_url: vertex.key_acquisition_url,
+    fields: vertex.fields.map((field) => ({ ...field, configured: false })),
+  });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { profile });
+  await page.goto(baseURL + applicationPath);
+  await page.locator("connection-dashboard").getByRole("button", { name: "Create connection", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Create connection" });
+  await dialog.getByRole("combobox", { name: "Provider", exact: true }).selectOption("vertex");
+  const link = dialog.getByRole("link", { name: "Get Vertex AI credentials ↗", exact: true });
+  await expect(link).toHaveAttribute("href", "https://console.cloud.google.com/agent-platform/studio/settings/api-keys");
+  await expect(link).toHaveAttribute("target", "_blank");
+  await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+});
+
 test("connection setup uses each provider's required catalog fields", async ({ page }) => {
   const profile=managementProfile();
   await installAssetRoutes(page);
@@ -3055,9 +3221,19 @@ test("connection setup uses each provider's required catalog fields", async ({ p
 
 test("model previews require an explicit save and preserve the other capability default", async ({ page }) => {
   const mutations = [];
+  const profile = managementProfile();
+  profile.providers.push({
+    id: "dictator", label: "Dictator", api_service_label: "Dictator API", key_acquisition_url: "https://dictator.example/setup",
+    aliases: [], configured: true, capabilities: ["speech_generation"], resources: ["voices"], services: [], model_families: [{id:"silero",label:"Silero"}],
+    fields: [{id:"grpc_address",label:"gRPC address",kind:"setting",type:"grpc_target",required:true,default:"",secret:false,validation:{},configured:true,value:"localhost:50051"}],
+    text_model: "", system_prompt: "", text_default_model: "", text_models: [], supports_dictation: false, transcription_models: [],
+    supports_speech: true, speech_default_model: "silero-ru", speech_models: ["silero-ru"],
+  });
+  profile.tenant.defaults.speech_provider = "dictator";
+  profile.tenant.defaults.speech_model = "silero-ru";
   page.on("request", request => { if(request.url().endsWith("/defaults"))mutations.push(request.postDataJSON()); });
   await installAssetRoutes(page);
-  await installManagementRoutes(page,{savedProviderIDs:["openai","deepseek","xai"]});
+  await installManagementRoutes(page,{profile,savedProviderIDs:["openai","deepseek","xai","dictator"]});
   await page.goto(baseURL + applicationPath);
   const dashboard = page.locator("connection-dashboard");
   await dashboard.getByRole("button",{name:"Default DeepSeek",exact:true}).click();
@@ -3068,14 +3244,19 @@ test("model previews require an explicit save and preserve the other capability 
   await expect(dashboard.locator('[data-model="deepseek-v4-flash"]')).not.toContainText("Default model");
   await dashboard.getByRole("button",{name:"Save text default"}).click();
   await expect(dashboard.locator('[data-model="deepseek-v4-flash"]')).toContainText("Default model");
-  expect(mutations[0]).toMatchObject({provider:"deepseek",model:"deepseek-v4-flash",dictation_provider:"openai",dictation_model:"gpt-transcribe",system_prompt:"Use tenant guidance."});
+  expect(mutations[0]).toMatchObject({provider:"deepseek",model:"deepseek-v4-flash",transcription_provider:"openai",transcription_model:"gpt-transcribe",system_prompt:"Use tenant guidance."});
   await dashboard.getByRole("button",{name:"Default xAI",exact:true}).click();
-  await dashboard.getByRole("button",{name:"Dictation",exact:true}).click();
+  await dashboard.getByRole("button",{name:"Transcription",exact:true}).click();
   await dashboard.locator('[data-model="xai-stt"]').click();
   expect(mutations).toHaveLength(1);
-  await dashboard.getByRole("button",{name:"Save dictation default"}).click();
+  await dashboard.getByRole("button",{name:"Save transcription default"}).click();
   await expect(dashboard.locator('[data-model="xai-stt"]')).toContainText("Default model");
-  expect(mutations[1]).toMatchObject({provider:"deepseek",model:"deepseek-v4-flash",dictation_provider:"xai",dictation_model:"xai-stt",system_prompt:"Use tenant guidance."});
+  expect(mutations[1]).toMatchObject({provider:"deepseek",model:"deepseek-v4-flash",transcription_provider:"xai",transcription_model:"xai-stt",system_prompt:"Use tenant guidance."});
+  for (const mutation of mutations) {
+    expect(mutation).toMatchObject({speech_provider:"dictator",speech_model:"silero-ru"});
+    expect(mutation).not.toHaveProperty("dictation_provider");
+    expect(mutation).not.toHaveProperty("dictation_model");
+  }
   await page.reload();
   await dashboard.getByRole("button",{name:"Default DeepSeek",exact:true}).click();
   await expect(dashboard.locator('[data-model="deepseek-v4-flash"]')).toContainText("Default model");
@@ -3089,15 +3270,15 @@ test("Gemini dictation default preserves the text default after reload", async (
   await page.goto(baseURL + applicationPath);
   const dashboard=page.locator("connection-dashboard");
   await dashboard.getByRole("button",{name:"Default Gemini",exact:true}).click();
-  await dashboard.getByRole("button",{name:"Dictation",exact:true}).click();
-  const model=profile.providers.find(provider=>provider.id==="gemini").dictation_models[0];
+  await dashboard.getByRole("button",{name:"Transcription",exact:true}).click();
+  const model=profile.providers.find(provider=>provider.id==="gemini").transcription_models[0];
   await dashboard.locator(`[data-model="${model}"]`).click();
-  await dashboard.getByRole("button",{name:"Save dictation default"}).click();
+  await dashboard.getByRole("button",{name:"Save transcription default"}).click();
   await expect(dashboard.locator(`[data-model="${model}"]`)).toContainText("Default model");
-  expect(profile.tenant.defaults).toMatchObject({provider:"openai",model:"gpt-4.1",dictation_provider:"gemini",dictation_model:model});
+  expect(profile.tenant.defaults).toMatchObject({provider:"openai",model:"gpt-4.1",transcription_provider:"gemini",transcription_model:model});
   await page.reload();
   await dashboard.getByRole("button",{name:"Default Gemini",exact:true}).click();
-  await dashboard.getByRole("button",{name:"Dictation",exact:true}).click();
+  await dashboard.getByRole("button",{name:"Transcription",exact:true}).click();
   await expect(dashboard.locator(`[data-model="${model}"]`)).toContainText("Default model");
 });
 
@@ -3116,9 +3297,9 @@ test("models require a connection and unavailable dictation has no save action",
   await page.goto(baseURL + applicationPath);
   const dashboard=page.locator("connection-dashboard");
   await expect(dashboard.locator("[data-connection]")).toHaveCount(1);
-  await dashboard.getByRole("button",{name:"Dictation",exact:true}).click();
+  await dashboard.getByRole("button",{name:"Transcription",exact:true}).click();
   await expect(dashboard).toContainText("No models for this capability.");
-  await expect(dashboard.getByRole("button",{name:"Save dictation default"})).toHaveCount(0);
+  await expect(dashboard.getByRole("button",{name:"Save transcription default"})).toHaveCount(0);
   await dashboard.locator('[data-tenant="tenant_2"]').click();
   await dashboard.locator("[data-connection]").click();
   await expect(dashboard).toContainText("Connect to choose models.");
@@ -3271,6 +3452,19 @@ for (const [name, corrupt] of [
     await expect(page.locator("connection-dashboard").getByRole("alert")).toHaveText("App data integrity error");
     await expect(page.locator("connection-dashboard [data-connection]")).toHaveCount(0);
     await expect(page.locator("connection-dashboard")).not.toContainText("secret-must-never-render");
+  });
+}
+
+for (const domains of [null, [], ["media"], ["text", "text"]]) {
+  test(`dashboard rejects invalid offering domains ${JSON.stringify(domains)}`, async ({page}) => {
+    await installAssetRoutes(page);
+    await installManagementRoutes(page);
+    const catalog=structuredClone(publicCapabilities);
+    catalog.offerings[0].domains=domains;
+    await page.route(`${baseURL}${publicCapabilitiesPath}`, route=>route.fulfill({json:catalog}));
+    await page.goto(baseURL+applicationPath);
+    await expect(page.locator('connection-dashboard').getByRole('alert')).toBeVisible();
+    await expect(page.locator('connection-dashboard [data-model]')).toHaveCount(0);
   });
 }
 
@@ -3622,11 +3816,13 @@ test("API access dialogs fit supported widths and copy one-time keys with safe e
   }
 });
 
-test("management notices occupy the header aux slot immediately before the avatar", async ({ page }) => {
+test("automatic refresh errors keep the header notice geometry", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-07-21T12:00:00Z") });
   await installAssetRoutes(page);
   await installManagementRoutes(page);
 
   for (const viewport of settingsLayerViewports) {
+    await installUsageResponse(page, httpOK, managementUsage("30d"));
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.goto(`${baseURL}${applicationPath}`);
 
@@ -3635,25 +3831,12 @@ test("management notices occupy the header aux slot immediately before the avata
     await expect(notificationRegion).toHaveAttribute("role", "status");
     await expect(notificationRegion).toHaveAttribute("aria-live", "polite");
     await expect(notificationRegion).toHaveAttribute("aria-atomic", "true");
-    await page.getByRole("button", {name:"Refresh",exact:true}).click();
-    await expect(notice).toHaveText("Usage refreshed");
-    await expect(notice).toHaveAttribute("data-kind", "success");
-    await expectHeaderNoticeGeometry(page);
-
-    await page.getByRole("button", { name: "Refresh" }).click();
-    await expect(notice).toHaveText("Usage refreshed");
-    await expect(notice).toHaveAttribute("data-kind", "success");
-    await expectHeaderNoticeGeometry(page);
-
+    await expect(page.getByRole("button", { name: "Refresh", exact: true })).toHaveCount(0);
+    await expect(notificationRegion).toBeHidden();
     await installUsageResponse(page, httpInternalServerError);
-    await page.getByRole("button", { name: "Refresh" }).click();
+    await page.clock.fastForward(30_001);
     await expect(notice).toHaveText("Request failed");
     await expect(notice).toHaveAttribute("data-kind", "error");
-    await expectHeaderNoticeGeometry(page);
-
-    await installUsageResponse(page, httpOK);
-    await page.getByRole("button", { name: "Refresh" }).click();
-    await expect(notice).toHaveText("Usage refreshed");
     await expectHeaderNoticeGeometry(page);
   }
 });
@@ -3672,7 +3855,7 @@ test("public Log In stays keyboard accessible at every supported width", async (
   }
 });
 
-test("management notices auto-dismiss after ten seconds and replacement notices own a new deadline", async ({ page }) => {
+test("automatic refresh clears stale usage after a temporary summary failure", async ({ page }) => {
   await page.clock.install({ time: new Date("2026-07-21T12:00:00Z") });
   await installAssetRoutes(page);
   await installManagementRoutes(page);
@@ -3680,41 +3863,21 @@ test("management notices auto-dismiss after ten seconds and replacement notices 
 
   const notificationRegion = page.locator("#llm-proxy-header notification-region");
   const notice = notificationRegion.locator(".notice");
-  const refresh = page.getByRole("button", { name: "Refresh" });
   const requests = page.locator("usage-metrics usage-card").first().locator("strong");
-  await refresh.click();
-  await expect(notice).toHaveText("Usage refreshed");
-  await page.clock.fastForward(9_000);
-  await expect(notificationRegion).toBeVisible();
-  await page.clock.fastForward(1_000);
+  await installUsageResponse(page, httpInternalServerError);
+  await page.clock.fastForward(30_001);
+  await expect(notice).toHaveText("Request failed");
+  await expect(requests).toHaveText("0");
+  await page.clock.fastForward(10_000);
   await expect(notificationRegion).toBeHidden();
 
-  await refresh.click();
-  await expect(notice).toHaveText("Usage refreshed");
-  await page.clock.fastForward(5_000);
   await installUsageResponse(page, httpOK, managementUsage("30d", {
     requests: 38,
     successful_requests: 36,
     text_requests: 36,
   }));
-  await refresh.click();
+  await page.clock.fastForward(30_001);
   await expect(requests).toHaveText("38");
-  await expect(notice).toHaveText("Usage refreshed");
-  await page.clock.fastForward(5_000);
-  await expect(notificationRegion).toBeVisible();
-  await page.clock.fastForward(5_000);
-  await expect(notificationRegion).toBeHidden();
-
-  await installUsageResponse(page, httpInternalServerError);
-  await refresh.click();
-  await expect(notice).toHaveText("Request failed");
-  await page.clock.fastForward(5_000);
-  await installUsageResponse(page, httpOK);
-  await refresh.click();
-  await expect(notice).toHaveText("Usage refreshed");
-  await page.clock.fastForward(5_000);
-  await expect(notificationRegion).toBeVisible();
-  await page.clock.fastForward(5_000);
   await expect(notificationRegion).toBeHidden();
 });
 
@@ -3743,6 +3906,7 @@ test("the shared footer project catalog opens as a keyboard-dismissible drop-up"
 test("header brand uses the local logo before its title without crowding the notice or avatar", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page);
+  await installUsageResponse(page, httpInternalServerError);
 
   for (const viewport of settingsLayerViewports) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -3763,8 +3927,8 @@ test("header brand uses the local logo before its title without crowding the not
     await expect(page.getByText("LLM Proxy", { exact: true })).toHaveCount(1);
     await brand.focus();
     await expect(brand).toBeFocused();
-    await page.getByRole("button", { name: "Refresh" }).click();
-    await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Usage refreshed");
+    await expect(page.getByRole("button", { name: "Refresh", exact: true })).toHaveCount(0);
+    await expect(page.locator("#llm-proxy-header notification-region .notice")).toHaveText("Request failed");
     await expectHeaderBrandGeometry(page);
 
   }
@@ -3780,25 +3944,14 @@ test("tenant configuration stays reachable when usage fails", async ({ page }) =
 });
 
 
-test("usage refresh clears stale metrics when summary reload fails", async ({ page }) => {
-  await installAssetRoutes(page);
-  await installManagementRoutes(page);
-
-  await page.goto(`${baseURL}${applicationPath}`);
-
-  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
-  await page.unroute(usageRequestPattern());
-  await page.route(usageRequestPattern(), async (route) => {
-    await route.fulfill({ status: httpInternalServerError, json: { error: "usage_failed" } });
-  });
-  await page.getByRole("button", { name: "Refresh" }).click();
-
-  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Request failed");
-  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
-  await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
-});
-
 test("admin menu opens all users dashboard", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-07-21T12:00:00Z") });
+  let adminUserRequests = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/management/admin/users") {
+      adminUserRequests += 1;
+    }
+  });
   await installAssetRoutes(page);
   await installManagementRoutes(page, { admin: true });
 
@@ -3811,6 +3964,10 @@ test("admin menu opens all users dashboard", async ({ page }) => {
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
   await expect(page.getByRole("heading", { name: "All users" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh", exact: true })).toHaveCount(0);
+  const adminRequestsBeforeAutoRefresh = adminUserRequests;
+  await page.clock.fastForward(30_001);
+  await expect.poll(() => adminUserRequests).toBe(adminRequestsBeforeAutoRefresh + 1);
   const ownerCard = page.locator("admin-user-card").filter({ hasText: "owner@example.com" });
   await expect(ownerCard).toContainText("2 tenants");
   await expect(ownerCard.locator("admin-tenant-card")).toHaveCount(2);
@@ -4509,7 +4666,7 @@ async function installManagementRoutes(page, options = {}) {
       text_default_model: "claude-sonnet-5",
       text_models: [{ id: "claude-sonnet-5" }],
       supports_dictation: false,
-      dictation_models: [],
+      transcription_models: [],
     });
     profile.tenant.defaults.provider = "anthropic";
   }
@@ -4608,12 +4765,12 @@ function reconcileManagementProfileRoutingDefaults(profile) {
   }
   const keyedDictationProviders = keyedProviders.filter((provider) => provider.supports_dictation);
   const currentDictationProvider = keyedDictationProviders.find(
-    (provider) => provider.id === profile.tenant.defaults.dictation_provider,
+    (provider) => provider.id === profile.tenant.defaults.transcription_provider,
   );
   if (!currentDictationProvider) {
     const nextDictationProvider = keyedDictationProviders[0];
-    profile.tenant.defaults.dictation_provider = nextDictationProvider ? nextDictationProvider.id : "";
-    profile.tenant.defaults.dictation_model = nextDictationProvider ? nextDictationProvider.dictation_default_model : "";
+    profile.tenant.defaults.transcription_provider = nextDictationProvider ? nextDictationProvider.id : "";
+    profile.tenant.defaults.transcription_model = nextDictationProvider ? nextDictationProvider.transcription_default_model : "";
   }
 }
 
@@ -4736,6 +4893,9 @@ function dashScopeBaseURLField() {
  * @returns {string}
  */
 function fixtureProviderSettingValue(providerID, field) {
+  if (providerID === "dictator" && field.id === "grpc_address") {
+    return "localhost:50051";
+  }
   if (providerID === "dashscope" && field.id === "base_url") {
     return "https://fixture.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1";
   }
@@ -4793,8 +4953,10 @@ function managementProfile(isAdmin = false, hasSecret = true) {
       defaults: {
         provider: "openai",
         model: "gpt-4.1",
-        dictation_provider: "openai",
-        dictation_model: "gpt-transcribe",
+        transcription_provider: "openai",
+        transcription_model: "gpt-transcribe",
+        speech_provider: "",
+        speech_model: "",
         system_prompt: "",
         reasoning_effort: "",
       },
@@ -4817,7 +4979,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
           })),
         ],
         supports_dictation: false,
-        dictation_models: [],
+        transcription_models: [],
       },
       {
         id: "openai",
@@ -4875,8 +5037,8 @@ function managementProfile(isAdmin = false, hasSecret = true) {
           },
         ],
         supports_dictation: true,
-        dictation_default_model: "gpt-transcribe",
-        dictation_models: ["gpt-transcribe"],
+        transcription_default_model: "gpt-transcribe",
+        transcription_models: ["gpt-transcribe"],
       },
       {
         id: "deepseek",
@@ -4892,7 +5054,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
           { id: "deepseek-v4-pro", reasoning_effort: { adapter: "chat_completions_thinking", efforts: ["none", "low", "high", "max"] } },
         ],
         supports_dictation: false,
-        dictation_models: [],
+        transcription_models: [],
       },
       {
         id: "gemini",
@@ -4909,8 +5071,8 @@ function managementProfile(isAdmin = false, hasSecret = true) {
  { id: "gemini-3.7-flash", reasoning_effort: { adapter: "gemini_interactions", efforts: ["low", "medium", "high"] } },
  ],
         supports_dictation: true,
-        dictation_default_model: "gemini-3.5-transcribe",
-        dictation_models: ["gemini-3.5-transcribe"],
+        transcription_default_model: "gemini-3.5-transcribe",
+        transcription_models: ["gemini-3.5-transcribe"],
       },
       {
         id: "dashscope",
@@ -4928,7 +5090,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
           { id: "qwen3.7-plus" },
         ],
         supports_dictation: false,
-        dictation_models: [],
+        transcription_models: [],
       },
       {
         id: "meta",
@@ -4941,7 +5103,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         text_default_model: "muse-spark-1.1",
         text_models: [{ id: "muse-spark-1.1" }, { id: "muse-spark-1.2" }, { id: "muse-spark-1.3", reasoning_effort: { adapter: "openai_chat_completions", efforts: ["minimal", "low", "medium", "high", "xhigh", "max"] } }],
         supports_dictation: false,
-        dictation_models: [],
+        transcription_models: [],
       },
       {
         id: "minimax",
@@ -4962,7 +5124,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
           { id: "minimax-m2.7-highspeed" },
         ],
         supports_dictation: false,
-        dictation_models: [],
+        transcription_models: [],
       },
       {
         id: "moonshot",
@@ -4986,7 +5148,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
           },
         ],
         supports_dictation: false,
-        dictation_models: [],
+        transcription_models: [],
       },
       {
         id: "xai",
@@ -4999,8 +5161,8 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         text_default_model: "grok-4.3",
         text_models: [{ id: "grok-4.3" }],
         supports_dictation: true,
-        dictation_default_model: "xai-stt",
-        dictation_models: ["xai-stt"],
+        transcription_default_model: "xai-stt",
+        transcription_models: ["xai-stt"],
       },
       {
         id: "zai",
@@ -5013,8 +5175,8 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         text_default_model: "glm-5.1",
         text_models: [{ id: "glm-5.1" }, { id: "glm-5.2" }],
         supports_dictation: true,
-        dictation_default_model: "glm-asr-2512",
-        dictation_models: ["glm-asr-2512"],
+        transcription_default_model: "glm-asr-2512",
+        transcription_models: ["glm-asr-2512"],
       },
     ],
     proxy: {
@@ -5033,7 +5195,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
     }],
     text_model: "ernie-5.0", system_prompt: "", text_default_model: "ernie-5.0",
     text_models: ["ernie-5.0", "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v3.2"].map((id) => ({ id })),
-    supports_dictation: false, dictation_models: [],
+    supports_dictation: false, transcription_models: [],
   });
   profile.providers.push({
     id: "siliconflow",
@@ -5046,8 +5208,8 @@ function managementProfile(isAdmin = false, hasSecret = true) {
     text_default_model: "deepseek-reasoner",
     text_models: [{ id: "deepseek-reasoner" }],
     supports_dictation: true,
-    dictation_default_model: "sensevoice-small",
-    dictation_models: ["sensevoice-small"],
+    transcription_default_model: "sensevoice-small",
+    transcription_models: ["sensevoice-small"],
   });
   /** @type {Record<string, {api_service_label: string, model_families: Array<{id: string, label: string}>}>} */
   const providerIdentities = {
@@ -5157,6 +5319,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
     const identity = providerIdentities[provider.id];
     if (!identity) throw new Error(`management_fixture_provider_identity_missing:${provider.id}`);
     Object.assign(provider, identity);
+    Object.assign(provider, {supports_speech: false, speech_models: [], resources: [], services: []});
     provider.key_acquisition_url = acquisitionURLs[provider.id];
     provider.capabilities = ["text", ...(mediaCapabilities[provider.id] || []), ...(provider.supports_dictation ? ["dictation"] : []), ...(provider.id === "xai" ? ["video_generation"] : [])];
   }

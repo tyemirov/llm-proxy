@@ -13,6 +13,116 @@ const executeFile = promisify(execFile);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const publicCapabilitiesPath = "/api/public/capabilities";
 
+test("public site renders catalog speech conversion routes", async ({ page }) => {
+  const capabilities = normalizedCapabilityFixture();
+  capabilities.operations = [{ id: "speech_conversion", input_artifacts: ["audio"], output_artifacts: ["audio", "text"] }];
+  Object.assign(capabilities.models[0], {operations: ["speech_conversion"], capabilities: ["speech_conversion"], domains: ["speech"]});
+  Object.assign(capabilities.offerings[0], {capabilities: ["speech_conversion"], domains: ["speech"], wire_contract: "elevenlabs_conversion"});
+  capabilities.prices[0].operation = "speech_conversion";
+  await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+    const fixture = await siteFixture();
+    try {
+      await renderFixture(fixture, capabilitiesURL);
+      await page.setContent(await readFile(path.join(fixture.output, "index.html"), "utf8"));
+      await expect(page.locator('[data-route-model="example-model"]')).toBeVisible();
+      await expect(page.locator('[data-route-provider="deepseek"]')).toBeVisible();
+      await expect(page.locator('body')).toContainText('Voice conversion');
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+});
+
+test("public site renders catalog number controls with decimal bounds", async ({ page }) => {
+  const capabilities = normalizedCapabilityFixture();
+  capabilities.offerings[0].controls = [{ id: "speed", kind: "number", values: [], minimum: 0.7, maximum: 1.2, account_dependent: false }];
+  await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+    const fixture = await siteFixture();
+    try {
+      await renderFixture(fixture, capabilitiesURL);
+      await page.setContent(await readFile(path.join(fixture.output, "index.html"), "utf8"));
+      await expect(page.locator('[data-route-model="example-model"]')).toBeVisible();
+      await expect(page.locator('[data-route-provider="deepseek"]')).toBeVisible();
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+});
+
+for (const [kind, minimum, maximum] of [["number", 1.2, 0.7], ["integer", 0.7, 1.2], ["integer", -1, 2], ["number", null, 1.2]]) {
+  test(`public site rejects invalid number controls: ${kind} ${minimum} ${maximum}`, async () => {
+    const capabilities = normalizedCapabilityFixture();
+    capabilities.offerings[0].controls = [{ id: "speed", kind, values: [], minimum, maximum, account_dependent: false }];
+    await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+      const fixture = await siteFixture();
+      try {
+        await expect(renderFixture(fixture, capabilitiesURL)).rejects.toThrow(/controls/u);
+      } finally {
+        await rm(fixture.root, { recursive: true, force: true });
+      }
+    });
+  });
+}
+
+test("public site renders image generation with catalog dimension controls", async () => {
+  const capabilities = normalizedCapabilityFixture();
+  capabilities.operations.push({ id: "image_generation", input_artifacts: ["text"], output_artifacts: ["image"] });
+  capabilities.operations.push({ id: "image_editing", input_artifacts: ["text", "image"], output_artifacts: ["image"] });
+  capabilities.families[0].identifier = "gpt-image";
+  capabilities.models[0].family = "gpt-image";
+  const textModel = structuredClone(capabilities.models[0]);
+  textModel.identifier = "text-model";
+  textModel.provider_offerings = ["deepseek:text-model"];
+  capabilities.models.push(textModel);
+  const textOffering = structuredClone(capabilities.offerings[0]);
+  textOffering.identifier = "deepseek:text-model";
+  textOffering.model = "text-model";
+  capabilities.offerings.push(textOffering);
+  capabilities.prices.push({ ...capabilities.prices[0], model: "text-model" });
+  capabilities.publishers[0].model_count = 2;
+  capabilities.counts.exact_models = 2;
+  capabilities.counts.provider_offerings = 2;
+  capabilities.models[0].operations = ["image_generation", "image_editing"];
+  capabilities.models[0].capabilities = ["image_generation", "image_editing"];
+  capabilities.models[0].domains = ["image"];
+  capabilities.offerings[0].capabilities = ["image_generation", "image_editing"];
+  capabilities.offerings[0].domains = ["image"];
+  capabilities.offerings[0].wire_contract = "openai_images";
+  capabilities.offerings[0].controls = [{ id: "size", kind: "image_size", values: [], minimum: null, maximum: null, account_dependent: false,
+    image_size: { automatic: true, dimension_multiple: 16, maximum_edge: 3840, minimum_pixels: 655360, maximum_pixels: 8294400, maximum_aspect_ratio: 3 } }];
+  capabilities.prices[0].operation = "image_generation";
+  capabilities.prices.push({ ...capabilities.prices[0], operation: "image_editing" });
+  await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+    const fixture = await siteFixture();
+    try {
+      await renderFixture(fixture, capabilitiesURL);
+      const html = await readFile(path.join(fixture.output, "index.html"), "utf8");
+      expect(html).toContain('data-route-capability="image_generation"');
+      expect(html).toContain("Image generation");
+      expect(html).toContain('data-route-capability="image_editing"');
+      expect(html).toContain("Image editing");
+      expect(html).toContain('data-brand-id="gpt-image"');
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+});
+
+for (const scope of ["models", "offerings"]) {
+  for (const domains of [[], ["dictation"], ["speech", "speech"]]) {
+    test(`public site rejects invalid domains for ${scope}: ${JSON.stringify(domains)}`, async () => {
+      const capabilities = normalizedCapabilityFixture();
+      capabilities[scope][0].domains = domains;
+      await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+        const fixture = await siteFixture();
+        try {
+          await expect(renderFixture(fixture, capabilitiesURL)).rejects.toThrow(new RegExp(`catalog\\.${scope}\\[0\\]\\.domains`, "u"));
+        } finally { await rm(fixture.root, { recursive: true, force: true }); }
+      });
+    });
+  }
+}
+
 test("brand icons public renderer rejects an unmapped runtime family", async () => {
   const capabilities = normalizedCapabilityFixture();
   capabilities.families[0].identifier = "new-family";
@@ -145,10 +255,10 @@ test("public site rendering writes the normalized exact model catalog", async ()
       const renderedLanding = await readFile(path.join(fixture.output, "index.html"), "utf8");
       expect(renderedLanding).toContain("1 family · 1 exact model · 1 offering");
       expect(renderedLanding).toContain('data-route-weight-access="proprietary" aria-pressed="true"');
-      expect(renderedLanding).toContain('data-route-weight-access="open_weights" aria-pressed="false"');
+      expect(renderedLanding).toContain('data-route-weight-access="open_weights" aria-pressed="true"');
       expect(renderedLanding).toContain('role="group" aria-label="Choose one or both weight access types"');
       expect(renderedLanding).toContain('role="group" aria-label="Choose one capability"');
-      expect(renderedLanding).toContain('data-route-capability="text" aria-label="Text generation" title="Text generation" aria-pressed="true"');
+      expect(renderedLanding).toContain('data-route-capability="all" aria-label="All capabilities" title="All capabilities" aria-pressed="true"');
       expect(renderedLanding).toContain('data-route-family-weight-access="proprietary"');
       expect(renderedLanding).toContain('data-route-provider-capabilities="text"');
       expect(renderedLanding).toContain('data-route-family="deepseek-v4"');
@@ -189,7 +299,7 @@ function normalizedCapabilityFixture() {
       { id: "dictation", input_artifacts: ["audio"], output_artifacts: ["text"] },
       { id: "video_generation", input_artifacts: ["text", "image"], output_artifacts: ["video"] },
     ],
-    providers: [{ identifier: "deepseek", label: "Example Provider", credential_kinds: ["api_key"] }],
+    providers: [{ identifier: "deepseek", label: "Example Provider", credential_kinds: ["api_key"], resources: /** @type {string[]} */ ([]), services: [] }],
     publishers: [{ identifier: "example-publisher", label: "Example Publisher", model_count: 1 }],
     families: [{
       identifier: "deepseek-v4",
@@ -205,6 +315,7 @@ function normalizedCapabilityFixture() {
       operations: ["text"],
       media_inputs: [],
       capabilities: ["text"],
+      domains: ["text"],
       provider_offerings: ["deepseek:example-model"],
     }],
     offerings: [{
@@ -212,6 +323,7 @@ function normalizedCapabilityFixture() {
       provider: "deepseek",
       model: "example-model",
       capabilities: ["text"],
+      domains: ["text"],
       wire_contract: "openai_chat_completions",
       execution_lifecycle: "synchronous_completion",
       output_token_limit: 0,
@@ -307,3 +419,50 @@ async function withCapabilityServer(statusCode, responseBody, assertion) {
     });
   }
 }
+
+for (const resources of [undefined, null, ["unknown"], ["voices", "voices"]]) {
+  test(`public site rejects invalid provider resources: ${JSON.stringify(resources)}`, async () => {
+    const capabilities = normalizedCapabilityFixture();
+    Object.assign(capabilities.providers[0], {resources});
+    await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+      const fixture = await siteFixture();
+      try {
+        await expect(renderFixture(fixture, capabilitiesURL)).rejects.toThrow(/public_capabilities_invalid: catalog.providers\[0\]/u);
+      } finally {
+        await rm(fixture.root, {recursive: true, force: true});
+      }
+    });
+  });
+}
+
+test("public site accepts catalog provider resources", async () => {
+  const capabilities = normalizedCapabilityFixture();
+  capabilities.providers[0].resources = ["voices"];
+  await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+    const fixture = await siteFixture();
+    try {
+      await renderFixture(fixture, capabilitiesURL);
+      expect(await readFile(path.join(fixture.output, "index.html"), "utf8")).toContain('data-route-provider="deepseek"');
+    } finally {
+      await rm(fixture.root, {recursive: true, force: true});
+    }
+  });
+});
+
+test("public site shows provider services without extra models", async ({page}) => {
+  const capabilities=normalizedCapabilityFixture();
+  Object.assign(capabilities.providers[0], {services:[{operation:'audio_alignment',controls:[],limits:[{id:'input_audio_bytes',value:1000000000,unit:'bytes',account_dependent:false}],price:{operation:'audio_alignment',available:false,rates:[],minimum_charge:null,source:'https://example.com/pricing',last_verified:'2026-09-20',unavailable_reason:'Exact price is unavailable.'}}]});
+  capabilities.providers[0].services.push({operation:'pronunciation_dictionary_creation',controls:[],limits:[],price:{operation:'pronunciation_dictionary_creation',available:false,rates:[],minimum_charge:null,source:'https://example.com/pricing',last_verified:'2026-09-20',unavailable_reason:'Exact price is unavailable.'}});
+  await withCapabilityServer(200,capabilities,async capabilitiesURL=>{
+    const fixture=await siteFixture();
+    try {
+      await renderFixture(fixture,capabilitiesURL);
+      await page.setContent(await readFile(path.join(fixture.output,'index.html'),'utf8'));
+      await expect(page.locator('[data-provider-services]')).toContainText('Example Provider');
+      await expect(page.locator('[data-provider-services]')).toContainText('Audio alignment');
+      await expect(page.locator('[data-provider-services]')).toContainText('Pronunciation dictionary');
+      await expect(page.locator('[data-provider-services]')).toContainText('Exact price is unavailable.');
+      await expect(page.locator('[data-route-model]')).toHaveCount(1);
+    } finally {await rm(fixture.root,{recursive:true,force:true});}
+  });
+});

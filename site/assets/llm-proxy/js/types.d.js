@@ -4,11 +4,18 @@
  * @typedef {{
  *   provider: string,
  *   model: string,
- *   dictation_provider: string,
- *   dictation_model: string,
+ *   transcription_provider: string,
+ *   transcription_model: string,
+ *   speech_provider: string,
+ *   speech_model: string,
  *   system_prompt: string,
  *   reasoning_effort: string
  * }} TenantDefaults
+ */
+
+/**
+ * @typedef {"text" | "transcription" | "speech" | "image" | "video"} CapabilityDomain
+ * @typedef {{provider:string, model:string, capabilities:string[], domains:CapabilityDomain[]}} DashboardOffering
  */
 
 /**
@@ -64,6 +71,8 @@
  *   key_acquisition_url: string,
  *   aliases: string[],
  *   capabilities: string[],
+ *   resources: string[],
+ *   services: {operation:string,controls:object[],limits:object[],price:object}[],
  *   model_families: CatalogIdentityProfile[],
  *   configured: boolean,
  *   fields: ProviderFieldProfile[],
@@ -72,8 +81,11 @@
  *   text_default_model: string,
  *   text_models: TextModelProfile[],
  *   supports_dictation: boolean,
- *   dictation_default_model?: string,
- *   dictation_models: string[]
+ *   transcription_default_model?: string,
+ *   transcription_models: string[],
+ *   supports_speech: boolean,
+ *   speech_default_model?: string,
+ *   speech_models: string[]
  * }} ProviderProfile
  */
 

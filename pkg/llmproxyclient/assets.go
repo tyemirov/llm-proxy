@@ -107,7 +107,7 @@ func (client Client) UploadAsset(contextValue context.Context, input AssetUpload
 
 func supportedClientMediaMIME(mimeType string) bool {
 	switch mimeType {
-	case "application/json", "application/x-subrip", audioMIMEM4A, audioMIMEMPEG, audioMIMEWAV, "audio/flac", "audio/ogg", imageMIMEJPEG, imageMIMEPNG, imageMIMEWebP, "video/mp4", "video/webm":
+	case "application/octet-stream", "application/json", "application/x-subrip", audioMIMEM4A, audioMIMEMPEG, audioMIMEWAV, "audio/flac", "audio/ogg", imageMIMEJPEG, imageMIMEPNG, imageMIMEWebP, "video/mp4", "video/webm":
 		return true
 	default:
 		return false

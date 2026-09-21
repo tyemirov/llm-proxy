@@ -12,21 +12,23 @@ var (
 
 // TenantDefaults holds default request values selected by an authenticated tenant.
 type TenantDefaults struct {
-	Provider          string
-	Model             string
-	DictationProvider string
-	DictationModel    string
-	SystemPrompt      string
-	ReasoningEffort   string
+	Provider              string
+	Model                 string
+	TranscriptionProvider string
+	TranscriptionModel    string
+	SpeechProvider        string
+	SpeechModel           string
+	SystemPrompt          string
+	ReasoningEffort       string
 }
 
 // DefaultTenantDefaults returns the canonical routing defaults assigned to a new managed tenant.
 func DefaultTenantDefaults() TenantDefaults {
 	return TenantDefaults{
-		Provider:          DefaultProvider,
-		Model:             DefaultModel,
-		DictationProvider: DefaultDictationProvider,
-		DictationModel:    DefaultDictationModel,
+		Provider:              DefaultProvider,
+		Model:                 DefaultModel,
+		TranscriptionProvider: DefaultTranscriptionProvider,
+		TranscriptionModel:    DefaultTranscriptionModel,
 	}
 }
 
@@ -37,12 +39,14 @@ func (identifier tenantID) string() string {
 }
 
 type tenantDefaults struct {
-	provider          string
-	model             string
-	dictationProvider string
-	dictationModel    string
-	systemPrompt      string
-	reasoningEffort   string
+	provider              string
+	model                 string
+	transcriptionProvider string
+	transcriptionModel    string
+	speechProvider        string
+	speechModel           string
+	systemPrompt          string
+	reasoningEffort       string
 }
 
 func newTenantDefaults(rawDefaults TenantDefaults) tenantDefaults {
@@ -51,19 +55,23 @@ func newTenantDefaults(rawDefaults TenantDefaults) tenantDefaults {
 
 func normalizedTenantDefaults(rawDefaults TenantDefaults) tenantDefaults {
 	defaults := tenantDefaults{
-		provider:          strings.TrimSpace(rawDefaults.Provider),
-		model:             strings.TrimSpace(rawDefaults.Model),
-		dictationProvider: strings.TrimSpace(rawDefaults.DictationProvider),
-		dictationModel:    strings.TrimSpace(rawDefaults.DictationModel),
-		systemPrompt:      rawDefaults.SystemPrompt,
-		reasoningEffort:   rawDefaults.ReasoningEffort,
+		provider:              strings.TrimSpace(rawDefaults.Provider),
+		model:                 strings.TrimSpace(rawDefaults.Model),
+		transcriptionProvider: strings.TrimSpace(rawDefaults.TranscriptionProvider),
+		transcriptionModel:    strings.TrimSpace(rawDefaults.TranscriptionModel),
+		speechProvider:        strings.TrimSpace(rawDefaults.SpeechProvider),
+		speechModel:           strings.TrimSpace(rawDefaults.SpeechModel),
+		systemPrompt:          rawDefaults.SystemPrompt,
+		reasoningEffort:       rawDefaults.ReasoningEffort,
 	}
 	defaults.provider = strings.ToLower(defaults.provider)
-	defaults.dictationProvider = strings.ToLower(defaults.dictationProvider)
+	defaults.transcriptionProvider = strings.ToLower(defaults.transcriptionProvider)
+	defaults.speechProvider = strings.ToLower(defaults.speechProvider)
 	return defaults
 }
 
 type managedProviderSettings struct {
+	connectionID     string
 	connectionValues map[string]string
 	configuredFields map[string]bool
 	textModel        string

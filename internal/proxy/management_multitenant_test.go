@@ -415,7 +415,7 @@ func saveManagementProviderKey(t *testing.T, router http.Handler, sessionCookie 
 		exchange(http.MethodPut, "/api/management/connections/"+id, body, http.StatusOK)
 	}
 	exchange(http.MethodPut, managementTenantTestPath(tenantID, "/provider-profiles/openai"), map[string]string{"text_model": model, "system_prompt": systemPrompt}, http.StatusOK)
-	exchange(http.MethodPut, managementTenantTestPath(tenantID, "/defaults"), map[string]string{"provider": "openai", "model": model, "dictation_provider": "openai", "dictation_model": proxy.DefaultDictationModel, "system_prompt": "", "reasoning_effort": ""}, http.StatusOK)
+	exchange(http.MethodPut, managementTenantTestPath(tenantID, "/defaults"), map[string]string{"provider": "openai", "model": model, "transcription_provider": "openai", "transcription_model": proxy.DefaultTranscriptionModel, "system_prompt": "", "reasoning_effort": ""}, http.StatusOK)
 }
 
 func saveManagementDefaults(t *testing.T, router http.Handler, sessionCookie *http.Cookie, tenantID string, model string, systemPrompt string) {
@@ -423,7 +423,7 @@ func saveManagementDefaults(t *testing.T, router http.Handler, sessionCookie *ht
 	request := authenticatedJSONRequest(
 		http.MethodPut,
 		managementTenantTestPath(tenantID, "/defaults"),
-		managementDefaultsRequestBody(t, proxy.ProviderNameOpenAI, model, proxy.ProviderNameOpenAI, proxy.DefaultDictationModel, systemPrompt),
+		managementDefaultsRequestBody(t, proxy.ProviderNameOpenAI, model, proxy.ProviderNameOpenAI, proxy.DefaultTranscriptionModel, systemPrompt),
 		sessionCookie,
 	)
 	response := httptest.NewRecorder()

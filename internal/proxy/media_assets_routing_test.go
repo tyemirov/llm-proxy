@@ -533,7 +533,7 @@ func mediaAssetRouter(t *testing.T, geminiBaseURL string, assetRoot string, cata
 
 func mediaAssetRouterWithMaxPrompt(t *testing.T, geminiBaseURL string, assetRoot string, catalog proxy.ModelCatalog, retentionSeconds int, maxPromptBytes int64) http.Handler {
 	t.Helper()
-	defaults := proxy.TenantDefaults{Provider: proxy.ProviderNameGemini, Model: proxy.ModelNameGemini35Flash, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel}
+	defaults := proxy.TenantDefaults{Provider: proxy.ProviderNameGemini, Model: proxy.ModelNameGemini35Flash, TranscriptionProvider: proxy.ProviderNameOpenAI, TranscriptionModel: proxy.DefaultTranscriptionModel}
 	firstTenant := proxy.StandardManagedTenantTestConfiguration("secret-a")
 	firstTenant.ID = "tenant-a"
 	firstTenant.Defaults = defaults
@@ -541,8 +541,8 @@ func mediaAssetRouterWithMaxPrompt(t *testing.T, geminiBaseURL string, assetRoot
 	secondTenant.ID = "tenant-b"
 	secondTenant.Defaults = defaults
 	configuration := proxy.Configuration{
-		Endpoints:   providerEndpoints(geminiBaseURL, proxy.ProviderNameGemini),
-		WorkerCount: 2, QueueSize: 4, RequestTimeoutSeconds: 10, MaxPromptBytes: maxPromptBytes,
+		Endpoints:        providerEndpoints(geminiBaseURL, proxy.ProviderNameGemini),
+		UpstreamCapacity: testfixtures.UpstreamCapacity(2, 4), RequestTimeoutSeconds: 10, MaxPromptBytes: maxPromptBytes,
 		MaxAssetBytes: 10 * 1024 * 1024, AssetRetentionSeconds: retentionSeconds, AssetStorePath: assetRoot,
 		ModelCatalog: catalog,
 	}

@@ -20,6 +20,10 @@ GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 fmt:
 	$(GOFMT) -w $(GO_SOURCES)
 
+.PHONY: go-dependencies
+go-dependencies:
+	$(GO) mod tidy
+
 check-format:
 	@formatted="$$($(GOFMT) -l $(GO_SOURCES))"; \
 	if [ -n "$$formatted" ]; then \
@@ -91,9 +95,23 @@ test-account-connections:
 test-management-contracts:
 	$(GO) test ./internal/proxy -run '$(if $(MANAGEMENT_TEST_PATTERN),$(MANAGEMENT_TEST_PATTERN),^TestManagement)' -timeout=2m -count=1
 
+.PHONY: test-upstream-admission test-upstream-admission-race test-upstream-admission-accounts
+test-upstream-admission-accounts:
+	$(GO) test -race ./internal/proxy -run '^TestUpstreamAdmissionSharesAccountCapacityAcrossTenants$$' -count=3
+
+test-upstream-admission:
+	$(GO) test ./tests/integration ./internal/proxy ./cmd/cli -run '$(if $(ADMISSION_TEST_PATTERN),$(ADMISSION_TEST_PATTERN),Test.*(UpstreamAdmission|UpstreamCapacity|UpstreamRateLimit|RateLimit|HighLoadQueue|BackgroundPollSleep|LimitedHTTP))' -count=1
+
+test-upstream-admission-race:
+	$(GO) test -race ./tests/integration ./internal/proxy -run '$(if $(ADMISSION_TEST_PATTERN),$(ADMISSION_TEST_PATTERN),Test.*(UpstreamAdmission|UpstreamCapacity|UpstreamRateLimit|RateLimit|HighLoadQueue|BackgroundPollSleep|LimitedHTTP))' -count=1 $(ADMISSION_TEST_ARGS)
+
 .PHONY: test-operational-live-contracts
 test-operational-live-contracts:
 	$(GO) test ./tests -run '^TestOperational.*Live' -count=1
+
+.PHONY: test-ci-runner
+test-ci-runner:
+	$(GO) test ./tests -run '^TestOperationalCIRunnerRequiresCurrentCompletionEvidence$$' -count=1
 
 test-live-provider-harness:
 	@GO="$(GO)" ./scripts/test_live_providers.sh --preflight
@@ -147,8 +165,10 @@ ci:
 	@MAKE_BIN="$(MAKE)" GO="$(GO)" GOFMT="$(GOFMT)" NPM="$(NPM)" UV="$(UV)" \
 		PYTHON_PROJECT_DIR="$(PYTHON_PROJECT_DIR)" ./scripts/run_ci.sh
 
-.PHONY: ci-backend ci-frontend
-ci-backend: test-release-policy check-format go-lint python-lint test-protocol-acceptance go-test python-test test-live-provider-harness
+.PHONY: ci-backend ci-backend-checks ci-frontend
+ci-backend: go-test
+
+ci-backend-checks: test-release-policy check-format go-lint python-lint test-protocol-acceptance test-upstream-admission-race python-test test-live-provider-harness
 
 ci-frontend: frontend-lint frontend-test test-openapi-pages-artifact test-management-auth-blackbox
 
@@ -192,6 +212,14 @@ test-protocol-acceptance: frontend-dependencies
 test-media-operations: frontend-dependencies
 	$(GO) test ./internal/proxy -run '^Test(MediaOperation|TenantAsset|DictatorWorkerIsolation)' -count=1
 
+.PHONY: test-image-generation
+test-image-generation: frontend-dependencies
+	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run '^TestImageGeneration' -count=1 $(IMAGE_TEST_ARGS)
+
+.PHONY: test-image-discovery
+test-image-discovery: frontend-dependencies
+	$(NPM) run frontend:test -- tests/e2e/public-site-renderer.spec.js tests/e2e/management-ui.spec.js --grep 'image generation'
+
 .PHONY: test-media-cli
 test-media-cli:
 	$(GO) test ./llm-proxy-client -run '^TestMedia' -count=1
@@ -220,9 +248,14 @@ test-installed-gateway:
 test-release-policy:
 	$(GO) test ./tests -run '^TestOperationalReleaseDecisionUsesGixVersion$$' -count=1
 
+.PHONY: test-provider-resources
+test-provider-resources: frontend-dependencies
+	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run '^TestProvider(CatalogResources|Resources)' -count=1
+	cd $(PYTHON_PROJECT_DIR) && $(UV) run --group dev pytest tests/test_client.py -k provider_resources
+
 .PHONY: test-provider-catalog
 test-provider-catalog: frontend-dependencies
-	$(GO) test ./internal/proxy ./tests ./cmd/cli -run 'Test(ProviderCatalog|CatalogDefined|ModelActivation|RootCommandPrintsCatalogDerivedLiveDiscovery)' -count=1
+	$(GO) test ./internal/proxy ./tests ./cmd/cli -run 'Test(ProviderCatalog|PublicCapabilityCatalog|CatalogDefined|ModelActivation|RootCommandPrintsCatalogDerivedLiveDiscovery)' -count=1
 
 .PHONY: test-deepseek-retirement
 test-deepseek-retirement: frontend-dependencies
@@ -360,3 +393,27 @@ generate-public-pages:
 # Supply the selected upstream credentials and a spoken 'hello world' WAV fixture.
 test-dictator-live: frontend-dependencies
 	LLM_PROXY_DICTATOR_LIVE_ENABLED=1 $(GO) test ./internal/proxy -run '^TestDictatorGatewayLiveAcceptance$$' -count=1 -v -timeout=20m
+
+.PHONY: test-fal-images
+test-fal-images: frontend-dependencies
+	$(GO) test ./internal/proxy -run "^TestFALImages" -count=1 $(FAL_TEST_ARGS)
+
+.PHONY: test-catalog-controls
+test-catalog-controls: frontend-dependencies
+	$(GO) test ./internal/proxy -run 'TestProviderCatalogNumberControls' -count=1 $(CATALOG_CONTROL_TEST_ARGS)
+
+.PHONY: test-elevenlabs-resources
+test-elevenlabs-resources: frontend-dependencies
+	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run '^TestElevenLabsAccountResources' -count=1 $(ELEVENLABS_TEST_ARGS)
+
+.PHONY: test-provider-services
+test-provider-services: frontend-dependencies
+	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run '^TestProviderServices' -count=1 $(PROVIDER_SERVICE_TEST_ARGS)
+
+.PHONY: test-provider-voices
+test-provider-voices: frontend-dependencies
+	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run '^Test(ElevenLabsVoices|MediaVoice)' -count=1 $(VOICE_TEST_ARGS)
+
+.PHONY: test-provider-speech
+test-provider-speech: frontend-dependencies
+	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run '^TestProviderSpeech' -count=1 $(SPEECH_TEST_ARGS)

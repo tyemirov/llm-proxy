@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Limited the MediaOps migration to model and provider access.
+  Kept all MediaOps applications, browser workflows, local processing, and application data in MediaOps.
+  Removed the proposed destination Frame Picker implementation before publication or activation.
+
+- Ran Python client checks at the same time as Go integration and admission race checks.
+  Preserved all CI gates, child failure statuses, temporary file removal, and completion receipts.
+
+- Added `image.edit` with ordered tenant assets and optional PNG masks.
+  Added catalog-selected Images and Responses routes with explicit controls.
+  Stored progressive image assets with durable output and partial ordinals.
+  Kept native response handles private and bound follow-ups to the accepted tenant, connection, route, and models.
+  Added background retrieval, restart recovery, and provider-confirmed cancellation without duplicate submissions.
+  Extended the Go and Python clients, OpenAPI, browser discovery, and image examples.
+  Audited retained source records and provider snapshots without source changes or provider calls.
+
+- Added terminal `image.generate` through the existing OpenAI connection.
+  The catalog selects `gpt-image-2`, explicit generation controls, and image limits.
+  The gateway verifies ordered PNG, JPEG, and WebP artifacts and retains private integrity metadata.
+  Lost responses produce `uncertain` without another provider submission.
+  Added a typed Go client method, image example, API schemas, and browser discovery.
+  Local protocol tests cover a second catalog provider, restart, cancellation, isolation, and concurrent text progress.
+  Client publication, deployment, and live acceptance remain separate release evidence.
+
 - Added the private Dictator media-provider boundary for transcription,
   diarization, alignment, subtitles, speech generation, and voice extraction.
   The gateway validates exact operation inputs, retains native jobs and voice

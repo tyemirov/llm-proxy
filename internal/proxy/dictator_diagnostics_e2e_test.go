@@ -230,7 +230,7 @@ func TestDictatorDiagnosticsUseAssignedConnection(t *testing.T) {
 		identifier := fmt.Sprintf("retained-%d", index)
 		record := map[string]any{"operation_id": identifier, "tenant_id": tenantID, "idempotency_key_digest": identifier,
 			"intent_digest": identifier, "capability": "audio.transcribe", "catalog_operation": "audio.transcribe", "provider": "dictator",
-			"model": "dictator-speech-v1", "catalog_revision": "test", "credential_reference": "test", "normalized_input": []byte(`{}`),
+			"model": "whisper-base", "catalog_revision": "test", "credential_reference": "test", "normalized_input": []byte(`{}`),
 			"normalized_controls": []byte(`{}`), "public_state": state, "provider_execution_state": "not_dispatched",
 			"cancellation_state": "not_requested", "accepted_at": time.Now(), "updated_at": time.Now(), "deadline_at": time.Now().Add(time.Hour)}
 		if err := database.Transaction(func(transaction *gorm.DB) error {

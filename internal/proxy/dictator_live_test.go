@@ -104,11 +104,16 @@ func exerciseDictatorGatewayAcceptance(t *testing.T, client llmproxyclient.Clien
 	}
 	routes := map[string]bool{}
 	for _, route := range capabilities.Routes {
-		if route.Provider == proxy.ProviderNameDictator && route.Model == proxy.ModelNameDictatorSpeechV1 {
+		if route.Provider != proxy.ProviderNameDictator {
+			continue
+		}
+		switch route.Model {
+		case proxy.ModelNameDictatorWhisperBase, proxy.ModelNameDictatorWhisperLargeV3, proxy.ModelNameDictatorQwen3TTS, proxy.ModelNameDictatorSileroRU:
 			routes[route.Capability] = true
 		}
 	}
-	voices, err := client.GetMediaVoices(ctx, proxy.ProviderNameDictator)
+	voicesPage, err := client.GetMediaVoices(ctx, llmproxyclient.MediaVoiceQuery{Provider: proxy.ProviderNameDictator})
+	voices := voicesPage.Voices
 	if err != nil || len(voices) == 0 {
 		t.Fatalf("voice discovery: count=%d error=%v", len(voices), err)
 	}
@@ -123,12 +128,18 @@ func exerciseDictatorGatewayAcceptance(t *testing.T, client llmproxyclient.Clien
 		}
 		return encoded
 	}
+	dictatorModelForCapability := func(capability string) string {
+		if capability == "audio.speech.generate" {
+			return proxy.ModelNameDictatorQwen3TTS
+		}
+		return proxy.ModelNameDictatorWhisperBase
+	}
 	execute := func(capability string, input json.RawMessage, controls string) [][]byte {
 		t.Helper()
 		if !routes[capability] {
 			t.Fatalf("missing advertised capability %s", capability)
 		}
-		request := llmproxyclient.MediaOperationInput{Provider: proxy.ProviderNameDictator, Model: proxy.ModelNameDictatorSpeechV1, Capability: capability, Input: input, Controls: json.RawMessage(controls)}
+		request := llmproxyclient.MediaOperationInput{Provider: proxy.ProviderNameDictator, Model: dictatorModelForCapability(capability), Capability: capability, Input: input, Controls: json.RawMessage(controls)}
 		operation, err := client.CreateMediaOperation(ctx, "gateway-acceptance-"+capability, request)
 		if err != nil {
 			t.Fatalf("%s admission: %v", capability, err)
@@ -187,7 +198,8 @@ func exerciseDictatorGatewayAcceptance(t *testing.T, client llmproxyclient.Clien
 	if len(extracted) != 1 {
 		t.Fatal("voice extraction lacks its public result")
 	}
-	voices, err = client.GetMediaVoices(ctx, proxy.ProviderNameDictator)
+	voicesPage, err = client.GetMediaVoices(ctx, llmproxyclient.MediaVoiceQuery{Provider: proxy.ProviderNameDictator})
+	voices = voicesPage.Voices
 	if err != nil {
 		t.Fatal(err)
 	}

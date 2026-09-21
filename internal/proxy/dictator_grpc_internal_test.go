@@ -34,7 +34,7 @@ func dictatorProtocolBoundary(t *testing.T, unary func(string, any, any) error, 
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = connection.Close() })
-	return &dictatorGRPCProtocol{provider: ProviderNameDictator, model: ModelNameDictatorSpeechV1, connection: connection, token: "token", binding: "account-a", maxAssetBytes: 32}
+	return &dictatorGRPCProtocol{provider: ProviderNameDictator, model: ModelNameDictatorWhisperBase, connection: connection, token: "token", binding: "account-a", maxAssetBytes: 32}
 }
 
 type dictatorBoundaryStream struct {
@@ -169,6 +169,10 @@ func TestDictatorJobAndVoiceBindingAtSDKBoundary(t *testing.T) {
 		}
 	}
 	reference, _ := json.Marshal(dictatorVoiceReference{Binding: protocol.binding, Engine: dictator.SynthesisEngine_SYNTHESIS_ENGINE_SILERO_RU, Preset: "baya"})
+	if _, err := protocol.synthesisRequest(dictatorCanonicalInput{}, dictatorCanonicalControls{TextFormat: "plain"}, &mediaVoiceRecord{ProviderVoiceReference: string(reference)}); err == nil {
+		t.Fatal("used a voice engine for a model without synthesis support")
+	}
+	protocol.model = ModelNameDictatorSileroRU
 	if _, err := protocol.synthesisRequest(dictatorCanonicalInput{}, dictatorCanonicalControls{}, &mediaVoiceRecord{ProviderVoiceReference: string(reference)}); err == nil {
 		t.Fatal("accepted unspecified text format")
 	}
@@ -249,7 +253,7 @@ func TestDictatorConnectionAuthorityAtExecutionBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := &managedTenantStore{routingDefaults: fixture.service.providers, providerKeyCipher: internalManagedProviderKeyCipher()}
-	adapter := &accountDictatorAdapter{provider: ProviderNameDictator, model: ModelNameDictatorSpeechV1, transport: fixture.service.providers.definitions[providerID(ProviderNameDictator)].transports["speech"], tenants: store, store: fixture.service.store, assets: fixture.service.assets}
+	adapter := &accountDictatorAdapter{provider: ProviderNameDictator, model: ModelNameDictatorWhisperBase, transport: fixture.service.providers.definitions[providerID(ProviderNameDictator)].transports["speech"], tenants: store, store: fixture.service.store, assets: fixture.service.assets}
 	request := MediaOperationExecutionRequest{TenantID: fixture.tenant.identifier.string(), CredentialReference: "connection-internal:v3", ProviderHandle: "private-handle"}
 	if result := adapter.Execute(context.Background(), request); result.State != MediaOperationStateFailed {
 		t.Fatalf("dispatched without assignment: %+v", result)
@@ -260,7 +264,10 @@ func TestDictatorConnectionAuthorityAtExecutionBoundary(t *testing.T) {
 	if result := adapter.Cancel(context.Background(), request); result.State != MediaCancellationUnsupported {
 		t.Fatalf("cancelled without authority: %+v", result)
 	}
-	if _, err := adapter.DiscoverMediaVoices(context.Background(), request.TenantID); err == nil {
+	if _, err := adapter.MediaVoiceAuthority(context.Background(), request.TenantID); err == nil {
+		t.Fatal("voice authority accepted an absent assignment")
+	}
+	if _, err := adapter.DiscoverMediaVoices(context.Background(), request.TenantID, MediaVoiceQuery{}); err == nil {
 		t.Fatal("discovered without assignment")
 	}
 	if err := fixture.database.Model(&managedTenantConnectionRecord{}).Where("tenant_id = ?", request.TenantID).Update("provider_id", ProviderNameDictator).Error; err != nil {

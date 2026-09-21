@@ -148,7 +148,8 @@ func (protocol *dictatorGRPCProtocol) Submit(ctx context.Context, request dictat
 	var err error
 	switch request.Capability {
 	case llmproxycontract.MediaCapabilityAudioTranscribe:
-		response, callErr := dictator.NewTranscriptionServiceClient(protocol.connection).SubmitTranscribeJob(ctx, &dictator.TranscribeRequest{AudioArtifactId: audioID, LanguageCode: controls.Language, AutodetectLanguage: controls.DetectLanguage, IncludeWordSegments: true})
+		modelSize, _ := dictatorWhisperSizeForModel(protocol.model)
+		response, callErr := dictator.NewTranscriptionServiceClient(protocol.connection).SubmitTranscribeJob(ctx, &dictator.TranscribeRequest{AudioArtifactId: audioID, LanguageCode: controls.Language, AutodetectLanguage: controls.DetectLanguage, IncludeWordSegments: true, ModelSize: modelSize})
 		err = callErr
 		if err == nil {
 			handle.JobID, state = response.JobId, int32(response.State)
@@ -168,7 +169,8 @@ func (protocol *dictatorGRPCProtocol) Submit(ctx context.Context, request dictat
 			handle.JobID, state = response.JobId, int32(response.State)
 		}
 	case llmproxycontract.MediaCapabilitySubtitlesCreate:
-		native := &dictator.RenderSubtitlesRequest{AudioArtifactId: audioID, LanguageCode: controls.Language, AutodetectLanguage: controls.DetectLanguage, OutputFormat: dictator.SubtitleFormat_SUBTITLE_FORMAT_SRT, GroupSize: int32(controls.GroupSize), IncludeSrtText: true}
+		modelSize, _ := dictatorWhisperSizeForModel(protocol.model)
+		native := &dictator.RenderSubtitlesRequest{AudioArtifactId: audioID, LanguageCode: controls.Language, AutodetectLanguage: controls.DetectLanguage, OutputFormat: dictator.SubtitleFormat_SUBTITLE_FORMAT_SRT, GroupSize: int32(controls.GroupSize), IncludeSrtText: true, ModelSize: modelSize}
 		if controls.Granularity == "word" {
 			native.Granularity = dictator.SubtitleGranularity_SUBTITLE_GRANULARITY_WORDS
 		} else {
@@ -212,6 +214,17 @@ func (protocol *dictatorGRPCProtocol) Submit(ctx context.Context, request dictat
 	return dictatorProtocolObservation{State: dictatorProtocolStateQueued, Handle: handle}, nil
 }
 
+func dictatorSynthesisEngineForModel(model string) (dictator.SynthesisEngine, bool) {
+	switch model {
+	case "qwen3-tts":
+		return dictator.SynthesisEngine_SYNTHESIS_ENGINE_QWEN3, true
+	case "silero-ru":
+		return dictator.SynthesisEngine_SYNTHESIS_ENGINE_SILERO_RU, true
+	default:
+		return dictator.SynthesisEngine(0), false
+	}
+}
+
 func (protocol *dictatorGRPCProtocol) synthesisRequest(input dictatorCanonicalInput, controls dictatorCanonicalControls, voice *mediaVoiceRecord) (*dictator.SynthesizeSpeechRequest, error) {
 	if voice == nil {
 		return nil, errors.New("dictator voice missing")
@@ -226,7 +239,11 @@ func (protocol *dictatorGRPCProtocol) synthesisRequest(input dictatorCanonicalIn
 	if reference.Engine != dictator.SynthesisEngine_SYNTHESIS_ENGINE_SILERO_RU && reference.Engine != dictator.SynthesisEngine_SYNTHESIS_ENGINE_QWEN3 {
 		return nil, errors.New("invalid Dictator synthesis engine")
 	}
-	native := &dictator.SynthesizeSpeechRequest{TextSource: &dictator.SynthesizeSpeechRequest_Text{Text: input.Text}, LanguageCode: controls.Language, SynthesisEngine: reference.Engine, SpeakerArtifactId: reference.Artifact, PresetSpeaker: reference.Preset, SpeakerTranscriptText: reference.Transcript, MaxDurationSeconds: controls.MaxDurationSeconds, IncludeTimeline: controls.IncludeTimeline, AudioFormat: &dictator.AudioFormat{Container: dictator.AudioContainer_AUDIO_CONTAINER_WAV, Codec: dictator.AudioCodec_AUDIO_CODEC_PCM_S16LE, SampleRateHz: int32(controls.SampleRateHz), ChannelCount: 1, BitDepth: 16}}
+	engine, modelOK := dictatorSynthesisEngineForModel(protocol.model)
+	if !modelOK || reference.Engine != engine {
+		return nil, errors.New("dictator voice is incompatible with the selected synthesis model")
+	}
+	native := &dictator.SynthesizeSpeechRequest{TextSource: &dictator.SynthesizeSpeechRequest_Text{Text: input.Text}, LanguageCode: controls.Language, SynthesisEngine: engine, SpeakerArtifactId: reference.Artifact, PresetSpeaker: reference.Preset, SpeakerTranscriptText: reference.Transcript, MaxDurationSeconds: controls.MaxDurationSeconds, IncludeTimeline: controls.IncludeTimeline, AudioFormat: &dictator.AudioFormat{Container: dictator.AudioContainer_AUDIO_CONTAINER_WAV, Codec: dictator.AudioCodec_AUDIO_CODEC_PCM_S16LE, SampleRateHz: int32(controls.SampleRateHz), ChannelCount: 1, BitDepth: 16}}
 	switch controls.TextFormat {
 	case "plain":
 		native.TextFormat = dictator.SynthesisTextFormat_SYNTHESIS_TEXT_FORMAT_PLAIN_TEXT

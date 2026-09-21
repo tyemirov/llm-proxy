@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -83,8 +84,7 @@ func textRouterWithResponsesHandlerAndDefaults(t *testing.T, handler http.Handle
 	tenantConfiguration.Defaults = defaults
 	router, buildError := buildRouterWithManagedTenant(t, proxy.Configuration{
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             2,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 2),
 		RequestTimeoutSeconds: TestTimeout,
 		Endpoints:             endpoints,
 	}, coverageLogger(), tenantConfiguration)
@@ -361,8 +361,7 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 		endpoints.SetResponsesURL(upstreamServer.URL)
 		smallRouter := coverageRouter(subTest, proxy.Configuration{
 			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
+			UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 			RequestTimeoutSeconds: TestTimeout,
 			MaxPromptBytes:        4,
 			Endpoints:             endpoints,
@@ -379,8 +378,7 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 	t.Run("v2 json body enforces provider token limits", func(subTest *testing.T) {
 		geminiRouter := coverageRouter(subTest, proxy.Configuration{
 			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
+			UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 			RequestTimeoutSeconds: TestTimeout,
 		})
 		request := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret+"&provider="+proxy.ProviderNameGemini, strings.NewReader(`{"messages":[{"role":"user","content":"hello"}],"model":"`+proxy.ModelNameGemini35Flash+`","max_tokens":65537}`))
@@ -1024,8 +1022,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
 		router := coverageRouter(subTest, proxy.Configuration{
 			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
+			UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 			RequestTimeoutSeconds: 1,
 		})
 		queryParameters := url.Values{}
@@ -1204,8 +1201,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
 		router := coverageRouter(subTest, proxy.Configuration{
 			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
+			UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 			RequestTimeoutSeconds: 1,
 		})
 		queryParameters := url.Values{}
@@ -1260,8 +1256,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		endpoints.SetResponsesURL(upstreamServer.URL)
 		router := coverageRouter(subTest, proxy.Configuration{
 			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
+			UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 			RequestTimeoutSeconds: 2,
 			Endpoints:             endpoints,
 		})
@@ -1302,8 +1297,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
 		router := coverageRouter(subTest, proxy.Configuration{
 			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
+			UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 			RequestTimeoutSeconds: 2,
 			Endpoints:             endpoints,
 		})
@@ -1333,8 +1327,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
 		router := coverageRouter(subTest, proxy.Configuration{
 			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
+			UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 			RequestTimeoutSeconds: 2,
 			Endpoints:             endpoints,
 		})
@@ -1363,8 +1356,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
 		router := coverageRouter(subTest, proxy.Configuration{
 			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
+			UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 			RequestTimeoutSeconds: 2,
 			Endpoints:             endpoints,
 		})
@@ -1418,8 +1410,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
 		router := coverageRouter(subTest, proxy.Configuration{
 			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
+			UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 			RequestTimeoutSeconds: 1,
 		})
 		queryParameters := url.Values{}
@@ -1442,18 +1433,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 	t.Run("invalid responses URL fails request construction", func(subTest *testing.T) {
 		endpoints := proxy.NewEndpoints()
 		endpoints.SetResponsesURL("http://[::1")
-		router := coverageRouter(subTest, proxy.Configuration{
-			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
-			RequestTimeoutSeconds: TestTimeout,
-			Endpoints:             endpoints,
-		})
-		queryParameters := url.Values{}
-		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
-		if statusCode != http.StatusBadGateway {
-			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusBadGateway)
-		}
+		assertInvalidUpstreamEndpointStartup(subTest, endpoints)
 	})
 
 	t.Run("synthesis continuation malformed responses fail", func(subTest *testing.T) {
@@ -1508,8 +1488,7 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		router := coverageRouter(subTest, proxy.Configuration{
 			Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDashScope),
 			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
+			UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 			RequestTimeoutSeconds: TestTimeout,
 		})
 		queryParameters := url.Values{}
@@ -1551,8 +1530,7 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 				router := coverageRouter(caseTest, proxy.Configuration{
 					Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek),
 					LogLevel:              proxy.LogLevelInfo,
-					WorkerCount:           1,
-					QueueSize:             1,
+					UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 					RequestTimeoutSeconds: TestTimeout,
 				})
 				queryParameters := url.Values{}
@@ -1574,8 +1552,7 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		router := coverageRouter(subTest, proxy.Configuration{
 			Endpoints:             providerEndpoints("https://deepseek.invalid", proxy.ProviderNameDeepSeek),
 			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
+			UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 			RequestTimeoutSeconds: 1,
 		})
 		queryParameters := url.Values{}
@@ -1594,15 +1571,13 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 			wantStatus int
 		}{
 			{name: "unknown model", baseURL: "https://deepseek.invalid", model: "unknown-model", wantStatus: http.StatusBadRequest},
-			{name: "invalid provider base URL", baseURL: "http://[::1", model: proxy.ModelNameDeepSeekV4Flash, wantStatus: http.StatusBadGateway},
 		}
 		for _, testCase := range testCases {
 			subTest.Run(testCase.name, func(caseTest *testing.T) {
 				router := coverageRouter(caseTest, proxy.Configuration{
 					Endpoints:             providerEndpoints(testCase.baseURL, proxy.ProviderNameDeepSeek),
 					LogLevel:              proxy.LogLevelInfo,
-					WorkerCount:           1,
-					QueueSize:             1,
+					UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 					RequestTimeoutSeconds: 1,
 				})
 				queryParameters := url.Values{}
@@ -1614,6 +1589,10 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 				}
 			})
 		}
+	})
+
+	t.Run("invalid provider origin fails startup", func(subTest *testing.T) {
+		assertInvalidUpstreamEndpointStartup(subTest, providerEndpoints("http://[::1", proxy.ProviderNameDeepSeek))
 	})
 
 	t.Run("blank model uses provider default", func(subTest *testing.T) {
@@ -1632,8 +1611,7 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		router := coverageRouter(subTest, proxy.Configuration{
 			Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek),
 			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
+			UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 			RequestTimeoutSeconds: TestTimeout,
 		})
 		queryParameters := url.Values{}
@@ -1657,8 +1635,7 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		router := coverageRouter(subTest, proxy.Configuration{
 			Endpoints:             providerEndpoints("https://deepseek.invalid", proxy.ProviderNameDeepSeek),
 			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
+			UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 			RequestTimeoutSeconds: 1,
 		})
 		queryParameters := url.Values{}
@@ -1687,8 +1664,7 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		router := coverageRouter(subTest, proxy.Configuration{
 			Endpoints:             providerEndpoints("https://deepseek.invalid", proxy.ProviderNameDeepSeek),
 			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
+			UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 			RequestTimeoutSeconds: TestTimeout,
 			UpstreamRateLimits: []proxy.UpstreamRateLimitConfiguration{{
 				Origin:      "https://deepseek.invalid",
@@ -1732,8 +1708,7 @@ func TestCoverageDictationEdges(t *testing.T) {
 	t.Run("invalid and missing audio forms", func(subTest *testing.T) {
 		router := coverageRouter(subTest, proxy.Configuration{
 			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
+			UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 			RequestTimeoutSeconds: 1,
 			MaxInputAudioBytes:    1024,
 		})
@@ -1761,8 +1736,7 @@ func TestCoverageDictationEdges(t *testing.T) {
 	t.Run("unsupported and unknown dictation requests", func(subTest *testing.T) {
 		router := coverageRouter(subTest, proxy.Configuration{
 			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
+			UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 			RequestTimeoutSeconds: TestTimeout,
 			MaxInputAudioBytes:    1024,
 		})
@@ -1800,8 +1774,7 @@ func TestCoverageDictationEdges(t *testing.T) {
 				name: "siliconflow missing credential",
 				configuration: proxy.Configuration{
 					LogLevel:              proxy.LogLevelInfo,
-					WorkerCount:           1,
-					QueueSize:             1,
+					UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 					RequestTimeoutSeconds: TestTimeout,
 					MaxInputAudioBytes:    1024,
 				},
@@ -1813,8 +1786,7 @@ func TestCoverageDictationEdges(t *testing.T) {
 				name: "siliconflow unknown model",
 				configuration: proxy.Configuration{
 					LogLevel:              proxy.LogLevelInfo,
-					WorkerCount:           1,
-					QueueSize:             1,
+					UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 					RequestTimeoutSeconds: TestTimeout,
 					MaxInputAudioBytes:    1024,
 				},
@@ -1825,8 +1797,7 @@ func TestCoverageDictationEdges(t *testing.T) {
 				name: "openai missing credential when non openai defaults are configured",
 				configuration: proxy.Configuration{
 					LogLevel:              proxy.LogLevelInfo,
-					WorkerCount:           1,
-					QueueSize:             1,
+					UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 					RequestTimeoutSeconds: TestTimeout,
 					MaxInputAudioBytes:    1024,
 				},
@@ -1838,8 +1809,7 @@ func TestCoverageDictationEdges(t *testing.T) {
 				name: "zai missing credential",
 				configuration: proxy.Configuration{
 					LogLevel:              proxy.LogLevelInfo,
-					WorkerCount:           1,
-					QueueSize:             1,
+					UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 					RequestTimeoutSeconds: TestTimeout,
 					MaxInputAudioBytes:    1024,
 				},
@@ -1851,8 +1821,7 @@ func TestCoverageDictationEdges(t *testing.T) {
 				name: "zai unknown model",
 				configuration: proxy.Configuration{
 					LogLevel:              proxy.LogLevelInfo,
-					WorkerCount:           1,
-					QueueSize:             1,
+					UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 					RequestTimeoutSeconds: TestTimeout,
 					MaxInputAudioBytes:    1024,
 				},
@@ -1863,8 +1832,7 @@ func TestCoverageDictationEdges(t *testing.T) {
 				name: "xai missing credential",
 				configuration: proxy.Configuration{
 					LogLevel:              proxy.LogLevelInfo,
-					WorkerCount:           1,
-					QueueSize:             1,
+					UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 					RequestTimeoutSeconds: TestTimeout,
 					MaxInputAudioBytes:    1024,
 				},
@@ -1876,8 +1844,7 @@ func TestCoverageDictationEdges(t *testing.T) {
 				name: "grok unknown model",
 				configuration: proxy.Configuration{
 					LogLevel:              proxy.LogLevelInfo,
-					WorkerCount:           1,
-					QueueSize:             1,
+					UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 					RequestTimeoutSeconds: TestTimeout,
 					MaxInputAudioBytes:    1024,
 				},
@@ -1891,10 +1858,10 @@ func TestCoverageDictationEdges(t *testing.T) {
 				delete(tenantConfiguration.ProviderKeys, testCase.missingKey)
 				if testCase.missingKey == proxy.ProviderNameOpenAI {
 					tenantConfiguration.Defaults = proxy.TenantDefaults{
-						Provider:          proxy.ProviderNameDeepSeek,
-						Model:             proxy.ModelNameDeepSeekV4Flash,
-						DictationProvider: proxy.ProviderNameSiliconFlow,
-						DictationModel:    "sensevoice-small",
+						Provider:              proxy.ProviderNameDeepSeek,
+						Model:                 proxy.ModelNameDeepSeekV4Flash,
+						TranscriptionProvider: proxy.ProviderNameSiliconFlow,
+						TranscriptionModel:    "sensevoice-small",
 					}
 				}
 				router, buildError := buildRouterWithManagedTenant(caseTest, testCase.configuration, coverageLogger(), tenantConfiguration)
@@ -1941,8 +1908,7 @@ func TestCoverageDictationEdges(t *testing.T) {
 				endpoints.SetTranscriptionsURL(upstreamServer.URL)
 				router := coverageRouter(caseTest, proxy.Configuration{
 					LogLevel:              proxy.LogLevelInfo,
-					WorkerCount:           1,
-					QueueSize:             1,
+					UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 					RequestTimeoutSeconds: TestTimeout,
 					MaxInputAudioBytes:    1024,
 					Endpoints:             endpoints,
@@ -1969,29 +1935,7 @@ func TestCoverageDictationEdges(t *testing.T) {
 	t.Run("invalid dictation endpoint fails request construction", func(subTest *testing.T) {
 		endpoints := proxy.NewEndpoints()
 		endpoints.SetTranscriptionsURL("http://[::1")
-		router := coverageRouter(subTest, proxy.Configuration{
-			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
-			RequestTimeoutSeconds: TestTimeout,
-			MaxInputAudioBytes:    1024,
-			Endpoints:             endpoints,
-		})
-		body := &bytes.Buffer{}
-		writer := multipart.NewWriter(body)
-		filePart, createError := writer.CreateFormFile("audio", "audio.webm")
-		if createError != nil {
-			subTest.Fatalf("create form file: %v", createError)
-		}
-		_, _ = filePart.Write([]byte(testAudioPayload))
-		_ = writer.Close()
-		request := httptest.NewRequest(http.MethodPost, "/dictate?key="+TestSecret, body)
-		request.Header.Set("Content-Type", writer.FormDataContentType())
-		responseRecorder := httptest.NewRecorder()
-		router.ServeHTTP(responseRecorder, request)
-		if responseRecorder.Code != http.StatusBadGateway {
-			subTest.Fatalf("status=%d want=%d", responseRecorder.Code, http.StatusBadGateway)
-		}
+		assertInvalidUpstreamEndpointStartup(subTest, endpoints)
 	})
 
 	t.Run("dictation transport deadline maps to timeout", func(subTest *testing.T) {
@@ -2002,8 +1946,7 @@ func TestCoverageDictationEdges(t *testing.T) {
 		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
 		router := coverageRouter(subTest, proxy.Configuration{
 			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
+			UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 			RequestTimeoutSeconds: TestTimeout,
 			MaxInputAudioBytes:    1024,
 		})
@@ -2035,8 +1978,7 @@ func TestCoverageServeAndEndpointReset(t *testing.T) {
 
 	buildError := proxy.Serve(proxy.Configuration{
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, coverageLogger())
 	if buildError == nil {
@@ -2046,8 +1988,7 @@ func TestCoverageServeAndEndpointReset(t *testing.T) {
 	serveConfiguration := withModelCatalog(t, proxy.Configuration{
 		Port:                  -1,
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	})
 	serveConfiguration.Management = proxy.ManagedRouterTestManagementConfiguration()
@@ -2113,8 +2054,7 @@ func TestCoverageHTTPUtilityReadFailure(t *testing.T) {
 	t.Cleanup(func() { proxy.HTTPClient = previousClient })
 	router := coverageRouter(t, proxy.Configuration{
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: 1,
 	})
 	queryParameters := url.Values{}

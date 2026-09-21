@@ -7,6 +7,7 @@ import (
 )
 
 type providerRequestCodecDefinition struct {
+	speechRate              string
 	modelField              string
 	tokenField              string
 	mediaExecutionLifecycle textExecutionLifecycle
@@ -32,6 +33,7 @@ type providerTransportComposition struct {
 }
 
 type providerProtocolParameters struct {
+	SpeechRate              string
 	ResponsePolicy          string
 	ModelField              string
 	TokenField              string
@@ -66,6 +68,10 @@ func composeProviderTransport(transport ProviderCatalogTransport, field string) 
 	if transport.Components.RequestCodec.ID != transport.Components.ResponseCodec.ID {
 		return providerTransportComposition{}, unsupportedTransportComponentCombination(transport, field, "codec_pair")
 	}
+	resourceCodec := transport.Components.RequestCodec.ID == CatalogProtocolJSONResource || transport.Components.RequestCodec.ID == CatalogProtocolElevenLabsModels || transport.Components.RequestCodec.ID == CatalogProtocolElevenLabsSubscription || transport.Components.RequestCodec.ID == CatalogProtocolElevenLabsVoices
+	if transport.Endpoint.Protocol == CatalogEndpointProtocolHTTP && (transport.Endpoint.Method == CatalogEndpointMethodGet) != resourceCodec {
+		return providerTransportComposition{}, unsupportedTransportComponentCombination(transport, field, "request_method")
+	}
 	if authenticationError := validateProviderCatalogAuthentication(transport.Components.Authentication, field+".components.authentication"); authenticationError != nil {
 		return providerTransportComposition{}, authenticationError
 	}
@@ -79,7 +85,7 @@ func composeProviderTransport(transport ProviderCatalogTransport, field string) 
 		return providerTransportComposition{}, unsupportedTransportComponentCombination(transport, field, "required_headers")
 	}
 	lifecycle := textExecutionLifecycle(transport.Components.Execution.ID)
-	if !knownTextExecutionLifecycle(lifecycle) && lifecycle != textExecutionLifecycle(CatalogExecutionAsynchronousJob) {
+	if !knownTextExecutionLifecycle(lifecycle) && lifecycle != textExecutionLifecycle(CatalogExecutionAsynchronousJob) && lifecycle != textExecutionLifecycle(CatalogExecutionReadOnly) {
 		return providerTransportComposition{}, fmt.Errorf("%w: field=%s.components.execution.id reason=unsupported_execution_lifecycle lifecycle=%s", ErrInvalidModelCatalog, field, transport.Components.Execution.ID)
 	}
 	if !requestCodecSupportsLifecycle(transport.Components.RequestCodec.ID, lifecycle) {
@@ -96,6 +102,7 @@ func composeProviderTransport(transport ProviderCatalogTransport, field string) 
 		lifecycle:          lifecycle,
 		resourceVisibility: visibility,
 		parameters: providerProtocolParameters{
+			SpeechRate:              request.speechRate,
 			ResponsePolicy:          response.responsePolicy,
 			ModelField:              request.modelField,
 			TokenField:              request.tokenField,
@@ -115,6 +122,9 @@ func composeProviderTransport(transport ProviderCatalogTransport, field string) 
 func providerRequestCodecDefinitionFor(reference ProviderCatalogCodecReference, field string) (providerRequestCodecDefinition, error) {
 	definition := providerRequestCodecDefinition{}
 	switch reference.ID {
+	case CatalogProtocolElevenLabsVoices, CatalogProtocolJSONResource, CatalogProtocolElevenLabsModels, CatalogProtocolElevenLabsSubscription:
+	case CatalogProtocolElevenLabsAlignment, CatalogProtocolElevenLabsDictionary:
+		definition.mediaExecutionLifecycle = textExecutionLifecycleSynchronousCompletion
 	case CatalogProtocolOpenAIResponses:
 		definition.modelField = "model"
 		definition.tokenField = "max_output_tokens"
@@ -162,6 +172,25 @@ func providerRequestCodecDefinitionFor(reference ProviderCatalogCodecReference, 
 		return definition, nil
 	case CatalogProtocolXAIVideosGenerations:
 		definition.modelField = "model"
+	case CatalogProtocolElevenLabsSpeech:
+		definition.modelField = "model_id"
+		definition.mediaExecutionLifecycle = textExecutionLifecycleSynchronousCompletion
+		switch reference.Variation {
+		case speechRateNative, speechRateTextPacing:
+			definition.speechRate = reference.Variation
+		default:
+			return providerRequestCodecDefinition{}, unsupportedProviderCodecVariation(reference, field)
+		}
+		return definition, nil
+	case CatalogProtocolElevenLabsConversion:
+		definition.modelField = "model_id"
+		definition.mediaExecutionLifecycle = textExecutionLifecycleSynchronousCompletion
+	case CatalogProtocolOpenAIImages:
+		definition.modelField = "model"
+		definition.mediaExecutionLifecycle = textExecutionLifecycleSynchronousCompletion
+	case CatalogProtocolFALQueueImages:
+		definition.modelField = "path.model"
+		definition.mediaExecutionLifecycle = textExecutionLifecycle(CatalogExecutionAsynchronousJob)
 	case CatalogProtocolDictatorSpeechV1:
 		definition.mediaExecutionLifecycle = textExecutionLifecycle(CatalogExecutionAsynchronousJob)
 	default:
@@ -176,6 +205,30 @@ func providerRequestCodecDefinitionFor(reference ProviderCatalogCodecReference, 
 func providerResponseCodecDefinitionFor(reference ProviderCatalogCodecReference, field string) (providerResponseCodecDefinition, error) {
 	definition := providerResponseCodecDefinition{}
 	switch reference.ID {
+	case CatalogProtocolElevenLabsSpeech:
+		definition.outputFields = []string{"audio", "audio_base64", "alignment", "normalized_alignment", "request-id", "history-item-id"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"http_200"}}
+		definition.errorRules = []string{"provider_error", "malformed_response", "uncertain"}
+	case CatalogProtocolElevenLabsConversion:
+		definition.outputFields = []string{"audio", "request-id", "history-item-id"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"http_200"}}
+		definition.errorRules = []string{"provider_error", "malformed_response", "uncertain"}
+	case CatalogProtocolElevenLabsDictionary:
+		definition.outputFields = []string{"id", "version_id", "name", "created_by", "creation_time_unix", "version_rules_num", "permission_on_resource", "description"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"http_200"}}
+		definition.errorRules = []string{"provider_error", "malformed_response", "uncertain"}
+	case CatalogProtocolElevenLabsAlignment:
+		definition.outputFields = []string{"characters", "words", "loss"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"http_200"}}
+		definition.errorRules = []string{"provider_error", "malformed_response", "uncertain"}
+	case CatalogProtocolElevenLabsModels:
+		definition.outputFields = []string{"[].model_id", "[].name"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"http_2xx"}}
+		definition.errorRules = []string{"malformed_response", "provider_error"}
+	case CatalogProtocolElevenLabsVoices, CatalogProtocolJSONResource, CatalogProtocolElevenLabsSubscription:
+		definition.outputFields = []string{"object"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"http_2xx"}}
+		definition.errorRules = []string{"malformed_response", "provider_error"}
 	case CatalogProtocolDashScopeResponses:
 		definition.outputFields = []string{"output[].content[].text"}
 		definition.finishRules = providerProtocolFinishRules{Complete: []string{"completed"}, Continue: []string{"incomplete"}}
@@ -232,10 +285,19 @@ func providerResponseCodecDefinitionFor(reference ProviderCatalogCodecReference,
 		definition.finishRules = providerProtocolFinishRules{Complete: []string{"completed"}, Continue: []string{"pending"}}
 		definition.continuationRules = []string{}
 		definition.errorRules = []string{"failed", "unknown_status"}
+	case CatalogProtocolFALQueueImages:
+		definition.outputFields = []string{"images[].url"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"COMPLETED"}, Continue: []string{"IN_QUEUE", "IN_PROGRESS"}}
+		definition.errorRules = []string{"error", "error_type", "uncertain"}
 	case CatalogProtocolDictatorSpeechV1:
 		definition.outputFields = []string{"tenant_assets"}
 		definition.finishRules = providerProtocolFinishRules{Complete: []string{"succeeded"}, Continue: []string{"queued", "running"}}
 		definition.errorRules = []string{"failed", "cancelled", "uncertain"}
+	case CatalogProtocolOpenAIImages:
+		definition.outputFields = []string{"data[].b64_json"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"http_200"}}
+		definition.errorRules = []string{"provider_error", "malformed_response", "uncertain"}
+		definition.usageFields = providerProtocolUsageFields{Input: "usage.input_tokens", Output: "usage.output_tokens", Total: "usage.total_tokens"}
 	default:
 		return providerResponseCodecDefinition{}, unsupportedProviderCodec(reference, field)
 	}
@@ -247,15 +309,17 @@ func providerResponseCodecDefinitionFor(reference ProviderCatalogCodecReference,
 
 func requestCodecSupportsLifecycle(codec string, lifecycle textExecutionLifecycle) bool {
 	switch codec {
+	case CatalogProtocolElevenLabsVoices, CatalogProtocolJSONResource, CatalogProtocolElevenLabsModels, CatalogProtocolElevenLabsSubscription:
+		return lifecycle == textExecutionLifecycle(CatalogExecutionReadOnly)
 	case CatalogProtocolOpenAIResponses, CatalogProtocolXAIVideosGenerations:
 		return lifecycle == textExecutionLifecyclePollableResource
 	case CatalogProtocolGeminiInteractions:
 		return lifecycle == textExecutionLifecyclePollableResource || lifecycle == textExecutionLifecycleSynchronousCompletion
-	case CatalogProtocolDictatorSpeechV1:
+	case CatalogProtocolDictatorSpeechV1, CatalogProtocolFALQueueImages:
 		return lifecycle == textExecutionLifecycle(CatalogExecutionAsynchronousJob)
 	case CatalogProtocolDashScopeResponses, CatalogProtocolXAIResponses, CatalogProtocolOpenAIChatCompletions,
 		CatalogProtocolAnthropicMessages, CatalogProtocolVertexGenerateContent,
-		CatalogProtocolMetaTranscription, CatalogProtocolMultipartTranscription:
+		CatalogProtocolMetaTranscription, CatalogProtocolMultipartTranscription, CatalogProtocolOpenAIImages, CatalogProtocolElevenLabsAlignment, CatalogProtocolElevenLabsDictionary, CatalogProtocolElevenLabsConversion, CatalogProtocolElevenLabsSpeech:
 		return lifecycle == textExecutionLifecycleSynchronousCompletion
 	default:
 		return false

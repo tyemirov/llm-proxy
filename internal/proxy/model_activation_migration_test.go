@@ -52,7 +52,7 @@ func TestModelActivationMigratesStoredSelectionsAtStartup(t *testing.T) {
 			}
 			management := managedRouterTestManagementConfiguration()
 			management.DatabaseDialector = fixture.database.Dialector
-			router, err := BuildRouter(Configuration{ProviderCatalog: catalog, Management: management, AssetStorePath: t.TempDir()}, zap.NewNop().Sugar())
+			router, err := BuildRouter(withInternalUpstreamCapacity(t, Configuration{ProviderCatalog: catalog, Management: management, AssetStorePath: t.TempDir()}), zap.NewNop().Sugar())
 			if !hasMigration {
 				if err == nil || !strings.Contains(err.Error(), "read_model_migrations") {
 					t.Fatalf("startup must reject absent migration: %v", err)

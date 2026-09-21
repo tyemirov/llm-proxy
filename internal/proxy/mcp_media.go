@@ -21,7 +21,7 @@ type mcpCreateMediaOperationInput struct {
 	IdempotencyKey string         `json:"idempotency_key"`
 	Capability     string         `json:"capability"`
 	Provider       string         `json:"provider"`
-	Model          string         `json:"model"`
+	Model          string         `json:"model,omitempty"`
 	Input          map[string]any `json:"input"`
 	Controls       map[string]any `json:"controls"`
 }
@@ -33,8 +33,10 @@ type mcpMediaOperationInput struct {
 
 func registerMCPMedia(server *mcp.Server, management *managementService, service *mediaOperationService) {
 	schema, _ := jsonschema.For[mediaOperationResponse](nil)
+	inputSchema, _ := jsonschema.For[mcpCreateMediaOperationInput](nil)
+	inputSchema.Properties["model"] = &jsonschema.Schema{Type: "string", Pattern: `\S`}
 	mcp.AddTool[mcpCreateMediaOperationInput, any](server, &mcp.Tool{
-		Name: mcpCreateMediaOperationTool, Description: "Submit a durable media operation for an owned tenant. The same idempotency key and request identify one operation. Provider charges can apply.", OutputSchema: schema,
+		InputSchema: inputSchema, Name: mcpCreateMediaOperationTool, Description: "Submit a durable media operation for an owned tenant. The same idempotency key and request identify one operation. Provider charges can apply.", OutputSchema: schema,
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false), IdempotentHint: true, OpenWorldHint: new(true)},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpCreateMediaOperationInput) (*mcp.CallToolResult, any, error) {
 		requestTenant, err := management.store.mcpTenant(ctx.Value(mcpIdentityKey{}).(mcpIdentity).subject, input.TenantID)

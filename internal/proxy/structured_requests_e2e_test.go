@@ -3,6 +3,7 @@ package proxy_test
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -47,7 +48,7 @@ func TestStructuredRequestConvergesAcrossSubmitReplayAndReconciliation(testingIn
 	tenantConfiguration.ID = "structured"
 	tenantConfiguration.Defaults.Model = proxy.ModelNameGPT55
 	router, buildError := buildRouterWithManagedTenant(testingInstance, proxy.Configuration{
-		WorkerCount: 1, QueueSize: 2, RequestTimeoutSeconds: TestTimeout,
+		UpstreamCapacity: testfixtures.UpstreamCapacity(1, 2), RequestTimeoutSeconds: TestTimeout,
 		Endpoints: endpoints, AssetStorePath: testingInstance.TempDir(), AssetRetentionSeconds: 3600,
 	}, coverageLogger(), tenantConfiguration)
 	if buildError != nil {
@@ -92,7 +93,7 @@ func TestStructuredRequestRejectsInvalidContractsBeforeProviderDispatch(testingI
 	tenantConfiguration.Defaults.Provider = proxy.ProviderNameDeepSeek
 	tenantConfiguration.Defaults.Model = proxy.ModelNameDeepSeekV4Flash
 	router, buildError := buildRouterWithManagedTenant(testingInstance, proxy.Configuration{
-		WorkerCount: 1, QueueSize: 2, RequestTimeoutSeconds: TestTimeout, Endpoints: endpoints,
+		UpstreamCapacity: testfixtures.UpstreamCapacity(1, 2), RequestTimeoutSeconds: TestTimeout, Endpoints: endpoints,
 		AssetStorePath: testingInstance.TempDir(), AssetRetentionSeconds: 3600,
 	}, coverageLogger(), tenantConfiguration)
 	if buildError != nil {
@@ -141,7 +142,7 @@ func TestStructuredRequestPersistsProviderSchemaFailure(testingInstance *testing
 	tenantConfiguration.ID = "structured-failure"
 	tenantConfiguration.Defaults.Model = proxy.ModelNameGPT55
 	router, buildError := buildRouterWithManagedTenant(testingInstance, proxy.Configuration{
-		WorkerCount: 1, QueueSize: 2, RequestTimeoutSeconds: TestTimeout,
+		UpstreamCapacity: testfixtures.UpstreamCapacity(1, 2), RequestTimeoutSeconds: TestTimeout,
 		Endpoints: endpoints, AssetStorePath: testingInstance.TempDir(), AssetRetentionSeconds: 3600,
 	}, coverageLogger(), tenantConfiguration)
 	if buildError != nil {
@@ -173,7 +174,7 @@ func TestBuildRouterRejectsUnsafeStructuredRequestStore(testingInstance *testing
 	tenantConfiguration := proxy.StandardManagedTenantTestConfiguration(TestSecret)
 	tenantConfiguration.ID = "unsafe-structured-store"
 	_, buildError := buildRouterWithManagedTenant(testingInstance, proxy.Configuration{
-		WorkerCount: 1, QueueSize: 1, RequestTimeoutSeconds: TestTimeout, AssetStorePath: assetRoot,
+		UpstreamCapacity: testfixtures.UpstreamCapacity(1, 1), RequestTimeoutSeconds: TestTimeout, AssetStorePath: assetRoot,
 	}, coverageLogger(), tenantConfiguration)
 	if buildError == nil {
 		testingInstance.Fatal("unsafe structured request store must fail router construction")

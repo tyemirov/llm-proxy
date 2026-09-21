@@ -5,7 +5,7 @@ The source review date is September 7, 2026.
 
 ## Scope and placement
 
-The provider catalog defines 14 API providers and 30 model families, including disabled candidates.
+The provider catalog defines 16 API providers and 34 model families, including disabled candidates.
 I237 separates API connection identities from model family identities.
 The icons keep that separation.
 
@@ -40,6 +40,8 @@ They identify the installed artwork. The collection is not an official asset pac
 | `baidu` | Qianfan API | Baidu Cloud symbol | `baiducloud-color.svg` |
 | `vertex` | Google Cloud Vertex AI | Vertex AI product symbol | `vertexai-color.svg` |
 | `dictator` | Dictator API | Explicit text-only presentation | No verified small logo |
+| `fal` | FAL API | Explicit text-only presentation | No reviewed logo asset |
+| `elevenlabs` | ElevenLabs API | Explicit text-only presentation | No reviewed logo asset |
 
 Alibaba Cloud identifies the service behind the [Alibaba Cloud connection][model-studio].
 Baidu Cloud identifies the service organization behind the [Qianfan connection][baidu-cloud].
@@ -52,10 +54,10 @@ Versions, reasoning levels, and capabilities do not receive separate brand artwo
 
 | Catalog families | Logo | Local SVG |
 | --- | --- | --- |
-| `gpt-6`, `gpt-4`, `gpt-5`, `gpt-transcribe` | OpenAI Blossom | `openai.svg` |
+| `gpt-6`, `gpt-4`, `gpt-5`, `gpt-transcribe`, `whisper` | OpenAI Blossom | `openai.svg` |
 | `ernie-5` | Baidu paw | `baidu-color.svg` |
 | `deepseek-v3`, `deepseek-v4`, `deepseek-r1` | DeepSeek whale | `deepseek-color.svg` |
-| `qwen`, `qwen3-8` | Qwen symbol | `qwen-color.svg` |
+| `qwen`, `qwen3-8`, `qwen3` | Qwen symbol | `qwen-color.svg` |
 | `kimi-k2`, `kimi-k3` | Kimi symbol | `kimi-color.svg` |
 | `minimax-m2`, `minimax-m3` | MiniMax symbol | `minimax-color.svg` |
 | `sensevoice` | Explicit text-only presentation | No verified small logo |
@@ -65,9 +67,10 @@ Versions, reasoning levels, and capabilities do not receive separate brand artwo
 | `muse-spark`, `muse-voice` | Meta infinity symbol | `meta-color.svg` |
 | `grok`, `grok-build`, `grok-code`, `grok-imagine` | Grok symbol | `grok.svg` |
 | `xai-stt` | xAI symbol | `xai.svg` |
-| `dictator-speech` | Explicit text-only presentation | No verified small logo |
+| `silero` | Explicit text-only presentation | No verified small logo |
+| `reve` | Explicit text-only presentation | No reviewed logo asset |
 
-The set contains 18 distinct SVG assets, one explicit text-only provider, and two explicit text-only families.
+The set contains 18 distinct SVG assets, three explicit text-only providers, and three explicit text-only families.
 The Meta and Z.AI choices represent the model publishers.
 They do not assert separate Muse or GLM product logos.
 

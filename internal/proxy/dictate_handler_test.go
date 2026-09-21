@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -36,8 +37,7 @@ func newDictationRouterWithAudioLimit(t *testing.T, transcriptionsURL string, re
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		LogLevel:              proxy.LogLevelDebug,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: requestTimeoutSeconds,
 		MaxInputAudioBytes:    maxInputAudioBytes,
 		Endpoints:             endpoints,
@@ -85,8 +85,8 @@ func TestDictateHandlerSuccessWithAudioField(t *testing.T) {
 		if parseError := request.ParseMultipartForm(1024 * 1024); parseError != nil {
 			t.Fatalf("ParseMultipartForm error: %v", parseError)
 		}
-		if model := request.FormValue("model"); model != proxy.DefaultDictationModel {
-			t.Fatalf("model=%q want=%q", model, proxy.DefaultDictationModel)
+		if model := request.FormValue("model"); model != proxy.DefaultTranscriptionModel {
+			t.Fatalf("model=%q want=%q", model, proxy.DefaultTranscriptionModel)
 		}
 		file, _, fileError := request.FormFile("file")
 		if fileError != nil {

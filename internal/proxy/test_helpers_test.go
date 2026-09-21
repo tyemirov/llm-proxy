@@ -1,9 +1,11 @@
 package proxy_test
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -57,8 +59,7 @@ func NewTestRouter(t *testing.T, serverURL string) *gin.Engine {
 
 	router, err := buildRouterWithCatalogs(t, proxy.Configuration{
 		LogLevel:              proxy.LogLevelDebug,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 		Endpoints:             endpoints,
 	}, logger.Sugar())
@@ -105,7 +106,7 @@ func newConfigurationWithCatalogs(testingInstance testing.TB, configuration prox
 		}
 	}
 	configuration.Endpoints = withProviderEndpointOverrides(configuration)
-	return proxy.NewConfiguration(configuration)
+	return proxy.NewConfiguration(testfixtures.WithUpstreamCapacity(testingInstance, configuration))
 }
 
 func withModelCatalog(testingInstance testing.TB, configuration proxy.Configuration) proxy.Configuration {
@@ -131,7 +132,7 @@ func configurationWithCatalogs(testingInstance testing.TB, configuration proxy.C
 		}
 	}
 	configuration.Endpoints = withProviderEndpointOverrides(configuration)
-	return configuration, nil
+	return testfixtures.WithUpstreamCapacity(testingInstance, configuration), nil
 }
 
 func withProviderEndpointOverrides(configuration proxy.Configuration) *proxy.Endpoints {
@@ -189,4 +190,16 @@ func catalogExactModelIndex(catalog proxy.ModelCatalog, model string) int {
 		}
 	}
 	return -1
+}
+
+func assertInvalidUpstreamEndpointStartup(t *testing.T, endpoints *proxy.Endpoints) {
+	t.Helper()
+	configuration, err := configurationWithCatalogs(t, managementConfigurationWithDatabasePath(proxy.Configuration{}, filepath.Join(t.TempDir(), "management.sqlite")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	configuration.Endpoints = endpoints
+	if _, err := proxy.BuildRouter(configuration, zap.NewNop().Sugar()); !errors.Is(err, proxy.ErrInvalidUpstreamCapacity) {
+		t.Fatalf("invalid endpoint startup error=%v", err)
+	}
 }

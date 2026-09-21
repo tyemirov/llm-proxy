@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -26,10 +27,9 @@ func TestIntegrationModelSpecSuppression(testingInstance *testing.T) {
 			client, captured := makeHTTPClient(subTest, true, endpoints)
 			configureProxy(subTest, client, endpoints)
 			router, buildRouterError := buildIntegrationRouter(subTest, proxy.Configuration{
-				LogLevel:    logLevelDebug,
-				WorkerCount: 1,
-				QueueSize:   8,
-				Endpoints:   endpoints,
+				LogLevel:         logLevelDebug,
+				UpstreamCapacity: testfixtures.UpstreamCapacity(1, 8),
+				Endpoints:        endpoints,
 			}, newLogger(subTest))
 			if buildRouterError != nil {
 				subTest.Fatalf(buildRouterFailedFormat, buildRouterError)
@@ -76,9 +76,8 @@ func TestIntegrationModelSpecSuppression(testingInstance *testing.T) {
 func TestIntegrationModelCatalogRejectsUnsupportedWebSearch(testingInstance *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router, buildRouterError := buildIntegrationRouter(testingInstance, proxy.Configuration{
-		LogLevel:    logLevelDebug,
-		WorkerCount: 1,
-		QueueSize:   8,
+		LogLevel:         logLevelDebug,
+		UpstreamCapacity: testfixtures.UpstreamCapacity(1, 8),
 	}, newLogger(testingInstance))
 	if buildRouterError != nil {
 		testingInstance.Fatalf(buildRouterFailedFormat, buildRouterError)
@@ -115,10 +114,9 @@ func TestIntegrationGPT56TemperatureSuppression(testingInstance *testing.T) {
 	client, captured := makeHTTPClient(testingInstance, true, endpoints)
 	configureProxy(testingInstance, client, endpoints)
 	router, buildRouterError := buildIntegrationRouter(testingInstance, proxy.Configuration{
-		LogLevel:    logLevelDebug,
-		WorkerCount: 1,
-		QueueSize:   8,
-		Endpoints:   endpoints,
+		LogLevel:         logLevelDebug,
+		UpstreamCapacity: testfixtures.UpstreamCapacity(1, 8),
+		Endpoints:        endpoints,
 	}, newLogger(testingInstance))
 	if buildRouterError != nil {
 		testingInstance.Fatalf(buildRouterFailedFormat, buildRouterError)

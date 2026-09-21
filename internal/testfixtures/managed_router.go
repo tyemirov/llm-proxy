@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -75,7 +76,10 @@ func BuildManagedRouter(testingInstance testing.TB, configuration proxy.Configur
 // ProvisionManagedRouter provisions one tenant and returns the reusable persistent router configuration.
 func ProvisionManagedRouter(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger, tenant ManagedTenant) (proxy.Configuration, error) {
 	testingInstance.Helper()
-	databasePath := "file:managed-router-" + rand.Text() + "?mode=memory&cache=shared"
+	databasePath := configuration.Management.DatabasePath
+	if databasePath == "" {
+		databasePath = "file:managed-router-" + rand.Text() + "?mode=memory&cache=shared"
+	}
 	configuration.Management = managedRouterConfiguration(databasePath)
 	originalHTTPClient := proxy.HTTPClient
 	proxy.HTTPClient = managedProviderVerificationDoer{next: originalHTTPClient}
@@ -188,9 +192,15 @@ func managedRouterTenantID(router http.Handler, sessionCookie *http.Cookie) (str
 
 func saveManagedProviderKey(router http.Handler, sessionCookie *http.Cookie, tenantID string, catalog *proxy.ProviderCatalog, provider string, apiKey string, configuredFields map[string]string) error {
 	fields := map[string]string{}
+	textModel := ""
 	for _, providerDefinition := range catalog.Schema().Providers {
 		if providerDefinition.ID != provider {
 			continue
+		}
+		for _, offering := range providerDefinition.Offerings {
+			if slices.Contains(offering.DefaultOperations, proxy.ModelOperationText) {
+				textModel = offering.Model
+			}
 		}
 		for _, field := range providerDefinition.Fields {
 			if field.Kind == proxy.CatalogProviderFieldKindCredential {
@@ -235,8 +245,10 @@ func saveManagedProviderKey(router http.Handler, sessionCookie *http.Cookie, ten
 	if _, err := exchange(http.MethodPut, path+"/connections/"+provider, map[string]string{"connection_id": connection.ID}, http.StatusOK); err != nil {
 		return err
 	}
-	if _, err := exchange(http.MethodPut, path+"/provider-profiles/"+provider, map[string]string{"text_model": managedProviderModel(provider), "system_prompt": ""}, http.StatusOK); err != nil {
-		return err
+	if textModel != "" {
+		if _, err := exchange(http.MethodPut, path+"/provider-profiles/"+provider, map[string]string{"text_model": textModel, "system_prompt": ""}, http.StatusOK); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -245,7 +257,7 @@ func saveManagedProviderKey(router http.Handler, sessionCookie *http.Cookie, ten
 func saveManagedDefaults(router http.Handler, sessionCookie *http.Cookie, tenantID string, defaults proxy.TenantDefaults) error {
 	encodedBody, encodeError := json.Marshal(map[string]any{
 		"provider": defaults.Provider, "model": defaults.Model,
-		"dictation_provider": defaults.DictationProvider, "dictation_model": defaults.DictationModel,
+		"transcription_provider": defaults.TranscriptionProvider, "transcription_model": defaults.TranscriptionModel,
 		"system_prompt": defaults.SystemPrompt, "reasoning_effort": defaults.ReasoningEffort,
 	})
 	if encodeError != nil {
@@ -282,35 +294,6 @@ func setManagedSecret(databasePath string, tenantID string, secret string) error
 	return sqlDatabase.Close()
 }
 
-func managedProviderModel(provider string) string {
-	switch provider {
-	case proxy.ProviderNameOpenAI:
-		return proxy.ModelNameGPT41
-	case proxy.ProviderNameDeepSeek:
-		return proxy.ModelNameDeepSeekV4Flash
-	case proxy.ProviderNameDashScope:
-		return proxy.ModelNameDashScopeQwenPlus
-	case proxy.ProviderNameMoonshot:
-		return proxy.ModelNameMoonshotKimiK26
-	case proxy.ProviderNameMiniMax:
-		return proxy.ModelNameMiniMaxM27
-	case proxy.ProviderNameSiliconFlow:
-		return proxy.ModelNameSiliconFlowDeepSeek
-	case proxy.ProviderNameZAI:
-		return proxy.ModelNameZAIGLM
-	case proxy.ProviderNameGemini:
-		return proxy.ModelNameGemini35Flash
-	case proxy.ProviderNameAnthropic:
-		return proxy.ModelNameClaudeSonnet46
-	case proxy.ProviderNameMeta:
-		return proxy.ModelNameMuseSpark11
-	case proxy.ProviderNameXAI:
-		return proxy.ModelNameGrok43
-	default:
-		return ""
-	}
-}
-
 type managedProviderVerificationDoer struct {
 	next proxy.HTTPDoer
 }
@@ -345,7 +328,7 @@ func (doer managedProviderVerificationDoer) Do(request *http.Request) (*http.Res
 		responseBody = `{"id":"managed-router-verification","status":"completed"}`
 	case request.Header.Get("x-api-key") != "":
 		responseBody = `{"id":"verification","type":"message","role":"assistant"}`
-	case strings.HasSuffix(request.URL.Path, "/responses"):
+	case bytes.Contains(body, []byte(`"input":`)):
 		responseBody = `{"id":"verification","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"verified"}]}]}`
 	}
 	return &http.Response{

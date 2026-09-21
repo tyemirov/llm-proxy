@@ -12,7 +12,9 @@ import (
 	"testing"
 
 	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -30,14 +32,12 @@ func TestRootCommandRunsConfiguredProxyFromConfigFile(t *testing.T) {
 server:
   port: 18080
   log_level: debug
-  workers: 2
-  queue_size: 9
   request_timeout_seconds: 7
   max_request_timeout_seconds: 11
   max_prompt_bytes: 1024
   max_input_audio_bytes: 2048
   upstream_rate_limits:
-    - origin: "https://openai.example"
+    - origin: "https://api.openai.com"
       max_requests: 12
       interval: "1m"
 management:
@@ -99,7 +99,7 @@ DASHSCOPE_BASE_URL=https://workspace.ap-southeast-1.maas.aliyuncs.com/compatible
 			capturedConfiguration.MaxRequestTimeoutSeconds,
 		)
 	}
-	if len(capturedConfiguration.UpstreamRateLimits) != 1 || capturedConfiguration.UpstreamRateLimits[0].Origin != "https://openai.example" || capturedConfiguration.UpstreamRateLimits[0].MaxRequests != 12 || capturedConfiguration.UpstreamRateLimits[0].Interval != "1m" {
+	if len(capturedConfiguration.UpstreamRateLimits) != 1 || capturedConfiguration.UpstreamRateLimits[0].Origin != "https://api.openai.com" || capturedConfiguration.UpstreamRateLimits[0].MaxRequests != 12 || capturedConfiguration.UpstreamRateLimits[0].Interval != "1m" {
 		t.Fatalf("upstreamRateLimits=%+v", capturedConfiguration.UpstreamRateLimits)
 	}
 	if capturedConfiguration.Management.PublicOrigin != "https://llm-proxy.example" {
@@ -271,7 +271,7 @@ func TestRootCommandRejectsRemovedServiceConfigurationFlags(t *testing.T) {
 		"openai_api_key",
 		"default_provider",
 		"default_model",
-		"default_dictation_provider",
+		"default_transcription_provider",
 		"gemini_api_key",
 		"port",
 		"log_level",
@@ -280,7 +280,7 @@ func TestRootCommandRejectsRemovedServiceConfigurationFlags(t *testing.T) {
 		"request_timeout",
 		"upstream_poll_timeout",
 		"max_prompt_bytes",
-		"dictation_model",
+		"transcription_model",
 		"max_input_audio_bytes",
 	}
 	for _, removedFlag := range removedFlags {
@@ -380,7 +380,6 @@ LLM_PROXY_MANAGEMENT_DATABASE_PATH=llm-proxy-management.sqlite
 LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 LLM_PROXY_MANAGEMENT_API_ORIGIN=https://llm-proxy-api.mprlab.com
 LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=https://llm-proxy-api.mprlab.com
-DASHSCOPE_BASE_URL=https://workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1
 `)
 
 	var capturedConfiguration proxy.Configuration
@@ -455,8 +454,8 @@ management:
 	if capturedConfiguration.Port != 9191 || capturedConfiguration.LogLevel != proxy.LogLevelDebug {
 		t.Fatalf("public API server=%+v", capturedConfiguration)
 	}
-	if len(capturedConfiguration.Catalog.Providers) != 14 {
-		t.Fatalf("provider count=%d want=14", len(capturedConfiguration.Catalog.Providers))
+	if len(capturedConfiguration.Catalog.Providers) != 16 {
+		t.Fatalf("provider count=%d want=15", len(capturedConfiguration.Catalog.Providers))
 	}
 	if capturedConfiguration.Catalog.MaxPromptBytes != 3 || capturedConfiguration.Catalog.MaxInputAudioBytes != 25*1024*1024 {
 		t.Fatalf("public limits=%+v", capturedConfiguration.Catalog)
@@ -537,7 +536,7 @@ func TestRootCommandPrintsCatalogDerivedLiveDiscovery(t *testing.T) {
 	if !metaFound {
 		t.Fatal("Meta live discovery must require MUSE_API_KEY")
 	}
-	if discovery.SchemaVersion != proxy.ProviderCatalogSchemaVersion || len(discovery.Providers) != 14 {
+	if discovery.SchemaVersion != proxy.ProviderCatalogSchemaVersion || len(discovery.Providers) != 16 {
 		t.Fatalf("provider discovery=%+v", discovery)
 	}
 	if !dashScopeFound || !baiduFound {
@@ -639,7 +638,7 @@ func TestRootCommandRejectsInvalidPublicCapabilityConfig(t *testing.T) {
 		{
 			name: "missing server",
 			prepare: func(subTest *testing.T, tempDir string) string {
-				return writeTestConfig(subTest, tempDir, completeManagementYAML())
+				return writeRawTestConfig(subTest, tempDir, completeManagementYAML())
 			},
 			expectedError: "field=server",
 		},
@@ -870,14 +869,14 @@ func TestRootCommandRejectsInvalidProviderCatalog(t *testing.T) {
 		{
 			name: "unsupported schema version",
 			mutate: func(document string) string {
-				return strings.Replace(document, "schema_version: 4", "schema_version: 5", 1)
+				return strings.Replace(document, "schema_version: 5", "schema_version: 6", 1)
 			},
-			expectedError: "field=schema_version value=5",
+			expectedError: "field=schema_version value=6",
 		},
 		{
 			name: "unknown field",
 			mutate: func(document string) string {
-				return strings.Replace(document, "schema_version: 4", "schema_version: 4\nfuture_option: true", 1)
+				return strings.Replace(document, "schema_version: 5", "schema_version: 5\nfuture_option: true", 1)
 			},
 			expectedError: "field future_option not found",
 		},
@@ -1006,6 +1005,42 @@ func failingServeProxy(t *testing.T) func(proxy.Configuration, *zap.SugaredLogge
 }
 
 func writeTestConfig(t *testing.T, tempDir string, configContent string) string {
+	t.Helper()
+	configPath := writeRawTestConfig(t, tempDir, configContent)
+	if strings.Contains(configContent, "upstream_capacity:") {
+		return configPath
+	}
+	providerBytes, err := os.ReadFile(filepath.Join(tempDir, testProviderCatalogFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := proxy.ParseProviderCatalog(providerBytes)
+	if err != nil {
+		// Invalid-catalog scenarios must reach the CLI's catalog parser unchanged.
+		return configPath
+	}
+	configuration := testfixtures.WithUpstreamCapacity(t, proxy.Configuration{ProviderCatalog: catalog})
+	for _, provider := range catalog.Schema().Providers {
+		if provider.ID == proxy.ProviderNameDashScope {
+			configuration.UpstreamCapacity.Origins = append(configuration.UpstreamCapacity.Origins, proxy.UpstreamOriginCapacity{
+				Origin: "https://workspace.ap-southeast-1.maas.aliyuncs.com", Provider: provider.ID, Active: 4, Queued: 100,
+			})
+		}
+	}
+	capacityYAML, err := yaml.Marshal(map[string]proxy.UpstreamCapacityConfiguration{"upstream_capacity": configuration.UpstreamCapacity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	indented := "  " + strings.ReplaceAll(strings.TrimSpace(string(capacityYAML)), "\n", "\n  ") + "\n"
+	if strings.Contains(configContent, "server:\n") {
+		configContent = strings.Replace(configContent, "server:\n", "server:\n"+indented, 1)
+	} else {
+		configContent = "server:\n" + indented + configContent
+	}
+	return writeRawTestConfig(t, tempDir, configContent)
+}
+
+func writeRawTestConfig(t *testing.T, tempDir string, configContent string) string {
 	t.Helper()
 	providerCatalogPath := filepath.Join(tempDir, testProviderCatalogFileName)
 	if _, statError := os.Stat(providerCatalogPath); os.IsNotExist(statError) {

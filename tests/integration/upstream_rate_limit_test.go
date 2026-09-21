@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -128,8 +129,7 @@ func TestIntegrationRateLimitLogExcludesWorkerAcquisitionWait(testingInstance *t
 	loggerInstance := zap.New(observedCore)
 	testingInstance.Cleanup(func() { _ = loggerInstance.Sync() })
 	configuration := rateLimitIntegrationConfiguration(upstreamServer.URL)
-	configuration.WorkerCount = 1
-	configuration.QueueSize = 2
+	configuration.UpstreamCapacity = testfixtures.UpstreamCapacity(1, 2)
 	configuration.UpstreamRateLimits = []proxy.UpstreamRateLimitConfiguration{{
 		Origin:      upstreamServer.URL,
 		MaxRequests: 1,
@@ -264,8 +264,7 @@ func TestIntegrationUpstreamRateLimitReservesAtCallAdmissionAfterWorkerWait(test
 	})
 
 	configuration := rateLimitIntegrationConfiguration(upstreamServer.URL)
-	configuration.WorkerCount = 1
-	configuration.QueueSize = rateLimitConcurrentRequestCount - 1
+	configuration.UpstreamCapacity = testfixtures.UpstreamCapacity(1, rateLimitConcurrentRequestCount-1)
 	configuration.UpstreamRateLimits = []proxy.UpstreamRateLimitConfiguration{{
 		Origin:      upstreamServer.URL,
 		MaxRequests: rateLimitConcurrentWindowCapacity,
@@ -349,8 +348,7 @@ func TestIntegrationCanceledWorkerAcquisitionsDoNotReserveRateSlots(testingInsta
 	testingInstance.Cleanup(upstreamServer.Close)
 
 	configuration := rateLimitIntegrationConfiguration(upstreamServer.URL)
-	configuration.WorkerCount = 1
-	configuration.QueueSize = 1
+	configuration.UpstreamCapacity = testfixtures.UpstreamCapacity(1, 1)
 	configuration.UpstreamRateLimits = []proxy.UpstreamRateLimitConfiguration{{
 		Origin:      upstreamServer.URL,
 		MaxRequests: 32,
@@ -507,8 +505,7 @@ func TestIntegrationUpstreamRateLimitDisabledPreservesConcurrentTextAndDictation
 	})
 
 	configuration := rateLimitIntegrationConfiguration(upstreamServer.URL)
-	configuration.WorkerCount = 2
-	configuration.QueueSize = 2
+	configuration.UpstreamCapacity = testfixtures.UpstreamCapacity(2, 2)
 	configuration.LogLevel = ""
 	router := buildRateLimitIntegrationRouter(testingInstance, configuration, nil)
 	applicationServer := httptest.NewServer(router)
@@ -607,8 +604,7 @@ func rateLimitIntegrationConfiguration(upstreamURL string) proxy.Configuration {
 	return proxy.Configuration{
 		Endpoints:             endpoints,
 		LogLevel:              logLevelDebug,
-		WorkerCount:           rateLimitConcurrentRequestCount,
-		QueueSize:             rateLimitConcurrentRequestCount,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(rateLimitConcurrentRequestCount, rateLimitConcurrentRequestCount),
 		RequestTimeoutSeconds: rateLimitRequestTimeoutSeconds,
 	}
 }

@@ -841,11 +841,13 @@ func newManagedUsageAccumulator() managedUsageAccumulator {
 
 func (accumulator *managedUsageAccumulator) apply(record managedUsageEventRecord, execution managedUsageExecution) {
 	applyUsageRecord(&accumulator.totals, record, execution)
-	if record.ProviderID != constants.EmptyString && record.ModelID != constants.EmptyString {
+	if record.ProviderID != constants.EmptyString {
 		providerAggregate := accumulator.providers[record.ProviderID]
 		applyUsageRecord(&providerAggregate, record, execution)
 		accumulator.providers[record.ProviderID] = providerAggregate
 
+	}
+	if record.ProviderID != constants.EmptyString && record.ModelID != constants.EmptyString {
 		modelKey := record.ProviderID + "\x00" + record.ModelID
 		modelBucket := accumulator.models[modelKey]
 		modelBucket.providerIdentifier = record.ProviderID

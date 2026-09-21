@@ -1173,6 +1173,47 @@ paths:
           schema:
             type: string
             pattern: ^[a-z][a-z0-9_-]*$
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            maxLength: 16384
+        - name: search
+          in: query
+          schema:
+            type: string
+            maxLength: 1000
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [name, created_at_unix]
+        - name: sort_direction
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+        - name: voice_type
+          in: query
+          schema:
+            type: string
+            enum: [personal, community, default, account, non-default, non-community, saved]
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [premade, cloned, generated, professional]
+        - name: include_total_count
+          in: query
+          schema:
+            type: boolean
       responses:
         '200':
           $ref: '#/components/responses/MediaVoiceCollection'
@@ -1203,6 +1244,73 @@ paths:
           $ref: '#/components/responses/MediaVoiceFailure'
         '500':
           $ref: '#/components/responses/MediaVoiceFailure'
+  /model/v1/voices/{voice_id}/previews/{preview}:
+    get:
+      operationId: getTenantMediaVoicePreview
+      summary: Read one account-bound voice preview
+      tags: [Proxy]
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - $ref: '#/components/parameters/MediaVoiceID'
+        - name: preview
+          in: path
+          required: true
+          schema: {type: integer, minimum: 0}
+      responses:
+        '200':
+          description: Audio preview from the current provider connection.
+          headers:
+            Cache-Control:
+              schema: {type: string, const: no-store}
+          content:
+            audio/mpeg:
+              schema: {type: string, contentEncoding: binary}
+            audio/wav:
+              schema: {type: string, contentEncoding: binary}
+        '403':
+          $ref: '#/components/responses/ProxyForbidden'
+        '404':
+          $ref: '#/components/responses/MediaVoiceFailure'
+        '500':
+          $ref: '#/components/responses/MediaVoiceFailure'
+        '502':
+          $ref: '#/components/responses/MediaVoiceFailure'
+  /model/v1/provider-resources/{provider}/{kind}:
+    get:
+      operationId: getTenantProviderResource
+      summary: Read assigned provider account metadata or quota
+      description: Account observations do not add executable model routes. The YAML catalog controls available routes.
+      tags: [Proxy]
+      security:
+        - TenantBearerKey: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema: {type: string, pattern: '^[a-z][a-z0-9_-]*$'}
+        - name: kind
+          in: path
+          required: true
+          schema: {type: string, enum: [metadata, quotas]}
+      responses:
+        '200':
+          description: Current provider account observation.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ProviderMetadata'
+                  - $ref: '#/components/schemas/ProviderQuotas'
+        '403':
+          $ref: '#/components/responses/ProxyForbidden'
+        '404':
+          $ref: '#/components/responses/ProviderResourceFailure'
+        '502':
+          $ref: '#/components/responses/ProviderResourceFailure'
   /model/v1/assets:
     post:
       operationId: uploadTenantAsset
@@ -1245,7 +1353,7 @@ paths:
         - $ref: '#/components/parameters/AssetID'
       responses:
         '200':
-          $ref: '#/components/responses/AssetCreated'
+          $ref: '#/components/responses/AssetAvailable'
         '403':
           $ref: '#/components/responses/ProxyForbidden'
         '404':
@@ -1288,6 +1396,12 @@ paths:
         '200':
           description: Exact authenticated asset bytes.
           content:
+            application/json:
+              schema: {}
+            application/x-subrip:
+              schema:
+                type: string
+                format: binary
             image/jpeg:
               schema:
                 type: string
@@ -2615,6 +2729,16 @@ components:
     AssetUpload:
       required: true
       content:
+        application/octet-stream:
+          schema:
+            type: string
+            format: binary
+        application/json:
+          schema: {}
+        application/x-subrip:
+          schema:
+            type: string
+            format: binary
         image/jpeg:
           schema:
             type: string
@@ -2843,6 +2967,12 @@ components:
             oneOf:
               - $ref: '#/components/schemas/AssetErrorEnvelope'
               - $ref: '#/components/schemas/StructuredRequestErrorEnvelope'
+    AssetAvailable:
+      description: The asset metadata is available to its authenticated tenant.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/TenantAsset'
     AssetCreated:
       description: The asset is available to its authenticated tenant.
       headers:
@@ -2908,6 +3038,23 @@ components:
                   code:
                     type: string
                     enum: [provider_diagnostics_not_found, media_operation_store_error, method_not_allowed]
+    ProviderResourceFailure:
+      description: The assigned resource is absent or the provider observation is unavailable.
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [error]
+            properties:
+              error:
+                type: object
+                additionalProperties: false
+                required: [code]
+                properties:
+                  code:
+                    type: string
+                    enum: [provider_resource_not_found, provider_resource_unavailable]
     MediaVoice:
       description: One tenant-owned voice without native provider identifiers.
       content:
@@ -3347,6 +3494,12 @@ components:
         text_model:
           type: string
           minLength: 1
+        speech_provider:
+          type: string
+          description: Selected speech provider. An empty value clears the selection.
+        speech_model:
+          type: string
+          description: Selected speech model. An empty value clears the selection.
         system_prompt:
           type: string
     ConnectionError:
@@ -4305,6 +4458,70 @@ components:
         max_request_timeout_seconds:
           type: integer
           minimum: 1
+    PublicProviderService:
+      type: object
+      additionalProperties: false
+      required: [operation, controls, limits, price]
+      properties:
+        operation:
+          enum: [audio_alignment, pronunciation_dictionary_creation]
+        controls:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicCatalogControl'
+        limits:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicCatalogLimit'
+        price:
+          $ref: '#/components/schemas/PublicServicePrice'
+    PublicServicePrice:
+      type: object
+      additionalProperties: false
+      required:
+        - operation
+        - available
+        - rates
+        - minimum_charge
+        - source
+        - last_verified
+        - unavailable_reason
+      properties:
+        operation:
+          type: string
+          enum:
+            - text
+            - dictation
+            - image_generation
+            - image_editing
+            - video_generation
+            - audio_transcription
+            - audio_diarization
+            - audio_alignment
+            - pronunciation_dictionary_creation
+            - subtitle_creation
+            - speech_generation
+            - speech_conversion
+            - voice_extraction
+        available:
+          type: boolean
+        rates:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicPriceRate'
+        minimum_charge:
+          oneOf:
+            - $ref: '#/components/schemas/PublicMinimumCharge'
+            - type: 'null'
+        source:
+          type: string
+          format: uri
+          pattern: '^https://'
+        last_verified:
+          type: string
+          format: date
+        unavailable_reason:
+          type: string
     PublicProviderCapability:
       type: object
       additionalProperties: false
@@ -4312,7 +4529,18 @@ components:
         - identifier
         - label
         - credential_kinds
+        - resources
+        - services
       properties:
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicProviderService'
+        resources:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/ProviderResourceKind'
         identifier:
           type: string
           minLength: 1
@@ -4341,12 +4569,16 @@ components:
           enum:
             - text
             - dictation
+            - image_generation
+            - image_editing
             - video_generation
             - audio_transcription
             - audio_diarization
             - audio_alignment
+            - pronunciation_dictionary_creation
             - subtitle_creation
             - speech_generation
+            - speech_conversion
             - voice_extraction
         input_artifacts:
           type: array
@@ -4407,6 +4639,18 @@ components:
           enum:
             - proprietary
             - open_weights
+    PublicCapabilityDomains:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items:
+        type: string
+        enum:
+          - text
+          - transcription
+          - speech
+          - image
+          - video
     PublicExactModelCapability:
       type: object
       additionalProperties: false
@@ -4419,6 +4663,7 @@ components:
         - media_inputs
         - capabilities
         - provider_offerings
+        - domains
       properties:
         identifier:
           type: string
@@ -4441,12 +4686,16 @@ components:
             enum:
               - text
               - dictation
+              - image_generation
+              - image_editing
               - video_generation
               - audio_transcription
               - audio_diarization
               - audio_alignment
+              - pronunciation_dictionary_creation
               - subtitle_creation
               - speech_generation
+              - speech_conversion
               - voice_extraction
         media_inputs:
           type: array
@@ -4470,12 +4719,16 @@ components:
               - image_input
               - audio_input
               - reasoning
+              - image_generation
+              - image_editing
               - video_generation
               - audio_transcription
               - audio_diarization
               - audio_alignment
+              - pronunciation_dictionary_creation
               - subtitle_creation
               - speech_generation
+              - speech_conversion
               - voice_extraction
         provider_offerings:
           type: array
@@ -4484,6 +4737,8 @@ components:
           items:
             type: string
             minLength: 1
+        domains:
+          $ref: '#/components/schemas/PublicCapabilityDomains'
     PublicProviderOffering:
       type: object
       additionalProperties: false
@@ -4514,6 +4769,7 @@ components:
         - controls
         - limits
         - media_limits
+        - domains
       properties:
         identifier:
           type: string
@@ -4546,12 +4802,16 @@ components:
               - image_input
               - audio_input
               - reasoning
+              - image_generation
+              - image_editing
               - video_generation
               - audio_transcription
               - audio_diarization
               - audio_alignment
+              - pronunciation_dictionary_creation
               - subtitle_creation
               - speech_generation
+              - speech_conversion
               - voice_extraction
         wire_contract:
           type: string
@@ -4589,6 +4849,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PublicCatalogMediaLimit'
+        domains:
+          $ref: '#/components/schemas/PublicCapabilityDomains'
     PublicCatalogControl:
       type: object
       additionalProperties: false
@@ -4608,7 +4870,9 @@ components:
           enum:
             - enum
             - integer
+            - number
             - boolean
+            - image_size
         values:
           type: array
           uniqueItems: true
@@ -4617,16 +4881,79 @@ components:
             minLength: 1
         minimum:
           oneOf:
-            - type: integer
-              minimum: 0
+            - type: number
             - type: 'null'
         maximum:
           oneOf:
-            - type: integer
-              minimum: 0
+            - type: number
             - type: 'null'
         account_dependent:
           type: boolean
+        image_size:
+          $ref: '#/components/schemas/PublicImageSizeConstraints'
+      allOf:
+        - if:
+            properties:
+              kind:
+                enum: [integer, number]
+          then:
+            properties:
+              minimum:
+                type: number
+              maximum:
+                type: number
+              values:
+                maxItems: 0
+          else:
+            properties:
+              minimum:
+                type: 'null'
+              maximum:
+                type: 'null'
+        - if:
+            properties:
+              kind:
+                const: integer
+          then:
+            properties:
+              minimum:
+                type: integer
+                minimum: 0
+              maximum:
+                type: integer
+                minimum: 0
+        - if:
+            properties:
+              kind:
+                const: image_size
+          then:
+            required: [image_size]
+          else:
+            not:
+              required: [image_size]
+    PublicImageSizeConstraints:
+      type: object
+      additionalProperties: false
+      required: [automatic, dimension_multiple, maximum_edge, minimum_pixels, maximum_pixels, maximum_aspect_ratio]
+      properties:
+        automatic:
+          type: boolean
+        dimension_multiple:
+          type: integer
+          minimum: 1
+        maximum_edge:
+          type: integer
+          minimum: 1
+          maximum: 32768
+        minimum_pixels:
+          type: integer
+          minimum: 1
+        maximum_pixels:
+          type: integer
+          minimum: 1
+        maximum_aspect_ratio:
+          type: integer
+          minimum: 1
     PublicCatalogLimit:
       type: object
       additionalProperties: false
@@ -4735,12 +5062,16 @@ components:
           enum:
             - text
             - dictation
+            - image_generation
+            - image_editing
             - video_generation
             - audio_transcription
             - audio_diarization
             - audio_alignment
+            - pronunciation_dictionary_creation
             - subtitle_creation
             - speech_generation
+            - speech_conversion
             - voice_extraction
         available:
           type: boolean
@@ -4964,11 +5295,119 @@ components:
         asset_id:
           type: string
           pattern: ^ast_[0-9a-f]{32}$
+    ProviderMetadata:
+      type: object
+      additionalProperties: false
+      required: [provider, models]
+      properties:
+        provider: {type: string, minLength: 1}
+        models:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderModelMetadata'
+    ProviderModelMetadata:
+      type: object
+      additionalProperties: false
+      required: [model_id, name, can_do_text_to_speech, can_do_voice_conversion, maximum_text_length_per_request, max_characters_request_free_user, max_characters_request_subscribed_user]
+      properties:
+        model_id: {type: string, minLength: 1}
+        name: {type: string, minLength: 1}
+        can_do_text_to_speech: {type: [boolean, 'null']}
+        can_do_voice_conversion: {type: [boolean, 'null']}
+        maximum_text_length_per_request: {type: [integer, 'null'], minimum: 0}
+        max_characters_request_free_user: {type: [integer, 'null'], minimum: 0}
+        max_characters_request_subscribed_user: {type: [integer, 'null'], minimum: 0}
+    ProviderQuotas:
+      type: object
+      additionalProperties: false
+      required: [provider, subscription]
+      properties:
+        provider: {type: string, minLength: 1}
+        subscription:
+          $ref: '#/components/schemas/ProviderSubscription'
+    ProviderSubscription:
+      type: object
+      additionalProperties: false
+      required: [tier, status, character_count, character_limit, credit_extension, can_extend_credit_limit, current_overage, has_open_invoices, currency, next_character_count_reset_unix]
+      properties:
+        tier: {type: string, minLength: 1}
+        status: {type: string, minLength: 1}
+        character_count: {type: integer, minimum: 0}
+        character_limit: {type: integer, minimum: 0}
+        credit_extension:
+          $ref: '#/components/schemas/ProviderCreditExtension'
+        can_extend_credit_limit: {type: boolean}
+        has_open_invoices: {type: boolean}
+        currency: {type: [string, 'null'], minLength: 1}
+        next_character_count_reset_unix: {type: [integer, 'null'], minimum: 0}
+        current_overage:
+          oneOf:
+            - type: 'null'
+            - type: object
+              additionalProperties: false
+              required: [amount, currency]
+              properties:
+                amount: {type: string, pattern: '^[0-9]+(\.[0-9]+)?$'}
+                currency: {type: string, minLength: 1}
+    ProviderCreditExtension:
+      type: object
+      additionalProperties: false
+      required: [unlimited, value]
+      properties:
+        unlimited: {type: boolean}
+        value: {type: [integer, 'null'], minimum: 0}
+      oneOf:
+        - properties:
+            unlimited: {const: true}
+            value: {type: 'null'}
+        - properties:
+            unlimited: {const: false}
+            value: {type: integer, minimum: 0}
+    ProviderResourceKind:
+      type: string
+      enum: [voices, voice_library, history, pronunciation_dictionaries, metadata, quotas, elements]
+    ProviderResource:
+      type: object
+      additionalProperties: false
+      required: [provider, kind]
+      properties:
+        provider:
+          type: string
+          minLength: 1
+        kind:
+          $ref: '#/components/schemas/ProviderResourceKind'
+    MediaCapabilityService:
+      type: object
+      additionalProperties: false
+      required: [capability, provider, controls, limits]
+      properties:
+        capability:
+          enum: [audio.align, audio.dictionary.create]
+        provider:
+          type: string
+          minLength: 1
+        controls:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicCatalogControl'
+        limits:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicCatalogLimit'
     MediaCapabilities:
       type: object
       additionalProperties: false
-      required: [catalog_revision, routes]
+      required: [catalog_revision, routes, resources, services]
       properties:
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/MediaCapabilityService'
+        resources:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/ProviderResource'
         catalog_revision:
           type: string
           minLength: 1
@@ -4998,15 +5437,261 @@ components:
                   type: object
     MediaOperationRequest:
       oneOf:
+        - $ref: '#/components/schemas/ImageGenerationOperationRequest'
+        - $ref: '#/components/schemas/ImageEditingOperationRequest'
         - $ref: '#/components/schemas/VideoGenerationOperationRequest'
         - $ref: '#/components/schemas/DictatorTranscriptionOperationRequest'
         - $ref: '#/components/schemas/DictatorDiarizationOperationRequest'
         - $ref: '#/components/schemas/DictatorAlignmentOperationRequest'
+        - $ref: '#/components/schemas/ProviderAlignmentOperationRequest'
+        - $ref: '#/components/schemas/ProviderDictionaryOperationRequest'
         - $ref: '#/components/schemas/DictatorSubtitleOperationRequest'
+        - $ref: '#/components/schemas/ProviderSpeechConversionOperationRequest'
+        - $ref: '#/components/schemas/ProviderSpeechGenerationOperationRequest'
         - $ref: '#/components/schemas/DictatorSpeechGenerationOperationRequest'
         - $ref: '#/components/schemas/DictatorVoiceExtractionOperationRequest'
       discriminator:
         propertyName: capability
+    ProviderDictionaryOperationRequest:
+      type: object
+      additionalProperties: false
+      required: [capability, provider, input, controls]
+      properties:
+        capability:
+          const: audio.dictionary.create
+        provider:
+          type: string
+          minLength: 1
+        input:
+          $ref: '#/components/schemas/PronunciationDictionaryInput'
+        controls:
+          type: object
+          additionalProperties: false
+    PronunciationDictionaryInput:
+      type: object
+      additionalProperties: false
+      required: [name, rules]
+      properties:
+        name:
+          type: string
+          pattern: '\S'
+        description:
+          type: [string, 'null']
+        rules:
+          type: array
+          minItems: 1
+          items:
+            oneOf:
+              - type: object
+                additionalProperties: false
+                required: [type, string_to_replace, alias]
+                properties:
+                  type: {const: alias}
+                  string_to_replace: {type: string, pattern: '\S'}
+                  alias: {type: string, pattern: '\S'}
+              - type: object
+                additionalProperties: false
+                required: [type, string_to_replace, phoneme, alphabet]
+                properties:
+                  type: {const: phoneme}
+                  string_to_replace: {type: string, pattern: '\S'}
+                  phoneme: {type: string, pattern: '\S'}
+                  alphabet: {type: string, pattern: '\S'}
+    MediaDictionary:
+      type: object
+      additionalProperties: false
+      description: The creation artifact contains owned references and provider observations. Native dictionary and version identifiers remain private.
+      required: [dictionary_id, version_id, provider, name, created_by, creation_time_unix, version_rules_num, permission_on_resource, description]
+      properties:
+        dictionary_id: {type: string, pattern: '^dic_[0-9a-f]{32}$'}
+        version_id: {type: string, pattern: '^div_[0-9a-f]{32}$'}
+        provider: {type: string, minLength: 1}
+        name: {type: string, pattern: '\S'}
+        created_by: {type: string}
+        creation_time_unix: {type: integer, minimum: 0}
+        version_rules_num: {type: integer, minimum: 0}
+        permission_on_resource: {type: [string, 'null']}
+        description: {type: [string, 'null']}
+    ProviderAlignmentOperationRequest:
+      type: object
+      additionalProperties: false
+      required: [capability, provider, input, controls]
+      properties:
+        capability:
+          const: audio.align
+        provider:
+          type: string
+          minLength: 1
+          description: A provider with an audio_alignment service in the current catalog.
+        input:
+          type: object
+          additionalProperties: false
+          required: [audio_asset_id, transcript]
+          properties:
+            audio_asset_id:
+              type: string
+              pattern: ^ast_[0-9a-f]{32}$
+            transcript:
+              type: string
+              minLength: 1
+              pattern: '\S'
+        controls:
+          type: object
+          additionalProperties: false
+    ProviderSpeechGenerationOperationRequest:
+      allOf:
+        - $ref: '#/components/schemas/MediaOperationRequestBase'
+        - type: object
+          properties:
+            capability:
+              const: audio.speech.generate
+            input:
+              type: object
+              additionalProperties: false
+              required: [text, voice_id]
+              properties:
+                text: {type: string, pattern: '\S'}
+                voice_id: {type: string, pattern: '^voi_[0-9a-f]{32}$'}
+                previous_text: {type: [string, 'null']}
+                next_text: {type: [string, 'null']}
+                previous_operation_ids:
+                  type: [array, 'null']
+                  maxItems: 3
+                  items: {type: string, pattern: '^mop_[0-9a-f]{32}$'}
+                next_operation_ids:
+                  type: [array, 'null']
+                  maxItems: 3
+                  items: {type: string, pattern: '^mop_[0-9a-f]{32}$'}
+                dictionaries:
+                  type: [array, 'null']
+                  maxItems: 3
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [dictionary_id, version_id]
+                    properties:
+                      dictionary_id: {type: string, pattern: '^dic_[0-9a-f]{32}$'}
+                      version_id: {type: string, pattern: '^div_[0-9a-f]{32}$'}
+            controls:
+              type: object
+              additionalProperties: false
+              required: [output_format, timestamps]
+              properties:
+                output_format:
+                  type: string
+                  minLength: 1
+                  description: Use a format from the selected catalog offering.
+                timestamps: {type: boolean}
+                stability: {type: [number, 'null'], minimum: 0, maximum: 1}
+                similarity_boost: {type: [number, 'null'], minimum: 0, maximum: 1}
+                style: {type: [number, 'null'], minimum: 0, maximum: 1}
+                use_speaker_boost: {type: [boolean, 'null']}
+                speed: {type: [number, 'null'], minimum: 0.7, maximum: 1.2}
+                seed: {type: [integer, 'null'], minimum: 0, maximum: 4294967295}
+                language_code:
+                  type: [string, 'null']
+                  description: Use a language code declared by the selected offering.
+                text_normalization:
+                  type: [string, 'null']
+                  enum: [auto, 'on', 'off', '', null]
+                language_text_normalization: {type: [boolean, 'null']}
+    MediaSpeechTiming:
+      type: object
+      additionalProperties: false
+      required: [alignment, normalized_alignment]
+      properties:
+        alignment:
+          anyOf:
+            - {type: 'null'}
+            - {$ref: '#/components/schemas/SpeechCharacterAlignment'}
+        normalized_alignment:
+          anyOf:
+            - {type: 'null'}
+            - {$ref: '#/components/schemas/SpeechCharacterAlignment'}
+    SpeechCharacterAlignment:
+      type: object
+      additionalProperties: false
+      required: [characters, character_start_times_seconds, character_end_times_seconds]
+      properties:
+        characters:
+          type: array
+          items: {type: string, minLength: 1}
+        character_start_times_seconds:
+          type: array
+          items: {type: number, minimum: 0}
+        character_end_times_seconds:
+          type: array
+          items: {type: number, minimum: 0}
+    ProviderSpeechConversionOperationRequest:
+      allOf:
+        - $ref: '#/components/schemas/MediaOperationRequestBase'
+        - type: object
+          properties:
+            capability:
+              const: audio.speech.convert
+            input:
+              type: object
+              additionalProperties: false
+              required: [voice_id, audio_asset_id]
+              properties:
+                voice_id:
+                  type: string
+                  pattern: ^voi_[0-9a-f]{32}$
+                audio_asset_id:
+                  type: string
+                  pattern: ^ast_[0-9a-f]{32}$
+            controls:
+              type: object
+              additionalProperties: false
+              required: [input_format, output_format]
+              properties:
+                input_format:
+                  enum: [other, pcm_s16le_16]
+                output_format:
+                  type: string
+                  description: Use a format from the selected catalog offering.
+                  minLength: 1
+                stability:
+                  type: [number, 'null']
+                  minimum: 0
+                  maximum: 1
+                similarity_boost:
+                  type: [number, 'null']
+                  minimum: 0
+                  maximum: 1
+                style:
+                  type: [number, 'null']
+                  minimum: 0
+                  maximum: 1
+                use_speaker_boost:
+                  type: [boolean, 'null']
+                seed:
+                  type: [integer, 'null']
+                  minimum: 0
+                  maximum: 4294967295
+                remove_background_noise:
+                  type: [boolean, 'null']
+    MediaAudioDescription:
+      type: object
+      additionalProperties: false
+      required: [output_format, mime_type]
+      properties:
+        output_format:
+          type: string
+          minLength: 1
+        mime_type:
+          enum: [audio/mpeg, audio/ogg, audio/wav, application/octet-stream]
+        raw_audio:
+          type: object
+          additionalProperties: false
+          required: [encoding, sample_rate_hz, channels]
+          properties:
+            encoding:
+              enum: [s16le, alaw, mulaw]
+            sample_rate_hz:
+              enum: [8000, 16000, 22050, 24000, 32000, 44100, 48000]
+            channels:
+              const: 1
     MediaOperationRequestBase:
       type: object
       additionalProperties: false
@@ -5025,6 +5710,198 @@ components:
           type: object
         controls:
           type: object
+    ImageGenerationOperationRequest:
+      oneOf:
+        - $ref: '#/components/schemas/SurfaceImageGenerationOperationRequest'
+        - $ref: '#/components/schemas/AspectRatioImageGenerationOperationRequest'
+    AspectRatioImageGenerationOperationRequest:
+      allOf:
+        - $ref: '#/components/schemas/MediaOperationRequestBase'
+        - type: object
+          properties:
+            capability:
+              const: image.generate
+            input:
+              type: object
+              additionalProperties: false
+              required: [prompt]
+              properties:
+                prompt:
+                  type: string
+                  minLength: 1
+                  maxLength: 4000
+                  pattern: '\S'
+            controls:
+              type: object
+              additionalProperties: false
+              required: [aspect_ratio, output_format, output_count]
+              properties:
+                aspect_ratio:
+                  type: string
+                  description: Use a value from the selected catalog offering.
+                  minLength: 1
+                output_format:
+                  enum: [png, jpeg, webp]
+                output_count:
+                  type: integer
+                  minimum: 1
+                  maximum: 4
+    SurfaceImageGenerationOperationRequest:
+      allOf:
+        - $ref: '#/components/schemas/MediaOperationRequestBase'
+        - $ref: '#/components/schemas/ImageSurfaceOperationRequest'
+        - type: object
+          properties:
+            capability:
+              const: image.generate
+            input:
+              type: object
+              additionalProperties: false
+              required: [prompt]
+              properties:
+                previous_operation_id:
+                  type: string
+                  pattern: '^mop_[a-f0-9]{32}$'
+                prompt:
+                  type: string
+                  minLength: 1
+                  maxLength: 32000
+                  pattern: '\S'
+            controls:
+              $ref: '#/components/schemas/ImageGenerationControls'
+    ImageEditingOperationRequest:
+      allOf:
+        - $ref: '#/components/schemas/MediaOperationRequestBase'
+        - $ref: '#/components/schemas/ImageSurfaceOperationRequest'
+        - type: object
+          properties:
+            capability:
+              const: image.edit
+            input:
+              type: object
+              additionalProperties: false
+              required: [prompt]
+              anyOf:
+                - required: [image_asset_ids]
+                - required: [previous_operation_id]
+              properties:
+                previous_operation_id:
+                  type: string
+                  pattern: '^mop_[a-f0-9]{32}$'
+                prompt:
+                  type: string
+                  minLength: 1
+                  maxLength: 32000
+                  pattern: '\S'
+                image_asset_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 16
+                  items:
+                    type: string
+                    pattern: '^ast_[a-f0-9]{32}$'
+                mask_asset_id:
+                  type: string
+                  pattern: '^ast_[a-f0-9]{32}$'
+            controls:
+              $ref: '#/components/schemas/ImageGenerationControls'
+    ImageSurfaceOperationRequest:
+      if:
+        properties:
+          controls:
+            properties:
+              surface:
+                const: responses
+      then:
+        properties:
+          input:
+            not:
+              required: [mask_asset_id]
+      else:
+        properties:
+          input:
+            not:
+              required: [previous_operation_id]
+    ImageGenerationControls:
+      type: object
+      description: Explicit generation choices. The selected catalog route supplies exact dimension and control limits. JPEG and WebP require compression, including explicit zero. PNG omits compression.
+      additionalProperties: false
+      required: [surface, quality, size, background, output_format, output_count]
+      properties:
+        surface:
+          enum: [images, responses]
+        responses_model:
+          type: string
+          minLength: 1
+          description: Catalog-selected text model for the Responses surface.
+        quality:
+          enum: [low, medium, high, auto]
+        size:
+          type: string
+          pattern: '^(auto|[1-9][0-9]*x[1-9][0-9]*)$'
+        background:
+          enum: [opaque, transparent, auto]
+        output_format:
+          enum: [png, jpeg, webp]
+        output_compression:
+          type: integer
+          minimum: 0
+          maximum: 100
+        output_count:
+          type: integer
+          minimum: 1
+          maximum: 10
+        stream:
+          type: boolean
+          description: Request progressive output. The current Images stream has one final image.
+        partial_images:
+          type: integer
+          minimum: 0
+          maximum: 3
+          description: Maximum preview count. Requires streaming when greater than zero. The provider can return fewer previews.
+      allOf:
+        - if:
+            properties:
+              surface:
+                const: responses
+          then:
+            required: [responses_model]
+            properties:
+              output_count:
+                const: 1
+          else:
+            not:
+              required: [responses_model]
+        - if:
+            required: [stream]
+            properties:
+              stream:
+                const: true
+          then:
+            properties:
+              output_count:
+                const: 1
+          else:
+            properties:
+              partial_images:
+                const: 0
+        - if:
+            properties:
+              output_format:
+                const: png
+          then:
+            not:
+              required: [output_compression]
+          else:
+            required: [output_compression]
+        - if:
+            properties:
+              output_format:
+                const: jpeg
+          then:
+            properties:
+              background:
+                enum: [opaque, auto]
     VideoGenerationOperationRequest:
       allOf:
         - $ref: '#/components/schemas/MediaOperationRequestBase'
@@ -5042,7 +5919,7 @@ components:
             provider:
               const: dictator
             model:
-              const: dictator-speech-v1
+              enum: [whisper-tiny, whisper-base, whisper-small, whisper-medium, whisper-large-v3]
             input:
               $ref: '#/components/schemas/DictatorAudioInput'
             controls:
@@ -5057,13 +5934,12 @@ components:
             provider:
               const: dictator
             model:
-              const: dictator-speech-v1
+              enum: [whisper-tiny, whisper-base, whisper-small, whisper-medium, whisper-large-v3]
             input:
               $ref: '#/components/schemas/DictatorAudioInput'
             controls:
               type: object
               additionalProperties: false
-              required: [model_size]
               properties:
                 language:
                   type: string
@@ -5094,7 +5970,7 @@ components:
             provider:
               const: dictator
             model:
-              const: dictator-speech-v1
+              enum: [whisper-tiny, whisper-base, whisper-small, whisper-medium, whisper-large-v3]
             input:
               type: object
               additionalProperties: false
@@ -5126,7 +6002,7 @@ components:
             provider:
               const: dictator
             model:
-              const: dictator-speech-v1
+              enum: [whisper-tiny, whisper-base, whisper-small, whisper-medium, whisper-large-v3]
             input:
               type: object
               additionalProperties: false
@@ -5171,7 +6047,7 @@ components:
             provider:
               const: dictator
             model:
-              const: dictator-speech-v1
+              enum: [qwen3-tts, silero-ru]
             input:
               type: object
               additionalProperties: false
@@ -5212,7 +6088,7 @@ components:
             provider:
               const: dictator
             model:
-              const: dictator-speech-v1
+              enum: [whisper-tiny, whisper-base, whisper-small, whisper-medium, whisper-large-v3]
             input:
               type: object
               additionalProperties: false
@@ -5233,7 +6109,6 @@ components:
             controls:
               type: object
               additionalProperties: false
-              required: [model_size]
               properties:
                 duration_seconds:
                   type: number
@@ -5269,8 +6144,12 @@ components:
     MediaOperation:
       type: object
       additionalProperties: false
-      required: [operation_id, capability, provider, model, catalog_revision, state, cancellation_state, outputs, cost, accepted_at, updated_at, deadline_at]
+      required: [operation_id, capability, provider, catalog_revision, state, cancellation_state, outputs, cost, accepted_at, updated_at, deadline_at]
       properties:
+        previous_operation_id:
+          type: string
+          pattern: ^mop_[0-9a-f]{32}$
+          description: The successful tenant operation used as the Responses chain parent.
         operation_id:
           type: string
           pattern: ^mop_[0-9a-f]{32}$
@@ -5310,6 +6189,30 @@ components:
                 format: int64
                 minimum: 1
               ordinal:
+                type: integer
+                minimum: 0
+        partial_outputs:
+          type: array
+          description: Verified preview assets in output and partial order. Available during execution and retained with the operation.
+          items:
+            type: object
+            additionalProperties: false
+            required: [asset_id, mime_type, size_bytes, output_ordinal, partial_ordinal]
+            properties:
+              asset_id:
+                type: string
+                pattern: ^ast_[0-9a-f]{32}$
+              mime_type:
+                type: string
+                minLength: 1
+              size_bytes:
+                type: integer
+                format: int64
+                minimum: 1
+              output_ordinal:
+                type: integer
+                minimum: 0
+              partial_ordinal:
                 type: integer
                 minimum: 0
         error:
@@ -5373,7 +6276,7 @@ components:
     MediaVoice:
       type: object
       additionalProperties: false
-      required: [voice_id, provider, mode, language, display_name, default, sample_rates, default_sample_rate]
+      required: [voice_id, provider, mode, language, display_name, default, sample_rates, default_sample_rate, description, category, labels, high_quality_base_model_ids, verified_languages, preview]
       properties:
         voice_id:
           type: string
@@ -5385,7 +6288,7 @@ components:
           type: string
           enum: [preset, extracted]
         language:
-          type: string
+          type: [string, "null"]
           minLength: 1
         display_name:
           type: string
@@ -5394,23 +6297,54 @@ components:
           type: boolean
         sample_rates:
           type: array
-          minItems: 1
           uniqueItems: true
           items:
             type: integer
             minimum: 1
         default_sample_rate:
-          type: integer
+          type: [integer, "null"]
           minimum: 1
+        description:
+          type: [string, "null"]
+        category:
+          type: [string, "null"]
+        labels:
+          type: object
+          additionalProperties: {type: string}
+        high_quality_base_model_ids:
+          type: array
+          items: {type: string, minLength: 1}
+        verified_languages:
+          type: array
+          items:
+            $ref: '#/components/schemas/MediaVoiceLanguage'
+        preview:
+          type: [string, "null"]
+          pattern: ^/model/v1/voices/voi_[0-9a-f]{32}/previews/0$
+    MediaVoiceLanguage:
+      type: object
+      additionalProperties: false
+      required: [language, model_id, accent, locale, preview]
+      properties:
+        language: {type: string, minLength: 1}
+        model_id: {type: string, minLength: 1}
+        accent: {type: [string, "null"]}
+        locale: {type: [string, "null"]}
+        preview:
+          type: [string, "null"]
+          pattern: ^/model/v1/voices/voi_[0-9a-f]{32}/previews/[1-9][0-9]*$
     MediaVoiceCollection:
       type: object
       additionalProperties: false
-      required: [voices]
+      required: [voices, has_more, total_count, next_cursor]
       properties:
         voices:
           type: array
           items:
             $ref: '#/components/schemas/MediaVoice'
+        has_more: {type: boolean}
+        total_count: {type: [integer, "null"], minimum: 0}
+        next_cursor: {type: [string, "null"], minLength: 1}
     ProviderDiagnostics:
       type: object
       additionalProperties: false
@@ -5480,6 +6414,9 @@ components:
         mime_type:
           type: string
           enum:
+            - application/octet-stream
+            - application/json
+            - application/x-subrip
             - image/jpeg
             - image/png
             - image/webp
@@ -5628,6 +6565,12 @@ components:
           minLength: 1
         web_search:
           type: boolean
+        speech_provider:
+          type: string
+          description: Selected speech provider. An empty value clears the selection.
+        speech_model:
+          type: string
+          description: Selected speech model. An empty value clears the selection.
         system_prompt:
           type: string
         max_tokens:
@@ -5944,8 +6887,8 @@ components:
       required:
         - provider
         - model
-        - dictation_provider
-        - dictation_model
+        - transcription_provider
+        - transcription_model
         - system_prompt
         - reasoning_effort
       properties:
@@ -5955,12 +6898,18 @@ components:
         model:
           type: string
           description: Canonical model for provider, or empty with provider when no provider connection exists.
-        dictation_provider:
+        transcription_provider:
           type: string
-          description: Canonical configured dictation provider, or empty with dictation_model for an unset selection.
-        dictation_model:
+          description: Canonical configured transcription provider, or empty with transcription_model for an unset selection.
+        transcription_model:
           type: string
-          description: Canonical dictation model, or empty with dictation_provider for an unset selection.
+          description: Canonical transcription model, or empty with transcription_provider for an unset selection.
+        speech_provider:
+          type: string
+          description: Selected speech provider. An empty value clears the selection.
+        speech_model:
+          type: string
+          description: Selected speech model. An empty value clears the selection.
         system_prompt:
           type: string
         reasoning_effort:
@@ -6078,8 +7027,10 @@ components:
       required:
         - provider
         - model
-        - dictation_provider
-        - dictation_model
+        - transcription_provider
+        - transcription_model
+        - speech_provider
+        - speech_model
         - system_prompt
         - reasoning_effort
       properties:
@@ -6089,12 +7040,18 @@ components:
         model:
           type: string
           description: Canonical text model paired with provider, or empty when provider is empty.
-        dictation_provider:
+        transcription_provider:
           type: string
-          description: Canonical configured dictation provider, or empty for an unset selection.
-        dictation_model:
+          description: Canonical configured transcription provider, or empty for an unset selection.
+        transcription_model:
           type: string
-          description: Canonical dictation model paired with dictation_provider, or empty when dictation_provider is empty.
+          description: Canonical transcription model paired with transcription_provider, or empty when transcription_provider is empty.
+        speech_provider:
+          type: string
+          description: Selected speech provider, or an empty value when no selection exists.
+        speech_model:
+          type: string
+          description: Selected speech model, or an empty value when no selection exists.
         system_prompt:
           type: string
         reasoning_effort:
@@ -6109,6 +7066,8 @@ components:
         - key_acquisition_url
         - aliases
         - capabilities
+        - resources
+        - services
         - model_families
         - configured
         - fields
@@ -6117,8 +7076,19 @@ components:
         - text_default_model
         - text_models
         - supports_dictation
-        - dictation_models
+        - transcription_models
+        - supports_speech
+        - speech_models
       properties:
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicProviderService'
+        resources:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/ProviderResourceKind'
         id:
           type: string
         label:
@@ -6137,7 +7107,6 @@ components:
             type: string
         capabilities:
           type: array
-          minItems: 1
           uniqueItems: true
           items:
             type: string
@@ -6146,16 +7115,19 @@ components:
               - image_input
               - audio_input
               - dictation
+              - image_generation
+              - image_editing
               - video_generation
               - audio_transcription
               - audio_diarization
               - audio_alignment
+              - pronunciation_dictionary_creation
               - subtitle_creation
               - speech_generation
+              - speech_conversion
               - voice_extraction
         model_families:
           type: array
-          minItems: 1
           items:
             $ref: '#/components/schemas/ManagementCatalogIdentity'
         configured:
@@ -6177,10 +7149,19 @@ components:
             $ref: '#/components/schemas/TextModel'
         supports_dictation:
           type: boolean
-        dictation_default_model:
+        transcription_default_model:
           type: string
-        dictation_models:
+        transcription_models:
           type: array
+          items:
+            type: string
+        supports_speech:
+          type: boolean
+        speech_default_model:
+          type: string
+        speech_models:
+          type: array
+          description: Models available for speech synthesis defaults. Voice extraction alone does not qualify a model.
           items:
             type: string
     ManagementCatalogIdentity:

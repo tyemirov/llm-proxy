@@ -3,7 +3,7 @@
 import * as backend from '../core/backendClient.js?v=20260903f037';
 import {profileFailureMessage} from '../core/managementProfile.js?v=20260903f037';
 
-import {COPY, PROVIDER_CAPABILITY_LABELS} from '../constants.js?v=20260903f037';
+import {COPY, PROVIDER_CAPABILITY_LABELS, PROVIDER_RESOURCE_LABELS, CAPABILITY_DOMAINS, CAPABILITY_DOMAIN_LABELS} from '../constants.js?v=20260903f037';
 
 const MCP_PATH = '/mcp';
 
@@ -25,11 +25,11 @@ export class ConnectionDashboard extends HTMLElement {
   /** @type {import('../types.d.js').ProviderProfile[]} */ providers = [];
   /** @type {import('../types.d.js').ManagementTenantProfile|null} */ profile = null;
   /** @type {Record<string, string>} */ modelFamilies = {};
-  /** @type {{provider:string,model:string,capabilities:string[]}[]} */ mediaOfferings = [];
+  /** @type {import('../types.d.js').DashboardOffering[]} */ offerings = [];
   tenantID = '';
   connectionID = '';
   modelID = '';
-  capability = 'text';
+  /** @type {import('../types.d.js').CapabilityDomain} */ capability = CAPABILITY_DOMAINS.TEXT;
   search = '';
   busy = false;
   message = '';
@@ -51,7 +51,7 @@ export class ConnectionDashboard extends HTMLElement {
       }
     }, {signal:this.controller.signal});
     this.observer.observe(this);
-    void this.run(async () => { const catalog = await backend.fetchDashboardModels(this.controller.signal); this.modelFamilies = catalog.families; this.mediaOfferings = catalog.offerings.filter(o=>o.capabilities.some(c=>!['text','dictation','image_input','audio_input','web_search','reasoning'].includes(c)));  await this.reload(); await this.selectTenant(this.defaultTenantID()); });
+    void this.run(async () => { const catalog = await backend.fetchDashboardModels(this.controller.signal); this.modelFamilies = catalog.families; this.offerings = catalog.offerings; await this.reload(); await this.selectTenant(this.defaultTenantID()); });
   }
   disconnectedCallback() { this.controller.abort(); this.observer.disconnect(); if (this.drawFrame) { cancelAnimationFrame(this.drawFrame); this.drawFrame = 0; } this.secret = ''; this.requestExample = ''; this.revision += 1; }
   scheduleDraw() {
@@ -69,10 +69,26 @@ export class ConnectionDashboard extends HTMLElement {
 
   /** @param {string} id */
   isDefaultModel(id) {
-    if(this.capability==='media')return false;
     const defaults=this.profile?.tenant.defaults;
-    return this.connection?.provider===(this.capability==='text'?defaults?.provider:defaults?.dictation_provider)
-      && id===(this.capability==='text'?defaults?.model:defaults?.dictation_model);
+    switch(this.capability) {
+      case CAPABILITY_DOMAINS.TEXT: return this.connection?.provider===defaults?.provider && id===defaults?.model;
+      case CAPABILITY_DOMAINS.TRANSCRIPTION: return this.connection?.provider===defaults?.transcription_provider && id===defaults?.transcription_model;
+      case CAPABILITY_DOMAINS.SPEECH: return this.connection?.provider===defaults?.speech_provider && id===defaults?.speech_model;
+      default: return false;
+    }
+  }
+  /** @param {import('../types.d.js').CapabilityDomain} domain */
+  modelsForDomain(domain) {
+    if (!this.provider) return [];
+    switch(domain) {
+      case CAPABILITY_DOMAINS.TEXT: return this.provider.text_models.map(model=>model.id);
+      case CAPABILITY_DOMAINS.TRANSCRIPTION: return this.provider.transcription_models;
+      default: return this.offerings.filter(offering=>offering.provider===this.connection?.provider && offering.domains.includes(domain)).map(offering=>offering.model);
+    }
+  }
+  get canSaveDefault() {
+    return this.capability===CAPABILITY_DOMAINS.TEXT || this.capability===CAPABILITY_DOMAINS.TRANSCRIPTION ||
+      (this.capability===CAPABILITY_DOMAINS.SPEECH && Boolean(this.provider?.speech_models.includes(this.modelID)));
   }
 
   async reload() {
@@ -87,6 +103,13 @@ export class ConnectionDashboard extends HTMLElement {
   emitContext() {
     this.dispatchEvent(new CustomEvent(CONNECTION_CONTEXT_EVENT, {bubbles:true, detail:{tenantID:this.tenantID,tenants:this.tenants,profile:this.profile}}));
   }
+  adaptCapabilityForConnection() {
+    if (!this.connection || !this.provider) return;
+    if (this.modelsForDomain(this.capability).length) return;
+    const available = Object.values(CAPABILITY_DOMAINS).find(domain=>this.modelsForDomain(domain).length);
+    if (available) this.capability = available;
+  }
+
   /** @param {string} id */
   async selectTenant(id) {
     const revision = ++this.revision;
@@ -97,6 +120,7 @@ export class ConnectionDashboard extends HTMLElement {
       if (revision !== this.revision) return;
       this.profile = profile;
       this.connectionID = this.connections.find(c => c.tenant_ids.includes(id))?.id || '';
+      this.adaptCapabilityForConnection();
     }
     this.emitContext(); this.render();
   }
@@ -150,7 +174,7 @@ export class ConnectionDashboard extends HTMLElement {
     const map = this.querySelector('[data-map]'); if (!map) return;
     const matches = (/** @type {string} */ text) => text.toLowerCase().includes(this.search.toLowerCase());
     const disabled = this.busy ? 'disabled':'';
-    const modelIDs = this.attached && this.ready && this.provider ? (this.capability === 'media' ? this.mediaOfferings.filter(o=>o.provider===this.connection?.provider).map(o=>o.model) : this.capability === 'text' ? this.provider.text_models.map(m=>m.id) : this.provider.dictation_models) : [];
+    const modelIDs = this.attached && this.ready ? this.modelsForDomain(this.capability) : [];
     map.innerHTML = `<svg class="cw-wires" aria-hidden="true"></svg>
       <section class="cw-column"><header><h3>Tenants <span>${this.tenants.length}</span></h3><button data-action="create-tenant" ${disabled}>Create tenant</button></header>
       <div class="cw-list">
@@ -160,8 +184,8 @@ export class ConnectionDashboard extends HTMLElement {
         const assigned=c.tenant_ids.includes(this.tenantID); const occupied=this.connections.some(other=>other.provider===c.provider && other.tenant_ids.includes(this.tenantID));
         return `<article class="cw-node ${c.id===this.connectionID?(assigned?'selected':'browsing'):''}" data-connection-node="${escapeHTML(c.id)}"><div class="cw-row"><button class="cw-name" data-connection="${escapeHTML(c.id)}">${providerIcon(c.provider)}<strong>${escapeHTML(c.name)}</strong></button>${this.tenantID ? assigned ? '<span class="cw-connected">✓ Connected</span>' : occupied ? '<span class="cw-muted">Provider already connected</span>' : `<button class="cw-connect" data-connect="${escapeHTML(c.id)}" ${disabled}>Connect</button>` : ''}</div><small>${escapeHTML(this.providers.find(p=>p.id===c.provider)?.api_service_label || c.provider)}</small><small>${c.tenant_ids.length ? `Used by ${c.tenant_ids.length} tenant${c.tenant_ids.length===1?'':'s'}`:'Unassigned'}</small>${connectionReady(c)?'':'<small>Credentials needed</small>'}</article>`;
       }).join('') || '<p class="cw-empty">Create a connection to add provider credentials.</p>'}</div></section>
-      <section class="cw-column"><header><h3>Models</h3></header><div class="cw-tabs" role="group" aria-label="Model capability"><button data-capability="text" aria-pressed="${this.capability==='text'}">Text</button><button data-capability="dictation" aria-pressed="${this.capability==='dictation'}">Dictation</button><button data-capability="media" aria-pressed="${this.capability==='media'}">Media</button></div><div class="cw-list">
-      ${modelIDs.filter(matches).map(id=>{const saved=this.isDefaultModel(id);return `<button class="cw-node ${this.modelID===id?(saved?'selected':'preview'):''}" data-model="${escapeHTML(id)}" ${disabled}><span class="cw-row"><brand-icon kind="family" identifier="${escapeHTML(this.modelFamilies[id])}"></brand-icon><code>${escapeHTML(id)}</code></span>${saved?'<small class="cw-connected">★ Default model</small>':''}</button>`;}).join('') || `<p class="cw-empty">${this.attached ? this.ready ? 'No models for this capability.' : 'Add credentials to choose models. Edit this connection to complete its setup.' : 'Connect to choose models.<br>Use a Connect button in the middle column.'}</p>`}</div></section>`;
+      <section class="cw-column"><header><h3>Models</h3></header><div class="cw-tabs" role="group" aria-label="Model capability">${Object.values(CAPABILITY_DOMAINS).map(domain=>`<button data-capability="${domain}" aria-pressed="${this.capability===domain}" ${disabled}>${CAPABILITY_DOMAIN_LABELS[domain]}</button>`).join('')}</div><div class="cw-list">
+      ${modelIDs.filter(matches).map(id=>{const saved=this.isDefaultModel(id);return `<button class="cw-node ${saved?'selected':this.modelID===id?'preview':''}" data-model="${escapeHTML(id)}" ${disabled}><span class="cw-row"><brand-icon kind="family" identifier="${escapeHTML(this.modelFamilies[id])}"></brand-icon><code>${escapeHTML(id)}</code></span>${saved?'<small class="cw-connected">★ Default model</small>':''}</button>`;}).join('') || `<p class="cw-empty">${this.attached ? this.ready ? (this.provider?.capabilities.length===0 && this.provider.resources.length ? 'This connection provides account resources.' : 'No models for this capability.') : 'Add credentials to choose models. Edit this connection to complete its setup.' : 'Connect to choose models.<br>Use a Connect button in the middle column.'}</p>`}</div></section>`;
     const footer=this.querySelector('[data-route]');
     if (footer) footer.textContent=this.connection ? `${this.tenantName} ${this.attached?'→':'· Viewing'} ${this.connection.name}${this.attached?'':' · Not connected'}${this.modelID?(this.isDefaultModel(this.modelID)?' · Saved default: ':' · Preview: ')+this.modelID:''}` : `${this.tenantName} · Select a connection`;
     map.querySelectorAll('.cw-list').forEach(list => list.addEventListener('scroll', () => this.scheduleDraw(), {passive:true}));
@@ -194,6 +218,8 @@ export class ConnectionDashboard extends HTMLElement {
       details.innerHTML=`<header class="cw-row"><h3>${escapeHTML(c.name)}</h3><button data-action="edit-connection" ${disabled}>Edit connection</button>${this.attached?`<button data-action="detach" ${disabled}>Detach from ${escapeHTML(this.tenantName)}</button>`:''}${c.tenant_ids.length===0?`<button data-action="delete-connection" ${disabled}>Delete connection</button>`:''}</header>
       <p class="cw-muted">${c.tenant_ids.length?'Used by '+c.tenant_ids.map(id=>escapeHTML(this.tenants.find(t=>t.id===id)?.name || id)).join(', '):'Unassigned'}</p>
       <dl class="cw-fields">${c.fields.map(f=>`<div><dt>${escapeHTML(f.label)}</dt><dd>${escapeHTML(f.secret?(f.masked_value||'Not configured'):f.value)}</dd></div>`).join('')}</dl>
+      ${this.provider?.services.length ? `<section data-provider-services><h4>Provider services</h4><ul>${this.provider.services.map(service=>`<li>${escapeHTML(PROVIDER_CAPABILITY_LABELS[/** @type {keyof typeof PROVIDER_CAPABILITY_LABELS} */(service.operation)])}</li>`).join('')}</ul></section>` : ''}
+      ${this.provider?.resources.length ? `<section data-provider-resources><h4>Provider resources</h4><ul>${this.provider.resources.map(kind=>`<li>${escapeHTML(PROVIDER_RESOURCE_LABELS[/** @type {keyof typeof PROVIDER_RESOURCE_LABELS} */(kind)])}</li>`).join('')}</ul></section>` : ''}
       ${this.attached && this.modelID ? this.modelDetails() : ''}
       ${this.attached && this.provider?.text_models.length ? `<form data-provider-profile><label>Provider system prompt for ${escapeHTML(this.tenantName)}<textarea name="provider_prompt">${escapeHTML(this.profile?.providers.find(p=>p.id===c.provider)?.system_prompt || '')}</textarea></label><button type="button" data-action="save-provider-profile" ${disabled}>Save provider prompt</button></form>` : ''}`;
     } else {
@@ -202,27 +228,50 @@ export class ConnectionDashboard extends HTMLElement {
     if(this.tenantID && c) details.insertAdjacentHTML('beforeend',`<footer class="cw-row"><span>${escapeHTML(this.tenantName)}</span><button data-action="tenant-details">Tenant details and API access</button></footer>`);
   }
   modelDetails() {
-    if(this.capability==='media') {
-      const offering=this.mediaOfferings.find(o=>o.provider===this.connection?.provider && o.model===this.modelID);
-      return `<section data-media-details><h4>${escapeHTML(this.modelID)}</h4><p>Available through this tenant’s API key.</p><ul>${(offering?.capabilities||[]).map(capability=>`<li>${escapeHTML(PROVIDER_CAPABILITY_LABELS[/** @type {keyof typeof PROVIDER_CAPABILITY_LABELS} */(capability)]||capability)}</li>`).join('')}</ul></section>`;
-    }
+    const offering=this.offerings.find(o=>o.provider===this.connection?.provider && o.model===this.modelID);
+    const offeringDetails=this.capability===CAPABILITY_DOMAINS.TEXT?'':`<section data-media-details><h4>${escapeHTML(this.modelID)}</h4><p>Available through this tenant’s API key.</p><ul>${(offering?.capabilities||[]).map(capability=>`<li>${escapeHTML(PROVIDER_CAPABILITY_LABELS[/** @type {keyof typeof PROVIDER_CAPABILITY_LABELS} */(capability)]||capability)}</li>`).join('')}</ul></section>`;
+    if(!this.canSaveDefault) return offeringDetails;
     const model=this.provider?.text_models.find(m=>m.id===this.modelID);
     const efforts=this.capability==='text'?(model?.reasoning_effort?.efforts||[]):[];
     const defaults=this.profile?.tenant.defaults;
-    return `<form data-default-form><h4>${escapeHTML(this.modelID)}</h4><p class="cw-muted">${this.isDefaultModel(this.modelID)?'Saved default':'Preview'} · Save to change ${escapeHTML(this.tenantName)}’s ${this.capability} default.</p>
+    return `${offeringDetails}<form data-default-form><h4>${escapeHTML(this.modelID)}</h4><p class="cw-muted">${this.isDefaultModel(this.modelID)?'Saved default':'Preview'} · Save to change ${escapeHTML(this.tenantName)}’s ${this.capability} default.</p>
     ${efforts.length?`<label>Reasoning effort<select aria-label="Reasoning effort" name="reasoning_effort"><option value="">Provider default</option>${efforts.map(e=>`<option ${e===defaults?.reasoning_effort?'selected':''}>${escapeHTML(e)}</option>`).join('')}</select></label>`:''}
     ${this.capability==='text'?`<label>Tenant system prompt<textarea name="system_prompt">${escapeHTML(defaults?.system_prompt||'')}</textarea></label>`:''}
     <button class="cw-primary" data-action="save-default" type="button" ${this.busy?'disabled':''}>Save ${this.capability} default</button></form>`;
   }
   /** @param {MouseEvent} event */
   handleClick(event) {
-    const button=event.target instanceof Element?event.target.closest('button'):null;if(!button || this.busy)return;
-    if(button.dataset.tenant) {void this.run(()=>this.selectTenant(button.dataset.tenant || ''));return;}
-    if(button.dataset.connection) {this.connectionID=button.dataset.connection;this.modelID='';this.render();return;}
-    if(button.dataset.connect) {const id=button.dataset.connect;void this.run(async()=>{const c=this.connections.find(c=>c.id===id);if(!c)return;await backend.assignConnection(this.tenantID,c.provider,c.id,this.controller.signal);this.connectionID=id;this.modelID='';await this.reload();this.message=`Connected ${this.tenantName} to ${c.name}. Choose a model.`;});return;}
-    if(button.dataset.model) {this.modelID=button.dataset.model;this.render();return;}
-    if(button.dataset.capability) {this.capability=button.dataset.capability;this.modelID='';this.render();return;}
-    switch(button.dataset.action) {
+    if (!(event.target instanceof Element) || this.busy) return;
+    const connectButton = event.target.closest('button[data-connect]');
+    if (connectButton instanceof HTMLElement && connectButton.dataset.connect) {
+      const id = connectButton.dataset.connect;
+      void this.run(async () => {
+        const c = this.connections.find(c => c.id === id);
+        if (!c) return;
+        await backend.assignConnection(this.tenantID, c.provider, c.id, this.controller.signal);
+        this.connectionID = id;
+        this.modelID = '';
+        await this.reload();
+        this.adaptCapabilityForConnection();
+        this.message = `Connected ${this.tenantName} to ${c.name}. Choose a model.`;
+      });
+      return;
+    }
+    const connectionNode = event.target.closest('[data-connection-node]');
+    if (connectionNode instanceof HTMLElement && connectionNode.dataset.connectionNode) {
+      this.connectionID = connectionNode.dataset.connectionNode;
+      this.modelID = '';
+      this.adaptCapabilityForConnection();
+      this.render();
+      return;
+    }
+    const button = event.target.closest('button');
+    if (!button) return;
+    if (button.dataset.tenant) { void this.run(() => this.selectTenant(button.dataset.tenant || '')); return; }
+    if (button.dataset.model) { this.modelID = button.dataset.model; this.render(); return; }
+    const domain=Object.values(CAPABILITY_DOMAINS).find(value=>value===button.dataset.capability);
+    if (domain) { this.capability = domain; this.modelID = ''; this.render(); return; }
+    switch (button.dataset.action) {
       case 'copy-mcp':void this.run(async()=>{const runtime=await backend.loadFrontendRuntimeConfig();await navigator.clipboard.writeText(new URL(MCP_PATH,runtime.proxyOrigin).href);this.message='MCP URL copied.';});break;
       case 'tenant-details':this.connectionID='';this.modelID='';this.render();break;
       case 'create-tenant':this.tenantForm(false);break;
@@ -249,11 +298,12 @@ export class ConnectionDashboard extends HTMLElement {
     await this.reload();this.message='Provider prompt saved for this tenant.';
   }
   async saveDefault() {
-    if(!this.profile || !this.connection || !this.attached)return;
+    if(!this.profile || !this.connection || !this.attached || !this.canSaveDefault)return;
     const form=this.querySelector('[data-default-form]');if(!(form instanceof HTMLFormElement))return;
     const values=new FormData(form);const defaults={...this.profile.tenant.defaults};
     if(this.capability==='text') {defaults.provider=this.connection.provider;defaults.model=this.modelID;defaults.reasoning_effort=String(values.get('reasoning_effort')||'');defaults.system_prompt=String(values.get('system_prompt')||'');}
-    else {defaults.dictation_provider=this.connection.provider;defaults.dictation_model=this.modelID;}
+    else if(this.capability===CAPABILITY_DOMAINS.TRANSCRIPTION) {defaults.transcription_provider=this.connection.provider;defaults.transcription_model=this.modelID;}
+    else {defaults.speech_provider=this.connection.provider;defaults.speech_model=this.modelID;}
     await backend.updateDefaults(this.tenantID,defaults,this.controller.signal);await this.reload();this.message='Default saved.';this.modelID='';
   }
   /** @param {string} title @param {string} body @param {(form: HTMLFormElement)=>Promise<void>} [submit] */
@@ -287,7 +337,7 @@ export class ConnectionDashboard extends HTMLElement {
   confirm(title,message,action) {this.dialog(title,`<p>${escapeHTML(message)}</p><button type="submit" class="cw-primary">Confirm</button>`,action);}
   confirmDetach() {
     const c=this.connection;if(!c)return;
-    const d=this.profile?.tenant.defaults;const affected=d?.provider===c.provider || d?.dictation_provider===c.provider;
+    const d=this.profile?.tenant.defaults;const affected=d?.provider===c.provider || d?.transcription_provider===c.provider || d?.speech_provider===c.provider;
     this.confirm('Detach connection',`Detach ${c.name} from ${this.tenantName}? ${affected?'Its saved default routes will be cleared. ':''}Other tenants keep their assignments.`,async()=>{await backend.detachConnection(this.tenantID,c.provider,affected,this.controller.signal);this.connectionID='';this.modelID='';await this.reload();this.message='Connection detached.';});
   }
   /** @param {boolean} rename */
@@ -314,7 +364,7 @@ export class ConnectionDashboard extends HTMLElement {
       this.closeDialog();
       this.message=edit?'Connection saved.':'Connection created. Use Connect to attach it to this tenant.';
       if(!edit && data.get('attach'))await backend.assignConnection(this.tenantID,result.provider,result.id,this.controller.signal);
-      await this.reload();if(!provider.text_models.length)this.capability='media';this.message='Connection saved.';
+      await this.reload();this.adaptCapabilityForConnection();this.message='Connection saved.';
     });
     const renderFields=()=>{
       const host=this.querySelector('[data-credential-fields]');if(!host)return;

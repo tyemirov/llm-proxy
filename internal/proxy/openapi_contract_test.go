@@ -107,7 +107,7 @@ func TestOpenAPIContractDocumentsActualAuthenticationBoundaries(t *testing.T) {
 			expectedSecurity = [][]string{}
 		case "/", "/v2", llmproxycontract.TenantIdentityPath, "/v2/requests", "/dictate":
 			expectedSecurity = [][]string{{"TenantClientKey"}}
-		case "/v1/chat/completions", "/v1/responses", "/v1/models", "/v1/audio/transcriptions", llmproxycontract.AssetPath, "/model/v1/assets/{asset_id}", "/model/v1/assets/{asset_id}/content", llmproxycontract.MediaCapabilitiesPath, llmproxycontract.MediaOperationsPath, "/model/v1/operations/{operation_id}", "/model/v1/operations/{operation_id}/cancellation", llmproxycontract.MediaVoicesPath, "/model/v1/voices/{voice_id}", llmproxycontract.ProviderDiagnosticsPath + "/{provider}":
+		case "/v1/chat/completions", "/v1/responses", "/v1/models", "/v1/audio/transcriptions", llmproxycontract.AssetPath, "/model/v1/assets/{asset_id}", "/model/v1/assets/{asset_id}/content", llmproxycontract.MediaCapabilitiesPath, llmproxycontract.MediaOperationsPath, "/model/v1/operations/{operation_id}", "/model/v1/operations/{operation_id}/cancellation", llmproxycontract.MediaVoicesPath, "/model/v1/voices/{voice_id}", "/model/v1/voices/{voice_id}/previews/{preview}", llmproxycontract.ProviderDiagnosticsPath + "/{provider}", llmproxycontract.ProviderResourcesPath + "/{provider}/{kind}":
 			expectedSecurity = [][]string{{"TenantBearerKey"}}
 		case "/healthz", proxy.ManagementConfigUIPath, proxy.PublicCapabilitiesPath:
 			expectedSecurity = [][]string{}
@@ -221,6 +221,99 @@ func TestOpenAPIContractEnforcesV2MediaRelationships(t *testing.T) {
 	}
 }
 
+func TestImageGenerationOpenAPIMatchesPublicControls(t *testing.T) {
+	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, scenario := range []struct {
+		name     string
+		controls string
+		valid    bool
+	}{
+		{"png", `{"surface":"images","quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":2}`, true},
+		{"jpeg zero", `{"surface":"images","quality":"high","size":"auto","background":"auto","output_format":"jpeg","output_compression":0,"output_count":1}`, true},
+		{"webp transparent", `{"surface":"images","quality":"medium","size":"1536x1024","background":"transparent","output_format":"webp","output_compression":100,"output_count":1}`, true},
+		{"png compression", `{"surface":"images","quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_compression":0,"output_count":1}`, false},
+		{"missing compression", `{"surface":"images","quality":"low","size":"1024x1024","background":"opaque","output_format":"jpeg","output_count":1}`, false},
+		{"jpeg transparency", `{"surface":"images","quality":"low","size":"auto","background":"transparent","output_format":"jpeg","output_compression":80,"output_count":1}`, false},
+		{"missing controls", `{}`, false},
+		{"unknown control", `{"surface":"images","quality":"low","size":"auto","background":"opaque","output_format":"png","output_count":1,"seed":1}`, false},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			body := []byte(`{"capability":"image.generate","provider":"openai","model":"gpt-image-2","input":{"prompt":"A small lighthouse"},"controls":` + scenario.controls + `}`)
+			request := httptest.NewRequest(http.MethodPost, llmproxycontract.MediaOperationsPath, bytes.NewReader(body))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Idempotency-Key", "openapi-image")
+			err := contract.ValidateRequest(llmproxycontract.MediaOperationsPath, request.Method, request, body)
+			if (err == nil) != scenario.valid {
+				t.Fatalf("valid=%v error=%v", scenario.valid, err)
+			}
+		})
+	}
+}
+
+func TestImageGenerationEditingOpenAPIAcceptsOnlyAssetReferences(t *testing.T) {
+	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const assetID = "ast_0123456789abcdef0123456789abcdef"
+	for _, scenario := range []struct {
+		name, input string
+		valid       bool
+	}{
+		{"ordered images", `{"prompt":"Edit","image_asset_ids":["` + assetID + `","` + assetID + `"]}`, true},
+		{"mask", `{"prompt":"Edit","image_asset_ids":["` + assetID + `"],"mask_asset_id":"` + assetID + `"}`, true},
+		{"no images", `{"prompt":"Edit","image_asset_ids":[]}`, false},
+		{"native file", `{"prompt":"Edit","image_asset_ids":["file_native"]}`, false},
+		{"external URL", `{"prompt":"Edit","image_asset_ids":["https://example.com/image.png"]}`, false},
+		{"provider field", `{"prompt":"Edit","image_asset_ids":["` + assetID + `"],"image_url":"https://example.com/image.png"}`, false},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			body := []byte(`{"capability":"image.edit","provider":"openai","model":"gpt-image-2","input":` + scenario.input + `,"controls":{"surface":"images","quality":"low","size":"auto","background":"opaque","output_format":"png","output_count":1}}`)
+			request := httptest.NewRequest(http.MethodPost, llmproxycontract.MediaOperationsPath, bytes.NewReader(body))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Idempotency-Key", "openapi-image-edit")
+			err := contract.ValidateRequest(llmproxycontract.MediaOperationsPath, request.Method, request, body)
+			if (err == nil) != scenario.valid {
+				t.Fatalf("valid=%v error=%v", scenario.valid, err)
+			}
+		})
+	}
+}
+
+func TestImageGenerationStreamingOpenAPIControls(t *testing.T) {
+	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, scenario := range []struct {
+		name, controls string
+		valid          bool
+	}{
+		{"previews", `"output_count":1,"stream":true,"partial_images":3`, true},
+		{"final event only", `"output_count":1,"stream":true,"partial_images":0`, true},
+		{"non streaming", `"output_count":2,"stream":false,"partial_images":0`, true},
+		{"too many previews", `"output_count":1,"stream":true,"partial_images":4`, false},
+		{"negative previews", `"output_count":1,"stream":true,"partial_images":-1`, false},
+		{"ambiguous outputs", `"output_count":2,"stream":true,"partial_images":3`, false},
+		{"no stream", `"output_count":1,"partial_images":1`, false},
+		{"disabled stream", `"output_count":1,"stream":false,"partial_images":1`, false},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			body := []byte(`{"capability":"image.generate","provider":"openai","model":"gpt-image-2","input":{"prompt":"Preview"},"controls":{"surface":"images","quality":"low","size":"auto","background":"opaque","output_format":"png",` + scenario.controls + `}}`)
+			request := httptest.NewRequest(http.MethodPost, llmproxycontract.MediaOperationsPath, bytes.NewReader(body))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Idempotency-Key", "openapi-stream")
+			err := contract.ValidateRequest(llmproxycontract.MediaOperationsPath, request.Method, request, body)
+			if (err == nil) != scenario.valid {
+				t.Fatalf("valid=%v error=%v", scenario.valid, err)
+			}
+		})
+	}
+}
+
 func TestOpenAPIContractEnforcesExactDictatorMediaOperations(t *testing.T) {
 	contract, loadError := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
 	if loadError != nil {
@@ -233,15 +326,15 @@ func TestOpenAPIContractEnforcesExactDictatorMediaOperations(t *testing.T) {
 		body      string
 		wantValid bool
 	}{
-		{name: "transcription", body: `{"capability":"audio.transcribe","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `"},"controls":{"detect_language":true}}`, wantValid: true},
-		{name: "diarization", body: `{"capability":"audio.diarize","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `"},"controls":{"language":"en-US","model_size":"large","utterance_gap_seconds":0.4}}`, wantValid: true},
-		{name: "alignment", body: `{"capability":"audio.align","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `","transcript":"Aligned words."},"controls":{"language":"en-US","remove_punctuation":true}}`, wantValid: true},
-		{name: "subtitles", body: `{"capability":"subtitles.create","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `","transcript":"Subtitle words."},"controls":{"language":"en-US","granularity":"sentence","group_size":2}}`, wantValid: true},
-		{name: "speech", body: `{"capability":"audio.speech.generate","provider":"dictator","model":"dictator-speech-v1","input":{"text":"Speak this.","voice_id":"` + voiceID + `"},"controls":{"language":"en-US","text_format":"plain","sample_rate_hz":48000,"include_timeline":true,"max_duration_seconds":30}}`, wantValid: true},
-		{name: "voice extraction", body: `{"capability":"audio.voice.extract","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `","transcript":"Reference words.","display_name":"Narrator","language":"en-US"},"controls":{"model_size":"large"}}`, wantValid: true},
-		{name: "missing language selector", body: `{"capability":"audio.transcribe","provider":"dictator","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `"},"controls":{}}`},
-		{name: "irrelevant speech control", body: `{"capability":"audio.speech.generate","provider":"dictator","model":"dictator-speech-v1","input":{"text":"Speak this.","voice_id":"` + voiceID + `"},"controls":{"language":"en-US","text_format":"plain","sample_rate_hz":48000,"model_size":"large"}}`},
-		{name: "non Dictator provider", body: `{"capability":"audio.align","provider":"xai","model":"dictator-speech-v1","input":{"audio_asset_id":"` + assetID + `","transcript":"Aligned words."},"controls":{"language":"en-US"}}`},
+		{name: "transcription", body: `{"capability":"audio.transcribe","provider":"dictator","model":"whisper-base","input":{"audio_asset_id":"` + assetID + `"},"controls":{"detect_language":true}}`, wantValid: true},
+		{name: "diarization", body: `{"capability":"audio.diarize","provider":"dictator","model":"whisper-large-v3","input":{"audio_asset_id":"` + assetID + `"},"controls":{"language":"en-US","model_size":"large-v3","utterance_gap_seconds":0.4}}`, wantValid: true},
+		{name: "alignment", body: `{"capability":"audio.align","provider":"dictator","model":"whisper-base","input":{"audio_asset_id":"` + assetID + `","transcript":"Aligned words."},"controls":{"language":"en-US","remove_punctuation":true}}`, wantValid: true},
+		{name: "subtitles", body: `{"capability":"subtitles.create","provider":"dictator","model":"whisper-base","input":{"audio_asset_id":"` + assetID + `","transcript":"Subtitle words."},"controls":{"language":"en-US","granularity":"sentence","group_size":2}}`, wantValid: true},
+		{name: "speech", body: `{"capability":"audio.speech.generate","provider":"dictator","model":"qwen3-tts","input":{"text":"Speak this.","voice_id":"` + voiceID + `"},"controls":{"language":"en-US","text_format":"plain","sample_rate_hz":48000,"include_timeline":true,"max_duration_seconds":30}}`, wantValid: true},
+		{name: "voice extraction", body: `{"capability":"audio.voice.extract","provider":"dictator","model":"whisper-large-v3","input":{"audio_asset_id":"` + assetID + `","transcript":"Reference words.","display_name":"Narrator","language":"en-US"},"controls":{"model_size":"large-v3"}}`, wantValid: true},
+		{name: "missing language selector", body: `{"capability":"audio.transcribe","provider":"dictator","model":"whisper-base","input":{"audio_asset_id":"` + assetID + `"},"controls":{}}`},
+		{name: "irrelevant speech control", body: `{"capability":"audio.speech.generate","provider":"dictator","model":"qwen3-tts","input":{"text":"Speak this.","voice_id":"` + voiceID + `"},"controls":{"language":"en-US","text_format":"plain","sample_rate_hz":48000,"model_size":"large"}}`},
+		{name: "non Dictator provider", body: `{"capability":"audio.align","provider":"xai","model":"whisper-base","input":{"audio_asset_id":"` + assetID + `","transcript":"Aligned words."},"controls":{"language":"en-US"}}`},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -323,6 +416,7 @@ func openAPIProviderOffering(capabilities []any, mediaExecutionLifecycle string)
 		"identifier":          "provider:model",
 		"provider":            "provider",
 		"model":               "model",
+		"domains":             []any{"text"},
 		"capabilities":        capabilities,
 		"wire_contract":       "provider_contract",
 		"execution_lifecycle": "pollable_resource",
@@ -397,8 +491,8 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 	if decodeError := json.Unmarshal(capabilitiesResponse.Body.Bytes(), &capabilityCatalog); decodeError != nil {
 		t.Fatalf("decode public capability catalog: %v", decodeError)
 	}
-	if len(capabilityCatalog.Providers) != 14 {
-		t.Fatalf("public capability providers=%d want=14", len(capabilityCatalog.Providers))
+	if len(capabilityCatalog.Providers) != 16 {
+		t.Fatalf("public capability providers=%d want=16", len(capabilityCatalog.Providers))
 	}
 
 	configRequest := httptest.NewRequest(http.MethodGet, proxy.ManagementConfigUIPath, nil)
@@ -618,4 +712,66 @@ func openAPIPath(ginPath string) string {
 		}
 	}
 	return strings.Join(pathSegments, "/")
+}
+
+func TestImageGenerationResponsesOpenAPIMatchesSurfaceAndChainContract(t *testing.T) {
+	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, scenario := range []struct {
+		name       string
+		surface    string
+		model      string
+		capability string
+		input      string
+		count      int
+		valid      bool
+	}{
+		{"generation", "responses", "gpt-5", "image.generate", `{"prompt":"Generate"}`, 1, true},
+		{"ordered editing", "responses", "gpt-5", "image.edit", `{"prompt":"Edit","image_asset_ids":["ast_0123456789abcdef0123456789abcdef"]}`, 1, true},
+		{"chain edit", "responses", "gpt-5", "image.edit", `{"prompt":"Edit","previous_operation_id":"mop_0123456789abcdef0123456789abcdef"}`, 1, true},
+		{"missing text model", "responses", "", "image.generate", `{"prompt":"Generate"}`, 1, false},
+		{"missing surface", "", "", "image.generate", `{"prompt":"Generate"}`, 1, false},
+		{"Images text model", "images", "gpt-5", "image.generate", `{"prompt":"Generate"}`, 1, false},
+		{"Responses mask", "responses", "gpt-5", "image.edit", `{"prompt":"Edit","image_asset_ids":["ast_0123456789abcdef0123456789abcdef"],"mask_asset_id":"ast_0123456789abcdef0123456789abcdef"}`, 1, false},
+		{"native chain", "responses", "gpt-5", "image.edit", `{"prompt":"Edit","previous_operation_id":"resp_native"}`, 1, false},
+		{"Images chain", "images", "", "image.edit", `{"prompt":"Edit","previous_operation_id":"mop_0123456789abcdef0123456789abcdef"}`, 1, false},
+		{"multiple Responses outputs", "responses", "gpt-5", "image.generate", `{"prompt":"Generate"}`, 2, false},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			controls := map[string]any{"quality": "low", "size": "auto", "background": "opaque", "output_format": "png", "output_count": scenario.count}
+			if scenario.surface != "" {
+				controls["surface"] = scenario.surface
+			}
+			if scenario.model != "" {
+				controls["responses_model"] = scenario.model
+			}
+			body, _ := json.Marshal(map[string]any{"capability": scenario.capability, "provider": "openai", "model": "gpt-image-2", "input": json.RawMessage(scenario.input), "controls": controls})
+			request := httptest.NewRequest(http.MethodPost, llmproxycontract.MediaOperationsPath, bytes.NewReader(body))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Idempotency-Key", "responses-contract")
+			err := contract.ValidateRequest(llmproxycontract.MediaOperationsPath, request.Method, request, body)
+			if (err == nil) != scenario.valid {
+				t.Fatalf("valid=%v error=%v", scenario.valid, err)
+			}
+		})
+	}
+}
+
+func TestProviderServicesOpenAPI(t *testing.T) {
+	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, model := range []string{"", `,"model":null`, `,"model":""`, `,"model":"invented"`} {
+		body := []byte(`{"capability":"audio.align","provider":"elevenlabs"` + model + `,"input":{"audio_asset_id":"ast_0123456789abcdef0123456789abcdef","transcript":"hello"},"controls":{}}`)
+		request := httptest.NewRequest(http.MethodPost, llmproxycontract.MediaOperationsPath, bytes.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Idempotency-Key", "alignment")
+		err := contract.ValidateRequest(llmproxycontract.MediaOperationsPath, request.Method, request, body)
+		if (err == nil) != (model == "") {
+			t.Fatalf("model=%q error=%v", model, err)
+		}
+	}
 }

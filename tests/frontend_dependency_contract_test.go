@@ -48,6 +48,12 @@ func TestOperationalFrontendValidationPreparesPinnedDependencies(testingInstance
 			expectedCommands: []string{"ci", "playwright install chromium"},
 		},
 		{
+			name:             "hosted-backend-checks",
+			target:           "ci-backend-checks",
+			makeArguments:    []string{"PLAYWRIGHT_INSTALL_FLAGS="},
+			expectedCommands: []string{"ci", "playwright install chromium"},
+		},
+		{
 			name:             "hosted-frontend",
 			target:           "ci-frontend",
 			makeArguments:    []string{"PLAYWRIGHT_INSTALL_FLAGS="},
@@ -206,7 +212,7 @@ func prepareFrontendDependencyFixture(testingInstance *testing.T, repositoryRoot
 		testingInstance,
 		filepath.Join(fixtureRoot, "Makefile"),
 		string(makefileBytes)+`
-test-release-policy check-format go-lint python-lint python-test check-brand-icons test-openapi-pages-artifact test-live-provider-harness test-protocol-acceptance prepare-shared-ui:
+test-release-policy check-format go-lint python-lint python-test check-brand-icons test-openapi-pages-artifact test-live-provider-harness test-protocol-acceptance test-upstream-admission-race prepare-shared-ui:
 	@:
 
 go-test:

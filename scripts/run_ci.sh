@@ -10,6 +10,8 @@ CI_COMPLETE=0
 RUN_STARTED_SECONDS=$SECONDS
 COMPLETED_STAGE_NAMES=()
 COMPLETED_STAGE_EVIDENCE=()
+BACKGROUND_PIDS=()
+BACKGROUND_LOGS=()
 
 print_ci_success() {
   local stage_index
@@ -38,7 +40,22 @@ finish_ci_run() {
   local exit_status=$?
   local cleanup_failed=0
   local receipt_status=0
+  local child_status=0
+  local child_index
   trap - EXIT INT TERM
+
+  for child_index in "${!BACKGROUND_PIDS[@]}"; do
+    if wait "${BACKGROUND_PIDS[$child_index]}"; then
+      child_status=0
+    else
+      child_status=$?
+    fi
+    cat "${BACKGROUND_LOGS[$child_index]}" || cleanup_failed=1
+    if [[ "$exit_status" -eq 0 && "$child_status" -ne 0 ]]; then
+      exit_status="$child_status"
+      CURRENT_STAGE="${STAGE_NAMES[$child_index]}"
+    fi
+  done
 
   if [[ -n "$RUN_DIRECTORY" && -d "$RUN_DIRECTORY" ]]; then
     rm -rf -- "$RUN_DIRECTORY" || cleanup_failed=1
@@ -80,6 +97,7 @@ STAGE_NAMES=(
   "Python static analysis"
   "Frontend static analysis"
   "Protocol acceptance"
+  "Upstream admission race tests"
   "Go integration tests"
   "Python client tests"
   "Frontend browser tests"
@@ -94,6 +112,7 @@ STAGE_TARGETS=(
   "python-lint"
   "frontend-lint"
   "test-protocol-acceptance"
+  "test-upstream-admission-race"
   "go-test"
   "python-test"
   "frontend-test"
@@ -120,13 +139,57 @@ run_stage() {
   printf '\n[%d/%d] %s\n' "$stage_number" "$TOTAL_TARGET_STAGES" "$stage_name"
   "$MAKE_BIN" --no-print-directory "$stage_target"
   stage_elapsed_seconds=$((SECONDS - stage_started_seconds))
-  completed_stage_index=${#COMPLETED_STAGE_NAMES[@]}
+  completed_stage_index=$((stage_number - 1))
   COMPLETED_STAGE_NAMES[$completed_stage_index]="$stage_name"
   COMPLETED_STAGE_EVIDENCE[$completed_stage_index]="${stage_elapsed_seconds}s"
   printf '[%d/%d] PASS %s (%ds)\n' "$stage_number" "$TOTAL_TARGET_STAGES" "$stage_name" "$stage_elapsed_seconds"
 }
 
+start_background_stage() {
+  local child_index="$1"
+  local child_started_seconds=$SECONDS
+  BACKGROUND_LOGS[$child_index]="$RUN_DIRECTORY/stage-${child_index}.log"
+  printf '\n[%d/%d] %s\n' "$((child_index + 1))" "$TOTAL_TARGET_STAGES" "${STAGE_NAMES[$child_index]}"
+  (
+    trap - EXIT INT TERM
+    "$MAKE_BIN" --no-print-directory "${STAGE_TARGETS[$child_index]}"
+    printf '%s\n' "$((SECONDS - child_started_seconds))" >"$RUN_DIRECTORY/stage-${child_index}.seconds"
+  ) >"${BACKGROUND_LOGS[$child_index]}" 2>&1 &
+  BACKGROUND_PIDS[$child_index]=$!
+}
+
+finish_background_stage() {
+  local child_index="$1"
+  local child_status=0
+  local child_elapsed_seconds
+  CURRENT_STAGE="${STAGE_NAMES[$child_index]}"
+  if wait "${BACKGROUND_PIDS[$child_index]}"; then
+    child_status=0
+  else
+    child_status=$?
+  fi
+  unset 'BACKGROUND_PIDS[child_index]'
+  cat "${BACKGROUND_LOGS[$child_index]}"
+  if [[ "$child_status" -ne 0 ]]; then
+    return "$child_status"
+  fi
+  read -r child_elapsed_seconds <"$RUN_DIRECTORY/stage-${child_index}.seconds"
+  COMPLETED_STAGE_NAMES[$child_index]="$CURRENT_STAGE"
+  COMPLETED_STAGE_EVIDENCE[$child_index]="${child_elapsed_seconds}s"
+  printf '[%d/%d] PASS %s (%ds)\n' "$((child_index + 1))" "$TOTAL_TARGET_STAGES" "$CURRENT_STAGE" "$child_elapsed_seconds"
+}
+
 for ((stage_index = 0; stage_index < TOTAL_TARGET_STAGES; stage_index++)); do
+  if [[ "${STAGE_TARGETS[$stage_index]}" == "test-upstream-admission-race" ]]; then
+    # These checks use independent temporary state and do not change source files.
+    start_background_stage "$stage_index"
+    start_background_stage "$((stage_index + 2))"
+    run_stage "${STAGE_NAMES[$((stage_index + 1))]}" "${STAGE_TARGETS[$((stage_index + 1))]}" "$((stage_index + 2))"
+    finish_background_stage "$stage_index"
+    finish_background_stage "$((stage_index + 2))"
+    stage_index=$((stage_index + 2))
+    continue
+  fi
   run_stage \
     "${STAGE_NAMES[$stage_index]}" \
     "${STAGE_TARGETS[$stage_index]}" \

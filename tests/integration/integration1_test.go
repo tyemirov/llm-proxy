@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -50,8 +51,7 @@ func newIntegrationServerWithTimeout(testingInstance *testing.T, openAIServer *h
 	testingInstance.Cleanup(func() { _ = logger.Sync() })
 	router, buildRouterError := buildIntegrationRouter(testingInstance, proxy.Configuration{
 		LogLevel:              logLevelDebug,
-		WorkerCount:           1,
-		QueueSize:             4,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 4),
 		RequestTimeoutSeconds: requestTimeoutSeconds,
 		Endpoints:             endpoints,
 	}, logger.Sugar())
@@ -126,11 +126,11 @@ func TestProxyGPT5SavedReasoningEffortFollowsTheResolvedRoute(testingInstance *t
 			openAIServer := newOpenAIServer(subTest, integrationSearchBody, &capturedPayload)
 			subTest.Cleanup(openAIServer.Close)
 			applicationServer := newIntegrationServerWithDefaults(subTest, openAIServer, proxy.TenantDefaults{
-				Provider:          proxy.ProviderNameOpenAI,
-				Model:             proxy.ModelNameGPT5,
-				DictationProvider: proxy.ProviderNameOpenAI,
-				DictationModel:    proxy.DefaultDictationModel,
-				ReasoningEffort:   reasoningEffortHighValue,
+				Provider:              proxy.ProviderNameOpenAI,
+				Model:                 proxy.ModelNameGPT5,
+				TranscriptionProvider: proxy.ProviderNameOpenAI,
+				TranscriptionModel:    proxy.DefaultTranscriptionModel,
+				ReasoningEffort:       reasoningEffortHighValue,
 			})
 			requestURL, _ := url.Parse(applicationServer.URL)
 			queryValues := requestURL.Query()
@@ -185,11 +185,11 @@ func TestProxyGPT5MiniSavedReasoningEffortFollowsTheResolvedRoute(testingInstanc
 	openAIServer := newOpenAIServer(testingInstance, integrationOKBody, &capturedPayload)
 	testingInstance.Cleanup(openAIServer.Close)
 	applicationServer := newIntegrationServerWithDefaults(testingInstance, openAIServer, proxy.TenantDefaults{
-		Provider:          proxy.ProviderNameOpenAI,
-		Model:             proxy.ModelNameGPT5Mini,
-		DictationProvider: proxy.ProviderNameOpenAI,
-		DictationModel:    proxy.DefaultDictationModel,
-		ReasoningEffort:   reasoningEffortHighValue,
+		Provider:              proxy.ProviderNameOpenAI,
+		Model:                 proxy.ModelNameGPT5Mini,
+		TranscriptionProvider: proxy.ProviderNameOpenAI,
+		TranscriptionModel:    proxy.DefaultTranscriptionModel,
+		ReasoningEffort:       reasoningEffortHighValue,
 	})
 
 	httpResponse, requestError := http.Get(applicationServer.URL + "?prompt=" + url.QueryEscape(promptValue) + "&key=" + integrationServiceSecret)
@@ -226,11 +226,11 @@ func TestProxyGPT56SavedReasoningEffortFollowsTheResolvedRoute(testingInstance *
 	openAIServer := newOpenAIServer(testingInstance, integrationOKBody, &capturedPayload)
 	testingInstance.Cleanup(openAIServer.Close)
 	applicationServer := newIntegrationServerWithDefaults(testingInstance, openAIServer, proxy.TenantDefaults{
-		Provider:          proxy.ProviderNameOpenAI,
-		Model:             proxy.ModelNameGPT56,
-		DictationProvider: proxy.ProviderNameOpenAI,
-		DictationModel:    proxy.DefaultDictationModel,
-		ReasoningEffort:   "max",
+		Provider:              proxy.ProviderNameOpenAI,
+		Model:                 proxy.ModelNameGPT56,
+		TranscriptionProvider: proxy.ProviderNameOpenAI,
+		TranscriptionModel:    proxy.DefaultTranscriptionModel,
+		ReasoningEffort:       "max",
 	})
 
 	httpResponse, requestError := http.Get(applicationServer.URL + "?prompt=" + url.QueryEscape(promptValue) + "&key=" + integrationServiceSecret)
@@ -258,11 +258,11 @@ func TestProxyTenantReasoningEffortDoesNotLeakToUnsupportedResolvedRoute(testing
 	openAIServer := newOpenAIServer(testingInstance, integrationOKBody, &capturedPayload)
 	testingInstance.Cleanup(openAIServer.Close)
 	applicationServer := newIntegrationServerWithDefaults(testingInstance, openAIServer, proxy.TenantDefaults{
-		Provider:          proxy.ProviderNameOpenAI,
-		Model:             proxy.ModelNameGPT5,
-		DictationProvider: proxy.ProviderNameOpenAI,
-		DictationModel:    proxy.DefaultDictationModel,
-		ReasoningEffort:   reasoningEffortHighValue,
+		Provider:              proxy.ProviderNameOpenAI,
+		Model:                 proxy.ModelNameGPT5,
+		TranscriptionProvider: proxy.ProviderNameOpenAI,
+		TranscriptionModel:    proxy.DefaultTranscriptionModel,
+		ReasoningEffort:       reasoningEffortHighValue,
 	})
 
 	requestURL, _ := url.Parse(applicationServer.URL)

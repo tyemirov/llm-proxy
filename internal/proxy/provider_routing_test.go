@@ -70,8 +70,7 @@ func TestProviderRoutingUsesConfiguredOpenAIURLsForTextAndDictation(t *testing.T
 			map[string]map[string]string{proxy.ProviderNameOpenAI: {"dictation": upstreamServer.URL + "/dictation-api/transcriptions"}},
 		),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
@@ -238,8 +237,7 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 	}
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 		Endpoints:             endpoints,
 		ModelCatalog:          catalogs,
@@ -321,8 +319,7 @@ func TestProviderRoutingSupportsDeepSeekChatCompletions(t *testing.T) {
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
@@ -396,8 +393,7 @@ func TestProviderRoutingExpandsConfiguredContinuationTokenBudget(t *testing.T) {
 			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
 				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDashScope),
 				LogLevel:              proxy.LogLevelInfo,
-				WorkerCount:           1,
-				QueueSize:             1,
+				UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 				RequestTimeoutSeconds: TestTimeout,
 			}, zap.NewNop().Sugar())
 			if buildError != nil {
@@ -486,8 +482,7 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
 				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDashScope, proxy.ProviderNameMoonshot, proxy.ProviderNameMiniMax, proxy.ProviderNameSiliconFlow, proxy.ProviderNameZAI, proxy.ProviderNameXAI),
 				LogLevel:              proxy.LogLevelInfo,
-				WorkerCount:           1,
-				QueueSize:             1,
+				UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 				RequestTimeoutSeconds: TestTimeout,
 			}, zap.NewNop().Sugar())
 			if buildError != nil {
@@ -552,8 +547,7 @@ func TestProviderRoutingMapsKimiK3ReasoningEffortWithoutExposingReasoningContent
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameMoonshot),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
@@ -627,8 +621,7 @@ func TestProviderRoutingPreservesKimiReasoningDuringOutputContinuation(t *testin
 			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
 				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameMoonshot),
 				LogLevel:              proxy.LogLevelInfo,
-				WorkerCount:           1,
-				QueueSize:             1,
+				UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 				RequestTimeoutSeconds: TestTimeout,
 			}, zap.NewNop().Sugar())
 			if buildError != nil {
@@ -675,8 +668,7 @@ func TestProviderRoutingRejectsGLM52MaxTokensAboveModelLimit(t *testing.T) {
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameZAI),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
@@ -716,8 +708,7 @@ func TestProviderRoutingRejectsCurrentQwenMaxTokensAboveModelLimit(t *testing.T)
 			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
 				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDashScope),
 				LogLevel:              proxy.LogLevelInfo,
-				WorkerCount:           1,
-				QueueSize:             1,
+				UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 				RequestTimeoutSeconds: TestTimeout,
 			}, zap.NewNop().Sugar())
 			if buildError != nil {
@@ -750,8 +741,7 @@ func TestProviderRoutingRejectsCurrentMiniMaxMaxTokensAboveModelLimit(t *testing
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameMiniMax),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
@@ -823,8 +813,7 @@ func TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints(t *testin
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameMeta),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
@@ -1004,8 +993,7 @@ func TestProviderRoutingIncreasesMetaContinuationBudgetAfterNoProgress(t *testin
 			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
 				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameMeta),
 				LogLevel:              proxy.LogLevelInfo,
-				WorkerCount:           1,
-				QueueSize:             1,
+				UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 				RequestTimeoutSeconds: TestTimeout,
 			}, zap.NewNop().Sugar())
 			if buildError != nil {
@@ -1075,8 +1063,7 @@ func TestProviderRoutingUsesConfiguredTextModelCatalog(t *testing.T) {
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 		ModelCatalog:          configuredCatalogs,
 	}, zap.NewNop().Sugar())
@@ -1130,8 +1117,7 @@ func TestProviderRoutingAppliesModelSpecificReasoningEffortCapability(t *testing
 	tenantConfiguration.Defaults = defaults
 	router, buildError := buildRouterWithManagedTenant(t, proxy.Configuration{
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 		Endpoints:             endpoints,
 		ModelCatalog:          catalogs,
@@ -1211,7 +1197,7 @@ func TestProviderRoutingRejectsInvalidReasoningEffortCatalogCapabilities(t *test
 		{
 			name: "dictation capability is forbidden",
 			configure: func(catalogs proxy.ModelCatalog) {
-				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, proxy.DefaultDictationModel)].ReasoningEffort = openAIResponsesReasoningEffortCapability()
+				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, proxy.DefaultTranscriptionModel)].ReasoningEffort = openAIResponsesReasoningEffortCapability()
 			},
 		},
 		{
@@ -1290,8 +1276,7 @@ func TestProviderRoutingTranslatesMaxTokensForOpenAICompatibleChat(t *testing.T)
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
@@ -1337,8 +1322,7 @@ func TestProviderRoutingSupportsMessagesJSONPostForOpenAICompatibleChat(t *testi
 	router, buildError := buildRouterWithManagedTenant(t, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar(), tenantConfiguration)
 	if buildError != nil {
@@ -1419,8 +1403,7 @@ func TestProviderRoutingSurfacesChatCompletionTokenUsage(t *testing.T) {
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameDeepSeek),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
@@ -1504,8 +1487,7 @@ func TestProviderRoutingSupportsGeminiInteractionsWithBackgroundPolling(t *testi
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
 		ProviderCatalog:       testfixtures.ProviderCatalogWithResourceVisibilityInterval(t, proxy.ProviderNameGemini, testVisibilityRetryIntervalMS),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
@@ -1602,8 +1584,7 @@ func TestProviderRoutingDoesNotReplayGeminiIncompleteResponse(t *testing.T) {
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
@@ -1658,8 +1639,7 @@ func TestProviderRoutingUsesGeminiDefaultModelForJSONPosts(t *testing.T) {
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
@@ -1761,17 +1741,16 @@ func TestProviderRoutingSelectsDefaultsByTenantSecret(t *testing.T) {
 	geminiTenant := proxy.StandardManagedTenantTestConfiguration(geminiTenantSecret)
 	geminiTenant.ID = "gemini"
 	geminiTenant.Defaults = proxy.TenantDefaults{
-		Provider:          proxy.ProviderNameGemini,
-		Model:             proxy.ModelNameGemini35Flash,
-		DictationProvider: proxy.ProviderNameOpenAI,
-		DictationModel:    proxy.DefaultDictationModel,
-		SystemPrompt:      "gemini tenant system",
+		Provider:              proxy.ProviderNameGemini,
+		Model:                 proxy.ModelNameGemini35Flash,
+		TranscriptionProvider: proxy.ProviderNameOpenAI,
+		TranscriptionModel:    proxy.DefaultTranscriptionModel,
+		SystemPrompt:          "gemini tenant system",
 	}
 	geminiTenant.ProviderSystemPrompts = map[string]string{proxy.ProviderNameOpenAI: "gemini tenant openai system"}
 	router, buildError := proxy.BuildRouterWithManagedTenantsForTest(t, withModelCatalog(t, proxy.Configuration{
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             3,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 3),
 		RequestTimeoutSeconds: TestTimeout,
 		Endpoints:             endpoints,
 	}), zap.NewNop().Sugar(), []proxy.ManagedTenantTestConfiguration{openAITenant, geminiTenant})
@@ -1856,8 +1835,7 @@ func TestProviderRoutingSupportsGeminiJSONPost(t *testing.T) {
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
@@ -1913,8 +1891,7 @@ func TestProviderRoutingSupportsMessagesJSONPostForGemini(t *testing.T) {
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
@@ -1965,8 +1942,7 @@ func TestProviderRoutingRejectsAssistantHistoryForAllGeminiRoutes(t *testing.T) 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
@@ -2036,8 +2012,7 @@ func TestProviderRoutingSupportsAnthropicMessages(t *testing.T) {
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameAnthropic),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
@@ -2130,8 +2105,7 @@ func TestProviderRoutingAnthropicDefaultMaxTokensByModel(t *testing.T) {
 			router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameAnthropic),
 				LogLevel:              proxy.LogLevelInfo,
-				WorkerCount:           1,
-				QueueSize:             1,
+				UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 				RequestTimeoutSeconds: TestTimeout,
 			}, zap.NewNop().Sugar())
 			if buildError != nil {
@@ -2176,8 +2150,7 @@ func TestProviderRoutingTranslatesMaxTokensForAnthropicMessages(t *testing.T) {
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameAnthropic),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
@@ -2223,8 +2196,7 @@ func TestProviderRoutingSupportsGrokResponses(t *testing.T) {
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameXAI),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
@@ -2263,8 +2235,7 @@ func TestProviderRoutingRejectsGeminiJSONPostMaxTokensAboveModelLimit(t *testing
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
@@ -2296,8 +2267,7 @@ func TestProviderRoutingRejectsGeminiQueryMaxTokensAboveModelLimit(t *testing.T)
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
@@ -2332,8 +2302,7 @@ func TestProviderRoutingRejectsAnthropicMaxTokensAboveModelLimit(t *testing.T) {
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameAnthropic),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
@@ -2364,8 +2333,7 @@ func TestProviderRoutingRejectsGeminiUnsupportedAndInvalidRequests(t *testing.T)
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints("https://gemini.invalid", proxy.ProviderNameGemini),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
@@ -2425,8 +2393,7 @@ func TestProviderRoutingRejectsAnthropicMetaAndGrokUnsupportedCapabilities(t *te
 			proxy.ProviderNameXAI:       "https://xai.invalid",
 		}, nil),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
@@ -2481,8 +2448,7 @@ func TestProviderRoutingRejectsGeminiMissingCredential(t *testing.T) {
 	router, buildError := buildRouterWithManagedTenant(t, proxy.Configuration{
 		Endpoints:             providerEndpoints("https://gemini.invalid", proxy.ProviderNameGemini),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar(), tenantConfiguration)
 	if buildError != nil {
@@ -2514,8 +2480,7 @@ func TestProviderRoutingRejectsAnthropicMetaAndGrokMissingCredentials(t *testing
 			proxy.ProviderNameXAI:       "https://xai.invalid",
 		}, nil),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar(), tenantConfiguration)
 	if buildError != nil {
@@ -2582,8 +2547,7 @@ func TestProviderRoutingMapsGeminiProviderErrors(t *testing.T) {
 			router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameGemini),
 				LogLevel:              proxy.LogLevelInfo,
-				WorkerCount:           1,
-				QueueSize:             1,
+				UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 				RequestTimeoutSeconds: TestTimeout,
 			}, logger.Sugar())
 			if buildError != nil {
@@ -2604,24 +2568,7 @@ func TestProviderRoutingMapsGeminiProviderErrors(t *testing.T) {
 
 func TestProviderRoutingMapsGeminiTransportErrors(t *testing.T) {
 	t.Run("invalid request URL", func(subTest *testing.T) {
-		logger := zap.NewNop()
-		router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-			Endpoints:             providerEndpoints("http://[::1", proxy.ProviderNameGemini),
-			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
-			RequestTimeoutSeconds: TestTimeout,
-		}, logger.Sugar())
-		if buildError != nil {
-			subTest.Fatalf(messageBuildRouterError, buildError)
-		}
-
-		request := httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=hello&provider=gemini", nil)
-		responseRecorder := httptest.NewRecorder()
-		router.ServeHTTP(responseRecorder, request)
-		if responseRecorder.Code != http.StatusBadGateway {
-			subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusBadGateway, responseRecorder.Body.String())
-		}
+		assertInvalidUpstreamEndpointStartup(subTest, providerEndpoints("http://[::1", proxy.ProviderNameGemini))
 	})
 
 	t.Run("transport error", func(subTest *testing.T) {
@@ -2635,8 +2582,7 @@ func TestProviderRoutingMapsGeminiTransportErrors(t *testing.T) {
 		router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 			Endpoints:             providerEndpoints("https://gemini.invalid", proxy.ProviderNameGemini),
 			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
+			UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 			RequestTimeoutSeconds: 1,
 		}, logger.Sugar())
 		if buildError != nil {
@@ -2682,8 +2628,7 @@ func TestProviderRoutingMapsAnthropicProviderErrors(t *testing.T) {
 			router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 				Endpoints:             providerEndpoints(upstreamServer.URL, proxy.ProviderNameAnthropic),
 				LogLevel:              proxy.LogLevelInfo,
-				WorkerCount:           1,
-				QueueSize:             1,
+				UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 				RequestTimeoutSeconds: TestTimeout,
 			}, zap.NewNop().Sugar())
 			if buildError != nil {
@@ -2704,23 +2649,7 @@ func TestProviderRoutingMapsAnthropicProviderErrors(t *testing.T) {
 
 func TestProviderRoutingMapsAnthropicTransportErrors(t *testing.T) {
 	t.Run("invalid request URL", func(subTest *testing.T) {
-		router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-			Endpoints:             providerEndpoints("http://[::1", proxy.ProviderNameAnthropic),
-			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
-			RequestTimeoutSeconds: TestTimeout,
-		}, zap.NewNop().Sugar())
-		if buildError != nil {
-			subTest.Fatalf(messageBuildRouterError, buildError)
-		}
-
-		request := httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=hello&provider=anthropic", nil)
-		responseRecorder := httptest.NewRecorder()
-		router.ServeHTTP(responseRecorder, request)
-		if responseRecorder.Code != http.StatusBadGateway {
-			subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusBadGateway, responseRecorder.Body.String())
-		}
+		assertInvalidUpstreamEndpointStartup(subTest, providerEndpoints("http://[::1", proxy.ProviderNameAnthropic))
 	})
 
 	t.Run("transport error", func(subTest *testing.T) {
@@ -2733,8 +2662,7 @@ func TestProviderRoutingMapsAnthropicTransportErrors(t *testing.T) {
 		router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 			Endpoints:             providerEndpoints("https://anthropic.invalid", proxy.ProviderNameAnthropic),
 			LogLevel:              proxy.LogLevelInfo,
-			WorkerCount:           1,
-			QueueSize:             1,
+			UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 			RequestTimeoutSeconds: 1,
 		}, zap.NewNop().Sugar())
 		if buildError != nil {
@@ -2757,8 +2685,7 @@ func TestProviderRoutingRejectsUnsupportedWebSearch(t *testing.T) {
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Endpoints:             providerEndpoints("https://deepseek.invalid", proxy.ProviderNameDeepSeek),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
@@ -2782,8 +2709,7 @@ func TestProviderRoutingRejectsMissingProviderCredential(t *testing.T) {
 	router, buildError := buildRouterWithManagedTenant(t, proxy.Configuration{
 		Endpoints:             providerEndpoints("https://deepseek.invalid", proxy.ProviderNameDeepSeek),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar(), tenantConfiguration)
 	if buildError != nil {
@@ -2823,8 +2749,7 @@ func TestProviderRoutingRejectsConflictingJSONModelParameters(t *testing.T) {
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
@@ -2871,8 +2796,7 @@ func TestProviderRoutingSupportsSiliconFlowDictation(t *testing.T) {
 			proxy.ProviderNameSiliconFlow: {"dictation": upstreamServer.URL},
 		}),
 		LogLevel:              proxy.LogLevelInfo,
-		WorkerCount:           1,
-		QueueSize:             1,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 		RequestTimeoutSeconds: TestTimeout,
 		MaxInputAudioBytes:    1024 * 1024,
 	}, logger.Sugar())
@@ -2929,8 +2853,7 @@ func TestProviderRoutingSupportsZAIAndGrokDictation(t *testing.T) {
 						proxy.ProviderNameZAI: {"dictation": transcriptionsURL},
 					}),
 					LogLevel:              proxy.LogLevelInfo,
-					WorkerCount:           1,
-					QueueSize:             1,
+					UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 					RequestTimeoutSeconds: TestTimeout,
 					MaxInputAudioBytes:    1024 * 1024,
 				}
@@ -2949,8 +2872,7 @@ func TestProviderRoutingSupportsZAIAndGrokDictation(t *testing.T) {
 						proxy.ProviderNameXAI: {"dictation": transcriptionsURL},
 					}),
 					LogLevel:              proxy.LogLevelInfo,
-					WorkerCount:           1,
-					QueueSize:             1,
+					UpstreamCapacity:      testfixtures.UpstreamCapacity(1, 1),
 					RequestTimeoutSeconds: TestTimeout,
 					MaxInputAudioBytes:    1024 * 1024,
 				}

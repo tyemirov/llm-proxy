@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/tyemirov/llm-proxy/internal/constants"
+	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 )
 
 const (
@@ -15,16 +16,24 @@ const (
 	ModelOperationDictation = "dictation"
 	// ModelOperationVideoGeneration identifies provider-backed video generation.
 	ModelOperationVideoGeneration = "video_generation"
+	// ModelOperationImageGeneration identifies durable image generation.
+	ModelOperationImageGeneration = "image_generation"
+	// ModelOperationImageEditing identifies durable image editing.
+	ModelOperationImageEditing = "image_editing"
 	// ModelOperationAudioTranscription identifies durable speech transcription.
 	ModelOperationAudioTranscription = "audio_transcription"
 	// ModelOperationAudioDiarization identifies durable speaker diarization.
 	ModelOperationAudioDiarization = "audio_diarization"
+	// ModelOperationPronunciationDictionaryCreation identifies dictionary creation.
+	ModelOperationPronunciationDictionaryCreation = "pronunciation_dictionary_creation"
 	// ModelOperationAudioAlignment identifies durable transcript alignment.
 	ModelOperationAudioAlignment = "audio_alignment"
 	// ModelOperationSubtitleCreation identifies durable subtitle creation.
 	ModelOperationSubtitleCreation = "subtitle_creation"
 	// ModelOperationSpeechGeneration identifies durable speech synthesis.
 	ModelOperationSpeechGeneration = "speech_generation"
+	// ModelOperationSpeechConversion identifies durable voice conversion.
+	ModelOperationSpeechConversion = "speech_conversion"
 	// ModelOperationVoiceExtraction identifies durable voice extraction.
 	ModelOperationVoiceExtraction = "voice_extraction"
 	// CatalogCredentialAPIKey identifies one opaque provider API key.
@@ -64,9 +73,11 @@ type ModelOperationKind struct {
 
 // CatalogProvider declares one provider that can own provider offerings.
 type CatalogProvider struct {
-	ID              string   `mapstructure:"id"`
-	Label           string   `mapstructure:"label"`
-	CredentialKinds []string `mapstructure:"credential_kinds"`
+	Services        []ProviderCatalogService                `mapstructure:"services"`
+	ID              string                                  `mapstructure:"id"`
+	Label           string                                  `mapstructure:"label"`
+	CredentialKinds []string                                `mapstructure:"credential_kinds"`
+	Resources       []llmproxycontract.ProviderResourceKind `mapstructure:"resources"`
 }
 
 // ModelPublisher declares the organization or community that publishes models.
@@ -109,6 +120,7 @@ type ProviderOffering struct {
 	Model                   string                     `mapstructure:"model"`
 	ProviderModel           string                     `mapstructure:"provider_model"`
 	Transport               string                     `mapstructure:"transport"`
+	ImageRoutes             CatalogImageRoutes         `mapstructure:"image_routes"`
 	Operations              []string                   `mapstructure:"operations"`
 	DefaultOperations       []string                   `mapstructure:"default_operations"`
 	WireContract            string                     `mapstructure:"wire_contract"`
@@ -173,6 +185,9 @@ func validateModelCatalogStructure(catalog ModelCatalog) (validatedModelCatalog,
 	}
 	if catalogError := validateCatalogProviders(catalog.Providers, validated.providers); catalogError != nil {
 		return validatedModelCatalog{}, catalogError
+	}
+	if err := validateCatalogServices(catalog.Providers, validated.operations); err != nil {
+		return validatedModelCatalog{}, err
 	}
 	if catalogError := validateModelPublishers(catalog.Publishers, validated.publishers); catalogError != nil {
 		return validatedModelCatalog{}, catalogError
@@ -368,6 +383,16 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 		if limitError := validateCatalogLimits(offering.Limits, fieldPrefix+".limits"); limitError != nil {
 			return limitError
 		}
+		var speechRouteError error
+		switch offering.WireContract {
+		case CatalogProtocolElevenLabsSpeech:
+			speechRouteError = validateSpeechGenerationOffering(offering, fieldPrefix)
+		case CatalogProtocolElevenLabsConversion:
+			speechRouteError = validateSpeechConversionOffering(offering, fieldPrefix)
+		}
+		if speechRouteError != nil {
+			return speechRouteError
+		}
 		for _, operation := range offering.Operations {
 			var routeError error
 			switch operation {
@@ -375,8 +400,18 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 				routeError = validateTextOffering(offering, fieldPrefix)
 			case ModelOperationVideoGeneration:
 				routeError = validateVideoOffering(offering, fieldPrefix)
+			case ModelOperationImageGeneration, ModelOperationImageEditing:
+				routeError = validateImageGenerationOffering(offering, fieldPrefix)
 			case ModelOperationDictation:
 				routeError = validateDictationOffering(offering, fieldPrefix)
+			case ModelOperationSpeechGeneration:
+				if offering.WireContract != CatalogProtocolElevenLabsSpeech && offering.WireContract != CatalogProtocolDictatorSpeechV1 {
+					routeError = fmt.Errorf("%w: field=%s reason=unsupported_speech_route", ErrInvalidModelCatalog, fieldPrefix)
+				}
+			case ModelOperationSpeechConversion:
+				if offering.WireContract != CatalogProtocolElevenLabsConversion {
+					routeError = fmt.Errorf("%w: field=%s reason=unsupported_conversion_route", ErrInvalidModelCatalog, fieldPrefix)
+				}
 			}
 			if routeError != nil {
 				return routeError
@@ -580,11 +615,15 @@ func supportedModelOperation(operation string) bool {
 	case ModelOperationText,
 		ModelOperationDictation,
 		ModelOperationVideoGeneration,
+		ModelOperationImageGeneration,
+		ModelOperationImageEditing,
 		ModelOperationAudioTranscription,
 		ModelOperationAudioDiarization,
 		ModelOperationAudioAlignment,
+		ModelOperationPronunciationDictionaryCreation,
 		ModelOperationSubtitleCreation,
 		ModelOperationSpeechGeneration,
+		ModelOperationSpeechConversion,
 		ModelOperationVoiceExtraction:
 		return true
 	default:

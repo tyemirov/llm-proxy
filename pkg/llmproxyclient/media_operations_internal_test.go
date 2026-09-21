@@ -138,7 +138,7 @@ func TestMediaOperationClientValidatesCapabilitiesAndAssets(testingInstance *tes
 
 	invalidCapabilities := []string{
 		`{}`,
-		`{"catalog_revision":"revision","routes":[{"capability":"","provider":"xai","model":"model","controls":[],"limits":[]}]}`,
+		`{"catalog_revision":"revision","services":[],"resources":[],"routes":[{"capability":"","provider":"xai","model":"model","controls":[],"limits":[]}]}`,
 	}
 	for _, body := range invalidCapabilities {
 		client := mediaOperationTestClient(mediaOperationDoer(func(*http.Request) (*http.Response, error) {
@@ -215,7 +215,7 @@ func TestMediaVoiceClientRejectsInvalidRequestsAndResponses(testingInstance *tes
 	client := mediaOperationTestClient(mediaOperationDoer(func(*http.Request) (*http.Response, error) {
 		return mediaOperationTestResponse(http.StatusOK, `{"voices":[]}`), nil
 	}))
-	if _, voiceError := client.GetMediaVoices(context.Background(), " XAI "); !errors.Is(voiceError, ErrInvalidClientRequest) {
+	if _, voiceError := client.GetMediaVoices(context.Background(), MediaVoiceQuery{Provider: " XAI "}); !errors.Is(voiceError, ErrInvalidClientRequest) {
 		testingInstance.Fatalf("provider error=%v", voiceError)
 	}
 	if _, voiceError := client.GetMediaVoice(context.Background(), "invalid"); !errors.Is(voiceError, ErrInvalidClientRequest) {
@@ -228,7 +228,7 @@ func TestMediaVoiceClientRejectsInvalidRequestsAndResponses(testingInstance *tes
 	transportFailure := mediaOperationTestClient(mediaOperationDoer(func(*http.Request) (*http.Response, error) {
 		return nil, io.ErrUnexpectedEOF
 	}))
-	if _, voiceError := transportFailure.GetMediaVoices(context.Background(), "xai"); !errors.Is(voiceError, ErrClientHTTPFailure) {
+	if _, voiceError := transportFailure.GetMediaVoices(context.Background(), MediaVoiceQuery{Provider: "xai"}); !errors.Is(voiceError, ErrClientHTTPFailure) {
 		testingInstance.Fatalf("voice list transport error=%v", voiceError)
 	}
 	if _, voiceError := transportFailure.GetMediaVoice(context.Background(), "voi_0123456789abcdef0123456789abcdef"); !errors.Is(voiceError, ErrClientHTTPFailure) {
@@ -243,7 +243,7 @@ func TestMediaVoiceClientRejectsInvalidRequestsAndResponses(testingInstance *tes
 		invalidClient := mediaOperationTestClient(mediaOperationDoer(func(*http.Request) (*http.Response, error) {
 			return mediaOperationTestResponse(http.StatusOK, body), nil
 		}))
-		if _, voiceError := invalidClient.GetMediaVoices(context.Background(), "xai"); !errors.Is(voiceError, ErrClientHTTPFailure) {
+		if _, voiceError := invalidClient.GetMediaVoices(context.Background(), MediaVoiceQuery{Provider: "xai"}); !errors.Is(voiceError, ErrClientHTTPFailure) {
 			testingInstance.Fatalf("collection=%s error=%v", body, voiceError)
 		}
 	}

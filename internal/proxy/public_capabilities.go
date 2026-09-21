@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 )
 
 // PublicCapabilitiesPath is the canonical unauthenticated capability catalog
@@ -40,9 +41,11 @@ type PublicCapabilityCounts struct {
 
 // PublicProviderCapability identifies one selectable provider.
 type PublicProviderCapability struct {
-	Identifier      string   `json:"identifier"`
-	Label           string   `json:"label"`
-	CredentialKinds []string `json:"credential_kinds"`
+	Services        []ProviderCatalogService                `json:"services"`
+	Identifier      string                                  `json:"identifier"`
+	Label           string                                  `json:"label"`
+	CredentialKinds []string                                `json:"credential_kinds"`
+	Resources       []llmproxycontract.ProviderResourceKind `json:"resources"`
 }
 
 // PublicModelPublisher identifies one model publisher and its exact-model count.
@@ -69,6 +72,7 @@ type PublicExactModelCapability struct {
 	Operations        []string `json:"operations"`
 	MediaInputs       []string `json:"media_inputs"`
 	Capabilities      []string `json:"capabilities"`
+	Domains           []string `json:"domains"`
 	ProviderOfferings []string `json:"provider_offerings"`
 }
 
@@ -78,6 +82,7 @@ type PublicProviderOffering struct {
 	Provider                string              `json:"provider"`
 	Model                   string              `json:"model"`
 	Capabilities            []string            `json:"capabilities"`
+	Domains                 []string            `json:"domains"`
 	WireContract            string              `json:"wire_contract"`
 	ExecutionLifecycle      string              `json:"execution_lifecycle"`
 	MediaExecutionLifecycle string              `json:"media_execution_lifecycle,omitempty"`
@@ -100,6 +105,67 @@ const (
 	PublicModelCapabilityReasoning  = "reasoning"
 	PublicModelCapabilityVideo      = "video_generation"
 )
+
+// Public capability domains are the first-class dashboard taxonomy buckets.
+// Transcription unifies dictation, audio transcription, diarization,
+// alignment, and subtitle creation. Speech unifies speech generation and
+// voice extraction.
+const (
+	PublicCapabilityDomainText          = "text"
+	PublicCapabilityDomainTranscription = "transcription"
+	PublicCapabilityDomainSpeech        = "speech"
+	PublicCapabilityDomainImage         = "image"
+	PublicCapabilityDomainVideo         = "video"
+)
+
+// PublicCapabilityDomainForOperation maps one catalog operation to its
+// canonical dashboard domain.
+func PublicCapabilityDomainForOperation(operation string) string {
+	switch operation {
+	case PublicModelCapabilityText:
+		return PublicCapabilityDomainText
+	case PublicModelCapabilityDictation,
+		"audio_transcription",
+		"audio_diarization",
+		"audio_alignment",
+		"subtitle_creation":
+		return PublicCapabilityDomainTranscription
+	case ModelOperationSpeechConversion, ModelOperationPronunciationDictionaryCreation, "speech_generation",
+		"voice_extraction":
+		return PublicCapabilityDomainSpeech
+	case PublicModelCapabilityImageInput, ModelOperationImageGeneration, ModelOperationImageEditing:
+		return PublicCapabilityDomainImage
+	case PublicModelCapabilityVideo:
+		return PublicCapabilityDomainVideo
+	default:
+		return ""
+	}
+}
+
+// PublicCapabilityDomainsForOperations normalizes operations into a sorted
+// set of dashboard domains.
+func PublicCapabilityDomainsForOperations(operations []string) []string {
+	domains := map[string]struct{}{}
+	for _, operation := range operations {
+		if domain := PublicCapabilityDomainForOperation(operation); domain != "" {
+			domains[domain] = struct{}{}
+		}
+	}
+	result := make([]string, 0, len(domains))
+	for domain := range domains {
+		result = append(result, domain)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func publicCapabilityDomains(operations, mediaInputs []string) []string {
+	capabilities := append([]string(nil), operations...)
+	for _, input := range mediaInputs {
+		capabilities = append(capabilities, mediaInputCapability(input))
+	}
+	return PublicCapabilityDomainsForOperations(capabilities)
+}
 
 // NewPublicCapabilityCatalog validates and projects the runtime catalog into a
 // deterministic public representation.
@@ -124,6 +190,8 @@ func newPublicCapabilityCatalog(configuration Configuration) PublicCapabilityCat
 	for _, provider := range configuration.ModelCatalog.Providers {
 		providers = append(providers, PublicProviderCapability{
 			Identifier: provider.ID, Label: provider.Label, CredentialKinds: append([]string{}, provider.CredentialKinds...),
+			Resources: append([]llmproxycontract.ProviderResourceKind{}, provider.Resources...),
+			Services:  cloneProviderServices(provider.Services),
 		})
 	}
 	sort.Slice(providers, func(first int, second int) bool { return providers[first].Identifier < providers[second].Identifier })
@@ -175,6 +243,7 @@ func newPublicCapabilityCatalog(configuration Configuration) PublicCapabilityCat
 			Operations:        append([]string{}, model.Operations...),
 			MediaInputs:       append([]string{}, model.MediaInputs...),
 			Capabilities:      capabilities,
+			Domains:           publicCapabilityDomains(model.Operations, model.MediaInputs),
 			ProviderOfferings: modelOfferings,
 		})
 	}
@@ -237,6 +306,7 @@ func publicProviderOffering(offering ProviderOffering) PublicProviderOffering {
 		Provider:                offering.Provider,
 		Model:                   offering.Model,
 		Capabilities:            capabilities,
+		Domains:                 publicCapabilityDomains(offering.Operations, offering.MediaInputs),
 		WireContract:            offering.WireContract,
 		ExecutionLifecycle:      offering.ExecutionLifecycle,
 		MediaExecutionLifecycle: mediaExecutionLifecycle,

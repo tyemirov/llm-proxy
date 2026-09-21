@@ -3,6 +3,7 @@ package integration_test
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -125,8 +126,7 @@ func TestIntegrationBackgroundPollSleepDoesNotOccupyUpstreamWorker(testingInstan
 	configureProxy(testingInstance, &http.Client{Transport: roundTripper}, endpoints)
 	router, buildError := buildIntegrationRouter(testingInstance, proxy.Configuration{
 		LogLevel:              logLevelDebug,
-		WorkerCount:           concurrencySingleUpstreamWorker,
-		QueueSize:             concurrencySingleQueuedHTTPRequest,
+		UpstreamCapacity:      testfixtures.UpstreamCapacity(concurrencySingleUpstreamWorker, concurrencySingleQueuedHTTPRequest),
 		RequestTimeoutSeconds: concurrencyRequestTimeoutSeconds,
 		Endpoints:             endpoints,
 	}, newLogger(testingInstance))

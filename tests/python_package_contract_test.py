@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import tarfile
+from uuid import uuid4
 
 import pytest
 
@@ -26,7 +27,7 @@ def run(directory: Path, *arguments: str, input_text: str | None = None) -> str:
 
 @pytest.fixture
 def package_repository(tmp_path: Path) -> Path:
-    root = tmp_path / "repository"
+    root = tmp_path / f"repository-{uuid4().hex}"
     root.mkdir()
     for name in run(REPOSITORY_ROOT, "git", "ls-files", "python").splitlines():
         destination = root / name

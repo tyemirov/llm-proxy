@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Upstream worker and queue limits for LLM traffic</title>
-    <meta name="description" content="Use shared worker and queue controls to bound upstream HTTP operations for text and dictation.">
+    <meta name="description" content="Set explicit capacity for each upstream origin, tenant, account, and work class.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/">
     <meta property="og:title" content="Upstream worker and queue limits for LLM traffic">
-    <meta property="og:description" content="Use shared worker and queue controls to bound upstream HTTP operations for text and dictation.">
+    <meta property="og:description" content="Set explicit capacity for each upstream origin, tenant, account, and work class.">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/">
     <meta name="twitter:card" content="summary">
@@ -27,9 +27,9 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Upstream worker and queue limits for LLM traffic","description":"Use shared worker and queue controls to bound upstream HTTP operations for text and dictation.","url":"https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/","datePublished":"2026-07-06","dateModified":"2026-08-22","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/","about":["LLM Proxy","Reliability","upstream worker queue limits"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Upstream worker and queue limits for LLM traffic","description":"Set explicit capacity for each upstream origin, tenant, account, and work class.","url":"https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/","datePublished":"2026-07-06","dateModified":"2026-09-19","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/","about":["LLM Proxy","Reliability","upstream worker queue limits"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Upstream worker and queue limits for LLM traffic","item":"https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/"}]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of upstream worker queue limits?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy combines server.workers and server.queue_size concurrency bounds with server.upstream_rate_limits rolling-window rules applied at actual upstream admission."}},{"@type":"Question","name":"Who should read this reliability resource?","acceptedAnswer":{"@type":"Answer","text":"Operators who need predictable capacity limits for provider HTTP calls."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is OpenAI background response polling without client loops, which covers OpenAI background response polling."}}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of upstream worker queue limits?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy uses server.upstream_capacity to allocate capacity by origin. The scheduler applies server.upstream_rate_limits when each HTTP request starts."}},{"@type":"Question","name":"Who should read this reliability resource?","acceptedAnswer":{"@type":"Answer","text":"Operators who need predictable capacity limits for provider HTTP calls."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is OpenAI background response polling without client loops, which covers OpenAI background response polling."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=543d2796-d616-4080-99e7-0720ae438440"></script>
   </head>
   <body class="resource-page">
@@ -65,9 +65,9 @@
           <header class="resource-hero">
             <p class="eyebrow">Reliability</p>
             <h1>Upstream worker and queue limits for LLM traffic</h1>
-            <p class="resource-deck">Use shared worker and queue controls to bound upstream HTTP operations for text and dictation.</p>
+            <p class="resource-deck">Set explicit capacity for each upstream origin, tenant, account, and work class.</p>
             <p class="resource-audience">Operators who need predictable capacity limits for provider HTTP calls.</p>
-            <p class="resource-byline">Reviewed 2026-08-22 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <p class="resource-byline">Reviewed 2026-09-19 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
             <div class="resource-actions">
               <a class="resource-button" href="/docs/">Open API reference</a>
               <a class="resource-link" href="/resources/">Browse all resources</a>
@@ -76,22 +76,22 @@
 
           <section>
             <h2>The problem</h2>
-            <p>Unlimited upstream calls can exhaust provider quotas or local resources, while long OpenAI polling sleeps should not occupy scarce worker capacity.</p>
+            <p>A slow upstream origin can occupy capacity that other origins need. Media traffic also needs bounded capacity and reserved interactive capacity.</p>
           </section>
 
           <section>
             <h2>How LLM Proxy helps</h2>
-            <p>LLM Proxy combines server.workers and server.queue_size concurrency bounds with server.upstream_rate_limits rolling-window rules applied at actual upstream admission.</p>
+            <p>LLM Proxy uses server.upstream_capacity to allocate capacity by origin. The scheduler applies server.upstream_rate_limits when each HTTP request starts.</p>
           </section>
 
           <section>
             <h2>How it works</h2>
             <ol class="resource-steps">
-              <li>Set server.workers for active upstream HTTP concurrency.</li>
-<li>Set server.queue_size for pending upstream operations.</li>
-<li>Set server.upstream_rate_limits rules for strict call budgets keyed by normalized upstream origin.</li>
-<li>Let OpenAI background poll sleeps release worker capacity between polls.</li>
-<li>Handle 503 request queue full and 504 timeout responses at the caller boundary.</li>
+              <li>Set server.upstream_capacity.global ceilings for active and admitted HTTP requests.</li>
+<li>Declare active and queued capacity for each exact upstream origin.</li>
+<li>Set tenant, account, media, status, and transfer limits. Set an interactive reserve.</li>
+<li>Set server.upstream_rate_limits for the call budget of each upstream origin.</li>
+<li>Close each response body before the next poll. Handle HTTP 503 overload and HTTP 504 timeout responses.</li>
             </ol>
           </section>
 
@@ -109,23 +109,23 @@
                 <tbody>
 
                         <tr>
-                          <td>Shared limiter</td>
-                          <td>Text providers and dictation use the same upstream HTTP operation limit.</td>
-                          <td>Capacity policy is centralized.</td>
+                          <td>Origin allocation</td>
+                          <td>Each origin has an explicit admission allocation.</td>
+                          <td>A slow origin cannot consume another origin's queue allocation.</td>
                         </tr>
 
 
                         <tr>
-                          <td>Queue pressure signal</td>
-                          <td>A full queue returns service-unavailable behavior.</td>
-                          <td>Callers can distinguish overload from provider failure.</td>
+                          <td>Interactive reserve</td>
+                          <td>Bulk media work leaves reserved capacity for interactive requests.</td>
+                          <td>Text can proceed during media saturation.</td>
                         </tr>
 
 
                         <tr>
-                          <td>Polling separation</td>
-                          <td>OpenAI poll sleeps do not occupy worker slots.</td>
-                          <td>Other requests can proceed while a background response waits.</td>
+                          <td>Response ownership</td>
+                          <td>An active request holds capacity until its response body closes.</td>
+                          <td>Poll sleeps do not hold active HTTP capacity.</td>
                         </tr>
 
                 </tbody>
@@ -138,20 +138,20 @@
             <div class="resource-card-grid">
 
                     <section class="resource-card">
-                      <h3>Low-capacity environment</h3>
-                      <p>A local deployment sets one worker and a small queue to keep provider traffic controlled.</p>
+                      <h3>Local deployment</h3>
+                      <p>The configuration declares each local provider origin before startup.</p>
                     </section>
 
 
                     <section class="resource-card">
-                      <h3>Mixed text and audio</h3>
-                      <p>Dictation and text calls share the same upstream HTTP admission boundary.</p>
+                      <h3>Shared account</h3>
+                      <p>Tenants that use one saved connection share its account limit within each origin.</p>
                     </section>
 
 
                     <section class="resource-card">
-                      <h3>Operational debugging</h3>
-                      <p>A queue-full status points to proxy-side capacity, not a malformed request.</p>
+                      <h3>Operation telemetry</h3>
+                      <p>Admission events carry a request ID or an operation ID without credentials or prompts.</p>
                     </section>
 
             </div>
@@ -160,9 +160,9 @@
           <section>
             <h2>Objections and limitations</h2>
             <ul class="resource-list">
-              <li>These controls limit upstream HTTP operations, not the number of connected client requests.</li>
-<li>They do not replace provider-side rate limits.</li>
-<li>Rate rules are keyed by exact normalized HTTP(S) origin, so providers sharing an origin share the configured budget.</li>
+              <li>Accepted durable jobs have separate capacity limits.</li>
+<li>Provider rate limits also apply.</li>
+<li>Transports that use the same exact origin share its capacity and rate budget.</li>
             </ul>
           </section>
 
@@ -172,7 +172,7 @@
 
                     <details>
                       <summary>What is the main job of upstream worker queue limits?</summary>
-                      <p>LLM Proxy combines server.workers and server.queue_size concurrency bounds with server.upstream_rate_limits rolling-window rules applied at actual upstream admission.</p>
+                      <p>LLM Proxy uses server.upstream_capacity to allocate capacity by origin. The scheduler applies server.upstream_rate_limits when each HTTP request starts.</p>
                     </details>
 
 

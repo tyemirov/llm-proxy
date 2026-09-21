@@ -21,6 +21,7 @@ The dashboard presents tenants, connections, and models in that order.
 The dashboard always keeps one tenant selected. It selects the `Default` tenant, or the first tenant when none is named `Default`.
 The selected tenant also controls the usage view.
 Account-wide usage remains available through the usage scope selector.
+Usage summaries refresh automatically every 30 seconds while the user is authenticated.
 Search filters the visible lists. Each column scrolls when its list exceeds the available space.
 
 1. Create a tenant with a descriptive name.
@@ -33,6 +34,12 @@ Search filters the visible lists. Each column scrolls when its list exceeds the 
 A dashed amber line identifies a model preview.
 A star and a text label identify a saved default.
 Model selection alone does not save a default.
+The model tabs are Text, Transcription, Speech, Image, and Video.
+If the selected connection has no models for the current tab, the dashboard selects the first available domain.
+A connection or tenant change removes unsaved model previews.
+The text, transcription, and speech save actions preserve the other saved defaults.
+Image and video cards show offering details without a default save action.
+Models with image inputs appear in the Image tab, including models with text operations.
 An unattached connection has a `Not connected` label.
 A connection without required credentials retains its assignments and shows `Credentials needed`.
 The model list remains empty until its required credentials are configured.
@@ -59,8 +66,18 @@ Enter the server address and bearer token. Select the required TLS setting.
 Connection creation checks the token through voice discovery without a speech job.
 The token remains encrypted in the backend credential store.
 Assign the saved connection to the required tenant.
-Select the Media tab to inspect `dictator-speech-v1` and its speech capabilities.
-Media models do not use text defaults or provider system prompts.
+Select the Transcription tab to inspect `whisper-base` and its transcription capabilities. Select the Speech tab to inspect `qwen3-tts` and `silero-ru` synthesis capabilities.
+Transcription and speech models use their own capability defaults.
+The Speech tab also shows voice extraction models.
+Only synthesis models have a speech default save action.
+Language, voice, sample rate, and output format remain operation request controls.
+The default resource saves provider and model selections.
+
+The defaults resource has separate provider and model pairs for text, transcription, and speech.
+API requests use `transcription_provider`, `transcription_model`, `speech_provider`, and `speech_model` for the two audio domains.
+The service rejects the obsolete `dictation_provider` and `dictation_model` fields.
+A default update replaces the resource. The client includes the unchanged pairs to preserve other selections.
+Each selected pair remains intact after a restart.
 
 Operations, output assets, and voice identifiers belong to the tenant.
 Execution and recovery require the accepted connection identity and version.
@@ -78,6 +95,7 @@ A detach operation removes only the selected tenant's assignment.
 The connection remains available to its other tenants.
 When a default depends on that assignment, the operation requires explicit confirmation to clear the default.
 The assignment removal and default updates occur in one database transaction.
+The transaction clears only defaults that use the removed connection.
 The service rejects connection deletion while assignments remain.
 The existing final-tenant deletion constraint remains in effect.
 
@@ -89,6 +107,16 @@ Current account-connection databases validate their records on startup.
 Historical version records do not control this validation and remain unchanged.
 Startup rejects predecessor credential and temporary transfer tables beside the current account connections.
 It preserves the rejected records for operator action.
+
+Current tenant records require separate transcription and speech columns.
+B236 adds a bounded startup transfer for the previous capability defaults.
+The transfer renames `default_dictation_provider` and `default_dictation_model` to their `default_transcription_*` columns through the GORM migration API.
+It adds empty speech defaults and keeps the saved routes and tenant timestamps.
+The same transaction validates the current records before commit.
+An invalid route or transfer failure rolls back the schema and data changes.
+Startup rejects incomplete or mixed column sets without data changes.
+The current schema does not execute the transfer again.
+Verify a disposable database copy before deployment, as specified in the [schema transition procedure](managed-schema-transition.md#bounded-transfer-procedure).
 
 New product fields and tables extend the declared current schema.
 Each change must define how existing records receive any required values.
@@ -103,7 +131,7 @@ The migration encrypts each secret with its new connection identity as authentic
 It preserves tenant access keys, default routes, system prompts, and usage records.
 The transaction removes the predecessor credential table after the transfer.
 A restart uses the current schema and preserves the migrated connection identifiers.
-I261 retains this transfer until the production database has current account connections.
+I271 retains this transfer until the production database has current account connections.
 The [schema transition record](managed-schema-transition.md) contains the inventory, local ownership prerequisite, and completion requirements.
 
 ## Connection inventory

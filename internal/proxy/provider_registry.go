@@ -26,23 +26,56 @@ type managedModelMigration struct {
 }
 
 type providerSummary struct {
-	identifier            string
-	label                 string
-	apiServiceLabel       string
-	keyAcquisitionURL     string
-	aliases               []string
-	capabilities          []string
-	modelFamilies         []ModelFamily
-	textDefaultModel      string
-	textModels            []textModelSummary
-	supportsDictation     bool
-	dictationDefaultModel string
-	dictationModels       []string
+	identifier                string
+	label                     string
+	apiServiceLabel           string
+	keyAcquisitionURL         string
+	aliases                   []string
+	capabilities              []string
+	resources                 []ProviderCatalogResource
+	services                  []ProviderCatalogService
+	modelFamilies             []ModelFamily
+	textDefaultModel          string
+	textModels                []textModelSummary
+	supportsDictation         bool
+	transcriptionDefaultModel string
+	transcriptionModels       []string
+	supportsSpeech            bool
+	speechDefaultModel        string
+	speechModels              []string
 }
 
 type textModelSummary struct {
 	identifier      string
 	reasoningEffort *reasoningEffortCapability
+}
+
+func offeringHasTranscriptionOperation(offering ProviderCatalogOffering) bool {
+	for _, operation := range offering.Operations {
+		switch operation {
+		case ModelOperationDictation, ModelOperationAudioTranscription, ModelOperationAudioDiarization, ModelOperationAudioAlignment, ModelOperationSubtitleCreation:
+			return true
+		}
+	}
+	return false
+}
+
+func offeringHasTranscriptionDefault(offering ProviderCatalogOffering) bool {
+	for _, operation := range offering.DefaultOperations {
+		switch operation {
+		case ModelOperationDictation, ModelOperationAudioTranscription, ModelOperationAudioDiarization, ModelOperationAudioAlignment, ModelOperationSubtitleCreation:
+			return true
+		}
+	}
+	return false
+}
+
+func offeringHasSpeechOperation(offering ProviderCatalogOffering) bool {
+	return slices.Contains(offering.Operations, ModelOperationSpeechGeneration)
+}
+
+func offeringHasSpeechDefault(offering ProviderCatalogOffering) bool {
+	return slices.Contains(offering.DefaultOperations, ModelOperationSpeechGeneration)
 }
 
 func newProviderRegistry(configuration Configuration) *providerRegistry {
@@ -60,6 +93,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 		identifier := providerID(provider.ID)
 		order = append(order, identifier)
 		definition := providerDefinition{
+			upstreamScope:       upstreamRequestScope{tenant: upstreamManagementTenant, account: upstreamDeploymentAccountPrefix + provider.ID, class: upstreamInteractive},
 			identifier:          identifier,
 			connectionOwnership: provider.ConnectionOwnership,
 			label:               provider.Label,
@@ -70,8 +104,12 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			fieldOrder:          make([]string, 0, len(provider.Fields)),
 			connectionValues:    make(map[string]string, len(provider.Fields)),
 			transports:          make(map[string]providerTransportDefinition, len(provider.Transports)),
+			verification:        provider.Verification,
+			resources:           append([]ProviderCatalogResource(nil), provider.Resources...),
+			services:            cloneProviderServices(provider.Services),
 			textModels:          map[string]textModelDefinition{},
 			transcriptionModels: map[string]dictationModelDefinition{},
+			speechModels:        map[string]dictationModelDefinition{},
 			mediaModels:         map[string]struct{}{},
 		}
 		familyIDs := map[string]struct{}{}
@@ -87,6 +125,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			composition, _ := composeProviderTransport(transport, "")
 			definition.transports[transport.ID] = providerTransportDefinition{
 				identifier:         transport.ID,
+				artifactOrigins:    append([]string(nil), transport.ArtifactOrigins...),
 				endpoint:           transport.Endpoint,
 				authentication:     composition.authentication,
 				headers:            append([]ProviderCatalogHeader(nil), transport.Headers...),
@@ -108,7 +147,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 					definition.capabilities = append(definition.capabilities, operation)
 				}
 			}
-			if slices.Contains(offering.Operations, ModelOperationVideoGeneration) {
+			if slices.Contains(offering.Operations, ModelOperationVideoGeneration) || slices.Contains(offering.Operations, ModelOperationImageGeneration) {
 				definition.mediaModels[offering.Model] = struct{}{}
 			}
 			for _, mediaInput := range offering.MediaInputs {
@@ -145,15 +184,27 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 					definition.defaultTextModel = modelID(offering.Model)
 				}
 			}
-			if slices.Contains(offering.Operations, ModelOperationDictation) {
+			if offeringHasTranscriptionOperation(offering) {
 				definition.transcriptionModels[strings.ToLower(offering.Model)] = dictationModelDefinition{
 					identifier:          modelID(offering.Model),
 					providerIdentifier:  modelID(offering.UpstreamModel),
 					transportIdentifier: offering.Transport,
+					operations:          slices.Clone(offering.Operations),
 				}
 				definition.supportsDictation = true
-				if slices.Contains(offering.DefaultOperations, ModelOperationDictation) {
+				if offeringHasTranscriptionDefault(offering) {
 					definition.defaultTranscriptionModel = modelID(offering.Model)
+				}
+			}
+			if offeringHasSpeechOperation(offering) {
+				definition.speechModels[strings.ToLower(offering.Model)] = dictationModelDefinition{
+					identifier:          modelID(offering.Model),
+					providerIdentifier:  modelID(offering.UpstreamModel),
+					transportIdentifier: offering.Transport,
+				}
+				definition.supportsSpeech = true
+				if offeringHasSpeechDefault(offering) {
+					definition.defaultSpeechModel = modelID(offering.Model)
 				}
 			}
 		}
@@ -231,7 +282,9 @@ func (registry *providerRegistry) forTenant(requestTenant tenant) *providerRegis
 	definitions := make(map[providerID]providerDefinition, len(registry.definitions))
 	for identifier, definition := range registry.definitions {
 		definition.connectionValues = cloneStringMap(definition.connectionValues)
+		definition.upstreamScope.tenant = requestTenant.identifier.string()
 		if providerSettings, configured := requestTenant.providerSettings[identifier]; configured && definition.connectionOwnership == CatalogProviderConnectionTenant {
+			definition.upstreamScope.account = providerSettings.connectionID
 			for fieldIdentifier, value := range providerSettings.connectionValues {
 				definition.connectionValues[fieldIdentifier] = value
 			}
@@ -287,18 +340,23 @@ func (registry *providerRegistry) providerSummaries() []providerSummary {
 		definition := registry.definitions[identifier]
 		aliases := append([]string(nil), definition.aliases...)
 		summaries = append(summaries, providerSummary{
-			identifier:            definition.identifier.string(),
-			label:                 definition.label,
-			apiServiceLabel:       definition.apiServiceLabel,
-			keyAcquisitionURL:     definition.keyAcquisitionURL,
-			aliases:               aliases,
-			capabilities:          append([]string(nil), definition.capabilities...),
-			modelFamilies:         append([]ModelFamily(nil), definition.modelFamilies...),
-			textDefaultModel:      definition.defaultTextModel.string(),
-			textModels:            sortedTextModelSummaries(definition.textModels),
-			supportsDictation:     definition.supportsDictation,
-			dictationDefaultModel: definition.defaultTranscriptionModel.string(),
-			dictationModels:       sortedDictationModels(definition.transcriptionModels),
+			identifier:                definition.identifier.string(),
+			label:                     definition.label,
+			apiServiceLabel:           definition.apiServiceLabel,
+			keyAcquisitionURL:         definition.keyAcquisitionURL,
+			aliases:                   aliases,
+			capabilities:              append([]string(nil), definition.capabilities...),
+			resources:                 append([]ProviderCatalogResource(nil), definition.resources...),
+			services:                  cloneProviderServices(definition.services),
+			modelFamilies:             append([]ModelFamily(nil), definition.modelFamilies...),
+			textDefaultModel:          definition.defaultTextModel.string(),
+			textModels:                sortedTextModelSummaries(definition.textModels),
+			supportsDictation:         definition.supportsDictation,
+			transcriptionDefaultModel: definition.defaultTranscriptionModel.string(),
+			transcriptionModels:       sortedDictationModels(definition.transcriptionModels),
+			supportsSpeech:            definition.supportsSpeech,
+			speechDefaultModel:        definition.defaultSpeechModel.string(),
+			speechModels:              sortedDictationModels(definition.speechModels),
 		})
 	}
 	return summaries
@@ -371,9 +429,29 @@ func (registry *providerRegistry) resolveDictationRequest(rawProvider string, ra
 	if resolutionError != nil {
 		return providerDefinition{}, modelID(""), resolutionError
 	}
+	model := definition.transcriptionModels[strings.ToLower(resolvedModel.string())]
+	if !slices.Contains(model.operations, ModelOperationDictation) {
+		return definition, resolvedModel, fmt.Errorf("%w: provider=%s model=%s endpoint=%s", ErrUnsupportedEndpoint, definition.identifier.string(), resolvedModel.string(), endpointKindDictation)
+	}
 	if definition.credentialFor(endpointKindDictation) == constants.EmptyString || definition.transcriptionsURL == constants.EmptyString {
 		return definition, resolvedModel, fmt.Errorf("%w: provider=%s endpoint=%s", ErrProviderNotConfigured, definition.identifier.string(), endpointKindDictation)
 	}
+	return definition, resolvedModel, nil
+}
+
+func (registry *providerRegistry) resolveSpeechModel(rawProvider string, rawModel string) (providerDefinition, modelID, error) {
+	definition, providerError := registry.resolveProvider(rawProvider, constants.EmptyString)
+	if providerError != nil {
+		return providerDefinition{}, modelID(""), providerError
+	}
+	if !definition.supportsSpeech {
+		return providerDefinition{}, modelID(""), fmt.Errorf("%w: provider=%s endpoint=%s", ErrUnsupportedEndpoint, definition.identifier.string(), endpointKindDictation)
+	}
+	resolvedModel, modelError := resolveModelFromSet(definition.speechModels, strings.TrimSpace(rawModel))
+	if modelError != nil {
+		return providerDefinition{}, modelID(""), modelError
+	}
+	definition, _ = definition.resolvedTransport(definition.speechModels[strings.ToLower(resolvedModel.string())].transportIdentifier)
 	return definition, resolvedModel, nil
 }
 

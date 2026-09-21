@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tyemirov/llm-proxy/internal/constants"
+	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 	"go.uber.org/zap"
 )
 
@@ -87,31 +88,38 @@ type managementTenantSummaryResponse struct {
 }
 
 type managementTenantDefaultsResponse struct {
-	Provider          string `json:"provider"`
-	Model             string `json:"model"`
-	DictationProvider string `json:"dictation_provider"`
-	DictationModel    string `json:"dictation_model"`
-	SystemPrompt      string `json:"system_prompt"`
-	ReasoningEffort   string `json:"reasoning_effort"`
+	Provider              string `json:"provider"`
+	Model                 string `json:"model"`
+	TranscriptionProvider string `json:"transcription_provider"`
+	TranscriptionModel    string `json:"transcription_model"`
+	SpeechProvider        string `json:"speech_provider"`
+	SpeechModel           string `json:"speech_model"`
+	SystemPrompt          string `json:"system_prompt"`
+	ReasoningEffort       string `json:"reasoning_effort"`
 }
 
 type managementProviderResponse struct {
-	ID                    string                              `json:"id"`
-	Label                 string                              `json:"label"`
-	APIServiceLabel       string                              `json:"api_service_label"`
-	KeyAcquisitionURL     string                              `json:"key_acquisition_url"`
-	Aliases               []string                            `json:"aliases"`
-	Capabilities          []string                            `json:"capabilities"`
-	ModelFamilies         []managementCatalogIdentityResponse `json:"model_families"`
-	Configured            bool                                `json:"configured"`
-	Fields                []managementProviderFieldResponse   `json:"fields"`
-	TextModel             string                              `json:"text_model"`
-	SystemPrompt          string                              `json:"system_prompt"`
-	TextDefaultModel      string                              `json:"text_default_model"`
-	TextModels            []managementTextModelResponse       `json:"text_models"`
-	SupportsDictation     bool                                `json:"supports_dictation"`
-	DictationDefaultModel string                              `json:"dictation_default_model,omitempty"`
-	DictationModels       []string                            `json:"dictation_models"`
+	Services                  []ProviderCatalogService                `json:"services"`
+	ID                        string                                  `json:"id"`
+	Label                     string                                  `json:"label"`
+	APIServiceLabel           string                                  `json:"api_service_label"`
+	KeyAcquisitionURL         string                                  `json:"key_acquisition_url"`
+	Aliases                   []string                                `json:"aliases"`
+	Capabilities              []string                                `json:"capabilities"`
+	Resources                 []llmproxycontract.ProviderResourceKind `json:"resources"`
+	ModelFamilies             []managementCatalogIdentityResponse     `json:"model_families"`
+	Configured                bool                                    `json:"configured"`
+	Fields                    []managementProviderFieldResponse       `json:"fields"`
+	TextModel                 string                                  `json:"text_model"`
+	SystemPrompt              string                                  `json:"system_prompt"`
+	TextDefaultModel          string                                  `json:"text_default_model"`
+	TextModels                []managementTextModelResponse           `json:"text_models"`
+	SupportsDictation         bool                                    `json:"supports_dictation"`
+	TranscriptionDefaultModel string                                  `json:"transcription_default_model,omitempty"`
+	TranscriptionModels       []string                                `json:"transcription_models"`
+	SupportsSpeech            bool                                    `json:"supports_speech"`
+	SpeechDefaultModel        string                                  `json:"speech_default_model,omitempty"`
+	SpeechModels              []string                                `json:"speech_models"`
 }
 
 type managementCatalogIdentityResponse struct {
@@ -284,12 +292,14 @@ type managementTenantNameRequest struct {
 }
 
 type managementDefaultsRequest struct {
-	Provider          string  `json:"provider"`
-	Model             string  `json:"model"`
-	DictationProvider string  `json:"dictation_provider"`
-	DictationModel    string  `json:"dictation_model"`
-	SystemPrompt      string  `json:"system_prompt"`
-	ReasoningEffort   *string `json:"reasoning_effort"`
+	Provider              string  `json:"provider"`
+	Model                 string  `json:"model"`
+	TranscriptionProvider string  `json:"transcription_provider"`
+	TranscriptionModel    string  `json:"transcription_model"`
+	SpeechProvider        string  `json:"speech_provider"`
+	SpeechModel           string  `json:"speech_model"`
+	SystemPrompt          string  `json:"system_prompt"`
+	ReasoningEffort       *string `json:"reasoning_effort"`
 }
 
 func newManagementService(configuration ManagementConfiguration, sessionValidator *managementSessionValidator, store *managedTenantStore, providers *providerRegistry, keyVerifier providerKeyVerifier, structuredLogger *zap.SugaredLogger) *managementService {
@@ -783,22 +793,27 @@ func (service *managementService) providerResponses(providerSettings map[provide
 			modelFamilies = append(modelFamilies, managementCatalogIdentityResponse{ID: family.ID, Label: family.Label})
 		}
 		response := managementProviderResponse{
-			ID:                    summary.identifier,
-			Label:                 summary.label,
-			APIServiceLabel:       summary.apiServiceLabel,
-			KeyAcquisitionURL:     summary.keyAcquisitionURL,
-			Aliases:               append([]string{}, summary.aliases...),
-			Capabilities:          append([]string{}, summary.capabilities...),
-			ModelFamilies:         modelFamilies,
-			Configured:            configured && settings.hasRequiredConnectionFields(definition),
-			Fields:                make([]managementProviderFieldResponse, 0, len(definition.fieldOrder)),
-			TextModel:             summary.textDefaultModel,
-			SystemPrompt:          constants.EmptyString,
-			TextDefaultModel:      summary.textDefaultModel,
-			TextModels:            textModels,
-			SupportsDictation:     summary.supportsDictation,
-			DictationDefaultModel: summary.dictationDefaultModel,
-			DictationModels:       summary.dictationModels,
+			ID:                        summary.identifier,
+			Label:                     summary.label,
+			APIServiceLabel:           summary.apiServiceLabel,
+			KeyAcquisitionURL:         summary.keyAcquisitionURL,
+			Aliases:                   append([]string{}, summary.aliases...),
+			Capabilities:              append([]string{}, summary.capabilities...),
+			Resources:                 providerResourceKinds(summary.resources),
+			Services:                  cloneProviderServices(summary.services),
+			ModelFamilies:             modelFamilies,
+			Configured:                configured && settings.hasRequiredConnectionFields(definition),
+			Fields:                    make([]managementProviderFieldResponse, 0, len(definition.fieldOrder)),
+			TextModel:                 summary.textDefaultModel,
+			SystemPrompt:              constants.EmptyString,
+			TextDefaultModel:          summary.textDefaultModel,
+			TextModels:                textModels,
+			SupportsDictation:         summary.supportsDictation,
+			TranscriptionDefaultModel: summary.transcriptionDefaultModel,
+			TranscriptionModels:       summary.transcriptionModels,
+			SupportsSpeech:            summary.supportsSpeech,
+			SpeechDefaultModel:        summary.speechDefaultModel,
+			SpeechModels:              summary.speechModels,
 		}
 		for _, fieldIdentifier := range definition.fieldOrder {
 			field := definition.fields[fieldIdentifier]
@@ -839,12 +854,14 @@ func (request managementDefaultsRequest) tenantDefaults() (TenantDefaults, error
 		return TenantDefaults{}, fmt.Errorf("%w: field=reasoning_effort", errManagementBadRequest)
 	}
 	return TenantDefaults{
-		Provider:          request.Provider,
-		Model:             request.Model,
-		DictationProvider: request.DictationProvider,
-		DictationModel:    request.DictationModel,
-		SystemPrompt:      request.SystemPrompt,
-		ReasoningEffort:   *request.ReasoningEffort,
+		Provider:              request.Provider,
+		Model:                 request.Model,
+		TranscriptionProvider: request.TranscriptionProvider,
+		TranscriptionModel:    request.TranscriptionModel,
+		SpeechProvider:        request.SpeechProvider,
+		SpeechModel:           request.SpeechModel,
+		SystemPrompt:          request.SystemPrompt,
+		ReasoningEffort:       *request.ReasoningEffort,
 	}, nil
 }
 

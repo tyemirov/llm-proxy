@@ -461,6 +461,7 @@ catalog_path.write_text(head + "\nmodels:\n" + models + "\nproviders:\n" + provi
   if [[ -n "${PREFLIGHT_PROVIDER_URL:-}" ]]; then
     python3 -c '
 import pathlib
+import re
 import sys
 
 catalog_path = pathlib.Path(sys.argv[1])
@@ -470,7 +471,21 @@ replacement = f"            default_base_url: {sys.argv[2]}\n            path: /
 if document.count(needle) != 1:
     raise SystemExit("OpenAI preflight transport is not unique")
 catalog_path.write_text(document.replace(needle, replacement, 1), encoding="utf-8")
-' "${PROVIDER_CATALOG_PATH}" "${PREFLIGHT_PROVIDER_URL}"
+config_path = pathlib.Path(sys.argv[3])
+configuration = config_path.read_text(encoding="utf-8")
+allocation_pattern = r"(?m)^      - \{origin: https://api\.openai\.com, active: (\d+), queued: (\d+)\}\n"
+allocations = list(re.finditer(allocation_pattern, configuration))
+if len(allocations) != 1:
+    raise SystemExit("OpenAI preflight capacity allocation is not unique")
+allocation = allocations[0]
+active, queued = map(int, allocation.groups())
+if active < 2:
+    raise SystemExit("OpenAI preflight requires capacity for two origins")
+local_active, local_queued = active // 2, queued // 2
+native_capacity = f"      - {{origin: https://api.openai.com, active: {active - local_active}, queued: {queued - local_queued}}}\n"
+preflight_capacity = f"      - {{origin: {sys.argv[2]}, active: {local_active}, queued: {local_queued}}}\n"
+config_path.write_text(configuration[:allocation.start()] + native_capacity + preflight_capacity + configuration[allocation.end():], encoding="utf-8")
+' "${PROVIDER_CATALOG_PATH}" "${PREFLIGHT_PROVIDER_URL}" "${CONFIG_PATH}"
   fi
 }
 

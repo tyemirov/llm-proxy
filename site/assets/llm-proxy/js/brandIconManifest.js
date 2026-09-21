@@ -116,6 +116,8 @@ export const brandIconManifest = {
     }
   },
   "providers": {
+    "fal": null,
+    "elevenlabs": null,
     "openai": "openai",
     "deepseek": "deepseek-color",
     "dashscope": "alibabacloud-color",
@@ -132,6 +134,10 @@ export const brandIconManifest = {
     "dictator": null
   },
   "families": {
+    "eleven-voice-conversion": null,
+    "eleven-speech": null,
+    "reve": null,
+    "gpt-image": "openai",
     "gpt-6": "openai",
     "gpt-4": "openai",
     "gpt-5": "openai",
@@ -161,6 +167,8 @@ export const brandIconManifest = {
     "grok-code": "grok",
     "grok-imagine": "grok",
     "xai-stt": "xai",
-    "dictator-speech": null
+    "whisper": "openai",
+    "qwen3": "qwen-color",
+    "silero": null
   }
 };

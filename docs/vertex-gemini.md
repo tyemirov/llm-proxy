@@ -50,6 +50,24 @@ Vertex dictation uses the exact model `gemini-3.5-transcribe-preview` and audio-
 Google documents this model as a preview.
 The Developer API identifier `gemini-3.5-transcribe` returned HTTP 404 on Vertex.
 
+## Get A Vertex API Key
+
+The connection form opens [Google Cloud API Keys](https://console.cloud.google.com/agent-platform/studio/settings/api-keys).
+Google labels this service Agent Platform in the console.
+The link uses the customer account and project selection.
+
+1. Open the API Keys page.
+2. Select your Google Cloud project.
+3. If the page shows **Enable APIs**, complete that setup first.
+4. To get an existing key, select **Show key** for a key restricted to **Agent Platform API**.
+5. To make a new key, select **Create API Key**.
+6. Complete any setup that Google requires.
+7. Enter the key in the **API key** field of the Vertex connection form.
+
+The API service is `aiplatform.googleapis.com`.
+Google can require billing setup or additional account permissions before key creation.
+Use [Google's setup guide](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/start/api-keys) for these requirements.
+
 ## Tenant Connection
 
 1. Obtain a Vertex authorization key that permits `aiplatform.googleapis.com` requests.
