@@ -27,7 +27,30 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
-- [!] [B242] (P2) Open the Vertex API Keys page from connection setup.
+- [x] [B244] (P2) Correct the asset metadata response header declaration.
+  Evidence: The public metadata endpoint returns no request-timeout header. Its OpenAPI response requires the upload timeout header.
+  Requirements: Declare the metadata response separately from the upload response. Preserve the upload timeout requirement.
+  Validation: Validate real upload and metadata responses against OpenAPI. Complete final CI with B243.
+  Evidence: `/tmp/llm-proxy-b243-assets-initial.log` records the missing-header schema error for every asset type.
+
+  Resolution: The public asset contract tests and final CI pass. All 14 gates pass with 100.0 percent Go coverage.
+  Evidence: `/tmp/llm-proxy-b243-b244-ci.log`. No event contract changed.
+
+- [x] [B243] (P2) Preserve supported asset types in the Python client and API schema.
+  Evidence: The gateway and Go client accept FLAC, Ogg, video, JSON, and subtitle assets.
+  Evidence: Python `upload_asset` rejects these types because it uses the narrower message attachment list.
+  Evidence: OpenAPI omits JSON and subtitle assets from upload, download, and metadata declarations.
+  Requirements: Keep asset support consistent across the gateway, official clients, and API schema.
+  Requirements: Preserve the separate message attachment constraints.
+  Validation: Upload every supported asset type through public clients and HTTP. Verify exact bytes and schema conformance.
+  Validation: Preserve the initial failure and complete final CI after the correction.
+  Evidence: `/tmp/llm-proxy-b243-python-initial.log` records 12 rejected upload cases across six supported types.
+  Evidence: `/tmp/llm-proxy-b243-assets-initial.log` records the JSON and subtitle schema failures.
+
+  Resolution: The public asset contract tests and final CI pass. All 14 gates pass with 100.0 percent Go coverage.
+  Evidence: `/tmp/llm-proxy-b243-b244-ci.log`. No event contract changed.
+
+- [x] [B242] (P2) Open the Vertex API Keys page from connection setup.
   Evidence: The catalog link opens the general Vertex page instead of the API Keys page.
   Requirements: Use the direct Google API Keys URL without a fixed account or project.
   Requirements: Document project selection and the Google controls for key creation and retrieval.
@@ -35,7 +58,8 @@ retain satisfied historical dependencies.
   Validation: The browser test fails with the old URL and passes with the new URL.
   Progress: Updated the catalog URL and the Vertex setup procedure. No event contract changed.
   Validation: All 147 frontend browser tests pass. Frontend static analysis and `git diff --check` pass.
-  Blocked: Final CI requires correction of the existing operation-count assertion described below.
+  Resolution: The operation-count assertion is corrected. Final CI passes all 14 gates with 100.0 percent Go coverage.
+  Evidence: `/tmp/llm-proxy-f026-dictionaries-final-ci.log` records the successful gate.
   Validation: `make ci` stops at `TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry` in `tests/capabilities_test.go:137`.
   Evidence: The unchanged test expects 11 operations. The catalog contains 12 operations. This URL change preserves operation counts.
   Evidence: `vertex-ci.log` in the task work directory records the failure.
@@ -3239,9 +3263,28 @@ retain satisfied historical dependencies.
   Evidence: `/tmp/llm-proxy-f026-voices-verified-ci.log` records the final voice checkpoint.
   Contracts: Voice collections use typed queries and page results. Owned voice previews use the common voice resource.
   Progress: Dictionary creation now uses the shared service branch with alias and phoneme rules, private references, and saved native recovery evidence.
-  Validation: Public dictionary tests cover both provider identities, storage failures, cancellation, restart, and operation expiry. Final CI remains open.
+  Validation: Public dictionary tests cover both provider identities, storage failures, cancellation, restart, and operation expiry.
+  Validation: The dictionary checkpoint passes all 14 CI gates, 147 frontend tests, and seven service-backed browser tests.
+  Evidence: `/tmp/llm-proxy-f026-dictionaries-final-ci.log` records 100.0 percent Go coverage.
   Evidence: `/tmp/llm-proxy-f026-dictionaries-initial.log` records the initial `400 media_operation_invalid` result.
-  Remaining: Speech, conversion, voice-library operations, history, all seven music methods, imports, and consumer acceptance remain open.
+  Progress: Both source conversion models now use the existing provider, connection, and operation gateway.
+  Progress: The YAML declares all 28 source formats and eight conversion controls. Raw audio includes a separate interpretation artifact.
+  Validation: Public tests verify both models, a renamed provider, exact multipart requests, account authority, cancellation, and restart behavior.
+  Evidence: `/tmp/llm-proxy-f026-conversion-initial.log` records the initial `400 media_operation_invalid` result.
+  Validation: Initial CI rejected the new discovery codec and a fixture that removed existing model offerings. Both focused corrections pass.
+  Progress: All four source speech models now use the same provider and typed native-speed or text-pacing transports.
+  Progress: Speech requests preserve owned dictionary and continuity references, seed, normalization, voice settings, formats, and timestamps.
+  Validation: Native limits reject a Multilingual v2 language override and Eleven v3 similarity or speaker boost. The catalog corrects those source flags.
+  Validation: Public tests cover both provider identities, all source pacing intervals, invalid context, malformed timestamps, cancellation, and uncertain recovery.
+  Evidence: `/tmp/llm-proxy-f026-generation-initial.log` records the initial `422 media_operation_unavailable` result.
+  Evidence: `/tmp/llm-proxy-f026-generation-openapi-initial.log` records the missing public request schema.
+  Validation: The conversion Go checkpoint reached 100.0 percent coverage. Corrected browser checks now select all six source models.
+  Validation: Final combined speech and conversion CI passes all 14 gates with 100.0 percent Go coverage.
+  Validation: All 148 frontend tests and seven service-backed browser tests pass. Python passes 116 client and five packaging tests.
+  Validation: The account browser test expected zero ElevenLabs models. The corrected test checks all six models and a saved speech default.
+  Evidence: `/tmp/llm-proxy-f026-speech-verified-ci.log` records the final combined checkpoint.
+  Contracts: Both speech capabilities use the existing media operation API. Native audio, format descriptions, and optional timestamps use owned artifacts.
+  Remaining: Voice-library operations, history, all seven music methods, imports, and consumer acceptance remain open.
   Files: `configs/providers.yml`, `internal/proxy/provider_metadata.go`, `pkg/llmproxycontract/provider_metadata.go`, both official clients, OpenAPI, and public integration tests.
   Contract: `GET /model/v1/provider-resources/{provider}/{kind}` adds typed `metadata` and `quotas` resources.
   Scope clarification (2026-09-20): Include every source method listed in `docs/media-provider-completeness.md`.
