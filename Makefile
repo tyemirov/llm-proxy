@@ -411,3 +411,7 @@ test-provider-services: frontend-dependencies
 .PHONY: test-provider-voices
 test-provider-voices: frontend-dependencies
 	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run '^Test(ElevenLabsVoices|MediaVoice)' -count=1 $(VOICE_TEST_ARGS)
+
+.PHONY: test-provider-speech
+test-provider-speech: frontend-dependencies
+	$(GO) test ./internal/proxy ./pkg/llmproxyclient -run '^TestProviderSpeech' -count=1 $(SPEECH_TEST_ARGS)
