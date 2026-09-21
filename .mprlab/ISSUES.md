@@ -282,6 +282,23 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [x] [I275] (P1) Make queue saturation acceptance independent of request timing.
+  Evidence: PR #335 run `35556331424` fails in `TestIntegrationHighLoadQueue` under the race detector.
+  Evidence: `high_load_queue_test.go:116` reports `queue-full response was not observed`. The frontend job passes.
+  Cause: A 25 ms request deadline can expire before admission. Concurrent request launch does not prove queue occupancy.
+  Evidence: The queued request returns HTTP 499 after 25 ms. The active request then reaches its one-second timeout.
+  Requirements: Wait for active and queued admission before the excess request. Preserve real HTTP requests and the production scheduler.
+  Requirements: Remove saturation-specific request deadlines. Keep bounded assertion waits and release blocked requests during failure cleanup.
+  Validation: Verify one HTTP 503, two successful admitted requests, and repeated race execution with different processor counts.
+  Validation: Run final local CI. Report GitHub validation separately for the updated PR commit.
+  Resolution: The test waits for active and queued admission, verifies one HTTP 503, and releases both successful requests.
+  Resolution: Failure cleanup releases blocked requests. The race target accepts optional stress-test arguments.
+  Validation: All 60 race runs pass with one, two, and four processors. Final local CI passes all 14 gates.
+  Validation: Go coverage remains 100.0 percent. All 148 frontend tests and seven service-backed browser tests pass.
+  Evidence: `/tmp/llm-proxy-pr335-queue-stress.log` and `/tmp/llm-proxy-pr335-i275-ci.log` record the local checks.
+  Delivery: The execution chain owns commit and push. Updated-commit GitHub validation remains pending.
+  Files: `tests/integration/high_load_queue_test.go`, `Makefile`. Public API and event contracts remain unchanged.
+
 - [x] [I273] (P1) Show all catalog families before route filters are selected.
   Goal: Let visitors discover text and media models from the same initial view.
   Evidence: The route explorer selects Text and Proprietary at first load. Media families remain hidden.
