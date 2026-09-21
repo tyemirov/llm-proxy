@@ -86,6 +86,9 @@ model_migrations:
       target_model: gpt-transcribe
       preserve_source_usage: true
 operations:
+    - id: speech_conversion
+      input_artifacts: [audio]
+      output_artifacts: [audio, text]
     - id: text
       input_artifacts:
         - text
@@ -147,6 +150,8 @@ operations:
       input_artifacts: [text, image]
       output_artifacts: [image]
 publishers:
+    - id: elevenlabs
+      label: ElevenLabs
     - id: reve
       label: Reve
     - id: baidu
@@ -176,6 +181,14 @@ publishers:
     - id: mprlab
       label: Marco Polo Research Lab
 families:
+    - id: eleven-speech
+      publisher: elevenlabs
+      label: Eleven Speech
+      weight_access: proprietary
+    - id: eleven-voice-conversion
+      publisher: elevenlabs
+      label: Eleven Voice Conversion
+      weight_access: proprietary
     - id: reve
       publisher: reve
       label: Reve
@@ -313,6 +326,42 @@ families:
       label: GPT Image
       weight_access: proprietary
 models:
+    - id: eleven_multilingual_v2
+      enabled: true
+      publisher: elevenlabs
+      family: eleven-speech
+      version: eleven_multilingual_v2
+      operations: [speech_generation]
+    - id: eleven_flash_v2_5
+      enabled: true
+      publisher: elevenlabs
+      family: eleven-speech
+      version: eleven_flash_v2_5
+      operations: [speech_generation]
+    - id: eleven_turbo_v2_5
+      enabled: true
+      publisher: elevenlabs
+      family: eleven-speech
+      version: eleven_turbo_v2_5
+      operations: [speech_generation]
+    - id: eleven_v3
+      enabled: true
+      publisher: elevenlabs
+      family: eleven-speech
+      version: eleven_v3
+      operations: [speech_generation]
+    - id: eleven_english_sts_v2
+      enabled: true
+      publisher: elevenlabs
+      family: eleven-voice-conversion
+      version: eleven_english_sts_v2
+      operations: [speech_conversion]
+    - id: eleven_multilingual_sts_v2
+      enabled: true
+      publisher: elevenlabs
+      family: eleven-voice-conversion
+      version: eleven_multilingual_sts_v2
+      operations: [speech_conversion]
     - id: reve-2.1
       enabled: true
       publisher: reve
@@ -6252,6 +6301,39 @@ providers:
             last_verified: "2026-09-20"
             unavailable_reason: Exact dictionary creation pricing has not been imported.
       transports:
+        - id: speech
+          endpoint:
+            protocol: http
+            method: POST
+            default_base_url: https://api.elevenlabs.io
+            path: /v1/text-to-speech
+          components:
+            request_codec: {id: elevenlabs_speech, variation: native_speed}
+            response_codec: {id: elevenlabs_speech}
+            authentication: {kind: header, field: api_key, header: xi-api-key}
+            execution: {id: synchronous_completion}
+        - id: expressive_speech
+          endpoint:
+            protocol: http
+            method: POST
+            default_base_url: https://api.elevenlabs.io
+            path: /v1/text-to-speech
+          components:
+            request_codec: {id: elevenlabs_speech, variation: text_pacing}
+            response_codec: {id: elevenlabs_speech}
+            authentication: {kind: header, field: api_key, header: xi-api-key}
+            execution: {id: synchronous_completion}
+        - id: conversion
+          endpoint:
+            protocol: http
+            method: POST
+            default_base_url: https://api.elevenlabs.io
+            path: /v1/speech-to-speech
+          components:
+            request_codec: {id: elevenlabs_conversion}
+            response_codec: {id: elevenlabs_conversion}
+            authentication: {kind: header, field: api_key, header: xi-api-key}
+            execution: {id: synchronous_completion}
         - id: voices
           endpoint:
             protocol: http
@@ -6309,4 +6391,171 @@ providers:
             response_codec: {id: elevenlabs_subscription}
             authentication: {kind: header, field: api_key, header: xi-api-key}
             execution: {id: read_only}
-      offerings: []
+      offerings:
+        - model: eleven_multilingual_v2
+          upstream_model: eleven_multilingual_v2
+          transport: speech
+          created: 1789862400
+          operations: [speech_generation]
+          default_operations: [speech_generation]
+          controls:
+            - id: output_format
+              kind: enum
+              account_dependent: true
+              values: [alaw_8000, mp3_22050_32, mp3_24000_48, mp3_44100_32, mp3_44100_64, mp3_44100_96, mp3_44100_128, mp3_44100_192, opus_48000_32, opus_48000_64, opus_48000_96, opus_48000_128, opus_48000_192, pcm_8000, pcm_16000, pcm_22050, pcm_24000, pcm_32000, pcm_44100, pcm_48000, wav_8000, wav_16000, wav_22050, wav_24000, wav_32000, wav_44100, wav_48000, ulaw_8000]
+            - {id: stability, kind: number, minimum: 0, maximum: 1}
+            - {id: similarity_boost, kind: number, minimum: 0, maximum: 1}
+            - {id: style, kind: number, minimum: 0, maximum: 1}
+            - {id: use_speaker_boost, kind: boolean}
+            - {id: speed, kind: number, minimum: 0.7, maximum: 1.2}
+            - {id: seed, kind: integer, minimum: 0, maximum: 4294967295}
+            - {id: timestamps, kind: boolean}
+            - {id: text_normalization, kind: enum, values: [auto, "on", "off"]}
+            - {id: language_text_normalization, kind: boolean}
+          limits:
+            - {id: input_text_characters, value: 10000, unit: characters}
+            - {id: pronunciation_dictionaries, value: 3, unit: dictionaries}
+            - {id: continuity_operations, value: 3, unit: operations_per_direction}
+          prices:
+            - operation: speech_generation
+              available: false
+              source: https://elevenlabs.io/docs/api-reference/text-to-speech/convert
+              last_verified: "2026-09-20"
+              unavailable_reason: Exact speech generation pricing has not been imported.
+        - model: eleven_flash_v2_5
+          upstream_model: eleven_flash_v2_5
+          transport: speech
+          created: 1789862400
+          operations: [speech_generation]
+          controls:
+            - id: output_format
+              kind: enum
+              account_dependent: true
+              values: [alaw_8000, mp3_22050_32, mp3_24000_48, mp3_44100_32, mp3_44100_64, mp3_44100_96, mp3_44100_128, mp3_44100_192, opus_48000_32, opus_48000_64, opus_48000_96, opus_48000_128, opus_48000_192, pcm_8000, pcm_16000, pcm_22050, pcm_24000, pcm_32000, pcm_44100, pcm_48000, wav_8000, wav_16000, wav_22050, wav_24000, wav_32000, wav_44100, wav_48000, ulaw_8000]
+            - {id: stability, kind: number, minimum: 0, maximum: 1}
+            - {id: similarity_boost, kind: number, minimum: 0, maximum: 1}
+            - {id: style, kind: number, minimum: 0, maximum: 1}
+            - {id: use_speaker_boost, kind: boolean}
+            - {id: speed, kind: number, minimum: 0.7, maximum: 1.2}
+            - {id: seed, kind: integer, minimum: 0, maximum: 4294967295}
+            - {id: timestamps, kind: boolean}
+            - {id: text_normalization, kind: enum, values: [auto, "on", "off"], account_dependent: true}
+            - {id: language_text_normalization, kind: boolean}
+            - {id: language_code, kind: enum, values: [en, ja, zh, de, hi, fr, ko, pt, it, es, id, nl, tr, fil, pl, sv, bg, ro, ar, cs, el, fi, hr, ms, sk, da, ta, uk, ru, hu, no, vi]}
+          limits:
+            - {id: input_text_characters, value: 40000, unit: characters}
+            - {id: pronunciation_dictionaries, value: 3, unit: dictionaries}
+            - {id: continuity_operations, value: 3, unit: operations_per_direction}
+          prices:
+            - operation: speech_generation
+              available: false
+              source: https://elevenlabs.io/docs/api-reference/text-to-speech/convert
+              last_verified: "2026-09-20"
+              unavailable_reason: Exact speech generation pricing has not been imported.
+        - model: eleven_turbo_v2_5
+          upstream_model: eleven_turbo_v2_5
+          transport: speech
+          created: 1789862400
+          operations: [speech_generation]
+          controls:
+            - id: output_format
+              kind: enum
+              account_dependent: true
+              values: [alaw_8000, mp3_22050_32, mp3_24000_48, mp3_44100_32, mp3_44100_64, mp3_44100_96, mp3_44100_128, mp3_44100_192, opus_48000_32, opus_48000_64, opus_48000_96, opus_48000_128, opus_48000_192, pcm_8000, pcm_16000, pcm_22050, pcm_24000, pcm_32000, pcm_44100, pcm_48000, wav_8000, wav_16000, wav_22050, wav_24000, wav_32000, wav_44100, wav_48000, ulaw_8000]
+            - {id: stability, kind: number, minimum: 0, maximum: 1}
+            - {id: similarity_boost, kind: number, minimum: 0, maximum: 1}
+            - {id: style, kind: number, minimum: 0, maximum: 1}
+            - {id: use_speaker_boost, kind: boolean}
+            - {id: speed, kind: number, minimum: 0.7, maximum: 1.2}
+            - {id: seed, kind: integer, minimum: 0, maximum: 4294967295}
+            - {id: timestamps, kind: boolean}
+            - {id: text_normalization, kind: enum, values: [auto, "on", "off"], account_dependent: true}
+            - {id: language_text_normalization, kind: boolean}
+            - {id: language_code, kind: enum, values: [en, ja, zh, de, hi, fr, ko, pt, it, es, id, nl, tr, fil, pl, sv, bg, ro, ar, cs, el, fi, hr, ms, sk, da, ta, uk, ru, hu, no, vi]}
+          limits:
+            - {id: input_text_characters, value: 40000, unit: characters}
+            - {id: pronunciation_dictionaries, value: 3, unit: dictionaries}
+            - {id: continuity_operations, value: 3, unit: operations_per_direction}
+          prices:
+            - operation: speech_generation
+              available: false
+              source: https://elevenlabs.io/docs/api-reference/text-to-speech/convert
+              last_verified: "2026-09-20"
+              unavailable_reason: Exact speech generation pricing has not been imported.
+        - model: eleven_v3
+          upstream_model: eleven_v3
+          transport: expressive_speech
+          created: 1789862400
+          operations: [speech_generation]
+          controls:
+            - id: output_format
+              kind: enum
+              account_dependent: true
+              values: [alaw_8000, mp3_22050_32, mp3_24000_48, mp3_44100_32, mp3_44100_64, mp3_44100_96, mp3_44100_128, mp3_44100_192, opus_48000_32, opus_48000_64, opus_48000_96, opus_48000_128, opus_48000_192, pcm_8000, pcm_16000, pcm_22050, pcm_24000, pcm_32000, pcm_44100, pcm_48000, wav_8000, wav_16000, wav_22050, wav_24000, wav_32000, wav_44100, wav_48000, ulaw_8000]
+            - {id: stability, kind: number, minimum: 0, maximum: 1}
+            - {id: style, kind: number, minimum: 0, maximum: 1}
+            - {id: speed, kind: number, minimum: 0.7, maximum: 1.2}
+            - {id: seed, kind: integer, minimum: 0, maximum: 4294967295}
+            - {id: timestamps, kind: boolean}
+            - {id: text_normalization, kind: enum, values: [auto, "on", "off"]}
+            - {id: language_text_normalization, kind: boolean}
+            - {id: language_code, kind: enum, values: [af, ar, hy, as, az, be, bn, bs, bg, ca, ceb, ny, hr, cs, da, nl, en, et, fil, fi, fr, gl, ka, de, el, gu, ha, he, hi, hu, is, id, ga, it, ja, jv, kn, kk, ky, ko, lv, ln, lt, lb, mk, ms, ml, zh, mr, ne, no, ps, fa, pl, pt, pa, ro, ru, sr, sd, sk, sl, so, es, sw, sv, ta, te, th, tr, uk, ur, vi, cy]}
+          limits:
+            - {id: input_text_characters, value: 5000, unit: characters}
+            - {id: pronunciation_dictionaries, value: 3, unit: dictionaries}
+            - {id: continuity_operations, value: 3, unit: operations_per_direction}
+          prices:
+            - operation: speech_generation
+              available: false
+              source: https://elevenlabs.io/docs/api-reference/text-to-speech/convert
+              last_verified: "2026-09-20"
+              unavailable_reason: Exact speech generation pricing has not been imported.
+        - model: eleven_english_sts_v2
+          upstream_model: eleven_english_sts_v2
+          transport: conversion
+          created: 1789862400
+          operations: [speech_conversion]
+          default_operations: [speech_conversion]
+          controls:
+            - id: output_format
+              kind: enum
+              account_dependent: true
+              values: [alaw_8000, mp3_22050_32, mp3_24000_48, mp3_44100_32, mp3_44100_64, mp3_44100_96, mp3_44100_128, mp3_44100_192, opus_48000_32, opus_48000_64, opus_48000_96, opus_48000_128, opus_48000_192, pcm_8000, pcm_16000, pcm_22050, pcm_24000, pcm_32000, pcm_44100, pcm_48000, wav_8000, wav_16000, wav_22050, wav_24000, wav_32000, wav_44100, wav_48000, ulaw_8000]
+            - {id: input_format, kind: enum, values: [other, pcm_s16le_16]}
+            - {id: stability, kind: number, minimum: 0, maximum: 1}
+            - {id: similarity_boost, kind: number, minimum: 0, maximum: 1}
+            - {id: style, kind: number, minimum: 0, maximum: 1}
+            - {id: use_speaker_boost, kind: boolean}
+            - {id: seed, kind: integer, minimum: 0, maximum: 4294967295}
+            - {id: remove_background_noise, kind: boolean}
+          limits: []
+          prices:
+            - operation: speech_conversion
+              available: false
+              source: https://elevenlabs.io/docs/api-reference/speech-to-speech/convert
+              last_verified: "2026-09-20"
+              unavailable_reason: Exact voice conversion pricing has not been imported.
+        - model: eleven_multilingual_sts_v2
+          upstream_model: eleven_multilingual_sts_v2
+          transport: conversion
+          created: 1789862400
+          operations: [speech_conversion]
+          controls:
+            - id: output_format
+              kind: enum
+              account_dependent: true
+              values: [alaw_8000, mp3_22050_32, mp3_24000_48, mp3_44100_32, mp3_44100_64, mp3_44100_96, mp3_44100_128, mp3_44100_192, opus_48000_32, opus_48000_64, opus_48000_96, opus_48000_128, opus_48000_192, pcm_8000, pcm_16000, pcm_22050, pcm_24000, pcm_32000, pcm_44100, pcm_48000, wav_8000, wav_16000, wav_22050, wav_24000, wav_32000, wav_44100, wav_48000, ulaw_8000]
+            - {id: input_format, kind: enum, values: [other, pcm_s16le_16]}
+            - {id: stability, kind: number, minimum: 0, maximum: 1}
+            - {id: similarity_boost, kind: number, minimum: 0, maximum: 1}
+            - {id: style, kind: number, minimum: 0, maximum: 1}
+            - {id: use_speaker_boost, kind: boolean}
+            - {id: seed, kind: integer, minimum: 0, maximum: 4294967295}
+            - {id: remove_background_noise, kind: boolean}
+          limits: []
+          prices:
+            - operation: speech_conversion
+              available: false
+              source: https://elevenlabs.io/docs/api-reference/speech-to-speech/convert
+              last_verified: "2026-09-20"
+              unavailable_reason: Exact voice conversion pricing has not been imported.
