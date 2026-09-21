@@ -120,7 +120,11 @@ def test_client_upload_asset_validates_exact_response_without_exposing_bytes() -
 
 
 @pytest.mark.parametrize("query", ["", "?key=obsolete&key=duplicate"])
-def test_client_upload_asset_uses_bearer_authentication_over_http(query: str) -> None:
+@pytest.mark.parametrize("mime_type", [
+    "image/jpeg", "image/png", "image/webp", "audio/m4a", "audio/mpeg", "audio/wav",
+    "audio/flac", "audio/ogg", "video/mp4", "video/webm", "application/json", "application/x-subrip", "application/octet-stream",
+])
+def test_client_upload_asset_uses_bearer_authentication_over_http(query: str, mime_type: str) -> None:
     data = b"asset-image"
 
     class AssetHandler(BaseHTTPRequestHandler):
@@ -129,10 +133,11 @@ def test_client_upload_asset_uses_bearer_authentication_over_http(query: str) ->
                 self.send_error(403)
                 return
             assert self.path == "/model/v1/assets"
+            assert self.headers["Content-Type"] == mime_type
             assert self.rfile.read(int(self.headers["Content-Length"])) == data
             body = json.dumps({
                 "asset_id": "ast_0123456789abcdef0123456789abcdef",
-                "mime_type": "image/png", "size_bytes": len(data), "state": "available",
+                "mime_type": mime_type, "size_bytes": len(data), "state": "available",
                 "created_at": "2026-08-11T10:00:00Z", "expires_at": "2026-08-13T10:00:00Z",
             }).encode()
             self.send_response(201)
@@ -145,11 +150,24 @@ def test_client_upload_asset_uses_bearer_authentication_over_http(query: str) ->
     thread.start()
     try:
         client = Client(ClientConfig(base_url=f"http://127.0.0.1:{server.server_port}/v2{query}", secret="sekret"))
-        assert client.upload_asset(data, "image/png").size_bytes == len(data)
+        asset = client.upload_asset(data, mime_type)
+        assert asset.size_bytes == len(data)
+        assert asset.mime_type == mime_type
     finally:
         server.shutdown()
         server.server_close()
         thread.join()
+
+
+@pytest.mark.parametrize("mime_type", [
+    "audio/flac", "audio/ogg", "video/mp4", "video/webm", "application/json", "application/x-subrip", "application/octet-stream",
+])
+def test_asset_types_do_not_expand_message_attachment_types(mime_type: str) -> None:
+    asset_id = "ast_0123456789abcdef0123456789abcdef"
+    with pytest.raises(LLMProxyClientError):
+        audio_asset_attachment(asset_id, mime_type)
+    with pytest.raises(LLMProxyClientError):
+        image_asset_attachment(asset_id, mime_type)
 
 
 def test_image_preview_resources_over_http() -> None:

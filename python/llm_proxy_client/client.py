@@ -53,7 +53,9 @@ POST_BODY_QUERY_KEYS = frozenset(
 MESSAGE_ROLES = frozenset({"system", "user", "assistant", "tool"})
 IMAGE_MIME_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 AUDIO_MIME_TYPES = frozenset({"audio/m4a", "audio/mpeg", "audio/wav"})
-MEDIA_MIME_TYPES = IMAGE_MIME_TYPES | AUDIO_MIME_TYPES
+ASSET_MIME_TYPES = IMAGE_MIME_TYPES | AUDIO_MIME_TYPES | frozenset({
+    "audio/flac", "audio/ogg", "video/mp4", "video/webm", "application/json", "application/x-subrip", "application/octet-stream",
+})
 ASSET_ID_PATTERN = re.compile(r"^ast_[0-9a-f]{32}$")
 MEDIA_OPERATION_ID_PATTERN = re.compile(r"^mop_[0-9a-f]{32}$")
 MEDIA_VOICE_ID_PATTERN = re.compile(r"^voi_[0-9a-f]{32}$")
@@ -1033,7 +1035,7 @@ class Client:
         """Upload exact tenant media bytes and return their asset record."""
 
         normalized_mime_type = mime_type.strip().lower()
-        if normalized_mime_type not in MEDIA_MIME_TYPES:
+        if normalized_mime_type not in ASSET_MIME_TYPES:
             raise LLMProxyClientError("llm_proxy_client_invalid_request: unsupported asset MIME type")
         if not isinstance(data, bytes) or not data:
             raise LLMProxyClientError("llm_proxy_client_invalid_request: asset data is empty")
