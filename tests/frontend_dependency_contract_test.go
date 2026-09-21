@@ -48,6 +48,12 @@ func TestOperationalFrontendValidationPreparesPinnedDependencies(testingInstance
 			expectedCommands: []string{"ci", "playwright install chromium"},
 		},
 		{
+			name:             "hosted-backend-checks",
+			target:           "ci-backend-checks",
+			makeArguments:    []string{"PLAYWRIGHT_INSTALL_FLAGS="},
+			expectedCommands: []string{"ci", "playwright install chromium"},
+		},
+		{
 			name:             "hosted-frontend",
 			target:           "ci-frontend",
 			makeArguments:    []string{"PLAYWRIGHT_INSTALL_FLAGS="},

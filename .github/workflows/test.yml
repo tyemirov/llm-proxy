@@ -52,10 +52,33 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+      - name: Run backend coverage
+        run: make ci-backend PLAYWRIGHT_INSTALL_FLAGS=
+
+  backend-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
       - name: Install uv
         run: python -m pip install uv
-      - name: Run backend qualification
-        run: make ci-backend PLAYWRIGHT_INSTALL_FLAGS=
+      - name: Run backend supporting checks
+        run: make ci-backend-checks PLAYWRIGHT_INSTALL_FLAGS=
 
   frontend:
     runs-on: ubuntu-latest
@@ -77,15 +100,17 @@ jobs:
         run: make ci-frontend PLAYWRIGHT_INSTALL_FLAGS=
 
   test:
-    needs: [backend, frontend]
+    needs: [backend, backend-checks, frontend]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
-      - name: Require both qualification jobs
+      - name: Require all qualification jobs
         env:
           BACKEND_RESULT: ${{ needs.backend.result }}
+          BACKEND_CHECKS_RESULT: ${{ needs.backend-checks.result }}
           FRONTEND_RESULT: ${{ needs.frontend.result }}
         run: |
           test "$BACKEND_RESULT" = success
+          test "$BACKEND_CHECKS_RESULT" = success
           test "$FRONTEND_RESULT" = success

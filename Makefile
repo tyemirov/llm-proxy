@@ -165,8 +165,10 @@ ci:
 	@MAKE_BIN="$(MAKE)" GO="$(GO)" GOFMT="$(GOFMT)" NPM="$(NPM)" UV="$(UV)" \
 		PYTHON_PROJECT_DIR="$(PYTHON_PROJECT_DIR)" ./scripts/run_ci.sh
 
-.PHONY: ci-backend ci-frontend
-ci-backend: test-release-policy check-format go-lint python-lint test-protocol-acceptance test-upstream-admission-race go-test python-test test-live-provider-harness
+.PHONY: ci-backend ci-backend-checks ci-frontend
+ci-backend: go-test
+
+ci-backend-checks: test-release-policy check-format go-lint python-lint test-protocol-acceptance test-upstream-admission-race python-test test-live-provider-harness
 
 ci-frontend: frontend-lint frontend-test test-openapi-pages-artifact test-management-auth-blackbox
 

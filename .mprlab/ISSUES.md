@@ -282,6 +282,19 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [x] [I276] (P1) Separate hosted backend gates to complete within the job limit.
+  Evidence: PR #335 run `35567984432` cancels the backend job at its ten-minute limit.
+  Evidence: Admission race tests pass. The full Go suite starts after five minutes and cannot finish before cancellation.
+  Goal: Start coverage independently from the other backend gates.
+  Requirements: Put the other backend gates in a separate job. Preserve each local CI gate exactly once across hosted jobs.
+  Requirements: Keep ten-minute job limits. Require all qualification jobs to succeed before the required test check passes.
+  Resolution: Go coverage starts in its own job. A separate job runs the other backend gates.
+  Validation: The public Make test passes. All 125 aggregate result combinations pass. Each local gate occurs exactly once across hosted jobs.
+  Validation: Final local CI passes all 14 gates in 386 seconds with 100.0 percent Go coverage.
+  Evidence: `/tmp/llm-proxy-i276-initial.log`, `/tmp/llm-proxy-i276-focused.log`, and `/tmp/llm-proxy-i276-ci.log` record local validation.
+  Delivery: GitHub checks on PR #335 record hosted validation after the push.
+  Files: `.github/workflows/test.yml`, `Makefile`, `README.md`, and the hosted CI contract tests. Public API and event contracts remain unchanged.
+
 - [x] [I275] (P1) Make queue saturation acceptance independent of request timing.
   Evidence: PR #335 run `35556331424` fails in `TestIntegrationHighLoadQueue` under the race detector.
   Evidence: `high_load_queue_test.go:116` reports `queue-full response was not observed`. The frontend job passes.
@@ -296,7 +309,7 @@ retain satisfied historical dependencies.
   Validation: All 60 race runs pass with one, two, and four processors. Final local CI passes all 14 gates.
   Validation: Go coverage remains 100.0 percent. All 148 frontend tests and seven service-backed browser tests pass.
   Evidence: `/tmp/llm-proxy-pr335-queue-stress.log` and `/tmp/llm-proxy-pr335-i275-ci.log` record the local checks.
-  Delivery: The execution chain owns commit and push. Updated-commit GitHub validation remains pending.
+  Delivery: Commit `47d24baa` is on PR #335. Its hosted race tests pass in run `35567984432`. I276 addresses the later job cancellation.
   Files: `tests/integration/high_load_queue_test.go`, `Makefile`. Public API and event contracts remain unchanged.
 
 - [x] [I273] (P1) Show all catalog families before route filters are selected.

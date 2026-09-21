@@ -32,10 +32,10 @@ func assertHostedCIWorkflow(testingInstance *testing.T, repositoryRoot string, d
 	if err := yaml.Unmarshal(document, &workflow); err != nil {
 		testingInstance.Fatalf("decode hosted CI workflow: %v", err)
 	}
-	if len(workflow.Jobs) != 3 {
-		testingInstance.Fatal("hosted CI must have independent backend and frontend jobs plus the required test check")
+	if len(workflow.Jobs) != 4 {
+		testingInstance.Fatal("hosted CI must have independent backend, backend-checks, and frontend jobs plus the required test check")
 	}
-	for _, name := range []string{"backend", "frontend"} {
+	for _, name := range []string{"backend", "backend-checks", "frontend"} {
 		job, exists := workflow.Jobs[name]
 		if !exists || len(job.Needs) != 0 || job.If != "" || job.ContinueOnError || job.TimeoutMinutes != 10 {
 			testingInstance.Fatalf("hosted %s job must run independently with its ten-minute deadline", name)
@@ -74,10 +74,13 @@ func assertHostedCIWorkflow(testingInstance *testing.T, repositoryRoot string, d
 		canonicalTargets[strings.Trim(line, " \t\"")] = true
 	}
 	hostedTargets := make(map[string]bool)
-	for _, name := range []string{"backend", "frontend"} {
+	for _, name := range []string{"backend", "backend-checks", "frontend"} {
 		match := regexp.MustCompile(`(?m)^ci-` + name + `: ([^\n]+)$`).FindSubmatch(makefile)
 		if match == nil {
 			testingInstance.Fatalf("public ci-%s target is absent", name)
+		}
+		if name == "backend" && string(match[1]) != "go-test" {
+			testingInstance.Fatal("hosted coverage must start independently from all other backend gates")
 		}
 		for _, target := range strings.Fields(string(match[1])) {
 			if !canonicalTargets[target] || hostedTargets[target] {
@@ -91,21 +94,23 @@ func assertHostedCIWorkflow(testingInstance *testing.T, repositoryRoot string, d
 	}
 
 	aggregate, exists := workflow.Jobs["test"]
-	if !exists || strings.Join(aggregate.Needs, ",") != "backend,frontend" || aggregate.If != "${{ always() }}" || aggregate.ContinueOnError || aggregate.TimeoutMinutes != 1 || len(aggregate.Steps) != 1 {
-		testingInstance.Fatal("required test check must evaluate both completed job results even after failure or cancellation")
+	if !exists || strings.Join(aggregate.Needs, ",") != "backend,backend-checks,frontend" || aggregate.If != "${{ always() }}" || aggregate.ContinueOnError || aggregate.TimeoutMinutes != 1 || len(aggregate.Steps) != 1 {
+		testingInstance.Fatal("required test check must evaluate all completed job results even after failure or cancellation")
 	}
 	step := aggregate.Steps[0]
-	if step.If != "" || step.ContinueOnError || step.Env["BACKEND_RESULT"] != "${{ needs.backend.result }}" || step.Env["FRONTEND_RESULT"] != "${{ needs.frontend.result }}" {
+	if step.If != "" || step.ContinueOnError || step.Env["BACKEND_RESULT"] != "${{ needs.backend.result }}" || step.Env["BACKEND_CHECKS_RESULT"] != "${{ needs.backend-checks.result }}" || step.Env["FRONTEND_RESULT"] != "${{ needs.frontend.result }}" {
 		testingInstance.Fatal("required test check does not consume the exact qualification results")
 	}
 	for _, backend := range []string{"success", "failure", "cancelled", "skipped", ""} {
-		for _, frontend := range []string{"success", "failure", "cancelled", "skipped", ""} {
-			command := exec.Command("bash", "-e", "-c", step.Run)
-			command.Env = append(os.Environ(), "BACKEND_RESULT="+backend, "FRONTEND_RESULT="+frontend)
-			output, commandError := command.CombinedOutput()
-			wantSuccess := backend == "success" && frontend == "success"
-			if (commandError == nil) != wantSuccess {
-				testingInstance.Fatalf("required test result is wrong for backend=%q frontend=%q: %v\n%s", backend, frontend, commandError, output)
+		for _, checks := range []string{"success", "failure", "cancelled", "skipped", ""} {
+			for _, frontend := range []string{"success", "failure", "cancelled", "skipped", ""} {
+				command := exec.Command("bash", "-e", "-c", step.Run)
+				command.Env = append(os.Environ(), "BACKEND_RESULT="+backend, "BACKEND_CHECKS_RESULT="+checks, "FRONTEND_RESULT="+frontend)
+				output, commandError := command.CombinedOutput()
+				wantSuccess := backend == "success" && checks == "success" && frontend == "success"
+				if (commandError == nil) != wantSuccess {
+					testingInstance.Fatalf("required test result is wrong for backend=%q checks=%q frontend=%q: %v\n%s", backend, checks, frontend, commandError, output)
+				}
 			}
 		}
 	}
