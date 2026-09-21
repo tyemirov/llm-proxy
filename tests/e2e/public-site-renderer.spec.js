@@ -13,6 +13,26 @@ const executeFile = promisify(execFile);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const publicCapabilitiesPath = "/api/public/capabilities";
 
+test("public site renders catalog speech conversion routes", async ({ page }) => {
+  const capabilities = normalizedCapabilityFixture();
+  capabilities.operations = [{ id: "speech_conversion", input_artifacts: ["audio"], output_artifacts: ["audio", "text"] }];
+  Object.assign(capabilities.models[0], {operations: ["speech_conversion"], capabilities: ["speech_conversion"], domains: ["speech"]});
+  Object.assign(capabilities.offerings[0], {capabilities: ["speech_conversion"], domains: ["speech"], wire_contract: "elevenlabs_conversion"});
+  capabilities.prices[0].operation = "speech_conversion";
+  await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
+    const fixture = await siteFixture();
+    try {
+      await renderFixture(fixture, capabilitiesURL);
+      await page.setContent(await readFile(path.join(fixture.output, "index.html"), "utf8"));
+      await expect(page.locator('[data-route-model="example-model"]')).toBeVisible();
+      await expect(page.locator('[data-route-provider="deepseek"]')).toBeVisible();
+      await expect(page.locator('body')).toContainText('Voice conversion');
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+});
+
 test("public site renders catalog number controls with decimal bounds", async ({ page }) => {
   const capabilities = normalizedCapabilityFixture();
   capabilities.offerings[0].controls = [{ id: "speed", kind: "number", values: [], minimum: 0.7, maximum: 1.2, account_dependent: false }];

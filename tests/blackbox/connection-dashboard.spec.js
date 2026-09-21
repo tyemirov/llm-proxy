@@ -299,9 +299,26 @@ test('account connection dashboard links Social Threader explicitly and preserve
  await expect(dashboard.locator('[data-provider-resources]')).toContainText('Quotas');
  await expect(dashboard.locator('[data-provider-resources]')).toContainText('Voices');
  await expect(dashboard.locator('[data-provider-services]')).toContainText('Transcript alignment');
- await expect(dashboard.locator('[data-model]')).toHaveCount(0);
+ await expect(dashboard.locator('[data-model]')).toHaveCount(6);
+ for(const model of ['eleven_multilingual_v2','eleven_flash_v2_5','eleven_turbo_v2_5','eleven_v3','eleven_english_sts_v2','eleven_multilingual_sts_v2']){
+  await expect(dashboard.locator(`[data-model="${model}"]`)).toBeVisible();
+ }
+ await dashboard.locator('[data-model="eleven_multilingual_sts_v2"]').click();
+ await expect(dashboard.locator('[data-media-details]')).toContainText('Voice conversion');
+ await expect(dashboard.locator('[data-default-form]')).toHaveCount(0);
+ await dashboard.locator('[data-model="eleven_flash_v2_5"]').click();
+ await expect(dashboard.locator('[data-media-details]')).toContainText('Speech synthesis');
+ const elevenDefaultSave=page.waitForResponse(response=>response.request().method()==='PUT' && response.url().endsWith('/defaults'));
+ await dashboard.getByRole('button',{name:'Save speech default',exact:true}).click();
+ const elevenProfile=await (await elevenDefaultSave).json();
+ expect(elevenProfile.tenant.defaults.speech_provider).toBe('elevenlabs');
+ expect(elevenProfile.tenant.defaults.speech_model).toBe('eleven_flash_v2_5');
+ await expect(dashboard.locator('[data-model="eleven_flash_v2_5"]')).toHaveClass(/selected/);
  await expect(dashboard).not.toContainText('local-eleven-key');
  await page.reload();
  await expect(dashboard.locator('[data-connection-node]').filter({hasText:'ElevenLabs account'})).toContainText('Connected');
+ await dashboard.getByRole('button',{name:'ElevenLabs account',exact:true}).click();
+ await dashboard.getByRole('button',{name:'Speech',exact:true}).click();
+ await expect(dashboard.locator('[data-model="eleven_flash_v2_5"]')).toHaveClass(/selected/);
  expect(errors).toEqual([]);
 });

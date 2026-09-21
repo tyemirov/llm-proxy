@@ -133,7 +133,7 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 	if catalogError != nil {
 		testingInstance.Fatalf("NewPublicCapabilityCatalog error: %v", catalogError)
 	}
-	if catalog.Revision == "" || len(catalog.Operations) != 11 || len(catalog.Prices) != 104 || catalog.Counts.Providers != 16 || catalog.Counts.ModelPublishers != 14 || catalog.Counts.ModelFamilies != 31 || catalog.Counts.ModelFamilies != len(catalog.Families) || catalog.Counts.ExactModels != 80 || catalog.Counts.ExactModels != len(catalog.Models) || catalog.Counts.ProviderOfferings != 83 || catalog.Counts.ProviderOfferings != len(catalog.Offerings) || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
+	if catalog.Revision == "" || len(catalog.Operations) != 13 || len(catalog.Prices) != 110 || catalog.Counts.Providers != 16 || catalog.Counts.ModelPublishers != 15 || catalog.Counts.ModelFamilies != 33 || catalog.Counts.ModelFamilies != len(catalog.Families) || catalog.Counts.ExactModels != 86 || catalog.Counts.ExactModels != len(catalog.Models) || catalog.Counts.ProviderOfferings != 89 || catalog.Counts.ProviderOfferings != len(catalog.Offerings) || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
 		testingInstance.Fatalf("catalog summary=%+v", catalog)
 	}
 	weightAccessFound := map[string]bool{}
