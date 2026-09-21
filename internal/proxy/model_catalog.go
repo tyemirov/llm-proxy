@@ -32,6 +32,8 @@ const (
 	ModelOperationSubtitleCreation = "subtitle_creation"
 	// ModelOperationSpeechGeneration identifies durable speech synthesis.
 	ModelOperationSpeechGeneration = "speech_generation"
+	// ModelOperationSpeechConversion identifies durable voice conversion.
+	ModelOperationSpeechConversion = "speech_conversion"
 	// ModelOperationVoiceExtraction identifies durable voice extraction.
 	ModelOperationVoiceExtraction = "voice_extraction"
 	// CatalogCredentialAPIKey identifies one opaque provider API key.
@@ -381,6 +383,16 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 		if limitError := validateCatalogLimits(offering.Limits, fieldPrefix+".limits"); limitError != nil {
 			return limitError
 		}
+		var speechRouteError error
+		switch offering.WireContract {
+		case CatalogProtocolElevenLabsSpeech:
+			speechRouteError = validateSpeechGenerationOffering(offering, fieldPrefix)
+		case CatalogProtocolElevenLabsConversion:
+			speechRouteError = validateSpeechConversionOffering(offering, fieldPrefix)
+		}
+		if speechRouteError != nil {
+			return speechRouteError
+		}
 		for _, operation := range offering.Operations {
 			var routeError error
 			switch operation {
@@ -392,6 +404,14 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 				routeError = validateImageGenerationOffering(offering, fieldPrefix)
 			case ModelOperationDictation:
 				routeError = validateDictationOffering(offering, fieldPrefix)
+			case ModelOperationSpeechGeneration:
+				if offering.WireContract != CatalogProtocolElevenLabsSpeech && offering.WireContract != CatalogProtocolDictatorSpeechV1 {
+					routeError = fmt.Errorf("%w: field=%s reason=unsupported_speech_route", ErrInvalidModelCatalog, fieldPrefix)
+				}
+			case ModelOperationSpeechConversion:
+				if offering.WireContract != CatalogProtocolElevenLabsConversion {
+					routeError = fmt.Errorf("%w: field=%s reason=unsupported_conversion_route", ErrInvalidModelCatalog, fieldPrefix)
+				}
 			}
 			if routeError != nil {
 				return routeError
@@ -603,6 +623,7 @@ func supportedModelOperation(operation string) bool {
 		ModelOperationPronunciationDictionaryCreation,
 		ModelOperationSubtitleCreation,
 		ModelOperationSpeechGeneration,
+		ModelOperationSpeechConversion,
 		ModelOperationVoiceExtraction:
 		return true
 	default:

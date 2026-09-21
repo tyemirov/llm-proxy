@@ -130,7 +130,7 @@ func PublicCapabilityDomainForOperation(operation string) string {
 		"audio_alignment",
 		"subtitle_creation":
 		return PublicCapabilityDomainTranscription
-	case ModelOperationPronunciationDictionaryCreation, "speech_generation",
+	case ModelOperationSpeechConversion, ModelOperationPronunciationDictionaryCreation, "speech_generation",
 		"voice_extraction":
 		return PublicCapabilityDomainSpeech
 	case PublicModelCapabilityImageInput, ModelOperationImageGeneration, ModelOperationImageEditing:

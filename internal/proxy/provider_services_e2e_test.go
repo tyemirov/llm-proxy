@@ -474,7 +474,7 @@ func TestProviderServicesAndModelOfferingsShareOneConnection(t *testing.T) {
 				continue
 			}
 			origin := p.Transports[0].Endpoint.DefaultBaseURL
-			p.Offerings = models.Offerings
+			p.Offerings = append(p.Offerings, models.Offerings...)
 			for _, transport := range models.Transports {
 				transport.Endpoint.DefaultBaseURL = origin
 				transport.Components.Authentication.Field = "resource_token"

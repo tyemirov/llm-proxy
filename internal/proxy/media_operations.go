@@ -336,8 +336,16 @@ func newMediaOperationService(configuration Configuration, managedTenants *manag
 	catalog := CatalogService{catalog: validatedModelCatalog{revision: configuration.ModelCatalog.Revision}}
 	var dictatorOfferings []ProviderOffering
 	var imageOfferings []ProviderOffering
+	var conversionOfferings []ProviderOffering
+	var speechOfferings []ProviderOffering
 	for _, offering := range configuration.ModelCatalog.Offerings {
 		transport := providers.definitions[providerID(offering.Provider)].transports[offering.Transport]
+		if transport.requestCodec == CatalogProtocolElevenLabsSpeech {
+			speechOfferings = append(speechOfferings, offering)
+		}
+		if transport.requestCodec == CatalogProtocolElevenLabsConversion {
+			conversionOfferings = append(conversionOfferings, offering)
+		}
 		if transport.requestCodec == CatalogProtocolDictatorSpeechV1 {
 			dictatorOfferings = append(dictatorOfferings, offering)
 		}
@@ -349,7 +357,7 @@ func newMediaOperationService(configuration Configuration, managedTenants *manag
 	for _, provider := range configuration.ModelCatalog.Providers {
 		hasServices = hasServices || len(provider.Services) > 0
 	}
-	if len(configuration.MediaOperationAdapters) != 0 || len(dictatorOfferings) != 0 || len(imageOfferings) != 0 || hasServices {
+	if len(configuration.MediaOperationAdapters) != 0 || len(dictatorOfferings) != 0 || len(imageOfferings) != 0 || len(conversionOfferings) != 0 || len(speechOfferings) != 0 || hasServices {
 		var catalogError error
 		catalog, catalogError = NewCatalogService(configuration.ModelCatalog)
 		if catalogError != nil {
@@ -388,6 +396,12 @@ func newMediaOperationService(configuration Configuration, managedTenants *manag
 			key := mediaOperationAdapterKey(mediaCapabilityForCatalogOperation(operation), offering.Provider, offering.Model)
 			service.adapters[key] = adapter
 		}
+	}
+	for _, offering := range speechOfferings {
+		service.adapters[mediaOperationAdapterKey(llmproxycontract.MediaCapabilityAudioSpeechGenerate, offering.Provider, offering.Model)] = newProviderGenerationAdapter(offering, providers.definitions[providerID(offering.Provider)], managedTenants, store, assets, catalog.Revision())
+	}
+	for _, offering := range conversionOfferings {
+		service.adapters[mediaOperationAdapterKey(llmproxycontract.MediaCapabilityAudioSpeechConvert, offering.Provider, offering.Model)] = newProviderConversionAdapter(offering, providers.definitions[providerID(offering.Provider)], managedTenants, store, assets, catalog.Revision())
 	}
 	for _, offering := range dictatorOfferings {
 		adapter := &accountDictatorAdapter{tenants: managedTenants, store: store, assets: assets, provider: offering.Provider, model: offering.Model, transport: providers.definitions[providerID(offering.Provider)].transports[offering.Transport]}
@@ -1305,6 +1319,8 @@ func catalogOperationForMediaCapability(capability string) string {
 		return ModelOperationSubtitleCreation
 	case llmproxycontract.MediaCapabilityAudioSpeechGenerate:
 		return ModelOperationSpeechGeneration
+	case llmproxycontract.MediaCapabilityAudioSpeechConvert:
+		return ModelOperationSpeechConversion
 	case llmproxycontract.MediaCapabilityAudioVoiceExtract:
 		return ModelOperationVoiceExtraction
 	default:
@@ -1332,6 +1348,8 @@ func mediaCapabilityForCatalogOperation(operation string) string {
 		return llmproxycontract.MediaCapabilitySubtitlesCreate
 	case ModelOperationSpeechGeneration:
 		return llmproxycontract.MediaCapabilityAudioSpeechGenerate
+	case ModelOperationSpeechConversion:
+		return llmproxycontract.MediaCapabilityAudioSpeechConvert
 	case ModelOperationVoiceExtraction:
 		return llmproxycontract.MediaCapabilityAudioVoiceExtract
 	default:

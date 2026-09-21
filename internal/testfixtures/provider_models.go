@@ -337,6 +337,8 @@ func testProviderTransport(identifier string, offering proxy.ProviderOffering) p
 		requestCodec.Variation = proxy.CatalogProtocolVariationMaxTokens
 	case proxy.CatalogProtocolMultipartTranscription:
 		requestCodec.Variation = proxy.CatalogProtocolVariationTranscriptionModel
+	case proxy.CatalogProtocolElevenLabsSpeech:
+		requestCodec.Variation = "native_speed"
 	}
 	transport := proxy.ProviderCatalogTransport{
 		ID:       identifier,

@@ -7,6 +7,7 @@ import (
 )
 
 type providerRequestCodecDefinition struct {
+	speechRate              string
 	modelField              string
 	tokenField              string
 	mediaExecutionLifecycle textExecutionLifecycle
@@ -32,6 +33,7 @@ type providerTransportComposition struct {
 }
 
 type providerProtocolParameters struct {
+	SpeechRate              string
 	ResponsePolicy          string
 	ModelField              string
 	TokenField              string
@@ -100,6 +102,7 @@ func composeProviderTransport(transport ProviderCatalogTransport, field string) 
 		lifecycle:          lifecycle,
 		resourceVisibility: visibility,
 		parameters: providerProtocolParameters{
+			SpeechRate:              request.speechRate,
 			ResponsePolicy:          response.responsePolicy,
 			ModelField:              request.modelField,
 			TokenField:              request.tokenField,
@@ -169,6 +172,19 @@ func providerRequestCodecDefinitionFor(reference ProviderCatalogCodecReference, 
 		return definition, nil
 	case CatalogProtocolXAIVideosGenerations:
 		definition.modelField = "model"
+	case CatalogProtocolElevenLabsSpeech:
+		definition.modelField = "model_id"
+		definition.mediaExecutionLifecycle = textExecutionLifecycleSynchronousCompletion
+		switch reference.Variation {
+		case speechRateNative, speechRateTextPacing:
+			definition.speechRate = reference.Variation
+		default:
+			return providerRequestCodecDefinition{}, unsupportedProviderCodecVariation(reference, field)
+		}
+		return definition, nil
+	case CatalogProtocolElevenLabsConversion:
+		definition.modelField = "model_id"
+		definition.mediaExecutionLifecycle = textExecutionLifecycleSynchronousCompletion
 	case CatalogProtocolOpenAIImages:
 		definition.modelField = "model"
 		definition.mediaExecutionLifecycle = textExecutionLifecycleSynchronousCompletion
@@ -189,6 +205,14 @@ func providerRequestCodecDefinitionFor(reference ProviderCatalogCodecReference, 
 func providerResponseCodecDefinitionFor(reference ProviderCatalogCodecReference, field string) (providerResponseCodecDefinition, error) {
 	definition := providerResponseCodecDefinition{}
 	switch reference.ID {
+	case CatalogProtocolElevenLabsSpeech:
+		definition.outputFields = []string{"audio", "audio_base64", "alignment", "normalized_alignment", "request-id", "history-item-id"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"http_200"}}
+		definition.errorRules = []string{"provider_error", "malformed_response", "uncertain"}
+	case CatalogProtocolElevenLabsConversion:
+		definition.outputFields = []string{"audio", "request-id", "history-item-id"}
+		definition.finishRules = providerProtocolFinishRules{Complete: []string{"http_200"}}
+		definition.errorRules = []string{"provider_error", "malformed_response", "uncertain"}
 	case CatalogProtocolElevenLabsDictionary:
 		definition.outputFields = []string{"id", "version_id", "name", "created_by", "creation_time_unix", "version_rules_num", "permission_on_resource", "description"}
 		definition.finishRules = providerProtocolFinishRules{Complete: []string{"http_200"}}
@@ -295,7 +319,7 @@ func requestCodecSupportsLifecycle(codec string, lifecycle textExecutionLifecycl
 		return lifecycle == textExecutionLifecycle(CatalogExecutionAsynchronousJob)
 	case CatalogProtocolDashScopeResponses, CatalogProtocolXAIResponses, CatalogProtocolOpenAIChatCompletions,
 		CatalogProtocolAnthropicMessages, CatalogProtocolVertexGenerateContent,
-		CatalogProtocolMetaTranscription, CatalogProtocolMultipartTranscription, CatalogProtocolOpenAIImages, CatalogProtocolElevenLabsAlignment, CatalogProtocolElevenLabsDictionary:
+		CatalogProtocolMetaTranscription, CatalogProtocolMultipartTranscription, CatalogProtocolOpenAIImages, CatalogProtocolElevenLabsAlignment, CatalogProtocolElevenLabsDictionary, CatalogProtocolElevenLabsConversion, CatalogProtocolElevenLabsSpeech:
 		return lifecycle == textExecutionLifecycleSynchronousCompletion
 	default:
 		return false
