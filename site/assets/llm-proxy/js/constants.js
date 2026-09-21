@@ -135,6 +135,7 @@ export const PROVIDER_CAPABILITY_LABELS = Object.freeze({
   pronunciation_dictionary_creation: "Pronunciation dictionary",
   subtitle_creation: "Subtitles",
   speech_generation: "Speech synthesis",
+  speech_conversion: "Voice conversion",
   voice_extraction: "Voice extraction",
 });
 
@@ -165,6 +166,7 @@ export const OPERATION_CAPABILITY_DOMAINS = Object.freeze({
   pronunciation_dictionary_creation: "speech",
   subtitle_creation: "transcription",
   speech_generation: "speech",
+  speech_conversion: "speech",
   voice_extraction: "speech",
   image_input: "image",
   video_generation: "video",

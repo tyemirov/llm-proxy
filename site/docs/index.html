@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="878b95d5a8d5cf6ebdb422fb5b4ecc4209d48b24937361259f5035f8806e6122">
+    <meta name="openapi-source-sha256" content="c3ac97c719f4310ecff65d06f8e0dc8d5af4b9048cdf3deefb39c0d0bf26c6d7">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="878b95d5a8d5cf6ebdb422fb5b4ecc4209d48b24937361259f5035f8806e6122">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="c3ac97c719f4310ecff65d06f8e0dc8d5af4b9048cdf3deefb39c0d0bf26c6d7">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>878b95d5a8d5cf6ebdb422fb5b4ecc4209d48b24937361259f5035f8806e6122</code></span>
+          <span>Source SHA-256 <code>c3ac97c719f4310ecff65d06f8e0dc8d5af4b9048cdf3deefb39c0d0bf26c6d7</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -1416,7 +1416,7 @@ paths:
         - $ref: &#39;#/components/parameters/AssetID&#39;
       responses:
         &#39;200&#39;:
-          $ref: &#39;#/components/responses/AssetCreated&#39;
+          $ref: &#39;#/components/responses/AssetAvailable&#39;
         &#39;403&#39;:
           $ref: &#39;#/components/responses/ProxyForbidden&#39;
         &#39;404&#39;:
@@ -1459,6 +1459,12 @@ paths:
         &#39;200&#39;:
           description: Exact authenticated asset bytes.
           content:
+            application/json:
+              schema: {}
+            application/x-subrip:
+              schema:
+                type: string
+                format: binary
             image/jpeg:
               schema:
                 type: string
@@ -2786,6 +2792,16 @@ components:
     AssetUpload:
       required: true
       content:
+        application/octet-stream:
+          schema:
+            type: string
+            format: binary
+        application/json:
+          schema: {}
+        application/x-subrip:
+          schema:
+            type: string
+            format: binary
         image/jpeg:
           schema:
             type: string
@@ -3014,6 +3030,12 @@ components:
             oneOf:
               - $ref: &#39;#/components/schemas/AssetErrorEnvelope&#39;
               - $ref: &#39;#/components/schemas/StructuredRequestErrorEnvelope&#39;
+    AssetAvailable:
+      description: The asset metadata is available to its authenticated tenant.
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/TenantAsset&#39;
     AssetCreated:
       description: The asset is available to its authenticated tenant.
       headers:
@@ -4542,6 +4564,7 @@ components:
             - pronunciation_dictionary_creation
             - subtitle_creation
             - speech_generation
+            - speech_conversion
             - voice_extraction
         available:
           type: boolean
@@ -4618,6 +4641,7 @@ components:
             - pronunciation_dictionary_creation
             - subtitle_creation
             - speech_generation
+            - speech_conversion
             - voice_extraction
         input_artifacts:
           type: array
@@ -4734,6 +4758,7 @@ components:
               - pronunciation_dictionary_creation
               - subtitle_creation
               - speech_generation
+              - speech_conversion
               - voice_extraction
         media_inputs:
           type: array
@@ -4766,6 +4791,7 @@ components:
               - pronunciation_dictionary_creation
               - subtitle_creation
               - speech_generation
+              - speech_conversion
               - voice_extraction
         provider_offerings:
           type: array
@@ -4848,6 +4874,7 @@ components:
               - pronunciation_dictionary_creation
               - subtitle_creation
               - speech_generation
+              - speech_conversion
               - voice_extraction
         wire_contract:
           type: string
@@ -5107,6 +5134,7 @@ components:
             - pronunciation_dictionary_creation
             - subtitle_creation
             - speech_generation
+            - speech_conversion
             - voice_extraction
         available:
           type: boolean
@@ -5481,6 +5509,8 @@ components:
         - $ref: &#39;#/components/schemas/ProviderAlignmentOperationRequest&#39;
         - $ref: &#39;#/components/schemas/ProviderDictionaryOperationRequest&#39;
         - $ref: &#39;#/components/schemas/DictatorSubtitleOperationRequest&#39;
+        - $ref: &#39;#/components/schemas/ProviderSpeechConversionOperationRequest&#39;
+        - $ref: &#39;#/components/schemas/ProviderSpeechGenerationOperationRequest&#39;
         - $ref: &#39;#/components/schemas/DictatorSpeechGenerationOperationRequest&#39;
         - $ref: &#39;#/components/schemas/DictatorVoiceExtractionOperationRequest&#39;
       discriminator:
@@ -5571,6 +5601,160 @@ components:
         controls:
           type: object
           additionalProperties: false
+    ProviderSpeechGenerationOperationRequest:
+      allOf:
+        - $ref: &#39;#/components/schemas/MediaOperationRequestBase&#39;
+        - type: object
+          properties:
+            capability:
+              const: audio.speech.generate
+            input:
+              type: object
+              additionalProperties: false
+              required: [text, voice_id]
+              properties:
+                text: {type: string, pattern: &#39;\S&#39;}
+                voice_id: {type: string, pattern: &#39;^voi_[0-9a-f]{32}$&#39;}
+                previous_text: {type: [string, &#39;null&#39;]}
+                next_text: {type: [string, &#39;null&#39;]}
+                previous_operation_ids:
+                  type: [array, &#39;null&#39;]
+                  maxItems: 3
+                  items: {type: string, pattern: &#39;^mop_[0-9a-f]{32}$&#39;}
+                next_operation_ids:
+                  type: [array, &#39;null&#39;]
+                  maxItems: 3
+                  items: {type: string, pattern: &#39;^mop_[0-9a-f]{32}$&#39;}
+                dictionaries:
+                  type: [array, &#39;null&#39;]
+                  maxItems: 3
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [dictionary_id, version_id]
+                    properties:
+                      dictionary_id: {type: string, pattern: &#39;^dic_[0-9a-f]{32}$&#39;}
+                      version_id: {type: string, pattern: &#39;^div_[0-9a-f]{32}$&#39;}
+            controls:
+              type: object
+              additionalProperties: false
+              required: [output_format, timestamps]
+              properties:
+                output_format:
+                  type: string
+                  minLength: 1
+                  description: Use a format from the selected catalog offering.
+                timestamps: {type: boolean}
+                stability: {type: [number, &#39;null&#39;], minimum: 0, maximum: 1}
+                similarity_boost: {type: [number, &#39;null&#39;], minimum: 0, maximum: 1}
+                style: {type: [number, &#39;null&#39;], minimum: 0, maximum: 1}
+                use_speaker_boost: {type: [boolean, &#39;null&#39;]}
+                speed: {type: [number, &#39;null&#39;], minimum: 0.7, maximum: 1.2}
+                seed: {type: [integer, &#39;null&#39;], minimum: 0, maximum: 4294967295}
+                language_code:
+                  type: [string, &#39;null&#39;]
+                  description: Use a language code declared by the selected offering.
+                text_normalization:
+                  type: [string, &#39;null&#39;]
+                  enum: [auto, &#39;on&#39;, &#39;off&#39;, &#39;&#39;, null]
+                language_text_normalization: {type: [boolean, &#39;null&#39;]}
+    MediaSpeechTiming:
+      type: object
+      additionalProperties: false
+      required: [alignment, normalized_alignment]
+      properties:
+        alignment:
+          anyOf:
+            - {type: &#39;null&#39;}
+            - {$ref: &#39;#/components/schemas/SpeechCharacterAlignment&#39;}
+        normalized_alignment:
+          anyOf:
+            - {type: &#39;null&#39;}
+            - {$ref: &#39;#/components/schemas/SpeechCharacterAlignment&#39;}
+    SpeechCharacterAlignment:
+      type: object
+      additionalProperties: false
+      required: [characters, character_start_times_seconds, character_end_times_seconds]
+      properties:
+        characters:
+          type: array
+          items: {type: string, minLength: 1}
+        character_start_times_seconds:
+          type: array
+          items: {type: number, minimum: 0}
+        character_end_times_seconds:
+          type: array
+          items: {type: number, minimum: 0}
+    ProviderSpeechConversionOperationRequest:
+      allOf:
+        - $ref: &#39;#/components/schemas/MediaOperationRequestBase&#39;
+        - type: object
+          properties:
+            capability:
+              const: audio.speech.convert
+            input:
+              type: object
+              additionalProperties: false
+              required: [voice_id, audio_asset_id]
+              properties:
+                voice_id:
+                  type: string
+                  pattern: ^voi_[0-9a-f]{32}$
+                audio_asset_id:
+                  type: string
+                  pattern: ^ast_[0-9a-f]{32}$
+            controls:
+              type: object
+              additionalProperties: false
+              required: [input_format, output_format]
+              properties:
+                input_format:
+                  enum: [other, pcm_s16le_16]
+                output_format:
+                  type: string
+                  description: Use a format from the selected catalog offering.
+                  minLength: 1
+                stability:
+                  type: [number, &#39;null&#39;]
+                  minimum: 0
+                  maximum: 1
+                similarity_boost:
+                  type: [number, &#39;null&#39;]
+                  minimum: 0
+                  maximum: 1
+                style:
+                  type: [number, &#39;null&#39;]
+                  minimum: 0
+                  maximum: 1
+                use_speaker_boost:
+                  type: [boolean, &#39;null&#39;]
+                seed:
+                  type: [integer, &#39;null&#39;]
+                  minimum: 0
+                  maximum: 4294967295
+                remove_background_noise:
+                  type: [boolean, &#39;null&#39;]
+    MediaAudioDescription:
+      type: object
+      additionalProperties: false
+      required: [output_format, mime_type]
+      properties:
+        output_format:
+          type: string
+          minLength: 1
+        mime_type:
+          enum: [audio/mpeg, audio/ogg, audio/wav, application/octet-stream]
+        raw_audio:
+          type: object
+          additionalProperties: false
+          required: [encoding, sample_rate_hz, channels]
+          properties:
+            encoding:
+              enum: [s16le, alaw, mulaw]
+            sample_rate_hz:
+              enum: [8000, 16000, 22050, 24000, 32000, 44100, 48000]
+            channels:
+              const: 1
     MediaOperationRequestBase:
       type: object
       additionalProperties: false
@@ -6293,6 +6477,9 @@ components:
         mime_type:
           type: string
           enum:
+            - application/octet-stream
+            - application/json
+            - application/x-subrip
             - image/jpeg
             - image/png
             - image/webp
@@ -7000,6 +7187,7 @@ components:
               - pronunciation_dictionary_creation
               - subtitle_creation
               - speech_generation
+              - speech_conversion
               - voice_extraction
         model_families:
           type: array
@@ -9598,7 +9786,7 @@ components:
             <table>
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>200</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset is available to its authenticated tenant.</td></tr>
+                <tr><td><code>200</code></td><td>application/json</td><td>none</td><td>The asset metadata is available to its authenticated tenant.</td></tr>
 <tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
 <tr><td><code>404</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
 <tr><td><code>410</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
@@ -9634,7 +9822,7 @@ components:
             <table>
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>200</code></td><td>image/jpeg, image/png, image/webp, audio/m4a, audio/mpeg, audio/wav, audio/flac, audio/ogg, video/mp4, video/webm, application/octet-stream</td><td>none</td><td>Exact authenticated asset bytes.</td></tr>
+                <tr><td><code>200</code></td><td>application/json, application/x-subrip, image/jpeg, image/png, image/webp, audio/m4a, audio/mpeg, audio/wav, audio/flac, audio/ogg, video/mp4, video/webm, application/octet-stream</td><td>none</td><td>Exact authenticated asset bytes.</td></tr>
 <tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
 <tr><td><code>404</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
 <tr><td><code>410</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>

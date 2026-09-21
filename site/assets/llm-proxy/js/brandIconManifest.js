@@ -134,6 +134,8 @@ export const brandIconManifest = {
     "dictator": null
   },
   "families": {
+    "eleven-voice-conversion": null,
+    "eleven-speech": null,
     "reve": null,
     "gpt-image": "openai",
     "gpt-6": "openai",
