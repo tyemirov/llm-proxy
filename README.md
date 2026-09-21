@@ -1405,7 +1405,8 @@ Applications store this value as `LLM_PROXY_DEFAULT_TENANT_KEY`.
 This repository exposes the standard local targets used by MPR app repos:
 
 Hosted CI runs Go coverage, backend supporting checks, and frontend qualification in three independent jobs.
-Each job has a ten-minute limit.
+The coverage job has a fifteen-minute limit for setup, compilation, and the existing ten-minute Go test limit.
+The other qualification jobs have ten-minute limits.
 Together, the jobs run every gate from local `make ci`.
 Playwright global setup builds the capability binary before browser test workers start.
 The build does not use the 30-second test hook limit.

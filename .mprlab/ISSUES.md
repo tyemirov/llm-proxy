@@ -287,11 +287,13 @@ retain satisfied historical dependencies.
   Evidence: Admission race tests pass. The full Go suite starts after five minutes and cannot finish before cancellation.
   Goal: Start coverage independently from the other backend gates.
   Requirements: Put the other backend gates in a separate job. Preserve each local CI gate exactly once across hosted jobs.
-  Requirements: Keep ten-minute job limits. Require all qualification jobs to succeed before the required test check passes.
-  Resolution: Go coverage starts in its own job. A separate job runs the other backend gates.
+  Requirements: Give coverage fifteen minutes for setup, compilation, and the existing ten-minute Go test limit. Keep other qualification jobs at ten minutes.
+  Requirements: Require all qualification jobs to succeed before the required test check passes.
+  Evidence: Run `35570475157` passes frontend and backend supporting checks. Coverage still exceeds the ten-minute job limit.
+  Resolution: Go coverage starts in its own job with a fifteen-minute budget. A separate job runs the other backend gates.
   Validation: The public Make test passes. All 125 aggregate result combinations pass. Each local gate occurs exactly once across hosted jobs.
   Validation: Final local CI passes all 14 gates in 386 seconds with 100.0 percent Go coverage.
-  Evidence: `/tmp/llm-proxy-i276-initial.log`, `/tmp/llm-proxy-i276-focused.log`, and `/tmp/llm-proxy-i276-ci.log` record local validation.
+  Evidence: `/tmp/llm-proxy-i276-budget-initial.log`, `/tmp/llm-proxy-i276-budget-focused.log`, and `/tmp/llm-proxy-i276-final-ci.log` record local validation.
   Delivery: GitHub checks on PR #335 record hosted validation after the push.
   Files: `.github/workflows/test.yml`, `Makefile`, `README.md`, and the hosted CI contract tests. Public API and event contracts remain unchanged.
 

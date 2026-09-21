@@ -37,8 +37,12 @@ func assertHostedCIWorkflow(testingInstance *testing.T, repositoryRoot string, d
 	}
 	for _, name := range []string{"backend", "backend-checks", "frontend"} {
 		job, exists := workflow.Jobs[name]
-		if !exists || len(job.Needs) != 0 || job.If != "" || job.ContinueOnError || job.TimeoutMinutes != 10 {
-			testingInstance.Fatalf("hosted %s job must run independently with its ten-minute deadline", name)
+		expectedDeadline := 10
+		if name == "backend" {
+			expectedDeadline = 15
+		}
+		if !exists || len(job.Needs) != 0 || job.If != "" || job.ContinueOnError || job.TimeoutMinutes != expectedDeadline {
+			testingInstance.Fatalf("hosted %s job must run independently with its %d-minute deadline", name, expectedDeadline)
 		}
 		qualificationSteps := 0
 		for _, step := range job.Steps {
