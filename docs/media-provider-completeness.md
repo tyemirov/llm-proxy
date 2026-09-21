@@ -106,7 +106,7 @@ F026 and F027 retain the other native service adapters and complete source cover
 | FAL | Reve images, both Seedance video routes, queue status and recovery, ordered artifacts | F041, F025 | Reve image code and local acceptance tests are implemented. Video, publication, and consumer acceptance remain open. |
 | Runway | Text, image, and video inputs, task status and recovery, all seven declared models | F025 | Media adapters remain open. |
 | xAI | Video generation, extension and editing controls, task recovery, private file access and cleanup | F025 | Catalog presence does not establish a complete durable media adapter. |
-| ElevenLabs | Speech generation and conversion, dictionaries, voices, metadata, history, alignment, all seven music operations | F026 | One provider defines account metadata, quotas, voice discovery, and forced alignment. Speech, conversion, voice-library operations, history, dictionaries, and music remain open. |
+| ElevenLabs | Speech generation and conversion, dictionaries, voices, metadata, history, alignment, all seven music operations | F026 | One provider defines account metadata, quotas, voice discovery, forced alignment, and dictionary creation. All six speech and conversion models use the same provider. Voice-library operations, history, and music remain open. |
 | HeyGen | Translation, video lip-sync, avatar creation, motion, avatar video, uploads, quota, task recovery | F027 | Provider definition and adapters are absent. |
 | Kling | Video generation, lip-sync, uploads, element create/list/get/delete, task recovery | F025, F027 | Provider definition and adapters are absent. |
 
@@ -186,3 +186,15 @@ The remaining F026 methods are still open.
 
 F026 voice discovery uses the common paginated voice resource for ElevenLabs and Dictator.
 See [Provider voices](provider-voices.md) for metadata, preview access, authority, and client contracts.
+
+F026 dictionary creation uses the declared service branch and shared account connection.
+See [Provider dictionaries](provider-dictionaries.md) for private references, durable creation evidence, and recovery.
+The dictionary checkpoint passes all 14 CI gates with 100.0 percent Go coverage.
+
+F026 speech conversion adds both exact source models under the existing ElevenLabs provider.
+The shared catalog declares all 28 source formats and eight conversion controls.
+The gateway preserves native bytes and publishes a separate audio description artifact.
+See [provider speech](provider-speech.md) for the current request and recovery contract.
+
+F026 speech generation adds all four source models with owned dictionaries, continuity references, timestamps, and catalog-selected pacing.
+The current native contract rejects a Multilingual v2 language override. This corrects the older source capability flag.
