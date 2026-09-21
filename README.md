@@ -32,6 +32,8 @@ MediaOps keeps all applications, browser workflows, local processing, and applic
 Only model and provider access moves to LLM Proxy under the F071 ownership contract.
 See the [consolidation strategy](docs/media-gateway-consolidation.md) for issue ownership, delivery order, and acceptance requirements.
 
+The [provider speech contract](docs/provider-speech.md) defines six ElevenLabs speech and conversion models, source controls, formats, and owned audio artifacts.
+
 ## Features
 
 - Minimal HTTP server whose complete owned operation surface is defined by the
