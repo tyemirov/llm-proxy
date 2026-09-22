@@ -27,6 +27,16 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B245] (P2) Keep model drafts when the final task filter stays pressed.
+  Evidence: Activating the final pressed task clears the selected model and removes the unsaved system prompt.
+  Requirements: Keep the selected model, form values, and focus when the task selection does not change.
+  Validation: Use browser coverage for mouse, Enter, and Space activation. Run final CI.
+  Evidence: `/tmp/b245-initial.log` records the expected browser failure because the prompt field disappears.
+  Resolution: The dashboard keeps model details and form values when the task selection stays unchanged.
+  Validation: Mouse, Enter, and Space browser checks pass. Final CI passes all 14 gates, including 151 browser tests and 100.0 percent Go coverage.
+  Evidence: `/tmp/b245-focused.log` and `/tmp/b245-ci.log`.
+  Event contracts: No event contract changed.
+
 - [x] [B244] (P2) Correct the asset metadata response header declaration.
   Evidence: The public metadata endpoint returns no request-timeout header. Its OpenAPI response requires the upload timeout header.
   Requirements: Declare the metadata response separately from the upload response. Preserve the upload timeout requirement.
