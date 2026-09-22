@@ -292,3 +292,17 @@
   }
 
 }
+
+/* Task navigation and directional model capabilities. */
+.task-filter{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px;color:inherit}
+.task-filter button{flex:0 1 auto;min-height:36px;padding:8px 12px;border:1px solid #56616c;border-radius:999px;background:transparent;color:#e0e5ec;font-size:13px;font-weight:600;cursor:pointer;text-align:left}
+.task-filter button small{display:block;font-size:11px;font-weight:400;color:#aeb8c6;margin-top:3px}
+.task-filter button[aria-pressed=true]{background:#183b36;border-color:#68ded1;color:#68ded1}
+.task-filter button:hover{background:#2a333c}
+.task-filter button[aria-pressed=true]:hover{background:#183b36}
+.task-filter button:focus-visible{outline:2px solid #7daaff;outline-offset:2px}
+.model-flow{display:flex;align-items:center;gap:7px;flex-wrap:wrap;color:#aeb8c6;min-height:24px;text-align:left}
+.model-modality{display:inline-flex;position:relative;width:20px;height:20px;align-items:center;justify-content:center;flex:none}.model-modality svg{width:18px;height:18px}.model-flow-arrow{padding:0 3px;font-size:18px}
+.model-flow-caption{display:none;width:100%;font-size:11px;line-height:1.5;letter-spacing:normal}button:focus-visible .model-flow-caption,.model-flow:has(.model-modality:hover) .model-flow-caption{display:block}
+.model-task-details{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;padding:0;list-style:none}.model-task-details li{display:grid;gap:8px;border:1px solid #46515e;border-radius:6px;padding:12px}.model-task-details small{line-height:1.6;color:#aeb8c6}
+.routing-tree__modalities{display:flex;gap:12px;flex-wrap:wrap}.routing-tree__modalities label{display:grid;gap:5px;font-size:12px}.routing-tree__modalities select{background:var(--mpr-surface,#191f25);color:inherit;border:1px solid #56616c;border-radius:5px;padding:8px;min-width:90px}

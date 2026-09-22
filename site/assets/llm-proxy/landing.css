@@ -1705,3 +1705,20 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Task filter buttons wrap and remain usable at narrow widths. */
+.routing-tree__header{grid-template-columns:minmax(0,1fr) auto}
+.routing-tree__header h2{grid-column:1}.routing-tree__counts{grid-column:2;grid-row:1}
+.routing-tree__filters{grid-column:1 / -1;grid-row:2;overflow:visible;flex-wrap:wrap;gap:12px;align-items:center}
+.routing-tree .task-filter{margin:0;align-self:end;max-width:100%}
+.routing-tree .routing-tree__modalities{align-items:end}.routing-tree [data-route-task-details]{padding:0 20px 20px}
+.routing-tree [data-route-task-flow]{display:flex;gap:12px;flex-wrap:wrap;text-align:left;font-size:11px}
+.routing-tree .task-filter,.routing-tree .model-task-details li{background:var(--panel);color:var(--text);border-color:var(--border-strong)}
+.routing-tree .task-filter{border:0;background:transparent;padding:0}
+.routing-tree .task-filter button{color:var(--text)}.routing-tree .task-filter small,.routing-tree .model-flow,.routing-tree .model-task-details small{color:var(--text-muted)}
+.routing-tree .task-filter button[aria-pressed=true]{background:var(--overlay);color:var(--routing-tree-accent)}
+.routing-tree .routing-tree__modalities select{background:var(--panel);color:var(--text)}
+@media(max-width:680px){.routing-tree__header{grid-template-columns:minmax(0,1fr)}.routing-tree__counts{grid-column:1;grid-row:3}.routing-tree__modalities{gap:8px}}
+.routing-tree__provider,.routing-tree__model{flex-direction:column;align-items:stretch;gap:8px}
+.routing-tree__model [data-route-model-tasks]{text-align:left}
+.routing-tree [data-route-task-flow] .model-flow{flex-wrap:nowrap}

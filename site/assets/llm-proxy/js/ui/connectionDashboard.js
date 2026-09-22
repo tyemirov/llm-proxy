@@ -3,7 +3,9 @@
 import * as backend from '../core/backendClient.js?v=20260903f037';
 import {profileFailureMessage} from '../core/managementProfile.js?v=20260903f037';
 
-import {COPY, PROVIDER_CAPABILITY_LABELS, PROVIDER_RESOURCE_LABELS, CAPABILITY_DOMAINS, CAPABILITY_DOMAIN_LABELS} from '../constants.js?v=20260903f037';
+import {COPY, PROVIDER_CAPABILITY_LABELS, PROVIDER_RESOURCE_LABELS, CAPABILITY_DOMAINS} from '../constants.js?v=20260903f037';
+
+import {MODEL_TASKS, tasksForOffering, offeringMatchesTasks, reconcileSelectedTasks, toggleSelectedTask, renderTaskFlow, renderTaskDetails, renderTaskPicker} from '../modelTasks.js?v=20260903f037';
 
 const MCP_PATH = '/mcp';
 
@@ -29,7 +31,12 @@ export class ConnectionDashboard extends HTMLElement {
   tenantID = '';
   connectionID = '';
   modelID = '';
-  /** @type {import('../types.d.js').CapabilityDomain} */ capability = CAPABILITY_DOMAINS.TEXT;
+  taskIDs = ['text'];
+  get capability() { return MODEL_TASKS.find(task=>this.taskIDs.includes(task.id))?.defaultDomain; }
+  get availableTasks() {
+    const identifiers = new Set(this.offerings.filter(offering=>offering.provider===this.connection?.provider).flatMap(offering=>tasksForOffering(offering).map(task=>task.id)));
+    return MODEL_TASKS.filter(task=>identifiers.has(task.id));
+  }
   search = '';
   busy = false;
   message = '';
@@ -77,14 +84,9 @@ export class ConnectionDashboard extends HTMLElement {
       default: return false;
     }
   }
-  /** @param {import('../types.d.js').CapabilityDomain} domain */
-  modelsForDomain(domain) {
-    if (!this.provider) return [];
-    switch(domain) {
-      case CAPABILITY_DOMAINS.TEXT: return this.provider.text_models.map(model=>model.id);
-      case CAPABILITY_DOMAINS.TRANSCRIPTION: return this.provider.transcription_models;
-      default: return this.offerings.filter(offering=>offering.provider===this.connection?.provider && offering.domains.includes(domain)).map(offering=>offering.model);
-    }
+  /** @param {string[]} selectedIDs */
+  modelsForSelectedTasks(selectedIDs) {
+    return this.offerings.filter(offering=>offering.provider===this.connection?.provider && offeringMatchesTasks(offering, selectedIDs)).map(offering=>offering.model);
   }
   get canSaveDefault() {
     return this.capability===CAPABILITY_DOMAINS.TEXT || this.capability===CAPABILITY_DOMAINS.TRANSCRIPTION ||
@@ -105,9 +107,7 @@ export class ConnectionDashboard extends HTMLElement {
   }
   adaptCapabilityForConnection() {
     if (!this.connection || !this.provider) return;
-    if (this.modelsForDomain(this.capability).length) return;
-    const available = Object.values(CAPABILITY_DOMAINS).find(domain=>this.modelsForDomain(domain).length);
-    if (available) this.capability = available;
+    this.taskIDs = reconcileSelectedTasks(this.taskIDs, this.availableTasks);
   }
 
   /** @param {string} id */
@@ -174,7 +174,7 @@ export class ConnectionDashboard extends HTMLElement {
     const map = this.querySelector('[data-map]'); if (!map) return;
     const matches = (/** @type {string} */ text) => text.toLowerCase().includes(this.search.toLowerCase());
     const disabled = this.busy ? 'disabled':'';
-    const modelIDs = this.attached && this.ready ? this.modelsForDomain(this.capability) : [];
+    const modelIDs = this.attached && this.ready ? this.modelsForSelectedTasks(this.taskIDs) : [];
     map.innerHTML = `<svg class="cw-wires" aria-hidden="true"></svg>
       <section class="cw-column"><header><h3>Tenants <span>${this.tenants.length}</span></h3><button data-action="create-tenant" ${disabled}>Create tenant</button></header>
       <div class="cw-list">
@@ -184,8 +184,8 @@ export class ConnectionDashboard extends HTMLElement {
         const assigned=c.tenant_ids.includes(this.tenantID); const occupied=this.connections.some(other=>other.provider===c.provider && other.tenant_ids.includes(this.tenantID));
         return `<article class="cw-node ${c.id===this.connectionID?(assigned?'selected':'browsing'):''}" data-connection-node="${escapeHTML(c.id)}"><div class="cw-row"><button class="cw-name" data-connection="${escapeHTML(c.id)}">${providerIcon(c.provider)}<strong>${escapeHTML(c.name)}</strong></button>${this.tenantID ? assigned ? '<span class="cw-connected">✓ Connected</span>' : occupied ? '<span class="cw-muted">Provider already connected</span>' : `<button class="cw-connect" data-connect="${escapeHTML(c.id)}" ${disabled}>Connect</button>` : ''}</div><small>${escapeHTML(this.providers.find(p=>p.id===c.provider)?.api_service_label || c.provider)}</small><small>${c.tenant_ids.length ? `Used by ${c.tenant_ids.length} tenant${c.tenant_ids.length===1?'':'s'}`:'Unassigned'}</small>${connectionReady(c)?'':'<small>Credentials needed</small>'}</article>`;
       }).join('') || '<p class="cw-empty">Create a connection to add provider credentials.</p>'}</div></section>
-      <section class="cw-column"><header><h3>Models</h3></header><div class="cw-tabs" role="group" aria-label="Model capability">${Object.values(CAPABILITY_DOMAINS).map(domain=>`<button data-capability="${domain}" aria-pressed="${this.capability===domain}" ${disabled}>${CAPABILITY_DOMAIN_LABELS[domain]}</button>`).join('')}</div><div class="cw-list">
-      ${modelIDs.filter(matches).map(id=>{const saved=this.isDefaultModel(id);return `<button class="cw-node ${saved?'selected':this.modelID===id?'preview':''}" data-model="${escapeHTML(id)}" ${disabled}><span class="cw-row"><brand-icon kind="family" identifier="${escapeHTML(this.modelFamilies[id])}"></brand-icon><code>${escapeHTML(id)}</code></span>${saved?'<small class="cw-connected">★ Default model</small>':''}</button>`;}).join('') || `<p class="cw-empty">${this.attached ? this.ready ? (this.provider?.capabilities.length===0 && this.provider.resources.length ? 'This connection provides account resources.' : 'No models for this capability.') : 'Add credentials to choose models. Edit this connection to complete its setup.' : 'Connect to choose models.<br>Use a Connect button in the middle column.'}</p>`}</div></section>`;
+      <section class="cw-column"><header><h3>Models</h3></header>${renderTaskPicker(this.availableTasks,this.taskIDs,this.busy)}<div class="cw-list">
+      ${modelIDs.filter(matches).map(id=>{const saved=this.isDefaultModel(id);const offering=this.offerings.find(o=>o.provider===this.connection?.provider && o.model===id); const selectedOfferingTasks=offering ? tasksForOffering(offering).filter(t=>this.taskIDs.includes(t.id)) : [];return `<button class="cw-node ${saved?'selected':this.modelID===id?'preview':''}" data-model="${escapeHTML(id)}" ${disabled}><span class="cw-row"><brand-icon kind="family" identifier="${escapeHTML(this.modelFamilies[id])}"></brand-icon><code>${escapeHTML(id)}</code></span>${selectedOfferingTasks.map(task=>renderTaskFlow(task)).join('')}${saved?'<small class="cw-connected">★ Default model</small>':''}</button>`;}).join('') || `<p class="cw-empty">${this.attached ? this.ready ? (this.provider?.capabilities.length===0 && this.provider.resources.length ? 'This connection provides account resources.' : 'No models for the selected tasks.') : 'Add credentials to choose models. Edit this connection to complete its setup.' : 'Connect to choose models.<br>Use a Connect button in the middle column.'}</p>`}</div></section>`;
     const footer=this.querySelector('[data-route]');
     if (footer) footer.textContent=this.connection ? `${this.tenantName} ${this.attached?'→':'· Viewing'} ${this.connection.name}${this.attached?'':' · Not connected'}${this.modelID?(this.isDefaultModel(this.modelID)?' · Saved default: ':' · Preview: ')+this.modelID:''}` : `${this.tenantName} · Select a connection`;
     map.querySelectorAll('.cw-list').forEach(list => list.addEventListener('scroll', () => this.scheduleDraw(), {passive:true}));
@@ -229,7 +229,7 @@ export class ConnectionDashboard extends HTMLElement {
   }
   modelDetails() {
     const offering=this.offerings.find(o=>o.provider===this.connection?.provider && o.model===this.modelID);
-    const offeringDetails=this.capability===CAPABILITY_DOMAINS.TEXT?'':`<section data-media-details><h4>${escapeHTML(this.modelID)}</h4><p>Available through this tenant’s API key.</p><ul>${(offering?.capabilities||[]).map(capability=>`<li>${escapeHTML(PROVIDER_CAPABILITY_LABELS[/** @type {keyof typeof PROVIDER_CAPABILITY_LABELS} */(capability)]||capability)}</li>`).join('')}</ul></section>`;
+    const offeringDetails=(offering?renderTaskDetails(offering):'')+(this.capability===CAPABILITY_DOMAINS.TEXT?'':`<section data-media-details><h4>${escapeHTML(this.modelID)}</h4><p>Available through this tenant’s API key.</p><ul>${(offering?.capabilities||[]).map(capability=>`<li>${escapeHTML(PROVIDER_CAPABILITY_LABELS[/** @type {keyof typeof PROVIDER_CAPABILITY_LABELS} */(capability)]||capability)}</li>`).join('')}</ul></section>`);
     if(!this.canSaveDefault) return offeringDetails;
     const model=this.provider?.text_models.find(m=>m.id===this.modelID);
     const efforts=this.capability==='text'?(model?.reasoning_effort?.efforts||[]):[];
@@ -269,8 +269,15 @@ export class ConnectionDashboard extends HTMLElement {
     if (!button) return;
     if (button.dataset.tenant) { void this.run(() => this.selectTenant(button.dataset.tenant || '')); return; }
     if (button.dataset.model) { this.modelID = button.dataset.model; this.render(); return; }
-    const domain=Object.values(CAPABILITY_DOMAINS).find(value=>value===button.dataset.capability);
-    if (domain) { this.capability = domain; this.modelID = ''; this.render(); return; }
+    const taskID = button.dataset.task;
+    if (taskID && this.availableTasks.some(value=>value.id===taskID)) {
+      this.taskIDs = toggleSelectedTask(this.taskIDs, taskID, this.availableTasks);
+      this.modelID = '';
+      this.render();
+      const taskButton = this.querySelector(`[data-task="${CSS.escape(taskID)}"]`);
+      if (taskButton instanceof HTMLElement) taskButton.focus();
+      return;
+    }
     switch (button.dataset.action) {
       case 'copy-mcp':void this.run(async()=>{const runtime=await backend.loadFrontendRuntimeConfig();await navigator.clipboard.writeText(new URL(MCP_PATH,runtime.proxyOrigin).href);this.message='MCP URL copied.';});break;
       case 'tenant-details':this.connectionID='';this.modelID='';this.render();break;
