@@ -271,7 +271,9 @@ export class ConnectionDashboard extends HTMLElement {
     if (button.dataset.model) { this.modelID = button.dataset.model; this.render(); return; }
     const taskID = button.dataset.task;
     if (taskID && this.availableTasks.some(value=>value.id===taskID)) {
-      this.taskIDs = toggleSelectedTask(this.taskIDs, taskID, this.availableTasks);
+      const selectedTasks = toggleSelectedTask(this.taskIDs, taskID, this.availableTasks);
+      if (selectedTasks === this.taskIDs) return;
+      this.taskIDs = selectedTasks;
       this.modelID = '';
       this.render();
       const taskButton = this.querySelector(`[data-task="${CSS.escape(taskID)}"]`);
