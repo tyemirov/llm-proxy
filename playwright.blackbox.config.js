@@ -1,6 +1,9 @@
+// @ts-check
+
 import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
+  outputDir: "./test-results/blackbox",
   testDir: "./tests/blackbox",
   timeout: 180000,
   workers: 1,
