@@ -36,23 +36,32 @@ A star and a text label identify a saved default.
 Model selection alone does not save a default.
 
 The Task filter shows compact rectangular buttons for tasks in the selected connection inventory.
-Each button shows one short label. Hover over a button to read its task description.
-The buttons sit beside the Models title. They align right and wrap within the header when space is limited.
+Each button shows one task icon. Hover over a button to read its task description.
+The buttons sit in one row beside the Models title. The row scrolls when space is limited.
+
 Text generates text. Vision interprets images and produces text. Images generates images. Editing changes images.
+
 Transcribe converts audio to text. Speech generates audio. Video generates video. Video analysis interprets video when supported.
 
 Specialized tasks include voice conversion, voice extraction, speaker identification, alignment, and subtitles.
-The dashboard presses Text first when Text is available. Otherwise it presses the first available task.
-Each button toggles independently. The dashboard keeps a minimum of one pressed button.
+
+The dashboard starts without a task selection and shows all models that the selected connection supports.
+Each button toggles independently. A second activation removes its selection, including the final selection.
+The available buttons depend on the complete connection inventory, independent of search text and selected tasks.
 The model list shows only offerings that support every pressed task on the same offering.
 An empty result keeps the pressed buttons for revision.
+
 A connection change removes unavailable selections and preserves the remaining selections.
-If no selection remains, the dashboard presses Text when available, otherwise the first available task.
+If no selection remains, the dashboard shows all models for the connection.
 A connection or tenant change removes unsaved model previews.
+
 The text, transcription, and speech save actions preserve the other saved defaults.
+The selected model determines the default save action. A selected task determines the domain for models with multiple default domains.
+Without a task selection, the first supported task determines the domain.
 Vision uses the text default controls. Task filtering does not save a default.
 
-Each model card shows an icon for each pressed task that the offering supports.
+Each model card shows an icon for every task that its provider offering supports.
+Search and task filters do not change these icons.
 Task icons use the following meanings:
 
 | Task | Icon | Description |
