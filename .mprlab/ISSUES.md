@@ -27,6 +27,17 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B246] (P2) Keep model capability icons independent of task filters.
+  Evidence: Task filters remove supported capability icons from model cards.
+  Requirements: Show all supported tasks on dashboard cards and public explorer cards, independent of search filters.
+  Validation: Check model icons before and after filter changes through the browser. Run final CI.
+  Evidence: `/tmp/model-cards-b246-initial.log` records the missing Generate text icon after Vision selection.
+  Evidence: Dashboard and explorer checks pass in `/tmp/model-cards-b246-focused.log`.
+  Resolution: Dashboard and explorer cards show all supported task icons, independent of search filters.
+  Validation: Final CI passes all 14 gates, including 151 frontend tests, seven integration browser tests, and 100.0 percent Go coverage.
+  Evidence: `/tmp/model-filters-ci-final.log`. Event contracts are unchanged.
+
+
 - [x] [B245] (P2) Keep model drafts when the final task filter stays pressed.
   Evidence: Activating the final pressed task clears the selected model and removes the unsaved system prompt.
   Requirements: Keep the selected model, form values, and focus when the task selection does not change.
@@ -291,6 +302,17 @@ retain satisfied historical dependencies.
   Blocked: The operator must publish the qualified shared UI assets and complete cache convergence under mpr-ui I009.
 
 ## Improvements
+
+- [x] [I284] (P2) Use icons for model task filters.
+  Requirements: Replace task labels with icons in one row. Keep accessible names, hover descriptions, and keyboard controls.
+  Validation: Check desktop and narrow browser layouts. Run final CI.
+  Evidence: `/tmp/model-filters-i284-initial.log` records visible Text content where the test expects an icon.
+  Resolution: Icon buttons retain accessible names and hover descriptions. The row scrolls when space is limited.
+  Evidence: A focused check found a three-pixel header offset. The corrected checks pass in `/tmp/model-filters-i284-focused.log`.
+  Resolution: Shared task filters use one row of icons with accessible names and keyboard controls.
+  Validation: Final CI passes all 14 gates, including 151 frontend tests, seven integration browser tests, and 100.0 percent Go coverage.
+  Evidence: `/tmp/model-filters-ci-final.log`. Event contracts are unchanged.
+
 
 - [x] [I283] (P2) Show task icons on model cards.
   Requirements: Use the agreed task icons and descriptions on dashboard and explorer model cards.
@@ -1610,6 +1632,67 @@ retain satisfied historical dependencies.
   was required.
 
 ## Features
+
+- [ ] [F086] (P1) Compare models on tenant tasks before a model change.
+  Goal:
+  Help tenants evaluate a candidate model with their own requests before they change the selected model.
+  Requirements:
+  - Place a `Compare models` action beside the model selection controls in the tenant dashboard.
+  - Start with the current model and one candidate model.
+  - Identify each exact model and provider offering separately.
+  - Let the tenant supply sample requests and define the expected results.
+  - Execute the same requests through both selected routes with explicit, supported settings.
+  - Show the two answers beside each other for each request.
+  - Show task results, response time, request errors, and available cost evidence.
+  - Distinguish tenant judgments from automatic checks and provider execution failures.
+  - Show cases where the candidate fails a check that the current model passes.
+  - Record request settings, route identities, execution dates, sample counts, and individual results.
+  - Label estimated cost separately from measured usage and confirmed charges.
+  - Show unavailable cost evidence explicitly.
+  - Use the canonical catalog and applicable price conditions for cost estimates.
+  - Keep the public price display owned by F036 separate from this tenant workflow.
+  - Save each result under the tenant in a dedicated `Comparisons` page.
+  - Let the tenant reopen results and run a new evaluation after a model update.
+  - Retain the original dated results when the tenant runs a new evaluation.
+  - Require an explicit tenant action before the selected model changes.
+  - Start with a results table and individual answers.
+  - Show summary charts only for comparable measurements with visible sample counts, settings, units, and scoring rules.
+  - Add a small public demonstration that links to the working tenant workflow after implementation.
+  Deliverables:
+  - Implement the dashboard action, execution workflow, result view, and saved results page.
+  - Define task scoring, request limits, repeat counts, and result retention before implementation.
+  - Protect tenant requests and results with the existing tenant access controls.
+  - Document the workflow and the limits of each metric.
+  Validation:
+  - Do a test of both routes with identical sample inputs through the public application interfaces.
+  - Do a test of supported settings, invalid inputs, provider errors, unavailable costs, and failed task checks.
+  - Verify saved results survive reload and remain inaccessible to other tenants.
+  - Verify the selected model changes only after the tenant chooses that action.
+  - Verify keyboard use, readable results, and no horizontal page overflow at desktop and mobile widths.
+  - Verify charts and tables agree with their individual results and sample counts.
+  - Run the applicable integration tests and `make ci` after application changes.
+  Context:
+  The user requested P1 on September 22, 2026.
+  A Reddit response requested task checks when providers change. This is one feedback signal, not measured demand.
+  Source: https://www.reddit.com/user/MarcoPoloResearchLab/comments/1wmhonq/comment/pbchgot/
+  Presentation reference: https://artificialanalysis.ai/
+
+
+- [x] [F085] (P2) Show all connection models without a task selection.
+  Requirements: Start the dashboard with no task filter selected. Show all models that the selected connection supports.
+  Requirements: Show only filters for tasks in the complete connection inventory. Permit removal of the final selection.
+  Requirements: Preserve available selections on connection changes. Show all models when no selection remains.
+  Requirements: Keep AND matching for selected tasks. Derive default actions from the selected model capabilities.
+  Validation: Check selection, search, connection changes, and default actions through the browser. Run final CI.
+  Evidence: `/tmp/model-filters-f085-initial.log` records one initial task selection where the test expects zero.
+  Evidence: `/tmp/model-filters-f085-focused.log` records five successful browser checks.
+  Validation: Initial CI passed 151 browser tests but found an obsolete automatic-selection assertion in the dashboard integration test.
+  Evidence: `/tmp/model-filters-ci.log` records expected `true` and actual `false` for the Transcribe button.
+  Validation: The corrected test passes in `/tmp/model-filters-blackbox.log`.
+  Resolution: The dashboard shows all connection models without a task selection. Filters use the complete connection inventory.
+  Validation: Final CI passes all 14 gates, including 151 frontend tests, seven integration browser tests, and 100.0 percent Go coverage.
+  Evidence: `/tmp/model-filters-ci-final.log`. Event contracts are unchanged.
+
 
 - [x] [F084] (P2) {I279} Filter model tasks with independently selectable buttons.
   Goal: Select one or more tasks through compact buttons and show models that support every selected task.
