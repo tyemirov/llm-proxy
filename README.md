@@ -1413,11 +1413,11 @@ Together, the jobs run every gate from local `make ci`.
 Playwright global setup builds the capability binary before browser test workers start.
 The build does not use the 30-second test hook limit.
 Global teardown removes the temporary binary after the browser tests.
-Browser tests must save generated screenshots in ignored output directories.
-`test.info().outputPath()` selects a path within the current test output directory.
+Browser tests capture screenshots only when a test fails.
+Successful tests must not save screenshots. Do not commit generated browser screenshots.
 Frontend tests use `test-results/frontend/`. Authentication tests use `test-results/blackbox/`.
-These separate directories preserve screenshots and attachments from both CI stages.
-CI must not overwrite tracked evidence in `artifacts/`.
+These ignored directories preserve failure screenshots and traces from both CI stages.
+Playwright clears each output directory before the next run of that suite.
 
 The required `Test / test` check passes only when all three jobs succeed.
 A failed, cancelled, skipped, or missing job result prevents success.
