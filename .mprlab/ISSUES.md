@@ -336,6 +336,16 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [x] [I285] (P2) Retain browser screenshots only for failed tests.
+  Goal: Remove routine screenshot storage after visual review.
+  Requirements: Remove manual screenshot captures and the five obsolete tracked PNG files.
+  Requirements: Configure both browser suites to retain screenshots only for failed tests in ignored output directories.
+  Validation: Verify screenshot output with passing and failing browser tests. Run final CI and check tracked file contents.
+  Resolution: Removed manual captures and five tracked PNG files. Both suites use `screenshot: "only-on-failure"` in separate ignored directories.
+  Evidence: Temporary browser checks retained one screenshot for each deliberate failure and none for successful tests in both suites.
+  Evidence: Final `make ci` passed all 14 gates, including 154 frontend tests and 7 authentication tests. Go statement coverage is 100.0%.
+  Evidence: `/tmp/screenshot-i285-integrity.json` records zero screenshots after successful CI and no changes to 621 tracked paths.
+
 - [x] [I284] (P2) Use icons for model task filters.
   Requirements: Replace task labels with icons in one row. Keep accessible names, hover descriptions, and keyboard controls.
   Validation: Check desktop and narrow browser layouts. Run final CI.
