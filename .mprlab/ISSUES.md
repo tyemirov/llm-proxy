@@ -282,6 +282,106 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [ ] [I279] (P2) Clarify model tasks with compact labels and input/output icons.
+  Goal: Distinguish model tasks, accepted inputs, and produced outputs through a compact visual language.
+  The current Image tab includes models that accept images and produce text.
+  This issue refines the existing model discovery UI and the capability separation from F073.
+  Its task selector replaces the tab navigation specified in F073.
+  Requirements:
+  - Replace the dashboard capability tabs with one compact Task selector.
+  - Keep a text label in the selector and show a full task description in its menu.
+  - Use these compact labels and descriptions:
+    - `Text`: Generate text.
+    - `Vision`: Understand images.
+    - `Images`: Generate images.
+    - `Editing`: Edit images.
+    - `Transcribe`: Transcribe audio.
+    - `Speech`: Generate speech.
+    - `Video analysis`: Understand video.
+    - `Video`: Generate video.
+  - Determine task eligibility from the exact provider offering and supported operation.
+  - Let a model appear under each task that its provider offering supports.
+  - Define supported inputs and outputs for each task explicitly.
+  - Keep image editing and other tasks distinct even when their input and output types match.
+  - Limit available tasks to operations supported through LLM Proxy.
+  - Show an input-to-output icon strip below the model name in the same position on each card.
+  - Use consistent text-line, picture, waveform, and filmstrip icons for text, image, audio, and video.
+  - Use an arrow to show the input-to-output direction.
+  - Show only the inputs and outputs relevant to the selected task on each card.
+  - Show every supported task and its respective inputs and outputs in model details.
+  - Explain required and optional inputs in model details.
+  - Use neutral modality icons and reserve teal for selection and connection state.
+  - Give each icon an accessible name, such as `Image input` or `Text output`.
+  - Show icon explanations on hover and keyboard focus, and make details available by touch.
+  - Keep task meaning available through text and accessible names independently of icon shape or color.
+  - Preserve the existing tenant, connection, and model default actions under the new task selector.
+  - Use the same task vocabulary and icon meanings in the public model explorer.
+  - Provide separate Input and Output filters in the public model explorer.
+  Deliverables:
+  - Produce reviewable views of the current dashboard, expanded task menu, and model details before implementation.
+  - Update the shared task definitions, dashboard, model explorer, and affected capability contracts.
+  - Update browser tests and the current model discovery documentation.
+  Validation:
+  - Verify that Kimi vision offerings appear under `Vision` with text and image inputs producing text.
+  - Verify that image generation results include only offerings with an image output operation.
+  - Verify generation, editing, transcription, speech, and video task mappings against supported provider offerings.
+  - Verify that a multimodal card shows the selected task without implying unsupported input/output combinations.
+  - Verify that model details show all supported tasks and identify required and optional inputs.
+  - Verify combined Input and Output filters in the public model explorer.
+  - Verify keyboard navigation, focus explanations, accessible names, touch access, and readable desktop and mobile layouts.
+  - Verify tenant selection, connection assignment, and applicable model default actions through real browser flows.
+  - Run the applicable repository validation after the final implementation change.
+
+- [ ] [I278] (P1) {I277,F081,F082,F083} Verify the complete tenant API access flow.
+  Goal: Provide durable tenant API access with clear configuration errors and historical connection attribution.
+  Requirements:
+  - Execute the work in this order: I277, F081, F082, F083, then I278 acceptance.
+  - Use I277 for the tenant name and optional existing connection selector.
+  - Use F081 for automatic key creation, encrypted storage, later retrieval, and key replacement.
+  - Use F082 for distinct authentication and configuration errors.
+  - Use F083 for saved request attribution and connection reporting.
+  - Keep implementation requirements in their respective issues.
+  - Close this umbrella only after its dependencies and combined acceptance pass.
+  Deliverables:
+  - Record the completed sequence and combined acceptance evidence in this issue.
+  Validation:
+  - Create a tenant with an existing connection and copy its automatically created key.
+  - Close the dialog, reload, and copy the same key through the tenant API access action.
+  - Repeat retrieval in a new authenticated browser session.
+  - Create a tenant without a connection and verify its key is available immediately.
+  - Send a generation request and verify the configuration error from F082.
+  - Assign a connection and save the required model default, then repeat the request successfully.
+  - Verify the actual connection in request details and usage reporting.
+  - Change the tenant assignment and verify that previous request attribution remains intact.
+  - Use automated browsers and real public API entry points for combined acceptance.
+
+- [ ] [I277] (P2) Simplify the tenant creation dialog and connection selection.
+  Goal: Create a tenant with an existing connection by default, with an explicit option to leave the connection blank.
+  The supplied screenshot shows a `Next step` selector instead of a selector for a specific connection.
+  The current form also offers `Create a new connection` and opens a separate connection form after tenant creation.
+  Requirements:
+  - Show the tenant name and an optional connection selector in the tenant creation dialog.
+  - List the account's existing connections by name and provider.
+  - Show the default connection as the initial selection when it is available.
+  - Let the user select another existing connection or explicitly select no connection.
+  - Assign the selected connection when the user creates the tenant.
+  - If the selection is blank, create the tenant without a connection assignment.
+  - If the account has no connections, permit tenant creation with a blank selection.
+  - Remove the new connection option and its automatic form transition from tenant creation.
+  - Keep connection creation in the separate connection management action.
+  - Show the saved tenant and its actual connection assignment after creation.
+  Open Decisions:
+  - Define which existing connection is the default when the account has multiple connections.
+  - Define the initial selection when connections exist but no default connection is available.
+  Deliverables:
+  - Update the tenant dialog, browser tests, and `docs/tenant-connections.md`.
+  Validation:
+  - Use automated browser tests with the real management API.
+  - Verify the default selection, another existing connection, an explicit blank selection, and an account without connections.
+  - Reload the page and verify the saved tenant assignment for each case.
+  - Verify that tenant creation neither creates a connection nor opens a connection creation form.
+  - Verify keyboard operation and the rendered dialog at desktop and mobile viewport sizes.
+
 - [x] [I276] (P1) Separate hosted backend gates to complete within the job limit.
   Evidence: PR #335 run `35567984432` cancels the backend job at its ten-minute limit.
   Evidence: Admission race tests pass. The full Go suite starts after five minutes and cannot finish before cancellation.
@@ -1436,6 +1536,83 @@ retain satisfied historical dependencies.
   was required.
 
 ## Features
+
+- [ ] [F081] (P1) {I277} Create and retain tenant API keys for later retrieval.
+  Goal: Make API access available when a tenant is created and through a permanent tenant action.
+  Requirements:
+  - Create the tenant and its initial API key in one durable operation.
+  - Make creation retries return the same tenant and key without duplicate resources.
+  - Store the recoverable key encrypted on the server with the current credential encryption facilities.
+  - Authorize key retrieval through the authenticated tenant owner's management session.
+  - Show a tenant creation result with `Copy API key`, connection status, and an example request.
+  - Keep API access available when the tenant has no connection or model default.
+  - Provide permanent `Reveal`, `Copy`, and `Replace key` actions in tenant API access.
+  - Retrieve the same key after dialog closure, page reload, and a new authenticated browser session.
+  - Keep the key masked until an explicit reveal or copy action.
+  - Clear revealed keys from browser memory when the access view closes or the session ends.
+  - Exclude raw keys from browser persistent storage, logs, traces, and usage records.
+  - Make key replacement explicit and revoke the replaced key when the replacement succeeds.
+  - Report creation, retrieval, and replacement failures with actionable messages.
+  Open Decisions:
+  - Define the bounded transition for existing digest-only keys, whose original values cannot be recovered.
+  - Preserve existing access until the owner explicitly replaces an existing key.
+  Deliverables:
+  - Update tenant creation, key storage, management endpoints, browser controls, and public contract tests.
+  - Update the OpenAPI contract, applicable clients, and tenant API access documentation.
+  Validation:
+  - Verify atomic creation and retry behavior through the management API.
+  - Verify retrieval after server restart and through a new authenticated browser session.
+  - Verify owner access and rejection of another account or an expired session.
+  - Verify key replacement, old-key rejection, and continued access with the replacement key.
+  - Verify the flow with and without a connection or model default.
+  - Verify that persisted ciphertext and captured logs contain no raw key.
+  - Run the applicable repository validation after the final change.
+
+- [ ] [F082] (P1) {F081} Return distinct tenant configuration errors for generation requests.
+  Goal: Distinguish valid tenant access from missing generation configuration.
+  Requirements:
+  - Accept a valid tenant key independently of connection and model readiness.
+  - Return `tenant_connection_required` when a generation request has no required tenant connection.
+  - Give the error an actionable message that directs the owner to assign a connection.
+  - Define distinct errors for a missing model default and rejected provider credentials.
+  - Keep invalid tenant authentication distinct from tenant configuration errors.
+  - Define HTTP statuses, error precedence, and response fields in the canonical API contract.
+  - Apply the configuration errors consistently across applicable generation entry points and official clients.
+  - Reject missing configuration before provider dispatch.
+  - Preserve successful explicit provider and model requests when no model default is needed.
+  Deliverables:
+  - Update request validation, error responses, OpenAPI, applicable clients, and tenant configuration documentation.
+  Validation:
+  - Verify invalid keys, no connections, an unassigned requested provider, and missing required defaults.
+  - Verify rejected provider credentials through a controlled upstream response.
+  - Verify that missing configuration causes zero provider requests.
+  - Assign a connection and the required default, then verify success with the same tenant key.
+  - Verify successful explicit routes without a saved default.
+  - Run the applicable repository validation after the final change.
+
+- [ ] [F083] (P1) {F082} Retain actual connection attribution for request details and reporting.
+  Goal: Show which connection each request actually used, including after tenant assignments change.
+  Requirements:
+  - Record the request ID, tenant ID, connection ID, connection version, provider, model, outcome, and usage.
+  - Capture the resolved connection when execution selects its route.
+  - Retain the connection identity for each provider attempt when one request has multiple attempts.
+  - Keep historical attribution unchanged after connection rename, replacement, reassignment, or deletion.
+  - Record rejected requests with their request ID, tenant identity when known, and error code.
+  - Leave connection attribution empty when rejection occurs before connection selection.
+  - Exclude tenant keys and provider credentials from attribution records.
+  - Show the actual connection in request details and support connection-based usage reporting.
+  - Restrict request details and reports to the authorized account and tenant scope.
+  Deliverables:
+  - Update request tracing, durable usage records, reporting contracts, and application request details.
+  - Document connection identity, version semantics, and historical reporting behavior.
+  Validation:
+  - Send requests through two connections and verify their separate attribution and usage totals.
+  - Change the tenant assignment and verify that earlier requests retain their original connection identity.
+  - Rename or replace a connection and verify historical attribution remains intact after server restart.
+  - Verify concurrent requests, failed attempts, and configuration rejections.
+  - Verify account isolation and the absence of raw credentials in traces and reports.
+  - Verify rendered request details and connection reporting through automated browser tests.
+  - Run the applicable repository validation after the final change.
 
 - [ ] [F080] (P1) Add Kimi web search through the current Moonshot search APIs.
   Goal: Let callers use `web_search=true` with supported Moonshot model offerings.
