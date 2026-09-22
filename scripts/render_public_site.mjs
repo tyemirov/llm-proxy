@@ -1,4 +1,4 @@
-import {MODEL_TASKS, MODALITY_LABELS, tasksForOffering, renderTaskPicker, renderTaskFlow, renderTaskDetails} from '../site/assets/llm-proxy/js/modelTasks.js';
+import {MODEL_TASKS, MODALITY_LABELS, tasksForOffering, renderTaskPicker, renderTaskIcon, renderTaskDetails} from '../site/assets/llm-proxy/js/modelTasks.js';
 // @ts-check
 
 import { cp, lstat, readFile, readdir, rm, writeFile } from "node:fs/promises";
@@ -801,7 +801,7 @@ function renderRoutingTree(catalog) {
     const matchingModels = familyModels.filter((model) => (defaultOfferingsByModel.get(model.identifier)?.length ?? 0) > 0);
     const modelButtons = familyModels.map((model) => {
       const visible = (defaultOfferingsByModel.get(model.identifier)?.length ?? 0) > 0;
-      return `<button type="button" class="routing-tree__branch routing-tree__model" data-route-model="${escapeAttribute(model.identifier)}" data-route-model-family="${escapeAttribute(model.family)}" aria-pressed="${model.identifier === selectedModel.identifier ? "true" : "false"}"${visible ? "" : " hidden"} disabled><code>${escapeHTML(model.identifier)}</code><small data-route-model-tasks>${escapeHTML([...new Set(model.provider_offerings.flatMap(id=>tasksForOffering(requireReference(offeringsByIdentifier,id,"model tasks")).map(task=>task.label)))].join(" · "))}</small></button>`;
+      return `<button type="button" class="routing-tree__branch routing-tree__model" data-route-model="${escapeAttribute(model.identifier)}" data-route-model-family="${escapeAttribute(model.family)}" aria-pressed="${model.identifier === selectedModel.identifier ? "true" : "false"}"${visible ? "" : " hidden"} disabled><code>${escapeHTML(model.identifier)}</code><small data-route-model-tasks>${[...new Set(model.provider_offerings.flatMap(id=>tasksForOffering(requireReference(offeringsByIdentifier,id,"model tasks")).map(renderTaskIcon)))].join("")}</small></button>`;
     }).join("");
     return `      <section id="routing-tree-models-${escapeAttribute(family.identifier)}" class="routing-tree__model-group" data-route-model-group="${escapeAttribute(family.identifier)}" aria-label="${escapeAttribute(family.label)} exact models"${family.identifier === selectedFamily.identifier ? "" : " hidden"}>
         <p><strong>${escapeHTML(family.label)}</strong><span data-route-model-count>${countLabel(matchingModels.length, "exact model")}</span></p>
@@ -819,7 +819,7 @@ function renderRoutingTree(catalog) {
     const matchingOfferings = defaultOfferingsByModel.get(model.identifier) ?? [];
     const providerButtons = modelOfferings.map((offering) => {
       const provider = providersByIdentifier.get(offering.provider);
-      return `<button type="button" class="routing-tree__branch routing-tree__provider" data-route-provider="${escapeAttribute(offering.provider)}" data-route-offering="${escapeAttribute(offering.identifier)}" data-route-provider-capabilities="${escapeAttribute(offering.capabilities.join(" "))}" aria-pressed="${offering.identifier === selectedOffering.identifier ? "true" : "false"}" disabled><strong class="brand-label">${renderBrandIcon("provider", offering.provider)}${escapeHTML(provider?.label ?? offering.provider)}</strong><span data-route-task-flow>${tasksForOffering(offering).map(task=>`<span>${task.label}${renderTaskFlow(task)}</span>`).join("")}</span></button>`;
+      return `<button type="button" class="routing-tree__branch routing-tree__provider" data-route-provider="${escapeAttribute(offering.provider)}" data-route-offering="${escapeAttribute(offering.identifier)}" data-route-provider-capabilities="${escapeAttribute(offering.capabilities.join(" "))}" aria-pressed="${offering.identifier === selectedOffering.identifier ? "true" : "false"}" disabled><strong class="brand-label">${renderBrandIcon("provider", offering.provider)}${escapeHTML(provider?.label ?? offering.provider)}</strong><span data-route-task-flow>${tasksForOffering(offering).map(renderTaskIcon).join("")}</span></button>`;
     }).join("");
     return `      <section class="routing-tree__provider-group" data-route-provider-group="${escapeAttribute(model.identifier)}" aria-label="Providers offering ${escapeAttribute(model.identifier)}"${model.identifier === selectedModel.identifier ? "" : " hidden"}>
         <p><strong>Provider offerings</strong><span data-route-provider-count>${matchingOfferings.length} route${matchingOfferings.length === 1 ? "" : "s"}</span></p>
