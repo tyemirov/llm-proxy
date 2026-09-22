@@ -27,6 +27,49 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B247] (P2) Show the necessary text input for Vision and Listen.
+  Evidence: Task details mark text as optional, but `/v2` rejects blank message content with attachments.
+  Requirements: Show text and the attachment type as required inputs for Vision and Listen.
+  Validation: Confirm the browser failure before the metadata correction. Run focused browser checks and final CI.
+  Evidence: `/tmp/task-inputs-b247-initial.log` records both incorrect Optional input labels.
+  Resolution: Task details now show text and the respective attachment type as necessary inputs for Vision and Listen.
+  Validation: Final CI passes all 14 gates, including 154 frontend tests, seven integration browser tests, and 100.0 percent Go coverage.
+  Evidence: `/tmp/task-inputs-ci.log`. Event contracts are unchanged.
+
+
+- [x] [B248] (P2) Include the required transcript in voice extraction task inputs.
+  Evidence: Dictator rejects voice extraction without a transcript, but task details list only audio.
+  Evidence: The Text input filter incorrectly excludes voice extraction offerings.
+  Requirements: Include text in the supported and required inputs for voice extraction.
+  Validation: Check task details and Text input selection through the browser. Run final CI with B247.
+  Evidence: `/tmp/task-inputs-b248-initial.log` records the missing required Text input.
+  Resolution: Voice extraction declares text and audio as supported and required inputs.
+  Evidence: `/tmp/task-inputs-focused.log` records three successful browser checks, including Text input selection.
+  Validation: Final CI passes all 14 gates, including 154 frontend tests, seven integration browser tests, and 100.0 percent Go coverage.
+  Evidence: `/tmp/task-inputs-ci.log`. Event contracts are unchanged.
+
+
+- [x] [B246] (P2) Keep model capability icons independent of task filters.
+  Evidence: Task filters remove supported capability icons from model cards.
+  Requirements: Show all supported tasks on dashboard cards and public explorer cards, independent of search filters.
+  Validation: Check model icons before and after filter changes through the browser. Run final CI.
+  Evidence: `/tmp/model-cards-b246-initial.log` records the missing Generate text icon after Vision selection.
+  Evidence: Dashboard and explorer checks pass in `/tmp/model-cards-b246-focused.log`.
+  Resolution: Dashboard and explorer cards show all supported task icons, independent of search filters.
+  Validation: Final CI passes all 14 gates, including 151 frontend tests, seven integration browser tests, and 100.0 percent Go coverage.
+  Evidence: `/tmp/model-filters-ci-final.log`. Event contracts are unchanged.
+
+
+- [x] [B245] (P2) Keep model drafts when the final task filter stays pressed.
+  Evidence: Activating the final pressed task clears the selected model and removes the unsaved system prompt.
+  Requirements: Keep the selected model, form values, and focus when the task selection does not change.
+  Validation: Use browser coverage for mouse, Enter, and Space activation. Run final CI.
+  Evidence: `/tmp/b245-initial.log` records the expected browser failure because the prompt field disappears.
+  Resolution: The dashboard keeps model details and form values when the task selection stays unchanged.
+  Validation: Mouse, Enter, and Space browser checks pass. Final CI passes all 14 gates, including 151 browser tests and 100.0 percent Go coverage.
+  Evidence: `/tmp/b245-focused.log` and `/tmp/b245-ci.log`.
+  Event contracts: No event contract changed.
+
 - [x] [B244] (P2) Correct the asset metadata response header declaration.
   Evidence: The public metadata endpoint returns no request-timeout header. Its OpenAPI response requires the upload timeout header.
   Requirements: Declare the metadata response separately from the upload response. Preserve the upload timeout requirement.
@@ -282,7 +325,71 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
-- [ ] [I279] (P2) Clarify model tasks with compact labels and input/output icons.
+- [x] [I284] (P2) Use icons for model task filters.
+  Requirements: Replace task labels with icons in one row. Keep accessible names, hover descriptions, and keyboard controls.
+  Validation: Check desktop and narrow browser layouts. Run final CI.
+  Evidence: `/tmp/model-filters-i284-initial.log` records visible Text content where the test expects an icon.
+  Resolution: Icon buttons retain accessible names and hover descriptions. The row scrolls when space is limited.
+  Evidence: A focused check found a three-pixel header offset. The corrected checks pass in `/tmp/model-filters-i284-focused.log`.
+  Resolution: Shared task filters use one row of icons with accessible names and keyboard controls.
+  Validation: Final CI passes all 14 gates, including 151 frontend tests, seven integration browser tests, and 100.0 percent Go coverage.
+  Evidence: `/tmp/model-filters-ci-final.log`. Event contracts are unchanged.
+
+
+- [x] [I283] (P2) Show task icons on model cards.
+  Requirements: Use the agreed task icons and descriptions on dashboard and explorer model cards.
+  Requirements: Keep compact selector labels unchanged. Show descriptions on hover and keyboard focus.
+  Requirements: Keep input and output directions in model details.
+  Validation: Check browser rendering, accessible names, and filter behavior. Run final CI.
+  Resolution: Dashboard and explorer cards use task icons with hover text and accessible descriptions. Model details retain input/output directions.
+  Evidence: `/tmp/i283-initial.log` records the initial missing-icon failures. Focused browser tests pass in `/tmp/i283-focused.log`.
+  Validation: The first CI run failed during temporary-directory cleanup in `TestGeminiCurrentModelsVertexAPIKeyConnection`. The isolated test passed without changes.
+  Validation: Final CI passes all 14 gates, including 151 browser tests and 100.0 percent Go coverage.
+  Evidence: `/tmp/i283-go-recheck.log` and `/tmp/i283-ci-final.log`. Event contracts are unchanged.
+
+- [x] [I282] (P2) Place task selectors beside the Models title.
+  Requirements: Put compact task buttons in the Models header. Align the group right and keep the title on its first row.
+  Requirements: Wrap buttons within the available header space. Keep labels, hover descriptions, and filter behavior.
+  Validation: Check header geometry and desktop and mobile browser renders. Run final CI.
+  Resolution: Task selectors sit beside the Models title and wrap within the right side of its header.
+  Validation: Header geometry, desktop, mobile, and filter browser checks pass. Final CI passes all 14 gates with 151 browser tests.
+  Evidence: `/tmp/i282-initial.log` records the initial alignment failure. `/tmp/i282-ci.log` records final CI and 100.0 percent Go coverage.
+  Event contracts: No event contract changed.
+
+- [x] [I281] (P2) Make task filter buttons compact and rectangular.
+  Requirements: Use short labels without visible explanations. Keep descriptions in hover text and accessible names.
+  Requirements: Use small rectangular buttons with clear pressed states and wrapping at narrow widths.
+  Validation: Check desktop and mobile browser renders. Keep combined selection behavior and run final CI.
+  Evidence: The initial browser test found visible explanations. The first CI run found an obsolete visible-description assertion.
+  Evidence: Updated label and hover-description checks pass in `/tmp/i281-corrected.log`.
+  Resolution: Shared task controls use rectangular buttons with short labels, hover descriptions, and accessible names.
+  Validation: Desktop and mobile browser checks pass. The refreshed local application shows the compact controls.
+  Validation: Final CI passes all 14 gates, including 151 browser tests and 100.0 percent Go coverage.
+  Evidence: `/tmp/i281-ci-final.log`. Event contracts are unchanged.
+
+- [ ] [I280] Buy `untzr.ai` and migrate llm-proxy to the new domain.
+  Goal: Complete the domain purchase and production migration, with `untzr.ai` as the website and `api.untzr.ai` as the API hostname.
+  Requirements:
+  - Confirm domain availability, purchase cost, renewal cost, and registrar account with the owner before purchase.
+  - Purchase `untzr.ai` through the approved account and record domain ownership and renewal settings.
+  - Configure DNS and HTTPS for `untzr.ai` and `api.untzr.ai`.
+  - Publish the website at `https://untzr.ai` through GitHub Pages.
+  - Route `https://api.untzr.ai` to the production llm-proxy API through the deployment gateway.
+  - Update deployment resources, website API configuration, authentication origins, callback URLs, cookies, and CORS settings as applicable.
+  - Update supported clients, examples, documentation, and runbooks to use the new canonical URLs.
+  - Preserve tenant data, credentials, and access controls through the migration.
+  - Remove obsolete domain configuration after the migration.
+  - Obtain owner approval for the purchase and production activation.
+  Deliverables:
+  - Record the purchase, DNS configuration, deployment changes, and production acceptance evidence.
+  Validation:
+  - Run the applicable repository checks and browser integration tests for the domain changes.
+  - Verify public DNS resolution and valid HTTPS certificates for both hostnames.
+  - Verify the website, sign-in flow, and authenticated API requests through the new public URLs.
+  - Verify website publication through `/.mprlab-release.json`.
+  - Record repository validation and production acceptance separately.
+
+- [x] [I279] (P2) Clarify model tasks with compact labels and input/output icons.
   Goal: Distinguish model tasks, accepted inputs, and produced outputs through a compact visual language.
   The current Image tab includes models that accept images and produce text.
   This issue refines the existing model discovery UI and the capability separation from F073.
@@ -331,6 +438,17 @@ retain satisfied historical dependencies.
   - Verify keyboard navigation, focus explanations, accessible names, touch access, and readable desktop and mobile layouts.
   - Verify tenant selection, connection assignment, and applicable model default actions through real browser flows.
   - Run the applicable repository validation after the final implementation change.
+  Resolution: 2026-09-21.
+  - Added shared task definitions, directional modality icons, and required/optional input details in `modelTasks.js`.
+  - Replaced dashboard tabs with a compact task selector and preserved explicit model default saves.
+  - Added task, Input, and Output filters to the public explorer with exact offering matching.
+  - Updated dashboard and explorer browser coverage, documentation, styles, and rendered acceptance images.
+  - `make ci` passed all 14 gates, including 149 frontend browser tests and 100.0% Go statement coverage.
+  - All seven TAuth management browser tests passed with local services and controlled provider responses.
+  - Changed prose and `git diff --check` passed.
+  - Existing Governor differences remain in `AGENTS.DOCKER.md`, `PLANNING.md`, and `POLICY.md`.
+  - Event contracts: The existing connection context event and public API contracts remain unchanged.
+
 
 - [ ] [I278] (P1) {I277,F081,F082,F083} Verify the complete tenant API access flow.
   Goal: Provide durable tenant API access with clear configuration errors and historical connection attribution.
@@ -1536,6 +1654,129 @@ retain satisfied historical dependencies.
   was required.
 
 ## Features
+
+- [ ] [F086] (P1) Compare models on tenant tasks before a model change.
+  Goal:
+  Help tenants evaluate a candidate model with their own requests before they change the selected model.
+  Requirements:
+  - Place a `Compare models` action beside the model selection controls in the tenant dashboard.
+  - Start with the current model and one candidate model.
+  - Identify each exact model and provider offering separately.
+  - Let the tenant supply sample requests and define the expected results.
+  - Execute the same requests through both selected routes with explicit, supported settings.
+  - Show the two answers beside each other for each request.
+  - Show task results, response time, request errors, and available cost evidence.
+  - Distinguish tenant judgments from automatic checks and provider execution failures.
+  - Show cases where the candidate fails a check that the current model passes.
+  - Record request settings, route identities, execution dates, sample counts, and individual results.
+  - Label estimated cost separately from measured usage and confirmed charges.
+  - Show unavailable cost evidence explicitly.
+  - Use the canonical catalog and applicable price conditions for cost estimates.
+  - Keep the public price display owned by F036 separate from this tenant workflow.
+  - Save each result under the tenant in a dedicated `Comparisons` page.
+  - Let the tenant reopen results and run a new evaluation after a model update.
+  - Retain the original dated results when the tenant runs a new evaluation.
+  - Require an explicit tenant action before the selected model changes.
+  - Start with a results table and individual answers.
+  - Show summary charts only for comparable measurements with visible sample counts, settings, units, and scoring rules.
+  - Add a small public demonstration that links to the working tenant workflow after implementation.
+  Deliverables:
+  - Implement the dashboard action, execution workflow, result view, and saved results page.
+  - Define task scoring, request limits, repeat counts, and result retention before implementation.
+  - Protect tenant requests and results with the existing tenant access controls.
+  - Document the workflow and the limits of each metric.
+  Validation:
+  - Do a test of both routes with identical sample inputs through the public application interfaces.
+  - Do a test of supported settings, invalid inputs, provider errors, unavailable costs, and failed task checks.
+  - Verify saved results survive reload and remain inaccessible to other tenants.
+  - Verify the selected model changes only after the tenant chooses that action.
+  - Verify keyboard use, readable results, and no horizontal page overflow at desktop and mobile widths.
+  - Verify charts and tables agree with their individual results and sample counts.
+  - Run the applicable integration tests and `make ci` after application changes.
+  Context:
+  The user requested P1 on September 22, 2026.
+  A Reddit response requested task checks when providers change. This is one feedback signal, not measured demand.
+  Source: https://www.reddit.com/user/MarcoPoloResearchLab/comments/1wmhonq/comment/pbchgot/
+  Presentation reference: https://artificialanalysis.ai/
+
+
+- [x] [F085] (P2) Show all connection models without a task selection.
+  Requirements: Start the dashboard with no task filter selected. Show all models that the selected connection supports.
+  Requirements: Show only filters for tasks in the complete connection inventory. Permit removal of the final selection.
+  Requirements: Preserve available selections on connection changes. Show all models when no selection remains.
+  Requirements: Keep AND matching for selected tasks. Derive default actions from the selected model capabilities.
+  Validation: Check selection, search, connection changes, and default actions through the browser. Run final CI.
+  Evidence: `/tmp/model-filters-f085-initial.log` records one initial task selection where the test expects zero.
+  Evidence: `/tmp/model-filters-f085-focused.log` records five successful browser checks.
+  Validation: Initial CI passed 151 browser tests but found an obsolete automatic-selection assertion in the dashboard integration test.
+  Evidence: `/tmp/model-filters-ci.log` records expected `true` and actual `false` for the Transcribe button.
+  Validation: The corrected test passes in `/tmp/model-filters-blackbox.log`.
+  Resolution: The dashboard shows all connection models without a task selection. Filters use the complete connection inventory.
+  Validation: Final CI passes all 14 gates, including 151 frontend tests, seven integration browser tests, and 100.0 percent Go coverage.
+  Evidence: `/tmp/model-filters-ci-final.log`. Event contracts are unchanged.
+
+
+- [x] [F084] (P2) {I279} Filter model tasks with independently selectable buttons.
+  Goal: Select one or more tasks through compact buttons and show models that support every selected task.
+  This change replaces the single-task dropdown introduced by I279.
+  Requirements:
+  - Replace the task dropdown with a visible group of compact toggle buttons in the dashboard and public explorer.
+  - Reuse the task vocabulary and modality icons from I279.
+  - Keep Text generation, Image generation, and Image understanding distinct in labels and accessible descriptions.
+  - Show a task button only when the selected connection has at least one model that supports that task.
+  - Determine button visibility from the connection's complete model inventory before applying task intersections or search filters.
+  - Start with Text as the only pressed task button when Text is available.
+  - If Text is unavailable, select the first available task in the canonical task order.
+  - Keep at least one task button pressed whenever task buttons are available.
+  - If the connection has no model tasks, show an empty state without task buttons.
+  - Let each button toggle independently while preserving at least one selection.
+  - If the user activates the final pressed button, keep that button pressed.
+  - Update the model list immediately after each selection change, without an Apply action or page reload.
+  - Use AND matching across selected tasks.
+  - With Text and Images pressed, show only offerings that support both text generation and image generation.
+  - Match all selected tasks on the same exact model and provider offering.
+  - Combine task selections with the existing search, provider, input, output, and other applicable filters.
+  - Keep input and output matching within one task on the same offering, as defined by I279.
+  - Preserve selected task filters when their combination has no results.
+  - When the connection changes, remove unavailable task selections and preserve the remaining selections.
+  - If no selection remains, select Text when available, otherwise select the first available task.
+  - Update the visible buttons, pressed states, and model list together after a connection change.
+  - Show an explicit empty result and retain controls that let the user revise the selection.
+  - Keep filter changes separate from tenant assignments and saved model defaults.
+  - Show each selected task's input/output direction separately on matching cards or their details.
+  - Preserve task-specific default controls when multiple tasks are selected.
+  - Use `aria-pressed`, keyboard activation, visible focus, and accessible descriptions for each toggle button.
+  - Make the button group wrap cleanly at desktop and mobile viewport widths.
+  Deliverables:
+  - Update shared filter state, dashboard controls, public explorer controls, and current discovery documentation.
+  - Add browser coverage for individual toggles, combined selections, the final pressed button, and empty results.
+  Validation:
+  - Verify initial Text selection, Images alone, and Text plus Images.
+  - Select Images with Text pressed and verify the model list immediately shows their intersection.
+  - Release Text with Images pressed and verify the model list immediately shows image generation offerings.
+  - Activate Images as the final pressed button and verify that its pressed state and results remain unchanged.
+  - Verify the same selection rules with mouse, keyboard, and touch input.
+  - Exclude a model with text generation on one provider and image generation only on another provider.
+  - Exclude vision-only offerings from a Text plus Images selection.
+  - Verify combined task and input/output filters without combining incompatible task directions.
+  - Verify that an empty intersection retains the selected buttons until the user changes them.
+  - Verify that unsupported task buttons are absent rather than disabled.
+  - Switch between text-only, image-only, multimodal, and resource-only connections and verify the available buttons.
+  - Verify that connection changes preserve available selections and remove unavailable selections.
+  - Verify Text selection when available and first-task selection when Text is unavailable.
+  - Verify that search results and empty task intersections do not remove otherwise supported buttons.
+  - Verify that a connection without model tasks shows an empty state without task buttons.
+  - Verify keyboard and touch operation, pressed-state announcements, and readable layouts at narrow widths.
+  - Verify that filtering causes no assignment or model default mutation.
+  - Run the applicable repository validation after the final implementation change.
+  Resolution: 2026-09-22.
+  - Replaced the single-task dropdown with toggle buttons in `modelTasks.js`, the dashboard, and the public explorer.
+  - Selections use AND matching on the same offering with Text pressed first and one pressed button kept.
+  - Connection changes preserve available selections and remove unavailable selections.
+  - Updated dashboard and explorer browser coverage, documentation, and styles.
+  - `make ci` passed all 14 gates, including 150 frontend browser tests and 100.0% Go statement coverage.
+  - Changed prose and `git diff --check` passed.
+  - Event contracts: The existing connection context event and public API contracts remain unchanged.
 
 - [ ] [F081] (P1) {I277} Create and retain tenant API keys for later retrieval.
   Goal: Make API access available when a tenant is created and through a permanent tenant action.

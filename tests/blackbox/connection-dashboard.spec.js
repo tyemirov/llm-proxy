@@ -190,7 +190,9 @@ test('account connection dashboard links Social Threader explicitly and preserve
   const speech=dashboard.locator('[data-connection-node]').filter({hasText:'Private speech server'});
   await expect(speech).toContainText('Connected');
   await expect(dashboard.locator('[data-provider-profile]')).toHaveCount(0);
-  await expect(dashboard.getByRole('button',{name:'Transcription',exact:true})).toHaveAttribute('aria-pressed','true');
+  await expect(dashboard.locator('[data-task][aria-pressed="true"]')).toHaveCount(0);
+  await expect(dashboard.locator('[data-model="qwen3-tts"]')).toBeVisible();
+  await expect(dashboard.locator('[data-model="silero-ru"]')).toBeVisible();
   await dashboard.locator('[data-model="whisper-base"]').click();
   await expect(dashboard.locator('[data-media-details]')).toContainText('Transcription');
   await expect(dashboard.locator('[data-media-details]')).toContainText('Voice extraction');
@@ -198,19 +200,19 @@ test('account connection dashboard links Social Threader explicitly and preserve
   await expect(dashboard.locator('[data-model="whisper-base"]')).toHaveClass(/preview/);
   await dashboard.getByRole('button',{name:'Save transcription default',exact:true}).click();
   await expect(dashboard.locator('[data-model="whisper-base"]')).toHaveClass(/selected/);
-  await dashboard.getByRole('button',{name:'Speech',exact:true}).click();
+  await selectModelTask(dashboard, 'speech_generation');
   for (const width of [320,390]) {
    await page.setViewportSize({width,height:844});
-   for (const domain of ['Text','Transcription','Speech','Image','Video']) {
-    const tab=dashboard.getByRole('button',{name:domain,exact:true});
-    await expect(tab).toBeVisible();
-    const bounds=await tab.boundingBox();
-    expect(bounds.x).toBeGreaterThanOrEqual(0);
-    expect(bounds.x+bounds.width).toBeLessThanOrEqual(width);
-   }
+   const picker=dashboard.locator('[data-task-filter]');
+   await expect(picker).toBeVisible();
+   const bounds=await picker.boundingBox();
+   expect(bounds.x).toBeGreaterThanOrEqual(0);
+   expect(bounds.x+bounds.width).toBeLessThanOrEqual(width);
   }
+  await selectModelTask(dashboard,'voice_extraction');
   await dashboard.locator('[data-model="whisper-base"]').click();
   await expect(dashboard.locator('[data-default-form]')).toHaveCount(0);
+  await selectModelTask(dashboard,'speech_generation');
   await dashboard.locator('[data-model="qwen3-tts"]').click();
   await expect(dashboard.locator('[data-media-details]')).toContainText('Speech synthesis');
   await expect(dashboard.locator('[data-media-details]')).not.toContainText('Voice extraction');
@@ -223,7 +225,7 @@ test('account connection dashboard links Social Threader explicitly and preserve
   await mkdir('artifacts',{recursive:true});
   await dashboard.screenshot({path:'artifacts/capability-dashboard-mobile.png'});
   await page.setViewportSize({width:1440,height:1050});
-  await dashboard.getByRole('button',{name:'Transcription',exact:true}).click();
+  await selectModelTask(dashboard, 'transcription');
   await expect(dashboard.locator('[data-model="whisper-base"]')).toHaveClass(/selected/);
   await expect(dashboard).not.toContainText('browser-dictator-token');
   await page.reload();
@@ -238,7 +240,7 @@ test('account connection dashboard links Social Threader explicitly and preserve
   await dialog.getByRole('button',{name:'Create connection',exact:true}).click();
   await expect(dialog).not.toBeVisible();
   await expect(dashboard.locator('[data-connection-node]').filter({hasText:'Second speech server'})).toContainText('Connected');
-  await dashboard.getByRole('button',{name:'Transcription',exact:true}).click();
+  await selectModelTask(dashboard, 'transcription');
   await dashboard.locator('[data-model="speech-fixture-v1"]').click();
   await expect(dashboard.locator('[data-media-details]')).toContainText('Transcription');
   await expect(dashboard.locator('[data-media-details]')).toContainText('Voice extraction');
@@ -267,7 +269,7 @@ test('account connection dashboard links Social Threader explicitly and preserve
  await dialog.getByRole('button',{name:'Create connection',exact:true}).click();
  await expect(dialog).not.toBeVisible();
  await expect(dashboard.locator('[data-connection-node]').filter({hasText:'Media-only account'})).toContainText('Connected');
- await expect(dashboard.getByRole('button',{name:'Video',exact:true})).toHaveAttribute('aria-pressed','true');
+ await expect(dashboard.locator('[data-task="video_generation"]')).toHaveAttribute('aria-pressed','false');
  await expect(dashboard.locator('[data-provider-profile]')).toHaveCount(0);
  await expect(dashboard).not.toContainText('browser-media-token');
  await page.reload();
@@ -299,13 +301,16 @@ test('account connection dashboard links Social Threader explicitly and preserve
  await expect(dashboard.locator('[data-provider-resources]')).toContainText('Quotas');
  await expect(dashboard.locator('[data-provider-resources]')).toContainText('Voices');
  await expect(dashboard.locator('[data-provider-services]')).toContainText('Transcript alignment');
- await expect(dashboard.locator('[data-model]')).toHaveCount(6);
- for(const model of ['eleven_multilingual_v2','eleven_flash_v2_5','eleven_turbo_v2_5','eleven_v3','eleven_english_sts_v2','eleven_multilingual_sts_v2']){
+ await selectModelTask(dashboard,'speech_generation');
+ await expect(dashboard.locator('[data-model]')).toHaveCount(4);
+ for(const model of ['eleven_multilingual_v2','eleven_flash_v2_5','eleven_turbo_v2_5','eleven_v3']){
   await expect(dashboard.locator(`[data-model="${model}"]`)).toBeVisible();
  }
+ await selectModelTask(dashboard,'speech_conversion');
  await dashboard.locator('[data-model="eleven_multilingual_sts_v2"]').click();
  await expect(dashboard.locator('[data-media-details]')).toContainText('Voice conversion');
  await expect(dashboard.locator('[data-default-form]')).toHaveCount(0);
+ await selectModelTask(dashboard,'speech_generation');
  await dashboard.locator('[data-model="eleven_flash_v2_5"]').click();
  await expect(dashboard.locator('[data-media-details]')).toContainText('Speech synthesis');
  const elevenDefaultSave=page.waitForResponse(response=>response.request().method()==='PUT' && response.url().endsWith('/defaults'));
@@ -318,7 +323,18 @@ test('account connection dashboard links Social Threader explicitly and preserve
  await page.reload();
  await expect(dashboard.locator('[data-connection-node]').filter({hasText:'ElevenLabs account'})).toContainText('Connected');
  await dashboard.getByRole('button',{name:'ElevenLabs account',exact:true}).click();
- await dashboard.getByRole('button',{name:'Speech',exact:true}).click();
+ await selectModelTask(dashboard, 'speech_generation');
  await expect(dashboard.locator('[data-model="eleven_flash_v2_5"]')).toHaveClass(/selected/);
  expect(errors).toEqual([]);
 });
+
+async function selectModelTask(root, task) {
+ const target = root.locator(`[data-task="${task}"]`);
+ await expect(target).toBeVisible();
+ if (await target.getAttribute('aria-pressed') !== 'true') await target.click();
+ const pressed = await root.locator('[data-task][aria-pressed="true"]').evaluateAll(elements=>elements.map(element=>element.getAttribute('data-task')));
+ for (const id of pressed) {
+  if (id && id !== task) await root.locator(`[data-task="${id}"]`).click();
+ }
+ await expect(target).toHaveAttribute('aria-pressed','true');
+}

@@ -2,6 +2,8 @@
 
 import { PUBLIC_THEME, ROUTE_CAPABILITY_ALL } from "../constants.js";
 
+import {MODEL_TASKS, tasksForOffering, offeringMatchesTasksWithModalities, defaultSelectedTasks, renderTaskIcon, renderTaskDetails} from '../modelTasks.js';
+
 const ROUTING_TREE_ELEMENT_NAME = "routing-tree";
 const SELECTED_ATTRIBUTE_VALUE = "true";
 const MOBILE_LAYOUT_MAX_WIDTH = 680;
@@ -80,6 +82,9 @@ class RoutingTreeElement extends HTMLElement {
     this.resizeObserver = null;
     /** @type {MutationObserver | null} */
     this.themeObserver = null;
+    /** @type {string[]} */ this.taskIDs = ['text'];
+    this.inputModality = '';
+    this.outputModality = '';
     this.drawFrameRequest = 0;
   }
 
@@ -87,6 +92,37 @@ class RoutingTreeElement extends HTMLElement {
     if (this.dataset.enhanced === SELECTED_ATTRIBUTE_VALUE) {
       return;
     }
+    this.querySelectorAll('[data-task], [data-route-input], [data-route-output]').forEach(element=>element.removeAttribute('disabled'));
+    this.addEventListener('change', event=>{
+      if (!(event.target instanceof HTMLSelectElement)) return;
+      if (event.target.matches('[data-route-input]')) this.inputModality=event.target.value;
+      if (event.target.matches('[data-route-output]')) this.outputModality=event.target.value;
+      this.applyFilters();
+    });
+    this.addEventListener('click', event=>{
+      if (!(event.target instanceof Element)) return;
+      const button=event.target.closest('[data-task]');
+      if (!(button instanceof HTMLButtonElement)) return;
+      const taskID=requiredDatasetValue(button,'task');
+      if (this.taskIDs.includes(taskID)) {
+        if (this.taskIDs.length <= 1) return;
+        this.taskIDs = this.taskIDs.filter(id=>id!==taskID);
+      } else {
+        this.taskIDs = [...this.taskIDs, taskID];
+      }
+      this.querySelectorAll('[data-task]').forEach(candidate=>{
+        if (candidate instanceof HTMLButtonElement) candidate.setAttribute('aria-pressed',String(this.taskIDs.includes(requiredDatasetValue(candidate,'task'))));
+      });
+      this.applyFilters();
+    });
+    const availableTaskIDs = [...this.querySelectorAll('[data-task]')].map(element=>{
+      if (!(element instanceof HTMLButtonElement)) throw new Error('routing_tree_task_button_invalid');
+      return requiredDatasetValue(element,'task');
+    });
+    this.taskIDs = defaultSelectedTasks(MODEL_TASKS.filter(task=>availableTaskIDs.includes(task.id)));
+    this.querySelectorAll('[data-task]').forEach(candidate=>{
+      if (candidate instanceof HTMLButtonElement) candidate.setAttribute('aria-pressed',String(this.taskIDs.includes(requiredDatasetValue(candidate,'task'))));
+    });
     this.weightAccessButtons = requiredButtons(this, SELECTORS.WEIGHT_ACCESS);
     this.capabilityButtons = requiredButtons(this, SELECTORS.CAPABILITY);
     this.familyButtons = requiredButtons(this, SELECTORS.FAMILY);
@@ -182,7 +218,10 @@ class RoutingTreeElement extends HTMLElement {
 
     for (const providerButton of this.providerButtons) {
       const capabilities = new Set(requiredDatasetValue(providerButton, "routeProviderCapabilities").split(" "));
-      providerButton.hidden = selectedCapability !== ROUTE_CAPABILITY_ALL && !capabilities.has(selectedCapability);
+      const offering = {capabilities:[...capabilities]};
+      const matches = offeringMatchesTasksWithModalities(offering, this.taskIDs, this.inputModality, this.outputModality);
+      providerButton.hidden = (selectedCapability !== ROUTE_CAPABILITY_ALL && !capabilities.has(selectedCapability)) || !matches;
+      requiredElement(providerButton,'[data-route-task-flow]',HTMLElement).innerHTML=tasksForOffering(offering).map(renderTaskIcon).join('');
     }
 
     let exactModelCount = 0;
@@ -195,6 +234,9 @@ class RoutingTreeElement extends HTMLElement {
       }
       const matchingProviders = requiredButtons(providerGroup, SELECTORS.PROVIDER).filter((button) => !button.hidden);
       modelButton.hidden = matchingProviders.length === 0;
+      const modelTasks=requiredElement(modelButton,'[data-route-model-tasks]',HTMLElement);
+      const taskIcons=new Set(requiredButtons(providerGroup, SELECTORS.PROVIDER).flatMap(provider=>tasksForOffering({capabilities:requiredDatasetValue(provider,'routeProviderCapabilities').split(' ')}).map(renderTaskIcon)));
+      modelTasks.innerHTML=[...taskIcons].join('');
       const providerCount = requiredElement(providerGroup, SELECTORS.PROVIDER_COUNT, HTMLElement);
       providerCount.textContent = countLabel(matchingProviders.length, "route");
     }
@@ -235,6 +277,7 @@ class RoutingTreeElement extends HTMLElement {
     const isEmpty = visibleFamilies.length === 0;
     this.emptyMessage.hidden = !isEmpty;
     this.selectionFooter.hidden = isEmpty;
+    requiredElement(this,'[data-route-task-details]',HTMLElement).hidden=isEmpty;
     for (const stage of this.downstreamStages) {
       stage.hidden = isEmpty;
     }
@@ -330,6 +373,7 @@ class RoutingTreeElement extends HTMLElement {
       throw new Error("routing_tree_provider_output_missing");
     }
     this.selectedProviderOutput.textContent = providerIdentifier;
+    requiredElement(this,'[data-route-task-details]',HTMLElement).innerHTML=renderTaskDetails({capabilities:requiredDatasetValue(providerButton,'routeProviderCapabilities').split(' ')});
     this.scheduleRouteDraw();
   }
 
