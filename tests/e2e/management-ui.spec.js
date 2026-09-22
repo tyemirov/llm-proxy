@@ -1069,6 +1069,53 @@ test("visitors can filter tasks and input/output pairs on exact provider offerin
   }
 });
 
+for (const scenario of [
+  {task:'vision', description:'Understand images', modality:'Image', capability:'image_input'},
+  {task:'audio_understanding', description:'Understand audio', modality:'Audio', capability:'audio_input'},
+]) {
+  test(`B247 ${scenario.task} details require text and attachments`, async ({page}) => {
+    await installAssetRoutes(page);
+    await installManagementRoutes(page);
+    // Supply the audio-capable offering at the catalog boundary; keep the real dashboard and renderer.
+    if (scenario.task === 'audio_understanding') {
+      const catalog = structuredClone(publicCapabilities);
+      catalog.offerings.find(offering => offering.provider === 'openai' && offering.model === 'gpt-4.1').capabilities.push(scenario.capability);
+      await page.route(`${baseURL}${publicCapabilitiesPath}`, route => route.fulfill({json:catalog}));
+    }
+    await page.goto(baseURL + applicationPath);
+    const dashboard = page.locator('connection-dashboard');
+    await selectModelTask(dashboard, scenario.task);
+    await dashboard.locator('[data-model="gpt-4.1"]').click();
+    const task = dashboard.locator('[data-model-tasks] li').filter({has:page.getByText(scenario.description, {exact:true})});
+    await expect(task.locator('small')).toHaveText(`Required input: Text, ${scenario.modality}. Output: Text.`);
+    await expect(task.getByRole('img', {name:'Text input', exact:true})).toBeVisible();
+    await expect(task.getByRole('img', {name:`${scenario.modality} input`, exact:true})).toBeVisible();
+  });
+}
+
+test("B248 voice extraction supports required text and audio inputs", async ({page}) => {
+  await installAssetRoutes(page, {initialAuthStatus:'unauthenticated'});
+  await page.goto(baseURL);
+  const tree = page.locator('routing-tree');
+  await expect(tree).toHaveAttribute('data-enhanced', 'true');
+  await selectModelTask(tree, 'voice_extraction');
+  await tree.locator('[data-route-family="whisper"]').click();
+  await tree.locator('[data-route-model="whisper-base"]').click();
+  const task = tree.locator('[data-route-task-details] li').filter({has:page.getByText('Extract a voice', {exact:true})});
+  await expect(task.locator('small')).toHaveText('Required input: Text, Audio. Output: Audio.');
+  await expect(task.getByRole('img', {name:'Text input', exact:true})).toBeVisible();
+  await expect(task.getByRole('img', {name:'Audio input', exact:true})).toBeVisible();
+  await tree.getByLabel('Output', {exact:true}).selectOption('audio');
+  for (const input of ['text', 'audio']) {
+    await tree.getByLabel('Input', {exact:true}).selectOption(input);
+    await expect(tree.locator('[data-route-empty]')).toBeHidden();
+    await expect(tree.locator('[data-route-model="whisper-base"]')).toBeVisible();
+    await expect(tree.locator('[data-route-provider]:visible')).toHaveAttribute('data-route-provider', 'dictator');
+  }
+  await tree.getByLabel('Input', {exact:true}).selectOption('image');
+  await expect(tree.locator('[data-route-empty]')).toBeVisible();
+});
+
 test("visitors can disclose filters, search every characteristic, and sort through table headers", async ({ page }) => {
   await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
   await page.setViewportSize({ width: 1280, height: 800 });
