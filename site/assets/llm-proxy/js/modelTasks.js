@@ -66,8 +66,13 @@ const TASK_ICON_PATHS = Object.freeze({
 });
 
 /** @param {ModelTask} task */
+function renderTaskSymbol(task) {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TASK_ICON_PATHS[task.id]}</svg>`;
+}
+
+/** @param {ModelTask} task */
 export function renderTaskIcon(task) {
-  return `<span class="model-task-icon" role="img" aria-label="${task.description}" title="${task.description}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TASK_ICON_PATHS[task.id]}</svg><span class="model-task-caption" aria-hidden="true">${task.description}</span></span>`;
+  return `<span class="model-task-icon" role="img" aria-label="${task.description}" title="${task.description}">${renderTaskSymbol(task)}<span class="model-task-caption" aria-hidden="true">${task.description}</span></span>`;
 }
 
 /** @param {ModelTask} task */
@@ -92,16 +97,13 @@ export function defaultSelectedTasks(tasks) {
 /** @param {string[]} selected @param {Array<{id:string}>} tasks @returns {string[]} */
 export function reconcileSelectedTasks(selected, tasks) {
   const available = new Set(tasks.map(task=>task.id));
-  const kept = selected.filter(id=>available.has(id));
-  if (kept.length) return kept;
-  return defaultSelectedTasks(tasks);
+  return selected.filter(id=>available.has(id));
 }
 
 /** @param {string[]} selected @param {string} taskID @param {Array<{id:string}>} tasks @returns {string[]} */
 export function toggleSelectedTask(selected, taskID, tasks) {
   if (!tasks.some(task=>task.id===taskID)) return selected;
   if (selected.includes(taskID)) {
-    if (selected.length <= 1) return selected;
     return selected.filter(id=>id!==taskID);
   }
   return [...selected, taskID];
@@ -127,5 +129,5 @@ export function offeringMatchesTasksWithModalities(offering, selectedIDs, inputM
 export function renderTaskPicker(tasks, selectedIDs, disabled) {
   if (!tasks.length) return `<div class="task-filter" data-task-filter role="group" aria-label="Model tasks"><p class="cw-empty">No tasks for this connection.</p></div>`;
   const selected = new Set(selectedIDs);
-  return `<div class="task-filter" data-task-filter role="group" aria-label="Model tasks">${tasks.map(task=>`<button type="button" data-task="${task.id}" aria-pressed="${selected.has(task.id)}" aria-label="${task.label}: ${task.description}" title="${task.description}" ${disabled?'disabled':''}>${task.label}</button>`).join('')}</div>`;
+  return `<div class="task-filter" data-task-filter role="group" aria-label="Model tasks">${tasks.map(task=>`<button type="button" data-task="${task.id}" aria-pressed="${selected.has(task.id)}" aria-label="${task.label}: ${task.description}" title="${task.description}" ${disabled?'disabled':''}>${renderTaskSymbol(task)}</button>`).join('')}</div>`;
 }

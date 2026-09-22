@@ -34,9 +34,9 @@ describe("reconcileSelectedTasks", () => {
     const tasks = MODEL_TASKS.filter((task) => ["text", "vision"].includes(task.id));
     assert.deepEqual(reconcileSelectedTasks(["text", "transcription"], tasks), ["text"]);
   });
-  it("selects the default task when no selection remains", () => {
+  it("keeps no selection when no selected task remains available", () => {
     const tasks = MODEL_TASKS.filter((task) => ["vision", "transcription"].includes(task.id));
-    assert.deepEqual(reconcileSelectedTasks(["text"], tasks), ["vision"]);
+    assert.deepEqual(reconcileSelectedTasks(["text"], tasks), []);
   });
 });
 
@@ -47,8 +47,8 @@ describe("toggleSelectedTask", () => {
   it("releases a pressed task while other tasks remain pressed", () => {
     assert.deepEqual(toggleSelectedTask(["text", "image_generation"], "text", MODEL_TASKS), ["image_generation"]);
   });
-  it("keeps the final pressed task pressed", () => {
-    assert.deepEqual(toggleSelectedTask(["text"], "text", MODEL_TASKS), ["text"]);
+  it("releases the final pressed task", () => {
+    assert.deepEqual(toggleSelectedTask(["text"], "text", MODEL_TASKS), []);
   });
   it("ignores tasks outside the available inventory", () => {
     assert.deepEqual(toggleSelectedTask(["text"], "unknown", MODEL_TASKS), ["text"]);

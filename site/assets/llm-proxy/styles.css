@@ -2025,10 +2025,10 @@ connection-dashboard button:focus-visible,connection-dashboard input:focus-visib
 .cw-column{min-width:0;z-index:1}.cw-column>header{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:12px;min-height:35px;flex-wrap:wrap}
 .cw-column h3{font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;margin:0;color:var(--cw-muted)}.cw-column h3 span{font-size:10px}
 .cw-column header button{font-size:11px;padding:3px 6px}
-.cw-column>.cw-model-header{align-items:flex-start;flex-wrap:nowrap;gap:8px}
-.cw-model-header h3{flex:none;padding-top:5px;line-height:18px}
-.cw-model-header .task-filter{flex:1;min-width:0;justify-content:flex-end;gap:4px;margin:0}
-.cw-model-header .task-filter button{min-height:28px;padding:4px 6px;font-size:11px;line-height:18px}
+.cw-column>.cw-model-header{align-items:center;flex-wrap:nowrap;gap:8px}
+.cw-model-header h3{flex:none;padding-top:0;line-height:18px}
+.cw-model-header .task-filter{flex:1;min-width:0;justify-content:safe flex-end;gap:4px;margin:0}
+.cw-model-header .task-filter button{min-height:28px;padding:4px;font-size:11px;line-height:18px}
 .cw-list{display:grid;gap:8px;align-content:start;max-height:390px;overflow:auto;scrollbar-width:thin}
 .cw-node{display:grid;align-content:center;gap:6px;width:100%;min-height:79px;padding:10px 12px;text-align:left;border:1px solid var(--cw-line);border-radius:7px;background:#1a1e24;color:#e0e5ec;overflow-wrap:anywhere;cursor:pointer}
 .cw-node.selected{border-color:var(--cw-accent);background:#18302d}.cw-node.browsing{border-color:#7daaff}.cw-node.preview{border-color:#e8b75e;border-style:dashed}

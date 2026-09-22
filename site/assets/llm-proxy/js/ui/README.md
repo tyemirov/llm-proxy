@@ -29,13 +29,23 @@ Both use the existing `brand-icon` element and asset manifest.
 `../modelTasks.js` defines the shared task labels, input/output directions, and offering eligibility.
 The dashboard and public route explorer use these definitions.
 Tasks match exact offering capabilities. Image input alone does not imply image generation.
-The dashboard and public explorer show task toggle buttons and task icons on model cards.
+
+The dashboard and public explorer show task icons on filter buttons and model cards.
+The filter buttons occupy one row that scrolls when space is limited.
+Cards show all supported task icons, independent of search filters.
 Each icon has a task description on hover and keyboard focus. Model details show input/output directions.
-The initial selection presses Text when Text is available, otherwise the first available task.
-Each button toggles independently with a minimum of one pressed button.
+
+The dashboard starts without a task selection and shows all models for the connection.
+Each dashboard button toggles independently. The final selection can be removed.
+Only tasks in the complete connection inventory have filter buttons.
+A connection change removes unavailable selections and keeps the remaining selections.
+
+The public explorer initially selects Text, or the first available task, and keeps at least one selection.
 Selections use AND matching on the same offering.
 Model details list all supported tasks, including required and optional inputs.
+
 Task selection changes the view. Model defaults still require an explicit save.
+The selected model and task determine the default domain. Without a task selection, the first supported task determines the domain.
 The public explorer matches input and output filters within one task on one offering.
 
 Tenant access controls show each generated API key once.

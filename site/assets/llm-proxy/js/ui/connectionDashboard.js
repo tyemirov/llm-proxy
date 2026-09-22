@@ -31,8 +31,14 @@ export class ConnectionDashboard extends HTMLElement {
   tenantID = '';
   connectionID = '';
   modelID = '';
-  taskIDs = ['text'];
-  get capability() { return MODEL_TASKS.find(task=>this.taskIDs.includes(task.id))?.defaultDomain; }
+  /** @type {string[]} */ taskIDs = [];
+  get capability() {
+    const offering = this.offerings.find(offering=>offering.provider===this.connection?.provider && offering.model===this.modelID);
+    if (!offering) return null;
+    const tasks = tasksForOffering(offering);
+    const selectedTasks = tasks.filter(task=>this.taskIDs.includes(task.id));
+    return (selectedTasks.length ? selectedTasks : tasks)[0]?.defaultDomain;
+  }
   get availableTasks() {
     const identifiers = new Set(this.offerings.filter(offering=>offering.provider===this.connection?.provider).flatMap(offering=>tasksForOffering(offering).map(task=>task.id)));
     return MODEL_TASKS.filter(task=>identifiers.has(task.id));
@@ -74,19 +80,15 @@ export class ConnectionDashboard extends HTMLElement {
     return this.tenants.find(t => t.name === 'Default')?.id || this.tenants[0]?.id || '';
   }
 
-  /** @param {string} id */
-  isDefaultModel(id) {
+  /** @param {string} id @param {import('../types.d.js').CapabilityDomain|null} [domain] */
+  isDefaultModel(id, domain = null) {
     const defaults=this.profile?.tenant.defaults;
-    switch(this.capability) {
-      case CAPABILITY_DOMAINS.TEXT: return this.connection?.provider===defaults?.provider && id===defaults?.model;
-      case CAPABILITY_DOMAINS.TRANSCRIPTION: return this.connection?.provider===defaults?.transcription_provider && id===defaults?.transcription_model;
-      case CAPABILITY_DOMAINS.SPEECH: return this.connection?.provider===defaults?.speech_provider && id===defaults?.speech_model;
-      default: return false;
-    }
+    return ((domain===null || domain===CAPABILITY_DOMAINS.TEXT) && this.connection?.provider===defaults?.provider && id===defaults?.model) ||
+      ((domain===null || domain===CAPABILITY_DOMAINS.TRANSCRIPTION) && this.connection?.provider===defaults?.transcription_provider && id===defaults?.transcription_model) ||
+      ((domain===null || domain===CAPABILITY_DOMAINS.SPEECH) && this.connection?.provider===defaults?.speech_provider && id===defaults?.speech_model);
   }
   /** @param {string[]} selectedIDs */
   modelsForSelectedTasks(selectedIDs) {
-    if (!selectedIDs.length || !this.availableTasks.length) return [];
     return this.offerings.filter(offering=>offering.provider===this.connection?.provider && offeringMatchesTasks(offering, selectedIDs)).map(offering=>offering.model);
   }
   get canSaveDefault() {
@@ -186,7 +188,7 @@ export class ConnectionDashboard extends HTMLElement {
         return `<article class="cw-node ${c.id===this.connectionID?(assigned?'selected':'browsing'):''}" data-connection-node="${escapeHTML(c.id)}"><div class="cw-row"><button class="cw-name" data-connection="${escapeHTML(c.id)}">${providerIcon(c.provider)}<strong>${escapeHTML(c.name)}</strong></button>${this.tenantID ? assigned ? '<span class="cw-connected">✓ Connected</span>' : occupied ? '<span class="cw-muted">Provider already connected</span>' : `<button class="cw-connect" data-connect="${escapeHTML(c.id)}" ${disabled}>Connect</button>` : ''}</div><small>${escapeHTML(this.providers.find(p=>p.id===c.provider)?.api_service_label || c.provider)}</small><small>${c.tenant_ids.length ? `Used by ${c.tenant_ids.length} tenant${c.tenant_ids.length===1?'':'s'}`:'Unassigned'}</small>${connectionReady(c)?'':'<small>Credentials needed</small>'}</article>`;
       }).join('') || '<p class="cw-empty">Create a connection to add provider credentials.</p>'}</div></section>
       <section class="cw-column"><header class="cw-model-header"><h3>Models</h3>${renderTaskPicker(this.availableTasks,this.taskIDs,this.busy)}</header><div class="cw-list">
-      ${modelIDs.filter(matches).map(id=>{const saved=this.isDefaultModel(id);const offering=this.offerings.find(o=>o.provider===this.connection?.provider && o.model===id); const selectedOfferingTasks=offering ? tasksForOffering(offering).filter(t=>this.taskIDs.includes(t.id)) : [];return `<button class="cw-node ${saved?'selected':this.modelID===id?'preview':''}" data-model="${escapeHTML(id)}" ${disabled}><span class="cw-row"><brand-icon kind="family" identifier="${escapeHTML(this.modelFamilies[id])}"></brand-icon><code>${escapeHTML(id)}</code></span><span class="model-task-icons">${selectedOfferingTasks.map(renderTaskIcon).join('')}</span>${saved?'<small class="cw-connected">★ Default model</small>':''}</button>`;}).join('') || `<p class="cw-empty">${this.attached ? this.ready ? (this.provider?.capabilities.length===0 && this.provider.resources.length ? 'This connection provides account resources.' : 'No models for the selected tasks.') : 'Add credentials to choose models. Edit this connection to complete its setup.' : 'Connect to choose models.<br>Use a Connect button in the middle column.'}</p>`}</div></section>`;
+      ${modelIDs.filter(matches).map(id=>{const saved=this.isDefaultModel(id);const offering=this.offerings.find(o=>o.provider===this.connection?.provider && o.model===id); const offeringTasks=offering ? tasksForOffering(offering) : [];return `<button class="cw-node ${saved?'selected':this.modelID===id?'preview':''}" data-model="${escapeHTML(id)}" ${disabled}><span class="cw-row"><brand-icon kind="family" identifier="${escapeHTML(this.modelFamilies[id])}"></brand-icon><code>${escapeHTML(id)}</code></span><span class="model-task-icons">${offeringTasks.map(renderTaskIcon).join('')}</span>${saved?'<small class="cw-connected">★ Default model</small>':''}</button>`;}).join('') || `<p class="cw-empty">${this.attached ? this.ready ? (this.provider?.capabilities.length===0 && this.provider.resources.length ? 'This connection provides account resources.' : 'No models for the selected tasks.') : 'Add credentials to choose models. Edit this connection to complete its setup.' : 'Connect to choose models.<br>Use a Connect button in the middle column.'}</p>`}</div></section>`;
     const footer=this.querySelector('[data-route]');
     if (footer) footer.textContent=this.connection ? `${this.tenantName} ${this.attached?'→':'· Viewing'} ${this.connection.name}${this.attached?'':' · Not connected'}${this.modelID?(this.isDefaultModel(this.modelID)?' · Saved default: ':' · Preview: ')+this.modelID:''}` : `${this.tenantName} · Select a connection`;
     map.querySelectorAll('.cw-list').forEach(list => list.addEventListener('scroll', () => this.scheduleDraw(), {passive:true}));
@@ -235,7 +237,7 @@ export class ConnectionDashboard extends HTMLElement {
     const model=this.provider?.text_models.find(m=>m.id===this.modelID);
     const efforts=this.capability==='text'?(model?.reasoning_effort?.efforts||[]):[];
     const defaults=this.profile?.tenant.defaults;
-    return `${offeringDetails}<form data-default-form><h4>${escapeHTML(this.modelID)}</h4><p class="cw-muted">${this.isDefaultModel(this.modelID)?'Saved default':'Preview'} · Save to change ${escapeHTML(this.tenantName)}’s ${this.capability} default.</p>
+    return `${offeringDetails}<form data-default-form><h4>${escapeHTML(this.modelID)}</h4><p class="cw-muted">${this.isDefaultModel(this.modelID,this.capability)?'Saved default':'Preview'} · Save to change ${escapeHTML(this.tenantName)}’s ${this.capability} default.</p>
     ${efforts.length?`<label>Reasoning effort<select aria-label="Reasoning effort" name="reasoning_effort"><option value="">Provider default</option>${efforts.map(e=>`<option ${e===defaults?.reasoning_effort?'selected':''}>${escapeHTML(e)}</option>`).join('')}</select></label>`:''}
     ${this.capability==='text'?`<label>Tenant system prompt<textarea name="system_prompt">${escapeHTML(defaults?.system_prompt||'')}</textarea></label>`:''}
     <button class="cw-primary" data-action="save-default" type="button" ${this.busy?'disabled':''}>Save ${this.capability} default</button></form>`;

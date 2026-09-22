@@ -2,7 +2,7 @@
 
 import { PUBLIC_THEME, ROUTE_CAPABILITY_ALL } from "../constants.js";
 
-import {MODEL_TASKS, tasksForOffering, offeringMatchesTasksWithModalities, reconcileSelectedTasks, renderTaskIcon, renderTaskDetails} from '../modelTasks.js';
+import {MODEL_TASKS, tasksForOffering, offeringMatchesTasksWithModalities, defaultSelectedTasks, renderTaskIcon, renderTaskDetails} from '../modelTasks.js';
 
 const ROUTING_TREE_ELEMENT_NAME = "routing-tree";
 const SELECTED_ATTRIBUTE_VALUE = "true";
@@ -119,7 +119,7 @@ class RoutingTreeElement extends HTMLElement {
       if (!(element instanceof HTMLButtonElement)) throw new Error('routing_tree_task_button_invalid');
       return requiredDatasetValue(element,'task');
     });
-    this.taskIDs = reconcileSelectedTasks(this.taskIDs, MODEL_TASKS.filter(task=>availableTaskIDs.includes(task.id)));
+    this.taskIDs = defaultSelectedTasks(MODEL_TASKS.filter(task=>availableTaskIDs.includes(task.id)));
     this.querySelectorAll('[data-task]').forEach(candidate=>{
       if (candidate instanceof HTMLButtonElement) candidate.setAttribute('aria-pressed',String(this.taskIDs.includes(requiredDatasetValue(candidate,'task'))));
     });
@@ -221,11 +221,7 @@ class RoutingTreeElement extends HTMLElement {
       const offering = {capabilities:[...capabilities]};
       const matches = offeringMatchesTasksWithModalities(offering, this.taskIDs, this.inputModality, this.outputModality);
       providerButton.hidden = (selectedCapability !== ROUTE_CAPABILITY_ALL && !capabilities.has(selectedCapability)) || !matches;
-      const visibleTasks=tasksForOffering(offering).filter(task=>
-        (!this.taskIDs.length || this.taskIDs.includes(task.id)) &&
-        (!this.inputModality || task.inputs.some(input=>input===this.inputModality)) &&
-        (!this.outputModality || task.outputs.some(output=>output===this.outputModality)));
-      requiredElement(providerButton,'[data-route-task-flow]',HTMLElement).innerHTML=visibleTasks.map(renderTaskIcon).join('');
+      requiredElement(providerButton,'[data-route-task-flow]',HTMLElement).innerHTML=tasksForOffering(offering).map(renderTaskIcon).join('');
     }
 
     let exactModelCount = 0;
@@ -239,13 +235,8 @@ class RoutingTreeElement extends HTMLElement {
       const matchingProviders = requiredButtons(providerGroup, SELECTORS.PROVIDER).filter((button) => !button.hidden);
       modelButton.hidden = matchingProviders.length === 0;
       const modelTasks=requiredElement(modelButton,'[data-route-model-tasks]',HTMLElement);
-      if(!this.taskIDs.length) {
-        const taskLabels=new Set(matchingProviders.flatMap(provider=>tasksForOffering({capabilities:requiredDatasetValue(provider,'routeProviderCapabilities').split(' ')}).map(task=>task.label)));
-        modelTasks.textContent=`${taskLabels.size} tasks`;
-      } else {
-        const taskFlows=new Set(matchingProviders.flatMap(provider=>tasksForOffering({capabilities:requiredDatasetValue(provider,'routeProviderCapabilities').split(' ')}).filter(task=>this.taskIDs.includes(task.id)).map(renderTaskIcon)));
-        modelTasks.innerHTML=[...taskFlows].join('');
-      }
+      const taskIcons=new Set(requiredButtons(providerGroup, SELECTORS.PROVIDER).flatMap(provider=>tasksForOffering({capabilities:requiredDatasetValue(provider,'routeProviderCapabilities').split(' ')}).map(renderTaskIcon)));
+      modelTasks.innerHTML=[...taskIcons].join('');
       const providerCount = requiredElement(providerGroup, SELECTORS.PROVIDER_COUNT, HTMLElement);
       providerCount.textContent = countLabel(matchingProviders.length, "route");
     }
