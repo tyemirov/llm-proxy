@@ -103,5 +103,5 @@ export function offeringMatchesTasksWithModalities(offering, selectedIDs, inputM
 export function renderTaskPicker(tasks, selectedIDs, disabled) {
   if (!tasks.length) return `<div class="task-filter" data-task-filter role="group" aria-label="Model tasks"><p class="cw-empty">No tasks for this connection.</p></div>`;
   const selected = new Set(selectedIDs);
-  return `<div class="task-filter" data-task-filter role="group" aria-label="Model tasks">${tasks.map(task=>`<button type="button" data-task="${task.id}" aria-pressed="${selected.has(task.id)}" aria-label="${task.label}: ${task.description}" title="${task.description}" ${disabled?'disabled':''}><strong>${task.label}</strong><small>${task.description}</small></button>`).join('')}</div>`;
+  return `<div class="task-filter" data-task-filter role="group" aria-label="Model tasks">${tasks.map(task=>`<button type="button" data-task="${task.id}" aria-pressed="${selected.has(task.id)}" aria-label="${task.label}: ${task.description}" title="${task.description}" ${disabled?'disabled':''}>${task.label}</button>`).join('')}</div>`;
 }

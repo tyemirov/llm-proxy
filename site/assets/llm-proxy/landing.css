@@ -1715,7 +1715,7 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
 .routing-tree [data-route-task-flow]{display:flex;gap:12px;flex-wrap:wrap;text-align:left;font-size:11px}
 .routing-tree .task-filter,.routing-tree .model-task-details li{background:var(--panel);color:var(--text);border-color:var(--border-strong)}
 .routing-tree .task-filter{border:0;background:transparent;padding:0}
-.routing-tree .task-filter button{color:var(--text)}.routing-tree .task-filter small,.routing-tree .model-flow,.routing-tree .model-task-details small{color:var(--text-muted)}
+.routing-tree .task-filter button{color:var(--text)}.routing-tree .model-flow,.routing-tree .model-task-details small{color:var(--text-muted)}
 .routing-tree .task-filter button[aria-pressed=true]{background:var(--overlay);color:var(--routing-tree-accent)}
 .routing-tree .routing-tree__modalities select{background:var(--panel);color:var(--text)}
 @media(max-width:680px){.routing-tree__header{grid-template-columns:minmax(0,1fr)}.routing-tree__counts{grid-column:1;grid-row:3}.routing-tree__modalities{gap:8px}}

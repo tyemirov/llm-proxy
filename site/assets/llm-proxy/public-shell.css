@@ -294,9 +294,8 @@
 }
 
 /* Task navigation and directional model capabilities. */
-.task-filter{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px;color:inherit}
-.task-filter button{flex:0 1 auto;min-height:36px;padding:8px 12px;border:1px solid #56616c;border-radius:999px;background:transparent;color:#e0e5ec;font-size:13px;font-weight:600;cursor:pointer;text-align:left}
-.task-filter button small{display:block;font-size:11px;font-weight:400;color:#aeb8c6;margin-top:3px}
+.task-filter{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 10px;color:inherit}
+.task-filter button{flex:0 0 auto;min-height:30px;padding:5px 9px;border:1px solid #46515e;border-radius:4px;background:#20262d;color:#e0e5ec;font-size:12px;line-height:18px;font-weight:600;white-space:nowrap;cursor:pointer;text-align:center}
 .task-filter button[aria-pressed=true]{background:#183b36;border-color:#68ded1;color:#68ded1}
 .task-filter button:hover{background:#2a333c}
 .task-filter button[aria-pressed=true]:hover{background:#183b36}
