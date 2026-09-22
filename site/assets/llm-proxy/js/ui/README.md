@@ -29,7 +29,8 @@ Both use the existing `brand-icon` element and asset manifest.
 `../modelTasks.js` defines the shared task labels, input/output directions, and offering eligibility.
 The dashboard and public route explorer use these definitions.
 Tasks match exact offering capabilities. Image input alone does not imply image generation.
-The dashboard and public explorer show task toggle buttons and task-specific icon strips.
+The dashboard and public explorer show task toggle buttons and task icons on model cards.
+Each icon has a task description on hover and keyboard focus. Model details show input/output directions.
 The initial selection presses Text when Text is available, otherwise the first available task.
 Each button toggles independently with a minimum of one pressed button.
 Selections use AND matching on the same offering.

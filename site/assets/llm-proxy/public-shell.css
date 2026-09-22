@@ -305,3 +305,9 @@
 .model-flow-caption{display:none;width:100%;font-size:11px;line-height:1.5;letter-spacing:normal}button:focus-visible .model-flow-caption,.model-flow:has(.model-modality:hover) .model-flow-caption{display:block}
 .model-task-details{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;padding:0;list-style:none}.model-task-details li{display:grid;gap:8px;border:1px solid #46515e;border-radius:6px;padding:12px}.model-task-details small{line-height:1.6;color:#aeb8c6}
 .routing-tree__modalities{display:flex;gap:12px;flex-wrap:wrap}.routing-tree__modalities label{display:grid;gap:5px;font-size:12px}.routing-tree__modalities select{background:var(--mpr-surface,#191f25);color:inherit;border:1px solid #56616c;border-radius:5px;padding:8px;min-width:90px}
+
+.model-task-icons,[data-route-model-tasks]{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.model-task-icon{display:inline-flex;align-items:center;gap:5px;color:var(--text-muted,#aeb8c6)}
+.model-task-icon svg{width:20px;height:20px;flex:none}
+.model-task-caption{display:none;font-size:11px;line-height:1.4;font-weight:400;letter-spacing:normal}
+button:focus-visible .model-task-caption{display:inline}

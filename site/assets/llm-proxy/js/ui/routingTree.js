@@ -2,7 +2,7 @@
 
 import { PUBLIC_THEME, ROUTE_CAPABILITY_ALL } from "../constants.js";
 
-import {tasksForOffering, offeringMatchesTasksWithModalities, reconcileSelectedTasks, renderTaskFlow, renderTaskDetails} from '../modelTasks.js';
+import {tasksForOffering, offeringMatchesTasksWithModalities, reconcileSelectedTasks, renderTaskIcon, renderTaskDetails} from '../modelTasks.js';
 
 const ROUTING_TREE_ELEMENT_NAME = "routing-tree";
 const SELECTED_ATTRIBUTE_VALUE = "true";
@@ -225,7 +225,7 @@ class RoutingTreeElement extends HTMLElement {
         (!this.taskIDs.length || this.taskIDs.includes(task.id)) &&
         (!this.inputModality || task.inputs.some(input=>input===this.inputModality)) &&
         (!this.outputModality || task.outputs.some(output=>output===this.outputModality)));
-      requiredElement(providerButton,'[data-route-task-flow]',HTMLElement).innerHTML=visibleTasks.map(task=>`<span>${task.label}${renderTaskFlow(task)}</span>`).join('');
+      requiredElement(providerButton,'[data-route-task-flow]',HTMLElement).innerHTML=visibleTasks.map(renderTaskIcon).join('');
     }
 
     let exactModelCount = 0;
@@ -243,7 +243,7 @@ class RoutingTreeElement extends HTMLElement {
         const taskLabels=new Set(matchingProviders.flatMap(provider=>tasksForOffering({capabilities:requiredDatasetValue(provider,'routeProviderCapabilities').split(' ')}).map(task=>task.label)));
         modelTasks.textContent=`${taskLabels.size} tasks`;
       } else {
-        const taskFlows=new Set(matchingProviders.flatMap(provider=>tasksForOffering({capabilities:requiredDatasetValue(provider,'routeProviderCapabilities').split(' ')}).filter(task=>this.taskIDs.includes(task.id)).map(renderTaskFlow)));
+        const taskFlows=new Set(matchingProviders.flatMap(provider=>tasksForOffering({capabilities:requiredDatasetValue(provider,'routeProviderCapabilities').split(' ')}).filter(task=>this.taskIDs.includes(task.id)).map(renderTaskIcon)));
         modelTasks.innerHTML=[...taskFlows].join('');
       }
       const providerCount = requiredElement(providerGroup, SELECTORS.PROVIDER_COUNT, HTMLElement);
