@@ -52,9 +52,23 @@ A connection or tenant change removes unsaved model previews.
 The text, transcription, and speech save actions preserve the other saved defaults.
 Vision uses the text default controls. Task filtering does not save a default.
 
-Each model card shows the inputs and outputs for each pressed task, separated by a directional arrow.
-Neutral icons identify text, image, audio, and video. Teal identifies selection and connection state.
-Icon names are available on hover. Keyboard focus shows an explanation of the complete input/output strip.
+Each model card shows an icon for each pressed task that the offering supports.
+Task icons use the following meanings:
+
+| Task | Icon | Description |
+| --- | --- | --- |
+| Text | Text lines and a pen nib | Generate text |
+| Vision | Eye | Understand images |
+| Images | Picture frame and a sparkle | Generate images |
+| Editing | Picture frame and a pencil | Edit images |
+| Transcribe | Waveform and text lines | Transcribe audio |
+| Speech | Speaker and sound waves | Generate speech |
+| Video analysis | Film frame and a magnifying glass | Understand video |
+| Video | Film frame and a sparkle | Generate video |
+
+Hover text and keyboard focus show the task description. Accessible names use the same description.
+Teal identifies selection and connection state.
+Model details show input and output directions.
 Select a model to read all its supported tasks and their required and optional inputs.
 These details remain available by touch.
 
