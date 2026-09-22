@@ -27,6 +27,28 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B247] (P2) Show the necessary text input for Vision and Listen.
+  Evidence: Task details mark text as optional, but `/v2` rejects blank message content with attachments.
+  Requirements: Show text and the attachment type as required inputs for Vision and Listen.
+  Validation: Confirm the browser failure before the metadata correction. Run focused browser checks and final CI.
+  Evidence: `/tmp/task-inputs-b247-initial.log` records both incorrect Optional input labels.
+  Resolution: Task details now show text and the respective attachment type as necessary inputs for Vision and Listen.
+  Validation: Final CI passes all 14 gates, including 154 frontend tests, seven integration browser tests, and 100.0 percent Go coverage.
+  Evidence: `/tmp/task-inputs-ci.log`. Event contracts are unchanged.
+
+
+- [x] [B248] (P2) Include the required transcript in voice extraction task inputs.
+  Evidence: Dictator rejects voice extraction without a transcript, but task details list only audio.
+  Evidence: The Text input filter incorrectly excludes voice extraction offerings.
+  Requirements: Include text in the supported and required inputs for voice extraction.
+  Validation: Check task details and Text input selection through the browser. Run final CI with B247.
+  Evidence: `/tmp/task-inputs-b248-initial.log` records the missing required Text input.
+  Resolution: Voice extraction declares text and audio as supported and required inputs.
+  Evidence: `/tmp/task-inputs-focused.log` records three successful browser checks, including Text input selection.
+  Validation: Final CI passes all 14 gates, including 154 frontend tests, seven integration browser tests, and 100.0 percent Go coverage.
+  Evidence: `/tmp/task-inputs-ci.log`. Event contracts are unchanged.
+
+
 - [x] [B246] (P2) Keep model capability icons independent of task filters.
   Evidence: Task filters remove supported capability icons from model cards.
   Requirements: Show all supported tasks on dashboard cards and public explorer cards, independent of search filters.
