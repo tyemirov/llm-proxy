@@ -81,6 +81,10 @@ Model details show input and output directions.
 Select a model to read all its supported tasks and their required and optional inputs.
 These details remain available by touch.
 
+Vision inputs must include text and an image. Listen inputs must include text and audio.
+Voice extraction inputs must include audio and a transcript.
+The Text input filter in the public explorer includes voice extraction offerings.
+
 An unattached connection has a `Not connected` label.
 A connection without required credentials retains its assignments and shows `Credentials needed`.
 The model list remains empty until its required credentials are configured.
