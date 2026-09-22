@@ -190,7 +190,9 @@ test('account connection dashboard links Social Threader explicitly and preserve
   const speech=dashboard.locator('[data-connection-node]').filter({hasText:'Private speech server'});
   await expect(speech).toContainText('Connected');
   await expect(dashboard.locator('[data-provider-profile]')).toHaveCount(0);
-  await expect(dashboard.locator('[data-task="transcription"]')).toHaveAttribute('aria-pressed','true');
+  await expect(dashboard.locator('[data-task][aria-pressed="true"]')).toHaveCount(0);
+  await expect(dashboard.locator('[data-model="qwen3-tts"]')).toBeVisible();
+  await expect(dashboard.locator('[data-model="silero-ru"]')).toBeVisible();
   await dashboard.locator('[data-model="whisper-base"]').click();
   await expect(dashboard.locator('[data-media-details]')).toContainText('Transcription');
   await expect(dashboard.locator('[data-media-details]')).toContainText('Voice extraction');
@@ -267,7 +269,7 @@ test('account connection dashboard links Social Threader explicitly and preserve
  await dialog.getByRole('button',{name:'Create connection',exact:true}).click();
  await expect(dialog).not.toBeVisible();
  await expect(dashboard.locator('[data-connection-node]').filter({hasText:'Media-only account'})).toContainText('Connected');
- await expect(dashboard.locator('[data-task="video_generation"]')).toHaveAttribute('aria-pressed','true');
+ await expect(dashboard.locator('[data-task="video_generation"]')).toHaveAttribute('aria-pressed','false');
  await expect(dashboard.locator('[data-provider-profile]')).toHaveCount(0);
  await expect(dashboard).not.toContainText('browser-media-token');
  await page.reload();

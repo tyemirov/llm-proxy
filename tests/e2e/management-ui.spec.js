@@ -984,9 +984,9 @@ test("the route explorer starts with Text and exposes media capabilities through
   await routingTree.locator('[data-route-family="gpt-image"]').click();
   await expect(routingTree.locator("[data-route-selected-model]")).toHaveText("gpt-image-2");
   await expect(routingTree.locator("[data-route-selected-provider]")).toHaveText("openai");
-  await expect(routingTree.locator('[data-task="image_generation"]')).toHaveText("Images");
+  await expect(routingTree.locator('[data-task="image_generation"] svg')).toBeVisible();
   await expect(routingTree.locator('[data-task="image_generation"]')).toHaveAttribute("title", "Generate images");
-  await expect(routingTree.locator('[data-task="vision"]')).toHaveText("Vision");
+  await expect(routingTree.locator('[data-task="vision"] svg')).toBeVisible();
   await expect(routingTree.locator('[data-task="vision"]')).toHaveAttribute("title", "Understand images");
   await selectModelTask(routingTree,'speech_generation');
   await expect(routingTree.locator('[data-route-family="gpt-image"]')).toBeHidden();
@@ -1021,6 +1021,14 @@ test("visitors can filter tasks and input/output pairs on exact provider offerin
   await expect(tree.locator('[data-route-selected-provider]')).toHaveText('moonshot');
   await expect(tree.locator('[data-route-task-details]')).toContainText('Understand images');
   await expect(tree.locator('[data-route-provider]:visible [aria-label="Understand images"]')).toBeVisible();
+  await expect(tree.locator('[data-route-provider]:visible [aria-label="Generate text"]')).toBeVisible();
+  const modelIcons = tree.locator('[data-route-model="kimi-k3"] .model-task-icon');
+  const supportedTasks = await modelIcons.evaluateAll(icons => icons.map(icon => icon.getAttribute('aria-label')));
+  expect(supportedTasks).toContain('Generate text');
+  await selectModelTask(tree, 'text');
+  await expect(modelIcons).toHaveCount(supportedTasks.length);
+  expect(await modelIcons.evaluateAll(icons => icons.map(icon => icon.getAttribute('aria-label')))).toEqual(supportedTasks);
+  await selectModelTask(tree, 'vision');
   await expect(tree.locator('[data-route-model]:visible .model-flow')).toHaveCount(0);
   await expectFiveStageRouteOrder(tree);
   await expectSelectedRoutingFanEndpoints(tree);
@@ -3048,7 +3056,6 @@ test("model previews require an explicit save and preserve the other capability 
   await expect(dashboard.locator('[data-model="deepseek-v4-flash"]')).toContainText("Default model");
   expect(mutations[0]).toMatchObject({provider:"deepseek",model:"deepseek-v4-flash",transcription_provider:"openai",transcription_model:"gpt-transcribe",system_prompt:"Use tenant guidance."});
   await dashboard.getByRole("button",{name:"Default xAI",exact:true}).click();
-  await selectModelTask(dashboard, 'transcription');
   await dashboard.locator('[data-model="xai-stt"]').click();
   expect(mutations).toHaveLength(1);
   await dashboard.getByRole("button",{name:"Save transcription default"}).click();
@@ -3059,6 +3066,10 @@ test("model previews require an explicit save and preserve the other capability 
     expect(mutation).not.toHaveProperty("dictation_provider");
     expect(mutation).not.toHaveProperty("dictation_model");
   }
+  await dashboard.getByRole('button', {name:'Default Dictator', exact:true}).click();
+  await dashboard.locator('[data-model="silero-ru"]').click();
+  await expect(dashboard.getByRole('button', {name:'Save speech default'})).toBeVisible();
+  await expect(dashboard.getByRole('button', {name:'Save text default'})).toHaveCount(0);
   await page.reload();
   await dashboard.getByRole("button",{name:"Default DeepSeek",exact:true}).click();
   await expect(dashboard.locator('[data-model="deepseek-v4-flash"]')).toContainText("Default model");
@@ -5820,9 +5831,11 @@ test("model task taxonomy separates vision from image generation", async ({ page
   await installManagementRoutes(page);
   await page.goto(`${baseURL}${applicationPath}`);
   const dashboard = page.locator('connection-dashboard');
-  await expect(dashboard.locator('[data-task="text"]')).toHaveAttribute('aria-pressed','true');
+  await expect(dashboard.locator('[data-task="text"]')).toHaveAttribute('aria-pressed','false');
   const textTask = dashboard.locator('[data-task="text"]');
-  await expect(textTask).toHaveText('Text');
+  await expect(textTask).toHaveText('');
+  await expect(textTask.locator('svg')).toBeVisible();
+  await expect(textTask).toHaveAccessibleName('Text: Generate text');
   await expect(textTask).toHaveAttribute('title', 'Generate text');
   const taskBounds = await textTask.boundingBox();
   expect(taskBounds.height).toBeLessThanOrEqual(32);
@@ -5838,10 +5851,11 @@ test("model task taxonomy separates vision from image generation", async ({ page
   await dashboard.locator('[data-task-filter] [data-task]').last().focus();
   await page.keyboard.press('Tab');
   await expect(card).toBeFocused();
-  await expect(card.locator('.model-task-caption')).toBeVisible();
+  await expect(card.locator('.model-task-caption').first()).toBeVisible();
   await expect(card.getByRole('img', {name:'Understand images', exact:true})).toBeVisible();
+  await expect(card.getByRole('img', {name:'Generate text', exact:true})).toBeVisible();
   await expect(card.locator('.model-flow')).toHaveCount(0);
-  await expect(card.locator('.model-task-icon')).toHaveAttribute('title', 'Understand images');
+  await expect(card.locator('.model-task-icon[aria-label="Understand images"]')).toHaveAttribute('title', 'Understand images');
   await card.click();
   await expect(dashboard.locator('[data-model-tasks]')).toContainText('Understand images');
   await expect(dashboard.locator('[data-model-tasks]')).toContainText('Generate text');
@@ -5854,6 +5868,8 @@ test("model task taxonomy separates vision from image generation", async ({ page
   await expect(dashboard.locator('[data-model] [aria-label="Generate images"]').first()).toBeVisible();
   await expect(dashboard.locator('[data-model] [aria-label="Generate text"]')).toHaveCount(0);
   expect(await dashboard.evaluate(element=>element.scrollWidth <= element.clientWidth)).toBeTruthy();
+  const filterRows = await dashboard.locator('[data-task]').evaluateAll(buttons => buttons.map(button => button.getBoundingClientRect().y));
+  expect(new Set(filterRows).size).toBe(1);
   await dashboard.screenshot({path:path.join(repoRoot,'artifacts/I279-dashboard-mobile.png')});
 });
 
@@ -5887,7 +5903,9 @@ test("F084 filters model tasks with independently selectable buttons", async ({ 
   const filter = dashboard.locator('[data-task-filter]');
   await expect(filter).toBeVisible();
   await expect(dashboard.locator('[data-task-picker]')).toHaveCount(0);
-  await expect(dashboard.locator('[data-task="text"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(dashboard.locator('[data-task][aria-pressed="true"]')).toHaveCount(0);
+  const allCount = await dashboard.locator('[data-model]').count();
+  await dashboard.locator('[data-task="text"]').click();
   await expect(dashboard.locator('[data-task-filter] [data-task][disabled]')).toHaveCount(0);
   const textOnlyCount = await dashboard.locator('[data-model]').count();
   expect(textOnlyCount).toBeGreaterThan(0);
@@ -5907,8 +5925,8 @@ test("F084 filters model tasks with independently selectable buttons", async ({ 
   expect(secondOnlyCount).toBeGreaterThanOrEqual(0);
   const finalButton = dashboard.locator(`[data-task="${secondTask}"]`);
   await finalButton.click();
-  await expect(finalButton).toHaveAttribute('aria-pressed', 'true');
-  expect(await dashboard.locator('[data-model]').count()).toBe(secondOnlyCount);
+  await expect(finalButton).toHaveAttribute('aria-pressed', 'false');
+  expect(await dashboard.locator('[data-model]').count()).toBe(allCount);
   await finalButton.focus();
   await page.keyboard.press('Enter');
   await expect(finalButton).toHaveAttribute('aria-pressed', 'true');
@@ -5928,24 +5946,59 @@ async function selectModelTask(root, task) {
 }
 
 
-test("final pressed task preserves the selected model and unsaved prompt", async ({ page }) => {
+test("F085 shows all connection models until task filters are selected", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page);
   await page.goto(`${baseURL}${applicationPath}`);
   const dashboard = page.locator('connection-dashboard');
+  const models = dashboard.locator('[data-model]');
+  const selected = dashboard.locator('[data-task][aria-pressed="true"]');
+  await expect(dashboard.locator('[data-task="text"]')).toBeVisible();
+  await expect(selected).toHaveCount(0);
+  const openaiModels = publicCapabilities.offerings.filter(offering => offering.provider === 'openai').map(offering => offering.model).sort();
+  expect(await models.evaluateAll(cards => cards.map(card => card.getAttribute('data-model')).sort())).toEqual(openaiModels);
+  await expect(dashboard.locator('[data-model="gpt-4.1"]')).toContainText('Default model');
+  await expect(dashboard.locator('[data-model="gpt-transcribe"]')).toContainText('Default model');
+  await dashboard.locator('[data-model="gpt-transcribe"]').click();
+  await expect(dashboard.getByRole('button', {name:'Save transcription default'})).toBeVisible();
+  await expect(dashboard.getByRole('button', {name:'Save text default'})).toHaveCount(0);
+  await dashboard.locator('[data-model="gpt-image-2"]').click();
+  await expect(dashboard.locator('[data-default-form]')).toHaveCount(0);
+  await dashboard.locator('[data-model="gpt-4.1"]').click();
+  await expect(dashboard.getByRole('button', {name:'Save text default'})).toBeVisible();
+  const tasks = await dashboard.locator('[data-task]').evaluateAll(buttons => buttons.map(button => button.getAttribute('data-task')));
+  expect(tasks).toEqual(['text', 'vision', 'image_generation', 'image_editing', 'transcription']);
+  await dashboard.getByRole('searchbox').fill('gpt-4.1');
+  await expect(models).toHaveCount(1);
+  expect(await dashboard.locator('[data-task]').evaluateAll(buttons => buttons.map(button => button.getAttribute('data-task')))).toEqual(tasks);
+  await dashboard.getByRole('searchbox').fill('');
   const text = dashboard.locator('[data-task="text"]');
-  await expect(text).toHaveAttribute('aria-pressed', 'true');
-  const model = dashboard.locator('[data-model]').first();
-  const modelID = await model.getAttribute('data-model');
-  await model.click();
-  const prompt = dashboard.getByLabel('Tenant system prompt', {exact:true});
-  await prompt.fill('Unsaved review draft');
   for (const activation of ['click', 'Enter', 'Space']) {
+    await text.focus();
     if (activation === 'click') await text.click();
-    else { await text.focus(); await page.keyboard.press(activation); }
+    else await page.keyboard.press(activation);
     await expect(text).toHaveAttribute('aria-pressed', 'true');
+    await expect(dashboard.locator('[data-model="gpt-image-2"]')).toHaveCount(0);
+    if (activation === 'click') await text.click();
+    else await page.keyboard.press(activation);
+    await expect(text).toHaveAttribute('aria-pressed', 'false');
     await expect(text).toBeFocused();
-    await expect(prompt).toHaveValue('Unsaved review draft');
-    await expect(dashboard.locator('[data-default-form] h4')).toHaveText(modelID);
+    await expect(models).toHaveCount(openaiModels.length);
   }
+  await selectModelTask(dashboard, 'image_generation');
+  await dashboard.getByRole('button', {name:'Default DeepSeek', exact:true}).click();
+  await expect(dashboard.locator('[data-task]')).toHaveCount(1);
+  await expect(text).toHaveAttribute('aria-pressed', 'false');
+  const deepseekModels = publicCapabilities.offerings.filter(offering => offering.provider === 'deepseek').map(offering => offering.model).sort();
+  expect(await models.evaluateAll(cards => cards.map(card => card.getAttribute('data-model')).sort())).toEqual(deepseekModels);
+  await text.click();
+  await dashboard.getByRole('button', {name:'Default OpenAI', exact:true}).click();
+  await expect(text).toHaveAttribute('aria-pressed', 'true');
+  await expect(dashboard.locator('[data-task="image_generation"]')).toBeVisible();
+  await dashboard.locator('[data-task="image_generation"]').click();
+  await expect(models).toHaveCount(0);
+  await expect(dashboard).toContainText('No models for the selected tasks.');
+  await expect(selected).toHaveCount(2);
+  await text.click();
+  await expect(dashboard.locator('[data-model="gpt-image-2"]')).toBeVisible();
 });
