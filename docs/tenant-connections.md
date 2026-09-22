@@ -34,12 +34,28 @@ Search filters the visible lists. Each column scrolls when its list exceeds the 
 A dashed amber line identifies a model preview.
 A star and a text label identify a saved default.
 Model selection alone does not save a default.
-The model tabs are Text, Transcription, Speech, Image, and Video.
-If the selected connection has no models for the current tab, the dashboard selects the first available domain.
+
+The Task filter shows toggle buttons for tasks in the selected connection inventory.
+Text generates text. Vision interprets images and produces text. Images generates images. Editing changes images.
+Transcribe converts audio to text. Speech generates audio. Video generates video. Video analysis interprets video when supported.
+
+Specialized tasks include voice conversion, voice extraction, speaker identification, alignment, and subtitles.
+The dashboard presses Text first when Text is available. Otherwise it presses the first available task.
+Each button toggles independently. The dashboard keeps a minimum of one pressed button.
+The model list shows only offerings that support every pressed task on the same offering.
+An empty result keeps the pressed buttons for revision.
+A connection change removes unavailable selections and preserves the remaining selections.
+If no selection remains, the dashboard presses Text when available, otherwise the first available task.
 A connection or tenant change removes unsaved model previews.
 The text, transcription, and speech save actions preserve the other saved defaults.
-Image and video cards show offering details without a default save action.
-Models with image inputs appear in the Image tab, including models with text operations.
+Vision uses the text default controls. Task filtering does not save a default.
+
+Each model card shows the inputs and outputs for each pressed task, separated by a directional arrow.
+Neutral icons identify text, image, audio, and video. Teal identifies selection and connection state.
+Icon names are available on hover. Keyboard focus shows an explanation of the complete input/output strip.
+Select a model to read all its supported tasks and their required and optional inputs.
+These details remain available by touch.
+
 An unattached connection has a `Not connected` label.
 A connection without required credentials retains its assignments and shows `Credentials needed`.
 The model list remains empty until its required credentials are configured.
@@ -66,9 +82,9 @@ Enter the server address and bearer token. Select the required TLS setting.
 Connection creation checks the token through voice discovery without a speech job.
 The token remains encrypted in the backend credential store.
 Assign the saved connection to the required tenant.
-Select the Transcription tab to inspect `whisper-base` and its transcription capabilities. Select the Speech tab to inspect `qwen3-tts` and `silero-ru` synthesis capabilities.
+Select Transcribe to inspect `whisper-base`. Select Speech to inspect `qwen3-tts` and `silero-ru`.
 Transcription and speech models use their own capability defaults.
-The Speech tab also shows voice extraction models.
+Select Voice extraction to inspect voice extraction models.
 Only synthesis models have a speech default save action.
 Language, voice, sample rate, and output format remain operation request controls.
 The default resource saves provider and model selections.
