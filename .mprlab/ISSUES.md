@@ -292,6 +292,17 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [x] [I283] (P2) Show task icons on model cards.
+  Requirements: Use the agreed task icons and descriptions on dashboard and explorer model cards.
+  Requirements: Keep compact selector labels unchanged. Show descriptions on hover and keyboard focus.
+  Requirements: Keep input and output directions in model details.
+  Validation: Check browser rendering, accessible names, and filter behavior. Run final CI.
+  Resolution: Dashboard and explorer cards use task icons with hover text and accessible descriptions. Model details retain input/output directions.
+  Evidence: `/tmp/i283-initial.log` records the initial missing-icon failures. Focused browser tests pass in `/tmp/i283-focused.log`.
+  Validation: The first CI run failed during temporary-directory cleanup in `TestGeminiCurrentModelsVertexAPIKeyConnection`. The isolated test passed without changes.
+  Validation: Final CI passes all 14 gates, including 151 browser tests and 100.0 percent Go coverage.
+  Evidence: `/tmp/i283-go-recheck.log` and `/tmp/i283-ci-final.log`. Event contracts are unchanged.
+
 - [x] [I282] (P2) Place task selectors beside the Models title.
   Requirements: Put compact task buttons in the Models header. Align the group right and keep the title on its first row.
   Requirements: Wrap buttons within the available header space. Keep labels, hover descriptions, and filter behavior.
