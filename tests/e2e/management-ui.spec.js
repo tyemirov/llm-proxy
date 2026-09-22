@@ -5914,3 +5914,26 @@ async function selectModelTask(root, task) {
   }
   await expect(target).toHaveAttribute('aria-pressed','true');
 }
+
+
+test("final pressed task preserves the selected model and unsaved prompt", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+  await page.goto(`${baseURL}${applicationPath}`);
+  const dashboard = page.locator('connection-dashboard');
+  const text = dashboard.locator('[data-task="text"]');
+  await expect(text).toHaveAttribute('aria-pressed', 'true');
+  const model = dashboard.locator('[data-model]').first();
+  const modelID = await model.getAttribute('data-model');
+  await model.click();
+  const prompt = dashboard.getByLabel('Tenant system prompt', {exact:true});
+  await prompt.fill('Unsaved review draft');
+  for (const activation of ['click', 'Enter', 'Space']) {
+    if (activation === 'click') await text.click();
+    else { await text.focus(); await page.keyboard.press(activation); }
+    await expect(text).toHaveAttribute('aria-pressed', 'true');
+    await expect(text).toBeFocused();
+    await expect(prompt).toHaveValue('Unsaved review draft');
+    await expect(dashboard.locator('[data-default-form] h4')).toHaveText(modelID);
+  }
+});
