@@ -1020,8 +1020,8 @@ test("visitors can filter tasks and input/output pairs on exact provider offerin
   await tree.locator('[data-route-family="kimi-k3"]').click();
   await expect(tree.locator('[data-route-selected-provider]')).toHaveText('moonshot');
   await expect(tree.locator('[data-route-task-details]')).toContainText('Understand images');
-  await expect(tree.locator('[data-route-provider]:visible [aria-label="Image input"]')).toBeVisible();
-  await expect(tree.locator('[data-route-provider]:visible [aria-label="Text output"]')).toBeVisible();
+  await expect(tree.locator('[data-route-provider]:visible [aria-label="Understand images"]')).toBeVisible();
+  await expect(tree.locator('[data-route-model]:visible .model-flow')).toHaveCount(0);
   await expectFiveStageRouteOrder(tree);
   await expectSelectedRoutingFanEndpoints(tree);
   await mkdir(path.join(repoRoot,'artifacts'),{recursive:true});
@@ -1035,8 +1035,8 @@ test("visitors can filter tasks and input/output pairs on exact provider offerin
   await expect(tree.locator('[data-route-family="kimi-k3"]')).toBeHidden();
   await expect(tree.locator('[data-route-family="gpt-image"]')).toBeVisible();
   await tree.locator('[data-route-family="gpt-image"]').click();
-  await expect(tree.locator('[data-route-provider]:visible [aria-label="Image output"]')).toBeVisible();
-  await expect(tree.locator('[data-route-provider]:visible [aria-label="Text output"]')).toHaveCount(0);
+  await expect(tree.locator('[data-route-provider]:visible [aria-label="Generate images"]')).toBeVisible();
+  await expect(tree.locator('[data-route-provider]:visible [aria-label="Generate text"]')).toHaveCount(0);
   await tree.getByLabel('Input',{exact:true}).selectOption('audio');
   await expect(tree.locator('[data-route-empty]')).toBeVisible();
   await tree.getByLabel('Output',{exact:true}).selectOption('text');
@@ -5838,10 +5838,10 @@ test("model task taxonomy separates vision from image generation", async ({ page
   await dashboard.locator('[data-task-filter] [data-task]').last().focus();
   await page.keyboard.press('Tab');
   await expect(card).toBeFocused();
-  await expect(card.locator('.model-flow-caption')).toBeVisible();
-  await expect(card.locator('[aria-label="Image input"]')).toBeVisible();
-  await expect(card.locator('[aria-label="Text output"]')).toBeVisible();
-  await expect(card.locator('[aria-label="Image output"]')).toHaveCount(0);
+  await expect(card.locator('.model-task-caption')).toBeVisible();
+  await expect(card.getByRole('img', {name:'Understand images', exact:true})).toBeVisible();
+  await expect(card.locator('.model-flow')).toHaveCount(0);
+  await expect(card.locator('.model-task-icon')).toHaveAttribute('title', 'Understand images');
   await card.click();
   await expect(dashboard.locator('[data-model-tasks]')).toContainText('Understand images');
   await expect(dashboard.locator('[data-model-tasks]')).toContainText('Generate text');
@@ -5851,8 +5851,8 @@ test("model task taxonomy separates vision from image generation", async ({ page
   await dashboard.screenshot({path:path.join(repoRoot,'artifacts/I279-task-menu.png')});
   await page.setViewportSize({width:320,height:844});
   await selectModelTask(dashboard,'image_generation');
-  await expect(dashboard.locator('[data-model] [aria-label="Image output"]').first()).toBeVisible();
-  await expect(dashboard.locator('[data-model] [aria-label="Text output"]')).toHaveCount(0);
+  await expect(dashboard.locator('[data-model] [aria-label="Generate images"]').first()).toBeVisible();
+  await expect(dashboard.locator('[data-model] [aria-label="Generate text"]')).toHaveCount(0);
   expect(await dashboard.evaluate(element=>element.scrollWidth <= element.clientWidth)).toBeTruthy();
   await dashboard.screenshot({path:path.join(repoRoot,'artifacts/I279-dashboard-mobile.png')});
 });
