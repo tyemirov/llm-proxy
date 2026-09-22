@@ -97,9 +97,9 @@ test("public site renders image generation with catalog dimension controls", asy
     try {
       await renderFixture(fixture, capabilitiesURL);
       const html = await readFile(path.join(fixture.output, "index.html"), "utf8");
-      expect(html).toContain('data-route-capability="image_generation"');
+      expect(html).toContain('data-task="image_generation"');
       expect(html).toContain("Image generation");
-      expect(html).toContain('data-route-capability="image_editing"');
+      expect(html).toContain('data-task="image_editing"');
       expect(html).toContain("Image editing");
       expect(html).toContain('data-brand-id="gpt-image"');
     } finally {
@@ -257,7 +257,7 @@ test("public site rendering writes the normalized exact model catalog", async ()
       expect(renderedLanding).toContain('data-route-weight-access="proprietary" aria-pressed="true"');
       expect(renderedLanding).toContain('data-route-weight-access="open_weights" aria-pressed="true"');
       expect(renderedLanding).toContain('role="group" aria-label="Choose one or both weight access types"');
-      expect(renderedLanding).toContain('role="group" aria-label="Choose one capability"');
+      expect(renderedLanding).toContain('role="group" aria-label="Additional capabilities"');
       expect(renderedLanding).toContain('data-route-capability="all" aria-label="All capabilities" title="All capabilities" aria-pressed="true"');
       expect(renderedLanding).toContain('data-route-family-weight-access="proprietary"');
       expect(renderedLanding).toContain('data-route-provider-capabilities="text"');
