@@ -292,6 +292,26 @@ retain satisfied historical dependencies.
 
 ## Improvements
 
+- [x] [I282] (P2) Place task selectors beside the Models title.
+  Requirements: Put compact task buttons in the Models header. Align the group right and keep the title on its first row.
+  Requirements: Wrap buttons within the available header space. Keep labels, hover descriptions, and filter behavior.
+  Validation: Check header geometry and desktop and mobile browser renders. Run final CI.
+  Resolution: Task selectors sit beside the Models title and wrap within the right side of its header.
+  Validation: Header geometry, desktop, mobile, and filter browser checks pass. Final CI passes all 14 gates with 151 browser tests.
+  Evidence: `/tmp/i282-initial.log` records the initial alignment failure. `/tmp/i282-ci.log` records final CI and 100.0 percent Go coverage.
+  Event contracts: No event contract changed.
+
+- [x] [I281] (P2) Make task filter buttons compact and rectangular.
+  Requirements: Use short labels without visible explanations. Keep descriptions in hover text and accessible names.
+  Requirements: Use small rectangular buttons with clear pressed states and wrapping at narrow widths.
+  Validation: Check desktop and mobile browser renders. Keep combined selection behavior and run final CI.
+  Evidence: The initial browser test found visible explanations. The first CI run found an obsolete visible-description assertion.
+  Evidence: Updated label and hover-description checks pass in `/tmp/i281-corrected.log`.
+  Resolution: Shared task controls use rectangular buttons with short labels, hover descriptions, and accessible names.
+  Validation: Desktop and mobile browser checks pass. The refreshed local application shows the compact controls.
+  Validation: Final CI passes all 14 gates, including 151 browser tests and 100.0 percent Go coverage.
+  Evidence: `/tmp/i281-ci-final.log`. Event contracts are unchanged.
+
 - [ ] [I280] Buy `untzr.ai` and migrate llm-proxy to the new domain.
   Goal: Complete the domain purchase and production migration, with `untzr.ai` as the website and `api.untzr.ai` as the API hostname.
   Requirements:
