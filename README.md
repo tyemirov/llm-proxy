@@ -11,9 +11,11 @@ that input capability.
 
 The public [LLM Proxy landing page](https://llm-proxy.mprlab.com/) explains the
 current provider, model, dictation, web-search, request-limit, and integration
-surface. Its route explorer initially shows all model families and capability types.
-Both weight access types are selected. Visitors can filter model families by weight access and
-provider-offering capabilities. It then selects a model family, an exact model,
+surface. Its route explorer initially presses the Text task.
+Both weight access types are selected. Visitors can press one or more tasks, and filter by input, output, weight access, and additional capabilities.
+The explorer shows only offerings that support every pressed task on the same offering.
+Input and output filters must match the same task on the same provider offering.
+Model details show each supported task and its input/output direction. It then selects a model family, an exact model,
 and a provider offering. Its model matrix has one row for each exact model and
 shows all current provider offerings for that model. Both interfaces use the
 validated runtime catalog. A catalog change appears on the landing page without
