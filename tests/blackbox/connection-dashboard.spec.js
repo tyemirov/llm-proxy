@@ -1,6 +1,6 @@
 // @ts-check
 import {expect,test} from '@playwright/test';
-import {readFile,mkdir} from 'node:fs/promises';
+import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import {assets,directory} from './sharedUIAssets.mjs';
 import {localManagementProfile,startLocalManagementStack} from './localManagementStack.mjs';
@@ -145,12 +145,9 @@ test('account connection dashboard links Social Threader explicitly and preserve
  await page.setViewportSize({width:390,height:844});
  await expect(dashboard.getByRole('button',{name:'Create tenant',exact:true})).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
- await mkdir('output/playwright',{recursive:true});
  await page.evaluate(()=>scrollTo(0,0));
- await page.screenshot({path:'output/playwright/p001-connections-mobile.png',fullPage:true});
  await page.setViewportSize({width:1440,height:1050});
  await page.evaluate(()=>scrollTo(0,0));
- await page.screenshot({path:'output/playwright/p001-connections-desktop.png',fullPage:true});
  const bounds=await production.getByRole('button',{name:'Connect',exact:true}).boundingBox();
  const cardBounds=await production.boundingBox();
  expect(bounds.x+bounds.width).toBeLessThanOrEqual(cardBounds.x+cardBounds.width);
@@ -222,9 +219,6 @@ test('account connection dashboard links Social Threader explicitly and preserve
   expect(speechProfile.tenant.defaults.speech_model).toBe('qwen3-tts');
   expect(speechProfile.tenant.defaults.transcription_model).toBe('whisper-base');
   await expect(dashboard.locator('[data-model="qwen3-tts"]')).toHaveClass(/selected/);
-  const capabilityScreenshot = test.info().outputPath('capability-dashboard-mobile.png');
-  await dashboard.screenshot({path:capabilityScreenshot});
-  await test.info().attach('Dashboard capabilities mobile', {path:capabilityScreenshot, contentType:'image/png'});
   await page.setViewportSize({width:1440,height:1050});
   await selectModelTask(dashboard, 'transcription');
   await expect(dashboard.locator('[data-model="whisper-base"]')).toHaveClass(/selected/);

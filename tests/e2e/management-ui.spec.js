@@ -5,7 +5,7 @@ import { load as loadYAML } from "js-yaml";
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -89,8 +89,6 @@ const mprUIConfigURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@
 const mprUIBundleURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js";
 const forbiddenTAuthBrowserClientURL = "https://tauth.mprlab.com/tauth.js";
 const catalogColumnCount = 3;
-const b020ScreenshotDirectory = path.join(repoRoot, "output/playwright");
-const f034ScreenshotDirectory = path.join(repoRoot, "output/playwright");
 const httpOK = 200;
 const httpNotFound = 404;
 const httpInternalServerError = 500;
@@ -444,7 +442,6 @@ for (const surface of ["management", "public"]) {
       await expect(icon).toHaveAttribute('alt', '');
       await expect(icon).toHaveAttribute('aria-hidden', 'true');
       await expect(icon).toHaveCSS('width', surface === 'management' ? '20px' : '16px');
-      await region.screenshot({ path: test.info().outputPath(`kimi-${surface}-${themeMode.theme}-${themeMode.palette}.png`) });
     }
   });
 }
@@ -476,11 +473,9 @@ test("brand icons preserve public model and provider identities", async ({ page 
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(248, 250, 252)');
   await expect(row.locator('.catalog-model img.brand-icon')).toHaveCSS('background-color', 'rgb(242, 244, 247)');
   await row.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: test.info().outputPath("brand-icons-public-light.png") });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await row.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: test.info().outputPath("brand-icons-public-mobile.png") });
 });
 
 test("brand icons identify connection providers and available model families", async ({ page }) => {
@@ -500,10 +495,8 @@ test("brand icons identify connection providers and available model families", a
   const senseVoice = dashboard.locator('[data-model="sensevoice-small"]');
   await expect(senseVoice).toBeVisible();
   await expect(senseVoice.locator('brand-icon img')).toHaveCount(0);
-  await dashboard.screenshot({ path: test.info().outputPath("brand-icons-connections.png") });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await senseVoice.screenshot({ path: test.info().outputPath("brand-icons-model-mobile.png") });
 });
 
 test("public landing explains the product and exposes the generated capability catalog", async ({ request }) => {
@@ -1032,9 +1025,6 @@ test("visitors can filter tasks and input/output pairs on exact provider offerin
   await expect(tree.locator('[data-route-model]:visible .model-flow')).toHaveCount(0);
   await expectFiveStageRouteOrder(tree);
   await expectSelectedRoutingFanEndpoints(tree);
-  const explorerScreenshot = test.info().outputPath('I279-explorer-desktop.png');
-  await tree.screenshot({path:explorerScreenshot});
-  await test.info().attach('Explorer desktop', {path:explorerScreenshot, contentType:'image/png'});
   await tree.getByLabel('Output',{exact:true}).selectOption('image');
   await expect(tree.locator('[data-route-empty]')).toBeVisible();
   await expect(tree.locator('[data-route-stage]:visible')).toHaveCount(0);
@@ -2739,8 +2729,6 @@ for (const width of [1280, 390]) {
       await closeButton.focus();
       await expect(closeButton).toBeFocused();
       await expect(closeButton).toHaveCSS("outline-style", "solid");
-      await mkdir(b020ScreenshotDirectory, { recursive: true });
-      await panel.screenshot({ path: path.join(b020ScreenshotDirectory, `b141-${surface}-${width}.png`) });
       await closeButton.press("Enter");
       await expect(closeButton).toBeHidden();
     });
@@ -5908,12 +5896,6 @@ test("model task taxonomy separates vision from image generation", async ({ page
   await expect(dashboard.locator('[data-model-tasks]')).toContainText('Understand images');
   await expect(dashboard.locator('[data-model-tasks]')).toContainText('Generate text');
   await expect(dashboard.getByRole('button', {name:'Save text default', exact:true})).toBeVisible();
-  const desktopScreenshot = test.info().outputPath('I279-dashboard-desktop.png');
-  await dashboard.screenshot({path:desktopScreenshot});
-  await test.info().attach('Dashboard desktop', {path:desktopScreenshot, contentType:'image/png'});
-  const taskMenuScreenshot = test.info().outputPath('I279-task-menu.png');
-  await dashboard.screenshot({path:taskMenuScreenshot});
-  await test.info().attach('Dashboard task filters', {path:taskMenuScreenshot, contentType:'image/png'});
   await page.setViewportSize({width:320,height:844});
   await selectModelTask(dashboard,'image_generation');
   await expect(dashboard.locator('[data-model] [aria-label="Generate images"]').first()).toBeVisible();
@@ -5921,9 +5903,6 @@ test("model task taxonomy separates vision from image generation", async ({ page
   expect(await dashboard.evaluate(element=>element.scrollWidth <= element.clientWidth)).toBeTruthy();
   const filterRows = await dashboard.locator('[data-task]').evaluateAll(buttons => buttons.map(button => button.getBoundingClientRect().y));
   expect(new Set(filterRows).size).toBe(1);
-  const mobileScreenshot = test.info().outputPath('I279-dashboard-mobile.png');
-  await dashboard.screenshot({path:mobileScreenshot});
-  await test.info().attach('Dashboard mobile', {path:mobileScreenshot, contentType:'image/png'});
 });
 
 test("F084 filters model tasks with independently selectable buttons", async ({ page }) => {
