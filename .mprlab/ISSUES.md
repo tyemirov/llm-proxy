@@ -27,6 +27,17 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B249] (P1) Keep browser screenshot output outside tracked files.
+  Evidence: Release CI changes five tracked PNG files in `artifacts/` and fails with `app_release.source_drift`.
+  Requirements: Save generated screenshots in ignored Playwright output and attach them to their test results.
+  Requirements: Preserve the failed release screenshots before restoration of the tracked copies.
+  Validation: Confirm the initial output failure through browser tests. Verify that final CI leaves tracked file contents unchanged.
+  Evidence: `/tmp/browser-output-b249-initial.log` records two missing screenshot failures in the test output directory.
+  Resolution: The five screenshot writes use Playwright output paths and test attachments. Both browser stages have separate ignored directories.
+  Evidence: Focused frontend and authentication checks pass. All five tracked screenshots retain their original contents.
+  Evidence: Final `make ci` passes all 14 gates, including 154 frontend tests and 7 authentication tests. Go statement coverage is 100.0%.
+  Evidence: `/tmp/browser-output-b249-integrity.log` confirms that CI changed none of the 621 tracked files. All five screenshot attachments remain available.
+
 - [x] [B247] (P2) Show the necessary text input for Vision and Listen.
   Evidence: Task details mark text as optional, but `/v2` rejects blank message content with attachments.
   Requirements: Show text and the attachment type as required inputs for Vision and Listen.

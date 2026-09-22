@@ -222,8 +222,9 @@ test('account connection dashboard links Social Threader explicitly and preserve
   expect(speechProfile.tenant.defaults.speech_model).toBe('qwen3-tts');
   expect(speechProfile.tenant.defaults.transcription_model).toBe('whisper-base');
   await expect(dashboard.locator('[data-model="qwen3-tts"]')).toHaveClass(/selected/);
-  await mkdir('artifacts',{recursive:true});
-  await dashboard.screenshot({path:'artifacts/capability-dashboard-mobile.png'});
+  const capabilityScreenshot = test.info().outputPath('capability-dashboard-mobile.png');
+  await dashboard.screenshot({path:capabilityScreenshot});
+  await test.info().attach('Dashboard capabilities mobile', {path:capabilityScreenshot, contentType:'image/png'});
   await page.setViewportSize({width:1440,height:1050});
   await selectModelTask(dashboard, 'transcription');
   await expect(dashboard.locator('[data-model="whisper-base"]')).toHaveClass(/selected/);

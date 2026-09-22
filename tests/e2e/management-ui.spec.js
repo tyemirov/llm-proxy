@@ -1032,8 +1032,9 @@ test("visitors can filter tasks and input/output pairs on exact provider offerin
   await expect(tree.locator('[data-route-model]:visible .model-flow')).toHaveCount(0);
   await expectFiveStageRouteOrder(tree);
   await expectSelectedRoutingFanEndpoints(tree);
-  await mkdir(path.join(repoRoot,'artifacts'),{recursive:true});
-  await tree.screenshot({path:path.join(repoRoot,'artifacts/I279-explorer-desktop.png')});
+  const explorerScreenshot = test.info().outputPath('I279-explorer-desktop.png');
+  await tree.screenshot({path:explorerScreenshot});
+  await test.info().attach('Explorer desktop', {path:explorerScreenshot, contentType:'image/png'});
   await tree.getByLabel('Output',{exact:true}).selectOption('image');
   await expect(tree.locator('[data-route-empty]')).toBeVisible();
   await expect(tree.locator('[data-route-stage]:visible')).toHaveCount(0);
@@ -5907,9 +5908,12 @@ test("model task taxonomy separates vision from image generation", async ({ page
   await expect(dashboard.locator('[data-model-tasks]')).toContainText('Understand images');
   await expect(dashboard.locator('[data-model-tasks]')).toContainText('Generate text');
   await expect(dashboard.getByRole('button', {name:'Save text default', exact:true})).toBeVisible();
-  await mkdir(path.join(repoRoot,'artifacts'),{recursive:true});
-  await dashboard.screenshot({path:path.join(repoRoot,'artifacts/I279-dashboard-desktop.png')});
-  await dashboard.screenshot({path:path.join(repoRoot,'artifacts/I279-task-menu.png')});
+  const desktopScreenshot = test.info().outputPath('I279-dashboard-desktop.png');
+  await dashboard.screenshot({path:desktopScreenshot});
+  await test.info().attach('Dashboard desktop', {path:desktopScreenshot, contentType:'image/png'});
+  const taskMenuScreenshot = test.info().outputPath('I279-task-menu.png');
+  await dashboard.screenshot({path:taskMenuScreenshot});
+  await test.info().attach('Dashboard task filters', {path:taskMenuScreenshot, contentType:'image/png'});
   await page.setViewportSize({width:320,height:844});
   await selectModelTask(dashboard,'image_generation');
   await expect(dashboard.locator('[data-model] [aria-label="Generate images"]').first()).toBeVisible();
@@ -5917,7 +5921,9 @@ test("model task taxonomy separates vision from image generation", async ({ page
   expect(await dashboard.evaluate(element=>element.scrollWidth <= element.clientWidth)).toBeTruthy();
   const filterRows = await dashboard.locator('[data-task]').evaluateAll(buttons => buttons.map(button => button.getBoundingClientRect().y));
   expect(new Set(filterRows).size).toBe(1);
-  await dashboard.screenshot({path:path.join(repoRoot,'artifacts/I279-dashboard-mobile.png')});
+  const mobileScreenshot = test.info().outputPath('I279-dashboard-mobile.png');
+  await dashboard.screenshot({path:mobileScreenshot});
+  await test.info().attach('Dashboard mobile', {path:mobileScreenshot, contentType:'image/png'});
 });
 
 test("F084 filters model tasks with independently selectable buttons", async ({ page }) => {
