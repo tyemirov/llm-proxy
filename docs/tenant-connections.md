@@ -35,7 +35,9 @@ A dashed amber line identifies a model preview.
 A star and a text label identify a saved default.
 Model selection alone does not save a default.
 
-The Task filter shows toggle buttons for tasks in the selected connection inventory.
+The Task filter shows compact rectangular buttons for tasks in the selected connection inventory.
+Each button shows one short label. Hover over a button to read its task description.
+The buttons sit beside the Models title. They align right and wrap within the header when space is limited.
 Text generates text. Vision interprets images and produces text. Images generates images. Editing changes images.
 Transcribe converts audio to text. Speech generates audio. Video generates video. Video analysis interprets video when supported.
 
