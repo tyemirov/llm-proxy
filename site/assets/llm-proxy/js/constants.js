@@ -147,14 +147,6 @@ export const CAPABILITY_DOMAINS = Object.freeze({
   VIDEO: "video",
 });
 
-export const CAPABILITY_DOMAIN_LABELS = Object.freeze({
-  text: "Text",
-  transcription: "Transcription",
-  speech: "Speech",
-  image: "Image",
-  video: "Video",
-});
-
 export const OPERATION_CAPABILITY_DOMAINS = Object.freeze({
   text: "text",
   image_generation: "image",

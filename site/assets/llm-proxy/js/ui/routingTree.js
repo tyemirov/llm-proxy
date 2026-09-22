@@ -2,7 +2,7 @@
 
 import { PUBLIC_THEME, ROUTE_CAPABILITY_ALL } from "../constants.js";
 
-import {tasksForOffering, offeringMatchesTasksWithModalities, reconcileSelectedTasks, renderTaskIcon, renderTaskDetails} from '../modelTasks.js';
+import {MODEL_TASKS, tasksForOffering, offeringMatchesTasksWithModalities, reconcileSelectedTasks, renderTaskIcon, renderTaskDetails} from '../modelTasks.js';
 
 const ROUTING_TREE_ELEMENT_NAME = "routing-tree";
 const SELECTED_ATTRIBUTE_VALUE = "true";
@@ -119,7 +119,7 @@ class RoutingTreeElement extends HTMLElement {
       if (!(element instanceof HTMLButtonElement)) throw new Error('routing_tree_task_button_invalid');
       return requiredDatasetValue(element,'task');
     });
-    this.taskIDs = reconcileSelectedTasks(this.taskIDs, availableTaskIDs.map(id=>({id})));
+    this.taskIDs = reconcileSelectedTasks(this.taskIDs, MODEL_TASKS.filter(task=>availableTaskIDs.includes(task.id)));
     this.querySelectorAll('[data-task]').forEach(candidate=>{
       if (candidate instanceof HTMLButtonElement) candidate.setAttribute('aria-pressed',String(this.taskIDs.includes(requiredDatasetValue(candidate,'task'))));
     });

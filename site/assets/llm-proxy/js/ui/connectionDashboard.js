@@ -86,6 +86,7 @@ export class ConnectionDashboard extends HTMLElement {
   }
   /** @param {string[]} selectedIDs */
   modelsForSelectedTasks(selectedIDs) {
+    if (!selectedIDs.length || !this.availableTasks.length) return [];
     return this.offerings.filter(offering=>offering.provider===this.connection?.provider && offeringMatchesTasks(offering, selectedIDs)).map(offering=>offering.model);
   }
   get canSaveDefault() {
