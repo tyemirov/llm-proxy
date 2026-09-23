@@ -325,7 +325,7 @@ test-provider-resources: frontend-dependencies
 
 .PHONY: test-provider-catalog
 test-provider-catalog: frontend-dependencies
-	$(GO) test ./internal/proxy ./tests ./cmd/cli -run 'Test(ProviderCatalog|PublicCapabilityCatalog|CatalogDefined|ModelActivation|RootCommandPrintsCatalogDerivedLiveDiscovery)' -count=1
+	$(GO) test ./internal/proxy ./tests ./cmd/cli -run 'Test(ProviderCatalog|PublicCapabilityCatalog|CatalogDefined|ModelActivation|RootCommandPrintsCatalogDerivedLiveDiscovery|RootCommandRejectsInvalidProviderCatalog)' -count=1
 
 .PHONY: test-deepseek-retirement
 test-deepseek-retirement: frontend-dependencies

@@ -473,7 +473,7 @@ Grant revocation prevents new work but does not remove a saved result.
 Native text and dictation replays use the durable failure envelope for retained HTTP 502 failures.
 Client protocol replays use their existing error envelope. Neither replay sends another provider request.
 
-The production router does not install the financial authorization operation yet.
+Without an explicit `hosted` configuration, the router does not install financial authorization.
 It denies hosted text with HTTP `403` after request validation.
 MCP uses the `idempotency_key` tool input for the same tenant-scoped identity.
 Concurrent duplicates return the retained execution identifier with `state: dispatched`.
@@ -909,7 +909,7 @@ Unknown usage, unresolved charge policy, and usage above the accepted bound reta
 The account API exposes the reason through the request's reconciliation cases.
 Controlled acceptance uses local HTTP providers and reopened database connections.
 Production activation remains disabled.
-Decisions for uncertain costs and complete service acceptance remain open under F068.
+Audited financial decisions use the F068 resolution resources. Commercial charge policies and complete service acceptance remain open under F070.
 
 An audited usage credit uses the existing charge adjustment transaction and its account lock.
 A compensating Ledger grant restores whole cents when required.
@@ -1062,7 +1062,8 @@ Do not start old and restored instances against different financial copies for t
 `make test-managed-database-snapshot` verifies the CLI and restores financial fixtures through the management HTTP API.
 The test retains an uncertain hold and compares financial responses after two recovery runs.
 Restore acceptance includes verified processor events, their private bodies, and replay after restart.
-F069 acceptance must also add payment receipts and financial processor effects to this fixture.
+The fixture also preserves funding orders, verified receipts, adjustments, payment reconciliation, and their Ledger effects.
+Replay after restoration does not apply those effects again.
 
 ### Tenant Spending Limits
 
@@ -1244,7 +1245,7 @@ Disconnecting the view cancels its pending requests and closes an unfinished por
 A controlled Paddle HTTP protocol supplies transactions, signed events, adjustments, and portal sessions.
 The test verifies delayed funding, receipts, pending holds, partial refunds, pagination, failure recovery, and desktop and narrow widths.
 These checks do not qualify a live Paddle environment.
-Full reconciliation remains open under F069.
+Controlled payment and provider reconciliation checks pass. Actual Paddle sandbox qualification remains open under F069.
 
 ### Browser Checkout
 
@@ -1703,9 +1704,9 @@ Its current amounts use integer cents.
 Its reservation expiry makes held funds spendable and prevents later capture.
 Its refund operation credits a prior usage debit. It does not reverse a funding grant.
 
-F067 must define exact fractional accounting without interpreting `amount_cents` as another unit.
-F068 must preserve holds for uncertain provider work. It must not apply automatic Ledger expiry to those holds.
-F069 must define payment reversals separately from refunds of usage debits.
+F067 defines exact fractional accounting without interpreting `amount_cents` as another unit.
+F068 preserves holds for uncertain provider work without automatic Ledger expiry.
+F069 applies payment reversals separately from refunds of usage debits.
 
 The Ledger integration guide also describes an embedded Go service and a public `Store` interface.
 Ledger F004 exposes the existing GORM adapter as `pkg/gormstore` in [merged PR 102](https://github.com/tyemirov/ledger/pull/102).
@@ -1719,8 +1720,8 @@ Implement missing shared capabilities in their owning package instead of creatin
 
 A remote Ledger transaction cannot commit atomically with the LLM Proxy database.
 F068 requires request admission, reservation, and ledger effects in one database transaction.
-The integration must preserve that requirement through a shared storage contract before implementation proceeds.
-The acceptance tests must prove transaction recovery and rejection before unauthorized provider dispatch.
+The published GORM store supplies this transaction boundary.
+Public tests check transaction recovery and rejection before unauthorized provider dispatch.
 
 ## Current Integration Boundaries
 
@@ -1739,7 +1740,7 @@ F067 must extend that contract where hosted pricing requires additional conditio
 
 `management_usage_writer.go` records operational telemetry through a memory queue.
 These records do not establish customer funds or financial history.
-F066 must write financial evidence durably before dispatch and before settlement.
+F066 writes financial evidence durably before dispatch and before settlement.
 HTTP acceptance fills this queue before a hosted request.
 The request retains exact usage and one delivery record while the telemetry writer drops its records.
 Replay returns the saved result without another provider call.
@@ -1752,7 +1753,7 @@ Credential rotation must preserve recovery references for accepted work.
 Revocation must prevent new provider work while permitting authorized result recovery.
 
 `upstream_admission.go` controls provider capacity.
-F068 must enforce financial admission separately and before each paid dispatch.
+F068 enforces financial admission separately and before each paid dispatch.
 Native HTTP, client protocols, MCP, dictation, and media workers require the same financial authority.
 
 ## Open Decisions

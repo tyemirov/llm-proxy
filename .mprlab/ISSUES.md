@@ -27,6 +27,18 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [ ] [B263] (P1) Correct the CLI catalog rejection fixture.
+  Evidence:
+  Stack CI rejects catalog schema version 7, but the test expects an error for version 6.
+  The production loader reports the submitted invalid value correctly.
+  The fixture now derives its values from the canonical version. Focused catalog checks and format checks pass.
+  Final stack CI remains open under F070.
+  Requirements:
+  - Derive the invalid schema value and expected error from the canonical version.
+  - Include CLI catalog rejection tests in the existing provider catalog target.
+  Validation:
+  - Run the focused provider catalog checks and the final stack CI checkpoint.
+
 - [x] [B262] (P1) Admit and settle priced dictionary services without a model.
   Goal:
   Use the shared financial contract for the existing dictionary creation service.
@@ -2489,7 +2501,8 @@ retain satisfied historical dependencies.
   The resource foundation is in [PR 339](https://github.com/tyemirov/llm-proxy/pull/339).
   Hosted CI run 35804548155 passed frontend and backend-checks jobs.
   The backend coverage gate reported `coverage total 99.0%, want 100.0%`.
-  Financial admission, accepted-work recovery, and complete acceptance remain open.
+  Financial admission and accepted-work recovery are implemented in the stack.
+  Final CI and complete F070 acceptance remain open.
   Requirements:
   - Use F070 as the shared hosted service contract.
   - Extend the ownership rules in `docs/tenant-connections.md` and the account connection store.
@@ -2591,7 +2604,7 @@ retain satisfied historical dependencies.
   HTTP acceptance verifies this separation and one provider call across replay.
   Controlled HTTP acceptance covers all 67 active text offerings, both image editing surfaces, and both Dictator synthesis offerings.
   Timeout and client disconnect acceptance preserve uncertain dispatches and prevent repeated provider work.
-  The journal implementation passes component acceptance. F067 and F068 must connect rating and funds settlement to its delivery transaction.
+  The journal implementation passes component acceptance. F067 and F068 connect rating and funds settlement to its delivery transaction.
   Final stack CI remains the F070 completion checkpoint.
   Requirements:
   - Use F070 as the shared hosted service contract.
@@ -2745,9 +2758,9 @@ retain satisfied historical dependencies.
   The funds suite passes in 22.330 seconds. Credit race checks pass in 36.013 seconds. Go lint and formatting pass.
   With the published dependency, hosted regression passes in 121.302 seconds and browser acceptance passes in 11.6 seconds.
   Go lint and formatting pass. Final stack CI remains the F070 completion gate.
-  Remaining acceptance:
-  - F069 must verify payment credits, reversals, and payment records in the restore fixture.
-  - F070 must complete service wiring, browser funding errors, commercial decisions, and complete acceptance.
+  F069 verifies payment credits, reversals, and payment records in the restore fixture.
+  F070 connects service admission and settlement and verifies browser funding errors.
+  Final CI, commercial decisions, and complete F070 acceptance remain open.
   Requirements:
   - Use F070 as the shared hosted service contract.
   - Reuse the Ledger integration and domain code used by PoodleScanner and Hecate.

@@ -873,6 +873,8 @@ server:
 }
 
 func TestRootCommandRejectsInvalidProviderCatalog(t *testing.T) {
+	currentVersion := fmt.Sprintf("schema_version: %d", proxy.ProviderCatalogSchemaVersion)
+	invalidVersion := proxy.ProviderCatalogSchemaVersion + 1
 	testCases := []struct {
 		name          string
 		mutate        func(string) string
@@ -886,14 +888,14 @@ func TestRootCommandRejectsInvalidProviderCatalog(t *testing.T) {
 		{
 			name: "unsupported schema version",
 			mutate: func(document string) string {
-				return strings.Replace(document, "schema_version: 6", "schema_version: 7", 1)
+				return strings.Replace(document, currentVersion, fmt.Sprintf("schema_version: %d", invalidVersion), 1)
 			},
-			expectedError: "field=schema_version value=6",
+			expectedError: fmt.Sprintf("field=schema_version value=%d", invalidVersion),
 		},
 		{
 			name: "unknown field",
 			mutate: func(document string) string {
-				return strings.Replace(document, "schema_version: 6", "schema_version: 6\nfuture_option: true", 1)
+				return strings.Replace(document, currentVersion, currentVersion+"\nfuture_option: true", 1)
 			},
 			expectedError: "field future_option not found",
 		},
