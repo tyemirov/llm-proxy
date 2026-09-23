@@ -2273,6 +2273,13 @@ retain satisfied historical dependencies.
   Goal:
   Let customers use approved provider offerings through platform credentials after account creation.
   Give each customer separate tenant access, usage attribution, and billing ownership.
+  Billing account, platform connection, and grant resources are implemented in the development branch.
+  Grant tests cover account isolation, concurrent revisions, audit rollback, and recovery after restart or catalog changes.
+  Explicit assignments, database exclusion constraints, and browser hosted setup are implemented.
+  HTTP tests reject unavailable hosted execution across native, client, MCP, dictation, and media interfaces without upstream calls.
+  Browser tests verify hosted setup and grant suspension at desktop, 390px, and 320px widths.
+  The resource foundation is in [PR 339](https://github.com/tyemirov/llm-proxy/pull/339).
+  Financial admission, accepted-work recovery, and complete acceptance remain open.
   Requirements:
   - Use F070 as the shared hosted service contract.
   - Extend the ownership rules in `docs/tenant-connections.md` and the account connection store.
@@ -2349,7 +2356,7 @@ retain satisfied historical dependencies.
   - Expose account-scoped, cursor-paginated journal reads with safe request and reconciliation identifiers.
   Deliverables:
   - Durable journal tables, transaction boundaries, restart recovery, and accounting delivery integration.
-  - Usage extraction in each initially eligible provider adapter and operation.
+  - Usage extraction in every supported provider adapter and operation.
   - Safe journal API, applicable client updates, and retention documentation.
   Validation:
   - Interrupt the real service before dispatch, after dispatch, after observation, and before settlement.
@@ -2376,7 +2383,7 @@ retain satisfied historical dependencies.
   - Store immutable price snapshots for accepted requests independently of later catalog changes.
   - Keep historical snapshots as financial evidence under the current schema, without obsolete catalog readers or compatibility paths.
   - Record provider rates and customer rates separately under one accepted snapshot identifier.
-  - Support a configured customer price schedule without assuming provider cost equals customer price.
+  - Apply the F070 customer price schedule: provider price multiplied by `1.30`.
   - Require explicit approval of customer rates and fees before production activation.
   - Use exact decimal or rational arithmetic for rates and integer monetary units for ledger amounts.
   - Specify monetary precision, overflow bounds, rounding direction, and the single rounding boundary.
@@ -2397,7 +2404,7 @@ retain satisfied historical dependencies.
   - Charge records and itemized customer representations with safe evidence references.
   - Canonical catalog, OpenAPI, client, pricing, and operator documentation updates.
   Validation:
-  - Verify calculations against hand-calculated fixtures for every initially eligible billing component.
+  - Verify calculations against hand-calculated fixtures for every supported provider billing component.
   - Prove cached and reasoning quantities follow provider inclusion rules without duplicate counting.
   - Prove repeated rating of one immutable observation produces the same charge.
   - Prove historical charges remain unchanged after catalog, margin, or currency configuration changes.
@@ -2411,6 +2418,9 @@ retain satisfied historical dependencies.
   Bound hosted provider spending by each customer's available funds across concurrent requests and process restarts.
   Requirements:
   - Use F070 as the shared hosted service contract.
+  - Reuse the Ledger integration and domain code used by PoodleScanner and Hecate.
+  - Resolve the transaction boundary, monetary precision, and uncertain holds before financial persistence implementation.
+  - Keep one balance authority and extend the owning shared component for missing capabilities.
   - Create an append-only credit ledger with balanced entries for each transaction and currency.
   - Use one billing account balance across all customer tenants, with optional lower tenant spending limits.
   - Define available funds as posted credits minus settled charges, active reservations, and payment reversal holds.
@@ -2453,12 +2463,21 @@ retain satisfied historical dependencies.
   - Run `make ci` after the last application change.
 
 - [ ] [F069] (P1) {F068} Add prepaid payments, receipts, and financial reconciliation.
+  Status:
+  - On 2026-09-22, the operator selected Paddle. The service must obey the applicable Paddle financial policies.
+  - F070 requires a USD 5 funding minimum. Customers can spend their balance down to USD 0.
+  - The current payment and refund contract is in `docs/hosted-billing.md`.
   Goal:
   Convert verified customer payments into account funds and explain differences between local records and external financial evidence.
   Requirements:
   - Use F070 as the shared hosted service contract.
-  - Use Stripe Checkout as the proposed first payment processor integration.
-  - Record processor selection and merchant ownership before external configuration or production activation.
+  - Use Paddle Checkout with one-time purchases for prepaid funding.
+  - Reuse `github.com/tyemirov/utils/billing` and the direct Paddle integration in PoodleScanner.
+  - Reuse Hecate event persistence and idempotent grant patterns without its native-store or RevenueCat purchase flow.
+  - Permit prepaid funding without an active subscription.
+  - Use Paddle as merchant of record and retain the platform supplier, Paddle account, and environment identities.
+  - Require a minimum funding amount of USD 5 without an unspent balance floor.
+  - Obey the Paddle Buyer Terms and Refund Policy applicable to each purchase.
   - Keep the credit ledger authoritative for immediate admission and customer usage deductions.
   - Use payment processing for account funding, receipts, refunds, and payment reversals.
   - Keep metered invoices outside the initial prepaid contract to prevent duplicate collection for consumed credits.
@@ -2468,14 +2487,18 @@ retain satisfied historical dependencies.
   - Define funding states as `created`, `pending`, `paid`, `failed`, `partially_refunded`, `refunded`, and `disputed`.
   - Keep payment receipts separate from credit ledger entries and link both through a unique funding order.
   - Verify webhook signatures against raw request bytes and validate the processor environment.
+  - Verify the `Paddle-Signature` header before JSON parsing.
   - Persist verified events in a payment inbox before acknowledging durable acceptance.
   - Deduplicate processor event identifiers and financial effects by payment object and effect type.
   - Handle duplicate and out-of-order events with verified payment state and explicit transition rules.
   - Credit funds only after verified payment success with matching account, amount, and currency.
+  - Use verified `transaction.completed` evidence for the funding credit.
   - Keep browser return pages informational until the server confirms the payment state.
   - Use a delivery outbox for retryable external requests with stable idempotency identifiers.
   - Retry transient transport failures while retaining uncertain outcomes for provider reconciliation.
   - Apply partial refunds, disputes, and chargebacks through compensating ledger entries and explicit account holds.
+  - Process Paddle adjustments with separate pending approval, approved, rejected, and reversed states.
+  - Deduplicate chargeback warnings, chargebacks, and reversals without duplicate deductions.
   - Prevent new spending from funds allocated to a pending refund or reversal.
   - Define account suspension and deficit treatment when a reversal exceeds remaining funds.
   - Keep gross payment, tax, processor fee, net settlement, customer credit, and refund amounts separate.
@@ -2485,7 +2508,8 @@ retain satisfied historical dependencies.
   - Compare provider costs with provider usage exports or invoices where those sources are available.
   - Separate timing, currency, discount, fee, missing usage, and duplicate-effect differences in reconciliation cases.
   - Require explicit approval and an audit record for corrective monetary entries.
-  - Define tax, receipt, retention, refund, and dispute policies before production activation.
+  - Align tax, receipt, retention, refund, and dispute behavior with the verified Paddle contract.
+  - Record platform retention periods and dispute holds before production activation.
   - Keep sandbox and production identifiers, secrets, and records isolated.
   Deliverables:
   - Checkout integration, verified webhook endpoint, payment inbox, delivery outbox, and receipt resources.
@@ -2505,6 +2529,14 @@ retain satisfied historical dependencies.
   - Run `make ci` after the last application change and record sandbox acceptance separately.
 
 - [ ] [F070] (P1) {F065,F066,F067,F068,F069} Deliver the unified prepaid hosted service.
+  Status:
+  - On 2026-09-22, the operator confirmed a 30% markup: `customer_price = provider_price * 1.30`.
+  - The operator selected all providers and their supported operations under one shared billing contract.
+  - The minimum funding amount is USD 5. Customers can spend their balance down to USD 0.
+  - Paddle supplies payments and merchant-of-record services. The service must obey the applicable Paddle financial policies.
+  - Reuse PoodleScanner and Hecate integrations and shared components. LLM Proxy has no native mobile application.
+  - Shared decisions and current integration boundaries are in `docs/hosted-billing.md`.
+  - The remaining commercial decisions and F065 through F069 implementation remain open.
   Goal:
   Give a customer one account, one funded balance, and immediate access to approved services without provider account setup.
   Govern implementation and development acceptance across the five connected billing capabilities.
@@ -2512,11 +2544,13 @@ retain satisfied historical dependencies.
   - Implement F065, F066, F067, F068, and F069 sequentially in dependency order.
   - Use this umbrella for shared decisions, interface ownership, and complete service acceptance.
   - Keep implementation details and component acceptance in the owning child issue.
-  - Use a prepaid account balance and USD as the proposed initial product scope.
-  - Use explicit customer rates with a limited initial set of qualified provider offerings.
+  - Use a prepaid USD account balance with a USD 5 funding minimum and no unspent balance floor.
+  - Cover all providers and their supported operations through one shared financial contract.
+  - Calculate customer rates from provider rates with a 30% markup.
   - Record scope decisions before implementation depends on them.
-  - Record the initial provider list, supported operations, customer rates, fees, funding minimum, and maximum account exposure.
-  - Record the processor choice, merchant identity, refund policy, failure-charge policy, and financial retention policy.
+  - Record every provider, supported operation, customer rate, fee, funding minimum, and maximum account exposure.
+  - Use Paddle for payments and obey its applicable financial and refund policies.
+  - Record the platform supplier, Paddle account, failure-charge policy, and financial retention policy.
   - Confirm provider commercial authorization and paid capacity before hosted activation for each offering.
   - Keep unresolved commercial choices visible without inventing rates, tax rules, or provider rights.
   - Use F065 for billing identity, platform credentials, grants, and customer onboarding.
@@ -2525,6 +2559,10 @@ retain satisfied historical dependencies.
   - Use F068 for funds reservations, ledger entries, admission, settlement, and financial account holds.
   - Use F069 for payment receipts, processor events, funding credits, reversals, and external reconciliation.
   - Reuse the current managed database, authentication boundary, provider catalog, and execution coordinators.
+  - Reuse existing Paddle and Ledger code and approaches from PoodleScanner and Hecate.
+  - Use shared component contracts for payment transport, signature verification, and financial operations.
+  - Resolve shared component gaps in the owning package instead of creating another billing implementation.
+  - Deliver browser flows without native mobile applications or native-store purchase integrations.
   - Add current schema resources through explicit migrations only when an actual stored-data inventory requires a transfer.
   - Keep billing schema extensions separate from historical telemetry conversion.
   - Start customer financial history from verified funding and journal records, not reconstructed telemetry totals.
@@ -2551,7 +2589,7 @@ retain satisfied historical dependencies.
   - Operator launch checklist with provider qualification, rate evidence, recovery evidence, and remaining activation decisions.
   Validation:
   - Create a fresh account, complete sandbox funding, and use platform credentials through the customer interface.
-  - Verify the exact customer charge, provider cost, funds release, and remaining balance for each pilot operation.
+  - Verify the exact customer charge, provider cost, funds release, and remaining balance for every supported provider operation.
   - Exhaust the available balance and prove subsequent rejected requests cause zero upstream work.
   - Exercise concurrent requests across tenants, idempotent retries, failed providers, client disconnects, and restarts.
   - Exercise payment duplication, delayed confirmation, refund, reversal, and uncertain provider outcomes.

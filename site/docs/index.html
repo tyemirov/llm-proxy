@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="c3ac97c719f4310ecff65d06f8e0dc8d5af4b9048cdf3deefb39c0d0bf26c6d7">
+    <meta name="openapi-source-sha256" content="b4a23054af5143a3a94a9f61ca774d23e5c7835b1f7d603a9578299ba1b92af5">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="c3ac97c719f4310ecff65d06f8e0dc8d5af4b9048cdf3deefb39c0d0bf26c6d7">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="b4a23054af5143a3a94a9f61ca774d23e5c7835b1f7d603a9578299ba1b92af5">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>c3ac97c719f4310ecff65d06f8e0dc8d5af4b9048cdf3deefb39c0d0bf26c6d7</code></span>
+          <span>Source SHA-256 <code>b4a23054af5143a3a94a9f61ca774d23e5c7835b1f7d603a9578299ba1b92af5</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -1793,6 +1793,7 @@ paths:
     delete:
       operationId: deleteManagementTenant
       summary: Delete an owned non-final tenant
+      description: Tenants with hosted grant history cannot be deleted. The service returns 409 with managed_tenant_hosted_history.
       tags:
         - Management
       security:
@@ -1891,6 +1892,466 @@ paths:
           $ref: &#39;#/components/responses/ManagementNotFound&#39;
         &#39;500&#39;:
           $ref: &#39;#/components/responses/ManagementInternalError&#39;
+  /api/management/billing-accounts:
+    get:
+      operationId: listBillingAccounts
+      summary: Read the authenticated owner&#39;s billing account
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      responses:
+        &#39;200&#39;:
+          description: The account list. A read does not create an account.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [billing_accounts]
+                properties:
+                  billing_accounts:
+                    type: array
+                    maxItems: 1
+                    items:
+                      $ref: &#39;#/components/schemas/BillingAccount&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+    post:
+      operationId: createBillingAccount
+      summary: Create one USD billing account for the authenticated owner
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+        - $ref: &#39;#/components/parameters/HostedCreationKey&#39;
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [currency]
+              properties:
+                currency:
+                  type: string
+                  enum: [USD]
+      responses:
+        &#39;201&#39;:
+          description: The immutable account creation response, including on a retry with the same key.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/BillingAccount&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;409&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+  /api/management/billing-accounts/{billing_account_id}:
+    get:
+      operationId: getBillingAccount
+      summary: Read an owned billing account
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - name: billing_account_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        &#39;200&#39;:
+          description: The owned account.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/BillingAccount&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+  /api/management/platform-connections:
+    get:
+      operationId: listPlatformConnections
+      summary: Read platform connection metadata as an operator
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            pattern: &#39;^platform-[a-f0-9]{32}$&#39;
+      responses:
+        &#39;200&#39;:
+          description: Connection metadata in ascending identifier order. Credentials are excluded.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [platform_connections, next_cursor]
+                properties:
+                  platform_connections:
+                    type: array
+                    items:
+                      $ref: &#39;#/components/schemas/PlatformConnection&#39;
+                  next_cursor:
+                    type: string
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+    post:
+      operationId: createPlatformConnection
+      summary: Verify and create a platform connection as an operator
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+        - $ref: &#39;#/components/parameters/HostedCreationKey&#39;
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: &#39;#/components/schemas/PlatformConnectionWrite&#39;
+      responses:
+        &#39;201&#39;:
+          description: The immutable creation receipt. Repeated keys require identical intent.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/PlatformConnection&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;409&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
+        &#39;422&#39;:
+          $ref: &#39;#/components/responses/ProviderKeyRejected&#39;
+        &#39;429&#39;:
+          $ref: &#39;#/components/responses/ProviderKeyVerificationRateLimited&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;503&#39;:
+          $ref: &#39;#/components/responses/ProviderKeyVerificationUnavailable&#39;
+        &#39;504&#39;:
+          $ref: &#39;#/components/responses/ProviderKeyVerificationTimedOut&#39;
+  /api/management/platform-connections/{platform_connection_id}:
+    get:
+      operationId: getPlatformConnection
+      summary: Read platform connection metadata as an operator
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/PlatformConnectionID&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/PlatformConnectionSuccess&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+    put:
+      operationId: rotatePlatformConnection
+      summary: Replace platform credentials while retaining accepted versions
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+        - $ref: &#39;#/components/parameters/PlatformConnectionID&#39;
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: &#39;#/components/schemas/PlatformConnectionWrite&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/PlatformConnectionSuccess&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;409&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
+        &#39;422&#39;:
+          $ref: &#39;#/components/responses/ProviderKeyRejected&#39;
+        &#39;429&#39;:
+          $ref: &#39;#/components/responses/ProviderKeyVerificationRateLimited&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;503&#39;:
+          $ref: &#39;#/components/responses/ProviderKeyVerificationUnavailable&#39;
+        &#39;504&#39;:
+          $ref: &#39;#/components/responses/ProviderKeyVerificationTimedOut&#39;
+  /api/management/hosted-access-grants:
+    get:
+      operationId: listHostedAccessGrants
+      summary: Read hosted access grants for the authenticated account
+      description: Operators can read all grants. Results use ascending ID order and an exclusive cursor.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/HostedPageLimit&#39;
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            pattern: &#39;^grant-[a-f0-9]{32}$&#39;
+      responses:
+        &#39;200&#39;:
+          description: The account grants without platform credentials or private provider handles.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [hosted_access_grants, next_cursor]
+                properties:
+                  hosted_access_grants:
+                    type: array
+                    items:
+                      $ref: &#39;#/components/schemas/HostedAccessGrant&#39;
+                  next_cursor:
+                    type: string
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+    post:
+      operationId: createHostedAccessGrant
+      summary: Create a hosted access grant as an operator
+      description: &gt;-
+        Creation binds one tenant to its billing account and explicit provider offerings.
+        A grant does not bypass pricing, metering, funds admission, or the hosted activation gate.
+        The original creation response remains available after grant changes and catalog changes.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+        - $ref: &#39;#/components/parameters/HostedCreationKey&#39;
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: &#39;#/components/schemas/HostedAccessGrantCreate&#39;
+      responses:
+        &#39;201&#39;:
+          description: The retained creation response. Read the resource for its current state.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/HostedAccessGrant&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;409&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+  /api/management/hosted-access-grants/{grant_id}:
+    get:
+      operationId: getHostedAccessGrant
+      summary: Read one hosted access grant
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/HostedGrantID&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/HostedAccessGrantSuccess&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+    patch:
+      operationId: changeHostedAccessGrant
+      summary: Change grant state with a revision precondition
+      description: &gt;-
+        Only operators can change grants. Each change records its actor and reason in the same transaction.
+        Suspended grants can return to active state. Revoked grants cannot return to another state.
+        A stale revision or an unchanged state returns a conflict. Read the current resource before another change.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+        - $ref: &#39;#/components/parameters/HostedGrantID&#39;
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [state, revision, reason]
+              properties:
+                state:
+                  $ref: &#39;#/components/schemas/HostedGrantState&#39;
+                revision:
+                  type: integer
+                  minimum: 1
+                  maximum: 9223372036854775806
+                reason:
+                  $ref: &#39;#/components/schemas/HostedGrantReason&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/HostedAccessGrantSuccess&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;409&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+  /api/management/hosted-access-grants/{grant_id}/revisions:
+    get:
+      operationId: listHostedAccessGrantRevisions
+      summary: Read the grant audit as an operator
+      description: Revisions use ascending order. Each cursor identifies the last revision on the previous page.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/HostedGrantID&#39;
+        - $ref: &#39;#/components/parameters/HostedPageLimit&#39;
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            pattern: &#39;^[1-9][0-9]*$&#39;
+      responses:
+        &#39;200&#39;:
+          description: Retained grant revisions with operator identity and reason.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [revisions, next_cursor]
+                properties:
+                  revisions:
+                    type: array
+                    items:
+                      $ref: &#39;#/components/schemas/HostedAccessGrantRevision&#39;
+                  next_cursor:
+                    type: string
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
   /api/management/connections:
     get:
       operationId: listManagementConnections
@@ -2258,10 +2719,54 @@ paths:
             application/json:
               schema:
                 $ref: &#39;#/components/schemas/ConnectionError&#39;
+  /api/management/tenants/{tenant_id}/connections:
+    get:
+      operationId: listManagementProviderAssignments
+      summary: Read the tenant&#39;s explicit provider assignments
+      description: The list contains one assignment per selected provider, in provider ID order. It contains no platform credentials.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/TenantID&#39;
+      responses:
+        &#39;200&#39;:
+          description: The tenant&#39;s selected account connections and hosted access grants.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [assignments]
+                properties:
+                  assignments:
+                    type: array
+                    items:
+                      $ref: &#39;#/components/schemas/TenantProviderAssignment&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          description: The tenant does not belong to the authenticated account.
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
+        &#39;500&#39;:
+          description: The assignment store is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ConnectionError&#39;
   /api/management/tenants/{tenant_id}/connections/{provider}:
     put:
       operationId: assignManagementConnection
-      summary: Assign one connection to the tenant provider
+      summary: Select an account connection or hosted access grant for one provider
+      description: &gt;-
+        The resource must belong to the tenant&#39;s account. A hosted grant must also name this tenant and provider.
+        Detach the current assignment before selecting a different resource. The service does not substitute credential sources.
       tags:
         - Management
       security:
@@ -2331,7 +2836,7 @@ paths:
                 $ref: &#39;#/components/schemas/ConnectionError&#39;
     delete:
       operationId: detachManagementConnection
-      summary: Detach a connection and optionally clear dependent defaults
+      summary: Detach the selected provider resource and optionally clear dependent defaults
       tags:
         - Management
       security:
@@ -2646,6 +3151,36 @@ components:
       schema:
         type: string
         pattern: &#39;^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$&#39;
+    HostedPageLimit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    HostedGrantID:
+      name: grant_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: &#39;^grant-[a-f0-9]{32}$&#39;
+    HostedCreationKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: A creation key scoped to the authenticated actor and resource kind.
+      schema:
+        type: string
+        pattern: &#39;^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$&#39;
+    PlatformConnectionID:
+      name: platform_connection_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: &#39;^platform-[a-f0-9]{32}$&#39;
     ConnectionCreationKey:
       name: Idempotency-Key
       in: header
@@ -3264,6 +3799,52 @@ components:
         application/json:
           schema:
             $ref: &#39;#/components/schemas/ProxyErrorEnvelope&#39;
+    HostedResourceError:
+      description: The hosted resource request failed.
+      headers:
+        Cache-Control:
+          $ref: &#39;#/components/headers/NoStore&#39;
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [error]
+            properties:
+              error:
+                type: object
+                additionalProperties: false
+                required: [code]
+                properties:
+                  code:
+                    type: string
+                    enum:
+                      - billing_account_invalid
+                      - billing_account_conflict
+                      - billing_account_not_found
+                      - billing_account_store_failed
+                      - hosted_access_invalid
+                      - hosted_access_conflict
+                      - hosted_access_not_found
+                      - hosted_access_store_failed
+    HostedAccessGrantSuccess:
+      description: The grant state. Only operators receive the platform connection identifier.
+      headers:
+        Cache-Control:
+          $ref: &#39;#/components/headers/NoStore&#39;
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/HostedAccessGrant&#39;
+    PlatformConnectionSuccess:
+      description: Platform metadata without credentials. Only operators can read this resource.
+      headers:
+        Cache-Control:
+          $ref: &#39;#/components/headers/NoStore&#39;
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/PlatformConnection&#39;
     AccountSuccess:
       description: Authenticated account snapshot.
       headers:
@@ -3542,9 +4123,28 @@ components:
       type: object
       additionalProperties: false
       required:
-        - connection_id
+        - kind
+        - resource_id
       properties:
-        connection_id:
+        kind:
+          $ref: &#39;#/components/schemas/ProviderAssignmentKind&#39;
+        resource_id:
+          type: string
+          minLength: 1
+    ProviderAssignmentKind:
+      type: string
+      enum: [account_connection, hosted_access_grant]
+    TenantProviderAssignment:
+      type: object
+      additionalProperties: false
+      required: [provider, kind, resource_id]
+      properties:
+        provider:
+          type: string
+          minLength: 1
+        kind:
+          $ref: &#39;#/components/schemas/ProviderAssignmentKind&#39;
+        resource_id:
           type: string
           minLength: 1
     TenantProviderProfileWrite:
@@ -6981,6 +7581,172 @@ components:
       type: object
       additionalProperties: false
       properties: {}
+    BillingAccount:
+      type: object
+      additionalProperties: false
+      required: [id, currency, created_at]
+      properties:
+        id:
+          type: string
+          pattern: &#39;^billing-[a-f0-9]{32}$&#39;
+        currency:
+          type: string
+          enum: [USD]
+        created_at:
+          type: string
+          format: date-time
+    PlatformConnection:
+      type: object
+      additionalProperties: false
+      required: [id, name, provider, version, qualified, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          pattern: &#39;^platform-[a-f0-9]{32}$&#39;
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        provider:
+          type: string
+          minLength: 1
+        version:
+          type: integer
+          minimum: 1
+        qualified:
+          type: boolean
+          const: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    PlatformConnectionWrite:
+      type: object
+      additionalProperties: false
+      required: [name, provider, fields]
+      description: &gt;-
+        Creation requires version zero or omission. Replacement requires the current version and all required connection fields.
+        Successful verification stores a new immutable credential version. Existing versions remain available for accepted work.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        provider:
+          type: string
+          minLength: 1
+        fields:
+          type: object
+          additionalProperties:
+            type: string
+        version:
+          type: integer
+          minimum: 0
+    HostedGrantState:
+      type: string
+      enum: [active, suspended, revoked]
+    HostedGrantReason:
+      type: string
+      minLength: 1
+      maxLength: 500
+      description: Operator reason without leading or trailing whitespace. Customer responses omit this field.
+    HostedGrantOfferings:
+      type: array
+      minItems: 1
+      description: Exact models from one provider. Each model and operation can occur only once.
+      items:
+        type: object
+        additionalProperties: false
+        required: [model, operations]
+        properties:
+          model:
+            type: string
+            minLength: 1
+          operations:
+            type: array
+            minItems: 1
+            uniqueItems: true
+            items:
+              type: string
+              minLength: 1
+    HostedAccessGrantCreate:
+      type: object
+      additionalProperties: false
+      required: [billing_account_id, tenant_id, platform_connection_id, catalog_revision, offerings, reason]
+      properties:
+        billing_account_id:
+          type: string
+          pattern: &#39;^billing-[a-f0-9]{32}$&#39;
+        tenant_id:
+          type: string
+          minLength: 1
+        platform_connection_id:
+          type: string
+          pattern: &#39;^platform-[a-f0-9]{32}$&#39;
+        catalog_revision:
+          type: string
+          minLength: 1
+        offerings:
+          $ref: &#39;#/components/schemas/HostedGrantOfferings&#39;
+        reason:
+          $ref: &#39;#/components/schemas/HostedGrantReason&#39;
+    HostedAccessGrant:
+      type: object
+      additionalProperties: false
+      required: [id, billing_account_id, tenant_id, provider, catalog_revision, offerings, state, revision, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          pattern: &#39;^grant-[a-f0-9]{32}$&#39;
+        billing_account_id:
+          type: string
+          pattern: &#39;^billing-[a-f0-9]{32}$&#39;
+        tenant_id:
+          type: string
+          minLength: 1
+        platform_connection_id:
+          type: string
+          pattern: &#39;^platform-[a-f0-9]{32}$&#39;
+          description: Operator responses only.
+        provider:
+          type: string
+          minLength: 1
+        catalog_revision:
+          type: string
+          minLength: 1
+        offerings:
+          $ref: &#39;#/components/schemas/HostedGrantOfferings&#39;
+        state:
+          $ref: &#39;#/components/schemas/HostedGrantState&#39;
+        revision:
+          type: integer
+          minimum: 1
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    HostedAccessGrantRevision:
+      type: object
+      additionalProperties: false
+      required: [revision, state, actor_user_id, reason, created_at]
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+        state:
+          $ref: &#39;#/components/schemas/HostedGrantState&#39;
+        actor_user_id:
+          type: string
+          minLength: 1
+        reason:
+          $ref: &#39;#/components/schemas/HostedGrantReason&#39;
+        created_at:
+          type: string
+          format: date-time
     ManagementAccount:
       type: object
       additionalProperties: false
@@ -8348,17 +9114,30 @@ components:
 <a href="#operation-getMCPResourceMetadata"><span class="api-method api-method-get">GET</span><code>/.well-known/oauth-protected-resource/mcp</code><span>Read OAuth metadata for the MCP resource.</span></a>
 <a href="#operation-getManagementAccount"><span class="api-method api-method-get">GET</span><code>/api/management/account</code><span>Read the authenticated user and owned tenant summaries</span></a>
 <a href="#operation-getManagementAdminUsers"><span class="api-method api-method-get">GET</span><code>/api/management/admin/users</code><span>Read the administrative user and tenant usage summary</span></a>
+<a href="#operation-listBillingAccounts"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts</code><span>Read the authenticated owner&#39;s billing account</span></a>
+<a href="#operation-createBillingAccount"><span class="api-method api-method-post">POST</span><code>/api/management/billing-accounts</code><span>Create one USD billing account for the authenticated owner</span></a>
+<a href="#operation-getBillingAccount"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}</code><span>Read an owned billing account</span></a>
 <a href="#operation-listManagementConnections"><span class="api-method api-method-get">GET</span><code>/api/management/connections</code><span>List account connections and provider definitions</span></a>
 <a href="#operation-createManagementConnection"><span class="api-method api-method-post">POST</span><code>/api/management/connections</code><span>Verify credentials and create an account connection</span></a>
 <a href="#operation-deleteManagementConnection"><span class="api-method api-method-delete">DELETE</span><code>/api/management/connections/{connection_id}</code><span>Delete an unassigned connection</span></a>
 <a href="#operation-getManagementConnection"><span class="api-method api-method-get">GET</span><code>/api/management/connections/{connection_id}</code><span>Read a connection with masked credentials</span></a>
 <a href="#operation-replaceManagementConnection"><span class="api-method api-method-put">PUT</span><code>/api/management/connections/{connection_id}</code><span>Update a connection at its expected version</span></a>
+<a href="#operation-listHostedAccessGrants"><span class="api-method api-method-get">GET</span><code>/api/management/hosted-access-grants</code><span>Read hosted access grants for the authenticated account</span></a>
+<a href="#operation-createHostedAccessGrant"><span class="api-method api-method-post">POST</span><code>/api/management/hosted-access-grants</code><span>Create a hosted access grant as an operator</span></a>
+<a href="#operation-getHostedAccessGrant"><span class="api-method api-method-get">GET</span><code>/api/management/hosted-access-grants/{grant_id}</code><span>Read one hosted access grant</span></a>
+<a href="#operation-changeHostedAccessGrant"><span class="api-method api-method-patch">PATCH</span><code>/api/management/hosted-access-grants/{grant_id}</code><span>Change grant state with a revision precondition</span></a>
+<a href="#operation-listHostedAccessGrantRevisions"><span class="api-method api-method-get">GET</span><code>/api/management/hosted-access-grants/{grant_id}/revisions</code><span>Read the grant audit as an operator</span></a>
+<a href="#operation-listPlatformConnections"><span class="api-method api-method-get">GET</span><code>/api/management/platform-connections</code><span>Read platform connection metadata as an operator</span></a>
+<a href="#operation-createPlatformConnection"><span class="api-method api-method-post">POST</span><code>/api/management/platform-connections</code><span>Verify and create a platform connection as an operator</span></a>
+<a href="#operation-getPlatformConnection"><span class="api-method api-method-get">GET</span><code>/api/management/platform-connections/{platform_connection_id}</code><span>Read platform connection metadata as an operator</span></a>
+<a href="#operation-rotatePlatformConnection"><span class="api-method api-method-put">PUT</span><code>/api/management/platform-connections/{platform_connection_id}</code><span>Replace platform credentials while retaining accepted versions</span></a>
 <a href="#operation-createManagementTenant"><span class="api-method api-method-post">POST</span><code>/api/management/tenants</code><span>Create an owned tenant</span></a>
 <a href="#operation-deleteManagementTenant"><span class="api-method api-method-delete">DELETE</span><code>/api/management/tenants/{tenant_id}</code><span>Delete an owned non-final tenant</span></a>
 <a href="#operation-getManagementTenant"><span class="api-method api-method-get">GET</span><code>/api/management/tenants/{tenant_id}</code><span>Read an owned tenant profile</span></a>
 <a href="#operation-renameManagementTenant"><span class="api-method api-method-put">PUT</span><code>/api/management/tenants/{tenant_id}</code><span>Rename an owned tenant</span></a>
-<a href="#operation-detachManagementConnection"><span class="api-method api-method-delete">DELETE</span><code>/api/management/tenants/{tenant_id}/connections/{provider}</code><span>Detach a connection and optionally clear dependent defaults</span></a>
-<a href="#operation-assignManagementConnection"><span class="api-method api-method-put">PUT</span><code>/api/management/tenants/{tenant_id}/connections/{provider}</code><span>Assign one connection to the tenant provider</span></a>
+<a href="#operation-listManagementProviderAssignments"><span class="api-method api-method-get">GET</span><code>/api/management/tenants/{tenant_id}/connections</code><span>Read the tenant&#39;s explicit provider assignments</span></a>
+<a href="#operation-detachManagementConnection"><span class="api-method api-method-delete">DELETE</span><code>/api/management/tenants/{tenant_id}/connections/{provider}</code><span>Detach the selected provider resource and optionally clear dependent defaults</span></a>
+<a href="#operation-assignManagementConnection"><span class="api-method api-method-put">PUT</span><code>/api/management/tenants/{tenant_id}/connections/{provider}</code><span>Select an account connection or hosted access grant for one provider</span></a>
 <a href="#operation-putManagementTenantDefaults"><span class="api-method api-method-put">PUT</span><code>/api/management/tenants/{tenant_id}/defaults</code><span>Replace the tenant routing defaults</span></a>
 <a href="#operation-updateManagementProviderProfile"><span class="api-method api-method-put">PUT</span><code>/api/management/tenants/{tenant_id}/provider-profiles/{provider}</code><span>Save the tenant provider model and system prompt</span></a>
 <a href="#operation-postManagementTenantSecret"><span class="api-method api-method-post">POST</span><code>/api/management/tenants/{tenant_id}/secrets</code><span>Generate and replace the tenant client secret</span></a>
@@ -8601,6 +9380,115 @@ components:
           </div>
         </div>
       </section>
+<section class="api-operation" id="operation-listBillingAccounts">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts</code>
+          <span class="api-operation-id">listBillingAccounts</span>
+        </header>
+        <h2>Read the authenticated owner&#39;s billing account</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block"><h3>Parameters</h3><p>None.</p></div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The account list. A read does not create an account.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-createBillingAccount">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-post">POST</span>
+          <code>/api/management/billing-accounts</code>
+          <span class="api-operation-id">createBillingAccount</span>
+        </header>
+        <h2>Create one USD billing account for the authenticated owner</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>Yes</td><td>string</td><td>A creation key scoped to the authenticated actor and resource kind.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>currency</code></td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>201</code></td><td>application/json</td><td>Cache-Control, Location</td><td>The immutable account creation response, including on a retry with the same key.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getBillingAccount">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}</code>
+          <span class="api-operation-id">getBillingAccount</span>
+        </header>
+        <h2>Read an owned billing account</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The owned account.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 <section class="api-operation" id="operation-listManagementConnections">
         <header class="api-operation-heading">
           <span class="api-method api-method-get">GET</span>
@@ -8838,6 +9726,417 @@ components:
           </div>
         </div>
       </section>
+<section class="api-operation" id="operation-listHostedAccessGrants">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/hosted-access-grants</code>
+          <span class="api-operation-id">listHostedAccessGrants</span>
+        </header>
+        <h2>Read hosted access grants for the authenticated account</h2>
+        <p>Operators can read all grants. Results use ascending ID order and an exclusive cursor.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>limit</code></td><td>query</td><td>No</td><td>integer</td><td></td></tr>
+<tr><td><code>cursor</code></td><td>query</td><td>No</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The account grants without platform credentials or private provider handles.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-createHostedAccessGrant">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-post">POST</span>
+          <code>/api/management/hosted-access-grants</code>
+          <span class="api-operation-id">createHostedAccessGrant</span>
+        </header>
+        <h2>Create a hosted access grant as an operator</h2>
+        <p>Creation binds one tenant to its billing account and explicit provider offerings. A grant does not bypass pricing, metering, funds admission, or the hosted activation gate. The original creation response remains available after grant changes and catalog changes.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>Yes</td><td>string</td><td>A creation key scoped to the authenticated actor and resource kind.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>tenant_id</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>platform_connection_id</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>catalog_revision</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>offerings</code></td><td>Yes</td><td>array&lt;object&gt;</td><td>Exact models from one provider. Each model and operation can occur only once.</td></tr>
+<tr><td><code>reason</code></td><td>Yes</td><td>string</td><td>Operator reason without leading or trailing whitespace. Customer responses omit this field.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>201</code></td><td>application/json</td><td>Cache-Control, Location</td><td>The retained creation response. Read the resource for its current state.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getHostedAccessGrant">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/hosted-access-grants/{grant_id}</code>
+          <span class="api-operation-id">getHostedAccessGrant</span>
+        </header>
+        <h2>Read one hosted access grant</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>grant_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The grant state. Only operators receive the platform connection identifier.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-changeHostedAccessGrant">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-patch">PATCH</span>
+          <code>/api/management/hosted-access-grants/{grant_id}</code>
+          <span class="api-operation-id">changeHostedAccessGrant</span>
+        </header>
+        <h2>Change grant state with a revision precondition</h2>
+        <p>Only operators can change grants. Each change records its actor and reason in the same transaction. Suspended grants can return to active state. Revoked grants cannot return to another state. A stale revision or an unchanged state returns a conflict. Read the current resource before another change.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+<tr><td><code>grant_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>state</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>revision</code></td><td>Yes</td><td>integer</td><td></td></tr>
+<tr><td><code>reason</code></td><td>Yes</td><td>string</td><td>Operator reason without leading or trailing whitespace. Customer responses omit this field.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The grant state. Only operators receive the platform connection identifier.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-listHostedAccessGrantRevisions">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/hosted-access-grants/{grant_id}/revisions</code>
+          <span class="api-operation-id">listHostedAccessGrantRevisions</span>
+        </header>
+        <h2>Read the grant audit as an operator</h2>
+        <p>Revisions use ascending order. Each cursor identifies the last revision on the previous page.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>grant_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>limit</code></td><td>query</td><td>No</td><td>integer</td><td></td></tr>
+<tr><td><code>cursor</code></td><td>query</td><td>No</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Retained grant revisions with operator identity and reason.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-listPlatformConnections">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/platform-connections</code>
+          <span class="api-operation-id">listPlatformConnections</span>
+        </header>
+        <h2>Read platform connection metadata as an operator</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>limit</code></td><td>query</td><td>No</td><td>integer</td><td></td></tr>
+<tr><td><code>cursor</code></td><td>query</td><td>No</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Connection metadata in ascending identifier order. Credentials are excluded.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-createPlatformConnection">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-post">POST</span>
+          <code>/api/management/platform-connections</code>
+          <span class="api-operation-id">createPlatformConnection</span>
+        </header>
+        <h2>Verify and create a platform connection as an operator</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>Yes</td><td>string</td><td>A creation key scoped to the authenticated actor and resource kind.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>name</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>provider</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>fields</code></td><td>Yes</td><td>object</td><td></td></tr>
+<tr><td><code>version</code></td><td>No</td><td>integer</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>201</code></td><td>application/json</td><td>Cache-Control, Location</td><td>The immutable creation receipt. Repeated keys require identical intent.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>422</code></td><td>text/plain</td><td>none</td><td>The candidate credential was rejected or cannot access the selected text model. Nothing was saved.</td></tr>
+<tr><td><code>429</code></td><td>text/plain</td><td>none</td><td>The provider rate-limited the single verification operation. The credential remains unconfirmed and nothing was saved.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>503</code></td><td>text/plain</td><td>none</td><td>The provider was unavailable or returned a malformed success envelope. The credential remains unconfirmed and nothing was saved.</td></tr>
+<tr><td><code>504</code></td><td>text/plain</td><td>none</td><td>The single verification operation timed out or was canceled. The credential remains unconfirmed and nothing was saved.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getPlatformConnection">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/platform-connections/{platform_connection_id}</code>
+          <span class="api-operation-id">getPlatformConnection</span>
+        </header>
+        <h2>Read platform connection metadata as an operator</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>platform_connection_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Platform metadata without credentials. Only operators can read this resource.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-rotatePlatformConnection">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-put">PUT</span>
+          <code>/api/management/platform-connections/{platform_connection_id}</code>
+          <span class="api-operation-id">rotatePlatformConnection</span>
+        </header>
+        <h2>Replace platform credentials while retaining accepted versions</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+<tr><td><code>platform_connection_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>name</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>provider</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>fields</code></td><td>Yes</td><td>object</td><td></td></tr>
+<tr><td><code>version</code></td><td>No</td><td>integer</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Platform metadata without credentials. Only operators can read this resource.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>422</code></td><td>text/plain</td><td>none</td><td>The candidate credential was rejected or cannot access the selected text model. Nothing was saved.</td></tr>
+<tr><td><code>429</code></td><td>text/plain</td><td>none</td><td>The provider rate-limited the single verification operation. The credential remains unconfirmed and nothing was saved.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>503</code></td><td>text/plain</td><td>none</td><td>The provider was unavailable or returned a malformed success envelope. The credential remains unconfirmed and nothing was saved.</td></tr>
+<tr><td><code>504</code></td><td>text/plain</td><td>none</td><td>The single verification operation timed out or was canceled. The credential remains unconfirmed and nothing was saved.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 <section class="api-operation" id="operation-createManagementTenant">
         <header class="api-operation-heading">
           <span class="api-method api-method-post">POST</span>
@@ -8894,6 +10193,7 @@ components:
           <span class="api-operation-id">deleteManagementTenant</span>
         </header>
         <h2>Delete an owned non-final tenant</h2>
+        <p>Tenants with hosted grant history cannot be deleted. The service returns 409 with managed_tenant_hosted_history.</p>
         <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
         <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
         <div class="api-contract-block">
@@ -9014,13 +10314,49 @@ components:
           </div>
         </div>
       </section>
+<section class="api-operation" id="operation-listManagementProviderAssignments">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/tenants/{tenant_id}/connections</code>
+          <span class="api-operation-id">listManagementProviderAssignments</span>
+        </header>
+        <h2>Read the tenant&#39;s explicit provider assignments</h2>
+        <p>The list contains one assignment per selected provider, in provider ID order. It contains no platform credentials.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>tenant_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant identifier from the authenticated account response.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The tenant&#39;s selected account connections and hosted access grants.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>none</td><td>The tenant does not belong to the authenticated account.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>none</td><td>The assignment store is unavailable.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 <section class="api-operation" id="operation-detachManagementConnection">
         <header class="api-operation-heading">
           <span class="api-method api-method-delete">DELETE</span>
           <code>/api/management/tenants/{tenant_id}/connections/{provider}</code>
           <span class="api-operation-id">detachManagementConnection</span>
         </header>
-        <h2>Detach a connection and optionally clear dependent defaults</h2>
+        <h2>Detach the selected provider resource and optionally clear dependent defaults</h2>
         <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
         <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
         <div class="api-contract-block">
@@ -9063,7 +10399,8 @@ components:
           <code>/api/management/tenants/{tenant_id}/connections/{provider}</code>
           <span class="api-operation-id">assignManagementConnection</span>
         </header>
-        <h2>Assign one connection to the tenant provider</h2>
+        <h2>Select an account connection or hosted access grant for one provider</h2>
+        <p>The resource must belong to the tenant&#39;s account. A hosted grant must also name this tenant and provider. Detach the current assignment before selecting a different resource. The service does not substitute credential sources.</p>
         <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
         <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
         <div class="api-contract-block">
@@ -9085,7 +10422,8 @@ components:
             <table>
               <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>connection_id</code></td><td>Yes</td><td>string</td><td></td></tr>
+                <tr><td><code>kind</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>resource_id</code></td><td>Yes</td><td>string</td><td></td></tr>
               </tbody>
             </table>
           </div>

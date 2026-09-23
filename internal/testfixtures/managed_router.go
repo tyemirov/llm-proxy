@@ -242,7 +242,7 @@ func saveManagedProviderKey(router http.Handler, sessionCookie *http.Cookie, ten
 		return err
 	}
 	path := "/api/management/tenants/" + tenantID
-	if _, err := exchange(http.MethodPut, path+"/connections/"+provider, map[string]string{"connection_id": connection.ID}, http.StatusOK); err != nil {
+	if _, err := exchange(http.MethodPut, path+"/connections/"+provider, map[string]string{"kind": "account_connection", "resource_id": connection.ID}, http.StatusOK); err != nil {
 		return err
 	}
 	if textModel != "" {

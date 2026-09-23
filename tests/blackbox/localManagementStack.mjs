@@ -46,7 +46,7 @@ export const localManagementProfile = Object.freeze({
   operatorPassword,
 });
 
-export async function startLocalManagementStack(authRouting = "frontend") {
+export async function startLocalManagementStack(authRouting = "frontend", {adminEmails = []} = {}) {
   if (!["frontend", "direct"].includes(authRouting)) throw new Error(`auth_routing_invalid:${authRouting}`);
   const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "llm-proxy-management-blackbox-"));
   const tAuthBinaryPath = path.join(temporaryDirectory, "tauth");
@@ -152,7 +152,7 @@ export async function startLocalManagementStack(authRouting = "frontend") {
       "llm-proxy",
       llmProxyBinaryPath,
       ["--config", llmProxyConfigPath],
-      llmProxyEnvironment(frontendOrigin, authRouting === "frontend" ? frontendOrigin : tAuthOrigin, llmProxyOrigin, temporaryDirectory),
+      {...llmProxyEnvironment(frontendOrigin, authRouting === "frontend" ? frontendOrigin : tAuthOrigin, llmProxyOrigin, temporaryDirectory), LLM_PROXY_MANAGEMENT_ADMIN_EMAILS: JSON.stringify(adminEmails)},
     );
     serviceProcesses.push(llmProxyProcess);
     await waitForHTTP(`${llmProxyOrigin}/config-ui.yaml`, {}, llmProxyProcess, 200);

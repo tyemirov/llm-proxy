@@ -68,7 +68,7 @@ func TestAccountConnectionStorageFailuresAreAtomic(t *testing.T) {
 			connectionID := connection["id"].(string)
 			assignmentPath := "/tenants/managed-first/connections/openai"
 			if scenario.action == "detach" || scenario.action == "prompt" || scenario.action == "delete-tenant" {
-				exchange(http.MethodPut, assignmentPath, fmt.Sprintf(`{"connection_id":%q}`, connectionID), http.StatusOK)
+				exchange(http.MethodPut, assignmentPath, fmt.Sprintf(`{"kind":"account_connection","resource_id":%q}`, connectionID), http.StatusOK)
 				exchange(http.MethodPut, "/tenants/managed-first/defaults", managementDefaultsBody(ProviderNameOpenAI, ModelNameGPT41), http.StatusOK)
 			}
 			beforeConnections := exchange(http.MethodGet, "/connections", "", http.StatusOK)
@@ -79,7 +79,7 @@ func TestAccountConnectionStorageFailuresAreAtomic(t *testing.T) {
 			case "edit":
 				method, path, body = http.MethodPut, "/connections/"+connectionID, `{"name":"Edited","provider":"openai","version":1,"fields":{"api_key":"sk-new"}}`
 			case "assign":
-				method, path, body = http.MethodPut, assignmentPath, fmt.Sprintf(`{"connection_id":%q}`, connectionID)
+				method, path, body = http.MethodPut, assignmentPath, fmt.Sprintf(`{"kind":"account_connection","resource_id":%q}`, connectionID)
 			case "detach":
 				method, path, body = http.MethodDelete, assignmentPath+"?clear_defaults=true", ""
 			case "delete":
@@ -188,7 +188,7 @@ func TestAccountConnectionTenantDeletionUsesMutationClock(t *testing.T) {
 	service, _, server := newAccountConnectionHTTPFixture(t)
 	connection := accountConnectionHTTPExchange(t, server, http.MethodPost, "/connections", `{"name":"Production","provider":"openai","fields":{"api_key":"sk-original"}}`, http.StatusCreated)
 	connectionID := connection["id"].(string)
-	accountConnectionHTTPExchange(t, server, http.MethodPut, "/tenants/managed-first/connections/openai", fmt.Sprintf(`{"connection_id":%q}`, connectionID), http.StatusOK)
+	accountConnectionHTTPExchange(t, server, http.MethodPut, "/tenants/managed-first/connections/openai", fmt.Sprintf(`{"kind":"account_connection","resource_id":%q}`, connectionID), http.StatusOK)
 	deletedAt := time.Date(2026, 9, 10, 18, 0, 0, 0, time.UTC)
 	service.store.now = func() time.Time { return deletedAt }
 	accountConnectionHTTPExchange(t, server, http.MethodDelete, "/tenants/managed-first", "", http.StatusNoContent)
@@ -371,7 +371,7 @@ func TestAccountConnectionCanceledChangesPreserveState(t *testing.T) {
 			})
 			connection := accountConnectionHTTPExchange(t, server, http.MethodPost, managementConnectionsPath, `{"name":"Cancellation","provider":"openai","fields":{"api_key":"sk-original"}}`, http.StatusCreated)
 			path := "/tenants/managed-first/connections/openai"
-			body := fmt.Sprintf(`{"connection_id":%q}`, connection["id"])
+			body := fmt.Sprintf(`{"kind":"account_connection","resource_id":%q}`, connection["id"])
 			if operation == "detach" || operation == "prompt" {
 				accountConnectionHTTPExchange(t, server, http.MethodPut, path, body, http.StatusOK)
 			}
@@ -403,8 +403,8 @@ func TestAccountConnectionCanceledChangesPreserveState(t *testing.T) {
 func TestAccountConnectionInvalidTenantAndProviderInputs(t *testing.T) {
 	_, _, server := newAccountConnectionHTTPFixture(t)
 	for _, method := range []string{http.MethodPut, http.MethodDelete} {
-		accountConnectionHTTPExchange(t, server, method, "/tenants/%20/connections/openai", `{"connection_id":"missing"}`, http.StatusNotFound)
-		accountConnectionHTTPExchange(t, server, method, "/tenants/managed-first/connections/unknown", `{"connection_id":"missing"}`, http.StatusBadRequest)
+		accountConnectionHTTPExchange(t, server, method, "/tenants/%20/connections/openai", `{"kind":"account_connection","resource_id":"missing"}`, http.StatusNotFound)
+		accountConnectionHTTPExchange(t, server, method, "/tenants/managed-first/connections/unknown", `{"kind":"account_connection","resource_id":"missing"}`, http.StatusBadRequest)
 	}
 	accountConnectionHTTPExchange(t, server, http.MethodPut, "/tenants/%20/provider-profiles/openai", `{"text_model":"gpt-4.1"}`, http.StatusNotFound)
 	for _, scenario := range []struct{ provider, body string }{
@@ -504,7 +504,7 @@ func TestAccountConnectionOptionalCredentialsAndInvalidAssignments(t *testing.T)
 	accountConnectionHTTPExchange(t, server, http.MethodPut, managementConnectionsPath+"/"+created["id"].(string), `{"name":"Renamed","provider":"openai","version":1,"fields":{"api_key":""}}`, http.StatusOK)
 	accountConnectionHTTPExchange(t, server, http.MethodPost, managementConnectionsPath, `{"name":"Invalid version","provider":"openai","version":1,"fields":{"api_key":""}}`, http.StatusBadRequest)
 	path := "/tenants/managed-first/connections/openai"
-	for _, body := range []string{`{}`, `{`, `{"connection_id":""}`, `{"connection_id":"missing"}`} {
+	for _, body := range []string{`{}`, `{`, `{"kind":"account_connection","resource_id":""}`, `{"kind":"account_connection","resource_id":"missing"}`} {
 		status := http.StatusBadRequest
 		if strings.Contains(body, "missing") {
 			status = http.StatusNotFound
@@ -519,7 +519,7 @@ func TestAccountConnectionRetryAfterProfileReadFailure(t *testing.T) {
 		_, database, server := newAccountConnectionHTTPFixture(t)
 		created := accountConnectionHTTPExchange(t, server, http.MethodPost, managementConnectionsPath, `{"name":"Read retry","provider":"openai","fields":{"api_key":"sk-original"}}`, http.StatusCreated)
 		path := "/tenants/managed-first/connections/openai"
-		body := fmt.Sprintf(`{"connection_id":%q}`, created["id"])
+		body := fmt.Sprintf(`{"kind":"account_connection","resource_id":%q}`, created["id"])
 		if action == "prompt" {
 			accountConnectionHTTPExchange(t, server, http.MethodPut, path, body, http.StatusOK)
 			path = "/tenants/managed-first/provider-profiles/openai"
@@ -540,7 +540,7 @@ func TestAccountConnectionRetryAfterProfileReadFailure(t *testing.T) {
 func TestAccountConnectionRejectsCorruptedFieldsAndMissingProfiles(t *testing.T) {
 	service, database, server := newAccountConnectionHTTPFixture(t)
 	connection := accountConnectionHTTPExchange(t, server, http.MethodPost, managementConnectionsPath, `{"name":"Corruption","provider":"openai","fields":{"api_key":"sk-original"}}`, http.StatusCreated)
-	accountConnectionHTTPExchange(t, server, http.MethodPut, "/tenants/managed-first/connections/openai", fmt.Sprintf(`{"connection_id":%q}`, connection["id"]), http.StatusOK)
+	accountConnectionHTTPExchange(t, server, http.MethodPut, "/tenants/managed-first/connections/openai", fmt.Sprintf(`{"kind":"account_connection","resource_id":%q}`, connection["id"]), http.StatusOK)
 	if err := database.database.Where("tenant_id = ?", "managed-first").Delete(&managedProviderProfileRecord{}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -564,7 +564,7 @@ func TestAccountConnectionDetachRequiresDefaultResolution(t *testing.T) {
 	_, _, server := newAccountConnectionHTTPFixture(t)
 	connection := accountConnectionHTTPExchange(t, server, http.MethodPost, managementConnectionsPath, `{"name":"Default route","provider":"openai","fields":{"api_key":"sk-original"}}`, http.StatusCreated)
 	path := "/tenants/managed-first/connections/openai"
-	accountConnectionHTTPExchange(t, server, http.MethodPut, path, fmt.Sprintf(`{"connection_id":%q}`, connection["id"]), http.StatusOK)
+	accountConnectionHTTPExchange(t, server, http.MethodPut, path, fmt.Sprintf(`{"kind":"account_connection","resource_id":%q}`, connection["id"]), http.StatusOK)
 	accountConnectionHTTPExchange(t, server, http.MethodPut, "/tenants/managed-first/defaults", managementDefaultsBody(ProviderNameOpenAI, ModelNameGPT41), http.StatusOK)
 	before := accountConnectionHTTPExchange(t, server, http.MethodGet, "/tenants/managed-first", "", http.StatusOK)
 	accountConnectionHTTPExchange(t, server, http.MethodDelete, path, "", http.StatusConflict)

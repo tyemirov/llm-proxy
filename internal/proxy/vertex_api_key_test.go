@@ -79,7 +79,7 @@ func TestGeminiCurrentModelsVertexAPIKeyConnection(t *testing.T) {
 	}
 	path := "/api/management/connections/" + created.ID
 	assignmentPath := "/api/management/tenants/" + tenant + "/connections/vertex"
-	status, body = send(http.MethodPut, assignmentPath, `{"connection_id":"`+created.ID+`"}`, owner)
+	status, body = send(http.MethodPut, assignmentPath, `{"kind":"account_connection","resource_id":"`+created.ID+`"}`, owner)
 	if status != http.StatusOK {
 		t.Fatalf("assign connection status=%d body=%s", status, body)
 	}
@@ -137,7 +137,7 @@ func TestGeminiCurrentModelsVertexAPIKeyConnection(t *testing.T) {
 	if err := json.Unmarshal([]byte(body), &created); err != nil {
 		t.Fatal(err)
 	}
-	status, body = send(http.MethodPut, "/api/management/tenants/"+otherTenant+"/connections/vertex", `{"connection_id":"`+created.ID+`"}`, other)
+	status, body = send(http.MethodPut, "/api/management/tenants/"+otherTenant+"/connections/vertex", `{"kind":"account_connection","resource_id":"`+created.ID+`"}`, other)
 	if status != http.StatusOK {
 		t.Fatalf("assign second connection status=%d body=%s", status, body)
 	}

@@ -919,7 +919,7 @@ pathlib.Path(sys.argv[3]).write_text(
     exit 1
   fi
   connection_id="$(python3 -c 'import json,pathlib,sys; print(json.loads(pathlib.Path(sys.argv[1]).read_text())["id"])' "${response_path}")"
-  python3 -c 'import json,pathlib,sys; pathlib.Path(sys.argv[1]).write_text(json.dumps({"connection_id":sys.argv[2]}))' "${request_path}" "${connection_id}"
+  python3 -c 'import json,pathlib,sys; pathlib.Path(sys.argv[1]).write_text(json.dumps({"kind":"account_connection","resource_id":sys.argv[2]}))' "${request_path}" "${connection_id}"
   http_status="$(curl -sS --max-time "${LIVE_TIMEOUT}" --cookie "${SESSION_COOKIE_PATH}" -X PUT -H "Content-Type: application/json" --data-binary "@${request_path}" -o "${response_path}" -w "%{http_code}" "${LIVE_ORIGIN}/api/management/tenants/${TENANT_ID}/connections/${provider}")"
   if [[ "${http_status}" != "200" ]]; then
     echo "error: live provider assignment failed: provider=${provider} status=${http_status}" >&2

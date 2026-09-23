@@ -69,7 +69,7 @@ func TestManagementCapabilityMigrationPreservesDataAndRestart(t *testing.T) {
 					"name": "Transcription", "provider": "dictator",
 					"fields": map[string]string{"grpc_address": listener.Addr().String(), "grpc_auth_token": fixture.token, "grpc_tls": "false"},
 				}, http.StatusCreated)
-				accountConnectionExchange(t, router, owner, http.MethodPut, path+"/connections/dictator", map[string]any{"connection_id": connection["id"]}, http.StatusOK)
+				accountConnectionExchange(t, router, owner, http.MethodPut, path+"/connections/dictator", map[string]any{"kind": "account_connection", "resource_id": connection["id"]}, http.StatusOK)
 				accountConnectionExchange(t, router, owner, http.MethodPut, path+"/defaults", map[string]string{
 					"provider": "openai", "model": proxy.ModelNameGPT41,
 					"transcription_provider": "dictator", "transcription_model": "whisper-base",
@@ -216,7 +216,13 @@ func TestManagementCapabilityMigrationBeforeAccountConnectionTransfer(t *testing
 	expected := accountConnectionExchange(t, router, owner, http.MethodGet, path, nil, http.StatusOK)
 	database := openManagedFixtureDatabase(t, databasePath)
 	previousCapabilityDefaults(t, database)
-	for _, table := range []string{"managed_connection_creation_records", "managed_connection_field_records", "managed_tenant_connection_records", "managed_account_connection_records"} {
+	// Reproduce the complete predecessor schema, before hosted resources existed.
+	for _, trigger := range []string{"guard_account_connection_insert", "guard_account_connection_update", "guard_hosted_access_grant_insert", "guard_hosted_access_grant_update"} {
+		if err := database.Exec("DROP TRIGGER " + trigger).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, table := range []string{"managed_hosted_tenant_assignment_records", "managed_hosted_grant_revision_records", "managed_hosted_grant_records", "managed_hosted_creation_records", "managed_platform_credential_records", "managed_platform_connection_records", "managed_billing_account_records", "managed_connection_creation_records", "managed_connection_field_records", "managed_tenant_connection_records", "managed_account_connection_records"} {
 		if err := database.Migrator().DropTable(table); err != nil {
 			t.Fatal(err)
 		}
@@ -230,7 +236,12 @@ func TestManagementCapabilityMigrationBeforeAccountConnectionTransfer(t *testing
 			t.Fatal(err)
 		}
 	}
-	restarted := newManagementRouterWithDatabasePath(t, proxy.Configuration{}, databasePath)
+	configuration := managementConfigurationWithDatabasePath(proxy.Configuration{}, databasePath)
+	configuration.Management.DatabaseDialector = nil
+	restarted, err := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
+	if err != nil {
+		t.Fatal(err)
+	}
 	actual := accountConnectionExchange(t, restarted, owner, http.MethodGet, path, nil, http.StatusOK)
 	if !reflect.DeepEqual(expected, actual) {
 		t.Fatal("predecessor transfer changed the public tenant profile")

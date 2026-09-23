@@ -90,7 +90,7 @@ func TestAccountConnectionMediaOnlyCatalogVerification(t *testing.T) {
 			path := "/connections/" + connection["id"].(string)
 			exchange(foreign, http.MethodGet, path, nil, http.StatusNotFound)
 			tenant := managementDefaultTenantTestID(t, router, owner)
-			exchange(owner, http.MethodPut, "/tenants/"+tenant+"/connections/"+fixture.provider, map[string]string{"connection_id": connection["id"].(string)}, http.StatusOK)
+			exchange(owner, http.MethodPut, "/tenants/"+tenant+"/connections/"+fixture.provider, map[string]string{"kind": "account_connection", "resource_id": connection["id"].(string)}, http.StatusOK)
 			connection = exchange(owner, http.MethodGet, path, nil, http.StatusOK)
 			update := map[string]any{"name": "Media account", "provider": fixture.provider, "version": connection["version"], "fields": map[string]string{fixture.credential: "rejected-secret"}}
 			exchange(owner, http.MethodPut, path, update, http.StatusUnprocessableEntity)

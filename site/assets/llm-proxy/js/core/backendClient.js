@@ -8,6 +8,8 @@ const MANAGEMENT_BASE_PATH = "/api/management";
 const HEADER_CONTENT_TYPE = "Content-Type";
 const MIME_JSON = "application/json";
 const EMPTY_STRING = "";
+const BILLING_ACCOUNTS_PATH = `${MANAGEMENT_BASE_PATH}/billing-accounts`;
+const HOSTED_GRANTS_PATH = `${MANAGEMENT_BASE_PATH}/hosted-access-grants`;
 
 /** @type {Promise<import("../types.d.js").FrontendRuntimeConfig> | null} */
 let frontendRuntimeConfigPromise = null;
@@ -452,7 +454,80 @@ export function deleteConnection(id, signal) {
 
 /** @param {string} tenantID @param {string} provider @param {string} connectionID @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').ManagementTenantProfile>} */
 export function assignConnection(tenantID, provider, connectionID, signal) {
-  return requestTenantProfile(`${managementTenantPath(tenantID)}/connections/${encodeURIComponent(provider)}`, {method:'PUT',body:{connection_id:connectionID},signal}, tenantID);
+  return requestTenantProfile(`${managementTenantPath(tenantID)}/connections/${encodeURIComponent(provider)}`, {method:'PUT',body:{kind:'account_connection',resource_id:connectionID},signal}, tenantID);
+}
+
+/** @param {import('../types.d.js').BillingAccount} account */
+function assertBillingAccount(account) {
+  if (!account || typeof account.id !== 'string' || !/^billing-[a-f0-9]{32}$/.test(account.id) || account.currency !== 'USD' ||
+      typeof account.created_at !== 'string' || !Number.isFinite(Date.parse(account.created_at))) throw new Error(APP_INTEGRITY_ERROR);
+}
+
+/** @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').BillingAccount|null>} */
+export async function fetchBillingAccount(signal) {
+  const result = await requestJSON(BILLING_ACCOUNTS_PATH, {method:'GET',signal});
+  if (!result || !Array.isArray(result.billing_accounts) || result.billing_accounts.length > 1) throw new Error(APP_INTEGRITY_ERROR);
+  result.billing_accounts.forEach(assertBillingAccount);
+  return result.billing_accounts[0] || null;
+}
+
+/** @param {string} idempotencyKey @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').BillingAccount>} */
+export async function createBillingAccount(idempotencyKey, signal) {
+  const account = await requestJSON(BILLING_ACCOUNTS_PATH, {method:'POST',body:{currency:'USD'},idempotencyKey,signal});
+  assertBillingAccount(account);
+  return account;
+}
+
+/** @param {import('../types.d.js').HostedAccessGrant} grant */
+function assertHostedAccessGrant(grant) {
+  if (!grant || typeof grant.id !== 'string' || !/^grant-[a-f0-9]{32}$/.test(grant.id) ||
+      ![grant.billing_account_id,grant.tenant_id,grant.provider,grant.catalog_revision].every(value=>typeof value==='string' && value.length>0) ||
+      !['active','suspended','revoked'].includes(grant.state) || !Number.isSafeInteger(grant.revision) || grant.revision < 1 ||
+      ![grant.created_at,grant.updated_at].every(value=>typeof value==='string' && Number.isFinite(Date.parse(value))) ||
+      !Array.isArray(grant.offerings) || !grant.offerings.length) throw new Error(APP_INTEGRITY_ERROR);
+  for (const offering of grant.offerings) {
+    if (!offering || typeof offering.model!=='string' || !offering.model || !Array.isArray(offering.operations) || !offering.operations.length ||
+        !offering.operations.every(value=>typeof value==='string' && value.length>0)) throw new Error(APP_INTEGRITY_ERROR);
+  }
+}
+
+/** @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').HostedAccessGrant[]>} */
+export async function fetchHostedAccessGrants(signal) {
+  /** @type {import('../types.d.js').HostedAccessGrant[]} */
+  const grants=[];
+  const identifiers=new Set();
+  let cursor='';
+  do {
+    const page=await requestJSON(`${HOSTED_GRANTS_PATH}?limit=100${cursor?'&cursor='+encodeURIComponent(cursor):''}`,{method:'GET',signal});
+    if (!page || !Array.isArray(page.hosted_access_grants) || typeof page.next_cursor!=='string') throw new Error(APP_INTEGRITY_ERROR);
+    for (const grant of page.hosted_access_grants) {
+      assertHostedAccessGrant(grant);
+      if (identifiers.has(grant.id)) throw new Error(APP_INTEGRITY_ERROR);
+      identifiers.add(grant.id);
+      grants.push(grant);
+    }
+    if (page.next_cursor && (page.next_cursor===cursor || page.next_cursor!==grants.at(-1)?.id)) throw new Error(APP_INTEGRITY_ERROR);
+    cursor=page.next_cursor;
+  } while(cursor);
+  return grants;
+}
+
+/** @param {string} tenantID @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').ProviderAssignment[]>} */
+export async function fetchProviderAssignments(tenantID, signal) {
+  const result=await requestJSON(`${managementTenantPath(tenantID)}/connections`,{method:'GET',signal});
+  if (!result || !Array.isArray(result.assignments)) throw new Error(APP_INTEGRITY_ERROR);
+  const providers=new Set();
+  for(const assignment of result.assignments) {
+    if (!assignment || typeof assignment.provider!=='string' || !assignment.provider || providers.has(assignment.provider) ||
+        !['account_connection','hosted_access_grant'].includes(assignment.kind) || typeof assignment.resource_id!=='string' || !assignment.resource_id) throw new Error(APP_INTEGRITY_ERROR);
+    providers.add(assignment.provider);
+  }
+  return result.assignments;
+}
+
+/** @param {string} tenantID @param {import('../types.d.js').HostedAccessGrant} grant @param {AbortSignal} [signal] */
+export function assignHostedAccess(tenantID, grant, signal) {
+  return requestTenantProfile(`${managementTenantPath(tenantID)}/connections/${encodeURIComponent(grant.provider)}`,{method:'PUT',body:{kind:'hosted_access_grant',resource_id:grant.id},signal},tenantID);
 }
 
 /** @param {string} tenantID @param {string} provider @param {boolean} clearDefaults @param {AbortSignal} [signal] @returns {Promise<void>} */

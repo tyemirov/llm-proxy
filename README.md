@@ -53,6 +53,10 @@ The [provider speech contract](docs/provider-speech.md) defines six ElevenLabs s
 - Supports plain text, JSON, XML, or CSV responses
 
 See [tenant connections](docs/tenant-connections.md) for the dashboard, ownership rules, and versionless database schema.
+F065 also provides development resources for billing accounts, platform connections, hosted grants, and explicit tenant assignments.
+The browser supports hosted setup without customer provider credentials.
+Hosted execution remains disabled until F070 acceptance passes.
+See [hosted billing](docs/hosted-billing.md) for the 30% markup, USD 5 funding minimum, Paddle integration, and remaining work.
 
 ## OpenCode and OpenAI clients
 
@@ -694,11 +698,12 @@ Provider-specific details:
 See the [xAI Responses contract and live acceptance procedure](docs/xai-responses.md).
 
 Tenant access keys, defaults, prompts, and usage belong to the tenant.
-Provider credentials and provider fields belong to named account connections.
-A tenant can use one connection per provider.
+Customer provider credentials and fields belong to named account connections.
+A tenant selects one account connection or one hosted access grant per provider.
 Multiple tenants in the same account can use the same connection.
-A provider request requires an assigned connection with its required fields.
-Otherwise, the proxy returns `409 provider_not_configured` before dispatch.
+A customer-credential request requires an assigned connection with its required fields.
+Otherwise, the native proxy returns `409 provider_not_configured` before dispatch.
+Hosted assignments require the financial admission contract and remain unavailable during this implementation.
 
 Static provider URLs and paths belong to `providers.yml`.
 Alibaba Cloud and Baidu also use a `base_url` connection field.
@@ -884,7 +889,8 @@ Replacement requires confirmation because the previous key stops working immedia
 The new value appears once, with a copy control.
 Request examples use the `<generated-secret>` placeholder.
 A client key cannot be deleted independently.
-Deleting a non-final tenant removes its access key and usage while preserving account connections.
+Deleting a non-final tenant without hosted grant history removes its access key and usage while preserving account connections.
+Hosted grant history prevents tenant deletion, including after revocation.
 
 SQLite stores account connections, tenant assignments, provider profiles, default routes, secret digests, and usage.
 Runtime authentication loads the tenant and its assigned connections from one database snapshot.

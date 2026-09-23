@@ -237,7 +237,7 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 	if err := json.Unmarshal(body, &connection); err != nil {
 		t.Fatal(err)
 	}
-	accountConnectionExchange(t, router, owner, http.MethodPut, "/tenants/"+account.Tenants[0].ID+"/connections/"+provider, map[string]string{"connection_id": connection.ID}, http.StatusOK)
+	accountConnectionExchange(t, router, owner, http.MethodPut, "/tenants/"+account.Tenants[0].ID+"/connections/"+provider, map[string]string{"kind": "account_connection", "resource_id": connection.ID}, http.StatusOK)
 	secret := generateManagementTenantSecret(t, router, owner, account.Tenants[0].ID)
 	config, err := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{BaseURL: server.URL, Secret: secret})
 	if err != nil {
@@ -526,7 +526,7 @@ func exerciseDictatorAccountConnection(t *testing.T, provider, model string, cat
 	otherAccount := requestManagementAccount(t, router, otherOwner)
 	created := accountConnectionExchange(t, router, otherOwner, http.MethodPost, "/connections", map[string]any{"name": "Other speech server", "provider": provider, "fields": map[string]string{addressField: otherListener.Addr().String(), tokenField: "second-account-token", "grpc_tls": "false"}}, http.StatusCreated)
 	otherConnectionID := created["id"].(string)
-	accountConnectionExchange(t, router, otherOwner, http.MethodPut, "/tenants/"+otherAccount.Tenants[0].ID+"/connections/"+provider, map[string]string{"connection_id": otherConnectionID}, http.StatusOK)
+	accountConnectionExchange(t, router, otherOwner, http.MethodPut, "/tenants/"+otherAccount.Tenants[0].ID+"/connections/"+provider, map[string]string{"kind": "account_connection", "resource_id": otherConnectionID}, http.StatusOK)
 	otherSecret := generateManagementTenantSecret(t, router, otherOwner, otherAccount.Tenants[0].ID)
 	otherConfig, err := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{BaseURL: server.URL, Secret: otherSecret})
 	if err != nil {

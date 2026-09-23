@@ -436,3 +436,19 @@ export {};
  * @property {AccountConnection[]} connections
  * @property {ProviderProfile[]} providers
  */
+
+/** @typedef {{id:string, currency:'USD', created_at:string}} BillingAccount */
+/** @typedef {{provider:string, kind:'account_connection'|'hosted_access_grant', resource_id:string}} ProviderAssignment */
+/**
+ * @typedef {object} HostedAccessGrant
+ * @property {string} id
+ * @property {string} billing_account_id
+ * @property {string} tenant_id
+ * @property {string} provider
+ * @property {string} catalog_revision
+ * @property {{model:string, operations:string[]}[]} offerings
+ * @property {'active'|'suspended'|'revoked'} state
+ * @property {number} revision
+ * @property {string} created_at
+ * @property {string} updated_at
+ */

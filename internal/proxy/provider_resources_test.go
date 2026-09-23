@@ -149,7 +149,7 @@ func TestProviderCatalogResourcesWithoutModelOfferings(t *testing.T) {
 			assertResources(secret, 0)
 			connection := accountConnectionExchange(t, router, owner, http.MethodPost, "/connections", map[string]any{"name": "Resource account", "provider": providerID, "fields": map[string]string{"voice_address": listener.Addr().String(), "voice_token": fixture.token, "grpc_tls": "false"}}, http.StatusCreated)
 			assignmentPath := "/tenants/" + tenantID + "/connections/" + providerID
-			accountConnectionExchange(t, router, owner, http.MethodPut, assignmentPath, map[string]string{"connection_id": connection["id"].(string)}, http.StatusOK)
+			accountConnectionExchange(t, router, owner, http.MethodPut, assignmentPath, map[string]string{"kind": "account_connection", "resource_id": connection["id"].(string)}, http.StatusOK)
 			assertResources(secret, 1)
 			clientConfig, err := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{BaseURL: server.URL, Secret: secret})
 			if err != nil {

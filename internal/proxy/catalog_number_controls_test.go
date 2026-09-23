@@ -145,7 +145,7 @@ func TestProviderCatalogNumberControlsReachTenantClient(t *testing.T) {
 	tenantID := managementDefaultTenantTestID(t, router, owner)
 	secret := generateManagementTenantSecret(t, router, owner, tenantID)
 	connection := accountConnectionExchange(t, router, owner, http.MethodPost, "/connections", map[string]any{"name": "Number controls", "provider": "dictator", "fields": map[string]string{"grpc_address": listener.Addr().String(), "grpc_auth_token": fixture.token, "grpc_tls": "false"}}, http.StatusCreated)
-	accountConnectionExchange(t, router, owner, http.MethodPut, "/tenants/"+tenantID+"/connections/dictator", map[string]string{"connection_id": connection["id"].(string)}, http.StatusOK)
+	accountConnectionExchange(t, router, owner, http.MethodPut, "/tenants/"+tenantID+"/connections/dictator", map[string]string{"kind": "account_connection", "resource_id": connection["id"].(string)}, http.StatusOK)
 	configuration, err := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{BaseURL: server.URL, Secret: secret})
 	if err != nil {
 		t.Fatal(err)

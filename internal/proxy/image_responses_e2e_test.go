@@ -270,7 +270,7 @@ func imageResponsesDurableClient(t *testing.T, upstream *httptest.Server) (llmpr
 			if err := database.Table("managed_tenant_connection_records").Where("provider_id = ?", "openai").First(&assignment).Error; err != nil {
 				t.Fatal(err)
 			}
-			accountConnectionExchange(t, router, cookie, http.MethodPut, "/tenants/"+otherTenant+"/connections/openai", map[string]string{"connection_id": assignment.ConnectionID}, http.StatusOK)
+			accountConnectionExchange(t, router, cookie, http.MethodPut, "/tenants/"+otherTenant+"/connections/openai", map[string]string{"kind": "account_connection", "resource_id": assignment.ConnectionID}, http.StatusOK)
 			foreignSecret = generateManagementTenantSecret(t, router, cookie, otherTenant)
 		}
 		foreignConfig, err := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{BaseURL: server.URL, Secret: foreignSecret})

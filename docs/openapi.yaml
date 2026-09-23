@@ -1730,6 +1730,7 @@ paths:
     delete:
       operationId: deleteManagementTenant
       summary: Delete an owned non-final tenant
+      description: Tenants with hosted grant history cannot be deleted. The service returns 409 with managed_tenant_hosted_history.
       tags:
         - Management
       security:
@@ -1828,6 +1829,466 @@ paths:
           $ref: '#/components/responses/ManagementNotFound'
         '500':
           $ref: '#/components/responses/ManagementInternalError'
+  /api/management/billing-accounts:
+    get:
+      operationId: listBillingAccounts
+      summary: Read the authenticated owner's billing account
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      responses:
+        '200':
+          description: The account list. A read does not create an account.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [billing_accounts]
+                properties:
+                  billing_accounts:
+                    type: array
+                    maxItems: 1
+                    items:
+                      $ref: '#/components/schemas/BillingAccount'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+    post:
+      operationId: createBillingAccount
+      summary: Create one USD billing account for the authenticated owner
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: '#/components/parameters/OptionalOrigin'
+        - $ref: '#/components/parameters/HostedCreationKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [currency]
+              properties:
+                currency:
+                  type: string
+                  enum: [USD]
+      responses:
+        '201':
+          description: The immutable account creation response, including on a retry with the same key.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingAccount'
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '403':
+          $ref: '#/components/responses/ManagementForbidden'
+        '409':
+          $ref: '#/components/responses/HostedResourceError'
+        '415':
+          $ref: '#/components/responses/ManagementUnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+  /api/management/billing-accounts/{billing_account_id}:
+    get:
+      operationId: getBillingAccount
+      summary: Read an owned billing account
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - name: billing_account_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The owned account.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingAccount'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+  /api/management/platform-connections:
+    get:
+      operationId: listPlatformConnections
+      summary: Read platform connection metadata as an operator
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            pattern: '^platform-[a-f0-9]{32}$'
+      responses:
+        '200':
+          description: Connection metadata in ascending identifier order. Credentials are excluded.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [platform_connections, next_cursor]
+                properties:
+                  platform_connections:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlatformConnection'
+                  next_cursor:
+                    type: string
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '403':
+          $ref: '#/components/responses/ManagementForbidden'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+    post:
+      operationId: createPlatformConnection
+      summary: Verify and create a platform connection as an operator
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: '#/components/parameters/OptionalOrigin'
+        - $ref: '#/components/parameters/HostedCreationKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformConnectionWrite'
+      responses:
+        '201':
+          description: The immutable creation receipt. Repeated keys require identical intent.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformConnection'
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '403':
+          $ref: '#/components/responses/ManagementForbidden'
+        '409':
+          $ref: '#/components/responses/HostedResourceError'
+        '415':
+          $ref: '#/components/responses/ManagementUnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ProviderKeyRejected'
+        '429':
+          $ref: '#/components/responses/ProviderKeyVerificationRateLimited'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+        '503':
+          $ref: '#/components/responses/ProviderKeyVerificationUnavailable'
+        '504':
+          $ref: '#/components/responses/ProviderKeyVerificationTimedOut'
+  /api/management/platform-connections/{platform_connection_id}:
+    get:
+      operationId: getPlatformConnection
+      summary: Read platform connection metadata as an operator
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/PlatformConnectionID'
+      responses:
+        '200':
+          $ref: '#/components/responses/PlatformConnectionSuccess'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '403':
+          $ref: '#/components/responses/ManagementForbidden'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+    put:
+      operationId: rotatePlatformConnection
+      summary: Replace platform credentials while retaining accepted versions
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: '#/components/parameters/OptionalOrigin'
+        - $ref: '#/components/parameters/PlatformConnectionID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformConnectionWrite'
+      responses:
+        '200':
+          $ref: '#/components/responses/PlatformConnectionSuccess'
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '403':
+          $ref: '#/components/responses/ManagementForbidden'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '409':
+          $ref: '#/components/responses/HostedResourceError'
+        '415':
+          $ref: '#/components/responses/ManagementUnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ProviderKeyRejected'
+        '429':
+          $ref: '#/components/responses/ProviderKeyVerificationRateLimited'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+        '503':
+          $ref: '#/components/responses/ProviderKeyVerificationUnavailable'
+        '504':
+          $ref: '#/components/responses/ProviderKeyVerificationTimedOut'
+  /api/management/hosted-access-grants:
+    get:
+      operationId: listHostedAccessGrants
+      summary: Read hosted access grants for the authenticated account
+      description: Operators can read all grants. Results use ascending ID order and an exclusive cursor.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/HostedPageLimit'
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            pattern: '^grant-[a-f0-9]{32}$'
+      responses:
+        '200':
+          description: The account grants without platform credentials or private provider handles.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [hosted_access_grants, next_cursor]
+                properties:
+                  hosted_access_grants:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HostedAccessGrant'
+                  next_cursor:
+                    type: string
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+    post:
+      operationId: createHostedAccessGrant
+      summary: Create a hosted access grant as an operator
+      description: >-
+        Creation binds one tenant to its billing account and explicit provider offerings.
+        A grant does not bypass pricing, metering, funds admission, or the hosted activation gate.
+        The original creation response remains available after grant changes and catalog changes.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: '#/components/parameters/OptionalOrigin'
+        - $ref: '#/components/parameters/HostedCreationKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HostedAccessGrantCreate'
+      responses:
+        '201':
+          description: The retained creation response. Read the resource for its current state.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostedAccessGrant'
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '403':
+          $ref: '#/components/responses/ManagementForbidden'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '409':
+          $ref: '#/components/responses/HostedResourceError'
+        '415':
+          $ref: '#/components/responses/ManagementUnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+  /api/management/hosted-access-grants/{grant_id}:
+    get:
+      operationId: getHostedAccessGrant
+      summary: Read one hosted access grant
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/HostedGrantID'
+      responses:
+        '200':
+          $ref: '#/components/responses/HostedAccessGrantSuccess'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+    patch:
+      operationId: changeHostedAccessGrant
+      summary: Change grant state with a revision precondition
+      description: >-
+        Only operators can change grants. Each change records its actor and reason in the same transaction.
+        Suspended grants can return to active state. Revoked grants cannot return to another state.
+        A stale revision or an unchanged state returns a conflict. Read the current resource before another change.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: '#/components/parameters/OptionalOrigin'
+        - $ref: '#/components/parameters/HostedGrantID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [state, revision, reason]
+              properties:
+                state:
+                  $ref: '#/components/schemas/HostedGrantState'
+                revision:
+                  type: integer
+                  minimum: 1
+                  maximum: 9223372036854775806
+                reason:
+                  $ref: '#/components/schemas/HostedGrantReason'
+      responses:
+        '200':
+          $ref: '#/components/responses/HostedAccessGrantSuccess'
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '403':
+          $ref: '#/components/responses/ManagementForbidden'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '409':
+          $ref: '#/components/responses/HostedResourceError'
+        '415':
+          $ref: '#/components/responses/ManagementUnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+  /api/management/hosted-access-grants/{grant_id}/revisions:
+    get:
+      operationId: listHostedAccessGrantRevisions
+      summary: Read the grant audit as an operator
+      description: Revisions use ascending order. Each cursor identifies the last revision on the previous page.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/HostedGrantID'
+        - $ref: '#/components/parameters/HostedPageLimit'
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            pattern: '^[1-9][0-9]*$'
+      responses:
+        '200':
+          description: Retained grant revisions with operator identity and reason.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [revisions, next_cursor]
+                properties:
+                  revisions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HostedAccessGrantRevision'
+                  next_cursor:
+                    type: string
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '403':
+          $ref: '#/components/responses/ManagementForbidden'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
   /api/management/connections:
     get:
       operationId: listManagementConnections
@@ -2195,10 +2656,54 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConnectionError'
+  /api/management/tenants/{tenant_id}/connections:
+    get:
+      operationId: listManagementProviderAssignments
+      summary: Read the tenant's explicit provider assignments
+      description: The list contains one assignment per selected provider, in provider ID order. It contains no platform credentials.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/TenantID'
+      responses:
+        '200':
+          description: The tenant's selected account connections and hosted access grants.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [assignments]
+                properties:
+                  assignments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TenantProviderAssignment'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          description: The tenant does not belong to the authenticated account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
+        '500':
+          description: The assignment store is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionError'
   /api/management/tenants/{tenant_id}/connections/{provider}:
     put:
       operationId: assignManagementConnection
-      summary: Assign one connection to the tenant provider
+      summary: Select an account connection or hosted access grant for one provider
+      description: >-
+        The resource must belong to the tenant's account. A hosted grant must also name this tenant and provider.
+        Detach the current assignment before selecting a different resource. The service does not substitute credential sources.
       tags:
         - Management
       security:
@@ -2268,7 +2773,7 @@ paths:
                 $ref: '#/components/schemas/ConnectionError'
     delete:
       operationId: detachManagementConnection
-      summary: Detach a connection and optionally clear dependent defaults
+      summary: Detach the selected provider resource and optionally clear dependent defaults
       tags:
         - Management
       security:
@@ -2583,6 +3088,36 @@ components:
       schema:
         type: string
         pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+    HostedPageLimit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    HostedGrantID:
+      name: grant_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^grant-[a-f0-9]{32}$'
+    HostedCreationKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: A creation key scoped to the authenticated actor and resource kind.
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+    PlatformConnectionID:
+      name: platform_connection_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^platform-[a-f0-9]{32}$'
     ConnectionCreationKey:
       name: Idempotency-Key
       in: header
@@ -3201,6 +3736,52 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ProxyErrorEnvelope'
+    HostedResourceError:
+      description: The hosted resource request failed.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [error]
+            properties:
+              error:
+                type: object
+                additionalProperties: false
+                required: [code]
+                properties:
+                  code:
+                    type: string
+                    enum:
+                      - billing_account_invalid
+                      - billing_account_conflict
+                      - billing_account_not_found
+                      - billing_account_store_failed
+                      - hosted_access_invalid
+                      - hosted_access_conflict
+                      - hosted_access_not_found
+                      - hosted_access_store_failed
+    HostedAccessGrantSuccess:
+      description: The grant state. Only operators receive the platform connection identifier.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HostedAccessGrant'
+    PlatformConnectionSuccess:
+      description: Platform metadata without credentials. Only operators can read this resource.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PlatformConnection'
     AccountSuccess:
       description: Authenticated account snapshot.
       headers:
@@ -3479,9 +4060,28 @@ components:
       type: object
       additionalProperties: false
       required:
-        - connection_id
+        - kind
+        - resource_id
       properties:
-        connection_id:
+        kind:
+          $ref: '#/components/schemas/ProviderAssignmentKind'
+        resource_id:
+          type: string
+          minLength: 1
+    ProviderAssignmentKind:
+      type: string
+      enum: [account_connection, hosted_access_grant]
+    TenantProviderAssignment:
+      type: object
+      additionalProperties: false
+      required: [provider, kind, resource_id]
+      properties:
+        provider:
+          type: string
+          minLength: 1
+        kind:
+          $ref: '#/components/schemas/ProviderAssignmentKind'
+        resource_id:
           type: string
           minLength: 1
     TenantProviderProfileWrite:
@@ -6918,6 +7518,172 @@ components:
       type: object
       additionalProperties: false
       properties: {}
+    BillingAccount:
+      type: object
+      additionalProperties: false
+      required: [id, currency, created_at]
+      properties:
+        id:
+          type: string
+          pattern: '^billing-[a-f0-9]{32}$'
+        currency:
+          type: string
+          enum: [USD]
+        created_at:
+          type: string
+          format: date-time
+    PlatformConnection:
+      type: object
+      additionalProperties: false
+      required: [id, name, provider, version, qualified, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          pattern: '^platform-[a-f0-9]{32}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        provider:
+          type: string
+          minLength: 1
+        version:
+          type: integer
+          minimum: 1
+        qualified:
+          type: boolean
+          const: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    PlatformConnectionWrite:
+      type: object
+      additionalProperties: false
+      required: [name, provider, fields]
+      description: >-
+        Creation requires version zero or omission. Replacement requires the current version and all required connection fields.
+        Successful verification stores a new immutable credential version. Existing versions remain available for accepted work.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        provider:
+          type: string
+          minLength: 1
+        fields:
+          type: object
+          additionalProperties:
+            type: string
+        version:
+          type: integer
+          minimum: 0
+    HostedGrantState:
+      type: string
+      enum: [active, suspended, revoked]
+    HostedGrantReason:
+      type: string
+      minLength: 1
+      maxLength: 500
+      description: Operator reason without leading or trailing whitespace. Customer responses omit this field.
+    HostedGrantOfferings:
+      type: array
+      minItems: 1
+      description: Exact models from one provider. Each model and operation can occur only once.
+      items:
+        type: object
+        additionalProperties: false
+        required: [model, operations]
+        properties:
+          model:
+            type: string
+            minLength: 1
+          operations:
+            type: array
+            minItems: 1
+            uniqueItems: true
+            items:
+              type: string
+              minLength: 1
+    HostedAccessGrantCreate:
+      type: object
+      additionalProperties: false
+      required: [billing_account_id, tenant_id, platform_connection_id, catalog_revision, offerings, reason]
+      properties:
+        billing_account_id:
+          type: string
+          pattern: '^billing-[a-f0-9]{32}$'
+        tenant_id:
+          type: string
+          minLength: 1
+        platform_connection_id:
+          type: string
+          pattern: '^platform-[a-f0-9]{32}$'
+        catalog_revision:
+          type: string
+          minLength: 1
+        offerings:
+          $ref: '#/components/schemas/HostedGrantOfferings'
+        reason:
+          $ref: '#/components/schemas/HostedGrantReason'
+    HostedAccessGrant:
+      type: object
+      additionalProperties: false
+      required: [id, billing_account_id, tenant_id, provider, catalog_revision, offerings, state, revision, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          pattern: '^grant-[a-f0-9]{32}$'
+        billing_account_id:
+          type: string
+          pattern: '^billing-[a-f0-9]{32}$'
+        tenant_id:
+          type: string
+          minLength: 1
+        platform_connection_id:
+          type: string
+          pattern: '^platform-[a-f0-9]{32}$'
+          description: Operator responses only.
+        provider:
+          type: string
+          minLength: 1
+        catalog_revision:
+          type: string
+          minLength: 1
+        offerings:
+          $ref: '#/components/schemas/HostedGrantOfferings'
+        state:
+          $ref: '#/components/schemas/HostedGrantState'
+        revision:
+          type: integer
+          minimum: 1
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    HostedAccessGrantRevision:
+      type: object
+      additionalProperties: false
+      required: [revision, state, actor_user_id, reason, created_at]
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+        state:
+          $ref: '#/components/schemas/HostedGrantState'
+        actor_user_id:
+          type: string
+          minLength: 1
+        reason:
+          $ref: '#/components/schemas/HostedGrantReason'
+        created_at:
+          type: string
+          format: date-time
     ManagementAccount:
       type: object
       additionalProperties: false

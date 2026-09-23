@@ -130,7 +130,7 @@ func TestElevenLabsAccountResourcesShareOneProviderConnection(t *testing.T) {
 			}
 			connection := accountConnectionExchange(t, router, owner, http.MethodPost, "/connections", map[string]any{"name": "Eleven account", "provider": identifier, "fields": map[string]string{"resource_token": token.Load().(string)}}, http.StatusCreated)
 			assignment := "/tenants/" + tenantID + "/connections/" + identifier
-			accountConnectionExchange(t, router, owner, http.MethodPut, assignment, map[string]string{"connection_id": connection["id"].(string)}, http.StatusOK)
+			accountConnectionExchange(t, router, owner, http.MethodPut, assignment, map[string]string{"kind": "account_connection", "resource_id": connection["id"].(string)}, http.StatusOK)
 			metadata := read("metadata", secret, 200)
 			models := metadata["models"].([]any)
 			if len(models) != 1 || models[0].(map[string]any)["model_id"] != "eleven_v3" {
@@ -210,7 +210,7 @@ func TestElevenLabsAccountResourcesRejectInvalidProviderResponses(t *testing.T) 
 	tenantID := managementDefaultTenantTestID(t, router, owner)
 	key := generateManagementTenantSecret(t, router, owner, tenantID)
 	connection := accountConnectionExchange(t, router, owner, http.MethodPost, "/connections", map[string]any{"name": "Account resources", "provider": "elevenlabs", "fields": map[string]string{"resource_token": "resource-secret"}}, http.StatusCreated)
-	accountConnectionExchange(t, router, owner, http.MethodPut, "/tenants/"+tenantID+"/connections/elevenlabs", map[string]string{"connection_id": connection["id"].(string)}, http.StatusOK)
+	accountConnectionExchange(t, router, owner, http.MethodPut, "/tenants/"+tenantID+"/connections/elevenlabs", map[string]string{"kind": "account_connection", "resource_id": connection["id"].(string)}, http.StatusOK)
 	cases := []result{
 		{kind: "metadata", body: "null"}, {kind: "metadata", body: "{}"}, {kind: "metadata", body: `[{"model_id":"","name":"Missing"}]`},
 		{kind: "metadata", body: `[{"model_id":"m","name":""}]`}, {kind: "metadata", body: `[{"model_id":"m","name":"Model","maximum_text_length_per_request":-1}]`},
@@ -307,7 +307,7 @@ func TestElevenLabsAccountResourcesShareAccountAdmission(t *testing.T) {
 		if i == 2 {
 			name = "independent-resource"
 		}
-		accountConnectionExchange(t, router, owner, http.MethodPut, "/tenants/"+tenant+"/connections/elevenlabs", map[string]string{"connection_id": connections[name]}, http.StatusOK)
+		accountConnectionExchange(t, router, owner, http.MethodPut, "/tenants/"+tenant+"/connections/elevenlabs", map[string]string{"kind": "account_connection", "resource_id": connections[name]}, http.StatusOK)
 		keys[i] = generateManagementTenantSecret(t, router, owner, tenant)
 	}
 	server := httptest.NewServer(router)
