@@ -45,7 +45,7 @@ func TestHostedToolUsageCountsSearchActions(t *testing.T) {
 				fmt.Fprintf(writer, `{"id":"private-response","status":"completed","output_text":"retained answer","output":%s,"usage":{"input_tokens":10,"output_tokens":2,"input_tokens_details":{"cached_tokens":0},"output_tokens_details":{"reasoning_tokens":0}}}`, scenario.output)
 			}))
 			t.Cleanup(upstream.Close)
-			server := newHostedIdentityHTTPServer(t, database, upstream.URL, t.TempDir())
+			server := newHostedIdentityHTTPServer(t, database, upstream.URL, t.TempDir(), hostedSearchRatingAuthorization(t))
 			if scenario.name == "wrong_shape" {
 				hostedSearchHTTP(t, server, "tool-usage", http.StatusBadGateway)
 			} else {
@@ -101,6 +101,10 @@ func TestHostedToolUsagePollingAndContinuations(t *testing.T) {
 				ordinal := posts.Load()
 				if request.Method == http.MethodPost {
 					ordinal = posts.Add(1)
+					var payload map[string]json.RawMessage
+					if err := json.NewDecoder(request.Body).Decode(&payload); err != nil || string(payload["max_tool_calls"]) != "2" {
+						t.Errorf("continuation lost accepted tool bound: payload=%v error=%v", payload, err)
+					}
 				} else {
 					polls.Add(1)
 				}
@@ -120,7 +124,7 @@ func TestHostedToolUsagePollingAndContinuations(t *testing.T) {
 				fmt.Fprintf(writer, `{"id":"private-tool-%d","status":%q,"output_text":"retained answer","output":%s,"usage":{"input_tokens":10,"output_tokens":2,"input_tokens_details":{"cached_tokens":0},"output_tokens_details":{"reasoning_tokens":0}}%s}`, ordinal, status, output, details)
 			}))
 			t.Cleanup(upstream.Close)
-			server := newHostedIdentityHTTPServer(t, database, upstream.URL, t.TempDir())
+			server := newHostedIdentityHTTPServer(t, database, upstream.URL, t.TempDir(), hostedSearchRatingAuthorization(t))
 			want, wantPosts, wantObservations := http.StatusOK, int64(1), 1
 			switch mode {
 			case "continuation":

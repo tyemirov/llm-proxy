@@ -100,6 +100,11 @@ func (execution *hostedTextExecution) do(next HTTPDoer, request *http.Request, t
 	}
 	// Cleanup and read-only polling do not create another paid generation attempt.
 	if role == hostedProviderGeneration {
+		if execution.webSearch {
+			if err := execution.bindAcceptedToolLimit(request, transport.responseCodec); err != nil {
+				return nil, err
+			}
+		}
 		identifier, err := newHostedResourceID(journalAttemptIDPrefix, execution.entropy)
 		if err != nil {
 			return nil, err

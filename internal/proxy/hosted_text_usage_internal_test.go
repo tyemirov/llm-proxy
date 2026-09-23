@@ -102,9 +102,9 @@ func TestHostedTextUsagePreservesCacheLifetimes(t *testing.T) {
 	}
 }
 
-func newHostedTextProviderFixture(t *testing.T, database *gormManagedTenantDatabase, endpoint, provider, model string) *httptest.Server {
+func newHostedTextProviderFixture(t *testing.T, database *gormManagedTenantDatabase, endpoint, provider, model string, configure ...func(*hostedTextRequestDependencies)) *httptest.Server {
 	t.Helper()
-	router, service, _ := newHostedIdentityHTTPHandler(t, database, endpoint, t.TempDir())
+	router, service, _ := newHostedIdentityHTTPHandler(t, database, endpoint, t.TempDir(), configure...)
 	for _, record := range []any{&managedHostedTenantAssignmentRecord{}, &managedProviderProfileRecord{}} {
 		if err := database.database.Where("tenant_id = ? AND provider_id = ?", "managed-first", provider).Delete(record).Error; err != nil {
 			t.Fatal(err)

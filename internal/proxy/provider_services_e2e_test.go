@@ -403,7 +403,7 @@ func TestProviderServicesCatalogServiceSnapshot(t *testing.T) {
 			index = i
 		}
 	}
-	catalog.Providers[index].Services[0].Price.MinimumCharge = &proxy.CatalogMinimumCharge{Currency: "USD", Amount: 1, Unit: "request"}
+	catalog.Providers[index].Services[0].Price.MinimumCharge = &proxy.CatalogMinimumCharge{Currency: "USD", Amount: "1", Unit: "request"}
 	service, err := proxy.NewCatalogService(catalog)
 	if err != nil {
 		t.Fatal(err)
@@ -413,9 +413,9 @@ func TestProviderServicesCatalogServiceSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	*route.Limits[0].Value = 2
-	route.Price.MinimumCharge.Amount = 999
+	route.Price.MinimumCharge.Amount = "999"
 	route, err = service.ResolveService("elevenlabs", "audio_alignment")
-	if err != nil || *route.Limits[0].Value != 1000000000 || route.Price.MinimumCharge.Amount != 1 {
+	if err != nil || *route.Limits[0].Value != 1000000000 || route.Price.MinimumCharge.Amount != "1" {
 		t.Fatalf("mutated immutable route=%+v error=%v", route, err)
 	}
 	for name, change := range map[string]func(*proxy.ProviderCatalogService){

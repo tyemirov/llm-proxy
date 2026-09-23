@@ -168,16 +168,16 @@ func TestMiniMaxM3ImagesAndPrices(t *testing.T) {
 			continue
 		}
 		found = true
-		expected := []float64{0.3, 1.2, 0.06, 0.6, 2.4, 0.12}
+		expected := []proxy.CatalogDecimal{"0.3", "1.2", "0.06", "0.6", "2.4", "0.12"}
 		if len(price.Rates) != len(expected) {
 			t.Fatalf("price rates=%v", price.Rates)
 		}
 		for index, rate := range price.Rates {
-			tier := "input_tokens_up_to_512k"
+			tier := "Published upper boundary is 512k. The exact token count is unverified."
 			if index >= 3 {
-				tier = "input_tokens_above_512k"
+				tier = "Published lower boundary is above 512k. The exact token count is unverified."
 			}
-			if rate.Rate != expected[index] || rate.Conditions.Mode != tier || rate.Conditions.BillingMode != "pay_as_you_go_standard" {
+			if rate.Rate != expected[index] || rate.Conditions.InputTokens.UnresolvedReason != tier || rate.Conditions.Mode != "" || rate.Conditions.ServiceTier != "standard" || rate.Conditions.BillingMode != "pay_as_you_go_standard" {
 				t.Fatalf("price rate=%v", rate)
 			}
 		}

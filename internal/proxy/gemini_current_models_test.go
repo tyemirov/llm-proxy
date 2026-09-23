@@ -333,7 +333,7 @@ func TestGeminiCurrentModelsCatalog(t *testing.T) {
 		if !found {
 			t.Fatalf("missing Gemini offering=%s", model)
 		}
-		expected := [][]float64{{0.75, 3.75, 0.075, 0.5}, {0.30, 2.50, 0.03, 1}}[index]
+		expected := [][]proxy.CatalogDecimal{{"0.75", "3.75", "0.075", "0.5"}, {"0.3", "2.5", "0.03", "1"}}[index]
 		foundPrice := false
 		for _, price := range public.Prices {
 			if price.Provider != proxy.ProviderNameGemini || price.Model != model {

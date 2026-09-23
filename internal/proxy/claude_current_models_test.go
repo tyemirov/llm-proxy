@@ -239,9 +239,9 @@ func TestClaudeCurrentModelsCatalog(t *testing.T) {
 				continue
 			}
 			foundPrice = true
-			expected := []float64{10, 50, .25, 12.5, 20}
+			expected := []proxy.CatalogDecimal{"10", "50", "0.25", "12.5", "20"}
 			if model == "claude-opus-5" {
-				expected = []float64{5, 25, .5, 6.25, 10}
+				expected = []proxy.CatalogDecimal{"5", "25", "0.5", "6.25", "10"}
 			}
 			if len(price.Rates) != len(expected) {
 				t.Fatalf("Claude price rates=%v", price.Rates)
@@ -251,7 +251,7 @@ func TestClaudeCurrentModelsCatalog(t *testing.T) {
 					t.Errorf("Claude rate=%v", rate)
 				}
 			}
-			if price.Rates[3].Conditions.Duration != "5m" || price.Rates[4].Conditions.Duration != "1h" {
+			if price.Rates[3].Conditions.CacheClass != "write_5m" || price.Rates[4].Conditions.CacheClass != "write_1h" {
 				t.Errorf("Claude cache durations=%v", price.Rates)
 			}
 		}

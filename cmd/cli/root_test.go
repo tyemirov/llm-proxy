@@ -869,14 +869,14 @@ func TestRootCommandRejectsInvalidProviderCatalog(t *testing.T) {
 		{
 			name: "unsupported schema version",
 			mutate: func(document string) string {
-				return strings.Replace(document, "schema_version: 5", "schema_version: 6", 1)
+				return strings.Replace(document, "schema_version: 6", "schema_version: 7", 1)
 			},
 			expectedError: "field=schema_version value=6",
 		},
 		{
 			name: "unknown field",
 			mutate: func(document string) string {
-				return strings.Replace(document, "schema_version: 5", "schema_version: 5\nfuture_option: true", 1)
+				return strings.Replace(document, "schema_version: 6", "schema_version: 6\nfuture_option: true", 1)
 			},
 			expectedError: "field future_option not found",
 		},

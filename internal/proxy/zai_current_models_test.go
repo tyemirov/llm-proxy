@@ -169,20 +169,20 @@ func TestZAICurrentCatalog(t *testing.T) {
 			t.Fatalf("missing price %s", model)
 		}
 		price := public.Prices[index]
-		expected := []float64{1.4, 4.4, 0.26}
+		expected := []proxy.CatalogDecimal{"1.4", "4.4", "0.26"}
 		if model == "glm-5.3-flash" {
-			expected = []float64{0.15, 0.5, 0.03, 0.075, 0.25, 0.015}
+			expected = []proxy.CatalogDecimal{"0.15", "0.5", "0.03", "0.075", "0.25", "0.015"}
 		}
 		if !price.Available || price.Source != "https://docs.z.ai/guides/overview/pricing" || price.LastVerified != "2026-09-05" || len(price.Rates) != len(expected) {
 			t.Fatalf("price=%+v", price)
 		}
 		for i, amount := range expected {
 			rate := price.Rates[i]
-			mode := "pay_as_you_go_list"
+			until := ""
 			if i >= 3 {
-				mode = "promotion_until_2026-09-09T16:00:00Z_exclusive"
+				until = "2026-09-09T16:00:00Z"
 			}
-			if rate.Rate != amount || rate.Currency != "USD" || rate.Unit != "USD/1M_tokens" || rate.Component != []string{"input_tokens", "output_tokens", "cache_read"}[i%3] || rate.Conditions.BillingMode != mode {
+			if rate.Rate != amount || rate.Currency != "USD" || rate.Unit != "USD/1M_tokens" || rate.Component != []string{"input_tokens", "output_tokens", "cache_read"}[i%3] || rate.Conditions.BillingMode != "pay_as_you_go_list" || rate.Conditions.EffectiveUntil != until {
 				t.Fatalf("rate=%+v", rate)
 			}
 		}

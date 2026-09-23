@@ -383,12 +383,14 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 		if limitError := validateCatalogLimits(offering.Limits, fieldPrefix+".limits"); limitError != nil {
 			return limitError
 		}
+		mediaCapabilities := offering
+		mediaCapabilities.Limits = mediaCapabilityLimits(offering)
 		var speechRouteError error
 		switch offering.WireContract {
 		case CatalogProtocolElevenLabsSpeech:
-			speechRouteError = validateSpeechGenerationOffering(offering, fieldPrefix)
+			speechRouteError = validateSpeechGenerationOffering(mediaCapabilities, fieldPrefix)
 		case CatalogProtocolElevenLabsConversion:
-			speechRouteError = validateSpeechConversionOffering(offering, fieldPrefix)
+			speechRouteError = validateSpeechConversionOffering(mediaCapabilities, fieldPrefix)
 		}
 		if speechRouteError != nil {
 			return speechRouteError
@@ -401,9 +403,9 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 			case ModelOperationVideoGeneration:
 				routeError = validateVideoOffering(offering, fieldPrefix)
 			case ModelOperationImageGeneration, ModelOperationImageEditing:
-				routeError = validateImageGenerationOffering(offering, fieldPrefix)
+				routeError = validateImageGenerationOffering(mediaCapabilities, fieldPrefix)
 			case ModelOperationDictation:
-				routeError = validateDictationOffering(offering, fieldPrefix)
+				routeError = validateDictationOffering(mediaCapabilities, fieldPrefix)
 			case ModelOperationSpeechGeneration:
 				if offering.WireContract != CatalogProtocolElevenLabsSpeech && offering.WireContract != CatalogProtocolDictatorSpeechV1 {
 					routeError = fmt.Errorf("%w: field=%s reason=unsupported_speech_route", ErrInvalidModelCatalog, fieldPrefix)
