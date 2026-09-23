@@ -1559,7 +1559,11 @@ test("site publishes the exact canonical OpenAPI artifact and its derived refere
   expect(documentationHTML).toContain('id="operation-getProviderDiagnosticsHeaders"');
   expect(documentationHTML).toContain('id="operation-getTenantProviderResource"');
   expect(documentationHTML).toContain('id="operation-getTenantMediaVoicePreview"');
-  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(51);
+  const contract=loadYAML(canonicalSource);
+  const methods=new Set(['get','put','post','delete','options','head','patch','trace']);
+  const expectedOperations=Object.values(contract.paths).flatMap(item=>Object.entries(item).filter(([method])=>methods.has(method)).map(([,operation])=>operation.operationId));
+  const renderedOperations=[...documentationHTML.matchAll(/<section class="api-operation" id="operation-([^"]+)"/g)].map(match=>match[1]);
+  expect(renderedOperations.toSorted()).toEqual(expectedOperations.toSorted());
 });
 
 test("OpenCode integration opens the bearer-authenticated client API reference", async ({ page }) => {

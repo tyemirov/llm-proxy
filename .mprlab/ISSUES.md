@@ -2278,6 +2278,7 @@ retain satisfied historical dependencies.
   Explicit assignments, database exclusion constraints, and browser hosted setup are implemented.
   HTTP tests reject unavailable hosted execution across native, client, MCP, dictation, and media interfaces without upstream calls.
   Browser tests verify hosted setup and grant suspension at desktop, 390px, and 320px widths.
+  The resource foundation is in [PR 339](https://github.com/tyemirov/llm-proxy/pull/339).
   Financial admission, accepted-work recovery, and complete acceptance remain open.
   Requirements:
   - Use F070 as the shared hosted service contract.
