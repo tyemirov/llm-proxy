@@ -1128,7 +1128,9 @@ The required public client token starts with `test_` for sandbox or `live_` for 
 The server rejects a token from the wrong environment before database access.
 Create this token in the selected Paddle account under Developer tools, Authentication.
 The [Paddle.js initialization contract](https://developer.paddle.com/paddle-js/methods/paddle-initialize/) uses this token instead of the API key.
-Configure and obtain approval for the default payment link before actual Paddle qualification.
+Configure the default payment link before actual Paddle qualification.
+Sandbox permits a test domain or localhost. Production requires Paddle domain verification.
+See the [default payment link contract](https://developer.paddle.com/build/transactions/default-payment-link/).
 The [transaction checkout prerequisites](https://developer.paddle.com/build/transactions/pass-transaction-checkout/) define this processor setup requirement.
 The shared client selects the Paddle API origin for the configured environment.
 `api_base_url` can select an explicit HTTPS origin. A sandbox loopback protocol can use HTTP.
@@ -1166,7 +1168,7 @@ The service rejects new hosted work when available funds are negative or a pendi
 This payment restriction does not replace an operator suspension.
 New funding and admission checks use available funds to complete retained refund holds.
 Controlled tests cover refund approval, rejection, concurrent processing, chargeback replay, reversal, and failed financial writes.
-Full reconciliation and processor sandbox qualification remain open under F069.
+Payment and provider reconciliation have controlled acceptance. Actual processor sandbox qualification remains open under F069.
 
 ### Audited Payment Reconciliation
 
@@ -1200,7 +1202,7 @@ The scheduler contract does not activate a production schedule.
 
 The complete backup includes runs, order sets, checkpoints, private evidence, and reports.
 Controlled tests verify seeded differences, concurrent runs, failed checkpoints, processor outages, replay, and backup restoration.
-Provider cost imports use the following contract. Approved corrective operations remain open under F069.
+Provider cost imports and approved corrections use the following contracts.
 
 ### Provider Cost Reconciliation
 
@@ -1260,6 +1262,37 @@ Schedule each provider comparison after its source period and export are availab
 Use one identifier per comparison and retry that identifier after a failed import.
 Review differences before any separately approved monetary correction.
 
+### Approved Reconciliation Corrections
+
+Reconciliation reports do not authorize monetary entries.
+Use the existing F068 financial resolution and request credit resources for an approved customer charge correction.
+An operator session must approve each request. Customer sessions cannot create these financial decisions.
+Paddle remains authoritative for payment refunds and reversals.
+
+1. Read the retained payment or provider report and its original evidence.
+2. Verify the account, request, period, scope, and evidence digest before approval.
+3. Record the approved amount and reason in the external review record.
+4. For an unresolved reservation, use the financial resolution procedure in this document.
+5. For a settled request, create its immutable `funds-credits/{credit_id}` resource with an operator session.
+6. Put the retained report reference in `evidence_reference` and the approved reason code in `reason`.
+7. Verify the returned credit receipt and current account balance.
+8. Run a new reconciliation comparison after the correction.
+
+For a provider report, use `provider-reconciliation:{run_id}:{local_evidence_digest}` as the retained report reference.
+The API retains this reference as review evidence. The operator verifies its scope before approval.
+The audit record retains the operator identity, exact credit, reason, report reference, time, and Ledger effect.
+A repeated credit identifier has one effect. A different repeat produces `409`.
+The correction cannot exceed the settled customer charge after prior credits.
+
+The original rating, provider cost, payment receipt, and completed reconciliation report remain unchanged.
+A new provider comparison can still show the original cost difference after a customer credit.
+The credit records an approved customer decision. It does not certify the provider invoice or replace missing usage evidence.
+
+Controlled acceptance funds an account through Paddle, incurs a metered charge, and retains a provider cost difference.
+Customer approval attempts fail. The operator credit applies once and restores the exact account remainder.
+A later Paddle refund produces the expected balance and a payment report without financial differences.
+The existing F068 tests cover failed audit writes, concurrent corrections, and restart recovery.
+
 ### Payment Event Inbox
 
 F069 adds `POST /api/payments/paddle/events` through the shared Paddle signature verifier from `github.com/tyemirov/utils/billing`.
@@ -1284,8 +1317,63 @@ See [Paddle transaction completion](https://developer.paddle.com/webhooks/transa
 
 `make test-hosted-payments` tests the real HTTP receiver with the shared verifier and SQLite storage.
 The current component has controlled development integration only.
-Full reconciliation and processor sandbox qualification remain open under F069.
+Payment and provider reconciliation have controlled acceptance. Actual processor sandbox qualification remains open under F069.
 Production payments remain disabled.
+
+### Processor Sandbox Qualification
+
+This procedure uses actual Paddle sandbox transactions through the normal application runtime.
+Controlled protocol tests and simulated notifications cannot establish actual checkout or refund acceptance.
+Obtain the operator authorization required by the development acceptance contract before this procedure.
+The separate native qualification target and actual sandbox receipts remain open under F069 and F070.
+
+#### Required Inputs
+
+Record the source commit, authorization reference, sandbox supplier, processor account, and qualification run identifier.
+Use the normal server configuration with `payments.environment: sandbox` and a separate managed database.
+Omit `payments.api_base_url` so the shared client selects the actual Paddle sandbox API.
+Use sandbox credentials and a `test_` client token from the same processor account.
+Keep credentials in the existing private environment input. Do not copy credentials into qualification reports.
+Select a one-time USD price that matches the configured funding offer of at least 500 cents.
+Record its tax treatment and expected customer credit before checkout.
+Use isolated application accounts and no paid model-provider dispatches during payment qualification.
+
+Record the browser origin, API origin, authentication configuration, and externally reachable webhook URL.
+Configure the sandbox notification destination for `/api/payments/paddle/events` on that API origin.
+Select the transaction and adjustment events required by the payment state contracts in this document.
+Use the destination secret in the application configuration.
+Configure the default payment link for the browser origin.
+Do not infer these origins from a production deployment or a controlled browser fixture.
+
+#### Required Scenarios
+
+| Scenario | Procedure and required evidence |
+| --- | --- |
+| Checkout | Create a fresh application account and funding order through the browser. Complete the server-created transaction with a Paddle test card. Retain its transaction identifier, funding order, and rendered receipt. |
+| Delayed confirmation | Hold delivery of the completion notification after sandbox checkout. Verify that browser completion leaves funds unavailable. Restore delivery and verify one funding credit after processor verification. |
+| Signature rejection | Send an invalid signature to the selected receiver. Verify rejection and no funding change. Retain a valid Paddle delivery identifier and its successful response separately. |
+| Notification replay | Replay the completion notification through Paddle. Restart the application and verify one receipt and one funding credit. |
+| Partial refund | Request a partial sandbox refund for the funded transaction. Verify the pending hold, approved reversal, adjusted receipt, and remaining available funds. |
+| Full refund | Refund the remaining refundable amount. Verify the complete customer credit reversal and zero remaining funds for an unused account. |
+| Account isolation | Use another application account to read the funding order and receipt. Verify denial and no exposure of processor evidence. |
+| Reconciliation | Run `make reconcile-payments` with the sandbox configuration and a new run identifier. Resolve each difference through the documented review procedure. Replay the run and verify the same report. |
+
+Use the current [Paddle sandbox test cards](https://developer.paddle.com/sdks/sandbox/) for checkout.
+Paddle sandbox automatically approves refund adjustments every ten minutes.
+Record the observed pending and approved states instead of assuming immediate approval.
+Use Paddle notification replay for the original transaction. An unrelated simulated transaction cannot establish this financial chain.
+
+#### Evidence And Failure Handling
+
+Retain UTC times, scenario results, safe resource identifiers, application receipts, notification delivery results, and reconciliation run identifiers.
+Record browser acceptance at desktop and narrow widths through automated browsers.
+Retain the private consistent database snapshot through the existing backup procedure.
+Keep raw payment evidence private. Exclude secrets, session cookies, and personal customer details from shared reports.
+For each failure, retain the first failed assertion and its safe diagnostic output.
+Continue from the retained order and run identifiers after correction. Do not create another payment to hide an uncertain outcome.
+Leave sandbox qualification incomplete until all required scenarios have their actual evidence.
+The qualification report must distinguish actual sandbox results, controlled protocol results, and unexecuted scenarios.
+Sandbox completion does not authorize production activation or establish provider invoice acceptance.
 
 ### Issue Responsibilities
 
@@ -1411,6 +1499,10 @@ Native HTTP, client protocols, MCP, dictation, and media workers require the sam
 
 Complete each child issue before F070 acceptance.
 Use controlled provider and processor protocols for repeatable development tests.
+Run `make test-hosted-billing` for the complete controlled acceptance target.
+This target runs hosted HTTP, exact rating, payments, official clients, database restoration, and authenticated browser checks.
+It includes the combined funding, usage, approved correction, and refund workflow.
+Final stack validation also requires `make ci`.
 Record processor sandbox qualification separately from local protocol tests.
 Use real HTTP entry points and automated browsers at desktop and mobile widths.
 Restore one consistent database backup that contains all financial resources.

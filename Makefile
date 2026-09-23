@@ -95,6 +95,13 @@ test-account-connections:
 test-hosted-access:
 	$(GO) test ./internal/proxy -run '$(if $(HOSTED_TEST_PATTERN),$(HOSTED_TEST_PATTERN),^TestHosted)' -count=1
 
+.PHONY: test-hosted-billing
+test-hosted-billing:
+	$(GO) test ./internal/proxy ./cmd/cli -run '^Test(Hosted|CatalogRating|CatalogService|CatalogPrice|ProviderCatalogExactAmounts|ProviderCatalogRejectsInvalidMonetaryAmounts|RootCommandRunsConfiguredProxyFromConfigFile)' -count=1
+	$(MAKE) test-hosted-clients
+	$(MAKE) test-managed-database-snapshot
+	$(MAKE) test-management-auth-blackbox BLACKBOX_TEST_ARGS='tests/blackbox/hosted-access.spec.js tests/blackbox/hosted-payments.spec.js'
+
 .PHONY: test-hosted-rating
 test-hosted-rating:
 	$(GO) test ./internal/proxy -run '^Test(HostedRating|CatalogRating|CatalogService|CatalogPrice|ProviderCatalogExactAmounts|ProviderCatalogRejectsInvalidMonetaryAmounts)' -count=1

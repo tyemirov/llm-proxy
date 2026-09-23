@@ -2778,7 +2778,14 @@ retain satisfied historical dependencies.
   Public tests verify exact cost comparison, source identity, scope filters, concurrent imports, rollback, replay, and unchanged customer charges.
   The normal CLI reads normalized evidence and the original source file. Backup restoration preserves both evidence and reports.
   Payment, CLI, backup, provider scope, race, lint, and format checks pass.
-  Approved corrective operations remain open.
+  Approved corrections reuse the F068 administrator-only financial resolution and request credit resources.
+  Integrated HTTP acceptance combines Paddle funding, metered usage, a provider report, an approved customer credit, and a later refund.
+  Customer approval fails. The operator identity and report reference remain in the audit record.
+  Replay preserves one credit, original costs remain unchanged, and the final payment report confirms the expected Ledger effects.
+  The combined hosted billing target passed hosted HTTP, exact rating, payments, official clients, and database restoration.
+  All three authenticated browser scenarios passed in 32.3 seconds. The approved correction race and Go lint checks passed.
+  The separate Paddle sandbox procedure specifies isolated configuration, required scenarios, and retained evidence.
+  The native sandbox target, actual sandbox evidence, final requirement audit, and stack CI remain open.
   Goal:
   Convert verified customer payments into account funds and explain differences between local records and external financial evidence.
   Requirements:
