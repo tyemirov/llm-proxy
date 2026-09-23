@@ -31,13 +31,13 @@ func TestHostedFundsMediaAdmissionUsesFinancialErrors(t *testing.T) {
 					offering.Limits = append(offering.Limits, CatalogLimit{ID: dimension, Unit: "tokens", Value: &maximum})
 				}
 			})
-			service.hostedAdmission = newHostedFundsAdmission(func(transaction *gorm.DB, request managedJournalRequestRecord) error {
+			service.hostedAdmission = fixedHostedMediaAdmission(newHostedFundsAdmission(func(transaction *gorm.DB, request managedJournalRequestRecord) error {
 				admission, err := newHostedMediaPriceAdmission(prices, request, CatalogProtocolOpenAIImages, CatalogPriceConditions{}, 1)
 				if err != nil {
 					return err
 				}
 				return admission(transaction, request)
-			})
+			}))
 			if scenario.name != "empty" {
 				seedHostedFunds(t, database, 5)
 			}

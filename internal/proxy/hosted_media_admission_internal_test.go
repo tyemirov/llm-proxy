@@ -46,7 +46,7 @@ func TestHostedMediaAdmissionRollsBackReservationAndOperation(t *testing.T) {
 				t.Fatal(err)
 			}
 			reject := true
-			service.hostedAdmission = func(transaction *gorm.DB, request managedJournalRequestRecord) error {
+			service.hostedAdmission = func(transaction *gorm.DB, request managedJournalRequestRecord, _ mediaOperationRecord) error {
 				if err := transaction.Exec("INSERT INTO media_reservation_probe (request_id) VALUES (?)", request.ID).Error; err != nil {
 					return err
 				}
@@ -90,7 +90,10 @@ func TestHostedMediaAdmissionConcurrentInstancesReserveOnce(t *testing.T) {
 	first, firstService := newHostedMediaAdmissionHTTPServer(t, database)
 	second, secondService := newHostedMediaAdmissionHTTPServer(t, openJournalTransactionInstance(t, database))
 	var reservations atomic.Int64
-	reserve := func(*gorm.DB, managedJournalRequestRecord) error { reservations.Add(1); return nil }
+	reserve := func(*gorm.DB, managedJournalRequestRecord, mediaOperationRecord) error {
+		reservations.Add(1)
+		return nil
+	}
 	firstService.hostedAdmission, secondService.hostedAdmission = reserve, reserve
 	var group sync.WaitGroup
 	results := make([]map[string]any, 6)
@@ -116,7 +119,7 @@ func TestHostedMediaAdmissionRetainsAcceptedAuthority(t *testing.T) {
 	database, _, read := newJournalTransactionFixture(t)
 	server, service := newHostedMediaAdmissionHTTPServer(t, database)
 	var reservations int
-	service.hostedAdmission = func(*gorm.DB, managedJournalRequestRecord) error { reservations++; return nil }
+	service.hostedAdmission = func(*gorm.DB, managedJournalRequestRecord, mediaOperationRecord) error { reservations++; return nil }
 	first := hostedMediaAdmissionHTTP(t, server, "retained", "private image prompt", http.StatusAccepted)
 	if err := database.database.Model(&managedHostedGrantRecord{}).Where("id = ?", "grant-journal").Update("state", hostedGrantRevoked).Error; err != nil {
 		t.Fatal(err)
@@ -138,7 +141,10 @@ func TestHostedMediaAdmissionRejectsTextKeyReuse(t *testing.T) {
 		t.Fatal(err)
 	}
 	server, service := newHostedMediaAdmissionHTTPServer(t, database)
-	service.hostedAdmission = func(*gorm.DB, managedJournalRequestRecord) error { t.Error("conflict reserved funds"); return nil }
+	service.hostedAdmission = func(*gorm.DB, managedJournalRequestRecord, mediaOperationRecord) error {
+		t.Error("conflict reserved funds")
+		return nil
+	}
 	hostedMediaAdmissionHTTP(t, server, "shared-key", "private image prompt", http.StatusConflict)
 	if entries := read("")["requests"].([]any); len(entries) != 1 || entries[0].(map[string]any)["execution_kind"] != string(journalExecutionText) {
 		t.Fatalf("media changed the text receipt: %v", entries)
@@ -190,7 +196,7 @@ func TestHostedMediaAdmissionRechecksAuthorityAfterValidation(t *testing.T) {
 					return transaction.Model(&managedPlatformConnectionRecord{}).Where("id = ?", "platform-journal").Update("version", 2).Error
 				})
 			}}
-			service.hostedAdmission = func(*gorm.DB, managedJournalRequestRecord) error {
+			service.hostedAdmission = func(*gorm.DB, managedJournalRequestRecord, mediaOperationRecord) error {
 				t.Error("obsolete authority reserved funds")
 				return nil
 			}
@@ -215,6 +221,12 @@ func TestHostedMediaAdmissionRequiresFundsOwner(t *testing.T) {
 type hostedMediaValidationHook struct {
 	MediaOperationAdapter
 	after func() error
+}
+
+func fixedHostedMediaAdmission(reserve journalReservation) hostedMediaReservation {
+	return func(transaction *gorm.DB, request managedJournalRequestRecord, _ mediaOperationRecord) error {
+		return reserve(transaction, request)
+	}
 }
 
 func (adapter hostedMediaValidationHook) Validate(ctx context.Context, request MediaOperationAdapterRequest) (MediaOperationValidatedRequest, error) {
@@ -243,7 +255,7 @@ func newHostedMediaAdmissionHTTPServer(t *testing.T, database *gormManagedTenant
 	}
 	service := &mediaOperationService{
 		logger:          zap.NewNop().Sugar(),
-		hostedAdmission: func(*gorm.DB, managedJournalRequestRecord) error { return nil },
+		hostedAdmission: func(*gorm.DB, managedJournalRequestRecord, mediaOperationRecord) error { return nil },
 		httpClient:      http.DefaultClient,
 		store:           store, assets: newTenantAssetStore(t.TempDir(), 4096, 60), providers: internalManagementProviderRegistry(),
 		catalog: catalog, adapters: map[string]MediaOperationAdapter{},
@@ -270,6 +282,11 @@ func newHostedMediaAdmissionHTTPServer(t *testing.T, database *gormManagedTenant
 
 func hostedMediaAdmissionHTTP(t *testing.T, server *httptest.Server, key, prompt string, want int, selectedControls ...json.RawMessage) map[string]any {
 	t.Helper()
+	return hostedMediaAdmissionClientHTTP(t, server.Client(), server.URL, key, prompt, want, selectedControls...)
+}
+
+func hostedMediaAdmissionClientHTTP(t *testing.T, client *http.Client, baseURL, key, prompt string, want int, selectedControls ...json.RawMessage) map[string]any {
+	t.Helper()
 	controls := json.RawMessage(`{"surface":"images","quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":1}`)
 	if len(selectedControls) != 0 {
 		controls = selectedControls[0]
@@ -278,13 +295,13 @@ func hostedMediaAdmissionHTTP(t *testing.T, server *httptest.Server, key, prompt
 	if err != nil {
 		t.Fatal(err)
 	}
-	request, err := http.NewRequest(http.MethodPost, server.URL+llmproxycontract.MediaOperationsPath, strings.NewReader(string(body)))
+	request, err := http.NewRequest(http.MethodPost, baseURL+llmproxycontract.MediaOperationsPath, strings.NewReader(string(body)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set(llmproxycontract.HeaderIdempotencyKey, key)
-	response, err := server.Client().Do(request)
+	response, err := client.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}

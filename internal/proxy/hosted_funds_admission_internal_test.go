@@ -166,7 +166,7 @@ func TestHostedFundsAdmissionFailureRollsBackLedgerHold(t *testing.T) {
 func fundsDependencies(prices journalReservation) func(*hostedTextRequestDependencies) {
 	return func(dependencies *hostedTextRequestDependencies) {
 		dependencies.now = ratingTestAcceptanceTime
-		dependencies.authorize = newHostedFundsAdmission(prices)
+		dependencies.authorize = fixedHostedCompletionAdmission(newHostedFundsAdmission(prices))
 	}
 }
 

@@ -25,7 +25,7 @@ func hostedSearchRatingAuthorization(t *testing.T) func(*hostedTextRequestDepend
 		t.Fatal(err)
 	}
 	return func(dependencies *hostedTextRequestDependencies) {
-		dependencies.authorize = func(transaction *gorm.DB, request managedJournalRequestRecord) error {
+		dependencies.authorize = func(transaction *gorm.DB, request managedJournalRequestRecord, _ hostedCompletionIntent) error {
 			input := chatRequestParameters{provider: providerDefinition{identifier: providerID(request.Provider), activeTransport: providerTransportDefinition{responseCodec: CatalogProtocolOpenAIResponses}}, model: textModelDefinition{identifier: newModelID(request.Model)}, webSearchEnabled: true}
 			reserve, err := newHostedTextPriceAdmission(prices, input, request.CreatedAt, categoricalPriceConditions(conditions), 2)
 			if err != nil {

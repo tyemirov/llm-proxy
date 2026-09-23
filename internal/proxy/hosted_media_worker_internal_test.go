@@ -34,7 +34,10 @@ func TestHostedMediaWorkerPublishesOneResultAndJournalOutcome(t *testing.T) {
 	t.Cleanup(upstream.Close)
 	server, service := newHostedMediaAdmissionHTTPServer(t, database, hostedMediaWorkerProvider(upstream.URL))
 	var reservations atomic.Int64
-	service.hostedAdmission = func(*gorm.DB, managedJournalRequestRecord) error { reservations.Add(1); return nil }
+	service.hostedAdmission = func(*gorm.DB, managedJournalRequestRecord, mediaOperationRecord) error {
+		reservations.Add(1)
+		return nil
+	}
 	accepted := hostedMediaAdmissionHTTP(t, server, "worker-result", "private image prompt", http.StatusAccepted)
 	id := accepted["operation_id"].(string)
 	service.runOperation("worker-first", id)
@@ -295,7 +298,10 @@ func TestHostedMediaWorkerRecoversProviderHandleAfterRevocation(t *testing.T) {
 	t.Cleanup(upstream.Close)
 	first, firstService := newHostedMediaAdmissionHTTPServer(t, database, hostedMediaWorkerProvider(upstream.URL))
 	second, secondService := newHostedMediaAdmissionHTTPServer(t, openJournalTransactionInstance(t, database), hostedMediaWorkerProvider(upstream.URL), func(service *mediaOperationService) { service.assets = firstService.assets })
-	reserve := func(*gorm.DB, managedJournalRequestRecord) error { reservations.Add(1); return nil }
+	reserve := func(*gorm.DB, managedJournalRequestRecord, mediaOperationRecord) error {
+		reservations.Add(1)
+		return nil
+	}
 	firstService.hostedAdmission, secondService.hostedAdmission = reserve, reserve
 	controls := json.RawMessage(`{"surface":"responses","responses_model":"gpt-5","quality":"low","size":"1024x1024","background":"opaque","output_format":"png","output_count":1}`)
 	accepted := hostedMediaAdmissionHTTP(t, first, "provider-recovery", "private image prompt", http.StatusAccepted, controls)

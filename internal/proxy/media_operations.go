@@ -293,7 +293,7 @@ type mediaOperationStore struct {
 
 type mediaOperationService struct {
 	logger            *zap.SugaredLogger
-	hostedAdmission   journalReservation
+	hostedAdmission   hostedMediaReservation
 	voiceCursorCipher managedProviderKeyCipher
 	voiceCursorRandom io.Reader
 	httpClient        HTTPDoer

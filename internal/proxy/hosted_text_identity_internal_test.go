@@ -205,7 +205,7 @@ func TestHostedTextIdentityPinsCredentialAcrossRotation(t *testing.T) {
 	t.Cleanup(upstream.Close)
 	var rotated atomic.Bool
 	server := newHostedIdentityHTTPServer(t, database, upstream.URL, t.TempDir(), func(service *hostedTextRequestDependencies) {
-		service.authorize = func(transaction *gorm.DB, record managedJournalRequestRecord) error {
+		service.authorize = func(transaction *gorm.DB, record managedJournalRequestRecord, _ hostedCompletionIntent) error {
 			if rotated.Load() {
 				return nil
 			}
@@ -427,7 +427,7 @@ func newHostedIdentityHTTPHandler(t *testing.T, database *gormManagedTenantDatab
 	if err := database.database.Model(&managedPlatformCredentialRecord{}).Where("connection_id = ? AND version = ?", "platform-journal", 1).Update("fields", fields).Error; err != nil {
 		t.Fatal(err)
 	}
-	dependencies := hostedTextRequestDependencies{database: database, responses: responses, cipher: service.store.providerKeyCipher, catalogRevision: "journal-catalog", authorize: func(*gorm.DB, managedJournalRequestRecord) error { return nil }, now: time.Now, entropy: rand.Reader}
+	dependencies := hostedTextRequestDependencies{database: database, responses: responses, cipher: service.store.providerKeyCipher, catalogRevision: "journal-catalog", authorize: func(*gorm.DB, managedJournalRequestRecord, hostedCompletionIntent) error { return nil }, now: time.Now, entropy: rand.Reader}
 	for _, apply := range configure {
 		apply(&dependencies)
 	}
@@ -464,4 +464,10 @@ func (transport hostedIdentityTransport) RoundTrip(request *http.Request) (*http
 		authorized.URL.RawQuery = query.Encode()
 	}
 	return transport.next.RoundTrip(authorized)
+}
+
+func fixedHostedCompletionAdmission(reserve journalReservation) func(*gorm.DB, managedJournalRequestRecord, hostedCompletionIntent) error {
+	return func(transaction *gorm.DB, request managedJournalRequestRecord, _ hostedCompletionIntent) error {
+		return reserve(transaction, request)
+	}
 }

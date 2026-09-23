@@ -2,7 +2,7 @@
 
 F070 defines the prepaid hosted service. F065 through F069 own its implementation in that order.
 This document records the shared contract and current decisions.
-The service is not complete. Hosted activation remains disabled until F070 acceptance passes.
+The service is not complete. Tracked runtime configuration keeps hosted activation disabled until F070 acceptance passes.
 
 ## Product Decisions
 
@@ -262,7 +262,8 @@ See [entity retention](https://developer.paddle.com/api-reference/about/delete-e
 
 The development API has billing account, platform connection, hosted access grant, and tenant assignment resources.
 The browser supports account creation, grant selection, and tenant API access without customer provider credentials.
-Hosted execution remains disabled. Financial admission and complete acceptance remain incomplete.
+Tracked configuration keeps hosted execution disabled. Explicit development configuration connects completion requests to financial admission.
+Complete service acceptance remains incomplete.
 
 Each grant binds one tenant to its billing account and one platform connection.
 The grant names exact models or explicit provider services and their permitted operations.
@@ -353,7 +354,59 @@ This case remains visible after recovery and does not authorize another paid exe
 
 HTTP acceptance verifies account isolation, pagination, private-field omission, exact quantities, and unchanged journal records.
 Browser acceptance covers desktop and phone widths, additional pages, failed reads, and rejection of numeric measurement values.
-F066 remains open. Hosted execution remains disabled.
+F066 remains open. Tracked runtime configuration keeps hosted execution disabled.
+
+### Normal Hosted Runtime
+
+The optional `hosted` configuration selects exact offering scopes for financial admission.
+The normal server connects native text, client protocols, MCP, and dictation to the existing completion coordinator.
+That coordinator retains request identity, reserves Ledger funds, enforces attempt limits, and preserves uncertain outcomes.
+The normal financial worker records charges and settles completed usage.
+The normal media service uses the same price and Ledger admission components before it queues an operation.
+The media worker checks the saved request controls and financial reservation before dispatch.
+The server keeps customer-owned assignments separate from this hosted path.
+
+The following shape selects the controlled text fixture. It does not qualify a published offering:
+
+```yaml
+hosted:
+  offerings:
+    - provider: openai
+      model: gpt-4.1
+      operation: text
+      maximum_attempts: 1
+      conditions:
+        billing_mode: standard
+        service_tier: standard
+```
+
+Each scope requires a canonical provider, model or service, operation, positive integer attempt count, and exact categorical price conditions.
+For a model-free service, omit `model` and identify the catalog operation.
+The server rejects duplicate scopes and unknown provider, model, or operation selections.
+It also rejects noncanonical identifiers, invalid price conditions, and fractional or quoted attempt counts.
+Effective intervals, token ranges, cache classes, rates, and the approved markup remain in the catalog and retained price snapshot.
+The configuration cannot supply replacement rates or a customer markup.
+
+An active grant and qualified platform credential remain necessary for each request.
+A configured scope still requires available rates, measured billing dimensions, and fixed catalog bounds before dispatch.
+The request supplies its search selection and output limit to the existing price calculation.
+Image price conditions for quality and resolution must match the normalized request controls.
+Other request conditions require a codec-specific mapping before the server can use their rates.
+The request retains the resulting price snapshot and funds reservation in one transaction.
+An omitted hosted configuration or unlisted scope rejects hosted execution.
+Unavailable pricing produces `financial_admission_unavailable`. Insufficient funds produce `insufficient_funds`.
+These rejected requests cause no upstream work.
+
+Controlled normal-runtime HTTP acceptance verifies disabled activation, unlisted scopes, unavailable prices, and unfunded rejection.
+It also verifies one funded execution, idempotent replay, automatic settlement, and the exact fractional remainder.
+Media acceptance verifies these effects through the normal HTTP listener, worker, and financial settlement process.
+It also verifies zero provider calls for an image request with an unmatched quality condition.
+Run `make test-hosted-runtime` for configuration and normal-runtime acceptance.
+The broader `make test-hosted-billing` target includes these tests.
+
+The rendered funded usage flow and complete provider-operation qualification remain open under F070.
+All existing providers and supported operations remain in scope.
+The tracked configuration omits `hosted`. Production activation still requires complete acceptance and explicit operator authorization.
 
 ### Hosted Text Identity
 

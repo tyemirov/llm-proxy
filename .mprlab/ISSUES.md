@@ -2881,6 +2881,11 @@ retain satisfied historical dependencies.
   - Paddle supplies payments and merchant-of-record services. The service must obey the applicable Paddle financial policies.
   - Reuse PoodleScanner and Hecate integrations and shared components. LLM Proxy has no native mobile application.
   - Shared decisions and current integration boundaries are in `docs/hosted-billing.md`.
+  - Normal server construction now connects hosted completion and media admission to the existing price, journal, and Ledger components.
+  - `make test-hosted-runtime` passed CLI configuration checks and funded text and image execution through the normal HTTP listener.
+  - These tests verify automatic settlement, exact remainders, idempotent replay, and zero provider calls after financial rejection.
+  - After runtime integration, `make test-hosted-billing` passed the billing, client, backup, and three browser tests. Go lint also passed.
+  - The rendered funded usage flow, complete provider-operation qualification, operational signals, final CI, and F069 PR remain open.
   - The remaining commercial decisions and F065 through F069 implementation remain open.
   Goal:
   Give a customer one account, one funded balance, and immediate access to approved services without provider account setup.

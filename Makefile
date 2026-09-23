@@ -103,6 +103,10 @@ test-hosted-billing:
 	$(MAKE) test-management-auth-blackbox BLACKBOX_TEST_ARGS='tests/blackbox/hosted-access.spec.js tests/blackbox/hosted-payments.spec.js'
 
 .PHONY: test-hosted-rating
+.PHONY: test-hosted-runtime
+test-hosted-runtime:
+	$(GO) test ./internal/proxy ./cmd/cli -run '^TestHostedRuntime' -count=1
+
 test-hosted-rating:
 	$(GO) test ./internal/proxy -run '^Test(HostedRating|CatalogRating|CatalogService|CatalogPrice|ProviderCatalogExactAmounts|ProviderCatalogRejectsInvalidMonetaryAmounts)' -count=1
 

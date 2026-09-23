@@ -64,7 +64,7 @@ func TestHostedRatingImageChargesNativeModalitiesOnce(t *testing.T) {
 					offering.Limits = append(offering.Limits, limit)
 				}
 			})
-			worker.hostedAdmission = func(transaction *gorm.DB, request managedJournalRequestRecord) error {
+			worker.hostedAdmission = func(transaction *gorm.DB, request managedJournalRequestRecord, _ mediaOperationRecord) error {
 				reserve, err := newHostedMediaPriceAdmission(prices, request, CatalogProtocolOpenAIImages, CatalogPriceConditions{}, 1)
 				if err != nil {
 					return err
@@ -148,7 +148,7 @@ func TestHostedRatingDictationUsesReportedDurationAndSelectedTimeRate(t *testing
 			}))
 			t.Cleanup(upstream.Close)
 			server := newHostedDictationServer(t, database, upstream.URL, t.TempDir(), func(dependencies *hostedTextRequestDependencies) {
-				dependencies.authorize = reserve
+				dependencies.authorize = fixedHostedCompletionAdmission(reserve)
 				dependencies.now = func() time.Time { return ratingTestAcceptanceTime() }
 			})
 			hostedDictationHTTP(t, server, dictatePath, "priced-audio", "private audio", http.StatusOK)
@@ -198,7 +198,7 @@ func TestHostedRatingSpeechConvertsOnlyExplicitlyPricedProviderUnits(t *testing.
 				maximum := 10
 				offering.Limits = append(offering.Limits, CatalogLimit{ID: "character_cost", Unit: "provider_units", Value: &maximum})
 			})
-			worker.hostedAdmission = func(transaction *gorm.DB, request managedJournalRequestRecord) error {
+			worker.hostedAdmission = func(transaction *gorm.DB, request managedJournalRequestRecord, _ mediaOperationRecord) error {
 				reserve, err := newHostedMediaPriceAdmission(prices, request, CatalogProtocolElevenLabsSpeech, categoricalPriceConditions(conditions), 1)
 				if err != nil {
 					return err

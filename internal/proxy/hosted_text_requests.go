@@ -11,6 +11,7 @@ import (
 
 	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 var errHostedResultExpired = errors.New(llmproxycontract.ErrorCodeHostedResultExpired)
@@ -44,7 +45,7 @@ type hostedTextRequestDependencies struct {
 	responses       *structuredRequestStore
 	cipher          managedProviderKeyCipher
 	catalogRevision string
-	authorize       journalReservation
+	authorize       func(*gorm.DB, managedJournalRequestRecord, hostedCompletionIntent) error
 	now             func() time.Time
 	entropy         io.Reader
 }
@@ -88,7 +89,7 @@ func (service *hostedTextRequests) execute(ctx context.Context, router *provider
 		return completionResult{}, err
 	}
 	intent := hostedCompletionIntent{provider: request.provider, model: request.model.identifier, operation: ModelOperationText,
-		kind: journalExecutionText, canonical: canonical, endpoint: endpointKindText, webSearch: request.webSearchEnabled}
+		kind: journalExecutionText, canonical: canonical, endpoint: endpointKindText, webSearch: request.webSearchEnabled, maxTokens: request.maxTokens}
 	return service.executeCompletion(ctx, intent, identity, func(ctx context.Context, provider providerDefinition) (completionResult, error) {
 		request.provider = provider
 		return router.generateText(ctx, request, logger)
@@ -108,6 +109,7 @@ type hostedCompletionIntent struct {
 	canonical []byte
 	endpoint  endpointKind
 	webSearch bool
+	maxTokens *int
 }
 
 func (service *hostedTextRequests) executeCompletion(ctx context.Context, request hostedCompletionIntent, identity hostedTextIdentity, run func(context.Context, providerDefinition) (completionResult, error), restore func(string) completionContent) (completionResult, error) {
@@ -127,7 +129,10 @@ func (service *hostedTextRequests) executeCompletion(ctx context.Context, reques
 	if err != nil {
 		return completionResult{}, err
 	}
-	accepted, err := service.database.admitJournalRequest(ctx, intent, service.authorize)
+	authorize := func(transaction *gorm.DB, record managedJournalRequestRecord) error {
+		return service.authorize(transaction, record, request)
+	}
+	accepted, err := service.database.admitJournalRequest(ctx, intent, authorize)
 	if err != nil {
 		return completionResult{}, err
 	}
@@ -143,7 +148,7 @@ func (service *hostedTextRequests) executeCompletion(ctx context.Context, reques
 		}
 		return service.replay(accepted, restore)
 	}
-	execution := newHostedTextExecution(service.database, accepted, service.authorize, service.now, service.entropy)
+	execution := newHostedTextExecution(service.database, accepted, authorize, service.now, service.entropy)
 	execution.webSearch = request.webSearch
 	ctx = contextWithHostedTextExecution(ctx, execution)
 	provider, err := service.pinnedProvider(ctx, accepted, request.provider, request.endpoint)

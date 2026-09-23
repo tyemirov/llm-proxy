@@ -3,6 +3,7 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -144,6 +145,20 @@ func buildProxyApplication(configuration Configuration, structuredLogger *zap.Su
 	structuredRequests, structuredStoreError := newStructuredRequestStore(configuration.AssetStorePath, configuration.AssetRetentionSeconds, journalDatabase)
 	if structuredStoreError != nil {
 		return nil, structuredStoreError
+	}
+	if configuration.hosted != nil {
+		if journalDatabase == nil {
+			return nil, fmt.Errorf("configure hosted execution: managed financial database is required")
+		}
+		var hostedError error
+		upstreamProviders.hostedText, hostedError = newHostedTextRequests(context.Background(), hostedTextRequestDependencies{
+			database: journalDatabase, responses: structuredRequests, cipher: managedTenants.providerKeyCipher,
+			catalogRevision: configuration.ModelCatalog.Revision, authorize: configuration.hosted.authorizeCompletion, now: time.Now, entropy: rand.Reader,
+		})
+		if hostedError != nil {
+			return nil, fmt.Errorf("initialize hosted completion runtime: %w", hostedError)
+		}
+		mediaOperations.hostedAdmission = configuration.hosted.mediaAdmission(providers)
 	}
 
 	router.Use(gin.Recovery())

@@ -61,7 +61,7 @@ func testHostedProviderService(t *testing.T, operation, requestID string) {
 	}))
 	t.Cleanup(upstream.Close)
 	server, service := newHostedMediaAdmissionHTTPServer(t, database)
-	service.hostedAdmission = func(_ *gorm.DB, request managedJournalRequestRecord) error {
+	service.hostedAdmission = func(_ *gorm.DB, request managedJournalRequestRecord, _ mediaOperationRecord) error {
 		if request.Model != "" || request.Provider != "elevenlabs" || request.Operation != operation {
 			t.Errorf("incorrect service attribution: %+v", request)
 		}

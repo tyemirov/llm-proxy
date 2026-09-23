@@ -62,6 +62,7 @@ const (
 type Configuration struct {
 	Management                        ManagementConfiguration
 	Payments                          *PaymentConfiguration
+	Hosted                            *HostedConfiguration
 	Port                              int
 	LogLevel                          string
 	UpstreamCapacity                  UpstreamCapacityConfiguration
@@ -92,6 +93,7 @@ type Configuration struct {
 	requestTimeoutPolicy              requestTimeoutPolicy
 	validated                         bool
 	payments                          *paymentSettings
+	hosted                            *hostedRuntimeSettings
 }
 
 // ManagementConfiguration holds authenticated browser UI and self-service tenant settings.
@@ -160,6 +162,11 @@ func NewConfiguration(configuration Configuration) (Configuration, error) {
 		return Configuration{}, paymentError
 	}
 	configuration.payments = paymentSettings
+	hostedSettings, hostedError := newHostedRuntimeSettings(configuration.Hosted, configuration.ModelCatalog)
+	if hostedError != nil {
+		return Configuration{}, hostedError
+	}
+	configuration.hosted = hostedSettings
 	configuration.validated = true
 	return configuration, nil
 }
