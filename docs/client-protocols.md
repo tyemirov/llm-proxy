@@ -102,6 +102,22 @@ One accepted request produces one managed usage event, regardless of its number 
 Errors use an OpenAI error object with a proxy request identifier.
 Provider errors, credentials, prompts, function arguments, and generated content remain outside logs.
 
+Hosted text requires one tenant-scoped `Idempotency-Key` under the development billing contract.
+Native text, Chat Completions, and Responses use the same normalized request intent.
+An active duplicate returns HTTP `202` with the original execution identifier.
+A completed duplicate returns its saved result and keeps the accepted result identifier and timestamp.
+Changed intent and uncertain outcomes return HTTP `409`. Expired hosted results return HTTP `410`.
+Use `GET /v2/requests` to read the retained request state.
+Hosted execution remains disabled until F070 acceptance passes.
+See [hosted text identity](hosted-billing.md#hosted-text-identity) for the current implementation limits.
+
+Hosted transcription also requires `Idempotency-Key`.
+Native `/dictate` and client `/v1/audio/transcriptions` share an identity for identical audio, format, provider, and model.
+Concurrent requests return HTTP `202`. Changed intent and uncertain outcomes return HTTP `409`.
+Expired saved transcripts return HTTP `410` without another provider call.
+`GET /v2/requests` returns the saved transcript in its `text` field.
+See [hosted dictation](hosted-billing.md#hosted-dictation) for usage evidence and acceptance limits.
+
 Model discovery lists only usable tenant routes in identifier order.
 `owned_by` comes from the model publisher in the catalog.
 `created` records catalog entry creation from repository history. It does not claim a model release date.
@@ -114,6 +130,55 @@ The new native fields are `tools`, `tool_choice`, `parallel_tool_calls`, assista
 A native tool result returns JSON with `type: tool_calls`, `text`, `tool_calls`, and `usage`.
 A normal text result retains its current format.
 The Go and Python clients expose these request fields. Their text methods return the response body.
+
+## Hosted Request Keys
+
+Each hosted text request requires a stable key for its complete request intent.
+Go uses `MessagesRequestInput.IdempotencyKey` for native and Responses requests.
+Python uses `ClientMessagesRequest.idempotency_key`.
+These fields send the `Idempotency-Key` header. They do not require a structured-output schema.
+The server rejects a key on unstructured text that uses customer-owned provider credentials.
+
+```python
+from llm_proxy_client import ClientMessage, ClientMessagesRequest, ClientStructuredOutput
+
+request = ClientMessagesRequest(
+    messages=(ClientMessage(role="user", content="Summarize this result."),),
+    model="gpt-4.1",
+    idempotency_key="report-42",
+)
+
+structured_request = ClientMessagesRequest(
+    messages=(ClientMessage(role="user", content="Return a decision."),),
+    model="gpt-4.1",
+    structured_output=ClientStructuredOutput(schema={"type": "object"}),
+    idempotency_key="decision-42",
+)
+```
+
+`ClientStructuredOutput` contains only the schema. The enclosing request owns its key.
+The CLI accepts the same key through `--idempotency-key`:
+
+```bash
+llm-proxy-client --provider openai --model gpt-4.1 \
+  --prompt 'Summarize this result.' --idempotency-key report-42
+```
+
+An identical request reuses the accepted execution across these clients.
+The clients do not create keys or retry provider work automatically.
+Go reports HTTP `202` through `StructuredRequestPendingError` and its `Snapshot()` method.
+Python reports `LLMProxyRequestPendingError` with a `snapshot` field.
+The CLI reports a pending error and exits without generated text.
+
+Go `GetStructuredRequest` and Python `get_text_request` read `GET /v2/requests` without provider dispatch.
+A successful hosted status read contains the saved JSON completion envelope.
+An expired result remains a failure with HTTP `410` and `hosted_result_expired`.
+Go exposes recognized codes through `HTTPFailure.ProxyErrorCode()`.
+Python exposes them through `LLMProxyHTTPError.proxy_error_code`.
+The journal keeps the accepted identity after result expiry.
+
+Run `make test-hosted-clients` for service, package, CLI, and Python installation checks.
+The service tests use controlled provider responses. They do not prove production financial admission.
 
 ## Go client protocol selection
 
@@ -211,5 +276,8 @@ The Python media wait checks its deadline before each status request.
 It supplies the remaining timeout to the HTTP transport and stops polling when the budget expires.
 A custom Python response opener must accept the keyword argument `timeout` and apply it to its HTTP request.
 The argument is a number of seconds or `None` for a request without a client timeout.
+The opener returns `ClientHTTPResponse(status_code, body, headers)`.
+The response retains HTTP status and immutable headers as well as decoded text.
+All Python client operations use this response contract.
 
 Speech generation and conversion use the common media operation API. See [provider speech](provider-speech.md) for inputs and output artifacts.

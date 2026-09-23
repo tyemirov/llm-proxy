@@ -189,8 +189,9 @@ interval, and limit for a resource that is not visible yet. OpenAI permits one
 retry after two seconds for `403` or `404`. Gemini permits six retries after
 five-second intervals for `400`, `403`, or `404`. The lifecycle releases the
 upstream worker during each wait. The request context bounds each wait.
-Provider resource ids remain in the active request lifecycle. The proxy does
-not keep a durable provider job or expose a provider resource id.
+For customer-owned credentials, provider resource ids remain in the active request lifecycle.
+For hosted work, the journal keeps private provider resource identifiers for recovery.
+The proxy does not expose these provider identifiers.
 
 Every current text route uses one provider-neutral completion coordinator.
 The coordinator starts a new request only when the selected transport declares
@@ -204,15 +205,18 @@ Safety filters, refusals, tool/intermediate states, malformed responses, and
 missing or unknown signals remain `502` failures and never trigger this loop.
 
 A `504 Gateway Timeout` means the proxy request budget expired before a final
-answer. For a structured request, reconcile the idempotency key before a new
+answer. For hosted or structured text, reconcile the idempotency key before a new
 submission.
 
 ### Structured JSON output and reconciliation
 
 Canonical `POST /v2` accepts an optional `structured_output.schema` object.
 The object contains the caller-owned JSON Schema. A structured request requires
-exactly one valid `Idempotency-Key` header. The proxy rejects either input when
-the other input is absent.
+exactly one valid `Idempotency-Key` header.
+For customer-owned provider credentials, the proxy rejects either input when the other input is absent.
+The hosted text contract requires the key for all requests, including requests without a schema.
+Hosted execution remains disabled until F070 acceptance passes.
+See [hosted text identity](docs/hosted-billing.md#hosted-text-identity) for replay and result expiry.
 
 The proxy compiles the schema and validates the selected provider subset before
 provider dispatch. It maps the schema to OpenAI Responses `text.format`, Gemini
@@ -245,8 +249,9 @@ record returns its safe failure with the recorded status. An uncertain record
 returns `409 structured_request_outcome_unknown`. Every reconciliation response
 sets `Cache-Control: no-store` because its content depends on the tenant and key.
 
-An identical `POST /v2` submission reuses a succeeded or active record. A
-failed record permits an explicit new attempt with the same request intent.
+An identical `POST /v2` submission reuses a succeeded or active record.
+For customer-owned credentials, a failed record permits an explicit new attempt with the same request intent.
+Hosted failed records retain their execution identity and do not start another provider call.
 An uncertain record never starts provider work again. A process restart changes
 each interrupted `dispatched` record to `uncertain`.
 

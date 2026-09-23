@@ -27,7 +27,7 @@ func (adapter structuredRouteAdapter) generateText(requestContext context.Contex
 
 func TestStructuredRequestStoreLifecycle(testingInstance *testing.T) {
 	assetRoot := testingInstance.TempDir()
-	store, storeError := newStructuredRequestStore(assetRoot, 3600)
+	store, storeError := newStructuredRequestStore(assetRoot, 3600, nil)
 	if storeError != nil {
 		testingInstance.Fatal(storeError)
 	}
@@ -107,7 +107,7 @@ func TestStructuredRequestStoreLifecycle(testingInstance *testing.T) {
 
 func TestStructuredRequestStoreRuntimeRetention(testingInstance *testing.T) {
 	currentTime := time.Date(2026, time.August, 18, 12, 0, 0, 0, time.UTC)
-	store, storeError := newStructuredRequestStore(testingInstance.TempDir(), 10)
+	store, storeError := newStructuredRequestStore(testingInstance.TempDir(), 10, nil)
 	if storeError != nil {
 		testingInstance.Fatal(storeError)
 	}
@@ -160,7 +160,7 @@ func TestStructuredRequestStoreRuntimeRetention(testingInstance *testing.T) {
 func TestStructuredRequestStoreRecoveryAndSafety(testingInstance *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	activeRoot := testingInstance.TempDir()
-	active, activeError := newStructuredRequestStore(activeRoot, 3600)
+	active, activeError := newStructuredRequestStore(activeRoot, 3600, nil)
 	if activeError != nil {
 		testingInstance.Fatal(activeError)
 	}
@@ -177,7 +177,7 @@ func TestStructuredRequestStoreRecoveryAndSafety(testingInstance *testing.T) {
 	if writeError := os.WriteFile(interruptedTempPath, []byte(`{"interrupted":true}`), 0o600); writeError != nil {
 		testingInstance.Fatal(writeError)
 	}
-	recovered, recoveredError := newStructuredRequestStore(activeRoot, 3600)
+	recovered, recoveredError := newStructuredRequestStore(activeRoot, 3600, nil)
 	if recoveredError != nil {
 		testingInstance.Fatal(recoveredError)
 	}
@@ -192,14 +192,14 @@ func TestStructuredRequestStoreRecoveryAndSafety(testingInstance *testing.T) {
 	}
 
 	expiredRoot := testingInstance.TempDir()
-	expired, _ := newStructuredRequestStore(expiredRoot, 1)
+	expired, _ := newStructuredRequestStore(expiredRoot, 1, nil)
 	expired.now = func() time.Time { return now.Add(-time.Hour) }
 	_, _, _ = expired.begin(requestTenant, "expired", intent, "openai", "gpt", "proxy-expired")
 	_, _, _ = expired.begin(requestTenant, "expired-dispatched", intent, "openai", "gpt", "proxy-dispatched")
 	_, _ = expired.claimDispatch(requestTenant, "expired-dispatched", intent)
 	_, _, _ = expired.begin(requestTenant, "expired-uncertain", intent, "openai", "gpt", "proxy-uncertain")
 	_ = expired.uncertain(requestTenant, "expired-uncertain", intent)
-	reloaded, reloadError := newStructuredRequestStore(expiredRoot, 1)
+	reloaded, reloadError := newStructuredRequestStore(expiredRoot, 1, nil)
 	if reloadError != nil {
 		testingInstance.Fatal(reloadError)
 	}
@@ -227,7 +227,7 @@ func TestStructuredRequestStoreRecoveryAndSafety(testingInstance *testing.T) {
 			if setupError := unsafe.setup(root); setupError != nil {
 				subtest.Fatal(setupError)
 			}
-			if _, storeError := newStructuredRequestStore(root, 1); storeError == nil {
+			if _, storeError := newStructuredRequestStore(root, 1, nil); storeError == nil {
 				subtest.Fatal("unsafe root must fail")
 			}
 		})
@@ -243,7 +243,7 @@ func TestStructuredRequestStoreRecoveryAndSafety(testingInstance *testing.T) {
 			if writeError := os.WriteFile(filepath.Join(untracked, unexpectedName), []byte("x"), 0o600); writeError != nil {
 				subtest.Fatal(writeError)
 			}
-			if _, storeError := newStructuredRequestStore(unexpectedRoot, 1); storeError == nil {
+			if _, storeError := newStructuredRequestStore(unexpectedRoot, 1, nil); storeError == nil {
 				subtest.Fatal("unexpected file must fail recovery")
 			}
 		})
@@ -323,12 +323,12 @@ func TestStructuredRequestRecordValidationAndIOFailures(testingInstance *testing
 func TestStructuredRequestStoreInjectedFailures(testingInstance *testing.T) {
 	requestTenant := structuredTestTenant(testingInstance, "failures")
 	intent := structuredRequestIntent("openai", "gpt", []byte(`{}`))
-	store, _ := newStructuredRequestStore(testingInstance.TempDir(), 10)
+	store, _ := newStructuredRequestStore(testingInstance.TempDir(), 10, nil)
 	store.publish = func(string, structuredRequestRecord) error { return errors.New("publish failed") }
 	if _, _, beginError := store.begin(requestTenant, "key", intent, "openai", "gpt", "proxy"); beginError == nil {
 		testingInstance.Fatal("begin publish failure missing")
 	}
-	store, _ = newStructuredRequestStore(testingInstance.TempDir(), 10)
+	store, _ = newStructuredRequestStore(testingInstance.TempDir(), 10, nil)
 	_, _, _ = store.begin(requestTenant, "key", intent, "openai", "gpt", "proxy")
 	store.publish = func(string, structuredRequestRecord) error { return errors.New("publish failed") }
 	if _, claimError := store.claimDispatch(requestTenant, "key", intent); claimError == nil {
@@ -350,7 +350,7 @@ func TestStructuredRequestStoreInjectedFailures(testingInstance *testing.T) {
 
 func TestStructuredRequestStatusHandler(testingInstance *testing.T) {
 	gin.SetMode(gin.TestMode)
-	store, _ := newStructuredRequestStore(testingInstance.TempDir(), 10)
+	store, _ := newStructuredRequestStore(testingInstance.TempDir(), 10, nil)
 	requestTenant := structuredTestTenant(testingInstance, "handler")
 	intent := structuredRequestIntent("openai", "gpt", []byte(`{}`))
 	_, _, _ = store.begin(requestTenant, "pending", intent, "openai", "gpt", "proxy-pending")
@@ -495,7 +495,7 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 	logger := zap.NewNop().Sugar()
 
 	testingInstance.Run("success", func(subtest *testing.T) {
-		store, _ := newStructuredRequestStore(subtest.TempDir(), 10)
+		store, _ := newStructuredRequestStore(subtest.TempDir(), 10, nil)
 		chatRequest, providers := structuredSubmitRequest(schema, "success", func(context.Context, *providerRouter, chatRequestParameters, *zap.SugaredLogger) (textGenerationResult, error) {
 			return textGenerationResult{text: `{"decision":"pass"}`}, nil
 		})
@@ -507,7 +507,7 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 	})
 
 	testingInstance.Run("invalid canonical body", func(subtest *testing.T) {
-		store, _ := newStructuredRequestStore(subtest.TempDir(), 10)
+		store, _ := newStructuredRequestStore(subtest.TempDir(), 10, nil)
 		chatRequest, providers := structuredSubmitRequest(schema, "invalid-body", nil)
 		contextValue, response := structuredSubmitContext(subtest, context.Background())
 		submitStructuredChatRequest(contextValue, providers, chatRequest, requestTenant, []byte(`{`), store, managedTenants, logger, time.Now())
@@ -517,7 +517,7 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 	})
 
 	testingInstance.Run("intent conflict", func(subtest *testing.T) {
-		store, _ := newStructuredRequestStore(subtest.TempDir(), 10)
+		store, _ := newStructuredRequestStore(subtest.TempDir(), 10, nil)
 		chatRequest, providers := structuredSubmitRequest(schema, "conflict", nil)
 		_, _, _ = store.begin(requestTenant, chatRequest.idempotencyKey, strings.Repeat("a", 64), "openai", "gpt", "old")
 		contextValue, response := structuredSubmitContext(subtest, context.Background())
@@ -528,7 +528,7 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 	})
 
 	testingInstance.Run("begin failure", func(subtest *testing.T) {
-		store, _ := newStructuredRequestStore(subtest.TempDir(), 10)
+		store, _ := newStructuredRequestStore(subtest.TempDir(), 10, nil)
 		store.read = func(string) (structuredRequestRecord, error) {
 			return structuredRequestRecord{}, errors.New("read failed")
 		}
@@ -541,7 +541,7 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 	})
 
 	testingInstance.Run("claim failure", func(subtest *testing.T) {
-		store, _ := newStructuredRequestStore(subtest.TempDir(), 10)
+		store, _ := newStructuredRequestStore(subtest.TempDir(), 10, nil)
 		originalRead := store.read
 		readCount := 0
 		store.read = func(path string) (structuredRequestRecord, error) {
@@ -560,7 +560,7 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 	})
 
 	testingInstance.Run("replay lookup failure", func(subtest *testing.T) {
-		store, _ := newStructuredRequestStore(subtest.TempDir(), 10)
+		store, _ := newStructuredRequestStore(subtest.TempDir(), 10, nil)
 		chatRequest, providers := structuredSubmitRequest(schema, "lookup-failure", nil)
 		canonicalBody, _ := canonicalJSON(body)
 		intent := structuredRequestIntent("openai", "gpt", canonicalBody)
@@ -583,7 +583,7 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 	})
 
 	testingInstance.Run("provider failure", func(subtest *testing.T) {
-		store, _ := newStructuredRequestStore(subtest.TempDir(), 10)
+		store, _ := newStructuredRequestStore(subtest.TempDir(), 10, nil)
 		chatRequest, providers := structuredSubmitRequest(schema, "provider-failure", func(context.Context, *providerRouter, chatRequestParameters, *zap.SugaredLogger) (textGenerationResult, error) {
 			return textGenerationResult{}, ErrProviderAPI
 		})
@@ -595,7 +595,7 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 	})
 
 	testingInstance.Run("provider failure persistence", func(subtest *testing.T) {
-		store, _ := newStructuredRequestStore(subtest.TempDir(), 10)
+		store, _ := newStructuredRequestStore(subtest.TempDir(), 10, nil)
 		chatRequest, providers := structuredSubmitRequest(schema, "failure-persist", func(context.Context, *providerRouter, chatRequestParameters, *zap.SugaredLogger) (textGenerationResult, error) {
 			store.publish = func(string, structuredRequestRecord) error { return errors.New("publish failed") }
 			return textGenerationResult{}, ErrProviderAPI
@@ -608,7 +608,7 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 	})
 
 	testingInstance.Run("success persistence", func(subtest *testing.T) {
-		store, _ := newStructuredRequestStore(subtest.TempDir(), 10)
+		store, _ := newStructuredRequestStore(subtest.TempDir(), 10, nil)
 		chatRequest, providers := structuredSubmitRequest(schema, "success-persist", func(context.Context, *providerRouter, chatRequestParameters, *zap.SugaredLogger) (textGenerationResult, error) {
 			store.publish = func(string, structuredRequestRecord) error { return errors.New("publish failed") }
 			return textGenerationResult{text: `{"decision":"pass"}`}, nil
@@ -629,7 +629,7 @@ func TestSubmitStructuredChatRequestLifecycle(testingInstance *testing.T) {
 		{name: "canceled success", result: textGenerationResult{text: `{"decision":"pass"}`}},
 	} {
 		testingInstance.Run(testCase.name, func(subtest *testing.T) {
-			store, _ := newStructuredRequestStore(subtest.TempDir(), 10)
+			store, _ := newStructuredRequestStore(subtest.TempDir(), 10, nil)
 			requestContext, cancel := context.WithCancel(context.Background())
 			idempotencyKey := "cancel-" + testCase.name
 			chatRequest, providers := structuredSubmitRequest(schema, idempotencyKey, func(context.Context, *providerRouter, chatRequestParameters, *zap.SugaredLogger) (textGenerationResult, error) {

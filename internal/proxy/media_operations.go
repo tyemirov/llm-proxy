@@ -117,11 +117,21 @@ type MediaOperationExecutionRequest struct {
 	Input               json.RawMessage
 	Controls            json.RawMessage
 	ProviderHandle      string
-	// PersistProviderHandle durably records a native job identity immediately
-	// after provider acceptance and before status polling begins.
-	PersistProviderHandle func(string) error
+	// PersistProviderReceipt records recovery data and the provider request
+	// identifier atomically after acceptance and before status polling.
+	PersistProviderReceipt func(MediaOperationProviderReceipt) error
 	// PublishPartial durably publishes a verified preview before completion.
 	PublishPartial func(MediaOperationPartialOutput) error
+	// recordUsage commits provider measurements before output publication.
+	// Customer-owned execution does not write to the financial journal.
+	recordUsage func(journalUsageEvidenceInput) error
+}
+
+// MediaOperationProviderReceipt separates private adapter recovery data from
+// the provider request identifier. RequestID is empty when none was supplied.
+type MediaOperationProviderReceipt struct {
+	Handle    string
+	RequestID string
 }
 
 // MediaOperationHTTPClients supplies tenant-bound network admission for each
@@ -277,10 +287,13 @@ type mediaOperationExpiredEnvelope struct {
 type mediaOperationStore struct {
 	acceptanceMutex sync.Mutex
 	database        *gorm.DB
+	journal         *gormManagedTenantDatabase
 	now             func() time.Time
 }
 
 type mediaOperationService struct {
+	logger            *zap.SugaredLogger
+	hostedAdmission   journalReservation
 	voiceCursorCipher managedProviderKeyCipher
 	voiceCursorRandom io.Reader
 	httpClient        HTTPDoer
@@ -325,10 +338,10 @@ func newMediaOperationStore(managedTenants *managedTenantStore) (*mediaOperation
 	); migrationError != nil {
 		return nil, fmt.Errorf("%w: migrate", errMediaOperationStore)
 	}
-	return &mediaOperationStore{database: database.database, now: func() time.Time { return time.Now().UTC() }}, nil
+	return &mediaOperationStore{database: database.database, journal: database, now: func() time.Time { return time.Now().UTC() }}, nil
 }
 
-func newMediaOperationService(configuration Configuration, managedTenants *managedTenantStore, assets *tenantAssetStore, providers *providerRegistry, httpClient HTTPDoer) (*mediaOperationService, error) {
+func newMediaOperationService(configuration Configuration, managedTenants *managedTenantStore, assets *tenantAssetStore, providers *providerRegistry, httpClient HTTPDoer, logger *zap.SugaredLogger) (*mediaOperationService, error) {
 	store, storeError := newMediaOperationStore(managedTenants)
 	if storeError != nil || store == nil {
 		return nil, storeError
@@ -365,6 +378,7 @@ func newMediaOperationService(configuration Configuration, managedTenants *manag
 		}
 	}
 	service := &mediaOperationService{
+		logger:            logger,
 		voiceCursorCipher: managedTenants.providerKeyCipher,
 		voiceCursorRandom: managedTenants.randomReader,
 		httpClient:        httpClient,
@@ -627,11 +641,19 @@ func (service *mediaOperationService) create(requestContext context.Context, req
 	if adapter == nil || !service.mediaOperationCredentialAvailable(requestTenant, provider, adapter) {
 		return mediaOperationRecord{}, false, errMediaOperationUnavailable
 	}
-	credentialVersionReference, credentialError := service.mediaOperationCredentialReference(requestContext, requestTenant, provider, adapter)
+	var credentialVersionReference string
+	var credentialError error
+	validationContext := requestContext
+	hosted := requestTenant.providerSettings[provider.identifier].hostedGrantID != ""
+	if hosted {
+		validationContext, credentialVersionReference, credentialError = service.hostedMediaValidationContext(requestContext, requestTenant, payload)
+	} else {
+		credentialVersionReference, credentialError = service.mediaOperationCredentialReference(requestContext, requestTenant, provider, adapter)
+	}
 	if credentialError != nil {
 		return mediaOperationRecord{}, false, credentialError
 	}
-	validated, validationError := adapter.Validate(requestContext, MediaOperationAdapterRequest{TenantID: requestTenant.identifier.string(), CredentialReference: credentialVersionReference, Capability: payload.Capability, Provider: payload.Provider, Model: payload.Model, Input: canonicalInput, Controls: canonicalControls})
+	validated, validationError := adapter.Validate(validationContext, MediaOperationAdapterRequest{TenantID: requestTenant.identifier.string(), CredentialReference: credentialVersionReference, Capability: payload.Capability, Provider: payload.Provider, Model: payload.Model, Input: canonicalInput, Controls: canonicalControls})
 	if validationError != nil {
 		return mediaOperationRecord{}, false, errMediaOperationInvalid
 	}
@@ -658,6 +680,11 @@ func (service *mediaOperationService) create(requestContext context.Context, req
 		defer service.assets.referenceMutex.Unlock()
 	}
 	transactionError := service.store.database.WithContext(requestContext).Transaction(func(transaction *gorm.DB) error {
+		if hosted {
+			if _, err := lockProviderAssignmentTenant(transaction, requestTenant.userID, record.TenantID); err != nil {
+				return errMediaOperationUnavailable
+			}
+		}
 		var existing mediaOperationRecord
 		lookupError := transaction.Where("tenant_id = ? AND idempotency_key_digest = ?", record.TenantID, keyDigest).First(&existing).Error
 		if lookupError == nil {
@@ -680,6 +707,11 @@ func (service *mediaOperationService) create(requestContext context.Context, req
 		}
 		if globalActive >= int64(service.globalCapacity) || tenantActive >= int64(service.tenantCapacity) {
 			return errMediaOperationCapacity
+		}
+		if hosted {
+			if err := service.admitHostedMedia(transaction, requestTenant, idempotencyKey, intentBytes, record); err != nil {
+				return err
+			}
 		}
 		if record.ParentOperationID != "" {
 			var parent mediaOperationRecord
@@ -708,7 +740,7 @@ func (service *mediaOperationService) create(requestContext context.Context, req
 
 func (service *mediaOperationService) mediaOperationCredentialAvailable(requestTenant tenant, provider providerDefinition, adapter MediaOperationAdapter) bool {
 	if requestTenant.providerSettings[provider.identifier].hostedGrantID != "" {
-		return false
+		return service.hostedAdmission != nil
 	}
 	if credential, deploymentOwned := adapter.(MediaOperationDeploymentCredential); deploymentOwned {
 		return strings.TrimSpace(credential.MediaOperationCredentialReference()) != ""
@@ -763,6 +795,10 @@ func (service *mediaOperationService) cancel(requestContext context.Context, req
 	needsProviderCancel := false
 	service.assets.referenceMutex.Lock()
 	transactionError := service.store.database.WithContext(requestContext).Transaction(func(transaction *gorm.DB) error {
+		lock := transaction.Model(&mediaOperationRecord{}).Where("operation_id = ? AND tenant_id = ?", operationID, requestTenant.identifier.string()).UpdateColumn("public_state", gorm.Expr("public_state"))
+		if lock.Error != nil {
+			return lock.Error
+		}
 		var record mediaOperationRecord
 		if lookupError := transaction.Where("operation_id = ? AND tenant_id = ?", operationID, requestTenant.identifier.string()).First(&record).Error; lookupError != nil {
 			return errMediaOperationNotFound
@@ -774,7 +810,7 @@ func (service *mediaOperationService) cancel(requestContext context.Context, req
 			record.CancellationState = MediaCancellationConfirmed
 			record.TerminalAt = &now
 			record.UpdatedAt = now
-			return finalizeMediaOperationCancellation(transaction, record, now)
+			return service.store.finalizeMediaOperationCancellation(transaction, record, now)
 		case MediaOperationStateRunning:
 			if record.CancellationState == MediaCancellationNotRequested {
 				record.CancellationState = MediaCancellationRequested
@@ -785,6 +821,17 @@ func (service *mediaOperationService) cancel(requestContext context.Context, req
 			}
 			needsProviderCancel = true
 			adapterRequest = service.executionRequestFromRecord(record)
+			hosted, err := service.store.hostedMediaRequest(transaction, operationID)
+			if err != nil {
+				return err
+			}
+			if hosted != nil {
+				requestContext = context.WithValue(requestContext, hostedMediaRequestContextKey{}, *hosted)
+				authorize := service.hostedMediaCancellationAuthority(operationID)
+				requestContext = context.WithValue(requestContext, hostedMediaAuthorizationContextKey{}, authorize)
+				adapterRequest.HTTP.Submission = &hostedMediaHTTPDoer{}
+				adapterRequest.HTTP.Status = &hostedMediaHTTPDoer{next: adapterRequest.HTTP.Status, authorize: authorize, role: hostedProviderCancellation}
+			}
 		}
 		return nil
 	})
@@ -808,6 +855,9 @@ func (service *mediaOperationService) cancel(requestContext context.Context, req
 		if result.State == MediaCancellationConfirmed {
 			service.assets.referenceMutex.Lock()
 			confirmationError := service.store.database.WithContext(requestContext).Transaction(func(transaction *gorm.DB) error {
+				if err := transaction.Model(&mediaOperationRecord{}).Where("operation_id = ? AND tenant_id = ?", operationID, requestTenant.identifier.string()).UpdateColumn("public_state", gorm.Expr("public_state")).Error; err != nil {
+					return err
+				}
 				var current mediaOperationRecord
 				if lookupError := transaction.Where("operation_id = ? AND tenant_id = ?", operationID, requestTenant.identifier.string()).First(&current).Error; lookupError != nil {
 					return lookupError
@@ -820,7 +870,7 @@ func (service *mediaOperationService) cancel(requestContext context.Context, req
 				current.PublicState = MediaOperationStateCancelled
 				current.TerminalAt = &now
 				current.UpdatedAt = now
-				return finalizeMediaOperationCancellation(transaction, current, now)
+				return service.store.finalizeMediaOperationCancellation(transaction, current, now)
 			})
 			service.assets.referenceMutex.Unlock()
 			if confirmationError != nil {
@@ -836,7 +886,7 @@ func (service *mediaOperationService) cancel(requestContext context.Context, req
 	return service.store.publicResponse(requestContext, requestTenant.identifier.string(), operationID)
 }
 
-func finalizeMediaOperationCancellation(transaction *gorm.DB, record mediaOperationRecord, now time.Time) error {
+func (store *mediaOperationStore) finalizeMediaOperationCancellation(transaction *gorm.DB, record mediaOperationRecord, now time.Time) error {
 	if saveError := transaction.Save(&record).Error; saveError != nil {
 		return saveError
 	}
@@ -845,6 +895,9 @@ func finalizeMediaOperationCancellation(transaction *gorm.DB, record mediaOperat
 	}
 	if usageError := deliverMediaOperationUsage(transaction, record, now); usageError != nil {
 		return usageError
+	}
+	if err := store.finishHostedMedia(transaction, record, now); err != nil {
+		return err
 	}
 	return transaction.Where("operation_id = ?", record.OperationID).Delete(&mediaOperationClaimRecord{}).Error
 }
@@ -896,6 +949,7 @@ func (service *mediaOperationService) enqueue(operationID string) {
 		var record mediaOperationRecord
 		if queryError := service.store.database.Select("provider", "model", "capability").First(&record, "operation_id = ?", operationID).Error; queryError != nil {
 			service.queued.Delete(operationID)
+			service.reportMaintenanceError(mediaMaintenanceSelectQueue, operationID, queryError)
 			return
 		}
 		if service.dictatorRoutes[mediaOperationAdapterKey(record.Capability, record.Provider, record.Model)] {
@@ -912,6 +966,7 @@ func (service *mediaOperationService) enqueue(operationID string) {
 func (service *mediaOperationService) resumeOutstanding() {
 	var records []mediaOperationRecord
 	if queryError := service.store.database.Where("public_state IN ? AND NOT EXISTS (SELECT 1 FROM media_operation_claim_records WHERE media_operation_claim_records.operation_id = media_operation_records.operation_id AND expires_at > ?)", []string{MediaOperationStateQueued, MediaOperationStateRunning}, service.store.now()).Find(&records).Error; queryError != nil {
+		service.reportMaintenanceError(mediaMaintenanceResume, "", queryError)
 		return
 	}
 	for _, record := range records {
@@ -929,6 +984,21 @@ func (service *mediaOperationService) runMaintenance() {
 	}
 }
 
+type mediaMaintenancePhase string
+
+const (
+	mediaMaintenanceSelectQueue   mediaMaintenancePhase = "select_queue"
+	mediaMaintenanceResume        mediaMaintenancePhase = "resume_outstanding"
+	mediaMaintenanceScanUsage     mediaMaintenancePhase = "scan_usage"
+	mediaMaintenanceScanRetention mediaMaintenancePhase = "scan_retention"
+	mediaMaintenanceDeliverUsage  mediaMaintenancePhase = "deliver_usage"
+	mediaMaintenanceExpire        mediaMaintenancePhase = "expire_terminal_data"
+)
+
+func (service *mediaOperationService) reportMaintenanceError(phase mediaMaintenancePhase, operationID string, err error) {
+	service.logger.Errorw("media operation maintenance failed", "phase", string(phase), "operation_id", operationID, "error", fmt.Errorf("%s: %w", phase, err))
+}
+
 func (service *mediaOperationService) runWorker(workerID string, queue <-chan string) {
 	for operationID := range queue {
 		service.queued.Delete(operationID)
@@ -937,20 +1007,35 @@ func (service *mediaOperationService) runWorker(workerID string, queue <-chan st
 }
 
 func (service *mediaOperationService) runOperation(workerID string, operationID string) {
+	if err := service.executeOperation(workerID, operationID); err != nil {
+		service.logger.Errorw("media operation worker failed", "worker_id", workerID, "operation_id", operationID, "error", err)
+	}
+}
+
+func (service *mediaOperationService) executeOperation(workerID string, operationID string) error {
 	record, generation, recoverOperation, claimError := service.claim(workerID, operationID)
+	if errors.Is(claimError, gorm.ErrRecordNotFound) {
+		return nil
+	}
 	if claimError != nil {
-		return
+		return fmt.Errorf("claim media operation %s: %w", operationID, claimError)
 	}
 	adapter := service.adapters[mediaOperationAdapterKey(record.Capability, record.Provider, record.Model)]
 	if adapter == nil {
-		service.finish(operationID, generation, MediaOperationExecutionResult{State: MediaOperationStateFailed, ErrorCode: errMediaOperationUnavailable.Error()})
-		return
+		return errors.Join(errMediaOperationUnavailable, service.finish(operationID, generation, MediaOperationExecutionResult{State: MediaOperationStateFailed, ErrorCode: errMediaOperationUnavailable.Error()}))
 	}
 	requestContext, cancel := context.WithDeadline(context.Background(), record.DeadlineAt)
 	defer cancel()
+	hosted, authorityError := service.store.hostedMediaRequest(service.store.database.WithContext(requestContext), record.OperationID)
+	if authorityError == nil && hosted != nil {
+		requestContext = context.WithValue(requestContext, hostedMediaRequestContextKey{}, *hosted)
+	}
 	var currentReference string
-	var authorityError error
-	if credential, deploymentOwned := adapter.(MediaOperationDeploymentCredential); deploymentOwned {
+	if hosted != nil {
+		currentReference = mediaJournalCredentialReference(*hosted)
+	} else if authorityError != nil {
+		currentReference = ""
+	} else if credential, deploymentOwned := adapter.(MediaOperationDeploymentCredential); deploymentOwned {
 		currentReference = credential.MediaOperationCredentialReference()
 	} else {
 		currentReference, authorityError = service.store.credentialReference(requestContext, record.TenantID, providerID(record.Provider))
@@ -960,15 +1045,30 @@ func (service *mediaOperationService) runOperation(workerID string, operationID 
 		if recoverOperation {
 			state = MediaOperationStateUncertain
 		}
-		service.finish(operationID, generation, MediaOperationExecutionResult{State: state, ErrorCode: errMediaOperationUnavailable.Error()})
-		return
+		return fmt.Errorf("resolve media authority for operation %s: %w", operationID, errors.Join(authorityError, errMediaOperationUnavailable, service.finish(operationID, generation, MediaOperationExecutionResult{State: state, ErrorCode: errMediaOperationUnavailable.Error()})))
 	}
 	request := service.executionRequestFromRecord(record)
-	request.PersistProviderHandle = func(providerHandle string) error {
-		return service.persistProviderHandle(operationID, generation, providerHandle)
+	if hosted != nil {
+		var submissionRole hostedProviderRole
+		if !recoverOperation {
+			submissionRole = hostedProviderGeneration
+		}
+		authority := &hostedMediaDispatchAuthority{service: service, operationID: operationID, generation: generation, submissionRole: submissionRole}
+		authorize := hostedMediaAuthorize(authority.authorize)
+		requestContext = context.WithValue(requestContext, hostedMediaAuthorizationContextKey{}, authorize)
+		request.HTTP.Submission = &hostedMediaHTTPDoer{next: request.HTTP.Submission, authorize: authorize, role: hostedProviderGeneration}
+		request.HTTP.Status = &hostedMediaHTTPDoer{next: request.HTTP.Status, authorize: authorize, role: hostedProviderObservation}
+		request.HTTP.Transfer = &hostedMediaHTTPDoer{next: request.HTTP.Transfer, authorize: authorize, role: hostedProviderAuxiliary}
+		request.recordUsage = func(input journalUsageEvidenceInput) error {
+			return service.reportPersistenceFailure(operationID, "observe_usage", service.observeHostedMediaUsage(requestContext, operationID, generation, input))
+		}
+		requestContext = context.WithValue(requestContext, hostedMediaUsageContextKey{}, request.recordUsage)
+	}
+	request.PersistProviderReceipt = func(receipt MediaOperationProviderReceipt) error {
+		return service.reportPersistenceFailure(operationID, "persist_provider_handle", service.persistProviderReceipt(operationID, generation, receipt))
 	}
 	request.PublishPartial = func(output MediaOperationPartialOutput) error {
-		return service.publishPartial(operationID, generation, output)
+		return service.reportPersistenceFailure(operationID, "publish_preview", service.publishPartial(operationID, generation, output))
 	}
 	var result MediaOperationExecutionResult
 	if recoverOperation {
@@ -977,27 +1077,53 @@ func (service *mediaOperationService) runOperation(workerID string, operationID 
 		})
 	} else {
 		if dispatchError := service.markDispatched(operationID, generation, record.DispatchToken); dispatchError != nil {
-			return
+			return fmt.Errorf("dispatch media operation %s: %w", operationID, errors.Join(dispatchError, service.finish(operationID, generation, MediaOperationExecutionResult{State: MediaOperationStateFailed, ErrorCode: errMediaOperationUnavailable.Error()})))
 		}
 		result = service.runWithClaimRenewal(requestContext, operationID, generation, func() MediaOperationExecutionResult {
 			return adapter.Execute(requestContext, request)
 		})
 	}
-	service.finish(operationID, generation, result)
+	return service.finish(operationID, generation, result)
 }
 
-func (service *mediaOperationService) persistProviderHandle(operationID string, generation uint64, providerHandle string) error {
-	providerHandle = strings.TrimSpace(providerHandle)
-	if providerHandle == "" {
+func (service *mediaOperationService) reportPersistenceFailure(operationID, phase string, err error) error {
+	if err != nil {
+		service.logger.Errorw("media operation persistence failed", "operation_id", operationID, "phase", phase, "error", err)
+	}
+	return err
+}
+
+func (service *mediaOperationService) persistProviderReceipt(operationID string, generation uint64, receipt MediaOperationProviderReceipt) error {
+	receipt.Handle = strings.TrimSpace(receipt.Handle)
+	if receipt.Handle == "" {
 		return errMediaOperationStore
 	}
-	result := service.store.database.Model(&mediaOperationRecord{}).
-		Where("operation_id = ? AND public_state = ? AND provider_execution_state = ? AND EXISTS (SELECT 1 FROM media_operation_claim_records WHERE operation_id = ? AND generation = ?)", operationID, MediaOperationStateRunning, MediaProviderExecutionDispatched, operationID, generation).
-		Updates(map[string]any{"provider_handle": providerHandle, "updated_at": service.store.now()})
-	if result.Error != nil || result.RowsAffected != 1 {
-		return errMediaOperationStore
-	}
-	return nil
+	now := service.store.now()
+	return service.store.database.Transaction(func(transaction *gorm.DB) error {
+		if err := lockMediaOperationClaim(transaction, operationID, generation, now); err != nil {
+			return err
+		}
+		result := transaction.Model(&mediaOperationRecord{}).
+			Where("operation_id = ? AND public_state = ? AND provider_execution_state = ?", operationID, MediaOperationStateRunning, MediaProviderExecutionDispatched).
+			Updates(map[string]any{"provider_handle": receipt.Handle, "updated_at": now})
+		if result.Error != nil {
+			return fmt.Errorf("persist provider handle for operation %s: %w", operationID, result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return errMediaOperationStore
+		}
+		request, err := service.store.hostedMediaRequest(transaction, operationID)
+		if err != nil || request == nil || receipt.RequestID == "" {
+			return err
+		}
+		var attempt managedJournalAttemptRecord
+		if err := transaction.Where("request_id = ? AND state = ?", request.ID, journalAttemptDispatched).First(&attempt).Error; err != nil {
+			return fmt.Errorf("read media attempt for request %s: %w", request.ID, err)
+		}
+		journal := &gormManagedTenantDatabase{database: transaction}
+		claim := journalWorkerClaim{requestID: request.ID, owner: mediaJournalWorkerToken(operationID, generation), now: now}
+		return journal.bindJournalProviderRequest(transaction.Statement.Context, claim, attempt.ID, receipt.RequestID)
+	})
 }
 
 func (service *mediaOperationService) runWithClaimRenewal(requestContext context.Context, operationID string, generation uint64, execute func() MediaOperationExecutionResult) MediaOperationExecutionResult {
@@ -1012,8 +1138,7 @@ func (service *mediaOperationService) runWithClaimRenewal(requestContext context
 		case <-requestContext.Done():
 			return MediaOperationExecutionResult{State: MediaOperationStateUncertain, ErrorCode: "operation_deadline_exceeded"}
 		case <-ticker.C:
-			result := service.store.database.Model(&mediaOperationClaimRecord{}).Where("operation_id = ? AND generation = ?", operationID, generation).Update("expires_at", service.store.now().Add(service.claimLifetime))
-			if result.Error != nil || result.RowsAffected != 1 {
+			if err := service.reportPersistenceFailure(operationID, "renew_claim", service.renewMediaClaim(operationID, generation)); err != nil {
 				return MediaOperationExecutionResult{State: MediaOperationStateUncertain, ErrorCode: "worker_claim_lost"}
 			}
 		}
@@ -1026,11 +1151,15 @@ func (service *mediaOperationService) claim(workerID string, operationID string)
 	recoverOperation := false
 	now := service.store.now()
 	transactionError := service.store.database.Transaction(func(transaction *gorm.DB) error {
+		lock := transaction.Model(&mediaOperationRecord{}).Where("operation_id = ? AND public_state IN ?", operationID, []string{MediaOperationStateQueued, MediaOperationStateRunning}).UpdateColumn("public_state", gorm.Expr("public_state"))
+		if lock.Error != nil {
+			return lock.Error
+		}
+		if lock.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
 		if lookupError := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&record, "operation_id = ?", operationID).Error; lookupError != nil {
 			return lookupError
-		}
-		if record.PublicState != MediaOperationStateQueued && record.PublicState != MediaOperationStateRunning {
-			return gorm.ErrRecordNotFound
 		}
 		var claim mediaOperationClaimRecord
 		claimError := transaction.First(&claim, "operation_id = ?", operationID).Error
@@ -1044,6 +1173,9 @@ func (service *mediaOperationService) claim(workerID string, operationID string)
 		claim = mediaOperationClaimRecord{OperationID: operationID, WorkerID: workerID, Generation: generation, ExpiresAt: now.Add(service.claimLifetime)}
 		if saveError := transaction.Save(&claim).Error; saveError != nil {
 			return saveError
+		}
+		if err := service.store.bindMediaJournalClaim(transaction, claim, now); err != nil {
+			return err
 		}
 		recoverOperation = record.ProviderExecutionState == MediaProviderExecutionDispatched
 		if record.PublicState == MediaOperationStateQueued {
@@ -1061,16 +1193,27 @@ func (service *mediaOperationService) claim(workerID string, operationID string)
 
 func (service *mediaOperationService) markDispatched(operationID string, generation uint64, dispatchToken string) error {
 	now := service.store.now()
-	result := service.store.database.Model(&mediaOperationRecord{}).
-		Where("operation_id = ? AND public_state = ? AND provider_execution_state = ? AND EXISTS (SELECT 1 FROM media_operation_claim_records WHERE operation_id = ? AND generation = ?)", operationID, MediaOperationStateRunning, MediaProviderExecutionNotDispatched, operationID, generation).
-		Updates(map[string]any{"provider_execution_state": MediaProviderExecutionDispatched, "dispatch_token": dispatchToken, "updated_at": now})
-	if result.Error != nil || result.RowsAffected != 1 {
-		return errMediaOperationStore
-	}
-	return nil
+	return service.store.database.Transaction(func(transaction *gorm.DB) error {
+		if err := lockMediaOperationClaim(transaction, operationID, generation, now); err != nil {
+			return err
+		}
+		if err := service.dispatchHostedMedia(transaction, operationID, generation, now); err != nil {
+			return err
+		}
+		result := transaction.Model(&mediaOperationRecord{}).
+			Where("operation_id = ? AND public_state = ? AND provider_execution_state = ?", operationID, MediaOperationStateRunning, MediaProviderExecutionNotDispatched).
+			Updates(map[string]any{"provider_execution_state": MediaProviderExecutionDispatched, "dispatch_token": dispatchToken, "updated_at": now})
+		if result.Error != nil {
+			return fmt.Errorf("persist dispatch for operation %s: %w", operationID, result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return errMediaOperationStore
+		}
+		return nil
+	})
 }
 
-func (service *mediaOperationService) finish(operationID string, generation uint64, result MediaOperationExecutionResult) {
+func (service *mediaOperationService) finish(operationID string, generation uint64, result MediaOperationExecutionResult) error {
 	publicState := result.State
 	providerState := MediaProviderExecutionUncertain
 	publicError := callerSafeMediaOperationError(result.ErrorCode)
@@ -1101,7 +1244,10 @@ func (service *mediaOperationService) finish(operationID string, generation uint
 	now := service.store.now()
 	service.assets.referenceMutex.Lock()
 	defer service.assets.referenceMutex.Unlock()
-	_ = service.store.database.Transaction(func(transaction *gorm.DB) error {
+	err := service.store.database.Transaction(func(transaction *gorm.DB) error {
+		if err := lockMediaOperationClaim(transaction, operationID, generation, now); err != nil {
+			return err
+		}
 		var claim mediaOperationClaimRecord
 		if claimError := transaction.First(&claim, "operation_id = ? AND generation = ?", operationID, generation).Error; claimError != nil {
 			return claimError
@@ -1114,7 +1260,7 @@ func (service *mediaOperationService) finish(operationID string, generation uint
 			requestTenant := tenant{identifier: tenantID(record.TenantID)}
 			outputs := append([]MediaOperationOutput(nil), result.Outputs...)
 			if result.dictionary != nil {
-				if err := transaction.Create(result.dictionary).Error; err != nil {
+				if err := service.reportPersistenceFailure(operationID, "persist_dictionary", transaction.Create(result.dictionary).Error); err != nil {
 					publicState = MediaOperationStateUncertain
 					providerState = MediaProviderExecutionSucceeded
 					publicError = "provider_result_invalid"
@@ -1127,7 +1273,7 @@ func (service *mediaOperationService) finish(operationID string, generation uint
 					publicError = "provider_result_invalid"
 				} else {
 					voice, voiceError := persistMediaVoice(transaction, record.TenantID, record.Provider, *result.Voice, now)
-					if voiceError != nil {
+					if service.reportPersistenceFailure(operationID, "persist_voice", voiceError) != nil {
 						publicState = MediaOperationStateFailed
 						providerState = MediaProviderExecutionSucceeded
 						publicError = "provider_result_invalid"
@@ -1142,7 +1288,7 @@ func (service *mediaOperationService) finish(operationID string, generation uint
 					break
 				}
 				metadata, outputError := service.assets.upload(requestTenant, strings.ToLower(strings.TrimSpace(output.MIMEType)), bytes.NewReader(output.Data))
-				if outputError != nil {
+				if service.reportPersistenceFailure(operationID, "publish_output", outputError) != nil {
 					publicState = MediaOperationStateFailed
 					providerState = MediaProviderExecutionSucceeded
 					publicError = "asset_publication_failed"
@@ -1176,8 +1322,15 @@ func (service *mediaOperationService) finish(operationID string, generation uint
 		if usageError := deliverMediaOperationUsage(transaction, record, now); usageError != nil {
 			return usageError
 		}
+		if err := service.store.finishHostedMedia(transaction, record, now); err != nil {
+			return err
+		}
 		return transaction.Delete(&claim).Error
 	})
+	if err != nil {
+		return fmt.Errorf("finish media operation %s: %w", operationID, err)
+	}
+	return nil
 }
 
 func (service *mediaOperationService) validOutputs(outputs []MediaOperationOutput, voice *MediaVoiceProviderRecord) bool {
@@ -1195,13 +1348,16 @@ func (service *mediaOperationService) validOutputs(outputs []MediaOperationOutpu
 func (service *mediaOperationService) deliverPendingUsage() {
 	var records []mediaOperationRecord
 	if queryError := service.store.database.Where("public_state IN ? AND operation_id NOT IN (SELECT operation_id FROM media_operation_usage_delivery_records)", []string{MediaOperationStateSucceeded, MediaOperationStateFailed, MediaOperationStateCancelled, MediaOperationStateUncertain}).Find(&records).Error; queryError != nil {
+		service.reportMaintenanceError(mediaMaintenanceScanUsage, "", queryError)
 		return
 	}
 	for _, record := range records {
 		now := service.store.now()
-		_ = service.store.database.Transaction(func(transaction *gorm.DB) error {
+		if err := service.store.database.Transaction(func(transaction *gorm.DB) error {
 			return deliverMediaOperationUsage(transaction, record, now)
-		})
+		}); err != nil {
+			service.reportMaintenanceError(mediaMaintenanceDeliverUsage, record.OperationID, err)
+		}
 	}
 }
 
@@ -1209,10 +1365,11 @@ func (service *mediaOperationService) expireTerminalData() {
 	cutoff := service.store.now().Add(-service.terminalRetention)
 	var records []mediaOperationRecord
 	if queryError := service.store.database.Where("terminal_at IS NOT NULL AND terminal_at <= ? AND public_state != ?", cutoff, MediaOperationStateUncertain).Find(&records).Error; queryError != nil {
+		service.reportMaintenanceError(mediaMaintenanceScanRetention, "", queryError)
 		return
 	}
 	for _, record := range records {
-		_ = service.store.database.Transaction(func(transaction *gorm.DB) error {
+		if err := service.store.database.Transaction(func(transaction *gorm.DB) error {
 			var retained mediaOperationRecord
 			lookupError := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&retained, "operation_id = ?", record.OperationID).Error
 			if errors.Is(lookupError, gorm.ErrRecordNotFound) {
@@ -1245,7 +1402,9 @@ func (service *mediaOperationService) expireTerminalData() {
 				return deleteError
 			}
 			return transaction.Delete(&record).Error
-		})
+		}); err != nil {
+			service.reportMaintenanceError(mediaMaintenanceExpire, record.OperationID, err)
+		}
 	}
 }
 
@@ -1282,7 +1441,7 @@ func deliverMediaOperationUsage(transaction *gorm.DB, record mediaOperationRecor
 
 func callerSafeMediaOperationError(errorCode string) string {
 	switch strings.TrimSpace(errorCode) {
-	case "provider_error", "provider_rate_limited", "operation_deadline_exceeded", "provider_outcome_unknown", "worker_claim_lost", "asset_publication_failed", "provider_result_invalid", errMediaOperationUnavailable.Error():
+	case "provider_error", "provider_rate_limited", "operation_deadline_exceeded", "provider_outcome_unknown", "worker_claim_lost", "asset_publication_failed", "provider_result_invalid", llmproxycontract.ErrorCodeUsageJournalUnavailable, errMediaOperationUnavailable.Error():
 		return strings.TrimSpace(errorCode)
 	default:
 		return ""
@@ -1364,6 +1523,12 @@ func mediaCapabilityForCatalogOperation(operation string) string {
 }
 
 func (store *mediaOperationStore) credentialReference(requestContext context.Context, tenantID string, provider providerID) (string, error) {
+	if request, hosted := requestContext.Value(hostedMediaRequestContextKey{}).(managedJournalRequestRecord); hosted {
+		if request.TenantID != tenantID || request.Provider != provider.string() {
+			return "", errHostedAuthorityDenied
+		}
+		return mediaJournalCredentialReference(request), nil
+	}
 	var assignment managedTenantConnectionRecord
 	lookupError := store.database.WithContext(requestContext).Preload("Connection").Where("tenant_id = ? AND provider_id = ?", tenantID, provider.string()).First(&assignment).Error
 	if errors.Is(lookupError, gorm.ErrRecordNotFound) {

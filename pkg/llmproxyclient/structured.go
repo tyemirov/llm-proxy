@@ -77,7 +77,7 @@ type StructuredRequestResult struct {
 	Output         string `json:"-"`
 }
 
-// StructuredRequestPendingError reports a durable structured request that has not reached a terminal state.
+// StructuredRequestPendingError reports pending hosted or structured text.
 type StructuredRequestPendingError struct {
 	snapshot StructuredRequestResult
 }
@@ -106,7 +106,7 @@ type structuredRequestErrorResponse struct {
 	} `json:"error"`
 }
 
-// GetStructuredRequest reconciles one structured request without submitting provider work.
+// GetStructuredRequest reads hosted or structured text without provider dispatch.
 func (client Client) GetStructuredRequest(contextValue context.Context, idempotencyKey string) (StructuredRequestResult, error) {
 	if !validClientIdempotencyKey(idempotencyKey) {
 		return StructuredRequestResult{}, fmt.Errorf("%w: invalid idempotency key", ErrInvalidClientRequest)

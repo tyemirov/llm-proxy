@@ -438,6 +438,33 @@ export {};
  */
 
 /** @typedef {{id:string, currency:'USD', created_at:string}} BillingAccount */
+/**
+ * @typedef {object} JournalRequest
+ * @property {string} id
+ * @property {string} tenant_id
+ * @property {string} grant_id
+ * @property {number} grant_revision
+ * @property {string} provider
+ * @property {string} [model]
+ * @property {string} operation
+ * @property {string} catalog_revision
+ * @property {'text_request'|'media_operation'|'dictation_request'} execution_kind
+ * @property {string} execution_id
+ * @property {'accepted'|'executing'|'completed'|'failed'|'uncertain'} state
+ * @property {'pending'|'complete'|'unknown'} usage_state
+ * @property {string} [failure_code]
+ * @property {string} created_at
+ * @property {string} updated_at
+ */
+/** @typedef {{requests:JournalRequest[], next_cursor:string}} JournalRequestPage */
+/** @typedef {{id:string,number:number,state:'prepared'|'dispatched'|'observed'|'uncertain',dispatched_at?:string,observed_at?:string,created_at:string,updated_at:string}} JournalAttempt */
+/** @typedef {{dimension:string,unit:string,value?:string,unknown_reason?:'not_reported'|'invalid_quantity'|'unsupported_meter',included_in?:string}} JournalQuantity */
+/** @typedef {{id:string,attempt_id:string,quantities:JournalQuantity[],completeness:'complete'|'unknown',outcome:'continue'|'complete'|'fail',failure_code?:string,observed_at:string,created_at:string}} JournalObservation */
+/** @typedef {{id:string,reason:'usage_unknown'|'dispatch_outcome_unknown'|'execution_outcome_unknown'|'execution_result_unknown',state:'open'|'resolved',resolved_at?:string,created_at:string}} JournalCase */
+/** @typedef {{attempts:JournalAttempt[],next_cursor:string}} JournalAttemptPage */
+/** @typedef {{observations:JournalObservation[],next_cursor:string}} JournalObservationPage */
+/** @typedef {{cases:JournalCase[],next_cursor:string}} JournalCasePage */
+/** @typedef {{request:JournalRequest,attempts:JournalAttemptPage,observations:JournalObservationPage,cases:JournalCasePage}} JournalEvidence */
 /** @typedef {{provider:string, kind:'account_connection'|'hosted_access_grant', resource_id:string}} ProviderAssignment */
 /**
  * @typedef {object} HostedAccessGrant
@@ -446,7 +473,7 @@ export {};
  * @property {string} tenant_id
  * @property {string} provider
  * @property {string} catalog_revision
- * @property {{model:string, operations:string[]}[]} offerings
+ * @property {{model?:string, operations:string[]}[]} offerings
  * @property {'active'|'suspended'|'revoked'} state
  * @property {number} revision
  * @property {string} created_at

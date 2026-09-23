@@ -139,7 +139,7 @@ func (adapter *dictatorMediaOperationAdapter) Execute(requestContext context.Con
 		return MediaOperationExecutionResult{State: MediaOperationStateUncertain, ErrorCode: "provider_outcome_unknown"}
 	}
 	handleJSON, _ := json.Marshal(handle)
-	if request.PersistProviderHandle == nil || request.PersistProviderHandle(string(handleJSON)) != nil {
+	if request.PersistProviderReceipt == nil || request.PersistProviderReceipt(MediaOperationProviderReceipt{Handle: string(handleJSON), RequestID: handle.JobID}) != nil {
 		return MediaOperationExecutionResult{State: MediaOperationStateUncertain, ProviderHandle: string(handleJSON), ErrorCode: "provider_outcome_unknown"}
 	}
 	return adapter.awaitObservation(requestContext, request.Capability, observation)
@@ -152,7 +152,7 @@ func (adapter *dictatorMediaOperationAdapter) Recover(requestContext context.Con
 	}
 	observation, observeError := adapter.protocol.Observe(requestContext, request.Capability, handle)
 	if observeError != nil {
-		return MediaOperationExecutionResult{State: MediaOperationStateUncertain, ProviderHandle: request.ProviderHandle, ErrorCode: "provider_outcome_unknown"}
+		return dictatorObservationFailure(request.ProviderHandle, observeError)
 	}
 	return adapter.awaitObservation(requestContext, request.Capability, observation)
 }
@@ -187,10 +187,18 @@ func (adapter *dictatorMediaOperationAdapter) awaitObservation(requestContext co
 		}
 		next, observeError := adapter.protocol.Observe(requestContext, capability, observation.Handle)
 		if observeError != nil {
-			return MediaOperationExecutionResult{State: MediaOperationStateUncertain, ProviderHandle: encodedDictatorProviderHandle(observation.Handle), ErrorCode: "provider_outcome_unknown"}
+			return dictatorObservationFailure(encodedDictatorProviderHandle(observation.Handle), observeError)
 		}
 		observation = next
 	}
+}
+
+func dictatorObservationFailure(handle string, err error) MediaOperationExecutionResult {
+	code := "provider_outcome_unknown"
+	if errors.Is(err, errUsageJournalUnavailable) {
+		code = llmproxycontract.ErrorCodeUsageJournalUnavailable
+	}
+	return MediaOperationExecutionResult{State: MediaOperationStateUncertain, ProviderHandle: handle, ErrorCode: code}
 }
 
 func dictatorExecutionResult(observation dictatorProtocolObservation) (MediaOperationExecutionResult, bool) {

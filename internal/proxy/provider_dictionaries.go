@@ -124,7 +124,7 @@ func (adapter *providerDictionaryAdapter) Execute(ctx context.Context, request M
 		return imageGenerationUncertain()
 	}
 	handle, _ := json.Marshal(result)
-	if err := request.PersistProviderHandle(string(handle)); err != nil {
+	if err := request.PersistProviderReceipt(MediaOperationProviderReceipt{Handle: string(handle), RequestID: response.Header.Get("request-id")}); err != nil {
 		return imageGenerationUncertain()
 	}
 	return dictionaryExecutionResult(request, result)

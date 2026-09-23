@@ -7,7 +7,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
-from llm_proxy_client import Client, ClientConfig, ClientMediaVoiceQuery, LLMProxyClientError, LLMProxyTransportError
+from llm_proxy_client import ClientHTTPResponse, Client, ClientConfig, ClientMediaVoiceQuery, LLMProxyClientError, LLMProxyTransportError
 
 
 VOICE_ID = "voi_0123456789abcdef0123456789abcdef"
@@ -66,6 +66,6 @@ def test_voice_query_rejects_invalid_inputs(arguments: dict) -> None:
 
 @pytest.mark.parametrize("changes", [{"voices": None}, {"has_more": None}, {"total_count": True}, {"total_count": -1}, {"next_cursor": None}, {"next_cursor": " "}, {"voices": [VOICE, VOICE]}, {"voices": [{**VOICE, "provider": "other"}]}, {"voices": [{**VOICE, "preview": "https://native.invalid"}]}, {"voices": [{**VOICE, "verified_languages": [{"language": "en"}]}]}, {"voices": [{**VOICE, "default_sample_rate": 24000}]}, {"voices": [{**VOICE, "labels": []}]}])
 def test_voice_client_rejects_malformed_pages(changes: dict) -> None:
-    client = Client(ClientConfig(base_url="https://gateway.example", secret="secret"), opener=lambda *_args, **_kwargs: json.dumps({**PAGE, **changes}))
+    client = Client(ClientConfig(base_url="https://gateway.example", secret="secret"), opener=lambda *_args, **_kwargs: ClientHTTPResponse(200, json.dumps({**PAGE, **changes})))
     with pytest.raises(LLMProxyTransportError):
         client.get_media_voices(ClientMediaVoiceQuery(provider="elevenlabs"))

@@ -27,6 +27,128 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B257] (P1) Document retained native completion failures.
+  Resolution: The shared native HTTP 502 schema now includes the current durable failure envelope.
+  Text, dictation, and client protocol replay tests pass without repeated provider work.
+  Generated API pages, artifact validation, shared regression, race checks, lint, and formatting pass.
+  Evidence: A hosted continuation failure replays as HTTP 502 with `structured_request_failed`.
+  The shared native response schema rejects this current durable failure representation.
+  Requirements:
+  - Include retained completion failures in the shared HTTP 502 response contract.
+  - Preserve the existing failure identifier, safe cause, and replay behavior.
+  - Verify native text, dictation, and client protocol failures through HTTP.
+  - Regenerate the API pages and run the artifact check.
+
+- [x] [B256] (P1) Report media maintenance persistence failures.
+  Resolution: All six maintenance phases report database failures through the configured logger.
+  HTTP tests verify rollback, retry, duplicate suppression, and retained financial evidence after operational deletion.
+  Media regression, focused race checks, Go lint, and formatting pass.
+  Evidence: Controlled database failures leave no operator report in six maintenance paths after HTTP operation admission.
+  Requirements:
+  - Report failures during queue selection, recovery scans, usage delivery, and terminal retention.
+  - Include the maintenance phase and operation identifier when available.
+  - Preserve transaction rollback and retry through the next maintenance pass.
+  - Keep financial journal records independent of operational retention.
+  Validation:
+  - Exercise admitted HTTP operations with controlled database read and transaction failures.
+  - Verify safe reports, unchanged public state after failure, successful recovery, and duplicate suppression.
+  - Run media regression and applicable checks.
+
+- [x] [B255] (P1) Stop hosted file staging after authority loss.
+  Evidence: A hosted dictation request completes its file upload after grant revocation during upload initialization.
+  Evidence: The generation guard rejects the later model call, but the upload bypasses the authority check.
+  Requirements:
+  - Assign a staging role to provider file uploads.
+  - Require the current worker claim and active grant before each staging request.
+  - Preserve read and cleanup operations for accepted work after grant revocation.
+  - Reject provider transfers from an obsolete worker.
+  - Preserve safe authority error codes through the existing adapter.
+  Validation:
+  - Exercise upload initialization, finalization, generation, cleanup, and duplicate requests through hosted HTTP dictation.
+  - Verify grant revocation and claim expiry before file transmission.
+  - Run shared completion regression and applicable checks.
+  Resolution: Shared completion authority now guards each provider upload, file read, cleanup, and completion poll.
+  Resolution: Staging requires an active grant. Cleanup remains available to the current worker after grant revocation.
+  Validation: Hosted upload and process-interruption tests, shared adapter regression, race checks, Go lint, and formatting pass.
+  Validation: Final stack CI remains the F070 completion checkpoint.
+
+- [x] [B254] (P1) Expose reconciliation cases for missing hosted results.
+  Evidence: A real process restart creates `execution_result_unknown`, but the customer journal returns HTTP 500 for that case.
+  Evidence: The browser rejects the same case reason and removes the request evidence view.
+  Requirements:
+  - Keep all canonical reconciliation reasons in the journal contract.
+  - Accept result-recovery cases in the API, OpenAPI schema, and browser client.
+  - Preserve private resolution data and rejection of unrecognized reasons.
+  Validation:
+  - Read the case created after process interruption and result recovery through HTTP.
+  - Verify the complete case contract and browser rendering at desktop and phone widths.
+  - Run focused regression and applicable checks before final stack CI.
+  Resolution: The journal, API schema, and browser accept `execution_result_unknown` and preserve private evidence.
+  Validation: Process recovery, journal HTTP tests, browser acceptance, lint, formatting, and generated API checks pass.
+  Validation: Final stack CI remains the F070 completion checkpoint.
+
+- [x] [B253] (P1) Enforce hosted worker authority at the gRPC transport boundary.
+  Evidence: Controlled gRPC tests submit speech after grant revocation and worker claim expiry.
+  Requirements:
+  - Use the shared media dispatch guard for HTTP and gRPC provider calls.
+  - Reject new work after authority loss and during recovery.
+  - Preserve authorized status reads, artifact transfers, and cancellation.
+  Validation:
+  - Exercise the generated Dictator SDK through hosted HTTP operations.
+  - Verify rejection before provider submission and retention of accepted request identity.
+  - Run focused regression and race checks before final stack CI.
+  Resolution: HTTP and generated Dictator SDK calls use the same media dispatch guard.
+  Resolution: The SDK wrapper uses explicit method roles and checks authority for artifact streams.
+  Validation: Hosted HTTP and gRPC tests reject revoked or expired authority before submission and prevent submission during recovery.
+  Validation: Recovery and cancellation after revocation retain one provider submission and the accepted request identity.
+  Validation: Broad regression tests, focused race checks, Go lint, and formatting pass. Final stack CI remains the F070 completion checkpoint.
+
+- [x] [B252] (P1) Use hosted authority during speech admission validation.
+  Evidence: A hosted Dictator speech request returns HTTP 400 because validation reads an absent customer connection.
+  Requirements:
+  - Supply the selected hosted authority to the existing adapter validator.
+  - Keep voice ownership and credential checks in their current adapters.
+  - Recheck grant and credential authority in the admission transaction.
+  Validation:
+  - Exercise hosted speech through HTTP and the current Dictator gRPC adapter.
+  - Verify accepted credential versions, voice isolation, replay, rotation, and revocation.
+  - Run focused regression and race checks before final stack CI.
+  Resolution: The shared admission boundary supplies hosted authority to the existing adapter validator.
+  Validation: HTTP and gRPC tests verify voice isolation, accepted credential versions, replay, and rejection after admission authority changes.
+  Validation: Broad regression tests, focused race checks, Go lint, and formatting pass. Final stack CI remains the F070 completion checkpoint.
+
+- [x] [B251] (P1) Keep provider recovery content outside the usage journal.
+  Evidence: Hosted dictionary HTTP tests retain the dictionary name and description in the journal provider identifier.
+  Requirements:
+  - Give each adapter separate recovery data and provider request identifier fields.
+  - Keep the recovery data in the media operation.
+  - Commit the recovery data and explicit provider identifier in one transaction.
+  - Preserve an absent provider identifier without a substitute value.
+  Validation:
+  - Verify journal contents after real hosted service requests with present and absent provider identifiers.
+  - Verify recovery, worker fencing, and transaction rollback through existing integration tests.
+  - Run focused regression and race checks before the final stack CI checkpoint.
+  Resolution: Adapters supply a typed receipt with separate recovery data and provider request identifiers.
+  Resolution: The worker stores recovery data with the operation and explicit identifiers with the journal in one transaction.
+  Validation: HTTP tests verify present and absent identifiers, private dictionary content, and rollback after an identifier write failure.
+  Validation: Broad adapter regression, focused race checks, Go lint, and formatting pass. Final stack CI remains the F070 completion checkpoint.
+
+- [x] [B250] (P1) Report media worker persistence failures.
+  Evidence: HTTP tests in F066 reproduced missing operator reports after claim, dispatch, and final result write failures.
+  Requirements:
+  - Return transaction errors to the worker boundary.
+  - Preserve the original database cause with the operation and worker identifiers.
+  - Report failures from usage, provider handle, preview, output, voice, dictionary, and claim renewal writes.
+  - Preserve retained request identity and prevent duplicate provider work after uncertain outcomes.
+  Validation:
+  - Inject database failures through real HTTP operation flows and the configured logger.
+  - Verify operator reports and caller-visible states through the official client.
+  - Run focused regression and race checks before the final stack CI checkpoint.
+  Resolution: The worker returns transaction failures and records their cause through the configured logger.
+  Resolution: Adapter persistence failures include the operation identifier and execution phase.
+  Validation: HTTP reporting tests and broad hosted and media regression tests pass. Focused race checks, Go lint, and formatting pass.
+  Validation: Final stack CI remains the F070 completion checkpoint.
+
 - [x] [B249] (P1) Keep browser screenshot output outside tracked files.
   Evidence: Release CI changes five tracked PNG files in `artifacts/` and fails with `app_release.source_drift`.
   Requirements: Save generated screenshots in ignored Playwright output and attach them to their test results.
@@ -2279,6 +2401,8 @@ retain satisfied historical dependencies.
   HTTP tests reject unavailable hosted execution across native, client, MCP, dictation, and media interfaces without upstream calls.
   Browser tests verify hosted setup and grant suspension at desktop, 390px, and 320px widths.
   The resource foundation is in [PR 339](https://github.com/tyemirov/llm-proxy/pull/339).
+  Hosted CI run 35804548155 passed frontend and backend-checks jobs.
+  The backend coverage gate reported `coverage total 99.0%, want 100.0%`.
   Financial admission, accepted-work recovery, and complete acceptance remain open.
   Requirements:
   - Use F070 as the shared hosted service contract.
@@ -2324,6 +2448,65 @@ retain satisfied historical dependencies.
 - [ ] [F066] (P1) {F065} Add a durable usage journal for customer billing.
   Goal:
   Record every hosted request and upstream attempt with enough evidence to explain its financial outcome after a restart.
+  Account-owned journal reads and browser client methods are implemented in the development branch.
+  Database tests cover concurrent admission, reservation rollback, worker claims, dispatch recovery, exact quantities, and accounting delivery.
+  Controlled HTTP tests cover text continuations, synthesis, polling, lost responses, invalid JSON, and grant denial.
+  Hosted text identity tests cover concurrent database instances, result replay, response expiry, and native and client protocols.
+  Text recovery tests interrupt the service before dispatch, during provider work, after observation, and before and after result publication.
+  HTTP tests verify worker replacement, retained usage, publication recovery, and rejection of obsolete worker writes.
+  Authenticated MCP tests verify shared native identity, concurrent replay, changed intent, account isolation, result expiry, and uncertain outcomes.
+  Go, Python, and CLI acceptance verifies shared hosted keys, pending states, and result expiry through the service.
+  Controlled media HTTP tests verify atomic admission, shared operation identity, concurrent replay, authority changes, and rollback.
+  Text startup recovery leaves media records for the media worker.
+  Hosted image worker tests cover accepted credential versions, dispatch authority, obsolete workers, provider recovery, and cancellation.
+  Media outcomes and journal outcomes use one transaction. Observations and delivery records also commit together.
+  Missing media meters retain unknown usage.
+  The Images API adapter records exact token evidence before image validation and asset publication.
+  HTTP tests cover completed streams, contradictory totals, missing quantities, evidence write failures, and delayed obsolete responses.
+  Unknown cache measurements prevent complete image usage.
+  The Responses image adapter retains exact terminal response usage from JSON, polling, and streams before result publication.
+  Separate response quantities preserve cache and reasoning inclusion. Unqualified image tool counters remain unknown.
+  Controlled HTTP tests verify failed outcomes, missing usage, replay, and evidence write failures across all three response paths.
+  B250 resolved missing operator reports for media worker persistence failures.
+  B251 prevents adapter recovery content from becoming journal provider identifiers.
+  B252 supplies hosted authority during existing speech validation and preserves the final admission check.
+  B253 applies shared dispatch authority to HTTP and gRPC, including recovery and cancellation.
+  Hosted voice discovery and previews now use current speech grants and qualified platform credentials through existing adapters.
+  HTTP and gRPC tests verify private voice isolation, retained tenant voices, obsolete cursors, revocation, and separate metadata permission.
+  Hosted grants and journal records now support explicit provider services without model identifiers.
+  HTTP tests verify dictionary creation, audio alignment, retained identity, exact service authority, and revocation through existing adapters.
+  The browser displays and assigns service grants at desktop and phone widths.
+  Customer journal views now expose bounded attempts, exact usage observations, and safe reconciliation cases through the existing dashboard.
+  HTTP tests verify account isolation, pagination, private-field omission, and unchanged journal records.
+  Browser tests verify exact values, unknown quantities, additional pages, failed reads, and desktop and phone layouts.
+  Hosted dictation now uses shared completion admission, pinned credentials, replay, and recovery.
+  HTTP tests verify cross-interface identity, concurrent requests, revocation, expiry, exact measurements, and uncertain outcomes after failures.
+  Catalog-driven HTTP tests verify each current dictation offering through its existing adapter and both transcription interfaces.
+  Dictation recovery tests verify all five process-interruption boundaries with retained usage and execution identity.
+  Hosted file tests verify staging authority, cleanup after revocation, claim expiry, and replay without repeated generation.
+  B256 verifies maintenance failure reports, transaction rollback, repeated recovery, and financial evidence after operational retention.
+  The existing ElevenLabs generation and conversion adapters retain exact provider cost units before audio publication.
+  HTTP tests cover every current offering for both protocols, unknown usage, failures, multipart conversion, and replay.
+  Anthropic cache evidence now retains exact five-minute and one-hour subdivisions with explicit inclusion rules.
+  Shared token validation preserves contradictory numeric source evidence while marking the corresponding quantities as unknown.
+  Hosted web search retains per-attempt search action counts without queries, URLs, or tool identifiers.
+  HTTP tests verify unknown tool usage, polling, continuations, transaction rollback, and failure replay without repeated work.
+  Google text and dictation meters now retain exact modality arrays with explicit inclusion rules.
+  HTTP tests verify unknown subdivisions, invalid counts, cache boundaries, and replay through both Google protocols.
+  xAI Responses evidence now retains exact provider cost in USD ticks separately from token measurements.
+  FAL queue results now retain exact billed units through the shared decimal header reader.
+  HTTP tests verify failed results, artifact failures, transaction rollback, and recovery without another submission.
+  The hosted Dictator gRPC boundary now retains terminal synthesis duration before artifact transfer.
+  HTTP and gRPC tests verify native precision, unknown duration, terminal states, failed writes, and artifact loss.
+  The same gRPC boundary now records unknown input duration for all five Dictator audio input operations.
+  Voice extraction retains reported sample duration separately from unknown input duration.
+  HTTP acceptance covers each current audio input offering and rejects duplicate work on replay.
+  A full operational telemetry queue does not remove hosted usage or its delivery record.
+  HTTP acceptance verifies this separation and one provider call across replay.
+  Controlled HTTP acceptance covers all 67 active text offerings, both image editing surfaces, and both Dictator synthesis offerings.
+  Timeout and client disconnect acceptance preserve uncertain dispatches and prevent repeated provider work.
+  The journal implementation passes component acceptance. F067 and F068 must connect rating and funds settlement to its delivery transaction.
+  Final stack CI remains the F070 completion checkpoint.
   Requirements:
   - Use F070 as the shared hosted service contract.
   - Replace the billing dependency on `management_usage_writer.go` with a durable journal in the managed database.

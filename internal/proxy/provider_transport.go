@@ -3,6 +3,8 @@ package proxy
 import (
 	"net/http"
 	"strings"
+
+	"github.com/cenkalti/backoff/v4"
 )
 
 type providerTransportHTTPDoer struct {
@@ -27,6 +29,13 @@ func (doer providerTransportHTTPDoer) Do(request *http.Request) (*http.Response,
 	authorizedRequest.Header.Set(authentication.Header, authentication.Prefix+doer.credentialValue)
 	for _, header := range doer.transport.headers {
 		authorizedRequest.Header.Set(header.Name, header.Value)
+	}
+	if execution := hostedTextExecutionFromContext(request.Context()); execution != nil {
+		response, err := execution.do(doer.next, authorizedRequest, doer.transport)
+		if err != nil && request.Method == http.MethodPost {
+			return response, backoff.Permanent(err)
+		}
+		return response, err
 	}
 	return doer.next.Do(authorizedRequest)
 }

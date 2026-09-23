@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="b4a23054af5143a3a94a9f61ca774d23e5c7835b1f7d603a9578299ba1b92af5">
+    <meta name="openapi-source-sha256" content="d7315027f30e8b32cb70351a0e1fea242d36e9f3c763185d20651d5bbcda2a4e">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="b4a23054af5143a3a94a9f61ca774d23e5c7835b1f7d603a9578299ba1b92af5">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="d7315027f30e8b32cb70351a0e1fea242d36e9f3c763185d20651d5bbcda2a4e">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -46,11 +46,11 @@
       <section id="openapi-schema" class="resource-hero">
         <p class="eyebrow">Canonical API contract</p>
         <h1>LLM Proxy HTTP API</h1>
-        <p class="resource-deck">The sole canonical wire contract for llm-proxy-owned proxy, browser configuration, and management endpoints. Each configured text model owns one explicit upstream wire contract and execution lifecycle. OpenAI Gemini 3.5 Transcribe accepts file dictation through synchronous Interactions. The filename extension selects a supported audio MIME type. An unsupported extension returns HTTP 400 with invalid_audio_input. The upload byte limit applies. Gemini enforces its one-hour audio duration limit. Gemini 3.6 Flash accepts reasoning efforts minimal, low, medium, and high. Gemini 3.7 Flash accepts low, medium, and high. An omitted effort leaves the provider default in effect. Both routes accept text, image, and audio input with a maximum of 65,536 output tokens. Responses and Gemini 3.x Interactions use stored pollable resources. OpenAI-compatible Chat Completions and Anthropic Messages complete synchronously. Public proxy operations remain blocking and never expose an upstream resource id. OpenAI resource ids remain in memory only, but the current adapter does not cancel or delete stored Responses, so OpenAI account retention policy applies. Background Gemini interaction ids are also request-local; the adapter cancels active resources and deletes every stored interaction on exit. Each Gemini Interactions route rejects assistant history before provider dispatch. An incomplete Gemini response returns a provider error without replay. TAuth-owned endpoints are outside this contract. Contributors must update this document in the same change as any owned handler or bundled-client wire change.</p>
+        <p class="resource-deck">The sole canonical wire contract for llm-proxy-owned proxy, browser configuration, and management endpoints. Each configured text model owns one explicit upstream wire contract and execution lifecycle. OpenAI Gemini 3.5 Transcribe accepts file dictation through synchronous Interactions. The filename extension selects a supported audio MIME type. An unsupported extension returns HTTP 400 with invalid_audio_input. The upload byte limit applies. Gemini enforces its one-hour audio duration limit. Gemini 3.6 Flash accepts reasoning efforts minimal, low, medium, and high. Gemini 3.7 Flash accepts low, medium, and high. An omitted effort leaves the provider default in effect. Both routes accept text, image, and audio input with a maximum of 65,536 output tokens. Responses and Gemini 3.x Interactions use stored pollable resources. OpenAI-compatible Chat Completions and Anthropic Messages complete synchronously. Generation responses remain synchronous. A hosted duplicate can return an active receipt. The proxy does not expose provider resource identifiers. For customer-owned credentials, OpenAI resource ids remain in memory only. The adapter does not cancel or delete stored Responses. The OpenAI account retention policy applies. For hosted work, the journal keeps private provider resource identifiers. For customer-owned credentials, background Gemini interaction ids are request-local. The adapter cancels active resources and deletes every stored interaction on exit. Each Gemini Interactions route rejects assistant history before provider dispatch. An incomplete Gemini response returns a provider error without replay. TAuth-owned endpoints are outside this contract. Contributors must update this document in the same change as any owned handler or bundled-client wire change.</p>
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>b4a23054af5143a3a94a9f61ca774d23e5c7835b1f7d603a9578299ba1b92af5</code></span>
+          <span>Source SHA-256 <code>d7315027f30e8b32cb70351a0e1fea242d36e9f3c763185d20651d5bbcda2a4e</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -79,12 +79,14 @@ info:
     input with a maximum of 65,536 output tokens.
     Responses and Gemini 3.x Interactions use stored pollable resources.
     OpenAI-compatible Chat Completions and Anthropic Messages complete
-    synchronously. Public proxy operations remain blocking and never expose an
-    upstream resource id. OpenAI resource ids remain in memory only, but the
-    current adapter does not cancel or delete stored Responses, so OpenAI
-    account retention policy applies. Background Gemini interaction ids are
-    also request-local; the adapter cancels active resources and deletes every
-    stored interaction on exit. Each Gemini Interactions route rejects
+    synchronously. Generation responses remain synchronous. A hosted duplicate
+    can return an active receipt. The proxy does not expose provider resource identifiers.
+    For customer-owned credentials, OpenAI resource ids remain in memory only.
+    The adapter does not cancel or delete stored Responses. The OpenAI account retention policy applies.
+    For hosted work, the journal keeps private provider resource identifiers.
+    For customer-owned credentials, background Gemini interaction ids are request-local.
+    The adapter cancels active resources and deletes every stored interaction on exit.
+    Each Gemini Interactions route rejects
     assistant history before provider dispatch. An incomplete Gemini response
     returns a provider error without replay.
     TAuth-owned endpoints are outside this contract.
@@ -155,6 +157,8 @@ paths:
         Generation uses a separate request_timeout_seconds budget after the upload.
         The llm_proxy.list_tenants tool provides all owned tenant summaries.
         The llm_proxy.generate_text tool requires tenant_id and messages.
+        Hosted text also requires idempotency_key and returns the original execution identifier for identical requests.
+        A concurrent hosted request returns state dispatched without generated text.
         The llm-proxy://tenants/{tenant_id}/routes resource template provides configured text routes.
         Tool execution failures use isError with a sanitized code.
         Resource errors and protocol errors use JSON-RPC errors with the protocol HTTP status.
@@ -266,6 +270,7 @@ paths:
         - TenantBearerKey: []
       parameters:
         - $ref: &#39;#/components/parameters/RequestTimeout&#39;
+        - $ref: &#39;#/components/parameters/HostedCompletionIdempotencyKey&#39;
       requestBody:
         required: true
         content:
@@ -273,6 +278,14 @@ paths:
             schema:
               $ref: &#39;#/components/schemas/OpenAIChatRequest&#39;
       responses:
+        &#39;202&#39;:
+          $ref: &#39;#/components/responses/StructuredRequestPending&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/HostedClientFailure&#39;
+        &#39;409&#39;:
+          $ref: &#39;#/components/responses/HostedClientFailure&#39;
+        &#39;410&#39;:
+          $ref: &#39;#/components/responses/HostedClientFailure&#39;
         &#39;200&#39;:
           description: Completed result.
           headers:
@@ -455,6 +468,7 @@ paths:
         - TenantBearerKey: []
       parameters:
         - $ref: &#39;#/components/parameters/RequestTimeout&#39;
+        - $ref: &#39;#/components/parameters/HostedCompletionIdempotencyKey&#39;
       requestBody:
         required: true
         content:
@@ -462,6 +476,14 @@ paths:
             schema:
               $ref: &#39;#/components/schemas/OpenAIResponsesRequest&#39;
       responses:
+        &#39;202&#39;:
+          $ref: &#39;#/components/responses/StructuredRequestPending&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/HostedClientFailure&#39;
+        &#39;409&#39;:
+          $ref: &#39;#/components/responses/HostedClientFailure&#39;
+        &#39;410&#39;:
+          $ref: &#39;#/components/responses/HostedClientFailure&#39;
         &#39;200&#39;:
           description: Completed result.
           headers:
@@ -638,11 +660,13 @@ paths:
         - Client protocols
       description: &gt;-
         Authenticate with a tenant bearer key. Select one exact provider/model route. Reject unsupported fields
-        before provider dispatch.
+        before provider dispatch. Hosted requests require Idempotency-Key.
+        Identical audio and format use the same request identity across both transcription interfaces.
       security:
         - TenantBearerKey: []
       parameters:
         - $ref: &#39;#/components/parameters/RequestTimeout&#39;
+        - $ref: &#39;#/components/parameters/HostedCompletionIdempotencyKey&#39;
       requestBody:
         required: true
         content:
@@ -650,6 +674,14 @@ paths:
             schema:
               $ref: &#39;#/components/schemas/OpenAITranscriptionRequest&#39;
       responses:
+        &#39;202&#39;:
+          $ref: &#39;#/components/responses/StructuredRequestPending&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/HostedClientFailure&#39;
+        &#39;409&#39;:
+          $ref: &#39;#/components/responses/HostedClientFailure&#39;
+        &#39;410&#39;:
+          $ref: &#39;#/components/responses/HostedClientFailure&#39;
         &#39;200&#39;:
           description: Completed result.
           headers:
@@ -891,7 +923,12 @@ paths:
         - $ref: &#39;#/components/parameters/ResponseFormat&#39;
         - $ref: &#39;#/components/parameters/Accept&#39;
         - $ref: &#39;#/components/parameters/RequestTimeout&#39;
+        - $ref: &#39;#/components/parameters/HostedCompletionIdempotencyKey&#39;
       responses:
+        &#39;202&#39;:
+          $ref: &#39;#/components/responses/StructuredRequestPending&#39;
+        &#39;410&#39;:
+          $ref: &#39;#/components/responses/HostedResultExpired&#39;
         &#39;200&#39;:
           $ref: &#39;#/components/responses/TextSuccess&#39;
         &#39;400&#39;:
@@ -899,7 +936,7 @@ paths:
         &#39;403&#39;:
           $ref: &#39;#/components/responses/ProxyForbidden&#39;
         &#39;409&#39;:
-          $ref: &#39;#/components/responses/ProviderNotConfigured&#39;
+          $ref: &#39;#/components/responses/V2Conflict&#39;
         &#39;429&#39;:
           $ref: &#39;#/components/responses/ProxyRateLimited&#39;
         &#39;499&#39;:
@@ -925,9 +962,14 @@ paths:
         - $ref: &#39;#/components/parameters/ResponseFormat&#39;
         - $ref: &#39;#/components/parameters/Accept&#39;
         - $ref: &#39;#/components/parameters/RequestTimeout&#39;
+        - $ref: &#39;#/components/parameters/HostedCompletionIdempotencyKey&#39;
       requestBody:
         $ref: &#39;#/components/requestBodies/TextRequest&#39;
       responses:
+        &#39;202&#39;:
+          $ref: &#39;#/components/responses/StructuredRequestPending&#39;
+        &#39;410&#39;:
+          $ref: &#39;#/components/responses/HostedResultExpired&#39;
         &#39;200&#39;:
           $ref: &#39;#/components/responses/TextSuccess&#39;
         &#39;400&#39;:
@@ -935,7 +977,7 @@ paths:
         &#39;403&#39;:
           $ref: &#39;#/components/responses/ProxyForbidden&#39;
         &#39;409&#39;:
-          $ref: &#39;#/components/responses/ProviderNotConfigured&#39;
+          $ref: &#39;#/components/responses/V2Conflict&#39;
         &#39;413&#39;:
           $ref: &#39;#/components/responses/ProxyPayloadTooLarge&#39;
         &#39;429&#39;:
@@ -995,7 +1037,7 @@ paths:
         &#39;404&#39;:
           $ref: &#39;#/components/responses/AssetFailure&#39;
         &#39;410&#39;:
-          $ref: &#39;#/components/responses/AssetFailure&#39;
+          $ref: &#39;#/components/responses/V2Expired&#39;
         &#39;409&#39;:
           $ref: &#39;#/components/responses/V2Conflict&#39;
         &#39;413&#39;:
@@ -1038,7 +1080,7 @@ paths:
   /v2/requests:
     get:
       operationId: getV2StructuredRequest
-      summary: Reconcile a durable structured-output request
+      summary: Reconcile a durable text request
       description: &gt;-
         Returns the terminal JSON result, a safe in-progress receipt, or a safe
         terminal failure for the authenticated tenant and exact Idempotency-Key.
@@ -1061,6 +1103,8 @@ paths:
           $ref: &#39;#/components/responses/StructuredRequestBadRequest&#39;
         &#39;404&#39;:
           $ref: &#39;#/components/responses/StructuredRequestNotFound&#39;
+        &#39;410&#39;:
+          $ref: &#39;#/components/responses/StructuredRequestExpired&#39;
         &#39;409&#39;:
           $ref: &#39;#/components/responses/StructuredRequestConflict&#39;
         &#39;429&#39;:
@@ -1224,6 +1268,12 @@ paths:
     get:
       operationId: listTenantMediaVoices
       summary: Discover and list tenant-owned provider voices
+      description: &gt;-
+        Hosted access requires an active speech grant and qualified platform credentials.
+        Hosted ElevenLabs discovery exposes default premade voices.
+        Hosted Dictator discovery includes only presets and the tenant&#39;s retained extracted voices.
+        Hosted cursors bind the grant revision and credential version.
+        Metadata reads do not create billable attempts.
       tags:
         - Proxy
       security:
@@ -1265,11 +1315,13 @@ paths:
             enum: [asc, desc]
         - name: voice_type
           in: query
+          description: Hosted ElevenLabs access accepts only default. Other values return 400.
           schema:
             type: string
             enum: [personal, community, default, account, non-default, non-community, saved]
         - name: category
           in: query
+          description: Hosted ElevenLabs access accepts only premade. Other values return 400.
           schema:
             type: string
             enum: [premade, cloned, generated, professional]
@@ -1521,6 +1573,9 @@ paths:
     post:
       operationId: postDictation
       summary: Transcribe an audio upload
+      description: &gt;-
+        Hosted dictation requires Idempotency-Key. Identical audio and format replay the accepted request across both transcription interfaces.
+        The usage journal retains provider measurements and the request identity after result expiry.
       tags:
         - Proxy
       security:
@@ -1531,9 +1586,14 @@ paths:
         - $ref: &#39;#/components/parameters/Provider&#39;
         - $ref: &#39;#/components/parameters/Model&#39;
         - $ref: &#39;#/components/parameters/RequestTimeout&#39;
+        - $ref: &#39;#/components/parameters/HostedCompletionIdempotencyKey&#39;
       requestBody:
         $ref: &#39;#/components/requestBodies/DictationRequest&#39;
       responses:
+        &#39;202&#39;:
+          $ref: &#39;#/components/responses/StructuredRequestPending&#39;
+        &#39;410&#39;:
+          $ref: &#39;#/components/responses/HostedResultExpired&#39;
         &#39;200&#39;:
           $ref: &#39;#/components/responses/DictationSuccess&#39;
         &#39;400&#39;:
@@ -1541,7 +1601,7 @@ paths:
         &#39;403&#39;:
           $ref: &#39;#/components/responses/ProxyForbidden&#39;
         &#39;409&#39;:
-          $ref: &#39;#/components/responses/ProviderNotConfigured&#39;
+          $ref: &#39;#/components/responses/V2Conflict&#39;
         &#39;413&#39;:
           $ref: &#39;#/components/responses/ProxyPayloadTooLarge&#39;
         &#39;429&#39;:
@@ -1991,6 +2051,219 @@ paths:
             application/json:
               schema:
                 $ref: &#39;#/components/schemas/BillingAccount&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+  /api/management/billing-accounts/{billing_account_id}/requests:
+    get:
+      operationId: listJournalRequests
+      summary: Read the usage journal for an owned billing account
+      description: Results use ascending request identifiers. Each response contains at most 100 requests. Credentials and request content are omitted.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+        - $ref: &#39;#/components/parameters/HostedPageLimit&#39;
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            pattern: &#39;^request-[a-f0-9]{32}$&#39;
+      responses:
+        &#39;200&#39;:
+          description: The account usage journal page.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [requests, next_cursor]
+                properties:
+                  requests:
+                    type: array
+                    items:
+                      $ref: &#39;#/components/schemas/JournalRequest&#39;
+                  next_cursor:
+                    type: string
+                    description: The last request identifier when another page exists. An empty value ends the collection.
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+  /api/management/billing-accounts/{billing_account_id}/requests/{request_id}:
+    get:
+      operationId: getJournalRequest
+      summary: Read one request from an owned usage journal
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+        - name: request_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: &#39;^request-[a-f0-9]{32}$&#39;
+      responses:
+        &#39;200&#39;:
+          description: The retained request and its usage completeness.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/JournalRequest&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+  /api/management/billing-accounts/{billing_account_id}/requests/{request_id}/attempts:
+    get:
+      operationId: listJournalAttempts
+      summary: Read attempts for an owned journal request
+      description: Results use ascending opaque identifiers. Each response contains at most 100 records. Private provider identifiers and source content are omitted.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+        - $ref: &#39;#/components/parameters/JournalRequestID&#39;
+        - $ref: &#39;#/components/parameters/HostedPageLimit&#39;
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            pattern: &#39;^attempt-[a-f0-9]{32}$&#39;
+      responses:
+        &#39;200&#39;:
+          description: The owned request collection page.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [attempts, next_cursor]
+                properties:
+                  attempts:
+                    type: array
+                    maxItems: 100
+                    items:
+                      $ref: &#39;#/components/schemas/JournalAttempt&#39;
+                  next_cursor:
+                    type: string
+                    description: The last record identifier when another page exists. An empty value ends the collection.
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+  /api/management/billing-accounts/{billing_account_id}/requests/{request_id}/observations:
+    get:
+      operationId: listJournalObservations
+      summary: Read usage observations for an owned journal request
+      description: Results use ascending opaque identifiers. Each response contains at most 100 records. Private provider identifiers and source content are omitted.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+        - $ref: &#39;#/components/parameters/JournalRequestID&#39;
+        - $ref: &#39;#/components/parameters/HostedPageLimit&#39;
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            pattern: &#39;^observation-[a-f0-9]{32}$&#39;
+      responses:
+        &#39;200&#39;:
+          description: The owned request collection page.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [observations, next_cursor]
+                properties:
+                  observations:
+                    type: array
+                    maxItems: 100
+                    items:
+                      $ref: &#39;#/components/schemas/JournalObservation&#39;
+                  next_cursor:
+                    type: string
+                    description: The last record identifier when another page exists. An empty value ends the collection.
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+  /api/management/billing-accounts/{billing_account_id}/requests/{request_id}/reconciliation-cases:
+    get:
+      operationId: listJournalReconciliationCases
+      summary: Read reconciliation cases for an owned journal request
+      description: Results use ascending opaque identifiers. Each response contains at most 100 records. Private provider identifiers and source content are omitted.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+        - $ref: &#39;#/components/parameters/JournalRequestID&#39;
+        - $ref: &#39;#/components/parameters/HostedPageLimit&#39;
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            pattern: &#39;^case-[a-f0-9]{32}$&#39;
+      responses:
+        &#39;200&#39;:
+          description: The owned request collection page.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [cases, next_cursor]
+                properties:
+                  cases:
+                    type: array
+                    maxItems: 100
+                    items:
+                      $ref: &#39;#/components/schemas/JournalReconciliationCase&#39;
+                  next_cursor:
+                    type: string
+                    description: The last record identifier when another page exists. An empty value ends the collection.
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
         &#39;401&#39;:
           $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
         &#39;404&#39;:
@@ -3147,7 +3420,22 @@ components:
       name: Idempotency-Key
       in: header
       required: false
-      description: Required with structured_output and invalid without it. A repeated active or successful request does not start a second provider call. A known failed request permits an explicit new attempt. An uncertain request never starts provider work again.
+      description: &gt;-
+        Required for hosted text and structured output. A hosted key identifies one tenant request across native and client protocols.
+        An identical request returns its saved result or active receipt. Changed intent returns 409. Expired hosted results return 410.
+        A hosted replay never starts another execution. For account-owned credentials, the key requires structured_output.
+        A known failed request with account-owned credentials permits an explicit new attempt.
+      schema:
+        type: string
+        pattern: &#39;^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$&#39;
+    HostedCompletionIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: &gt;-
+        Required for hosted text and dictation. The key identifies one tenant request across native and client protocols.
+        An identical request returns its saved result or active receipt. Changed intent returns 409.
+        Expired hosted results return 410. A hosted replay never starts another execution.
       schema:
         type: string
         pattern: &#39;^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$&#39;
@@ -3159,6 +3447,20 @@ components:
         minimum: 1
         maximum: 100
         default: 50
+    BillingAccountID:
+      name: billing_account_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: &#39;^billing-[a-f0-9]{32}$&#39;
+    JournalRequestID:
+      name: request_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: &#39;^request-[a-f0-9]{32}$&#39;
     HostedGrantID:
       name: grant_id
       in: path
@@ -3486,14 +3788,19 @@ components:
             type: string
         application/json:
           schema:
-            $ref: &#39;#/components/schemas/ProxyErrorEnvelope&#39;
+            oneOf:
+              - $ref: &#39;#/components/schemas/ProxyErrorEnvelope&#39;
+              - $ref: &#39;#/components/schemas/StructuredRequestErrorEnvelope&#39;
     ProxyForbidden:
-      description: The tenant client key is absent or unknown.
+      description: The tenant client key is absent or unknown, or hosted admission is denied.
       content:
         text/plain:
           schema:
             type: string
             const: unknown client key
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/ProviderErrorEnvelope&#39;
     TenantIdentitySuccess:
       description: Server-resolved identity for the authenticated tenant.
       headers:
@@ -3529,6 +3836,7 @@ components:
             oneOf:
               - $ref: &#39;#/components/schemas/ProxyErrorEnvelope&#39;
               - $ref: &#39;#/components/schemas/AssetErrorEnvelope&#39;
+              - $ref: &#39;#/components/schemas/StructuredRequestErrorEnvelope&#39;
     V2StructuredRequestPending:
       description: The durable request is active. Reconcile the same key again.
       headers:
@@ -3553,7 +3861,9 @@ components:
               - provider_not_configured
         application/json:
           schema:
-            $ref: &#39;#/components/schemas/StructuredRequestErrorEnvelope&#39;
+            oneOf:
+              - $ref: &#39;#/components/schemas/StructuredRequestErrorEnvelope&#39;
+              - $ref: &#39;#/components/schemas/ProviderErrorEnvelope&#39;
     V2InternalFailure:
       description: The asset store or structured request store failed.
       headers:
@@ -3671,8 +3981,39 @@ components:
         application/json:
           schema:
             $ref: &#39;#/components/schemas/MediaVoiceErrorEnvelope&#39;
+    HostedClientFailure:
+      description: Hosted authority is denied, request intent conflicts, the outcome is unknown, or the saved result expired.
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/OpenAIError&#39;
+    HostedResultExpired:
+      description: The saved hosted result expired. The journal keeps the request identity and prevents another execution.
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/ProviderErrorEnvelope&#39;
+    V2Expired:
+      description: A referenced asset or saved hosted result expired.
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: &#39;#/components/schemas/AssetErrorEnvelope&#39;
+              - $ref: &#39;#/components/schemas/ProviderErrorEnvelope&#39;
+    StructuredRequestExpired:
+      description: The saved hosted result expired. The journal keeps the request identity and prevents another execution.
+      headers:
+        Cache-Control:
+          $ref: &#39;#/components/headers/NoStore&#39;
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/StructuredRequestErrorEnvelope&#39;
     StructuredRequestSucceeded:
-      description: Exact provider output that passed the caller JSON Schema and was durably committed before this response.
+      description: &gt;-
+        A saved hosted completion contains text, optional tool_calls, and optional usage.
+        An account-owned structured request returns the exact JSON that passed its caller schema.
       headers:
         Cache-Control:
           $ref: &#39;#/components/headers/NoStore&#39;
@@ -3755,7 +4096,10 @@ components:
     CallerClosed:
       description: The caller canceled or closed the request.
     ProxyBadGateway:
-      description: The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. The error response excludes partial text, token-count headers, and raw provider errors. Managed failure accounting can keep available provider usage.
+      description: &gt;-
+        The provider failed or returned an unusable response. A retained request failure uses the durable error representation.
+        The proxy continues output-budget stops only when the execution contract permits another attempt.
+        Errors exclude partial text, token-count headers, and raw provider errors. The journal can retain available usage after failure.
       headers:
         X-LLM-Proxy-Request-Timeout-Seconds:
           $ref: &#39;#/components/headers/ResolvedRequestTimeout&#39;
@@ -3766,7 +4110,9 @@ components:
       content:
         application/json:
           schema:
-            $ref: &#39;#/components/schemas/ProviderErrorEnvelope&#39;
+            oneOf:
+              - $ref: &#39;#/components/schemas/ProviderErrorEnvelope&#39;
+              - $ref: &#39;#/components/schemas/StructuredRequestErrorEnvelope&#39;
     ProxyUnavailable:
       description: The bounded request queue is full.
       headers:
@@ -4225,6 +4571,10 @@ components:
         tenant_id:
           type: string
           minLength: 1
+        idempotency_key:
+          type: string
+          pattern: &#39;^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$&#39;
+          description: Required for hosted text. Identifies one complete request within its tenant. Customer-owned text rejects this field.
         messages:
           type: array
           minItems: 1
@@ -4247,6 +4597,11 @@ components:
           minimum: 1
     MCPGenerateOutput:
       type: object
+      oneOf:
+        - $ref: &#39;#/components/schemas/MCPGenerateCompletionOutput&#39;
+        - $ref: &#39;#/components/schemas/MCPGeneratePendingOutput&#39;
+    MCPGenerateCompletionOutput:
+      type: object
       additionalProperties: false
       required: [text, request_id, provider, model, usage, request_timeout_seconds]
       properties:
@@ -4262,6 +4617,24 @@ components:
           oneOf:
             - $ref: &#39;#/components/schemas/TokenUsage&#39;
             - type: &#39;null&#39;
+        request_timeout_seconds:
+          type: integer
+          minimum: 1
+    MCPGeneratePendingOutput:
+      type: object
+      additionalProperties: false
+      required: [state, request_id, provider, model, request_timeout_seconds]
+      properties:
+        state:
+          type: string
+          enum: [dispatched]
+        request_id:
+          type: string
+          description: The original hosted execution identifier.
+        provider:
+          type: string
+        model:
+          type: string
         request_timeout_seconds:
           type: integer
           minimum: 1
@@ -6885,7 +7258,7 @@ components:
           properties:
             code:
               type: string
-              enum: [provider_error, provider_rate_limited, operation_deadline_exceeded, provider_outcome_unknown, worker_claim_lost, asset_publication_failed, provider_result_invalid, media_operation_unavailable]
+              enum: [provider_error, provider_rate_limited, operation_deadline_exceeded, provider_outcome_unknown, worker_claim_lost, asset_publication_failed, provider_result_invalid, media_operation_unavailable, usage_journal_unavailable]
         cost:
           type: object
           additionalProperties: false
@@ -7347,6 +7720,7 @@ components:
         code:
           type: string
           enum:
+            - hosted_result_expired
             - invalid_idempotency_key
             - structured_request_not_found
             - structured_request_intent_conflict
@@ -7357,6 +7731,7 @@ components:
         state:
           type: string
           enum:
+            - succeeded
             - failed
             - uncertain
         cause:
@@ -7508,6 +7883,10 @@ components:
             code:
               type: string
               enum:
+                - hosted_authority_denied
+                - hosted_result_expired
+                - usage_journal_conflict
+                - usage_journal_claim_lost
                 - provider_error
                 - provider_media_limit_exceeded
                 - provider_rate_limited
@@ -7595,6 +7974,159 @@ components:
         created_at:
           type: string
           format: date-time
+    JournalRequest:
+      type: object
+      additionalProperties: false
+      required: [id, tenant_id, grant_id, grant_revision, provider, operation, catalog_revision, execution_kind, execution_id, state, usage_state, created_at, updated_at]
+      anyOf:
+        - required: [model]
+        - properties:
+            execution_kind:
+              const: media_operation
+      properties:
+        id:
+          type: string
+          pattern: &#39;^request-[a-f0-9]{32}$&#39;
+        tenant_id:
+          type: string
+        grant_id:
+          type: string
+          pattern: &#39;^grant-[a-f0-9]{32}$&#39;
+        grant_revision:
+          type: integer
+          minimum: 1
+        provider:
+          type: string
+        model:
+          type: string
+          minLength: 1
+          description: Omitted for provider services that do not select a model.
+        operation:
+          type: string
+        catalog_revision:
+          type: string
+        execution_kind:
+          type: string
+          enum: [text_request, media_operation, dictation_request]
+        execution_id:
+          type: string
+          description: The identity retained by the execution owner.
+        state:
+          type: string
+          enum: [accepted, executing, completed, failed, uncertain]
+        usage_state:
+          type: string
+          enum: [pending, complete, unknown]
+          description: Execution completion does not establish usage completeness or charge eligibility.
+        failure_code:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    JournalAttempt:
+      type: object
+      additionalProperties: false
+      required: [id, number, state, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          pattern: &#39;^attempt-[a-f0-9]{32}$&#39;
+        number:
+          type: integer
+          minimum: 1
+        state:
+          type: string
+          enum: [prepared, dispatched, observed, uncertain]
+        dispatched_at:
+          type: string
+          format: date-time
+        observed_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    JournalQuantity:
+      type: object
+      additionalProperties: false
+      required: [dimension, unit]
+      oneOf:
+        - required: [value]
+        - required: [unknown_reason]
+      properties:
+        dimension:
+          type: string
+          pattern: &#39;^[a-z][a-z0-9_]{0,63}$&#39;
+        unit:
+          type: string
+          pattern: &#39;^[a-z][a-z0-9_]{0,63}$&#39;
+        value:
+          type: string
+          pattern: &#39;^(0|[1-9][0-9]*)(\.[0-9]+)?$&#39;
+          description: An exact nonnegative decimal measurement. An unknown measurement has no value.
+        unknown_reason:
+          type: string
+          enum: [not_reported, invalid_quantity, unsupported_meter]
+        included_in:
+          type: string
+          pattern: &#39;^[a-z][a-z0-9_]{0,63}$&#39;
+          description: The parent dimension that already includes this quantity. Do not add it to the parent again.
+    JournalObservation:
+      type: object
+      additionalProperties: false
+      required: [id, attempt_id, quantities, completeness, outcome, observed_at, created_at]
+      properties:
+        id:
+          type: string
+          pattern: &#39;^observation-[a-f0-9]{32}$&#39;
+        attempt_id:
+          type: string
+          pattern: &#39;^attempt-[a-f0-9]{32}$&#39;
+        quantities:
+          type: array
+          minItems: 1
+          items:
+            $ref: &#39;#/components/schemas/JournalQuantity&#39;
+        completeness:
+          type: string
+          enum: [complete, unknown]
+        outcome:
+          type: string
+          enum: [continue, complete, fail]
+        failure_code:
+          type: string
+        observed_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    JournalReconciliationCase:
+      type: object
+      additionalProperties: false
+      required: [id, reason, state, created_at]
+      properties:
+        id:
+          type: string
+          pattern: &#39;^case-[a-f0-9]{32}$&#39;
+        reason:
+          type: string
+          enum: [usage_unknown, dispatch_outcome_unknown, execution_outcome_unknown, execution_result_unknown]
+        state:
+          type: string
+          enum: [open, resolved]
+        resolved_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
     PlatformConnection:
       type: object
       additionalProperties: false
@@ -7655,11 +8187,11 @@ components:
     HostedGrantOfferings:
       type: array
       minItems: 1
-      description: Exact models from one provider. Each model and operation can occur only once.
+      description: Exact models or explicit services from one provider. An omitted model selects services, never all models.
       items:
         type: object
         additionalProperties: false
-        required: [model, operations]
+        required: [operations]
         properties:
           model:
             type: string
@@ -9117,6 +9649,11 @@ components:
 <a href="#operation-listBillingAccounts"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts</code><span>Read the authenticated owner&#39;s billing account</span></a>
 <a href="#operation-createBillingAccount"><span class="api-method api-method-post">POST</span><code>/api/management/billing-accounts</code><span>Create one USD billing account for the authenticated owner</span></a>
 <a href="#operation-getBillingAccount"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}</code><span>Read an owned billing account</span></a>
+<a href="#operation-listJournalRequests"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/requests</code><span>Read the usage journal for an owned billing account</span></a>
+<a href="#operation-getJournalRequest"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}</code><span>Read one request from an owned usage journal</span></a>
+<a href="#operation-listJournalAttempts"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/attempts</code><span>Read attempts for an owned journal request</span></a>
+<a href="#operation-listJournalObservations"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/observations</code><span>Read usage observations for an owned journal request</span></a>
+<a href="#operation-listJournalReconciliationCases"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/reconciliation-cases</code><span>Read reconciliation cases for an owned journal request</span></a>
 <a href="#operation-listManagementConnections"><span class="api-method api-method-get">GET</span><code>/api/management/connections</code><span>List account connections and provider definitions</span></a>
 <a href="#operation-createManagementConnection"><span class="api-method api-method-post">POST</span><code>/api/management/connections</code><span>Verify credentials and create an account connection</span></a>
 <a href="#operation-deleteManagementConnection"><span class="api-method api-method-delete">DELETE</span><code>/api/management/connections/{connection_id}</code><span>Delete an unassigned connection</span></a>
@@ -9172,7 +9709,7 @@ components:
 <a href="#operation-createResponse"><span class="api-method api-method-post">POST</span><code>/v1/responses</code><span>createResponse</span></a>
 <a href="#operation-postV2Messages"><span class="api-method api-method-post">POST</span><code>/v2</code><span>Generate text from canonical messages</span></a>
 <a href="#operation-getTenantIdentity"><span class="api-method api-method-get">GET</span><code>/v2/identity</code><span>Read the authenticated tenant identity</span></a>
-<a href="#operation-getV2StructuredRequest"><span class="api-method api-method-get">GET</span><code>/v2/requests</code><span>Reconcile a durable structured-output request</span></a>
+<a href="#operation-getV2StructuredRequest"><span class="api-method api-method-get">GET</span><code>/v2/requests</code><span>Reconcile a durable text request</span></a>
         </div>
       </section>
       <section class="api-operation" id="operation-getText">
@@ -9200,6 +9737,7 @@ components:
 <tr><td><code>format</code></td><td>query</td><td>No</td><td>string</td><td>Preferred response media type. Unknown values select text/plain.</td></tr>
 <tr><td><code>Accept</code></td><td>header</td><td>No</td><td>string</td><td>Response media preference used when format is omitted.</td></tr>
 <tr><td><code>X-LLM-Proxy-Request-Timeout-Seconds</code></td><td>header</td><td>No</td><td>integer</td><td>A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.</td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>No</td><td>string</td><td>Required for hosted text and dictation. The key identifies one tenant request across native and client protocols. An identical request returns its saved result or active receipt. Changed intent returns 409. Expired hosted results return 410. A hosted replay never starts another execution.</td></tr>
               </tbody>
             </table>
           </div>
@@ -9212,12 +9750,14 @@ components:
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Complete generated text in the selected representation. Each provider offering publishes one validated wire contract and an execution lifecycle for text-only requests. A media-capable offering also publishes media_execution_lifecycle for requests that contain image or audio input. The proxy does not infer a lifecycle from an endpoint or an upstream identifier. The proxy observes queued and in_progress states only for a pollable lifecycle. Each public operation remains blocking. Gemini media requests use synchronous completion and do not poll an Interaction resource. Transports with continuation actions continue exact output-budget stops through new provider calls. These transports are OpenAI Responses incomplete/max_output_tokens, OpenAI-compatible Chat Completions length, and Anthropic max_tokens. Gemini Interactions has no continuation actions. An incomplete result returns a provider error after cleanup. The adapter returns HTTP 200 only after the provider reports its complete signal. These signals are OpenAI or Gemini completed, Chat stop, or Anthropic end_turn or stop_sequence. Intermediate, safety, refusal, tool, malformed, missing, and unknown states do not return text as success.</td></tr>
+<tr><td><code>202</code></td><td>application/json</td><td>Cache-Control, X-LLM-Proxy-Structured-Request-State</td><td>The durable request has not reached a terminal state. Reconcile the same key again.</td></tr>
 <tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
-<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
-<tr><td><code>409</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected catalog route cannot execute because its provider credentials are not configured. No provider dispatch occurs.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
+<tr><td><code>409</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The provider is not configured, or the key identifies a different intent or an uncertain provider outcome.</td></tr>
+<tr><td><code>410</code></td><td>application/json</td><td>none</td><td>The saved hosted result expired. The journal keeps the request identity and prevents another execution.</td></tr>
 <tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
-<tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. The error response excludes partial text, token-count headers, and raw provider errors. Managed failure accounting can keep available provider usage.</td></tr>
+<tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The provider failed or returned an unusable response. A retained request failure uses the durable error representation. The proxy continues output-budget stops only when the execution contract permits another attempt. Errors exclude partial text, token-count headers, and raw provider errors. The journal can retain available usage after failure.</td></tr>
 <tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The bounded request queue is full.</td></tr>
 <tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
               </tbody>
@@ -9245,6 +9785,7 @@ components:
 <tr><td><code>format</code></td><td>query</td><td>No</td><td>string</td><td>Preferred response media type. Unknown values select text/plain.</td></tr>
 <tr><td><code>Accept</code></td><td>header</td><td>No</td><td>string</td><td>Response media preference used when format is omitted.</td></tr>
 <tr><td><code>X-LLM-Proxy-Request-Timeout-Seconds</code></td><td>header</td><td>No</td><td>integer</td><td>A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.</td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>No</td><td>string</td><td>Required for hosted text and dictation. The key identifies one tenant request across native and client protocols. An identical request returns its saved result or active receipt. Changed intent returns 409. Expired hosted results return 410. A hosted replay never starts another execution.</td></tr>
               </tbody>
             </table>
           </div>
@@ -9275,13 +9816,15 @@ components:
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Complete generated text in the selected representation. Each provider offering publishes one validated wire contract and an execution lifecycle for text-only requests. A media-capable offering also publishes media_execution_lifecycle for requests that contain image or audio input. The proxy does not infer a lifecycle from an endpoint or an upstream identifier. The proxy observes queued and in_progress states only for a pollable lifecycle. Each public operation remains blocking. Gemini media requests use synchronous completion and do not poll an Interaction resource. Transports with continuation actions continue exact output-budget stops through new provider calls. These transports are OpenAI Responses incomplete/max_output_tokens, OpenAI-compatible Chat Completions length, and Anthropic max_tokens. Gemini Interactions has no continuation actions. An incomplete result returns a provider error after cleanup. The adapter returns HTTP 200 only after the provider reports its complete signal. These signals are OpenAI or Gemini completed, Chat stop, or Anthropic end_turn or stop_sequence. Intermediate, safety, refusal, tool, malformed, missing, and unknown states do not return text as success.</td></tr>
+<tr><td><code>202</code></td><td>application/json</td><td>Cache-Control, X-LLM-Proxy-Structured-Request-State</td><td>The durable request has not reached a terminal state. Reconcile the same key again.</td></tr>
 <tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
-<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
-<tr><td><code>409</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected catalog route cannot execute because its provider credentials are not configured. No provider dispatch occurs.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
+<tr><td><code>409</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The provider is not configured, or the key identifies a different intent or an uncertain provider outcome.</td></tr>
+<tr><td><code>410</code></td><td>application/json</td><td>none</td><td>The saved hosted result expired. The journal keeps the request identity and prevents another execution.</td></tr>
 <tr><td><code>413</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The compatibility JSON request limit, dictation audio limit, tenant asset limit, or selected provider media limit was exceeded.</td></tr>
 <tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
-<tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. The error response excludes partial text, token-count headers, and raw provider errors. Managed failure accounting can keep available provider usage.</td></tr>
+<tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The provider failed or returned an unusable response. A retained request failure uses the durable error representation. The proxy continues output-budget stops only when the execution contract permits another attempt. Errors exclude partial text, token-count headers, and raw provider errors. The journal can retain available usage after failure.</td></tr>
 <tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The bounded request queue is full.</td></tr>
 <tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
               </tbody>
@@ -9481,6 +10024,201 @@ components:
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The owned account.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-listJournalRequests">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/requests</code>
+          <span class="api-operation-id">listJournalRequests</span>
+        </header>
+        <h2>Read the usage journal for an owned billing account</h2>
+        <p>Results use ascending request identifiers. Each response contains at most 100 requests. Credentials and request content are omitted.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>limit</code></td><td>query</td><td>No</td><td>integer</td><td></td></tr>
+<tr><td><code>cursor</code></td><td>query</td><td>No</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The account usage journal page.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getJournalRequest">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}</code>
+          <span class="api-operation-id">getJournalRequest</span>
+        </header>
+        <h2>Read one request from an owned usage journal</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>request_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The retained request and its usage completeness.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-listJournalAttempts">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/attempts</code>
+          <span class="api-operation-id">listJournalAttempts</span>
+        </header>
+        <h2>Read attempts for an owned journal request</h2>
+        <p>Results use ascending opaque identifiers. Each response contains at most 100 records. Private provider identifiers and source content are omitted.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>request_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>limit</code></td><td>query</td><td>No</td><td>integer</td><td></td></tr>
+<tr><td><code>cursor</code></td><td>query</td><td>No</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The owned request collection page.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-listJournalObservations">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/observations</code>
+          <span class="api-operation-id">listJournalObservations</span>
+        </header>
+        <h2>Read usage observations for an owned journal request</h2>
+        <p>Results use ascending opaque identifiers. Each response contains at most 100 records. Private provider identifiers and source content are omitted.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>request_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>limit</code></td><td>query</td><td>No</td><td>integer</td><td></td></tr>
+<tr><td><code>cursor</code></td><td>query</td><td>No</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The owned request collection page.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-listJournalReconciliationCases">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/reconciliation-cases</code>
+          <span class="api-operation-id">listJournalReconciliationCases</span>
+        </header>
+        <h2>Read reconciliation cases for an owned journal request</h2>
+        <p>Results use ascending opaque identifiers. Each response contains at most 100 records. Private provider identifiers and source content are omitted.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>request_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>limit</code></td><td>query</td><td>No</td><td>integer</td><td></td></tr>
+<tr><td><code>cursor</code></td><td>query</td><td>No</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The owned request collection page.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
 <tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
 <tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
 <tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
@@ -9795,7 +10533,7 @@ components:
 <tr><td><code>tenant_id</code></td><td>Yes</td><td>string</td><td></td></tr>
 <tr><td><code>platform_connection_id</code></td><td>Yes</td><td>string</td><td></td></tr>
 <tr><td><code>catalog_revision</code></td><td>Yes</td><td>string</td><td></td></tr>
-<tr><td><code>offerings</code></td><td>Yes</td><td>array&lt;object&gt;</td><td>Exact models from one provider. Each model and operation can occur only once.</td></tr>
+<tr><td><code>offerings</code></td><td>Yes</td><td>array&lt;object&gt;</td><td>Exact models or explicit services from one provider. An omitted model selects services, never all models.</td></tr>
 <tr><td><code>reason</code></td><td>Yes</td><td>string</td><td>Operator reason without leading or trailing whitespace. Customer responses omit this field.</td></tr>
               </tbody>
             </table>
@@ -10895,6 +11633,7 @@ components:
           <span class="api-operation-id">postDictation</span>
         </header>
         <h2>Transcribe an audio upload</h2>
+        <p>Hosted dictation requires Idempotency-Key. Identical audio and format replay the accepted request across both transcription interfaces. The usage journal retains provider measurements and the request identity after result expiry.</p>
         <p class="api-security"><strong>Authentication:</strong> TenantClientKey (query key)</p>
         <div class="api-contract-block">
           <h3>Parameters</h3>
@@ -10906,6 +11645,7 @@ components:
 <tr><td><code>provider</code></td><td>query</td><td>No</td><td>string</td><td>Canonical provider identifier from the public capability catalog, such as zai. Retired zhipu and glm values are invalid. Omission uses the tenant default.</td></tr>
 <tr><td><code>model</code></td><td>query</td><td>No</td><td>string</td><td>Model identifier. Omission uses the resolved provider default.</td></tr>
 <tr><td><code>X-LLM-Proxy-Request-Timeout-Seconds</code></td><td>header</td><td>No</td><td>integer</td><td>A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.</td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>No</td><td>string</td><td>Required for hosted text and dictation. The key identifies one tenant request across native and client protocols. An identical request returns its saved result or active receipt. Changed intent returns 409. Expired hosted results return 410. A hosted replay never starts another execution.</td></tr>
               </tbody>
             </table>
           </div>
@@ -10928,13 +11668,15 @@ components:
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>200</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>Transcription result.</td></tr>
+<tr><td><code>202</code></td><td>application/json</td><td>Cache-Control, X-LLM-Proxy-Structured-Request-State</td><td>The durable request has not reached a terminal state. Reconcile the same key again.</td></tr>
 <tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
-<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
-<tr><td><code>409</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected catalog route cannot execute because its provider credentials are not configured. No provider dispatch occurs.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
+<tr><td><code>409</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The provider is not configured, or the key identifies a different intent or an uncertain provider outcome.</td></tr>
+<tr><td><code>410</code></td><td>application/json</td><td>none</td><td>The saved hosted result expired. The journal keeps the request identity and prevents another execution.</td></tr>
 <tr><td><code>413</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The compatibility JSON request limit, dictation audio limit, tenant asset limit, or selected provider media limit was exceeded.</td></tr>
 <tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
-<tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. The error response excludes partial text, token-count headers, and raw provider errors. Managed failure accounting can keep available provider usage.</td></tr>
+<tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The provider failed or returned an unusable response. A retained request failure uses the durable error representation. The proxy continues output-budget stops only when the execution contract permits another attempt. Errors exclude partial text, token-count headers, and raw provider errors. The journal can retain available usage after failure.</td></tr>
 <tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The bounded request queue is full.</td></tr>
 <tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
               </tbody>
@@ -10972,7 +11714,7 @@ components:
           <span class="api-operation-id">postMCPRequest</span>
         </header>
         <h2>Use an owned tenant through MCP.</h2>
-        <p>Stateless Streamable HTTP supports 2026-07-28, 2025-11-25, 2025-06-18, and 2025-03-26 with JSON responses. The 2025 revisions use initialize and notifications/initialized. The 2026 revision uses server/discover and per-request protocol metadata. TAuth issues tokens for the API origin with the llm-proxy:use scope. Each request requires a bearer token. The body must arrive within server.request_timeout_seconds and cannot exceed 8 MiB. An upload timeout returns HTTP 408 before tool execution. Generation uses a separate request_timeout_seconds budget after the upload. The llm_proxy.list_tenants tool provides all owned tenant summaries. The llm_proxy.generate_text tool requires tenant_id and messages. The llm-proxy://tenants/{tenant_id}/routes resource template provides configured text routes. Tool execution failures use isError with a sanitized code. Resource errors and protocol errors use JSON-RPC errors with the protocol HTTP status.</p>
+        <p>Stateless Streamable HTTP supports 2026-07-28, 2025-11-25, 2025-06-18, and 2025-03-26 with JSON responses. The 2025 revisions use initialize and notifications/initialized. The 2026 revision uses server/discover and per-request protocol metadata. TAuth issues tokens for the API origin with the llm-proxy:use scope. Each request requires a bearer token. The body must arrive within server.request_timeout_seconds and cannot exceed 8 MiB. An upload timeout returns HTTP 408 before tool execution. Generation uses a separate request_timeout_seconds budget after the upload. The llm_proxy.list_tenants tool provides all owned tenant summaries. The llm_proxy.generate_text tool requires tenant_id and messages. Hosted text also requires idempotency_key and returns the original execution identifier for identical requests. A concurrent hosted request returns state dispatched without generated text. The llm-proxy://tenants/{tenant_id}/routes resource template provides configured text routes. Tool execution failures use isError with a sanitized code. Resource errors and protocol errors use JSON-RPC errors with the protocol HTTP status.</p>
         <p class="api-security"><strong>Authentication:</strong> MCPAccessToken (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
         <div class="api-contract-block">
           <h3>Parameters</h3>
@@ -11052,7 +11794,7 @@ components:
               <tbody>
                 <tr><td><code>201</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset is available to its authenticated tenant.</td></tr>
 <tr><td><code>400</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
-<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
 <tr><td><code>413</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
 <tr><td><code>500</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
@@ -11089,7 +11831,7 @@ components:
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>204</code></td><td>none</td><td>none</td><td>The asset is deleted.</td></tr>
-<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
 <tr><td><code>404</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
 <tr><td><code>410</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
 <tr><td><code>500</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
@@ -11125,7 +11867,7 @@ components:
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>200</code></td><td>application/json</td><td>none</td><td>The asset metadata is available to its authenticated tenant.</td></tr>
-<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
 <tr><td><code>404</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
 <tr><td><code>410</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
 <tr><td><code>500</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
@@ -11161,7 +11903,7 @@ components:
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>200</code></td><td>application/json, application/x-subrip, image/jpeg, image/png, image/webp, audio/m4a, audio/mpeg, audio/wav, audio/flac, audio/ogg, video/mp4, video/webm, application/octet-stream</td><td>none</td><td>Exact authenticated asset bytes.</td></tr>
-<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
 <tr><td><code>404</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
 <tr><td><code>410</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
 <tr><td><code>500</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
@@ -11187,7 +11929,7 @@ components:
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>200</code></td><td>application/json</td><td>none</td><td>Tenant-available media capability routes.</td></tr>
-<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
               </tbody>
             </table>
           </div>
@@ -11222,7 +11964,7 @@ components:
                 <tr><td><code>200</code></td><td>application/json</td><td>none</td><td>Current durable media operation state.</td></tr>
 <tr><td><code>202</code></td><td>application/json</td><td>none</td><td>Current durable media operation state.</td></tr>
 <tr><td><code>400</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
-<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
 <tr><td><code>409</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
 <tr><td><code>410</code></td><td>application/json</td><td>none</td><td>Terminal operation detail expired. The tenant idempotency tombstone remains.</td></tr>
 <tr><td><code>422</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
@@ -11260,7 +12002,7 @@ components:
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>200</code></td><td>application/json</td><td>none</td><td>Current durable media operation state.</td></tr>
-<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
 <tr><td><code>404</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
 <tr><td><code>410</code></td><td>application/json</td><td>none</td><td>Terminal operation detail expired. The tenant idempotency tombstone remains.</td></tr>
               </tbody>
@@ -11295,7 +12037,7 @@ components:
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>200</code></td><td>application/json</td><td>none</td><td>Current durable media operation state.</td></tr>
-<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
 <tr><td><code>404</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
 <tr><td><code>422</code></td><td>application/json</td><td>none</td><td>The media operation request failed with a stable caller-safe code.</td></tr>
               </tbody>
@@ -11333,7 +12075,7 @@ components:
               <tbody>
                 <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Retained tenant operation counts for one assigned provider.</td></tr>
 <tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
-<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
 <tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>A diagnostic read failed with a stable public code.</td></tr>
 <tr><td><code>405</code></td><td>application/json</td><td>Cache-Control</td><td>A diagnostic read failed with a stable public code.</td></tr>
 <tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>A diagnostic read failed with a stable public code.</td></tr>
@@ -11405,7 +12147,7 @@ components:
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Current provider account observation.</td></tr>
-<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
 <tr><td><code>404</code></td><td>application/json</td><td>none</td><td>The assigned resource is absent or the provider observation is unavailable.</td></tr>
 <tr><td><code>502</code></td><td>application/json</td><td>none</td><td>The assigned resource is absent or the provider observation is unavailable.</td></tr>
               </tbody>
@@ -11420,6 +12162,7 @@ components:
           <span class="api-operation-id">listTenantMediaVoices</span>
         </header>
         <h2>Discover and list tenant-owned provider voices</h2>
+        <p>Hosted access requires an active speech grant and qualified platform credentials. Hosted ElevenLabs discovery exposes default premade voices. Hosted Dictator discovery includes only presets and the tenant&#39;s retained extracted voices. Hosted cursors bind the grant revision and credential version. Metadata reads do not create billable attempts.</p>
         <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
         <div class="api-contract-block">
           <h3>Parameters</h3>
@@ -11433,8 +12176,8 @@ components:
 <tr><td><code>page_size</code></td><td>query</td><td>No</td><td>integer</td><td></td></tr>
 <tr><td><code>sort</code></td><td>query</td><td>No</td><td>string</td><td></td></tr>
 <tr><td><code>sort_direction</code></td><td>query</td><td>No</td><td>string</td><td></td></tr>
-<tr><td><code>voice_type</code></td><td>query</td><td>No</td><td>string</td><td></td></tr>
-<tr><td><code>category</code></td><td>query</td><td>No</td><td>string</td><td></td></tr>
+<tr><td><code>voice_type</code></td><td>query</td><td>No</td><td>string</td><td>Hosted ElevenLabs access accepts only default. Other values return 400.</td></tr>
+<tr><td><code>category</code></td><td>query</td><td>No</td><td>string</td><td>Hosted ElevenLabs access accepts only premade. Other values return 400.</td></tr>
 <tr><td><code>include_total_count</code></td><td>query</td><td>No</td><td>boolean</td><td></td></tr>
               </tbody>
             </table>
@@ -11449,7 +12192,7 @@ components:
               <tbody>
                 <tr><td><code>200</code></td><td>application/json</td><td>none</td><td>Tenant-owned voices discovered from the selected provider.</td></tr>
 <tr><td><code>400</code></td><td>application/json</td><td>none</td><td>The voice request failed with a stable caller-safe code.</td></tr>
-<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
 <tr><td><code>500</code></td><td>application/json</td><td>none</td><td>The voice request failed with a stable caller-safe code.</td></tr>
 <tr><td><code>502</code></td><td>application/json</td><td>none</td><td>The voice request failed with a stable caller-safe code.</td></tr>
               </tbody>
@@ -11484,7 +12227,7 @@ components:
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>200</code></td><td>application/json</td><td>none</td><td>One tenant-owned voice without native provider identifiers.</td></tr>
-<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
 <tr><td><code>404</code></td><td>application/json</td><td>none</td><td>The voice request failed with a stable caller-safe code.</td></tr>
 <tr><td><code>500</code></td><td>application/json</td><td>none</td><td>The voice request failed with a stable caller-safe code.</td></tr>
               </tbody>
@@ -11520,7 +12263,7 @@ components:
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>200</code></td><td>audio/mpeg, audio/wav</td><td>Cache-Control</td><td>Audio preview from the current provider connection.</td></tr>
-<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
 <tr><td><code>404</code></td><td>application/json</td><td>none</td><td>The voice request failed with a stable caller-safe code.</td></tr>
 <tr><td><code>500</code></td><td>application/json</td><td>none</td><td>The voice request failed with a stable caller-safe code.</td></tr>
 <tr><td><code>502</code></td><td>application/json</td><td>none</td><td>The voice request failed with a stable caller-safe code.</td></tr>
@@ -11536,7 +12279,7 @@ components:
           <span class="api-operation-id">createTranscription</span>
         </header>
         <h2>createTranscription</h2>
-        <p>Authenticate with a tenant bearer key. Select one exact provider/model route. Reject unsupported fields before provider dispatch.</p>
+        <p>Authenticate with a tenant bearer key. Select one exact provider/model route. Reject unsupported fields before provider dispatch. Hosted requests require Idempotency-Key. Identical audio and format use the same request identity across both transcription interfaces.</p>
         <p class="api-security"><strong>Authentication:</strong> TenantBearerKey (Authorization: Bearer &lt;tenant-client-key&gt;)</p>
         <div class="api-contract-block">
           <h3>Parameters</h3>
@@ -11545,6 +12288,7 @@ components:
               <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>X-LLM-Proxy-Request-Timeout-Seconds</code></td><td>header</td><td>No</td><td>integer</td><td>A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.</td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>No</td><td>string</td><td>Required for hosted text and dictation. The key identifies one tenant request across native and client protocols. An identical request returns its saved result or active receipt. Changed intent returns 409. Expired hosted results return 410. A hosted replay never starts another execution.</td></tr>
               </tbody>
             </table>
           </div>
@@ -11569,9 +12313,13 @@ components:
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>200</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control, X-LLM-Proxy-Request-Timeout-Seconds</td><td>Completed result.</td></tr>
+<tr><td><code>202</code></td><td>application/json</td><td>Cache-Control, X-LLM-Proxy-Structured-Request-State</td><td>The durable request has not reached a terminal state. Reconcile the same key again.</td></tr>
 <tr><td><code>400</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control, X-LLM-Proxy-Request-Timeout-Seconds</td><td>Request failure.</td></tr>
 <tr><td><code>401</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control</td><td>Request failure.</td></tr>
+<tr><td><code>403</code></td><td>application/json</td><td>none</td><td>Hosted authority is denied, request intent conflicts, the outcome is unknown, or the saved result expired.</td></tr>
 <tr><td><code>405</code></td><td>application/json</td><td>Allow</td><td>The HTTP method is unsupported.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>none</td><td>Hosted authority is denied, request intent conflicts, the outcome is unknown, or the saved result expired.</td></tr>
+<tr><td><code>410</code></td><td>application/json</td><td>none</td><td>Hosted authority is denied, request intent conflicts, the outcome is unknown, or the saved result expired.</td></tr>
 <tr><td><code>413</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control, X-LLM-Proxy-Request-Timeout-Seconds</td><td>Request failure.</td></tr>
 <tr><td><code>415</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control, X-LLM-Proxy-Request-Timeout-Seconds</td><td>Request failure.</td></tr>
 <tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control, X-LLM-Proxy-Request-Timeout-Seconds, Retry-After</td><td>Request failure.</td></tr>
@@ -11600,6 +12348,7 @@ components:
               <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>X-LLM-Proxy-Request-Timeout-Seconds</code></td><td>header</td><td>No</td><td>integer</td><td>A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.</td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>No</td><td>string</td><td>Required for hosted text and dictation. The key identifies one tenant request across native and client protocols. An identical request returns its saved result or active receipt. Changed intent returns 409. Expired hosted results return 410. A hosted replay never starts another execution.</td></tr>
               </tbody>
             </table>
           </div>
@@ -11633,9 +12382,13 @@ components:
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>200</code></td><td>application/json, text/event-stream</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control, X-LLM-Proxy-Request-Timeout-Seconds</td><td>Completed result.</td></tr>
+<tr><td><code>202</code></td><td>application/json</td><td>Cache-Control, X-LLM-Proxy-Structured-Request-State</td><td>The durable request has not reached a terminal state. Reconcile the same key again.</td></tr>
 <tr><td><code>400</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control, X-LLM-Proxy-Request-Timeout-Seconds</td><td>Request failure.</td></tr>
 <tr><td><code>401</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control</td><td>Request failure.</td></tr>
+<tr><td><code>403</code></td><td>application/json</td><td>none</td><td>Hosted authority is denied, request intent conflicts, the outcome is unknown, or the saved result expired.</td></tr>
 <tr><td><code>405</code></td><td>application/json</td><td>Allow</td><td>The HTTP method is unsupported.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>none</td><td>Hosted authority is denied, request intent conflicts, the outcome is unknown, or the saved result expired.</td></tr>
+<tr><td><code>410</code></td><td>application/json</td><td>none</td><td>Hosted authority is denied, request intent conflicts, the outcome is unknown, or the saved result expired.</td></tr>
 <tr><td><code>413</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control, X-LLM-Proxy-Request-Timeout-Seconds</td><td>Request failure.</td></tr>
 <tr><td><code>415</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control, X-LLM-Proxy-Request-Timeout-Seconds</td><td>Request failure.</td></tr>
 <tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control, X-LLM-Proxy-Request-Timeout-Seconds, Retry-After</td><td>Request failure.</td></tr>
@@ -11690,6 +12443,7 @@ components:
               <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>X-LLM-Proxy-Request-Timeout-Seconds</code></td><td>header</td><td>No</td><td>integer</td><td>A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.</td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>No</td><td>string</td><td>Required for hosted text and dictation. The key identifies one tenant request across native and client protocols. An identical request returns its saved result or active receipt. Changed intent returns 409. Expired hosted results return 410. A hosted replay never starts another execution.</td></tr>
               </tbody>
             </table>
           </div>
@@ -11724,9 +12478,13 @@ components:
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>200</code></td><td>application/json, text/event-stream</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control, X-LLM-Proxy-Request-Timeout-Seconds</td><td>Completed result.</td></tr>
+<tr><td><code>202</code></td><td>application/json</td><td>Cache-Control, X-LLM-Proxy-Structured-Request-State</td><td>The durable request has not reached a terminal state. Reconcile the same key again.</td></tr>
 <tr><td><code>400</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control, X-LLM-Proxy-Request-Timeout-Seconds</td><td>Request failure.</td></tr>
 <tr><td><code>401</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control</td><td>Request failure.</td></tr>
+<tr><td><code>403</code></td><td>application/json</td><td>none</td><td>Hosted authority is denied, request intent conflicts, the outcome is unknown, or the saved result expired.</td></tr>
 <tr><td><code>405</code></td><td>application/json</td><td>Allow</td><td>The HTTP method is unsupported.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>none</td><td>Hosted authority is denied, request intent conflicts, the outcome is unknown, or the saved result expired.</td></tr>
+<tr><td><code>410</code></td><td>application/json</td><td>none</td><td>Hosted authority is denied, request intent conflicts, the outcome is unknown, or the saved result expired.</td></tr>
 <tr><td><code>413</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control, X-LLM-Proxy-Request-Timeout-Seconds</td><td>Request failure.</td></tr>
 <tr><td><code>415</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control, X-LLM-Proxy-Request-Timeout-Seconds</td><td>Request failure.</td></tr>
 <tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-Request-ID, Cache-Control, X-LLM-Proxy-Request-Timeout-Seconds, Retry-After</td><td>Request failure.</td></tr>
@@ -11759,7 +12517,7 @@ components:
 <tr><td><code>format</code></td><td>query</td><td>No</td><td>string</td><td>Preferred response media type. Unknown values select text/plain.</td></tr>
 <tr><td><code>Accept</code></td><td>header</td><td>No</td><td>string</td><td>Response media preference used when format is omitted.</td></tr>
 <tr><td><code>X-LLM-Proxy-Request-Timeout-Seconds</code></td><td>header</td><td>No</td><td>integer</td><td>A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.</td></tr>
-<tr><td><code>Idempotency-Key</code></td><td>header</td><td>No</td><td>string</td><td>Required with structured_output and invalid without it. A repeated active or successful request does not start a second provider call. A known failed request permits an explicit new attempt. An uncertain request never starts provider work again.</td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>No</td><td>string</td><td>Required for hosted text and structured output. A hosted key identifies one tenant request across native and client protocols. An identical request returns its saved result or active receipt. Changed intent returns 409. Expired hosted results return 410. A hosted replay never starts another execution. For account-owned credentials, the key requires structured_output. A known failed request with account-owned credentials permits an explicit new attempt.</td></tr>
               </tbody>
             </table>
           </div>
@@ -11792,15 +12550,15 @@ components:
                 <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens, X-LLM-Proxy-Structured-Request-State</td><td>Final text, caller-schema JSON, or caller function calls. Structured output includes durable request state. Function calls use NativeToolResult.</td></tr>
 <tr><td><code>202</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Structured-Request-State</td><td>The durable request is active. Reconcile the same key again.</td></tr>
 <tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The canonical message input or referenced asset is invalid.</td></tr>
-<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
 <tr><td><code>404</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
 <tr><td><code>409</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The provider is not configured, or the key identifies a different intent or an uncertain provider outcome.</td></tr>
-<tr><td><code>410</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
+<tr><td><code>410</code></td><td>application/json</td><td>none</td><td>A referenced asset or saved hosted result expired.</td></tr>
 <tr><td><code>413</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The compatibility JSON request limit, dictation audio limit, tenant asset limit, or selected provider media limit was exceeded.</td></tr>
 <tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
 <tr><td><code>500</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset store or structured request store failed.</td></tr>
-<tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. The error response excludes partial text, token-count headers, and raw provider errors. Managed failure accounting can keep available provider usage.</td></tr>
+<tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The provider failed or returned an unusable response. A retained request failure uses the durable error representation. The proxy continues output-budget stops only when the execution contract permits another attempt. Errors exclude partial text, token-count headers, and raw provider errors. The journal can retain available usage after failure.</td></tr>
 <tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The bounded request queue is full.</td></tr>
 <tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
               </tbody>
@@ -11837,7 +12595,7 @@ components:
               <tbody>
                 <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Server-resolved identity for the authenticated tenant.</td></tr>
 <tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
-<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>403</code></td><td>text/plain, application/json</td><td>none</td><td>The tenant client key is absent or unknown, or hosted admission is denied.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
               </tbody>
             </table>
@@ -11850,7 +12608,7 @@ components:
           <code>/v2/requests</code>
           <span class="api-operation-id">getV2StructuredRequest</span>
         </header>
-        <h2>Reconcile a durable structured-output request</h2>
+        <h2>Reconcile a durable text request</h2>
         <p>Returns the terminal JSON result, a safe in-progress receipt, or a safe terminal failure for the authenticated tenant and exact Idempotency-Key. This operation never dispatches provider work. Every response sets Cache-Control to no-store.</p>
         <p class="api-security"><strong>Authentication:</strong> TenantClientKey (query key)</p>
         <div class="api-contract-block">
@@ -11872,11 +12630,12 @@ components:
             <table>
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control, X-LLM-Proxy-Structured-Request-State</td><td>Exact provider output that passed the caller JSON Schema and was durably committed before this response.</td></tr>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control, X-LLM-Proxy-Structured-Request-State</td><td>A saved hosted completion contains text, optional tool_calls, and optional usage. An account-owned structured request returns the exact JSON that passed its caller schema.</td></tr>
 <tr><td><code>202</code></td><td>application/json</td><td>Cache-Control, X-LLM-Proxy-Structured-Request-State</td><td>The durable request has not reached a terminal state. Reconcile the same key again.</td></tr>
 <tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The Idempotency-Key is missing or invalid.</td></tr>
 <tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>No durable request exists for the authenticated tenant and key.</td></tr>
 <tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The key names a different request intent, or provider dispatch completed with an outcome that cannot be proven.</td></tr>
+<tr><td><code>410</code></td><td>application/json</td><td>Cache-Control</td><td>The saved hosted result expired. The journal keeps the request identity and prevents another execution.</td></tr>
 <tr><td><code>429</code></td><td>application/json</td><td>Cache-Control, X-LLM-Proxy-Structured-Request-State</td><td>The durable request reached a safe terminal provider failure.</td></tr>
 <tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The durable request record cannot be read or updated.</td></tr>
 <tr><td><code>502</code></td><td>application/json</td><td>Cache-Control, X-LLM-Proxy-Structured-Request-State</td><td>The durable request reached a safe terminal provider failure.</td></tr>

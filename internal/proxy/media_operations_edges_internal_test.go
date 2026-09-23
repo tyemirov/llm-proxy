@@ -146,7 +146,8 @@ func newMediaOperationInternalFixture(testingInstance *testing.T) mediaOperation
 		cancelResult:  MediaOperationCancellationResult{State: MediaCancellationUnsupported},
 	}
 	service := &mediaOperationService{
-		store: store, assets: assets, adapters: map[string]MediaOperationAdapter{mediaOperationAdapterKey(llmproxycontract.MediaCapabilityVideoGenerate, ProviderNameXAI, "grok-imagine-video-1.5"): adapter},
+		logger: zap.NewNop().Sugar(),
+		store:  store, assets: assets, adapters: map[string]MediaOperationAdapter{mediaOperationAdapterKey(llmproxycontract.MediaCapabilityVideoGenerate, ProviderNameXAI, "grok-imagine-video-1.5"): adapter},
 		catalog: catalog, providers: providers, queue: make(chan string, 1), claimLifetime: time.Minute, claimRenewal: time.Millisecond,
 		lifetime: time.Hour, globalCapacity: 2, tenantCapacity: 2, terminalRetention: time.Hour,
 	}
@@ -388,7 +389,7 @@ func TestMediaOperationServiceRejectsInvalidAdapterCatalog(testingInstance *test
 		MediaOperationWorkers: 1, MediaOperationCapacity: 1, TenantMediaOperationCapacity: 1,
 		MediaOperationLifetimeSeconds: 60, MediaOperationClaimSeconds: 10, MediaOperationClaimRenewalSeconds: 1, AssetRetentionSeconds: 60,
 	}
-	if service, serviceError := newMediaOperationService(configuration, managedTenants, fixture.service.assets, fixture.service.providers, HTTPClient); service != nil || serviceError == nil {
+	if service, serviceError := newMediaOperationService(configuration, managedTenants, fixture.service.assets, fixture.service.providers, HTTPClient, zap.NewNop().Sugar()); service != nil || serviceError == nil {
 		testingInstance.Fatalf("service=%v error=%v", service, serviceError)
 	}
 	configuration.validated = true
@@ -514,7 +515,7 @@ func TestMediaOperationCancellationFinalizerFailures(testingInstance *testing.T)
 			record.TerminalAt = &fixture.now
 			failNthMediaGORMOperation(testingInstance, fixture.database, testCase.operation, testCase.table, testCase.occurrence)
 			finalizeError := fixture.database.Transaction(func(transaction *gorm.DB) error {
-				return finalizeMediaOperationCancellation(transaction, record, fixture.now)
+				return fixture.service.store.finalizeMediaOperationCancellation(transaction, record, fixture.now)
 			})
 			if finalizeError == nil {
 				testingInstance.Fatal("expected finalizer failure")
@@ -587,11 +588,11 @@ func TestMediaOperationPersistsProviderHandleBeforeAdapterCompletion(testingInst
 	}
 	var hookError error
 	fixture.adapter.executeHook = func(request MediaOperationExecutionRequest) {
-		if request.TenantID != fixture.tenant.identifier.string() || request.PersistProviderHandle == nil {
+		if request.TenantID != fixture.tenant.identifier.string() || request.PersistProviderReceipt == nil {
 			hookError = fmt.Errorf("execution request=%+v", request)
 			return
 		}
-		if persistError := request.PersistProviderHandle(`{"version":1,"job_id":"native-job"}`); persistError != nil {
+		if persistError := request.PersistProviderReceipt(MediaOperationProviderReceipt{Handle: `{"version":1,"job_id":"native-job"}`, RequestID: "native-job"}); persistError != nil {
 			hookError = fmt.Errorf("persist provider handle: %w", persistError)
 			return
 		}
@@ -892,7 +893,7 @@ func TestMediaOperationClaimExecutionAndTerminalEdges(testingInstance *testing.T
 	if _, _, _, claimError := fixture.service.claim("other", queued.OperationID); !errors.Is(claimError, gorm.ErrRecordNotFound) {
 		testingInstance.Fatal(claimError)
 	}
-	if dispatchError := fixture.service.markDispatched(queued.OperationID, generation+1, queued.OperationID); !errors.Is(dispatchError, errMediaOperationStore) {
+	if dispatchError := fixture.service.markDispatched(queued.OperationID, generation+1, queued.OperationID); !errors.Is(dispatchError, errJournalClaimLost) {
 		testingInstance.Fatal(dispatchError)
 	}
 	if dispatchError := fixture.service.markDispatched(queued.OperationID, generation, queued.OperationID); dispatchError != nil {
@@ -1024,10 +1025,10 @@ func TestDictatorRegistrationQueueAndTerminalEdges(testingInstance *testing.T) {
 	if _, queued := fixture.service.queued.Load("mop_00000000000000000000000000000000"); queued {
 		testingInstance.Fatal("missing operation retained in queue set")
 	}
-	if persistError := fixture.service.persistProviderHandle("missing", 1, " "); !errors.Is(persistError, errMediaOperationStore) {
+	if persistError := fixture.service.persistProviderReceipt("missing", 1, MediaOperationProviderReceipt{Handle: " "}); !errors.Is(persistError, errMediaOperationStore) {
 		testingInstance.Fatalf("empty provider handle error=%v", persistError)
 	}
-	if persistError := fixture.service.persistProviderHandle("missing", 1, "native"); !errors.Is(persistError, errMediaOperationStore) {
+	if persistError := fixture.service.persistProviderReceipt("missing", 1, MediaOperationProviderReceipt{Handle: "native", RequestID: "native"}); !errors.Is(persistError, errJournalClaimLost) {
 		testingInstance.Fatalf("missing provider handle error=%v", persistError)
 	}
 

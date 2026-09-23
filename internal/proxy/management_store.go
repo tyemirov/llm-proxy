@@ -223,6 +223,11 @@ func newManagedTenantName(value string) (managedTenantName, error) {
 type managedUsageEventVisitor func(managedUsageEventRecord) error
 
 type managedTenantDatabase interface {
+	journalRequests(context.Context, string, managedConnectionPage) ([]managedJournalRequestRecord, error)
+	journalRequest(context.Context, string, string) (managedJournalRequestRecord, error)
+	journalAttempts(context.Context, string, managedConnectionPage) ([]managedJournalAttemptRecord, error)
+	journalObservations(context.Context, string, managedConnectionPage) ([]managedJournalObservationRecord, error)
+	journalCases(context.Context, string, managedConnectionPage) ([]managedJournalCaseRecord, error)
 	hostedGrant(context.Context, managementPrincipal, string) (managedHostedGrantRecord, error)
 	hostedGrants(context.Context, managementPrincipal, managedConnectionPage) ([]managedHostedGrantRecord, error)
 	createHostedGrant(context.Context, managedHostedGrantRecord, managedHostedGrantRevisionRecord, managedHostedCreationRecord) (managedHostedCreationRecord, error)
@@ -657,7 +662,10 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 		if err := initializeManagedConnectionSchema(transaction.Session(&gorm.Session{DisableNestedTransaction: true}), providerKeyCipher, providers); err != nil {
 			return err
 		}
-		return initializeHostedSchema(transaction)
+		if err := initializeHostedSchema(transaction); err != nil {
+			return err
+		}
+		return initializeHostedJournalSchema(transaction)
 	})
 }
 

@@ -28,6 +28,13 @@ func bindTextTelemetryRoute(ctx context.Context, provider providerDefinition, mo
 // executeText is the shared execution boundary for native and MCP generation.
 // The provider router owns admission, rate limits, queues, retries, and continuation.
 func executeText(ctx context.Context, upstream *providerRouter, request chatRequestParameters, logger *zap.SugaredLogger) (completionResult, error) {
+	if request.provider.hostedGrantID != "" {
+		identity, ok := ctx.Value(hostedTextIdentityContextKey{}).(hostedTextIdentity)
+		if !ok || upstream.hostedText == nil {
+			return completionResult{}, errHostedAuthorityDenied
+		}
+		return upstream.hostedText.execute(ctx, upstream, request, identity, logger)
+	}
 	return upstream.generateText(ctx, request, logger)
 }
 
@@ -75,7 +82,13 @@ func prepareV2TextRequest(ctx context.Context, payload chatV2RequestPayload, que
 	if structuredOutputError != nil {
 		return chatRequestParameters{}, &textValidationError{message: "invalid structured_output"}
 	}
-	idempotencyKey, idempotencyError := structuredRequestKeyValues(idempotencyValues, structuredOutput)
+	var idempotencyKey string
+	var idempotencyError error
+	if providerDefinition.hostedGrantID != "" {
+		idempotencyKey, idempotencyError = hostedTextKeyValues(idempotencyValues)
+	} else {
+		idempotencyKey, idempotencyError = structuredRequestKeyValues(idempotencyValues, structuredOutput)
+	}
 	if idempotencyError != nil {
 		return chatRequestParameters{}, &textValidationError{message: "invalid Idempotency-Key"}
 	}

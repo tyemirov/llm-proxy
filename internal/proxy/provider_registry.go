@@ -398,7 +398,7 @@ func (registry *providerRegistry) resolveTextRequest(rawProvider string, rawMode
 	if resolutionError != nil {
 		return providerDefinition{}, textModelDefinition{}, resolutionError
 	}
-	if definition.credentialFor(endpointKindText) == constants.EmptyString || definition.textEndpointURL == constants.EmptyString {
+	if definition.hostedGrantID == "" && (definition.credentialFor(endpointKindText) == constants.EmptyString || definition.textEndpointURL == constants.EmptyString) {
 		return definition, resolvedModel, fmt.Errorf("%w: provider=%s endpoint=%s", ErrProviderNotConfigured, definition.identifier.string(), endpointKindText)
 	}
 	return definition, resolvedModel, nil
@@ -437,7 +437,7 @@ func (registry *providerRegistry) resolveDictationRequest(rawProvider string, ra
 	if !slices.Contains(model.operations, ModelOperationDictation) {
 		return definition, resolvedModel, fmt.Errorf("%w: provider=%s model=%s endpoint=%s", ErrUnsupportedEndpoint, definition.identifier.string(), resolvedModel.string(), endpointKindDictation)
 	}
-	if definition.credentialFor(endpointKindDictation) == constants.EmptyString || definition.transcriptionsURL == constants.EmptyString {
+	if definition.hostedGrantID == "" && (definition.credentialFor(endpointKindDictation) == constants.EmptyString || definition.transcriptionsURL == constants.EmptyString) {
 		return definition, resolvedModel, fmt.Errorf("%w: provider=%s endpoint=%s", ErrProviderNotConfigured, definition.identifier.string(), endpointKindDictation)
 	}
 	return definition, resolvedModel, nil

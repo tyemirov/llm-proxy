@@ -280,6 +280,9 @@ func (client *OpenAIClient) resolveCompleteOpenAIResponse(parentContext context.
 }
 
 func openAIStageError(stageError error) error {
+	if errors.Is(stageError, errHostedAuthorityDenied) || errors.Is(stageError, errUsageJournalConflict) || errors.Is(stageError, errJournalClaimLost) {
+		return stageError
+	}
 	if errors.Is(stageError, context.Canceled) || errors.Is(stageError, context.DeadlineExceeded) || errors.Is(stageError, errProviderOutputLimitReached) {
 		return stageError
 	}
@@ -367,6 +370,7 @@ func (client *OpenAIClient) pollResponseUntilDone(parentContext context.Context,
 
 // fetchResponseByID retrieves and validates a response by identifier.
 func (client *OpenAIClient) fetchResponseByID(parentContext context.Context, openAIKey string, responseIdentifier string, structuredLogger *zap.SugaredLogger) (openAIResponseSnapshot, error) {
+	parentContext = contextWithHostedProviderRole(parentContext, hostedProviderObservation)
 	resourceURL := client.endpoints.GetResponsesURL() + "/" + responseIdentifier
 	httpRequest, buildError := buildAuthorizedJSONRequest(parentContext, http.MethodGet, resourceURL, openAIKey, nil)
 	if buildError != nil {
@@ -491,6 +495,9 @@ func (client *OpenAIClient) performResponsesRequest(httpRequest *http.Request, s
 		var transportError error
 		statusCode, responseBytes, responseHeader, latencyMillis, transportError = utils.PerformHTTPRequest(client.httpClient.Do, httpRequest, structuredLogger, logEvent)
 		responseError := providerResponseError(statusCode, responseHeader, transportError)
+		if responseError != nil && hostedTextExecutionFromContext(httpRequest.Context()) != nil && httpRequest.Method == http.MethodPost {
+			return backoff.Permanent(responseError)
+		}
 		if _, _, _, hasHTTPMetadata := providerHTTPMetadata(responseError); !hasHTTPMetadata {
 			if responseError == nil {
 				return nil

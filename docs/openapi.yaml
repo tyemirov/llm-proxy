@@ -16,12 +16,14 @@ info:
     input with a maximum of 65,536 output tokens.
     Responses and Gemini 3.x Interactions use stored pollable resources.
     OpenAI-compatible Chat Completions and Anthropic Messages complete
-    synchronously. Public proxy operations remain blocking and never expose an
-    upstream resource id. OpenAI resource ids remain in memory only, but the
-    current adapter does not cancel or delete stored Responses, so OpenAI
-    account retention policy applies. Background Gemini interaction ids are
-    also request-local; the adapter cancels active resources and deletes every
-    stored interaction on exit. Each Gemini Interactions route rejects
+    synchronously. Generation responses remain synchronous. A hosted duplicate
+    can return an active receipt. The proxy does not expose provider resource identifiers.
+    For customer-owned credentials, OpenAI resource ids remain in memory only.
+    The adapter does not cancel or delete stored Responses. The OpenAI account retention policy applies.
+    For hosted work, the journal keeps private provider resource identifiers.
+    For customer-owned credentials, background Gemini interaction ids are request-local.
+    The adapter cancels active resources and deletes every stored interaction on exit.
+    Each Gemini Interactions route rejects
     assistant history before provider dispatch. An incomplete Gemini response
     returns a provider error without replay.
     TAuth-owned endpoints are outside this contract.
@@ -92,6 +94,8 @@ paths:
         Generation uses a separate request_timeout_seconds budget after the upload.
         The llm_proxy.list_tenants tool provides all owned tenant summaries.
         The llm_proxy.generate_text tool requires tenant_id and messages.
+        Hosted text also requires idempotency_key and returns the original execution identifier for identical requests.
+        A concurrent hosted request returns state dispatched without generated text.
         The llm-proxy://tenants/{tenant_id}/routes resource template provides configured text routes.
         Tool execution failures use isError with a sanitized code.
         Resource errors and protocol errors use JSON-RPC errors with the protocol HTTP status.
@@ -203,6 +207,7 @@ paths:
         - TenantBearerKey: []
       parameters:
         - $ref: '#/components/parameters/RequestTimeout'
+        - $ref: '#/components/parameters/HostedCompletionIdempotencyKey'
       requestBody:
         required: true
         content:
@@ -210,6 +215,14 @@ paths:
             schema:
               $ref: '#/components/schemas/OpenAIChatRequest'
       responses:
+        '202':
+          $ref: '#/components/responses/StructuredRequestPending'
+        '403':
+          $ref: '#/components/responses/HostedClientFailure'
+        '409':
+          $ref: '#/components/responses/HostedClientFailure'
+        '410':
+          $ref: '#/components/responses/HostedClientFailure'
         '200':
           description: Completed result.
           headers:
@@ -392,6 +405,7 @@ paths:
         - TenantBearerKey: []
       parameters:
         - $ref: '#/components/parameters/RequestTimeout'
+        - $ref: '#/components/parameters/HostedCompletionIdempotencyKey'
       requestBody:
         required: true
         content:
@@ -399,6 +413,14 @@ paths:
             schema:
               $ref: '#/components/schemas/OpenAIResponsesRequest'
       responses:
+        '202':
+          $ref: '#/components/responses/StructuredRequestPending'
+        '403':
+          $ref: '#/components/responses/HostedClientFailure'
+        '409':
+          $ref: '#/components/responses/HostedClientFailure'
+        '410':
+          $ref: '#/components/responses/HostedClientFailure'
         '200':
           description: Completed result.
           headers:
@@ -575,11 +597,13 @@ paths:
         - Client protocols
       description: >-
         Authenticate with a tenant bearer key. Select one exact provider/model route. Reject unsupported fields
-        before provider dispatch.
+        before provider dispatch. Hosted requests require Idempotency-Key.
+        Identical audio and format use the same request identity across both transcription interfaces.
       security:
         - TenantBearerKey: []
       parameters:
         - $ref: '#/components/parameters/RequestTimeout'
+        - $ref: '#/components/parameters/HostedCompletionIdempotencyKey'
       requestBody:
         required: true
         content:
@@ -587,6 +611,14 @@ paths:
             schema:
               $ref: '#/components/schemas/OpenAITranscriptionRequest'
       responses:
+        '202':
+          $ref: '#/components/responses/StructuredRequestPending'
+        '403':
+          $ref: '#/components/responses/HostedClientFailure'
+        '409':
+          $ref: '#/components/responses/HostedClientFailure'
+        '410':
+          $ref: '#/components/responses/HostedClientFailure'
         '200':
           description: Completed result.
           headers:
@@ -828,7 +860,12 @@ paths:
         - $ref: '#/components/parameters/ResponseFormat'
         - $ref: '#/components/parameters/Accept'
         - $ref: '#/components/parameters/RequestTimeout'
+        - $ref: '#/components/parameters/HostedCompletionIdempotencyKey'
       responses:
+        '202':
+          $ref: '#/components/responses/StructuredRequestPending'
+        '410':
+          $ref: '#/components/responses/HostedResultExpired'
         '200':
           $ref: '#/components/responses/TextSuccess'
         '400':
@@ -836,7 +873,7 @@ paths:
         '403':
           $ref: '#/components/responses/ProxyForbidden'
         '409':
-          $ref: '#/components/responses/ProviderNotConfigured'
+          $ref: '#/components/responses/V2Conflict'
         '429':
           $ref: '#/components/responses/ProxyRateLimited'
         '499':
@@ -862,9 +899,14 @@ paths:
         - $ref: '#/components/parameters/ResponseFormat'
         - $ref: '#/components/parameters/Accept'
         - $ref: '#/components/parameters/RequestTimeout'
+        - $ref: '#/components/parameters/HostedCompletionIdempotencyKey'
       requestBody:
         $ref: '#/components/requestBodies/TextRequest'
       responses:
+        '202':
+          $ref: '#/components/responses/StructuredRequestPending'
+        '410':
+          $ref: '#/components/responses/HostedResultExpired'
         '200':
           $ref: '#/components/responses/TextSuccess'
         '400':
@@ -872,7 +914,7 @@ paths:
         '403':
           $ref: '#/components/responses/ProxyForbidden'
         '409':
-          $ref: '#/components/responses/ProviderNotConfigured'
+          $ref: '#/components/responses/V2Conflict'
         '413':
           $ref: '#/components/responses/ProxyPayloadTooLarge'
         '429':
@@ -932,7 +974,7 @@ paths:
         '404':
           $ref: '#/components/responses/AssetFailure'
         '410':
-          $ref: '#/components/responses/AssetFailure'
+          $ref: '#/components/responses/V2Expired'
         '409':
           $ref: '#/components/responses/V2Conflict'
         '413':
@@ -975,7 +1017,7 @@ paths:
   /v2/requests:
     get:
       operationId: getV2StructuredRequest
-      summary: Reconcile a durable structured-output request
+      summary: Reconcile a durable text request
       description: >-
         Returns the terminal JSON result, a safe in-progress receipt, or a safe
         terminal failure for the authenticated tenant and exact Idempotency-Key.
@@ -998,6 +1040,8 @@ paths:
           $ref: '#/components/responses/StructuredRequestBadRequest'
         '404':
           $ref: '#/components/responses/StructuredRequestNotFound'
+        '410':
+          $ref: '#/components/responses/StructuredRequestExpired'
         '409':
           $ref: '#/components/responses/StructuredRequestConflict'
         '429':
@@ -1161,6 +1205,12 @@ paths:
     get:
       operationId: listTenantMediaVoices
       summary: Discover and list tenant-owned provider voices
+      description: >-
+        Hosted access requires an active speech grant and qualified platform credentials.
+        Hosted ElevenLabs discovery exposes default premade voices.
+        Hosted Dictator discovery includes only presets and the tenant's retained extracted voices.
+        Hosted cursors bind the grant revision and credential version.
+        Metadata reads do not create billable attempts.
       tags:
         - Proxy
       security:
@@ -1202,11 +1252,13 @@ paths:
             enum: [asc, desc]
         - name: voice_type
           in: query
+          description: Hosted ElevenLabs access accepts only default. Other values return 400.
           schema:
             type: string
             enum: [personal, community, default, account, non-default, non-community, saved]
         - name: category
           in: query
+          description: Hosted ElevenLabs access accepts only premade. Other values return 400.
           schema:
             type: string
             enum: [premade, cloned, generated, professional]
@@ -1458,6 +1510,9 @@ paths:
     post:
       operationId: postDictation
       summary: Transcribe an audio upload
+      description: >-
+        Hosted dictation requires Idempotency-Key. Identical audio and format replay the accepted request across both transcription interfaces.
+        The usage journal retains provider measurements and the request identity after result expiry.
       tags:
         - Proxy
       security:
@@ -1468,9 +1523,14 @@ paths:
         - $ref: '#/components/parameters/Provider'
         - $ref: '#/components/parameters/Model'
         - $ref: '#/components/parameters/RequestTimeout'
+        - $ref: '#/components/parameters/HostedCompletionIdempotencyKey'
       requestBody:
         $ref: '#/components/requestBodies/DictationRequest'
       responses:
+        '202':
+          $ref: '#/components/responses/StructuredRequestPending'
+        '410':
+          $ref: '#/components/responses/HostedResultExpired'
         '200':
           $ref: '#/components/responses/DictationSuccess'
         '400':
@@ -1478,7 +1538,7 @@ paths:
         '403':
           $ref: '#/components/responses/ProxyForbidden'
         '409':
-          $ref: '#/components/responses/ProviderNotConfigured'
+          $ref: '#/components/responses/V2Conflict'
         '413':
           $ref: '#/components/responses/ProxyPayloadTooLarge'
         '429':
@@ -1928,6 +1988,219 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BillingAccount'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+  /api/management/billing-accounts/{billing_account_id}/requests:
+    get:
+      operationId: listJournalRequests
+      summary: Read the usage journal for an owned billing account
+      description: Results use ascending request identifiers. Each response contains at most 100 requests. Credentials and request content are omitted.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/BillingAccountID'
+        - $ref: '#/components/parameters/HostedPageLimit'
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            pattern: '^request-[a-f0-9]{32}$'
+      responses:
+        '200':
+          description: The account usage journal page.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [requests, next_cursor]
+                properties:
+                  requests:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/JournalRequest'
+                  next_cursor:
+                    type: string
+                    description: The last request identifier when another page exists. An empty value ends the collection.
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+  /api/management/billing-accounts/{billing_account_id}/requests/{request_id}:
+    get:
+      operationId: getJournalRequest
+      summary: Read one request from an owned usage journal
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/BillingAccountID'
+        - name: request_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^request-[a-f0-9]{32}$'
+      responses:
+        '200':
+          description: The retained request and its usage completeness.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalRequest'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+  /api/management/billing-accounts/{billing_account_id}/requests/{request_id}/attempts:
+    get:
+      operationId: listJournalAttempts
+      summary: Read attempts for an owned journal request
+      description: Results use ascending opaque identifiers. Each response contains at most 100 records. Private provider identifiers and source content are omitted.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/BillingAccountID'
+        - $ref: '#/components/parameters/JournalRequestID'
+        - $ref: '#/components/parameters/HostedPageLimit'
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            pattern: '^attempt-[a-f0-9]{32}$'
+      responses:
+        '200':
+          description: The owned request collection page.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [attempts, next_cursor]
+                properties:
+                  attempts:
+                    type: array
+                    maxItems: 100
+                    items:
+                      $ref: '#/components/schemas/JournalAttempt'
+                  next_cursor:
+                    type: string
+                    description: The last record identifier when another page exists. An empty value ends the collection.
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+  /api/management/billing-accounts/{billing_account_id}/requests/{request_id}/observations:
+    get:
+      operationId: listJournalObservations
+      summary: Read usage observations for an owned journal request
+      description: Results use ascending opaque identifiers. Each response contains at most 100 records. Private provider identifiers and source content are omitted.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/BillingAccountID'
+        - $ref: '#/components/parameters/JournalRequestID'
+        - $ref: '#/components/parameters/HostedPageLimit'
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            pattern: '^observation-[a-f0-9]{32}$'
+      responses:
+        '200':
+          description: The owned request collection page.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [observations, next_cursor]
+                properties:
+                  observations:
+                    type: array
+                    maxItems: 100
+                    items:
+                      $ref: '#/components/schemas/JournalObservation'
+                  next_cursor:
+                    type: string
+                    description: The last record identifier when another page exists. An empty value ends the collection.
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+  /api/management/billing-accounts/{billing_account_id}/requests/{request_id}/reconciliation-cases:
+    get:
+      operationId: listJournalReconciliationCases
+      summary: Read reconciliation cases for an owned journal request
+      description: Results use ascending opaque identifiers. Each response contains at most 100 records. Private provider identifiers and source content are omitted.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/BillingAccountID'
+        - $ref: '#/components/parameters/JournalRequestID'
+        - $ref: '#/components/parameters/HostedPageLimit'
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            pattern: '^case-[a-f0-9]{32}$'
+      responses:
+        '200':
+          description: The owned request collection page.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [cases, next_cursor]
+                properties:
+                  cases:
+                    type: array
+                    maxItems: 100
+                    items:
+                      $ref: '#/components/schemas/JournalReconciliationCase'
+                  next_cursor:
+                    type: string
+                    description: The last record identifier when another page exists. An empty value ends the collection.
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
         '401':
           $ref: '#/components/responses/ManagementUnauthorized'
         '404':
@@ -3084,7 +3357,22 @@ components:
       name: Idempotency-Key
       in: header
       required: false
-      description: Required with structured_output and invalid without it. A repeated active or successful request does not start a second provider call. A known failed request permits an explicit new attempt. An uncertain request never starts provider work again.
+      description: >-
+        Required for hosted text and structured output. A hosted key identifies one tenant request across native and client protocols.
+        An identical request returns its saved result or active receipt. Changed intent returns 409. Expired hosted results return 410.
+        A hosted replay never starts another execution. For account-owned credentials, the key requires structured_output.
+        A known failed request with account-owned credentials permits an explicit new attempt.
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+    HostedCompletionIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: >-
+        Required for hosted text and dictation. The key identifies one tenant request across native and client protocols.
+        An identical request returns its saved result or active receipt. Changed intent returns 409.
+        Expired hosted results return 410. A hosted replay never starts another execution.
       schema:
         type: string
         pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
@@ -3096,6 +3384,20 @@ components:
         minimum: 1
         maximum: 100
         default: 50
+    BillingAccountID:
+      name: billing_account_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^billing-[a-f0-9]{32}$'
+    JournalRequestID:
+      name: request_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^request-[a-f0-9]{32}$'
     HostedGrantID:
       name: grant_id
       in: path
@@ -3423,14 +3725,19 @@ components:
             type: string
         application/json:
           schema:
-            $ref: '#/components/schemas/ProxyErrorEnvelope'
+            oneOf:
+              - $ref: '#/components/schemas/ProxyErrorEnvelope'
+              - $ref: '#/components/schemas/StructuredRequestErrorEnvelope'
     ProxyForbidden:
-      description: The tenant client key is absent or unknown.
+      description: The tenant client key is absent or unknown, or hosted admission is denied.
       content:
         text/plain:
           schema:
             type: string
             const: unknown client key
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProviderErrorEnvelope'
     TenantIdentitySuccess:
       description: Server-resolved identity for the authenticated tenant.
       headers:
@@ -3466,6 +3773,7 @@ components:
             oneOf:
               - $ref: '#/components/schemas/ProxyErrorEnvelope'
               - $ref: '#/components/schemas/AssetErrorEnvelope'
+              - $ref: '#/components/schemas/StructuredRequestErrorEnvelope'
     V2StructuredRequestPending:
       description: The durable request is active. Reconcile the same key again.
       headers:
@@ -3490,7 +3798,9 @@ components:
               - provider_not_configured
         application/json:
           schema:
-            $ref: '#/components/schemas/StructuredRequestErrorEnvelope'
+            oneOf:
+              - $ref: '#/components/schemas/StructuredRequestErrorEnvelope'
+              - $ref: '#/components/schemas/ProviderErrorEnvelope'
     V2InternalFailure:
       description: The asset store or structured request store failed.
       headers:
@@ -3608,8 +3918,39 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/MediaVoiceErrorEnvelope'
+    HostedClientFailure:
+      description: Hosted authority is denied, request intent conflicts, the outcome is unknown, or the saved result expired.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/OpenAIError'
+    HostedResultExpired:
+      description: The saved hosted result expired. The journal keeps the request identity and prevents another execution.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProviderErrorEnvelope'
+    V2Expired:
+      description: A referenced asset or saved hosted result expired.
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/AssetErrorEnvelope'
+              - $ref: '#/components/schemas/ProviderErrorEnvelope'
+    StructuredRequestExpired:
+      description: The saved hosted result expired. The journal keeps the request identity and prevents another execution.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StructuredRequestErrorEnvelope'
     StructuredRequestSucceeded:
-      description: Exact provider output that passed the caller JSON Schema and was durably committed before this response.
+      description: >-
+        A saved hosted completion contains text, optional tool_calls, and optional usage.
+        An account-owned structured request returns the exact JSON that passed its caller schema.
       headers:
         Cache-Control:
           $ref: '#/components/headers/NoStore'
@@ -3692,7 +4033,10 @@ components:
     CallerClosed:
       description: The caller canceled or closed the request.
     ProxyBadGateway:
-      description: The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. The error response excludes partial text, token-count headers, and raw provider errors. Managed failure accounting can keep available provider usage.
+      description: >-
+        The provider failed or returned an unusable response. A retained request failure uses the durable error representation.
+        The proxy continues output-budget stops only when the execution contract permits another attempt.
+        Errors exclude partial text, token-count headers, and raw provider errors. The journal can retain available usage after failure.
       headers:
         X-LLM-Proxy-Request-Timeout-Seconds:
           $ref: '#/components/headers/ResolvedRequestTimeout'
@@ -3703,7 +4047,9 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ProviderErrorEnvelope'
+            oneOf:
+              - $ref: '#/components/schemas/ProviderErrorEnvelope'
+              - $ref: '#/components/schemas/StructuredRequestErrorEnvelope'
     ProxyUnavailable:
       description: The bounded request queue is full.
       headers:
@@ -4162,6 +4508,10 @@ components:
         tenant_id:
           type: string
           minLength: 1
+        idempotency_key:
+          type: string
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+          description: Required for hosted text. Identifies one complete request within its tenant. Customer-owned text rejects this field.
         messages:
           type: array
           minItems: 1
@@ -4184,6 +4534,11 @@ components:
           minimum: 1
     MCPGenerateOutput:
       type: object
+      oneOf:
+        - $ref: '#/components/schemas/MCPGenerateCompletionOutput'
+        - $ref: '#/components/schemas/MCPGeneratePendingOutput'
+    MCPGenerateCompletionOutput:
+      type: object
       additionalProperties: false
       required: [text, request_id, provider, model, usage, request_timeout_seconds]
       properties:
@@ -4199,6 +4554,24 @@ components:
           oneOf:
             - $ref: '#/components/schemas/TokenUsage'
             - type: 'null'
+        request_timeout_seconds:
+          type: integer
+          minimum: 1
+    MCPGeneratePendingOutput:
+      type: object
+      additionalProperties: false
+      required: [state, request_id, provider, model, request_timeout_seconds]
+      properties:
+        state:
+          type: string
+          enum: [dispatched]
+        request_id:
+          type: string
+          description: The original hosted execution identifier.
+        provider:
+          type: string
+        model:
+          type: string
         request_timeout_seconds:
           type: integer
           minimum: 1
@@ -6822,7 +7195,7 @@ components:
           properties:
             code:
               type: string
-              enum: [provider_error, provider_rate_limited, operation_deadline_exceeded, provider_outcome_unknown, worker_claim_lost, asset_publication_failed, provider_result_invalid, media_operation_unavailable]
+              enum: [provider_error, provider_rate_limited, operation_deadline_exceeded, provider_outcome_unknown, worker_claim_lost, asset_publication_failed, provider_result_invalid, media_operation_unavailable, usage_journal_unavailable]
         cost:
           type: object
           additionalProperties: false
@@ -7284,6 +7657,7 @@ components:
         code:
           type: string
           enum:
+            - hosted_result_expired
             - invalid_idempotency_key
             - structured_request_not_found
             - structured_request_intent_conflict
@@ -7294,6 +7668,7 @@ components:
         state:
           type: string
           enum:
+            - succeeded
             - failed
             - uncertain
         cause:
@@ -7445,6 +7820,10 @@ components:
             code:
               type: string
               enum:
+                - hosted_authority_denied
+                - hosted_result_expired
+                - usage_journal_conflict
+                - usage_journal_claim_lost
                 - provider_error
                 - provider_media_limit_exceeded
                 - provider_rate_limited
@@ -7532,6 +7911,159 @@ components:
         created_at:
           type: string
           format: date-time
+    JournalRequest:
+      type: object
+      additionalProperties: false
+      required: [id, tenant_id, grant_id, grant_revision, provider, operation, catalog_revision, execution_kind, execution_id, state, usage_state, created_at, updated_at]
+      anyOf:
+        - required: [model]
+        - properties:
+            execution_kind:
+              const: media_operation
+      properties:
+        id:
+          type: string
+          pattern: '^request-[a-f0-9]{32}$'
+        tenant_id:
+          type: string
+        grant_id:
+          type: string
+          pattern: '^grant-[a-f0-9]{32}$'
+        grant_revision:
+          type: integer
+          minimum: 1
+        provider:
+          type: string
+        model:
+          type: string
+          minLength: 1
+          description: Omitted for provider services that do not select a model.
+        operation:
+          type: string
+        catalog_revision:
+          type: string
+        execution_kind:
+          type: string
+          enum: [text_request, media_operation, dictation_request]
+        execution_id:
+          type: string
+          description: The identity retained by the execution owner.
+        state:
+          type: string
+          enum: [accepted, executing, completed, failed, uncertain]
+        usage_state:
+          type: string
+          enum: [pending, complete, unknown]
+          description: Execution completion does not establish usage completeness or charge eligibility.
+        failure_code:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    JournalAttempt:
+      type: object
+      additionalProperties: false
+      required: [id, number, state, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          pattern: '^attempt-[a-f0-9]{32}$'
+        number:
+          type: integer
+          minimum: 1
+        state:
+          type: string
+          enum: [prepared, dispatched, observed, uncertain]
+        dispatched_at:
+          type: string
+          format: date-time
+        observed_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    JournalQuantity:
+      type: object
+      additionalProperties: false
+      required: [dimension, unit]
+      oneOf:
+        - required: [value]
+        - required: [unknown_reason]
+      properties:
+        dimension:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{0,63}$'
+        unit:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{0,63}$'
+        value:
+          type: string
+          pattern: '^(0|[1-9][0-9]*)(\.[0-9]+)?$'
+          description: An exact nonnegative decimal measurement. An unknown measurement has no value.
+        unknown_reason:
+          type: string
+          enum: [not_reported, invalid_quantity, unsupported_meter]
+        included_in:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{0,63}$'
+          description: The parent dimension that already includes this quantity. Do not add it to the parent again.
+    JournalObservation:
+      type: object
+      additionalProperties: false
+      required: [id, attempt_id, quantities, completeness, outcome, observed_at, created_at]
+      properties:
+        id:
+          type: string
+          pattern: '^observation-[a-f0-9]{32}$'
+        attempt_id:
+          type: string
+          pattern: '^attempt-[a-f0-9]{32}$'
+        quantities:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/JournalQuantity'
+        completeness:
+          type: string
+          enum: [complete, unknown]
+        outcome:
+          type: string
+          enum: [continue, complete, fail]
+        failure_code:
+          type: string
+        observed_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    JournalReconciliationCase:
+      type: object
+      additionalProperties: false
+      required: [id, reason, state, created_at]
+      properties:
+        id:
+          type: string
+          pattern: '^case-[a-f0-9]{32}$'
+        reason:
+          type: string
+          enum: [usage_unknown, dispatch_outcome_unknown, execution_outcome_unknown, execution_result_unknown]
+        state:
+          type: string
+          enum: [open, resolved]
+        resolved_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
     PlatformConnection:
       type: object
       additionalProperties: false
@@ -7592,11 +8124,11 @@ components:
     HostedGrantOfferings:
       type: array
       minItems: 1
-      description: Exact models from one provider. Each model and operation can occur only once.
+      description: Exact models or explicit services from one provider. An omitted model selects services, never all models.
       items:
         type: object
         additionalProperties: false
-        required: [model, operations]
+        required: [operations]
         properties:
           model:
             type: string

@@ -478,6 +478,50 @@ export async function createBillingAccount(idempotencyKey, signal) {
   return account;
 }
 
+/** @param {import('../types.d.js').JournalRequest} request */
+function assertJournalRequest(request) {
+  if (!request || typeof request.id !== 'string' || !/^request-[a-f0-9]{32}$/.test(request.id) ||
+      typeof request.grant_id !== 'string' || !/^grant-[a-f0-9]{32}$/.test(request.grant_id) ||
+      ![request.tenant_id,request.provider,request.operation,request.catalog_revision,request.execution_id].every(value=>typeof value==='string' && value.length>0) ||
+      (request.model === undefined ? request.execution_kind !== 'media_operation' : typeof request.model !== 'string' || !request.model || request.model !== request.model.trim()) ||
+      !Number.isSafeInteger(request.grant_revision) || request.grant_revision < 1 ||
+      !['text_request','media_operation','dictation_request'].includes(request.execution_kind) ||
+      !['accepted','executing','completed','failed','uncertain'].includes(request.state) ||
+      !['pending','complete','unknown'].includes(request.usage_state) ||
+      (request.failure_code !== undefined && typeof request.failure_code !== 'string') ||
+      ![request.created_at,request.updated_at].every(value=>typeof value==='string' && Number.isFinite(Date.parse(value)))) throw new Error(APP_INTEGRITY_ERROR);
+}
+
+/** @param {string} accountID @returns {string} */
+function journalRequestsPath(accountID) {
+  if (!/^billing-[a-f0-9]{32}$/.test(accountID)) throw new Error(APP_INTEGRITY_ERROR);
+  return `${BILLING_ACCOUNTS_PATH}/${encodeURIComponent(accountID)}/requests`;
+}
+
+/** @param {string} accountID @param {string} [cursor] @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').JournalRequestPage>} */
+export async function fetchJournalRequests(accountID, cursor='', signal) {
+  if (cursor && !/^request-[a-f0-9]{32}$/.test(cursor)) throw new Error(APP_INTEGRITY_ERROR);
+  const page=await requestJSON(`${journalRequestsPath(accountID)}?limit=50${cursor?'&cursor='+encodeURIComponent(cursor):''}`,{method:'GET',signal});
+  if (!page || !Array.isArray(page.requests) || page.requests.length>50 || typeof page.next_cursor!=='string') throw new Error(APP_INTEGRITY_ERROR);
+  let previous=cursor;
+  for (const request of page.requests) {
+    assertJournalRequest(request);
+    if (request.id<=previous) throw new Error(APP_INTEGRITY_ERROR);
+    previous=request.id;
+  }
+  if (page.next_cursor && (!page.requests.length || page.next_cursor!==previous)) throw new Error(APP_INTEGRITY_ERROR);
+  return page;
+}
+
+/** @param {string} accountID @param {string} requestID @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').JournalRequest>} */
+export async function fetchJournalRequest(accountID, requestID, signal) {
+  if (!/^request-[a-f0-9]{32}$/.test(requestID)) throw new Error(APP_INTEGRITY_ERROR);
+  const request=await requestJSON(`${journalRequestsPath(accountID)}/${encodeURIComponent(requestID)}`,{method:'GET',signal});
+  assertJournalRequest(request);
+  if (request.id!==requestID) throw new Error(APP_INTEGRITY_ERROR);
+  return request;
+}
+
 /** @param {import('../types.d.js').HostedAccessGrant} grant */
 function assertHostedAccessGrant(grant) {
   if (!grant || typeof grant.id !== 'string' || !/^grant-[a-f0-9]{32}$/.test(grant.id) ||
@@ -486,7 +530,7 @@ function assertHostedAccessGrant(grant) {
       ![grant.created_at,grant.updated_at].every(value=>typeof value==='string' && Number.isFinite(Date.parse(value))) ||
       !Array.isArray(grant.offerings) || !grant.offerings.length) throw new Error(APP_INTEGRITY_ERROR);
   for (const offering of grant.offerings) {
-    if (!offering || typeof offering.model!=='string' || !offering.model || !Array.isArray(offering.operations) || !offering.operations.length ||
+    if (!offering || (offering.model !== undefined && (typeof offering.model!=='string' || !offering.model || offering.model!==offering.model.trim())) || !Array.isArray(offering.operations) || !offering.operations.length ||
         !offering.operations.every(value=>typeof value==='string' && value.length>0)) throw new Error(APP_INTEGRITY_ERROR);
   }
 }
@@ -558,4 +602,86 @@ export async function fetchDashboardModels(signal) {
     if (!Array.isArray(offering.domains) || offering.domains.length === 0 || new Set(offering.domains).size !== offering.domains.length || !offering.domains.every((/** @type {unknown} */ value)=>Object.values(CAPABILITY_DOMAINS).some(domain=>domain===value))) throw new Error('Invalid provider offering domains');
   }
   return {families, offerings:result.offerings};
+}
+
+/** @param {string} accountID @param {string} requestID */
+function journalEvidencePath(accountID, requestID) {
+  if (!/^request-[a-f0-9]{32}$/.test(requestID)) throw new Error(APP_INTEGRITY_ERROR);
+  return `${journalRequestsPath(accountID)}/${encodeURIComponent(requestID)}`;
+}
+/** @param {unknown} value */
+function journalTimestamp(value) { return typeof value==='string' && Number.isFinite(Date.parse(value)); }
+/**
+ * @template {{id:string}} T
+ * @param {T[]} records @param {string} next @param {string} cursor @param {RegExp} pattern @param {(record:T)=>void} validate
+ */
+function assertJournalPage(records, next, cursor, pattern, validate) {
+  if (!Array.isArray(records) || records.length>50 || typeof next!=='string') throw new Error(APP_INTEGRITY_ERROR);
+  let previous=cursor;
+  for (const record of records) {
+    if (!record || typeof record.id!=='string' || !pattern.test(record.id) || record.id<=previous) throw new Error(APP_INTEGRITY_ERROR);
+    validate(record); previous=record.id;
+  }
+  if (next && (!records.length || next!==previous)) throw new Error(APP_INTEGRITY_ERROR);
+}
+/** @param {import('../types.d.js').JournalAttempt} record */
+function assertJournalAttempt(record) {
+  if (!Number.isSafeInteger(record.number) || record.number<1 || !['prepared','dispatched','observed','uncertain'].includes(record.state) ||
+      !journalTimestamp(record.created_at) || !journalTimestamp(record.updated_at) ||
+      (record.dispatched_at!==undefined && !journalTimestamp(record.dispatched_at)) || (record.observed_at!==undefined && !journalTimestamp(record.observed_at))) throw new Error(APP_INTEGRITY_ERROR);
+}
+/** @param {import('../types.d.js').JournalObservation} record */
+function assertJournalObservation(record) {
+  if (!/^attempt-[a-f0-9]{32}$/.test(record.attempt_id) || !Array.isArray(record.quantities) || !record.quantities.length ||
+      !['complete','unknown'].includes(record.completeness) || !['continue','complete','fail'].includes(record.outcome) ||
+      !journalTimestamp(record.created_at) || !journalTimestamp(record.observed_at) || (record.failure_code!==undefined && typeof record.failure_code!=='string')) throw new Error(APP_INTEGRITY_ERROR);
+  const dimensions=new Set();
+  for (const quantity of record.quantities) {
+    if (!quantity || !/^[a-z][a-z0-9_]{0,63}$/.test(quantity.dimension) || !/^[a-z][a-z0-9_]{0,63}$/.test(quantity.unit) || dimensions.has(quantity.dimension) ||
+        (quantity.included_in!==undefined && !/^[a-z][a-z0-9_]{0,63}$/.test(quantity.included_in)) ||
+        (quantity.value===undefined ? !['not_reported','invalid_quantity','unsupported_meter'].includes(quantity.unknown_reason || '') : typeof quantity.value!=='string' || !/^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(quantity.value) || quantity.unknown_reason!==undefined)) throw new Error(APP_INTEGRITY_ERROR);
+    dimensions.add(quantity.dimension);
+  }
+  for (const quantity of record.quantities) {
+    const seen=new Set([quantity.dimension]);
+    let parent=quantity.included_in;
+    while (parent!==undefined) {
+      const inclusive=record.quantities.find(value=>value.dimension===parent);
+      if (!inclusive || inclusive.unit!==quantity.unit || seen.has(parent)) throw new Error(APP_INTEGRITY_ERROR);
+      seen.add(parent); parent=inclusive.included_in;
+    }
+  }
+  if ((record.completeness==='unknown')!==record.quantities.some(quantity=>quantity.unknown_reason!==undefined)) throw new Error(APP_INTEGRITY_ERROR);
+}
+/** @param {import('../types.d.js').JournalCase} record */
+function assertJournalCase(record) {
+  if (!['usage_unknown','dispatch_outcome_unknown','execution_outcome_unknown','execution_result_unknown'].includes(record.reason) || !['open','resolved'].includes(record.state) ||
+      !journalTimestamp(record.created_at) || (record.state==='resolved' ? !journalTimestamp(record.resolved_at) : record.resolved_at!==undefined)) throw new Error(APP_INTEGRITY_ERROR);
+}
+/** @param {string} accountID @param {string} requestID @param {string} [cursor] @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').JournalAttemptPage>} */
+export async function fetchJournalAttempts(accountID,requestID,cursor='',signal) {
+  const pattern=/^attempt-[a-f0-9]{32}$/;
+  if (cursor && !pattern.test(cursor)) throw new Error(APP_INTEGRITY_ERROR);
+  const page=await requestJSON(`${journalEvidencePath(accountID,requestID)}/attempts?limit=50${cursor?'&cursor='+encodeURIComponent(cursor):''}`,{method:'GET',signal});
+  if (!page) throw new Error(APP_INTEGRITY_ERROR);
+  assertJournalPage(page.attempts,page.next_cursor,cursor,pattern,assertJournalAttempt);
+  return page;
+}
+/** @param {string} accountID @param {string} requestID @param {string} [cursor] @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').JournalObservationPage>} */
+export async function fetchJournalObservations(accountID,requestID,cursor='',signal) {
+  const pattern=/^observation-[a-f0-9]{32}$/;
+  if (cursor && !pattern.test(cursor)) throw new Error(APP_INTEGRITY_ERROR);
+  const page=await requestJSON(`${journalEvidencePath(accountID,requestID)}/observations?limit=50${cursor?'&cursor='+encodeURIComponent(cursor):''}`,{method:'GET',signal});
+  if (!page) throw new Error(APP_INTEGRITY_ERROR);
+  assertJournalPage(page.observations,page.next_cursor,cursor,pattern,assertJournalObservation);
+  return page;
+}
+/** @param {string} accountID @param {string} requestID @param {string} [cursor] @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').JournalCasePage>} */
+export async function fetchJournalCases(accountID,requestID,cursor='',signal) {
+  const pattern=/^case-[a-f0-9]{32}$/;
+  if (cursor && !pattern.test(cursor)) throw new Error(APP_INTEGRITY_ERROR);
+  const page=await requestJSON(`${journalEvidencePath(accountID,requestID)}/reconciliation-cases?limit=50${cursor?'&cursor='+encodeURIComponent(cursor):''}`,{method:'GET',signal});
+  if (!page) throw new Error(APP_INTEGRITY_ERROR);
+  assertJournalPage(page.cases,page.next_cursor,cursor,pattern,assertJournalCase);
+  return page;
 }

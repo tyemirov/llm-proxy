@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 type mediaOperationPartialReferenceRecord struct {
@@ -55,8 +54,7 @@ func (service *mediaOperationService) publishPartial(operationID string, generat
 	defer service.assets.referenceMutex.Unlock()
 	return service.store.database.Transaction(func(transaction *gorm.DB) error {
 		now := service.store.now()
-		var claim mediaOperationClaimRecord
-		if err := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&claim, "operation_id = ? AND generation = ? AND expires_at > ?", operationID, generation, now).Error; err != nil {
+		if err := lockMediaOperationClaim(transaction, operationID, generation, now); err != nil {
 			return err
 		}
 		var operation mediaOperationRecord

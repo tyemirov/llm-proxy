@@ -106,7 +106,7 @@ func (service *mediaOperationService) mediaVoiceHandler() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		ginContext.Header("Cache-Control", "no-store")
 		requestTenant := authenticatedTenantFromContext(ginContext)
-		record, voiceError := service.currentMediaVoice(ginContext.Request.Context(), requestTenant.identifier.string(), ginContext.Param("voice_id"))
+		_, record, voiceError := service.currentMediaVoice(ginContext.Request.Context(), requestTenant, ginContext.Param("voice_id"))
 		var voice mediaVoiceResponse
 		if voiceError == nil {
 			voice, voiceError = publicMediaVoice(record)
@@ -292,6 +292,10 @@ func publicMediaVoice(record mediaVoiceRecord) (mediaVoiceResponse, error) {
 }
 
 func writeMediaVoiceError(ginContext *gin.Context, voiceError error) {
+	if errors.Is(voiceError, errHostedAuthorityDenied) {
+		writeProviderErrorResponse(ginContext, ginContext.Query("provider"), voiceError, nil)
+		return
+	}
 	code := voiceError.Error()
 	status := http.StatusInternalServerError
 	switch code {

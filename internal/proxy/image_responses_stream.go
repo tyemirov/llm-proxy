@@ -89,7 +89,7 @@ func (adapter *imageGenerationAdapter) decodeResponsesStream(body io.Reader, con
 			if handle != "" || !imageResponseHandlePattern.MatchString(event.Response.ID) || !imageResponsePending(event.Response) {
 				return invalid
 			}
-			if err := request.PersistProviderHandle(event.Response.ID); err != nil {
+			if err := request.PersistProviderReceipt(MediaOperationProviderReceipt{Handle: event.Response.ID, RequestID: event.Response.ID}); err != nil {
 				return imageGenerationUncertain()
 			}
 			handle = event.Response.ID
@@ -139,7 +139,7 @@ func (adapter *imageGenerationAdapter) decodeResponsesStream(body io.Reader, con
 					return invalid
 				}
 			}
-			return adapter.imageResponseResult(event.Response, controls)
+			return adapter.imageResponseResult(event.Response, controls, request)
 		case "response.content_part.added", "response.content_part.done", "response.output_text.delta", "response.output_text.done", "response.output_text.annotation.added", "response.reasoning_summary_part.added", "response.reasoning_summary_part.done", "response.reasoning_summary_text.delta", "response.reasoning_summary_text.done", "response.reasoning_text.delta", "response.reasoning_text.done":
 			// Text and reasoning items do not create image output positions.
 		default:

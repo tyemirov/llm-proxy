@@ -421,3 +421,66 @@ schemas/executor-handoff.schema.json
 schemas/gateway-speech.schema.json
 schemas/schema-catalog.json
 ```
+
+## Shared Key Connection Repair: 2026-09-23
+
+Creative Director uses one `LLM_PROXY_SECRET` for text and media requests.
+That key selects Default tenant `managed-60634d2470f31557462f52e319f07d07`.
+Before the repair, this tenant had six provider connections and no Dictator connection.
+Its media capability response contained only two OpenAI routes for `gpt-image-2`.
+The submitted diarization request failed with `HTTP 422 media_operation_unavailable` before operation acceptance.
+
+Connection `connection-ef115fb73594e0158a626d610393aec1`, named MediaOps Dictator, has the same account owner.
+The existing MediaOps tenant already used this connection.
+The authorized repair added one tenant assignment from Default to this connection.
+The management page used the existing account session.
+The deployed frontend was `v1.12.0`, from commit `2fda9020e776da3e82bdd50b28b2a6c87e988842`.
+Its request contract was:
+
+```http
+PUT /api/management/tenants/managed-60634d2470f31557462f52e319f07d07/connections/dictator
+Content-Type: application/json
+
+{"connection_id":"connection-ef115fb73594e0158a626d610393aec1"}
+```
+
+The page showed `Connected Default to MediaOps Dictator` and seven connections for Default.
+The response from `llm-proxy-client v1.12.0` then contained 29 media routes with the same shared key.
+The two OpenAI routes stayed available. The response added 27 Dictator routes:
+
+| Models | Capabilities | Routes |
+| --- | --- | --- |
+| `whisper-tiny`, `whisper-base`, `whisper-small`, `whisper-medium`, `whisper-large-v3` | `audio.transcribe`, `audio.diarize`, `audio.align`, `audio.voice.extract`, `subtitles.create` | 25 |
+| `qwen3-tts`, `silero-ru` | `audio.speech.generate` | 2 |
+
+The catalog revision stayed `sha256-376d4d9b2884500ad06ca8a2750f9a9a5cf7d7188e82e7f6afcc4ab6ce54e26a`.
+Read-only database queries showed the same tenant identity, six previous assignments, and text, transcription, and speech defaults.
+Default still uses `openai/gpt-5.6-terra` for text and `openai/gpt-transcribe` for transcription.
+The MediaOps tenant still uses the same Dictator connection.
+The assignment increased the connection version from 2 to 3, as specified by the released management implementation.
+
+Asset `ast_4a8b700f1a8db555b40d72180bb713f0` still belongs to Default. Its state is `available`.
+Its metadata stayed unchanged. Its size is 5,071,705 bytes and its expiry is `2026-09-25T06:43:17.958348092Z`.
+The runtime image also stayed unchanged.
+This repair created no connection, changed no key or model default, and submitted no media operation.
+The management API made the change. The diagnostic database queries used read-only access.
+
+Creative Director B072 contains the caller correction to `whisper-medium` with `detect_language=true`.
+The capability response has empty controls for Dictator routes. The released adapter defines the `detect_language` control.
+This result is evidence for tenant capability access. Full F042 acceptance is a separate requirement.
+
+## Installed Consumer Result: 2026-09-23
+
+Creative Director reported a successful F001 gateway operation after the tenant repair and B072 caller correction.
+Its installed caller completed operation `mop_51b12ff8a363772f37d8ee988391adfb` with `whisper-medium`.
+The caller used the existing audio asset `ast_4a8b700f1a8db555b40d72180bb713f0` and saved its execution receipt.
+The output asset is `ast_9591ed2d01aed1f823e5b1fbfb8e3c68`.
+[Creative Director PR 11](https://github.com/MarcoPoloResearchLab/CreativeDirector/pull/11) contains the B072 correction.
+
+The caller then reached `accepted-assets` and reported `accepted_audio_transcript_mismatch`.
+Its transcript and 427 timed words equal the retained August evidence.
+The checked narration has 426 normalized words. Timing order and tail coverage passed.
+Creative Director B073 contains the separate narration acceptance requirements. Full F001 delivery is still unverified.
+
+The connection repair passed this installed consumer check.
+The remaining content QA decision belongs to Creative Director B073.

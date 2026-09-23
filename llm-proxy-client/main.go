@@ -28,6 +28,7 @@ const (
 	flagMaxTokens             = "max-tokens"
 	flagReasoningEffort       = "reasoning-effort"
 	flagRequestTimeoutSeconds = "request-timeout-seconds"
+	flagIdempotencyKey        = "idempotency-key"
 
 	envNameBaseURL          = "LLM_PROXY_BASE_URL"
 	envNameDefaultTenantKey = "LLM_PROXY_DEFAULT_TENANT_KEY"
@@ -46,6 +47,7 @@ type commandOptions struct {
 	maxTokens             int
 	reasoningEffort       string
 	requestTimeoutSeconds int
+	idempotencyKey        string
 }
 
 type httpClientFactory func() llmproxyclient.HTTPDoer
@@ -118,9 +120,10 @@ func newRootCommand(
 			}
 			messages = append(messages, llmproxyclient.MessageInput{Role: "user", Content: prompt})
 			requestInput := llmproxyclient.MessagesRequestInput{
-				Messages:  messages,
-				Model:     options.model,
-				WebSearch: options.webSearch,
+				IdempotencyKey: options.idempotencyKey,
+				Messages:       messages,
+				Model:          options.model,
+				WebSearch:      options.webSearch,
 			}
 			if command.Flags().Changed(flagMaxTokens) {
 				requestInput.MaxTokens = &options.maxTokens
@@ -164,6 +167,7 @@ func newRootCommand(
 	flagSet.IntVar(&options.maxTokens, flagMaxTokens, 0, "positive output token cap")
 	flagSet.StringVar(&options.reasoningEffort, flagReasoningEffort, "", "model-supported reasoning effort")
 	flagSet.IntVar(&options.requestTimeoutSeconds, flagRequestTimeoutSeconds, 0, "positive proxy work budget in whole seconds")
+	flagSet.StringVar(&options.idempotencyKey, flagIdempotencyKey, "", "stable key for one hosted text request")
 
 	rootCommand.AddCommand(newMediaCommand(stdin, stdout, httpClientFactoryValue))
 	return rootCommand

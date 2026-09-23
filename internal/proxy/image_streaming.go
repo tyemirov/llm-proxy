@@ -56,6 +56,11 @@ func (adapter *imageGenerationAdapter) decodeStream(body io.Reader, controls ima
 		if json.Unmarshal([]byte(data.String()), &event) != nil || (eventName != "" && eventName != event.Type) {
 			return invalid
 		}
+		if event.Type == prefix+".completed" {
+			if err := request.recordImageUsage([]byte(data.String())); err != nil {
+				return MediaOperationExecutionResult{State: MediaOperationStateUncertain, ErrorCode: llmproxycontract.ErrorCodeUsageJournalUnavailable}
+			}
+		}
 		data.Reset()
 		eventName = ""
 		if event.Type == "error" {

@@ -1,5 +1,7 @@
 package proxy
 
+import "time"
+
 // completionContent is the closed set of successful canonical results.
 // Provider attempts stay separate from this client-facing domain result.
 type completionContent interface {
@@ -25,6 +27,12 @@ func (value completedFunctionCalls) text() string              { return value.vi
 func (value completedFunctionCalls) toolCalls() []functionCall { return value.calls }
 
 type completionResult struct {
+	receipt *completionReceipt
 	content completionContent
 	usage   *tokenUsage
+}
+
+type completionReceipt struct {
+	executionID string
+	createdAt   time.Time
 }
