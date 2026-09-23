@@ -16,7 +16,7 @@ import (
 var errHostedResultExpired = errors.New(llmproxycontract.ErrorCodeHostedResultExpired)
 
 func hostedRequestErrorCode(err error) (string, bool) {
-	for _, failure := range []error{errUsageJournalConflict, errJournalClaimLost, errHostedAuthorityDenied, errHostedResultExpired} {
+	for _, failure := range []error{errUsageJournalConflict, errJournalClaimLost, errHostedAuthorityDenied, errHostedResultExpired, errInsufficientFunds, errFinancialAdmissionUnavailable} {
 		if errors.Is(err, failure) {
 			return failure.Error(), true
 		}
@@ -64,6 +64,9 @@ func newHostedTextRequests(ctx context.Context, dependencies hostedTextRequestDe
 	service := &hostedTextRequests{hostedTextRequestDependencies: dependencies}
 	if err := service.recoverResults(startupContext); err != nil {
 		return nil, fmt.Errorf("recover hosted text results: %w", err)
+	}
+	if err := dependencies.database.reconcileHostedFunds(startupContext, dependencies.now().UTC()); err != nil {
+		return nil, fmt.Errorf("recover hosted funds: %w", err)
 	}
 	dependencies.responses.hosted = service
 	return service, nil

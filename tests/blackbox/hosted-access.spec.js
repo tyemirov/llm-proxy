@@ -37,6 +37,26 @@ test('hosted onboarding creates tenant access without provider credentials at de
   await expect(hosted.getByRole('button',{name:'Create billing account'})).toBeVisible();
   await hosted.getByRole('button',{name:'Create billing account'}).click();
   await expect(hosted).toContainText('USD billing account');
+  const funds=dashboard.getByRole('region',{name:'Prepaid balance',exact:true});
+  await expect(funds).toBeVisible();
+  await expect(funds.locator('[data-funds-value="available_cents"]')).toHaveText('$0.00');
+  await expect(funds).toContainText('No funds available for hosted requests.');
+  await expect(funds).toContainText('Minimum funding: $5.00');
+  const tenantLimit=funds.getByRole('region',{name:'Tenant spending limit',exact:true});
+  await expect(tenantLimit).toContainText('No tenant limit');
+  await tenantLimit.getByLabel('Limit in USD').fill('12.34');
+  await tenantLimit.getByRole('button',{name:'Save limit',exact:true}).click();
+  await expect(tenantLimit).toContainText('Remaining allowance: $12.34');
+  await page.reload();
+  await expect(tenantLimit.getByLabel('Limit in USD')).toHaveValue('12.34');
+  await tenantLimit.getByLabel('Limit in USD').fill('0.001');
+  await tenantLimit.getByRole('button',{name:'Save limit',exact:true}).click();
+  await expect(tenantLimit.getByRole('alert')).toContainText('Use a nonnegative USD amount with at most two decimal places.');
+  await tenantLimit.getByRole('button',{name:'Remove limit',exact:true}).click();
+  await expect(tenantLimit).toContainText('No tenant limit');
+  await funds.getByRole('button',{name:'View financial history',exact:true}).click();
+  await expect(funds).toContainText('No reservations yet.');
+  await expect(funds).toContainText('No ledger entries yet.');
   const journalView=dashboard.getByRole('region',{name:'Usage journal',exact:true});
   await expect(journalView).toBeVisible();
   await journalView.getByRole('button',{name:'Load usage journal',exact:true}).click();
@@ -51,10 +71,24 @@ test('hosted onboarding creates tenant access without provider credentials at de
   },billing.billing_accounts[0].id);
   expect(journal).toEqual({requests:[],next_cursor:''});
   const tenant=account.tenants[0].id;
+  const limitURL=`${base}/billing-accounts/${billing.billing_accounts[0].id}/tenant-limits/${tenant}`;
+  const priorLimit=await (await context.request.get(limitURL,{headers})).json();
+  const otherTab=await context.request.put(limitURL,{headers,data:{limit_cents:'456',revision:priorLimit.revision}});
+  expect(otherTab.status()).toBe(200);
+  await tenantLimit.getByLabel('Limit in USD').fill('7.89');
+  await tenantLimit.getByRole('button',{name:'Save limit',exact:true}).click();
+  await expect(tenantLimit.getByRole('alert')).toContainText('The limit changed in another session.');
+  await expect(tenantLimit.getByLabel('Limit in USD')).toHaveValue('4.56');
+  const foreignOrigin=await context.request.put(limitURL,{headers:{...headers,Origin:'https://foreign.example'},data:{limit_cents:null,revision:priorLimit.revision+1}});
+  expect(foreignOrigin.status()).toBe(403);
+  await tenantLimit.getByRole('button',{name:'Remove limit',exact:true}).click();
+  await expect(tenantLimit).toContainText('No tenant limit');
   const operator=await browser.newContext();
   try {
     const login=await operator.request.post(`${stack.tAuthOrigin}/auth/password/login`,{headers,data:{email:localManagementProfile.secondOperatorEmail,password:localManagementProfile.operatorPassword}});
     expect(login.ok()).toBeTruthy();
+    const foreignAccount=await operator.request.get(limitURL,{headers});
+    expect(foreignAccount.status()).toBe(404);
     const provision=async(path, data)=>{
       const response=await operator.request.post(base+path,{headers:{...headers,'Idempotency-Key':crypto.randomUUID()},data});
       expect(response.status(),await response.text()).toBe(201);
@@ -113,7 +147,7 @@ test('hosted onboarding creates tenant access without provider credentials at de
     const serviceRequest={...retained,id:secondID,grant_id:serviceGrant.id,provider:'elevenlabs',operation:'audio_alignment',execution_kind:'media_operation',execution_id:'retained-media',state:'uncertain'};
     delete serviceRequest.model;
     const root=`${base}/billing-accounts/${billing.billing_accounts[0].id}/requests`;
-    let failObservations=false, invalidMeasurement=false;
+    let failObservations=false, invalidMeasurement=false, financialReason='usage_unknown';
     await page.route(root+'**',async route=>{
       const url=new URL(route.request().url()),cursor=url.searchParams.get('cursor');
       let body;
@@ -123,7 +157,7 @@ test('hosted onboarding creates tenant access without provider credentials at de
       else if(url.pathname.endsWith('/observations')) {
         if(failObservations){await route.fulfill({status:500,json:{error:{code:'usage_journal_unavailable',detail:'private storage diagnostic'}}});return;}
         body={observations:[{id:cursor?secondObservation:observationID,attempt_id:attemptID,quantities:cursor?[{dimension:'output_tokens',unit:'token',value:'1.25'}]:[{dimension:'input_tokens',unit:'token',value:invalidMeasurement?9007199254740992:'9007199254740993'},{dimension:'output_tokens',unit:'token',value:'0'},{dimension:'cache_read_tokens',unit:'token',unknown_reason:'not_reported',included_in:'input_tokens'}],completeness:cursor?'complete':'unknown',outcome:'continue',observed_at:timestamp,created_at:timestamp}],next_cursor:cursor?'':observationID};
-      } else if(url.pathname.endsWith('/reconciliation-cases'))body={cases:[cursor?{id:secondCase,reason:'execution_result_unknown',state:'resolved',resolved_at:timestamp,created_at:timestamp}:{id:caseID,reason:'usage_unknown',state:'open',created_at:timestamp}],next_cursor:cursor?'':caseID};
+      } else if(url.pathname.endsWith('/reconciliation-cases'))body={cases:[cursor?{id:secondCase,reason:'execution_result_unknown',state:'resolved',resolved_at:timestamp,created_at:timestamp}:{id:caseID,reason:financialReason,state:'open',created_at:timestamp}],next_cursor:cursor?'':caseID};
       else throw new Error('Unexpected journal request: '+url.pathname);
       await route.fulfill({json:body});
     });
@@ -142,6 +176,12 @@ test('hosted onboarding creates tenant access without provider credentials at de
     await expect(details).toContainText('1.25 token');
     await expect(details).toContainText('Resolved');
     await expect(details).toContainText('Execution result unknown');
+    for(const reason of ['usage_unresolved','policy_unresolved','limit_unresolved','platform_exposure']) {
+      financialReason=reason;
+      await journalView.locator(`[data-journal-request="${requestID}"]`).click();
+      const label=reason.charAt(0).toUpperCase()+reason.slice(1).replaceAll('_',' ');
+      await expect(details).toContainText(label);
+    }
     for(const width of [1440,390,320]){
       await page.setViewportSize({width,height:1000});
       await expect(details).toBeVisible();
@@ -160,5 +200,49 @@ test('hosted onboarding creates tenant access without provider credentials at de
     invalidMeasurement=false;
     await journalView.locator(`[data-journal-request="${requestID}"]`).click();
     await expect(details).toContainText('9007199254740993');
+
+    const fundsRoot=`${base}/billing-accounts/${billing.billing_accounts[0].id}`;
+    let fundsFailure=false, invalidFunds=false;
+    await page.route(fundsRoot+'/balance',async route=>{
+      if(fundsFailure)return route.fulfill({status:500,json:{error:{code:'billing_account_store_failed',detail:'private financial diagnostic'}}});
+      return route.fulfill({json:{currency:'USD',state:'active',posted_cents:'9007199254740993',available_cents:invalidFunds?9007199254740493:'9007199254740493',reserved_cents:'500',spent_cents:'123',pending_cents:'200',unsettled_fraction:{numerator:'91',denominator:'25000'}}});
+    });
+    await page.route(fundsRoot+'/reservations?*',route=>{
+      const more=new URL(route.request().url()).searchParams.has('cursor');
+      return route.fulfill({json:{reservations:[{id:more?secondID:requestID,currency:'USD',maximum_cents:more?'200':'300',state:more?'reconciliation_required':'held',revision:1,created_at:timestamp,updated_at:timestamp}],next_cursor:more?'':requestID}});
+    });
+    await page.route(fundsRoot+'/ledger-entries?*',route=>{
+      const more=new URL(route.request().url()).searchParams.has('cursor');
+      const entryID=more?'22222222-2222-4222-8222-222222222222':'11111111-1111-4111-8111-111111111111';
+      return route.fulfill({json:{entries:[{id:entryID,currency:'USD',type:more?'spend':'grant',amount_cents:more?'-123':'9007199254740993',reservation_id:null,refund_of_entry_id:null,created_at:timestamp}],next_cursor:more?'':entryID}});
+    });
+    await funds.getByRole('button',{name:'Refresh balance',exact:true}).click();
+    await expect(funds.locator('[data-funds-value="available_cents"]')).toHaveText('$90071992547404.93');
+    await expect(funds.locator('[data-funds-value="reserved_cents"]')).toHaveText('$5.00');
+    await expect(funds.locator('[data-funds-value="pending_cents"]')).toHaveText('$2.00');
+    await expect(funds.locator('[data-funds-value="spent_cents"]')).toHaveText('$1.23');
+    await expect(funds).toContainText('91/25000 USD');
+    await funds.getByRole('button',{name:'View financial history',exact:true}).click();
+    await funds.getByRole('button',{name:'Load more reservations',exact:true}).click();
+    await funds.getByRole('button',{name:'Load more ledger entries',exact:true}).click();
+    await expect(funds.locator('[data-funds-reservation]')).toHaveCount(2);
+    await expect(funds.locator('[data-funds-entry]')).toHaveCount(2);
+    await expect(funds).toContainText('-$1.23');
+    await expect(funds).toContainText('Reconciliation required');
+    for(const width of [1440,390,320]) {
+      await page.setViewportSize({width,height:1000});
+      await expect(funds).toBeVisible();
+      expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+    }
+    for(const failure of ['read','contract']) {
+      fundsFailure=failure==='read';invalidFunds=failure==='contract';
+      await funds.getByRole('button',{name:'Refresh balance',exact:true}).click();
+      await expect(funds.getByRole('alert')).toBeVisible();
+      await expect(funds.locator('[data-funds-value]')).toHaveCount(0);
+      await expect(funds).not.toContainText('private financial diagnostic');
+    }
+    fundsFailure=false;invalidFunds=false;
+    await funds.getByRole('button',{name:'Refresh balance',exact:true}).click();
+    await expect(funds.locator('[data-funds-value="available_cents"]')).toHaveText('$90071992547404.93');
   } finally { await operator.close(); }
 });

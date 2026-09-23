@@ -62,6 +62,8 @@ func recognizedProxyErrorCode(responseBody []byte) string {
 	}
 	switch envelope.Error.Code {
 	case llmproxycontract.ErrorCodeInvalidRequestTimeout,
+		llmproxycontract.ErrorCodeInsufficientFunds,
+		llmproxycontract.ErrorCodeFinancialAdmissionUnavailable,
 		llmproxycontract.ErrorCodeHostedAuthorityDenied,
 		llmproxycontract.ErrorCodeHostedResultExpired,
 		llmproxycontract.ErrorCodeUsageJournalConflict,

@@ -1574,6 +1574,12 @@ func writeMediaOperationError(ginContext *gin.Context, operationError error) {
 		return
 	}
 	switch {
+	case errors.Is(operationError, errInsufficientFunds):
+		statusCode, code = http.StatusPaymentRequired, errInsufficientFunds.Error()
+	case errors.Is(operationError, errFinancialAdmissionUnavailable):
+		statusCode, code = http.StatusServiceUnavailable, errFinancialAdmissionUnavailable.Error()
+	case errors.Is(operationError, errFinancialAccountSuspended):
+		statusCode, code = http.StatusForbidden, errHostedAuthorityDenied.Error()
 	case errors.Is(operationError, errMediaOperationUnavailable):
 		statusCode, code = http.StatusUnprocessableEntity, errMediaOperationUnavailable.Error()
 	case errors.Is(operationError, errMediaOperationNotFound):

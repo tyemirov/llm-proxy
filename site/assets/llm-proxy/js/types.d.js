@@ -457,10 +457,17 @@ export {};
  * @property {string} updated_at
  */
 /** @typedef {{requests:JournalRequest[], next_cursor:string}} JournalRequestPage */
+/** @typedef {{numerator:string,denominator:string}} ExactMoney */
+/** @typedef {{currency:'USD',state:'active'|'suspended'|'reconciliation_required',posted_cents:string,available_cents:string,reserved_cents:string,spent_cents:string,pending_cents:string,unsettled_fraction:ExactMoney}} FundsBalance */
+/** @typedef {{id:string,currency:'USD',maximum_cents:string,state:'held'|'settled'|'released'|'reconciliation_required',revision:number,created_at:string,updated_at:string}} FundsReservation */
+/** @typedef {{id:string,currency:'USD',type:'grant'|'hold'|'reverse_hold'|'spend'|'refund',amount_cents:string,reservation_id:string|null,refund_of_entry_id:string|null,created_at:string}} FundsEntry */
+/** @typedef {{reservations:FundsReservation[],next_cursor:string}} FundsReservationPage */
+/** @typedef {{entries:FundsEntry[],next_cursor:string}} FundsEntryPage */
+/** @typedef {{tenant_id:string,currency:'USD',limit_cents:string|null,remaining_cents:string|null,reserved_cents:string,spent:ExactMoney,revision:number}} FundsTenantLimit */
 /** @typedef {{id:string,number:number,state:'prepared'|'dispatched'|'observed'|'uncertain',dispatched_at?:string,observed_at?:string,created_at:string,updated_at:string}} JournalAttempt */
 /** @typedef {{dimension:string,unit:string,value?:string,unknown_reason?:'not_reported'|'invalid_quantity'|'unsupported_meter',included_in?:string}} JournalQuantity */
 /** @typedef {{id:string,attempt_id:string,quantities:JournalQuantity[],completeness:'complete'|'unknown',outcome:'continue'|'complete'|'fail',failure_code?:string,observed_at:string,created_at:string}} JournalObservation */
-/** @typedef {{id:string,reason:'usage_unknown'|'dispatch_outcome_unknown'|'execution_outcome_unknown'|'execution_result_unknown',state:'open'|'resolved',resolved_at?:string,created_at:string}} JournalCase */
+/** @typedef {{id:string,reason:'usage_unknown'|'dispatch_outcome_unknown'|'execution_outcome_unknown'|'execution_result_unknown'|'usage_unresolved'|'policy_unresolved'|'limit_unresolved'|'platform_exposure',state:'open'|'resolved',resolved_at?:string,created_at:string}} JournalCase */
 /** @typedef {{attempts:JournalAttempt[],next_cursor:string}} JournalAttemptPage */
 /** @typedef {{observations:JournalObservation[],next_cursor:string}} JournalObservationPage */
 /** @typedef {{cases:JournalCase[],next_cursor:string}} JournalCasePage */

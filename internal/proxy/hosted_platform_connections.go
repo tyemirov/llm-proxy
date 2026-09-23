@@ -85,6 +85,14 @@ type managementPlatformConnectionsResponse struct {
 }
 
 func newHostedResourcePage(rawQuery, prefix string) (managedConnectionPage, error) {
+	return newHostedPage(rawQuery, func(cursor string) bool {
+		encoded, found := strings.CutPrefix(cursor, prefix)
+		identifier, err := hex.DecodeString(encoded)
+		return found && err == nil && len(identifier) == hostedResourceIDBytes && encoded == strings.ToLower(encoded)
+	})
+}
+
+func newHostedPage(rawQuery string, validCursor func(string) bool) (managedConnectionPage, error) {
 	query, err := url.ParseQuery(rawQuery)
 	if err != nil {
 		return managedConnectionPage{}, errHostedAccessInvalid
@@ -101,9 +109,7 @@ func newHostedResourcePage(rawQuery, prefix string) (managedConnectionPage, erro
 				return managedConnectionPage{}, errHostedAccessInvalid
 			}
 		case "cursor":
-			encoded, found := strings.CutPrefix(values[0], prefix)
-			identifier, err := hex.DecodeString(encoded)
-			if !found || err != nil || len(identifier) != hostedResourceIDBytes || encoded != strings.ToLower(encoded) {
+			if !validCursor(values[0]) {
 				return managedConnectionPage{}, errHostedAccessInvalid
 			}
 			page.after = values[0]

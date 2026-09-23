@@ -40,7 +40,7 @@ go-lint:
 	$(GO) run github.com/gordonklaus/ineffassign@latest ./...
 
 python-lint:
-	cd $(PYTHON_PROJECT_DIR) && $(UV) run --group dev mypy --strict llm_proxy_client
+	cd $(PYTHON_PROJECT_DIR) && $(UV) run --group dev mypy --strict llm_proxy_client ../scripts/snapshot_managed_database.py
 
 frontend-dependencies: $(FRONTEND_DEPENDENCY_STAMP)
 
@@ -98,6 +98,19 @@ test-hosted-access:
 .PHONY: test-hosted-rating
 test-hosted-rating:
 	$(GO) test ./internal/proxy -run '^Test(HostedRating|CatalogRating|CatalogService|CatalogPrice|ProviderCatalogExactAmounts|ProviderCatalogRejectsInvalidMonetaryAmounts)' -count=1
+
+.PHONY: test-hosted-funds
+test-hosted-funds:
+	$(GO) test ./internal/proxy -run '^TestHostedFunds' -count=1
+
+export SNAPSHOT_SOURCE SNAPSHOT_DESTINATION
+.PHONY: snapshot-managed-database test-managed-database-snapshot
+snapshot-managed-database:
+	$(UV) run --no-project python scripts/snapshot_managed_database.py --source "$$SNAPSHOT_SOURCE" --destination "$$SNAPSHOT_DESTINATION"
+
+test-managed-database-snapshot:
+	cd $(PYTHON_PROJECT_DIR) && $(UV) run --group dev pytest tests/test_database_snapshot.py
+	$(GO) test ./internal/proxy -run '^TestHostedFundsBackup' -count=1
 
 .PHONY: test-hosted-clients
 test-hosted-clients:

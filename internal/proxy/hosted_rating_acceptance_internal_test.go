@@ -30,13 +30,29 @@ func newHostedRatingFixtureForAttempts(t *testing.T, attempts uint32) (*gormMana
 	service := newInternalManagementService(t, newFakeManagedTenantDatabase(), internalManagementProviderRegistry())
 	service.store.database = database
 	router := server.Config.Handler.(*gin.Engine)
+	router.GET(managementAPIPath+managementFundsBalancePath, service.getFundsBalanceHandler())
+	router.GET(managementAPIPath+managementFundsReservationsPath, service.listFundsReservationsHandler())
+	router.GET(managementAPIPath+managementFundsEntriesPath, service.listFundsEntriesHandler())
+	router.GET(managementAPIPath+managementFundsTenantLimitPath, service.fundsTenantLimitHandler())
+	router.PUT(managementAPIPath+managementFundsTenantLimitPath, service.fundsTenantLimitHandler())
 	router.GET(managementAPIPath+managementChargesPath, service.listChargesHandler())
 	router.GET(managementAPIPath+managementChargePath, service.getChargeHandler())
 	router.GET(managementAPIPath+managementPriceSnapshotPath, service.getPriceSnapshotHandler())
 	router.GET(managementAPIPath+managementRequestChargeSummaryPath, service.getRequestChargeSummaryHandler())
+	return database, intent, server, hostedRatingFixtureAdmission(t, attempts)
+}
+
+func hostedRatingFixtureAdmission(t *testing.T, attempts uint32) journalReservation {
+	t.Helper()
+	return hostedRatingFixtureAdmissionAt(t, attempts, ratingTestAcceptanceTime())
+}
+
+func hostedRatingFixtureAdmissionAt(t *testing.T, attempts uint32, acceptedAt time.Time) journalReservation {
+	t.Helper()
 	catalog := internalTestModelCatalog(internalTestOffering("openai", "gpt-4.1", []string{"text"}, []string{"text"}))
 	catalog.Revision = "journal-catalog"
-	conditions := CatalogPriceConditions{EffectiveFrom: "2026-09-01T00:00:00Z", EffectiveUntil: "2026-10-01T00:00:00Z"}
+	month := time.Date(acceptedAt.Year(), acceptedAt.Month(), 1, 0, 0, 0, 0, time.UTC)
+	conditions := CatalogPriceConditions{EffectiveFrom: month.Format(time.RFC3339), EffectiveUntil: month.AddDate(0, 1, 0).Format(time.RFC3339)}
 	catalog.Prices[0] = CatalogPriceDescriptor{Provider: "openai", Model: "gpt-4.1", Operation: "text", Available: true, Source: "https://example.com/prices", LastVerified: "2026-09-22", Rates: []CatalogPriceRate{
 		{Component: "input_tokens", Currency: "USD", Rate: "2", Unit: "USD/1M_tokens", Conditions: conditions},
 		{Component: "output_tokens", Currency: "USD", Rate: "8", Unit: "USD/1M_tokens", Conditions: conditions},
@@ -45,7 +61,7 @@ func newHostedRatingFixtureForAttempts(t *testing.T, attempts uint32) (*gormMana
 	if err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err := prices.NewRatingSnapshot("openai", "gpt-4.1", "text", ratingTestAcceptanceTime(), []CatalogRateBinding{{Dimension: "input_tokens", Component: "input_tokens", Conditions: categoricalPriceConditions(conditions)}, {Dimension: "output_tokens", Component: "output_tokens", Conditions: categoricalPriceConditions(conditions)}})
+	snapshot, err := prices.NewRatingSnapshot("openai", "gpt-4.1", "text", acceptedAt, []CatalogRateBinding{{Dimension: "input_tokens", Component: "input_tokens", Conditions: categoricalPriceConditions(conditions)}, {Dimension: "output_tokens", Component: "output_tokens", Conditions: categoricalPriceConditions(conditions)}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +69,7 @@ func newHostedRatingFixtureForAttempts(t *testing.T, attempts uint32) (*gormMana
 	if err != nil {
 		t.Fatal(err)
 	}
-	return database, intent, server, admission
+	return admission
 }
 
 func observeRatedFixture(t *testing.T, database *gormManagedTenantDatabase, intent journalAdmissionIntent, reserve journalReservation, outcome journalObservationOutcome, quantities []journalQuantity) (managedJournalRequestRecord, managedJournalObservationRecord) {
@@ -329,6 +345,9 @@ func ratingHTTPExchange(t *testing.T, server *httptest.Server, method, path, bod
 	if err != nil {
 		t.Fatal(err)
 	}
+	if body != "" {
+		request.Header.Set("Content-Type", "application/json")
+	}
 	response, err := server.Client().Do(request)
 	if err != nil {
 		t.Fatal(err)
@@ -345,8 +364,19 @@ func ratingHTTPExchange(t *testing.T, server *httptest.Server, method, path, bod
 		t.Fatal("financial response permits caching")
 	}
 	template := "/api/management/billing-accounts/{billing_account_id}/charges"
-	if strings.HasSuffix(path, "/charge-summary") {
+	resourcePath := strings.SplitN(path, "?", 2)[0]
+	if strings.Contains(resourcePath, "/tenant-limits/") {
+		template = "/api/management/billing-accounts/{billing_account_id}/tenant-limits/{tenant_id}"
+	} else if strings.HasSuffix(resourcePath, "/reservations") {
+		template = "/api/management/billing-accounts/{billing_account_id}/reservations"
+	} else if strings.HasSuffix(resourcePath, "/ledger-entries") {
+		template = "/api/management/billing-accounts/{billing_account_id}/ledger-entries"
+	} else if strings.HasSuffix(path, "/balance") {
+		template = "/api/management/billing-accounts/{billing_account_id}/balance"
+	} else if strings.HasSuffix(path, "/charge-summary") {
 		template = "/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/charge-summary"
+	} else if strings.HasSuffix(path, "/reconciliation-cases") {
+		template = "/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/reconciliation-cases"
 	} else if strings.Contains(path, "/price-snapshots/") {
 		template = "/api/management/billing-accounts/{billing_account_id}/price-snapshots/{price_snapshot_id}"
 	} else if strings.Contains(path, "/charges/") {

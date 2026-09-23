@@ -52,6 +52,19 @@ Ledger entries use integer USD cents. The maximum entry is `9223372036854775807`
 Settlement adds the retained account remainder before conversion to cents.
 Settlement rounds down once and retains the exact remainder, which is less than one cent.
 F068 must commit the remainder and the ledger entry in one transaction.
+An exact usage credit reduces this remainder before it credits whole cents.
+The conversion preserves the same fractional accounting boundary:
+
+```text
+residual = previous_remainder - exact_credit
+credited_cents = max(0, ceil(-residual * 100))
+next_remainder = residual + credited_cents / 100
+```
+
+The credit transaction retains the previous remainder, next remainder, and credited cents.
+The next remainder stays below one cent.
+Original provider costs, charges, and settlement records remain unchanged.
+
 The reservation estimate rounds up to cents and includes each authorized attempt.
 An upper bound for cached tokens does not establish a cache discount.
 An unknown component bound or an amount above the ledger limit prevents authorization.
@@ -147,7 +160,7 @@ The account lock serializes concurrent credits. Total credits cannot exceed the 
 Only a resolved charge can receive a usage credit.
 
 The adjustment record and its settlement callback share one transaction.
-A failed callback rolls back the adjustment. F068 must connect this callback to the shared Ledger service.
+A failed callback rolls back the adjustment. F068 connects this callback to the shared Ledger service.
 The command is an internal financial interface. The customer HTTP resources remain read-only.
 Paddle funding reversals remain separate F069 operations.
 
@@ -692,6 +705,249 @@ Status GET requests do not change the journal.
 Process interruption tests verify these boundaries through authenticated HTTP requests and a controlled provider.
 These tests do not prove funds settlement, provider reconciliation, or recovery for every operation.
 
+### Funds Admission and Settlement
+
+F068 uses the shared Ledger service in the managed database transaction.
+Admission locks the billing account before it reads funds or creates a reservation.
+The transaction retains the request, accepted price, and reservation together.
+An unsuccessful transaction retains none of these effects.
+All tenants of the account use the same Ledger balance.
+
+The reservation covers the accepted maximum cost, rounded up to cents.
+It has no automatic expiry.
+An identical request reuses its reservation and execution identity.
+Insufficient funds produce `402` before provider dispatch.
+A suspended financial account produces `403`.
+A financial admission failure produces `503`.
+Media admission uses these same errors before it creates queued work.
+
+Usage delivery retains each exact charge before settlement.
+Settlement waits for request completion and a resolved charge for every attempt.
+The transaction releases the hold, posts the charge in cents, and retains the exact account remainder.
+It also retains a settlement record and acknowledges usage delivery.
+A failed write rolls back all these effects and leaves delivery pending.
+A repeated delivery cannot post another charge or release.
+
+Unknown usage, unresolved charge policy, and usage above the accepted bound retain the hold for reconciliation.
+The account API exposes the reason through the request's reconciliation cases.
+Controlled acceptance uses local HTTP providers and reopened database connections.
+Production activation remains disabled.
+Decisions for uncertain costs and complete service acceptance remain open under F068.
+
+An audited usage credit uses the existing charge adjustment transaction and its account lock.
+A compensating Ledger grant restores whole cents when required.
+This supports credits for several fractional charges that shared one settled cent.
+A separate credit record links the Ledger effect to the original adjustment and request.
+Repeated adjustment identifiers cannot change funds twice.
+Before settlement, a credit reduces the pending charge. The settlement record retains the identifiers of those credits.
+
+Controlled tests verify fractional credits, concurrent adjustments, duplicate events, and rollback after a failed financial write.
+The public calculation tests verify that exact credits reverse cent settlements, including the maximum Ledger amount.
+F069 owns payment refunds and funding reversals through Paddle.
+
+Hosted completion startup reconciles retained funds after journal and result recovery.
+It delivers pending funded observations and reviews held reservations in bounded batches.
+Each financial effect has one transaction. A later run resumes pending records without a process-local checkpoint.
+
+The HTTP service reconciles funds before it accepts requests and then once per second.
+Its lifecycle owns the financial worker and HTTP listener.
+A reconciliation failure stops the listener and returns the financial error to the process owner.
+An interrupt or termination signal cancels the worker and active requests.
+HTTP shutdown has a ten-second limit.
+
+Settlement requires a published result and final charges for all attempts.
+A completed request with no publication receipt retains its reservation.
+A later reconciliation pass can settle the request after publication.
+
+A failed request with no dispatch evidence releases its reservation.
+For an expired undispatched request, recovery closes the journal request before it releases funds.
+This transition prevents a stale worker from dispatching with released funds.
+Recovery leaves active worker claims unchanged.
+Dispatched work with an uncertain outcome retains its hold and requires reconciliation.
+
+A failed recovery write stops hosted startup and leaves the financial effect pending.
+Controlled tests interrupt real service processes before dispatch, after dispatch, and during settlement.
+The settlement interruption occurs after Ledger release and spend operations, before the caller commits the transaction.
+Restart tests verify rollback, retained holds, exact remainders, and one financial effect per accepted request.
+Two concurrent service processes share one funded balance and reject excess reservations before provider work.
+Two running service processes also settle new completed work through the shared database without restart.
+Runtime tests verify failed settlement rollback, listener closure, restart recovery, and request cancellation during shutdown.
+
+### Platform Exposure
+
+Reservation details include `known_provider_cost`, `known_platform_exposure`, and `provider_cost_complete`.
+Known costs include only attempts with complete retained pricing results.
+An incomplete cost response does not establish a zero total cost.
+Known exposure is the positive difference between known provider costs and the exact request authorization.
+It is a lower bound when provider costs remain incomplete.
+
+Usage delivery retains positive exposure with a `platform_exposure` reconciliation case in the same financial transaction.
+A failed write leaves usage delivery pending and keeps the hold.
+Repeated delivery and recovery retain one exposure record and case for the request.
+Customer credits and financial waivers do not erase provider costs or exposure.
+The browser journal shows the exposure case. Reservation details expose the exact amounts to the owner and operator.
+
+### Audited Financial Resolution
+
+An operator can resolve a reservation in `reconciliation_required` after the request reaches a final execution state.
+The decision records a final net customer charge, reason, evidence reference, operator identity, and time.
+The charge cannot exceed the exact authorized maximum, even when the rounded hold permits a larger amount.
+When all provider costs are known, the accepted customer pricing can reduce this upper limit.
+Prior customer credits also reduce the limit.
+Reservation details expose the resulting `resolution_charge_limit`.
+A zero charge waives the request charge and releases the hold.
+No default failure-charge policy applies through this command.
+
+The financial transaction commits the decision, settlement receipt, Ledger effects, account remainder, and tenant total together.
+A failed audit write rolls back all these effects.
+An identical repeat returns the retained decision. A different decision for the same request produces `409`.
+Later credits cannot exceed the amount actually settled for that request.
+
+Original usage, provider costs, and charges remain unchanged.
+The financial decision does not establish missing provider evidence or close its usage cases.
+The account owner can read the financial receipt. Private operator identity and evidence references remain in the audit record.
+
+Use this procedure for an approved decision:
+
+1. Read `GET /api/management/billing-accounts/{billing_account_id}/reservations/{request_id}` with an operator session.
+2. Review the reservation state, current revision, exact authorization, and retained financial evidence.
+3. Prepare the final net USD amount as `customer_charge`, including prior credits.
+4. Set `reason` to the approved reason code and `evidence_reference` to the retained review identifier.
+5. Submit these fields and the reservation `revision` to `PUT /api/management/billing-accounts/{billing_account_id}/requests/{request_id}/funds-resolution`.
+6. If the response is `409`, review the current reservation and decision before another submission.
+7. Read the same resolution resource with `GET` to verify the retained receipt.
+
+The command rejects customer sessions and active execution.
+It does not create a funding credit or change the payment processor records.
+
+An operator can credit a settled request through `PUT /api/management/billing-accounts/{billing_account_id}/requests/{request_id}/funds-credits/{credit_id}`.
+This resource also supports a settled decision with unresolved provider usage.
+The request body contains a positive exact `credit`, a `reason`, and an `evidence_reference`.
+The account owner or an operator can read the receipt with `GET` at the same resource.
+The audit record retains the operator identity and evidence reference. Customer responses omit these private fields.
+
+Each request credit has one immutable identifier. A changed repeat produces `409`.
+The account lock serializes request credits and usage credits against the same settled amount.
+The transaction retains the credit, Ledger effect, exact account remainder, and tenant total together.
+The original settlement, financial decision, charges, and provider evidence remain unchanged.
+These credits correct customer usage charges. F069 owns Paddle payment refunds and funding reversals.
+
+### Financial Backup and Restore
+
+`make snapshot-managed-database` copies the complete managed SQLite database through the SQLite snapshot API.
+The copy includes journal records, price snapshots, charges, Ledger entries, reservations, credits, tenant totals, financial decisions, and exposure records.
+It also includes all other tables in that database. The command does not select a subset of financial records.
+Committed WAL data forms part of the snapshot. Uncommitted writes do not.
+
+The command opens the source for reads only and checks the copied database for integrity and foreign key errors.
+It publishes the complete image at a new destination and refuses to replace an existing path.
+The JSON receipt contains the source, destination, byte count, SHA-256, and completion time.
+A failed check returns a nonzero exit status without publishing the invalid image.
+
+Use the configured `management.database_path` as the source:
+
+```bash
+SNAPSHOT_SOURCE=/srv/llm-proxy/managed.db \
+SNAPSHOT_DESTINATION=/srv/backups/llm-proxy-2026-09-23.db \
+make --silent snapshot-managed-database
+```
+
+Create the destination directory before this command. Use a new path for each backup.
+Retain the JSON receipt with the backup and verify its SHA-256 before restoration.
+The database snapshot is consistent while the service runs.
+
+For a complete application backup, stop all service instances before the database and asset copies.
+Retain the matching `server.asset_store_path` directory, including stored request results.
+Retain the configuration and credential encryption key through the existing credential storage procedure.
+The database command does not copy these external files.
+
+Use this restore procedure:
+
+1. Stop all instances that use the affected database.
+2. Verify the backup against its retained SHA-256 receipt.
+3. Copy the backup to a new database path with the same snapshot command.
+
+```bash
+SNAPSHOT_SOURCE=/srv/backups/llm-proxy-2026-09-23.db \
+SNAPSHOT_DESTINATION=/srv/llm-proxy/restored-2026-09-23.db \
+make --silent snapshot-managed-database
+```
+
+4. Set `management.database_path` to the restored path and restore the matching asset directory and credential configuration.
+5. Start one instance and verify the schema and financial recovery results before more instances start.
+6. Compare account balances, reservations, charges, usage evidence, and financial decisions with the retained backup records.
+7. Reconcile external payments and provider work after the backup time before hosted admission resumes.
+
+An older backup cannot contain financial effects that occurred after its snapshot.
+Do not copy only the main file of an active WAL database or replace individual financial tables.
+Do not start old and restored instances against different financial copies for the same customers.
+
+`make test-managed-database-snapshot` verifies the CLI and restores financial fixtures through the management HTTP API.
+The test retains an uncertain hold and compares financial responses after two recovery runs.
+F069 acceptance must add payment receipts and processor events to this restore fixture.
+
+### Tenant Spending Limits
+
+An account owner can set an optional USD limit for each tenant.
+The default has no tenant limit. The account balance still limits all paid work.
+The tenant limit covers total net charges and active reservations. It does not reset automatically.
+Credits reduce net charges. A lower limit does not cancel existing reservations.
+
+Admission checks the tenant limit under the same account lock as the Ledger reservation.
+Settlement and usage credits update exact tenant totals in their financial transactions.
+Fractional charges reduce the remaining allowance before they form a whole cent.
+The tenant total does not replace the shared Ledger balance.
+Free requests with a zero maximum remain available when the allowance is zero.
+
+`GET /api/management/billing-accounts/{billing_account_id}/tenant-limits/{tenant_id}` reads the limit and exact net usage.
+The read creates no financial records and prohibits caching.
+`PUT` sets `limit_cents` to a nonnegative decimal string, or `null` to remove the limit.
+The body requires the current `revision`. A conflicting revision produces `409`.
+A repeat of the last identical change returns the same result.
+Both methods require ownership of the account and tenant.
+
+The balance panel shows the selected tenant's limit and remaining allowance.
+An account owner can save or remove the limit in this panel.
+After a revision conflict, the panel shows the current value for review before another change.
+
+### Account Balance Resource
+
+`GET /api/management/billing-accounts/{billing_account_id}/balance` requires the account owner's management session.
+The response uses one database snapshot and prohibits caching.
+The read does not create a Ledger account or financial records.
+An unfunded account returns zero amounts.
+
+All cent amounts use decimal strings to preserve integer precision in browsers.
+`posted_cents` contains net posted credits and debits.
+`reserved_cents` contains all active Ledger holds.
+
+`available_cents` equals posted cents minus reserved cents.
+`spent_cents` contains cumulative settled usage debits before compensating credits.
+`pending_cents` identifies reservations that require financial reconciliation and forms part of reserved cents.
+
+`unsettled_fraction` retains an exact USD charge below one cent for later settlement.
+The account state identifies active, suspended, or reconciliation-required financial access.
+Financial read failures return an error without partial balance data.
+
+The account resource also provides `GET /reservations` and `GET /ledger-entries` as child collections.
+Both collections use ascending identifiers, bounded pages, and `next_cursor`.
+Entries with the same timestamp remain distinct across pages.
+New records can appear before an existing cursor. Start a new read to obtain those records.
+
+A reservation uses its request identifier and retains its currency, maximum cents, state, revision, and timestamps.
+Ledger responses retain entry identifiers, types, signed cent amounts, timestamps, and reservation or refund references.
+Private metadata and idempotency keys remain outside these responses.
+
+The existing dashboard shows available, reserved, spent, pending, and posted amounts for its billing account.
+The browser formats integer cents without conversion to floating point.
+It shows the USD 5 funding minimum and the zero balance floor.
+Financial history provides reservation and Ledger pages with separate continuation controls.
+
+A failed balance refresh removes prior financial values and provides an error with a retry control.
+Malformed financial responses do not produce displayed balances.
+The usage journal accepts financial reconciliation reasons for unresolved usage, policy, and authorized limits.
+Browser acceptance covers desktop and narrow widths with the real local management stack and controlled financial responses.
+
 ### Issue Responsibilities
 
 | Issue | Resources and responsibilities |
@@ -755,8 +1011,11 @@ F068 must preserve holds for uncertain provider work. It must not apply automati
 F069 must define payment reversals separately from refunds of usage debits.
 
 The Ledger integration guide also describes an embedded Go service and a public `Store` interface.
-Its GORM adapter resides under `internal/store/gormstore` and cannot be imported by LLM Proxy.
-Before integration, verify the published storage interface and the required transaction boundary.
+Ledger F004 exposes the existing GORM adapter as `pkg/gormstore` in [merged PR 102](https://github.com/tyemirov/ledger/pull/102).
+LLM Proxy uses this package from the published Ledger v1.1.0 module.
+Its public integration tests prove that application records and Ledger effects share the caller's transaction.
+They also verify permanent holds after restart and atomic settlement below the reserved amount.
+The operator authorized publication on 2026-09-23. Release CI and publication completed for commit `7ba6162535652bcac01a08cd1bb6bf97085878d8`.
 Use shared Ledger domain code or the existing service contract wherever it satisfies that boundary.
 Keep one authority for balances. Do not add a competing local balance ledger.
 Implement missing shared capabilities in their owning package instead of creating incompatible financial behavior in LLM Proxy.
