@@ -113,6 +113,12 @@ export PAYMENT_RECONCILIATION_CONFIG PAYMENT_RECONCILIATION_RUN_ID
 reconcile-payments:
 	$(GO) run ./cmd/cli reconcile-payments --config "$$PAYMENT_RECONCILIATION_CONFIG" --run-id "$$PAYMENT_RECONCILIATION_RUN_ID"
 
+PROVIDER_RECONCILIATION_CONFIG ?= config.yml
+export PROVIDER_RECONCILIATION_CONFIG PROVIDER_RECONCILIATION_RUN_ID PROVIDER_RECONCILIATION_EVIDENCE PROVIDER_RECONCILIATION_SOURCE
+.PHONY: reconcile-provider-costs
+reconcile-provider-costs:
+	$(GO) run ./cmd/cli reconcile-provider-costs --config "$$PROVIDER_RECONCILIATION_CONFIG" --run-id "$$PROVIDER_RECONCILIATION_RUN_ID" --evidence "$$PROVIDER_RECONCILIATION_EVIDENCE" --source "$$PROVIDER_RECONCILIATION_SOURCE"
+
 export SNAPSHOT_SOURCE SNAPSHOT_DESTINATION
 .PHONY: snapshot-managed-database test-managed-database-snapshot
 snapshot-managed-database:

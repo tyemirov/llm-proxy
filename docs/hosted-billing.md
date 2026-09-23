@@ -1200,7 +1200,65 @@ The scheduler contract does not activate a production schedule.
 
 The complete backup includes runs, order sets, checkpoints, private evidence, and reports.
 Controlled tests verify seeded differences, concurrent runs, failed checkpoints, processor outages, replay, and backup restoration.
-Provider invoice comparisons and approved corrective operations remain open under F069.
+Provider cost imports use the following contract. Approved corrective operations remain open under F069.
+
+### Provider Cost Reconciliation
+
+The provider comparison uses imported invoices or usage exports and the existing usage journal.
+One import selects a provider, platform connection, credential version, and half-open UTC period.
+Optional model and operation fields restrict this scope. Empty fields include all models and operations in the selected account scope.
+The comparison includes attempts whose dispatch time is at least `period_start` and less than `period_end`.
+It uses retained ratings and does not recalculate accepted prices from the current catalog.
+
+```bash
+make reconcile-provider-costs \
+  PROVIDER_RECONCILIATION_CONFIG=config.yml \
+  PROVIDER_RECONCILIATION_RUN_ID=provider-2026-09-22 \
+  PROVIDER_RECONCILIATION_EVIDENCE=provider-evidence.json \
+  PROVIDER_RECONCILIATION_SOURCE=provider-export.csv
+```
+
+The operator maps source fields into one normalized JSON object with these fields.
+The original source can be an invoice, CSV export, or another retained provider document.
+
+| Field | Required content |
+| --- | --- |
+| `source_reference` | Stable identifier for this source revision and scope |
+| `source_sha256` | SHA-256 of the original source bytes |
+| `provider` | Canonical provider identifier |
+| `platform_connection_id`, `credential_version` | Retained credential binding for the source account |
+| `provider_account_reference` | External account identifier declared by the operator |
+| `period_start`, `period_end`, `reported_at` | RFC 3339 timestamps |
+| `model`, `operation` | Optional exact scope filters |
+| `currency` | Three-letter source currency |
+| `usage_amount` | Usage cost before discounts, fees, and taxes |
+| `discount`, `fees` | Separate source amounts, including explicit zero values |
+| `attempt_count` | Optional count of provider attempts in this scope |
+
+Each amount uses `numerator` and `denominator` strings. The denominator must be positive.
+The service uses exact rational arithmetic and makes no currency conversion.
+It compares USD usage amounts with known provider costs before the customer markup.
+Discounts and fees remain separate report differences. They do not change customer charges.
+An absent rating produces a missing-usage difference and prevents a complete cost comparison.
+A source reported before the period ends produces a timing difference.
+Repeated provider request identifiers produce a duplicate-effect difference.
+
+The declared account mapping and normalized amounts are operator evidence.
+The file digest proves retained-byte identity. It does not prove provider authenticity or correct source interpretation.
+Without an imported attempt count, the report compares amounts but cannot establish that the provider listed every attempt.
+Actual provider qualification remains separate from these controlled import tests.
+
+The command limits normalized JSON to one MiB and the original source to 16 MiB.
+It rejects unknown fields, changed source bytes, invalid amounts, and absent or mismatched credential bindings.
+The source, normalized scope, local evidence, and report commit together.
+A failed write leaves no partial import. Concurrent imports retain one report for the run identifier.
+A completed run returns its retained report. A new run can compare later local observations against the same source.
+A changed source revision requires a new source reference.
+
+The complete backup preserves imported documents and reports with the journal, prices, Ledger, and payment records.
+Schedule each provider comparison after its source period and export are available.
+Use one identifier per comparison and retry that identifier after a failed import.
+Review differences before any separately approved monetary correction.
 
 ### Payment Event Inbox
 

@@ -28,7 +28,7 @@ type paymentReconciliationEvidence struct {
 }
 
 func (report *PaymentReconciliationItem) difference(category, code, expected, observed string) {
-	report.Differences = append(report.Differences, PaymentReconciliationDifference{category, code, expected, observed})
+	report.Differences = append(report.Differences, FinancialReconciliationDifference{category, code, expected, observed})
 }
 
 func optionalPaymentRecord(tx *gorm.DB, result any, query string, values ...any) (bool, error) {
@@ -43,7 +43,7 @@ func optionalPaymentRecord(tx *gorm.DB, result any, query string, values ...any)
 }
 
 func comparePaymentEvidence(tx *gorm.DB, order managedFundingOrderRecord, checkout managedPaymentCheckoutRecord, transaction *billing.PaddleTransactionCompletedWebhookData, adjustments []billing.PaddleAdjustment, now time.Time) (PaymentReconciliationItem, string, error) {
-	report := PaymentReconciliationItem{OrderID: order.ID, BillingAccountID: order.BillingAccountID, ObservedAt: now, Differences: []PaymentReconciliationDifference{}}
+	report := PaymentReconciliationItem{OrderID: order.ID, BillingAccountID: order.BillingAccountID, ObservedAt: now, Differences: []FinancialReconciliationDifference{}}
 	evidence := paymentReconciliationEvidence{Order: order, Checkout: checkout, Transaction: transaction, Adjustments: adjustments, Entries: []gormstore.LedgerEntry{}}
 	var receipt managedPaymentReceiptRecord
 	found, err := optionalPaymentRecord(tx, &receipt, "order_id = ?", order.ID)

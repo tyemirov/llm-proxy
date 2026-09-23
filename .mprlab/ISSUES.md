@@ -2772,7 +2772,13 @@ retain satisfied historical dependencies.
   Completed runs return their retained report. Unfinished runs resume the same order set.
   Public tests detect currency, discount, fee, receipt, Ledger, duplicate-credit, and pending-refund differences.
   Payment, CLI, backup, race, funds, browser, lint, and format checks pass.
-  Provider comparisons and approved corrective operations remain open.
+  Provider cost imports bind original source bytes and normalized amounts to a credential version and UTC period.
+  The comparison uses immutable ratings and separates incomplete usage, currencies, discounts, fees, and duplicate provider identifiers.
+  Imported evidence and reports commit together without customer charge changes.
+  Public tests verify exact cost comparison, source identity, scope filters, concurrent imports, rollback, replay, and unchanged customer charges.
+  The normal CLI reads normalized evidence and the original source file. Backup restoration preserves both evidence and reports.
+  Payment, CLI, backup, provider scope, race, lint, and format checks pass.
+  Approved corrective operations remain open.
   Goal:
   Convert verified customer payments into account funds and explain differences between local records and external financial evidence.
   Requirements:

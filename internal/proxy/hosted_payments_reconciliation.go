@@ -43,21 +43,13 @@ type managedPaymentReconciliationItemRecord struct {
 	ObservedAt     *time.Time
 }
 
-// PaymentReconciliationDifference identifies an observed financial discrepancy.
-type PaymentReconciliationDifference struct {
-	Category string `json:"category"`
-	Code     string `json:"code"`
-	Expected string `json:"expected"`
-	Observed string `json:"observed"`
-}
-
 // PaymentReconciliationItem exposes a private operator report without raw processor data.
 type PaymentReconciliationItem struct {
-	OrderID          string                            `json:"order_id"`
-	BillingAccountID string                            `json:"billing_account_id"`
-	ObservedAt       time.Time                         `json:"observed_at"`
-	EvidenceDigest   string                            `json:"evidence_digest"`
-	Differences      []PaymentReconciliationDifference `json:"differences"`
+	OrderID          string                              `json:"order_id"`
+	BillingAccountID string                              `json:"billing_account_id"`
+	ObservedAt       time.Time                           `json:"observed_at"`
+	EvidenceDigest   string                              `json:"evidence_digest"`
+	Differences      []FinancialReconciliationDifference `json:"differences"`
 }
 
 // PaymentReconciliationReport is an immutable completed run or its durable checkpoint.

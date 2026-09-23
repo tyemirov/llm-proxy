@@ -55,7 +55,7 @@ func initializeHostedPaymentsSchema(database *gorm.DB) error {
 	if err := initializeFundingOrdersSchema(database); err != nil {
 		return err
 	}
-	models := []any{&managedPaymentInboxRecord{}, &managedPaymentReceiptRecord{}, &managedPaymentAdjustmentRecord{}, &managedPaymentAdjustmentRevisionRecord{}, &managedPaymentEnvironmentRecord{}, &managedPaymentStateObservationRecord{}, &managedPaymentReconciliationRunRecord{}, &managedPaymentReconciliationItemRecord{}}
+	models := []any{&managedPaymentInboxRecord{}, &managedPaymentReceiptRecord{}, &managedPaymentAdjustmentRecord{}, &managedPaymentAdjustmentRevisionRecord{}, &managedPaymentEnvironmentRecord{}, &managedPaymentStateObservationRecord{}, &managedPaymentReconciliationRunRecord{}, &managedPaymentReconciliationItemRecord{}, &managedProviderCostEvidenceRecord{}, &managedProviderReconciliationRunRecord{}}
 	present := 0
 	for _, model := range models {
 		if database.Migrator().HasTable(model) {
