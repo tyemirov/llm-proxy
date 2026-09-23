@@ -346,6 +346,17 @@ Unknown measurements retain their reason and have no numeric value.
 The browser shows inclusion relations to distinguish a quantity from its inclusive parent.
 Execution completion and complete usage do not establish a final customer charge.
 
+The usage journal reads request totals from the existing `charge-summary` resource.
+It shows the provider cost, customer charge, customer credits, and net charge when those amounts are available.
+Pending and unresolved totals remain explicit. The browser does not display an unknown charge as zero.
+The `charges` collection supplies itemized usage, customer rates, minimum adjustments, and approved credits with cursor pagination.
+
+The browser validates financial responses before display and formats exact integer fractions without floating-point conversion.
+The display uses at most six decimal places and marks nonterminating or smaller fractions as approximate amounts.
+Values below USD 0.000001 display `Less than $0.000001`.
+Each amount retains its exact numerator and denominator in its title.
+A failed charge refresh removes the prior charge list and provides a retry control.
+
 The request children are `attempts`, `observations`, and `reconciliation-cases` under the current account request resource.
 The browser shows open and resolved cases through safe identifiers and reasons.
 The public case reasons include unknown usage, unknown dispatch outcome, unknown execution outcome, and missing execution result.
@@ -354,6 +365,7 @@ This case remains visible after recovery and does not authorize another paid exe
 
 HTTP acceptance verifies account isolation, pagination, private-field omission, exact quantities, and unchanged journal records.
 Browser acceptance covers desktop and phone widths, additional pages, failed reads, and rejection of numeric measurement values.
+It also covers itemized charges, customer credits, unresolved totals, large amounts, and exact fractions through controlled financial responses.
 F066 remains open. Tracked runtime configuration keeps hosted execution disabled.
 
 ### Normal Hosted Runtime

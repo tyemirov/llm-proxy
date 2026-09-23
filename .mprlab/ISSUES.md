@@ -2609,6 +2609,8 @@ retain satisfied historical dependencies.
   One database snapshot prevents mixed totals when another instance commits a credit during the read.
   HTTP tests cover multiple pages, pending delivery, unpublished results, unknown usage, failed work, and account ownership.
   Unresolved customer totals remain null. Known provider costs remain separate from customer credits.
+  The browser reads itemized charges and request totals through the existing account-owned APIs.
+  Browser checks passed for customer credits, exact fractions, large amounts, pending totals, pagination, failed reads, and phone widths.
   Complete provider price and limit qualification remains incomplete.
   Shared Ledger admission and settlement remain under F068.
   Component validation passes for hosted execution, exact rating, provider catalogs, Go lint, client contracts, and 39 browser tests.
@@ -2885,6 +2887,8 @@ retain satisfied historical dependencies.
   - `make test-hosted-runtime` passed CLI configuration checks and funded text and image execution through the normal HTTP listener.
   - These tests verify automatic settlement, exact remainders, idempotent replay, and zero provider calls after financial rejection.
   - After runtime integration, `make test-hosted-billing` passed the billing, client, backup, and three browser tests. Go lint also passed.
+  - The usage journal now shows request totals, itemized charges, and customer credits through the existing APIs.
+  - Frontend lint and browser checks passed for exact amounts, pending and unresolved states, pagination, invalid responses, and narrow layouts.
   - The rendered funded usage flow, complete provider-operation qualification, operational signals, final CI, and F069 PR remain open.
   - The remaining commercial decisions and F065 through F069 implementation remain open.
   Goal:

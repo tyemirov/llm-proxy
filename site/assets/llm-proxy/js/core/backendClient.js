@@ -851,3 +851,61 @@ export async function fetchJournalCases(accountID,requestID,cursor='',signal) {
   assertHostedPage(page.cases,page.next_cursor,cursor,pattern,assertJournalCase);
   return page;
 }
+
+/** @param {import('../types.d.js').ExactMoney} amount */
+function assertExactMoney(amount) {
+  if (!amount || !unsignedCents(amount.numerator) || typeof amount.denominator!=='string' ||
+      !/^[1-9][0-9]*$/.test(amount.denominator) || amount.numerator.length>512 || amount.denominator.length>512) throw new Error(APP_INTEGRITY_ERROR);
+}
+/** @param {import('../types.d.js').CustomerCharge} charge */
+function assertCustomerCharge(charge) {
+  if (!/^request-[a-f0-9]{32}$/.test(charge.request_id) || !/^attempt-[a-f0-9]{32}$/.test(charge.attempt_id) ||
+      !/^observation-[a-f0-9]{32}$/.test(charge.observation_id) || !/^price-[a-f0-9]{32}$/.test(charge.price_snapshot_id) ||
+      !['rated','usage_unresolved','policy_unresolved','limit_unresolved'].includes(charge.state) || !journalTimestamp(charge.created_at) ||
+      !charge.rating || !['resolved','unresolved'].includes(charge.rating.state) || !Array.isArray(charge.rating.lines) ||
+      !Array.isArray(charge.rating.unresolved_dimensions) || !charge.rating.unresolved_dimensions.every(value=>typeof value==='string') ||
+      !Array.isArray(charge.customer_adjustments)) throw new Error(APP_INTEGRITY_ERROR);
+  for(const amount of [charge.rating.provider_cost,charge.rating.customer_charge,charge.rating.minimum_adjustment]) {
+    if (charge.rating.state==='resolved') assertExactMoney(/** @type {import('../types.d.js').ExactMoney} */(amount));
+    else if (amount!==null) throw new Error(APP_INTEGRITY_ERROR);
+  }
+  for(const amount of [charge.customer_charge,charge.net_customer_charge]) {
+    if (charge.state==='rated') {
+      if (charge.rating.state!=='resolved') throw new Error(APP_INTEGRITY_ERROR);
+      assertExactMoney(/** @type {import('../types.d.js').ExactMoney} */(amount));
+    } else if (amount!==null) throw new Error(APP_INTEGRITY_ERROR);
+  }
+  for(const line of charge.rating.lines) {
+    if (!line || ![line.dimension,line.component,line.quantity_unit,line.rate_unit].every(value=>typeof value==='string' && value.length>0) ||
+        ![line.quantity,line.provider_rate].every(value=>typeof value==='string' && /^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value))) throw new Error(APP_INTEGRITY_ERROR);
+    for(const amount of [line.provider_cost,line.customer_rate,line.customer_charge]) assertExactMoney(amount);
+  }
+  const adjustments=new Set();
+  for(const credit of charge.customer_adjustments) {
+    if (!credit || charge.state!=='rated' || typeof credit.id!=='string' || !credit.id || adjustments.has(credit.id) ||
+        typeof credit.reason!=='string' || !credit.reason || !journalTimestamp(credit.created_at)) throw new Error(APP_INTEGRITY_ERROR);
+    assertExactMoney(credit.credit); adjustments.add(credit.id);
+  }
+}
+/** @param {string} accountID @param {string} [cursor] @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').CustomerChargePage>} */
+export async function fetchCustomerCharges(accountID,cursor='',signal) {
+  const pattern=/^charge-[a-f0-9]{32}$/;
+  if (cursor && !pattern.test(cursor)) throw new Error(APP_INTEGRITY_ERROR);
+  const page=await requestJSON(`${billingAccountPath(accountID)}/charges?limit=50${cursor?'&cursor='+encodeURIComponent(cursor):''}`,{method:'GET',signal});
+  if (!page) throw new Error(APP_INTEGRITY_ERROR);
+  assertHostedPage(page.charges,page.next_cursor,cursor,pattern,assertCustomerCharge);
+  return page;
+}
+/** @param {string} accountID @param {string} requestID @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').RequestChargeSummary>} */
+export async function fetchRequestChargeSummary(accountID,requestID,signal) {
+  const summary=await requestJSON(`${journalEvidencePath(accountID,requestID)}/charge-summary`,{method:'GET',signal});
+  if (!summary || summary.request_id!==requestID || !['rated','pending','unresolved'].includes(summary.state) ||
+      !Number.isSafeInteger(summary.attempt_count) || summary.attempt_count<0 || !Number.isSafeInteger(summary.charge_count) ||
+      summary.charge_count<0 || summary.charge_count>summary.attempt_count) throw new Error(APP_INTEGRITY_ERROR);
+  if(summary.provider_cost!==null) assertExactMoney(summary.provider_cost);
+  for(const amount of [summary.customer_charge,summary.customer_credits,summary.net_customer_charge]) {
+    if(summary.state==='rated') assertExactMoney(amount);
+    else if(amount!==null) throw new Error(APP_INTEGRITY_ERROR);
+  }
+  return summary;
+}
