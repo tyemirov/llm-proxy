@@ -2638,6 +2638,8 @@ retain satisfied historical dependencies.
   Goal:
   Bound hosted provider spending by each customer's available funds across concurrent requests and process restarts.
   Evidence:
+  The operator selected the existing Ledger model and balance conservation for acceptance on 2026-09-23.
+  The funds suite passes in 20.456 seconds after the decision update.
   Ledger PR 102 is merged. Release CI and publication passed for Ledger v1.1.0 on 2026-09-23.
   LLM Proxy uses the published public GORM adapter without a local module replacement.
   Journal admission, accepted prices, Ledger reservations, and settlement effects share the application transaction.
@@ -2656,7 +2658,6 @@ retain satisfied historical dependencies.
   With the published dependency, hosted regression passes in 121.302 seconds and browser acceptance passes in 11.6 seconds.
   Go lint and formatting pass. Final stack CI remains the F070 completion gate.
   Remaining acceptance:
-  - Verify the per-transaction balanced-entry requirement beyond the current account-conservation tests.
   - F069 must verify payment credits, reversals, and payment records in the restore fixture.
   - F070 must complete service wiring, browser funding errors, commercial decisions, and complete acceptance.
   Requirements:
@@ -2664,7 +2665,8 @@ retain satisfied historical dependencies.
   - Reuse the Ledger integration and domain code used by PoodleScanner and Hecate.
   - Resolve the transaction boundary, monetary precision, and uncertain holds before financial persistence implementation.
   - Keep one balance authority and extend the owning shared component for missing capabilities.
-  - Create an append-only credit ledger with balanced entries for each transaction and currency.
+  - Use the existing Ledger account model and append-only credit ledger.
+  - Verify balance conservation for each account and currency, including exact remainders and holds.
   - Use one billing account balance across all customer tenants, with optional lower tenant spending limits.
   - Define available funds as posted credits minus settled charges, active reservations, and payment reversal holds.
   - Store ledger amounts in the precision defined by F067.
@@ -2697,7 +2699,7 @@ retain satisfied historical dependencies.
   Validation:
   - Submit concurrent requests whose combined maximum exceeds the funded balance through multiple real service processes.
   - Prove admitted reservations never exceed available funds and rejected requests cause zero provider work.
-  - Prove ledger entries balance after settlement, refund, reversal, and recovery.
+  - Prove balance conservation after settlement, refund, reversal, and recovery through the existing Ledger model.
   - Prove duplicate settlements, credits, and releases change balances once.
   - Interrupt execution across each transaction boundary and verify recovery against the real database.
   - Prove uncertain work retains its hold and known undispatched work releases its hold.

@@ -17,6 +17,11 @@ The operator selected Paddle for payments. The service must obey the applicable 
 The operator required reuse of the existing PoodleScanner and Hecate integrations and implementation approaches.
 LLM Proxy has a browser application. Native mobile applications are outside this scope.
 
+On 2026-09-23, the operator selected the existing Ledger account model and balance conservation for acceptance.
+Use the existing append-only journal and verify each account balance against its recorded financial effects.
+Include exact remainders, active reservations, and payment reversal holds in these checks.
+F069 must extend conservation checks to payment credits, refunds, reversals, and recovery.
+
 ```text
 customer_price = provider_price * 1.30
                = provider_price * 13 / 10
