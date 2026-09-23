@@ -27,6 +27,26 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B261] (P1) Include provider service prices in the shared pricing index.
+  Goal:
+  Use declared service prices through the same exact pricing API as model offerings.
+  Evidence:
+  Public catalog tests returned `price_not_cataloged` for declared alignment and dictionary service rates.
+  The same lookup also lost the reason and source for unavailable service prices.
+  Requirements:
+  - Index validated service prices by provider and operation with an empty model.
+  - Keep the service declaration as the only price source.
+  - Preserve exact markup, charge bounds, snapshot immutability, and unavailable price evidence.
+  - Reject invented model identifiers and retain unknown usage without a charge.
+  Validation:
+  - Verify both existing provider services through the public catalog API.
+  - Run catalog and hosted rating regression checks.
+  - Keep actual provider rate and metering qualification separate from controlled calculation tests.
+  Resolution:
+  The shared price index now includes validated service declarations without an invented model.
+  Public API tests passed exact markup, charge bounds, immutable snapshots, unknown usage, and unavailable price evidence for both services.
+  Catalog, provider service, hosted rating, and runtime regression checks passed. Go lint also passed.
+
 - [x] [B260] (P1) Accept explicit routing defaults within assigned hosted grants.
   Goal:
   Let a customer select a model from an assigned hosted grant without customer-owned provider credentials.

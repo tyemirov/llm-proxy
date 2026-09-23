@@ -74,6 +74,13 @@ The reservation estimate rounds up to cents and includes each authorized attempt
 An upper bound for cached tokens does not establish a cache discount.
 An unknown component bound or an amount above the ledger limit prevents authorization.
 
+Provider services keep their prices in their catalog service declarations.
+The shared price index uses the provider, an empty model, and the operation for each service.
+Exact price selection and rating use that index for both model offerings and services.
+Service snapshots preserve rates, conditions, markup, and unknown usage under the same financial rules.
+Unavailable service prices retain their declared source and reason.
+Price lookup alone does not qualify a service for hosted execution. Native metering and bounded admission remain required.
+
 Text admission uses the catalog input bound and output-token limit for each authorized attempt.
 The input bound is the smallest fixed input-token or context-token limit.
 Input tokens are part of the total context, so both limits apply.
