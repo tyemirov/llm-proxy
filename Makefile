@@ -95,6 +95,10 @@ test-account-connections:
 test-hosted-access:
 	$(GO) test ./internal/proxy -run '$(if $(HOSTED_TEST_PATTERN),$(HOSTED_TEST_PATTERN),^TestHosted)' -count=1
 
+.PHONY: test-hosted-rating
+test-hosted-rating:
+	$(GO) test ./internal/proxy -run '^Test(HostedRating|CatalogRating|CatalogService|CatalogPrice|ProviderCatalogExactAmounts|ProviderCatalogRejectsInvalidMonetaryAmounts)' -count=1
+
 .PHONY: test-hosted-clients
 test-hosted-clients:
 	$(GO) test ./internal/proxy -run '^TestHostedClientIdentity' -count=1

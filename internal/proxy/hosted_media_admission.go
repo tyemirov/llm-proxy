@@ -47,7 +47,7 @@ func (service *mediaOperationService) admitHostedMedia(transaction *gorm.DB, req
 	if errors.Is(err, errUsageJournalConflict) {
 		return errMediaOperationIntentConflict
 	}
-	if errors.Is(err, errHostedAuthorityDenied) {
+	if errors.Is(err, errHostedAuthorityDenied) || errors.Is(err, ErrCatalogRatingUnavailable) {
 		return errMediaOperationUnavailable
 	}
 	if err != nil {

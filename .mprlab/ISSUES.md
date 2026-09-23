@@ -2554,6 +2554,44 @@ retain satisfied historical dependencies.
 - [ ] [F067] (P1) {F066} Calculate exact provider costs and customer charges.
   Goal:
   Convert measured usage into reproducible provider costs and customer charges with the price selected at request acceptance.
+  Evidence:
+  The catalog now uses exact decimal strings for rates and minimum charges.
+  Public HTTP tests retain large values and small fractions without floating-point conversion.
+  The calculation service copies selected rates and applies the approved multiplier `13/10`.
+  Public package tests cover cache inclusion, reasoning inclusion, minimum charges, unknown quantities, fractional remainders, and authorization bounds.
+  Admission retains prices and bounds in the journal transaction. The attempt limit rejects excess work before dispatch.
+  Journal delivery records charges in the settlement transaction. Unresolved charges do not call settlement.
+  Account-owned HTTP resources expose charges and accepted prices under OpenAPI.
+  HTTP tests cover restart recovery, immutable prices, duplicate delivery, rollback, ownership, pagination, and corrupt records.
+  The catalog now has typed token ranges, cache classes, service tiers, regions, and effective intervals.
+  The loader rejects overlapping known conditions. Admission rejects expired prices and unresolved token boundaries.
+  Price snapshots retain all active input-token tiers. HTTP tests prove correct tier selection after restart and price expiry.
+  Native text bindings cover Responses, Chat Completions, DashScope, xAI, and Anthropic cache lifetimes.
+  Text admission constructs bounds from catalog token limits for each authorized attempt.
+  HTTP tests prove that an exhausted attempt limit prevents dispatch and returns a request conflict.
+  Compound quantity rules retain separate thinking tokens under the output rate without changing journal measurements.
+  Gemini HTTP tests prove cache-storage exclusion and unresolved settlement for missing thoughts or unexpected tool input.
+  HTTP tests verify dictation time rates, explicit speech provider-unit rates, and separate image modality charges.
+  Image retries produce one charge. Missing measurements and usage above accepted bounds do not settle.
+  Media admission constructs native quantity bounds from fixed catalog limits.
+  HTTP tests reject missing, account-dependent, and incompatible bounds before provider dispatch.
+  Catalog validation retains billing limits separately from capability control limits.
+  Text admission uses the smallest fixed input or context limit for its input bound.
+  The catalog ends the published Gemini Flash discounts at the local January 2027 eligibility boundary.
+  Search admission includes call prices and input passes in its reservation.
+  The transport sends the accepted tool limit on each generation, including continuations.
+  HTTP tests verify search charges, missing evidence, exceeded bounds, and disabled-search exclusion.
+  Separate customer-credit records preserve the original provider cost and exact charge.
+  HTTP tests verify partial and full credits, duplicate events, restart recovery, account isolation, settlement rollback, and concurrent credit limits.
+  The adjustment and Ledger callback share one transaction. Shared Ledger integration remains under F068.
+  Request summaries add exact amounts across all attempts and customer credits without rounding.
+  One database snapshot prevents mixed totals when another instance commits a credit during the read.
+  HTTP tests cover multiple pages, pending delivery, unpublished results, unknown usage, failed work, and account ownership.
+  Unresolved customer totals remain null. Known provider costs remain separate from customer credits.
+  Complete provider price and limit qualification remains incomplete.
+  Shared Ledger admission and settlement remain under F068.
+  Component validation passes for hosted execution, exact rating, provider catalogs, Go lint, client contracts, and 39 browser tests.
+  Final stack CI remains the F070 completion checkpoint. Production qualification and activation remain separate.
   Requirements:
   - Use F070 as the shared hosted service contract.
   - Extend `catalog_service.go` and the canonical provider catalog instead of copying provider rates into billing code.

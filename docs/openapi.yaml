@@ -1994,6 +1994,129 @@ paths:
           $ref: '#/components/responses/HostedResourceError'
         '500':
           $ref: '#/components/responses/HostedResourceError'
+  /api/management/billing-accounts/{billing_account_id}/requests/{request_id}/charge-summary:
+    get:
+      operationId: getRequestChargeSummary
+      summary: Read the charge totals for an owned request
+      description: Totals include all attempts and customer credits from one database snapshot. Pending or unresolved customer totals are null.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/BillingAccountID'
+        - name: request_id
+          in: path
+          required: true
+          schema: {type: string, minLength: 1}
+      responses:
+        '200':
+          description: The current request totals.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestChargeSummary'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+  /api/management/billing-accounts/{billing_account_id}/charges:
+    get:
+      operationId: listCharges
+      summary: Read charges for an owned billing account
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/BillingAccountID'
+        - $ref: '#/components/parameters/HostedPageLimit'
+        - name: cursor
+          in: query
+          schema: {type: string, pattern: '^charge-[a-f0-9]{32}$'}
+      responses:
+        '200':
+          description: The retained account resource.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargePage'
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+  /api/management/billing-accounts/{billing_account_id}/charges/{charge_id}:
+    get:
+      operationId: getCharge
+      summary: Read one charge from an owned billing account
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/BillingAccountID'
+        - name: charge_id
+          in: path
+          required: true
+          schema: {type: string, minLength: 1}
+      responses:
+        '200':
+          description: The retained account resource.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostedCharge'
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+  /api/management/billing-accounts/{billing_account_id}/price-snapshots/{price_snapshot_id}:
+    get:
+      operationId: getPriceSnapshot
+      summary: Read the prices retained for an accepted request
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/BillingAccountID'
+        - name: price_snapshot_id
+          in: path
+          required: true
+          schema: {type: string, minLength: 1}
+      responses:
+        '200':
+          description: The retained account resource.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostedPriceSnapshot'
+        '400':
+          $ref: '#/components/responses/HostedResourceError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/HostedResourceError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
   /api/management/billing-accounts/{billing_account_id}/requests:
     get:
       operationId: listJournalRequests
@@ -4110,6 +4233,10 @@ components:
                       - hosted_access_conflict
                       - hosted_access_not_found
                       - hosted_access_store_failed
+                      - usage_journal_invalid
+                      - usage_journal_not_found
+                      - usage_journal_conflict
+                      - usage_journal_unavailable
     HostedAccessGrantSuccess:
       description: The grant state. Only operators receive the platform connection identifier.
       headers:
@@ -6065,6 +6192,226 @@ components:
           format: date
         unavailable_reason:
           type: string
+    ExactMoney:
+      type: object
+      additionalProperties: false
+      description: An exact nonnegative USD amount expressed as a reduced fraction.
+      required: [numerator, denominator]
+      properties:
+        numerator: {type: string, pattern: '^(0|[1-9][0-9]*)$', maxLength: 512}
+        denominator: {type: string, pattern: '^[1-9][0-9]*$', maxLength: 512}
+    NullableExactMoney:
+      oneOf:
+        - $ref: '#/components/schemas/ExactMoney'
+        - type: 'null'
+    RatedLine:
+      type: object
+      additionalProperties: false
+      required: [dimension, component, quantity, quantity_unit, provider_rate, customer_rate, rate_unit, conditions, provider_cost, customer_charge]
+      properties:
+        dimension: {type: string}
+        component: {type: string}
+        quantity:
+          $ref: '#/components/schemas/ExactNonnegativeDecimal'
+        quantity_unit: {type: string}
+        provider_rate:
+          $ref: '#/components/schemas/ExactNonnegativeDecimal'
+        customer_rate:
+          $ref: '#/components/schemas/ExactMoney'
+        rate_unit: {type: string}
+        conditions:
+          $ref: '#/components/schemas/PublicPriceConditions'
+        provider_cost:
+          $ref: '#/components/schemas/ExactMoney'
+        customer_charge:
+          $ref: '#/components/schemas/ExactMoney'
+    RatedUsage:
+      type: object
+      additionalProperties: false
+      description: The exact calculation under the accepted prices. Charge state controls settlement eligibility.
+      required: [state, lines, provider_cost, customer_charge, minimum_adjustment, unresolved_dimensions]
+      properties:
+        state: {type: string, enum: [resolved, unresolved]}
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/RatedLine'
+        provider_cost:
+          $ref: '#/components/schemas/NullableExactMoney'
+        customer_charge:
+          $ref: '#/components/schemas/NullableExactMoney'
+        minimum_adjustment:
+          $ref: '#/components/schemas/NullableExactMoney'
+        unresolved_dimensions:
+          type: array
+          items: {type: string}
+    HostedCharge:
+      type: object
+      additionalProperties: false
+      required: [id, request_id, attempt_id, observation_id, price_snapshot_id, state, rating, customer_charge, net_customer_charge, customer_adjustments, created_at]
+      properties:
+        id: {type: string}
+        request_id: {type: string}
+        attempt_id: {type: string}
+        observation_id: {type: string}
+        price_snapshot_id: {type: string}
+        state: {type: string, enum: [rated, usage_unresolved, policy_unresolved, limit_unresolved]}
+        rating:
+          $ref: '#/components/schemas/RatedUsage'
+        customer_charge:
+          $ref: '#/components/schemas/NullableExactMoney'
+        net_customer_charge:
+          $ref: '#/components/schemas/NullableExactMoney'
+        customer_adjustments:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerChargeAdjustment'
+        created_at: {type: string, format: date-time}
+    CustomerChargeAdjustment:
+      type: object
+      additionalProperties: false
+      required: [id, credit, reason, created_at]
+      properties:
+        id: {type: string}
+        credit:
+          $ref: '#/components/schemas/ExactMoney'
+        reason: {type: string}
+        created_at: {type: string, format: date-time}
+    RequestChargeSummary:
+      type: object
+      additionalProperties: false
+      required: [request_id, state, attempt_count, charge_count, provider_cost, customer_charge, customer_credits, net_customer_charge]
+      properties:
+        request_id: {type: string}
+        state:
+          type: string
+          enum: [pending, unresolved, rated]
+          description: Pending requests await completion, result publication, or charge delivery. Unresolved requests lack required usage or policy decisions.
+        attempt_count: {type: integer, minimum: 0}
+        charge_count: {type: integer, minimum: 0}
+        provider_cost:
+          description: The complete provider cost, when known. Customer credits do not change this amount.
+          anyOf:
+            - $ref: '#/components/schemas/ExactMoney'
+            - type: 'null'
+        customer_charge:
+          description: The total customer charge before credits. Only rated requests have this amount.
+          anyOf:
+            - $ref: '#/components/schemas/ExactMoney'
+            - type: 'null'
+        customer_credits:
+          description: The total customer credits. Only rated requests have this amount.
+          anyOf:
+            - $ref: '#/components/schemas/ExactMoney'
+            - type: 'null'
+        net_customer_charge:
+          description: The customer charge after credits. Only rated requests have this amount.
+          anyOf:
+            - $ref: '#/components/schemas/ExactMoney'
+            - type: 'null'
+    ChargePage:
+      type: object
+      additionalProperties: false
+      required: [charges, next_cursor]
+      properties:
+        charges:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/HostedCharge'
+        next_cursor: {type: string}
+    PriceUsageBound:
+      type: object
+      additionalProperties: false
+      required: [dimension, unit, maximum]
+      properties:
+        dimension: {type: string}
+        unit: {type: string}
+        maximum:
+          $ref: '#/components/schemas/ExactNonnegativeDecimal'
+    AuthorizedPriceMaximum:
+      type: object
+      additionalProperties: false
+      required: [attempts, customer_charge, reserved_cents]
+      properties:
+        attempts: {type: integer, minimum: 1, maximum: 4294967295}
+        customer_charge:
+          $ref: '#/components/schemas/ExactMoney'
+        reserved_cents: {type: string, pattern: '^(0|[1-9][0-9]*)$', maxLength: 19}
+    AcceptedPriceRate:
+      type: object
+      additionalProperties: false
+      required: [provider_rate, customer_rate]
+      properties:
+        provider_rate:
+          $ref: '#/components/schemas/PublicPriceRate'
+        customer_rate:
+          $ref: '#/components/schemas/ExactMoney'
+    AcceptedPriceComponent:
+      type: object
+      additionalProperties: false
+      required: [dimension, additional_dimension, rates]
+      properties:
+        dimension: {type: string}
+        additional_dimension: {type: string}
+        rates:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/AcceptedPriceRate'
+    AcceptedPrices:
+      type: object
+      additionalProperties: false
+      required: [catalog_revision, provider, model, operation, source, last_verified, markup, components, excluded_components, zero_dimensions, minimum_charge, bounds, maximum]
+      properties:
+        catalog_revision: {type: string}
+        provider: {type: string}
+        model: {type: string}
+        operation: {type: string}
+        source: {type: string, format: uri}
+        last_verified: {type: string, format: date}
+        markup:
+          $ref: '#/components/schemas/ExactMoney'
+        components:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/AcceptedPriceComponent'
+        excluded_components:
+          type: array
+          uniqueItems: true
+          items: {type: string, enum: [cache_storage, web_search_calls]}
+        zero_dimensions:
+          type: array
+          uniqueItems: true
+          items: {type: string}
+        minimum_charge:
+          oneOf:
+            - $ref: '#/components/schemas/PublicMinimumCharge'
+            - type: 'null'
+        bounds:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/PriceUsageBound'
+        maximum:
+          $ref: '#/components/schemas/AuthorizedPriceMaximum'
+    HostedPriceSnapshot:
+      type: object
+      additionalProperties: false
+      required: [id, request_id, snapshot, created_at]
+      properties:
+        id: {type: string}
+        request_id: {type: string}
+        snapshot:
+          $ref: '#/components/schemas/AcceptedPrices'
+        created_at: {type: string, format: date-time}
+    ExactNonnegativeDecimal:
+      type: string
+      minLength: 1
+      maxLength: 128
+      pattern: '^(0|[1-9][0-9]*)(\.[0-9]*[1-9])?$'
+      description: Exact decimal amount without an exponent, leading zeros, or trailing fractional zeros.
     PublicPriceRate:
       type: object
       additionalProperties: false
@@ -6082,8 +6429,7 @@ components:
           type: string
           const: USD
         rate:
-          type: number
-          minimum: 0
+          $ref: '#/components/schemas/ExactNonnegativeDecimal'
         unit:
           type: string
           minLength: 1
@@ -6101,15 +6447,29 @@ components:
           type: string
           const: USD
         amount:
-          type: number
-          minimum: 0
+          $ref: '#/components/schemas/ExactNonnegativeDecimal'
         unit:
           type: string
           minLength: 1
+    PriceTokenRange:
+      type: object
+      additionalProperties: false
+      description: The minimum is inclusive. A nonzero maximum is exclusive. Zero maximum means unbounded. An unresolved boundary prevents paid admission.
+      required: [minimum, maximum_exclusive, unresolved_reason]
+      properties:
+        minimum: {type: string, pattern: '^(0|[1-9][0-9]*)$', maxLength: 20}
+        maximum_exclusive: {type: string, pattern: '^(0|[1-9][0-9]*)$', maxLength: 20}
+        unresolved_reason: {type: string}
     PublicPriceConditions:
       type: object
       additionalProperties: false
       required:
+        - input_tokens
+        - cache_class
+        - service_tier
+        - region
+        - effective_from
+        - effective_until
         - resolution
         - generated_audio
         - input_media
@@ -6123,6 +6483,13 @@ components:
         - billing_mode
         - billing_outcome
       properties:
+        input_tokens:
+          $ref: '#/components/schemas/PriceTokenRange'
+        cache_class: {type: string, enum: ['', read, write, write_5m, write_1h, storage]}
+        service_tier: {type: string, enum: ['', standard, priority, batch, flex, fast]}
+        region: {type: string}
+        effective_from: {type: string}
+        effective_until: {type: string}
         resolution: {type: string}
         generated_audio: {type: string}
         input_media: {type: string}

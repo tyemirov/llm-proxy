@@ -8,7 +8,7 @@ model migrations, controls, limits, and prices.
 
 The loader reads `providers.yml` from the directory of the selected
 `config.yml`. It parses the provider catalog before it validates service
-configuration. The loader accepts only schema version 5.
+configuration. The loader accepts only schema version 6.
 
 The current provider catalog has these records:
 
@@ -399,9 +399,49 @@ Price conditions use these optional fields:
 - `resolution`, `generated_audio`, `input_media`, and `output_media`.
 - `duration`, `quantity`, `quality`, and `mode`.
 - `api_version`, `avatar_type`, `billing_mode`, and `billing_outcome`.
+- `input_tokens`, `cache_class`, `service_tier`, and `region`.
+- `effective_from` and `effective_until`.
 
 The runtime selects a price only for an exact component and condition match.
 It never estimates a missing price.
+
+The typed selector also matches the input token count and acceptance time.
+The `input_tokens.minimum` value is inclusive. A nonzero `maximum_exclusive` value is exclusive.
+A zero maximum means that the range has no upper bound.
+Public JSON represents token boundaries as integer strings.
+An `unresolved_reason` preserves a published boundary that cannot be converted to an exact token count.
+Such a boundary cannot authorize paid work.
+
+Cache classes distinguish reads, writes, five-minute writes, one-hour writes, and storage.
+Service tiers and regions must match the selected conditions exactly.
+The loader rejects overlapping token and time intervals for the same component and categorical conditions.
+Effective times use UTC. The start is inclusive and the end is exclusive.
+New hosted admission requires an explicit start and rejects an inactive interval.
+Retained snapshots use their acceptance time when they validate historical prices.
+
+The initial local effective start is midnight UTC on the recorded verification date.
+This start defines local catalog eligibility. It does not claim the provider first published a rate at that time.
+An explicit promotional end separates the promotional interval from the following list-price interval.
+
+Gemini 3.6, 3.7, and 3.8 Flash rates have a local eligibility end of `2027-01-01T00:00:00Z`.
+The [official Google prices](https://ai.google.dev/gemini-api/docs/pricing) publish higher rates from January 1, 2027.
+The source gives a date without a time zone. The catalog end follows the local UTC eligibility convention.
+The catalog does not yet authorize the later rates. After this boundary, new paid admission needs a verified replacement schedule.
+Accepted snapshots retain their original rates.
+
+Media offerings can declare fixed billing limits in `limits` with identifiers from their native usage quantities.
+For example, `audio_seconds` uses `seconds`, and `character_cost` uses `provider_units`.
+Token quantities use `tokens`. Each bound applies to one provider attempt.
+These limits describe verified usage ceilings. They do not define new request controls.
+Capability validation continues to require the route's control limits.
+Hosted admission requires a fixed limit with the matching unit for each priced native dimension.
+An unknown or account-dependent limit cannot authorize paid work.
+
+Rates and minimum charges use exact decimal strings in YAML and public JSON.
+Each amount has at most 128 characters and no exponent, leading zeros, or trailing fractional zeros.
+Zero is `"0"`. A rate of one quarter is `"0.25"`.
+The loader rejects numeric amount fields and invalid decimal strings.
+The catalog and hosted rating share this amount type. Neither requires a floating-point conversion.
 
 ## Data outside the provider catalog
 

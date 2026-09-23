@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -18,6 +19,12 @@ import (
 )
 
 func newJournalTransactionFixture(t *testing.T) (*gormManagedTenantDatabase, func(string) journalAdmissionIntent, func(string) map[string]any) {
+	t.Helper()
+	database, intent, read, _ := newJournalTransactionHTTPFixture(t)
+	return database, intent, read
+}
+
+func newJournalTransactionHTTPFixture(t *testing.T) (*gormManagedTenantDatabase, func(string) journalAdmissionIntent, func(string) map[string]any, *httptest.Server) {
 	t.Helper()
 	service, database, server := newAccountConnectionHTTPFixture(t)
 	now := time.Date(2026, 9, 22, 12, 0, 0, 0, time.UTC)
@@ -50,7 +57,7 @@ func newJournalTransactionFixture(t *testing.T) (*gormManagedTenantDatabase, fun
 		t.Helper()
 		return accountConnectionHTTPExchange(t, server, http.MethodGet, "/billing-accounts/billing-journal/requests"+path, "", http.StatusOK)
 	}
-	return database, intent, read
+	return database, intent, read, server
 }
 
 func TestHostedJournalAdmissionPinsAuthorityAndArbitratesRetries(t *testing.T) {

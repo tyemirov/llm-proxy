@@ -35,6 +35,162 @@ Each supported provider and operation requires metering, bounded pricing, and qu
 Missing evidence remains an explicit implementation or qualification gap.
 Provider additions must use the same financial contract.
 
+## Exact Rating and Ledger Amounts
+
+Provider rates use exact decimal strings. Customer rates use the exact multiplier `13/10`.
+The rating result retains reduced rational amounts for provider costs and customer charges.
+A minute has 60 seconds. An hour has 3600 seconds.
+The catalog uses `USD/1M_tokens` for one million tokens.
+Cache storage uses `USD/1M_token_hours` and measured token-seconds.
+
+A priced child replaces its part of an inclusive parent quantity.
+Reasoning tokens that remain part of output tokens do not create another charge.
+Unknown required quantities prevent settlement. They do not become zero quantities.
+A provider minimum applies before the customer markup.
+
+Ledger entries use integer USD cents. The maximum entry is `9223372036854775807` cents.
+Settlement adds the retained account remainder before conversion to cents.
+Settlement rounds down once and retains the exact remainder, which is less than one cent.
+F068 must commit the remainder and the ledger entry in one transaction.
+The reservation estimate rounds up to cents and includes each authorized attempt.
+An upper bound for cached tokens does not establish a cache discount.
+An unknown component bound or an amount above the ledger limit prevents authorization.
+
+Text admission uses the catalog input bound and output-token limit for each authorized attempt.
+The input bound is the smallest fixed input-token or context-token limit.
+Input tokens are part of the total context, so both limits apply.
+The output bound includes increases that a continuation can make after an empty response.
+Each cache quantity uses the input-token limit as its upper bound.
+Without a fixed input or context limit, admission fails. Missing output limits also prevent admission.
+Provider search requires a fixed call limit, an exact call price, and a protocol that enforces the limit.
+An exhausted attempt limit returns HTTP 409 with `usage_journal_conflict` before another provider call.
+
+The calculation tests use the public Go package interface and local catalog fixtures.
+The HTTP tests use local SQLite storage and the management API.
+
+### Retained Prices and Charges
+
+The admission transaction stores the selected provider rates, customer rates, markup, component bounds, and attempt limit.
+The price snapshot retains its catalog revision and source evidence.
+Later catalog or markup changes cannot replace accepted prices.
+The rating worker reads retained prices without a current catalog dependency.
+Each component retains all active input-token tiers in its `rates` array.
+Measured input selects the tier at settlement. The reservation covers every tier within the accepted input bound.
+A gap in that range prevents admission. Later price expiry does not invalidate an accepted snapshot.
+
+Text price bindings use the existing native protocol meters and catalog components.
+Responses and Chat Completions subtract priced cached input from inclusive input tokens.
+Anthropic cache reads and writes remain separate from ordinary input.
+Its five-minute and one-hour cache writes use their separate catalog rates.
+The `additional_dimension` field identifies a separate native quantity that contributes to the same rate.
+The calculation adds only disjoint quantities with the same unit. It rejects quantities already included in each other.
+Missing contributions prevent settlement. The original journal quantities remain unchanged.
+
+Google output prices include thinking tokens, which its native usage reports separately from visible output.
+The Google bindings add `reasoning_tokens` to `output_tokens` before the output charge calculation.
+See the [Google pricing contract](https://ai.google.dev/gemini-api/docs/pricing) and [native usage fields](https://ai.google.dev/api/generate-content#UsageMetadata).
+The current Google input price components use the native input total, with priced cached tokens removed once.
+
+Gemini Interactions supports implicit caching without explicit cache resources.
+See the [Google cache contract](https://ai.google.dev/gemini-api/docs/caching).
+The current Google adapters do not allocate or reference explicit cache resources.
+Their snapshots retain `cache_storage` under `excluded_components` instead of inventing a zero storage measurement.
+The `zero_dimensions` field requires reported zero tool input until provider-tool pricing is qualified.
+Missing or nonzero tool input prevents settlement. These conditions also apply after restart.
+
+OpenAI Responses search uses the native `web_search_calls` quantity and a selected `USD/call` rate.
+The catalog must declare a fixed `web_search_calls` limit in `calls`.
+The transport reads that accepted bound before each generation and sends it as `max_tool_calls`.
+This also applies to continuations. Polling does not start a new generation.
+The [OpenAI request contract](https://developers.openai.com/api/reference/cli/resources/responses/methods/create) defines this limit across built-in tools.
+The reservation covers the initial input pass and one additional full input pass per authorized tool call.
+It includes call charges and the output bound for each authorized attempt.
+Missing search evidence prevents settlement. Usage above the accepted bound remains unresolved.
+When search is disabled, the snapshot records `web_search_calls` under `excluded_components`.
+
+Search content has a token cost in addition to the tool call cost.
+See [OpenAI tool prices](https://developers.openai.com/api/docs/pricing).
+Model qualification must verify the native token totals and any fixed-block search charges.
+The current search acceptance tests use controlled prices and protocol responses.
+Production search rates and model-specific token rules still require qualification.
+
+Media bindings use the native quantity and an explicit catalog conversion rate.
+Dictation duration uses seconds with the selected per-second, per-minute, or per-hour rate.
+Token prices require native token measurements. The calculation never converts tokens into an estimated duration.
+Image prices use separate input and output text and image token quantities.
+ElevenLabs `character_cost` and FAL `billable_units` require an explicit `USD/provider_unit` rate.
+Provider units have no implicit currency or duration value.
+Dictator speech can use measured output duration with a catalog time rate.
+Missing measurements prevent settlement. An unsupported component prevents price admission.
+Controlled HTTP tests cover dictation, ElevenLabs speech, and Images charges.
+Image tests also verify duplicate delivery and usage above the accepted bound.
+Media admission constructs bounds from fixed catalog limits for each priced native dimension.
+Limit identifiers match native dimensions, such as `audio_seconds`, `input_image_tokens`, or `character_cost`.
+Catalog units are `seconds`, `tokens`, and `provider_units` for those examples.
+A missing limit, an account-dependent limit, or an incompatible unit prevents admission before provider dispatch.
+The media API returns HTTP 422 with `media_operation_unavailable` in these cases.
+Billing limits do not replace the capability limits that validate request controls.
+The retained snapshot contains all selected bounds and the authorized attempt count.
+These tests use fixture prices and limits. They do not qualify production prices or provider limit enforcement.
+Publish only verified provider ceilings or enforced request ceilings as billing limits.
+A desired spending budget does not establish a usage ceiling.
+
+The journal delivery transaction records one charge per attempt and observation.
+The charge, settlement effect, and delivery acknowledgment share one transaction.
+A settlement failure rolls back the charge and leaves the observation pending.
+The accepted attempt limit prevents another attempt from being prepared or dispatched.
+
+Customer usage credits use separate adjustment records. The original rating and incurred provider cost remain unchanged.
+Each adjustment has an account-scoped event identity, a positive exact credit, a reason code, and a creation time.
+A repeated event has no additional effect. A changed event with the same identity fails.
+The account lock serializes concurrent credits. Total credits cannot exceed the original customer charge.
+Only a resolved charge can receive a usage credit.
+
+The adjustment record and its settlement callback share one transaction.
+A failed callback rolls back the adjustment. F068 must connect this callback to the shared Ledger service.
+The command is an internal financial interface. The customer HTTP resources remain read-only.
+Paddle funding reversals remain separate F069 operations.
+
+Charge responses retain `customer_charge` as the original charge.
+They also expose `customer_adjustments` and `net_customer_charge` after those credits.
+An unresolved charge has no net amount. A full credit leaves a zero net amount and retains the provider cost.
+HTTP tests verify partial and full credits, event replay, restart recovery, account isolation, settlement failure, and concurrent over-credit rejection.
+
+Each request has a charge summary across all its attempts.
+The summary reads the request, attempts, charges, and credits from one database snapshot.
+It adds exact amounts without rounding. Customer credits do not change the provider cost or original customer charge.
+
+The `pending` state has no final totals.
+It covers active work, unpublished results, and charges that await delivery.
+The `unresolved` state has no customer totals. It retains the complete provider cost when that cost is known.
+Failed work, uncertain results, missing usage, and unresolved charge policies prevent a final customer total.
+The `rated` state reports provider cost, original customer charges, customer credits, and net customer charges.
+
+The account owner can read these resources:
+
+| Method | Resource | Result |
+| --- | --- | --- |
+| `GET` | `/api/management/billing-accounts/{billing_account_id}/charges` | A page of at most 100 charges. |
+| `GET` | `/api/management/billing-accounts/{billing_account_id}/charges/{charge_id}` | One charge with itemized calculations and evidence identifiers. |
+| `GET` | `/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/charge-summary` | Exact totals across the request attempts and credits. |
+| `GET` | `/api/management/billing-accounts/{billing_account_id}/price-snapshots/{price_snapshot_id}` | The prices and bounds accepted for a request. |
+
+The charge page uses ascending identifiers and a cursor.
+The responses omit provider request identifiers, credentials, and request content.
+Exact amounts use rational strings. The `reserved_cents` value is also a string.
+
+Only the `rated` state permits a customer charge and a settlement call.
+The `usage_unresolved` state retains unknown required quantities without a zero-cost assumption.
+The `policy_unresolved` state retains known provider costs when failed work requires a customer policy decision.
+The `limit_unresolved` state retains costs above an accepted component or attempt bound.
+Unresolved states expose a null `customer_charge` and do not call settlement.
+Their `rating` field retains the available calculations under the accepted prices.
+
+Typed price conditions now supply token ranges, cache classes, service tiers, regions, and effective intervals.
+F067 constructs native quantity bounds from fixed catalog limits and retains them with accepted prices.
+Production qualification must verify each offering's prices, measurements, and enforced limits before hosted activation.
+F068 connects the admission and settlement callbacks to shared Ledger transactions.
+
 ## Paddle Payment Contract
 
 The following references were verified on 2026-09-22.

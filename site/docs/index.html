@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="d7315027f30e8b32cb70351a0e1fea242d36e9f3c763185d20651d5bbcda2a4e">
+    <meta name="openapi-source-sha256" content="1d4fc3aaf9c3cca944f10727aa43d09791bf17a7280f3945d28d98428ca9d721">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="d7315027f30e8b32cb70351a0e1fea242d36e9f3c763185d20651d5bbcda2a4e">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="1d4fc3aaf9c3cca944f10727aa43d09791bf17a7280f3945d28d98428ca9d721">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>d7315027f30e8b32cb70351a0e1fea242d36e9f3c763185d20651d5bbcda2a4e</code></span>
+          <span>Source SHA-256 <code>1d4fc3aaf9c3cca944f10727aa43d09791bf17a7280f3945d28d98428ca9d721</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -2051,6 +2051,129 @@ paths:
             application/json:
               schema:
                 $ref: &#39;#/components/schemas/BillingAccount&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+  /api/management/billing-accounts/{billing_account_id}/requests/{request_id}/charge-summary:
+    get:
+      operationId: getRequestChargeSummary
+      summary: Read the charge totals for an owned request
+      description: Totals include all attempts and customer credits from one database snapshot. Pending or unresolved customer totals are null.
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+        - name: request_id
+          in: path
+          required: true
+          schema: {type: string, minLength: 1}
+      responses:
+        &#39;200&#39;:
+          description: The current request totals.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/RequestChargeSummary&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+  /api/management/billing-accounts/{billing_account_id}/charges:
+    get:
+      operationId: listCharges
+      summary: Read charges for an owned billing account
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+        - $ref: &#39;#/components/parameters/HostedPageLimit&#39;
+        - name: cursor
+          in: query
+          schema: {type: string, pattern: &#39;^charge-[a-f0-9]{32}$&#39;}
+      responses:
+        &#39;200&#39;:
+          description: The retained account resource.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/ChargePage&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+  /api/management/billing-accounts/{billing_account_id}/charges/{charge_id}:
+    get:
+      operationId: getCharge
+      summary: Read one charge from an owned billing account
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+        - name: charge_id
+          in: path
+          required: true
+          schema: {type: string, minLength: 1}
+      responses:
+        &#39;200&#39;:
+          description: The retained account resource.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/HostedCharge&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
+  /api/management/billing-accounts/{billing_account_id}/price-snapshots/{price_snapshot_id}:
+    get:
+      operationId: getPriceSnapshot
+      summary: Read the prices retained for an accepted request
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/BillingAccountID&#39;
+        - name: price_snapshot_id
+          in: path
+          required: true
+          schema: {type: string, minLength: 1}
+      responses:
+        &#39;200&#39;:
+          description: The retained account resource.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/HostedPriceSnapshot&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/HostedResourceError&#39;
         &#39;401&#39;:
           $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
         &#39;404&#39;:
@@ -4173,6 +4296,10 @@ components:
                       - hosted_access_conflict
                       - hosted_access_not_found
                       - hosted_access_store_failed
+                      - usage_journal_invalid
+                      - usage_journal_not_found
+                      - usage_journal_conflict
+                      - usage_journal_unavailable
     HostedAccessGrantSuccess:
       description: The grant state. Only operators receive the platform connection identifier.
       headers:
@@ -6128,6 +6255,226 @@ components:
           format: date
         unavailable_reason:
           type: string
+    ExactMoney:
+      type: object
+      additionalProperties: false
+      description: An exact nonnegative USD amount expressed as a reduced fraction.
+      required: [numerator, denominator]
+      properties:
+        numerator: {type: string, pattern: &#39;^(0|[1-9][0-9]*)$&#39;, maxLength: 512}
+        denominator: {type: string, pattern: &#39;^[1-9][0-9]*$&#39;, maxLength: 512}
+    NullableExactMoney:
+      oneOf:
+        - $ref: &#39;#/components/schemas/ExactMoney&#39;
+        - type: &#39;null&#39;
+    RatedLine:
+      type: object
+      additionalProperties: false
+      required: [dimension, component, quantity, quantity_unit, provider_rate, customer_rate, rate_unit, conditions, provider_cost, customer_charge]
+      properties:
+        dimension: {type: string}
+        component: {type: string}
+        quantity:
+          $ref: &#39;#/components/schemas/ExactNonnegativeDecimal&#39;
+        quantity_unit: {type: string}
+        provider_rate:
+          $ref: &#39;#/components/schemas/ExactNonnegativeDecimal&#39;
+        customer_rate:
+          $ref: &#39;#/components/schemas/ExactMoney&#39;
+        rate_unit: {type: string}
+        conditions:
+          $ref: &#39;#/components/schemas/PublicPriceConditions&#39;
+        provider_cost:
+          $ref: &#39;#/components/schemas/ExactMoney&#39;
+        customer_charge:
+          $ref: &#39;#/components/schemas/ExactMoney&#39;
+    RatedUsage:
+      type: object
+      additionalProperties: false
+      description: The exact calculation under the accepted prices. Charge state controls settlement eligibility.
+      required: [state, lines, provider_cost, customer_charge, minimum_adjustment, unresolved_dimensions]
+      properties:
+        state: {type: string, enum: [resolved, unresolved]}
+        lines:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/RatedLine&#39;
+        provider_cost:
+          $ref: &#39;#/components/schemas/NullableExactMoney&#39;
+        customer_charge:
+          $ref: &#39;#/components/schemas/NullableExactMoney&#39;
+        minimum_adjustment:
+          $ref: &#39;#/components/schemas/NullableExactMoney&#39;
+        unresolved_dimensions:
+          type: array
+          items: {type: string}
+    HostedCharge:
+      type: object
+      additionalProperties: false
+      required: [id, request_id, attempt_id, observation_id, price_snapshot_id, state, rating, customer_charge, net_customer_charge, customer_adjustments, created_at]
+      properties:
+        id: {type: string}
+        request_id: {type: string}
+        attempt_id: {type: string}
+        observation_id: {type: string}
+        price_snapshot_id: {type: string}
+        state: {type: string, enum: [rated, usage_unresolved, policy_unresolved, limit_unresolved]}
+        rating:
+          $ref: &#39;#/components/schemas/RatedUsage&#39;
+        customer_charge:
+          $ref: &#39;#/components/schemas/NullableExactMoney&#39;
+        net_customer_charge:
+          $ref: &#39;#/components/schemas/NullableExactMoney&#39;
+        customer_adjustments:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/CustomerChargeAdjustment&#39;
+        created_at: {type: string, format: date-time}
+    CustomerChargeAdjustment:
+      type: object
+      additionalProperties: false
+      required: [id, credit, reason, created_at]
+      properties:
+        id: {type: string}
+        credit:
+          $ref: &#39;#/components/schemas/ExactMoney&#39;
+        reason: {type: string}
+        created_at: {type: string, format: date-time}
+    RequestChargeSummary:
+      type: object
+      additionalProperties: false
+      required: [request_id, state, attempt_count, charge_count, provider_cost, customer_charge, customer_credits, net_customer_charge]
+      properties:
+        request_id: {type: string}
+        state:
+          type: string
+          enum: [pending, unresolved, rated]
+          description: Pending requests await completion, result publication, or charge delivery. Unresolved requests lack required usage or policy decisions.
+        attempt_count: {type: integer, minimum: 0}
+        charge_count: {type: integer, minimum: 0}
+        provider_cost:
+          description: The complete provider cost, when known. Customer credits do not change this amount.
+          anyOf:
+            - $ref: &#39;#/components/schemas/ExactMoney&#39;
+            - type: &#39;null&#39;
+        customer_charge:
+          description: The total customer charge before credits. Only rated requests have this amount.
+          anyOf:
+            - $ref: &#39;#/components/schemas/ExactMoney&#39;
+            - type: &#39;null&#39;
+        customer_credits:
+          description: The total customer credits. Only rated requests have this amount.
+          anyOf:
+            - $ref: &#39;#/components/schemas/ExactMoney&#39;
+            - type: &#39;null&#39;
+        net_customer_charge:
+          description: The customer charge after credits. Only rated requests have this amount.
+          anyOf:
+            - $ref: &#39;#/components/schemas/ExactMoney&#39;
+            - type: &#39;null&#39;
+    ChargePage:
+      type: object
+      additionalProperties: false
+      required: [charges, next_cursor]
+      properties:
+        charges:
+          type: array
+          maxItems: 100
+          items:
+            $ref: &#39;#/components/schemas/HostedCharge&#39;
+        next_cursor: {type: string}
+    PriceUsageBound:
+      type: object
+      additionalProperties: false
+      required: [dimension, unit, maximum]
+      properties:
+        dimension: {type: string}
+        unit: {type: string}
+        maximum:
+          $ref: &#39;#/components/schemas/ExactNonnegativeDecimal&#39;
+    AuthorizedPriceMaximum:
+      type: object
+      additionalProperties: false
+      required: [attempts, customer_charge, reserved_cents]
+      properties:
+        attempts: {type: integer, minimum: 1, maximum: 4294967295}
+        customer_charge:
+          $ref: &#39;#/components/schemas/ExactMoney&#39;
+        reserved_cents: {type: string, pattern: &#39;^(0|[1-9][0-9]*)$&#39;, maxLength: 19}
+    AcceptedPriceRate:
+      type: object
+      additionalProperties: false
+      required: [provider_rate, customer_rate]
+      properties:
+        provider_rate:
+          $ref: &#39;#/components/schemas/PublicPriceRate&#39;
+        customer_rate:
+          $ref: &#39;#/components/schemas/ExactMoney&#39;
+    AcceptedPriceComponent:
+      type: object
+      additionalProperties: false
+      required: [dimension, additional_dimension, rates]
+      properties:
+        dimension: {type: string}
+        additional_dimension: {type: string}
+        rates:
+          type: array
+          minItems: 1
+          items:
+            $ref: &#39;#/components/schemas/AcceptedPriceRate&#39;
+    AcceptedPrices:
+      type: object
+      additionalProperties: false
+      required: [catalog_revision, provider, model, operation, source, last_verified, markup, components, excluded_components, zero_dimensions, minimum_charge, bounds, maximum]
+      properties:
+        catalog_revision: {type: string}
+        provider: {type: string}
+        model: {type: string}
+        operation: {type: string}
+        source: {type: string, format: uri}
+        last_verified: {type: string, format: date}
+        markup:
+          $ref: &#39;#/components/schemas/ExactMoney&#39;
+        components:
+          type: array
+          minItems: 1
+          items:
+            $ref: &#39;#/components/schemas/AcceptedPriceComponent&#39;
+        excluded_components:
+          type: array
+          uniqueItems: true
+          items: {type: string, enum: [cache_storage, web_search_calls]}
+        zero_dimensions:
+          type: array
+          uniqueItems: true
+          items: {type: string}
+        minimum_charge:
+          oneOf:
+            - $ref: &#39;#/components/schemas/PublicMinimumCharge&#39;
+            - type: &#39;null&#39;
+        bounds:
+          type: array
+          minItems: 1
+          items:
+            $ref: &#39;#/components/schemas/PriceUsageBound&#39;
+        maximum:
+          $ref: &#39;#/components/schemas/AuthorizedPriceMaximum&#39;
+    HostedPriceSnapshot:
+      type: object
+      additionalProperties: false
+      required: [id, request_id, snapshot, created_at]
+      properties:
+        id: {type: string}
+        request_id: {type: string}
+        snapshot:
+          $ref: &#39;#/components/schemas/AcceptedPrices&#39;
+        created_at: {type: string, format: date-time}
+    ExactNonnegativeDecimal:
+      type: string
+      minLength: 1
+      maxLength: 128
+      pattern: &#39;^(0|[1-9][0-9]*)(\.[0-9]*[1-9])?$&#39;
+      description: Exact decimal amount without an exponent, leading zeros, or trailing fractional zeros.
     PublicPriceRate:
       type: object
       additionalProperties: false
@@ -6145,8 +6492,7 @@ components:
           type: string
           const: USD
         rate:
-          type: number
-          minimum: 0
+          $ref: &#39;#/components/schemas/ExactNonnegativeDecimal&#39;
         unit:
           type: string
           minLength: 1
@@ -6164,15 +6510,29 @@ components:
           type: string
           const: USD
         amount:
-          type: number
-          minimum: 0
+          $ref: &#39;#/components/schemas/ExactNonnegativeDecimal&#39;
         unit:
           type: string
           minLength: 1
+    PriceTokenRange:
+      type: object
+      additionalProperties: false
+      description: The minimum is inclusive. A nonzero maximum is exclusive. Zero maximum means unbounded. An unresolved boundary prevents paid admission.
+      required: [minimum, maximum_exclusive, unresolved_reason]
+      properties:
+        minimum: {type: string, pattern: &#39;^(0|[1-9][0-9]*)$&#39;, maxLength: 20}
+        maximum_exclusive: {type: string, pattern: &#39;^(0|[1-9][0-9]*)$&#39;, maxLength: 20}
+        unresolved_reason: {type: string}
     PublicPriceConditions:
       type: object
       additionalProperties: false
       required:
+        - input_tokens
+        - cache_class
+        - service_tier
+        - region
+        - effective_from
+        - effective_until
         - resolution
         - generated_audio
         - input_media
@@ -6186,6 +6546,13 @@ components:
         - billing_mode
         - billing_outcome
       properties:
+        input_tokens:
+          $ref: &#39;#/components/schemas/PriceTokenRange&#39;
+        cache_class: {type: string, enum: [&#39;&#39;, read, write, write_5m, write_1h, storage]}
+        service_tier: {type: string, enum: [&#39;&#39;, standard, priority, batch, flex, fast]}
+        region: {type: string}
+        effective_from: {type: string}
+        effective_until: {type: string}
         resolution: {type: string}
         generated_audio: {type: string}
         input_media: {type: string}
@@ -9649,9 +10016,13 @@ components:
 <a href="#operation-listBillingAccounts"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts</code><span>Read the authenticated owner&#39;s billing account</span></a>
 <a href="#operation-createBillingAccount"><span class="api-method api-method-post">POST</span><code>/api/management/billing-accounts</code><span>Create one USD billing account for the authenticated owner</span></a>
 <a href="#operation-getBillingAccount"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}</code><span>Read an owned billing account</span></a>
+<a href="#operation-listCharges"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/charges</code><span>Read charges for an owned billing account</span></a>
+<a href="#operation-getCharge"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/charges/{charge_id}</code><span>Read one charge from an owned billing account</span></a>
+<a href="#operation-getPriceSnapshot"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/price-snapshots/{price_snapshot_id}</code><span>Read the prices retained for an accepted request</span></a>
 <a href="#operation-listJournalRequests"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/requests</code><span>Read the usage journal for an owned billing account</span></a>
 <a href="#operation-getJournalRequest"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}</code><span>Read one request from an owned usage journal</span></a>
 <a href="#operation-listJournalAttempts"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/attempts</code><span>Read attempts for an owned journal request</span></a>
+<a href="#operation-getRequestChargeSummary"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/charge-summary</code><span>Read the charge totals for an owned request</span></a>
 <a href="#operation-listJournalObservations"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/observations</code><span>Read usage observations for an owned journal request</span></a>
 <a href="#operation-listJournalReconciliationCases"><span class="api-method api-method-get">GET</span><code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/reconciliation-cases</code><span>Read reconciliation cases for an owned journal request</span></a>
 <a href="#operation-listManagementConnections"><span class="api-method api-method-get">GET</span><code>/api/management/connections</code><span>List account connections and provider definitions</span></a>
@@ -10032,6 +10403,118 @@ components:
           </div>
         </div>
       </section>
+<section class="api-operation" id="operation-listCharges">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/charges</code>
+          <span class="api-operation-id">listCharges</span>
+        </header>
+        <h2>Read charges for an owned billing account</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>limit</code></td><td>query</td><td>No</td><td>integer</td><td></td></tr>
+<tr><td><code>cursor</code></td><td>query</td><td>No</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The retained account resource.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getCharge">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/charges/{charge_id}</code>
+          <span class="api-operation-id">getCharge</span>
+        </header>
+        <h2>Read one charge from an owned billing account</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>charge_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The retained account resource.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getPriceSnapshot">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/price-snapshots/{price_snapshot_id}</code>
+          <span class="api-operation-id">getPriceSnapshot</span>
+        </header>
+        <h2>Read the prices retained for an accepted request</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>price_snapshot_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The retained account resource.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 <section class="api-operation" id="operation-listJournalRequests">
         <header class="api-operation-heading">
           <span class="api-method api-method-get">GET</span>
@@ -10139,6 +10622,43 @@ components:
               <tbody>
                 <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The owned request collection page.</td></tr>
 <tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getRequestChargeSummary">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/billing-accounts/{billing_account_id}/requests/{request_id}/charge-summary</code>
+          <span class="api-operation-id">getRequestChargeSummary</span>
+        </header>
+        <h2>Read the charge totals for an owned request</h2>
+        <p>Totals include all attempts and customer credits from one database snapshot. Pending or unresolved customer totals are null.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>billing_account_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>request_id</code></td><td>path</td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The current request totals.</td></tr>
 <tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
 <tr><td><code>404</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>
 <tr><td><code>500</code></td><td>application/json</td><td>Cache-Control</td><td>The hosted resource request failed.</td></tr>

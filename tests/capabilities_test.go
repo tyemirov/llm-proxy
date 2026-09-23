@@ -294,10 +294,10 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 		testingInstance.Fatalf("public capability catalog omitted Qwen offerings=%v", expectedQwenOfferings)
 	}
 
-	expectedQwenRates := map[string][]float64{
-		proxy.ModelNameDashScopeQwen37Max:   {2.5, 7.5},
-		proxy.ModelNameDashScopeQwen37Plus:  {0.4, 1.6},
-		proxy.ModelNameDashScopeQwen36Flash: {0.25, 1.5},
+	expectedQwenRates := map[string][]proxy.CatalogDecimal{
+		proxy.ModelNameDashScopeQwen37Max:   {"2.5", "7.5"},
+		proxy.ModelNameDashScopeQwen37Plus:  {"0.4", "1.6"},
+		proxy.ModelNameDashScopeQwen36Flash: {"0.25", "1.5"},
 	}
 	for _, price := range catalog.Prices {
 		expectedRates, expected := expectedQwenRates[price.Model]
@@ -313,14 +313,14 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 		testingInstance.Fatalf("public capability catalog omitted Qwen prices=%v", expectedQwenRates)
 	}
 
-	expectedMiniMaxRates := map[string][]float64{
-		proxy.ModelNameMiniMaxM27:          {0.3, 1.2, 0.06, 0.375},
-		proxy.ModelNameMiniMaxM27HighSpeed: {0.6, 2.4, 0.06, 0.375},
-		proxy.ModelNameMiniMaxM25:          {0.3, 1.2, 0.03, 0.375},
-		proxy.ModelNameMiniMaxM25HighSpeed: {0.6, 2.4, 0.03, 0.375},
-		proxy.ModelNameMiniMaxM21:          {0.3, 1.2, 0.03, 0.375},
-		proxy.ModelNameMiniMaxM21HighSpeed: {0.6, 2.4, 0.03, 0.375},
-		proxy.ModelNameMiniMaxM2:           {0.3, 1.2, 0.03, 0.375},
+	expectedMiniMaxRates := map[string][]proxy.CatalogDecimal{
+		proxy.ModelNameMiniMaxM27:          {"0.3", "1.2", "0.06", "0.375"},
+		proxy.ModelNameMiniMaxM27HighSpeed: {"0.6", "2.4", "0.06", "0.375"},
+		proxy.ModelNameMiniMaxM25:          {"0.3", "1.2", "0.03", "0.375"},
+		proxy.ModelNameMiniMaxM25HighSpeed: {"0.6", "2.4", "0.03", "0.375"},
+		proxy.ModelNameMiniMaxM21:          {"0.3", "1.2", "0.03", "0.375"},
+		proxy.ModelNameMiniMaxM21HighSpeed: {"0.6", "2.4", "0.03", "0.375"},
+		proxy.ModelNameMiniMaxM2:           {"0.3", "1.2", "0.03", "0.375"},
 	}
 	validatedMiniMaxOfferings := 0
 	for _, offering := range catalog.Offerings {

@@ -220,12 +220,12 @@ func TestQwenCurrentCatalog(t *testing.T) {
 			t.Fatalf("missing price %s", model)
 		}
 		price := public.Prices[priceIndex]
-		expected := [][2]float64{{2, 6}, {2, 6}, {.15, .47}, {2, 6}, {.5, 3}}[index]
+		expected := [][2]proxy.CatalogDecimal{{"2", "6"}, {"2", "6"}, {"0.15", "0.47"}, {"2", "6"}, {"0.5", "3"}}[index]
 		if !price.Available || len(price.Rates) != 2 || price.Source != "https://www.alibabacloud.com/help/en/model-studio/model-pricing" || price.LastVerified != "2026-09-05" {
 			t.Fatalf("price=%+v", price)
 		}
 		for index, rate := range price.Rates {
-			if rate.Rate != expected[index] || rate.Currency != "USD" || rate.Unit != "USD/1M_tokens" || rate.Conditions.BillingMode != "pay_as_you_go_list" || rate.Conditions.Mode != "singapore_international;thinking_or_non_thinking;input_tokens_0_to_1000000" || rate.Component != []string{"input_tokens", "output_tokens"}[index] {
+			if rate.Rate != expected[index] || rate.Currency != "USD" || rate.Unit != "USD/1M_tokens" || rate.Conditions.BillingMode != "pay_as_you_go_list" || rate.Conditions.Mode != "" || rate.Conditions.Region != "singapore" || rate.Conditions.InputTokens.MaximumExclusive != 1000001 || rate.Component != []string{"input_tokens", "output_tokens"}[index] {
 				t.Fatalf("rate=%+v", rate)
 			}
 		}

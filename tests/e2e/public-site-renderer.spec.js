@@ -466,3 +466,37 @@ test("public site shows provider services without extra models", async ({page}) 
     } finally {await rm(fixture.root,{recursive:true,force:true});}
   });
 });
+
+for (const amount of ['9007199254740993.123456789012345678', '0.000000000000000001', '0']) {
+  test(`public site preserves exact monetary strings: ${amount}`, async ({ page }) => {
+    const capabilities = normalizedCapabilityFixture();
+    const conditions = {input_tokens:{minimum:'0',maximum_exclusive:'200000',unresolved_reason:''},cache_class:'',service_tier:'standard',region:'global',effective_from:'2026-09-01T00:00:00Z',effective_until:'2026-10-01T00:00:00Z',resolution:'',generated_audio:'',input_media:'',output_media:'',duration:'',quantity:'',quality:'',mode:'',api_version:'',avatar_type:'',billing_mode:'',billing_outcome:''};
+    const price = {operation:'audio_alignment',available:true,rates:[{component:'input_audio',currency:'USD',rate:amount,unit:'USD/minute',conditions}],minimum_charge:{currency:'USD',amount,unit:'USD/request'},source:'https://example.com/pricing',last_verified:'2026-09-23',unavailable_reason:''};
+    Object.assign(capabilities.providers[0], {services:[{operation:'audio_alignment',controls:[],limits:[],price}]});
+    await withCapabilityServer(200, capabilities, async capabilitiesURL => {
+      const fixture = await siteFixture();
+      try {
+        await renderFixture(fixture, capabilitiesURL);
+        await page.setContent(await readFile(path.join(fixture.output, 'index.html'), 'utf8'));
+        await expect(page.locator('[data-provider-services]')).toContainText(amount);
+      } finally {
+        await rm(fixture.root, {recursive:true,force:true});
+      }
+    });
+  });
+}
+
+for (const amount of [1.25, '01', '1.0', '1e3', '-1', '', '9'.repeat(129)]) {
+  test(`public site rejects noncanonical monetary strings: ${String(amount).slice(0,20)}`, async () => {
+    const capabilities = normalizedCapabilityFixture();
+    Object.assign(capabilities.prices[0], {minimum_charge:{currency:'USD',amount,unit:'USD/request'}});
+    await withCapabilityServer(200, capabilities, async capabilitiesURL => {
+      const fixture = await siteFixture();
+      try {
+        await expect(renderFixture(fixture, capabilitiesURL)).rejects.toThrow('public_capabilities_invalid');
+      } finally {
+        await rm(fixture.root, {recursive:true,force:true});
+      }
+    });
+  });
+}
