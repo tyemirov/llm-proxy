@@ -151,6 +151,9 @@ func decodeProviderDictionary(data []byte) (providerDictionaryNative, bool) {
 }
 
 func dictionaryExecutionResult(request MediaOperationExecutionRequest, result providerDictionaryNative) MediaOperationExecutionResult {
+	if err := request.recordDictionaryUsage(); err != nil {
+		return imageGenerationUncertain()
+	}
 	suffix := strings.TrimPrefix(request.OperationID, "mop_")
 	public := llmproxycontract.MediaDictionary{DictionaryID: "dic_" + suffix, VersionID: "div_" + suffix, Provider: request.Provider, Name: result.Name, CreatedBy: *result.CreatedBy, CreationTimeUnix: *result.CreationTimeUnix, VersionRulesNum: *result.VersionRulesNum, PermissionOnResource: result.PermissionOnResource, Description: result.Description}
 	metadata, _ := json.Marshal(public)

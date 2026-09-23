@@ -27,6 +27,29 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B262] (P1) Admit and settle priced dictionary services without a model.
+  Goal:
+  Use the shared financial contract for the existing dictionary creation service.
+  Evidence:
+  Normal HTTP admission returns `financial_admission_unavailable` with HTTP 503 instead of HTTP 402 for an unfunded, explicitly priced service.
+  Financial admission resolves only model offerings. Dictionary execution does not retain a measured call quantity.
+  Requirements:
+  - Resolve declared services without an invented model.
+  - Bound each dictionary attempt to its single native creation call.
+  - Retain a successful call from a validated provider receipt, including receipt recovery.
+  - Require an explicit catalog rate per call before financial admission.
+  - Preserve unknown financial outcomes when no valid receipt exists.
+  Validation:
+  - Verify exact provider costs, customer charges, funds release, and replay through normal HTTP execution.
+  - Reject unfunded requests without provider work.
+  - Keep controlled fixture rates separate from supplier rate qualification.
+  Resolution:
+  Service admission now resolves the declared service and uses the adapter's single-call bound.
+  Dictionary receipts supply exact call evidence through the existing usage journal, including receipt recovery.
+  Normal HTTP acceptance passed exact markup, automatic settlement, replay, zero balance, and rejection without provider work.
+  Recovery checks passed after failed usage and terminal writes. Invalid receipts remain uncertain without measured usage.
+  Related service, media rating, and normal runtime checks passed. Go lint passed.
+
 - [x] [B261] (P1) Include provider service prices in the shared pricing index.
   Goal:
   Use declared service prices through the same exact pricing API as model offerings.
@@ -2935,6 +2958,7 @@ retain satisfied historical dependencies.
   - Four hosted browser tests passed at desktop and narrow widths with controlled Paddle and provider responses.
   - The operational command reads queue ages, comparison differences, and exact financial totals without financial writes or external calls.
   - `make test-hosted-signals` passed CLI and financial snapshot checks. Go lint passed.
+  - B262 added normal HTTP acceptance for dictionary service charges, exact balance exhaustion, replay, and receipt recovery.
   - Complete provider-operation qualification, final CI, and the F069 PR remain open.
   - The remaining commercial decisions and F065 through F069 implementation remain open.
   Goal:

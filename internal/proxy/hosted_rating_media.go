@@ -42,18 +42,33 @@ func newHostedMediaPriceAdmission(service CatalogService, request managedJournal
 	if err != nil {
 		return nil, err
 	}
-	offering, err := service.ResolveOffering(request.Provider, request.Model)
-	if err != nil {
-		return nil, err
+	var declaredLimits []CatalogLimit
+	if request.Model == "" {
+		route, err := service.ResolveService(request.Provider, request.Operation)
+		if err != nil {
+			return nil, err
+		}
+		declaredLimits = route.Limits
+	} else {
+		offering, err := service.ResolveOffering(request.Provider, request.Model)
+		if err != nil {
+			return nil, err
+		}
+		declaredLimits = offering.Limits
 	}
-	limits := make(map[string]CatalogLimit, len(offering.Limits))
-	for _, limit := range offering.Limits {
+	limits := make(map[string]CatalogLimit, len(declaredLimits))
+	for _, limit := range declaredLimits {
 		limits[limit.ID] = limit
 	}
 	bounds := []CatalogUsageBound{}
 	for _, component := range snapshot.components {
 		for _, dimension := range []string{component.binding.Dimension, component.binding.AdditionalDimension} {
 			if dimension == "" {
+				continue
+			}
+			if codec == CatalogProtocolElevenLabsDictionary && dimension == journalServiceCallsDimension {
+				// The adapter submits exactly one creation call per attempt.
+				bounds = append(bounds, CatalogUsageBound{Dimension: dimension, Unit: "call", Maximum: "1"})
 				continue
 			}
 			limit, found := limits[dimension]
@@ -100,6 +115,9 @@ var googleAudioPriceDimensions = map[mediaPriceComponent]string{
 // Every conversion names the native meter quantity and its catalog unit.
 // A provider-reported cost unit has no implicit USD, character, or time value.
 var mediaPriceProfiles = map[mediaPriceRoute]map[mediaPriceComponent]string{
+	{CatalogProtocolElevenLabsDictionary, ModelOperationPronunciationDictionaryCreation}: {
+		{journalServiceCallsDimension, "USD/call", ""}: journalServiceCallsDimension,
+	},
 	{CatalogProtocolMultipartTranscription, ModelOperationDictation}:      multipartPriceDimensions,
 	{CatalogProtocolGeminiInteractions, ModelOperationDictation}:          googleAudioPriceDimensions,
 	{CatalogProtocolVertexGenerateContent, ModelOperationDictation}:       googleAudioPriceDimensions,

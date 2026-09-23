@@ -21,12 +21,20 @@ import (
 func TestHostedProviderServiceUsesExistingExecution(t *testing.T) {
 	for _, operation := range []string{ModelOperationPronunciationDictionaryCreation, ModelOperationAudioAlignment} {
 		for _, requestID := range []string{"native-service-request", ""} {
-			t.Run(operation+"/request_id="+requestID, func(t *testing.T) { testHostedProviderService(t, operation, requestID) })
+			t.Run(operation+"/request_id="+requestID, func(t *testing.T) { testHostedProviderService(t, operation, requestID, "") })
 		}
 	}
 }
 
-func testHostedProviderService(t *testing.T, operation, requestID string) {
+func TestHostedProviderServiceDictionaryReceiptEvidence(t *testing.T) {
+	for _, fault := range []string{"publication", "usage", "invalid_receipt"} {
+		t.Run(fault, func(t *testing.T) {
+			testHostedProviderService(t, ModelOperationPronunciationDictionaryCreation, "native-service-request", fault)
+		})
+	}
+}
+
+func testHostedProviderService(t *testing.T, operation, requestID, fault string) {
 	t.Helper()
 	database, _, read := newJournalTransactionFixture(t)
 	const audio = "controlled audio input"
@@ -37,6 +45,10 @@ func testHostedProviderService(t *testing.T, operation, requestID string) {
 			t.Errorf("service submission lost pinned authority: %s", request.Method)
 		}
 		writer.Header().Set("Content-Type", "application/json")
+		if fault == "invalid_receipt" {
+			fmt.Fprint(writer, `{}`)
+			return
+		}
 		if operation == ModelOperationAudioAlignment {
 			if err := request.ParseMultipartForm(4096); err != nil {
 				t.Error(err)
@@ -144,7 +156,70 @@ func testHostedProviderService(t *testing.T, operation, requestID string) {
 	}
 	accepted := exchange("hosted-service", intent, http.StatusAccepted)
 	id := accepted["operation_id"].(string)
+	if fault == "publication" || fault == "usage" {
+		if err := database.database.Exec("CREATE TRIGGER reject_dictionary_publication BEFORE UPDATE OF public_state ON media_operation_records WHEN OLD.public_state = 'running' AND NEW.public_state != 'running' BEGIN SELECT RAISE(ABORT, 'controlled dictionary publication failure'); END").Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if fault == "usage" {
+		if err := database.database.Exec("CREATE TRIGGER reject_dictionary_usage BEFORE INSERT ON managed_journal_observation_records BEGIN SELECT RAISE(ABORT, 'controlled dictionary usage failure'); END").Error; err != nil {
+			t.Fatal(err)
+		}
+	}
 	service.runOperation("service-worker", id)
+	if fault == "invalid_receipt" {
+		if result := hostedMediaWorkerStatus(t, server, id); result["state"] != MediaOperationStateUncertain {
+			t.Fatalf("invalid receipt result=%v", result)
+		}
+		entry := read("")["requests"].([]any)[0].(map[string]any)
+		if entry["state"] != string(journalRequestUncertain) || entry["usage_state"] == string(journalUsageComplete) {
+			t.Fatalf("invalid receipt journal=%v", entry)
+		}
+		var observations int64
+		if err := database.database.Model(&managedJournalObservationRecord{}).Count(&observations).Error; err != nil {
+			t.Fatal(err)
+		}
+		if observations != 0 {
+			t.Fatal("invalid receipt acquired measured usage")
+		}
+		exchange("hosted-service", intent, http.StatusOK)
+		service.runOperation("duplicate-uncertain", id)
+		if submissions.Load() != 1 {
+			t.Fatal("uncertain request repeated provider work")
+		}
+		return
+	}
+	if fault == "publication" || fault == "usage" {
+		if result := hostedMediaWorkerStatus(t, server, id); result["state"] != MediaOperationStateRunning {
+			t.Fatalf("failed publication result=%v", result)
+		}
+		if err := database.database.Exec("DROP TRIGGER reject_dictionary_publication").Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := database.database.Model(&mediaOperationClaimRecord{}).Where("operation_id = ?", id).Update("expires_at", time.Now().Add(-time.Hour)).Error; err != nil {
+			t.Fatal(err)
+		}
+		if fault == "usage" {
+			var before int64
+			if err := database.database.Model(&managedJournalObservationRecord{}).Count(&before).Error; err != nil {
+				t.Fatal(err)
+			}
+			if before != 0 {
+				t.Fatal("failed usage write retained an observation")
+			}
+			if err := database.database.Exec("DROP TRIGGER reject_dictionary_usage").Error; err != nil {
+				t.Fatal(err)
+			}
+		}
+		service.runOperation("recovery-worker", id)
+		var observations int64
+		if err := database.database.Model(&managedJournalObservationRecord{}).Count(&observations).Error; err != nil {
+			t.Fatal(err)
+		}
+		if observations != 1 {
+			t.Fatalf("recovery retained %d observations, want one", observations)
+		}
+	}
 	result := hostedMediaWorkerStatus(t, server, id)
 	if result["state"] != MediaOperationStateSucceeded || len(result["outputs"].([]any)) != 1 {
 		t.Fatalf("service result=%v", result)
@@ -153,7 +228,11 @@ func testHostedProviderService(t *testing.T, operation, requestID string) {
 	if _, present := entry["model"]; present {
 		t.Fatalf("service journal invented model: %v", entry)
 	}
-	if entry["state"] != string(journalRequestCompleted) || entry["operation"] != operation || entry["usage_state"] != string(journalUsageUnknown) {
+	wantUsage := journalUsageUnknown
+	if operation == ModelOperationPronunciationDictionaryCreation {
+		wantUsage = journalUsageComplete
+	}
+	if entry["state"] != string(journalRequestCompleted) || entry["operation"] != operation || entry["usage_state"] != string(wantUsage) {
 		t.Fatalf("service journal=%v", entry)
 	}
 	var attempt managedJournalAttemptRecord

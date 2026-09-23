@@ -608,8 +608,19 @@ Controlled HTTP tests verify dictionary creation and audio alignment through exi
 Admission and dispatch each require financial authorization through the shared transaction callback.
 Duplicate requests retain one operation and one provider submission.
 Changed intent conflicts. Grant revocation rejects new work and preserves accepted results.
-Missing service meters retain unknown usage.
-Complete service metering and live provider qualification remain open.
+Dictionary creation records one `service_calls` quantity from a validated native receipt.
+The journal uses `call` as the quantity unit. It does not infer money from the receipt.
+An explicit `service_calls` catalog rate in `USD/call` supplies the monetary conversion and effective interval.
+The existing adapter submits one creation call per attempt. Financial admission uses that fixed bound and the configured maximum attempt count.
+Receipt recovery restores the same observation without another provider call or another charge.
+An invalid or absent receipt leaves the outcome uncertain and does not establish a measured call.
+Other service meters can remain unknown. Complete service metering and live provider qualification remain open.
+
+The normal HTTP test uses a controlled rate of USD 0.50 per call and verifies a USD 0.65 customer charge.
+Eight calls spend a USD 5.20 balance down to zero. Subsequent admission returns HTTP 402 without another provider call.
+The test also verifies automatic settlement, released funds, exact provider costs, and idempotent replay.
+Separate HTTP checks verify receipt recovery after failed usage or terminal writes and preserve invalid receipt uncertainty.
+These fixture prices do not establish actual supplier rates or authorize production activation.
 
 ### Media Worker Failure Reports
 
