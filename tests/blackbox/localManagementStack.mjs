@@ -46,7 +46,7 @@ export const localManagementProfile = Object.freeze({
   operatorPassword,
 });
 
-export async function startLocalManagementStack(authRouting = "frontend", {adminEmails = []} = {}) {
+export async function startLocalManagementStack(authRouting = "frontend", {adminEmails = [], payments} = {}) {
   if (!["frontend", "direct"].includes(authRouting)) throw new Error(`auth_routing_invalid:${authRouting}`);
   const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "llm-proxy-management-blackbox-"));
   const tAuthBinaryPath = path.join(temporaryDirectory, "tauth");
@@ -78,6 +78,7 @@ export async function startLocalManagementStack(authRouting = "frontend", {admin
       throw new Error("llm_proxy_blackbox_port_contract_missing");
     }
     const capacityConfig = yaml.load(llmProxyConfig);
+    if (payments) capacityConfig.payments = payments;
     capacityConfig.server.upstream_capacity.origins = capacityConfig.server.upstream_capacity.origins.filter(rule => rule.origin !== "https://api.fal.ai");
     capacityConfig.server.upstream_capacity.origins.push({origin: frontendOrigin, active: 4, queued: 24});
     llmProxyConfig = yaml.dump(capacityConfig);

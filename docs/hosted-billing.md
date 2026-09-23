@@ -973,12 +973,12 @@ The API orders history by ascending identifier and returns `next_cursor` for the
 Order responses exclude private processor configuration and the creation key digest.
 Existing order reads remain available when new funding is disabled.
 
-Controlled HTTP tests configure funding offers explicitly. Normal runtime payment configuration remains open.
+Controlled HTTP tests configure funding offers explicitly. The normal runtime uses the optional `payments` configuration.
 The snapshot fixture verifies restoration and replay of orders, customer associations, checkout delivery, payment receipts, and Ledger credits.
 
 ### Checkout Delivery
 
-The delivery worker uses the shared Paddle commerce client from `utils/billing` v0.18.0.
+The delivery worker uses the shared Paddle commerce client from `utils/billing` v0.19.0.
 A durable customer association binds the processor customer to one billing account and environment.
 The worker records its dispatch intent before it creates the processor transaction.
 It verifies the returned transaction against the retained order, customer, price, quantity, currency, and server metadata.
@@ -1027,6 +1027,29 @@ Each request creates a new session without a financial effect.
 The service does not store or cache the URL.
 The [Paddle customer portal](https://developer.paddle.com/api-reference/customer-portals/create-customer-portal-session/) supplies transaction history and invoice downloads.
 The browser must open this URL directly, without an iframe.
+
+### Browser Payment History
+
+The billing dashboard shows funding orders and verified receipts for the owned account.
+The customer can refresh payment records and request each additional page.
+Each order shows its state, credit amount, environment, identifier, and creation time.
+Pending orders have no receipt. A browser return URL cannot grant funds.
+
+The receipt shows original and current payment amounts, taxes, customer credit, reversals, and pending refund allocations.
+The browser keeps cent amounts as decimal strings and formats them with integer arithmetic.
+It rejects invalid amounts, currencies, and receipt identities before display.
+A failed refresh removes the affected records and shows a retry message.
+Financial history accepts opaque Ledger reservation identifiers, including payment refund holds.
+
+The invoice button creates a temporary Paddle portal session and opens it in a separate tab.
+The browser does not retain the session URL. A failed session request closes the empty tab.
+Disconnecting the view cancels its pending requests and closes an unfinished portal tab.
+
+`tests/blackbox/hosted-payments.spec.js` runs the normal CLI, authentication service, SQLite database, and browser.
+A controlled Paddle HTTP protocol supplies transactions, signed events, adjustments, and portal sessions.
+The test verifies delayed funding, receipts, pending holds, partial refunds, pagination, failure recovery, and desktop and narrow widths.
+These checks do not qualify a live Paddle environment.
+Browser checkout and full reconciliation remain open under F069.
 
 ### Payment Runtime Configuration
 
@@ -1087,7 +1110,7 @@ The service rejects new hosted work when available funds are negative or a pendi
 This payment restriction does not replace an operator suspension.
 New funding and admission checks use available funds to complete retained refund holds.
 Controlled tests cover refund approval, rejection, concurrent processing, chargeback replay, reversal, and failed financial writes.
-Full reconciliation, browser acceptance, and processor sandbox qualification remain open under F069.
+Full reconciliation, browser checkout, and processor sandbox qualification remain open under F069.
 
 ### Payment Event Inbox
 
@@ -1113,7 +1136,7 @@ See [Paddle transaction completion](https://developer.paddle.com/webhooks/transa
 
 `make test-hosted-payments` tests the real HTTP receiver with the shared verifier and SQLite storage.
 The current component has controlled development integration only.
-Browser payment history, full reconciliation, and processor sandbox qualification remain open under F069.
+Browser checkout, full reconciliation, and processor sandbox qualification remain open under F069.
 Production payments remain disabled.
 
 ### Issue Responsibilities

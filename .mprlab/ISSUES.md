@@ -2753,7 +2753,11 @@ retain satisfied historical dependencies.
   Financial write failure stops admission. Restart recovery applies the retained payment once.
   The database binds to one payment environment and preserves that binding through backup restoration.
   Payment, CLI, funds, restore, race, lint, and generated API checks pass against released utils v0.19.0.
-  Browser checkout, payment history, and full reconciliation remain open.
+  The browser shows funding history, verified receipts, and temporary Paddle invoice links.
+  Signed payment and adjustment events drive the normal runtime, database, and rendered financial records in browser tests.
+  The checks cover delayed funding, pending holds, partial refunds, pagination, invalid responses, and failed portal requests.
+  Payment and onboarding browser checks pass in 16.5 seconds at desktop and narrow widths.
+  Browser checkout and full reconciliation remain open.
   Goal:
   Convert verified customer payments into account funds and explain differences between local records and external financial evidence.
   Requirements:

@@ -9,6 +9,9 @@ const HEADER_CONTENT_TYPE = "Content-Type";
 const MIME_JSON = "application/json";
 const EMPTY_STRING = "";
 const BILLING_ACCOUNTS_PATH = `${MANAGEMENT_BASE_PATH}/billing-accounts`;
+const FUNDING_ORDER_PATTERN = /^funding-[a-f0-9]{32}$/;
+const PAYMENT_ENVIRONMENTS = ['sandbox','production'];
+const RECEIPT_STATES = ['paid','partially_refunded','refunded','disputed'];
 const HOSTED_GRANTS_PATH = `${MANAGEMENT_BASE_PATH}/hosted-access-grants`;
 
 /** @type {Promise<import("../types.d.js").FrontendRuntimeConfig> | null} */
@@ -27,6 +30,9 @@ export class BackendClientError extends Error {
 }
 
 const MANAGEMENT_FAILURE_MESSAGES = new Map([
+  ['funding_unavailable', 'Payments are unavailable. Try again later.'],
+  ['funding_not_found', 'This payment record is not available yet. Refresh payments and try again.'],
+  ['funding_conflict', 'The payment request conflicts with an existing order. Refresh payments before trying again.'],
   ['insufficient_funds', 'Available funds cannot cover this request. Add funds or reduce the request size.'],
   ['financial_admission_unavailable', 'Funds verification is unavailable. Try again later.'],
   ['billing_account_store_failed', 'Unable to load account funds. Try again.'],
@@ -487,6 +493,39 @@ function billingAccountPath(accountID) {
   return `${BILLING_ACCOUNTS_PATH}/${encodeURIComponent(accountID)}`;
 }
 
+/** @param {import('../types.d.js').FundingOrder} order */
+function assertFundingOrder(order) {
+  if (!order || !FUNDING_ORDER_PATTERN.test(order.id) || order.currency!=='USD' || !PAYMENT_ENVIRONMENTS.includes(order.environment) ||
+      !['created','pending','failed',...RECEIPT_STATES].includes(order.state) || !unsignedCents(order.funding_cents) || BigInt(order.funding_cents)<500n ||
+      typeof order.offer_code!=='string' || !/^[a-z][a-z0-9_]{0,63}$/.test(order.offer_code) || !journalTimestamp(order.created_at)) throw new Error(APP_INTEGRITY_ERROR);
+}
+/** @param {string} accountID @param {string} [cursor] @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').FundingOrderPage>} */
+export async function fetchFundingOrders(accountID,cursor='',signal) {
+  if (cursor && !FUNDING_ORDER_PATTERN.test(cursor)) throw new Error(APP_INTEGRITY_ERROR);
+  const page=await requestJSON(`${billingAccountPath(accountID)}/funding-orders?limit=50${cursor?'&cursor='+encodeURIComponent(cursor):''}`,{method:'GET',signal});
+  if (!page) throw new Error(APP_INTEGRITY_ERROR);
+  assertHostedPage(page.orders,page.next_cursor,cursor,FUNDING_ORDER_PATTERN,assertFundingOrder);
+  return page;
+}
+/** @param {string} accountID @param {string} orderID @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').PaymentReceipt>} */
+export async function fetchPaymentReceipt(accountID,orderID,signal) {
+  if (!FUNDING_ORDER_PATTERN.test(orderID)) throw new Error(APP_INTEGRITY_ERROR);
+  const receipt=await requestJSON(`${billingAccountPath(accountID)}/funding-orders/${encodeURIComponent(orderID)}/receipt`,{method:'GET',signal});
+  if (!receipt || receipt.funding_order_id!==orderID || receipt.currency!=='USD' || !PAYMENT_ENVIRONMENTS.includes(receipt.environment) ||
+      !RECEIPT_STATES.includes(receipt.state) || !journalTimestamp(receipt.paid_at) ||
+      (receipt.invoice_number!==null && typeof receipt.invoice_number!=='string') ||
+      ![receipt.credit_cents,receipt.gross_cents,receipt.tax_cents,receipt.adjusted_gross_cents,receipt.adjusted_tax_cents,receipt.reversed_cents,receipt.pending_refund_cents].every(unsignedCents)) throw new Error(APP_INTEGRITY_ERROR);
+  return receipt;
+}
+/** @param {string} accountID @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').PaymentPortalSession>} */
+export async function createPaymentPortalSession(accountID,signal) {
+  const session=await requestJSON(`${billingAccountPath(accountID)}/payment-portal-sessions`,{method:'POST',body:{},signal});
+  if (!session || session.provider!=='paddle' || !PAYMENT_ENVIRONMENTS.includes(session.environment) || typeof session.url!=='string') throw new Error(APP_INTEGRITY_ERROR);
+  const url=new URL(session.url);
+  if (url.protocol!=='https:' || !url.hostname || url.username || url.password || url.hash) throw new Error(APP_INTEGRITY_ERROR);
+  return session;
+}
+
 /** @param {unknown} value */
 function signedCents(value) { return typeof value==='string' && /^(0|-?[1-9][0-9]*)$/.test(value); }
 /** @param {unknown} value */
@@ -557,7 +596,7 @@ export async function fetchFundsReservations(accountID,cursor='',signal) {
 /** @param {import('../types.d.js').FundsEntry} record */
 function assertFundsEntry(record) {
   if (record.currency!=='USD' || !signedCents(record.amount_cents) || !['grant','hold','reverse_hold','spend','refund'].includes(record.type) ||
-      (record.reservation_id!==null && (typeof record.reservation_id!=='string' || !/^request-[a-f0-9]{32}$/.test(record.reservation_id))) ||
+      (record.reservation_id!==null && (typeof record.reservation_id!=='string' || !record.reservation_id || record.reservation_id!==record.reservation_id.trim())) ||
       (record.refund_of_entry_id!==null && (typeof record.refund_of_entry_id!=='string' || !record.refund_of_entry_id)) || !journalTimestamp(record.created_at)) throw new Error(APP_INTEGRITY_ERROR);
 }
 /** @param {string} accountID @param {string} [cursor] @param {AbortSignal} [signal] @returns {Promise<import('../types.d.js').FundsEntryPage>} */
