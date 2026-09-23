@@ -2933,7 +2933,9 @@ retain satisfied historical dependencies.
   - Frontend lint and browser checks passed for exact amounts, pending and unresolved states, pagination, invalid responses, and narrow layouts.
   - The funded browser flow passed model selection, USD 5 funding, exact charges, replay, receipts, isolation, and grant suspension.
   - Four hosted browser tests passed at desktop and narrow widths with controlled Paddle and provider responses.
-  - Complete provider-operation qualification, operational signals, final CI, and the F069 PR remain open.
+  - The operational command reads queue ages, comparison differences, and exact financial totals without financial writes or external calls.
+  - `make test-hosted-signals` passed CLI and financial snapshot checks. Go lint passed.
+  - Complete provider-operation qualification, final CI, and the F069 PR remain open.
   - The remaining commercial decisions and F065 through F069 implementation remain open.
   Goal:
   Give a customer one account, one funded balance, and immediate access to approved services without provider account setup.

@@ -107,6 +107,16 @@ test-hosted-billing:
 test-hosted-runtime:
 	$(GO) test ./internal/proxy ./cmd/cli -run '^TestHostedRuntime' -count=1
 
+.PHONY: test-hosted-signals
+test-hosted-signals:
+	$(GO) test ./internal/proxy ./cmd/cli -run '^TestHostedSignals' -count=1
+
+HOSTED_SIGNALS_CONFIG ?= config.yml
+export HOSTED_SIGNALS_CONFIG
+.PHONY: hosted-financial-signals
+hosted-financial-signals:
+	$(GO) run ./cmd/cli hosted-financial-signals --config "$$HOSTED_SIGNALS_CONFIG"
+
 test-hosted-rating:
 	$(GO) test ./internal/proxy -run '^Test(HostedRating|CatalogRating|CatalogService|CatalogPrice|ProviderCatalogExactAmounts|ProviderCatalogRejectsInvalidMonetaryAmounts)' -count=1
 

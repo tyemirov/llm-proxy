@@ -1372,6 +1372,51 @@ Customer approval attempts fail. The operator credit applies once and restores t
 A later Paddle refund produces the expected balance and a payment report without financial differences.
 The existing F068 tests cover failed audit writes, concurrent corrections, and restart recovery.
 
+### Operational Financial Signals
+
+Use the existing managed database for operational financial signals:
+
+```bash
+make hosted-financial-signals HOSTED_SIGNALS_CONFIG=/private/path/config.yml
+```
+
+The command opens the database in read-only mode and reads one consistent transaction.
+It does not initialize a schema, create accounts, contact providers, or change financial records.
+Its JSON report contains aggregate counts, timestamps, exact amounts, and comparison codes.
+It excludes account identifiers, provider credentials, request content, and raw processor evidence.
+A missing database, failed read, or invalid retained comparison stops the command with an error.
+
+| Signal | Meaning |
+| --- | --- |
+| `unresolved_attempts` | Count and oldest creation time of uncertain provider attempts. |
+| `active_attempts` | Count and oldest creation time of prepared or dispatched attempts. |
+| `pending_usage_deliveries` | Count and oldest creation time of observations awaiting financial delivery. |
+| `unsettled_completed_requests` | Completed requests with held reservations. The timestamp is the oldest request update time. |
+| `open_reconciliation_cases` | Count and oldest creation time of cases without a resolution. |
+| `pending_payment_comparisons` | Count and oldest creation time of incomplete payment comparison runs. |
+| `latest_payment_comparisons` | Number of orders with a completed comparison and the oldest selected observation time. |
+| `latest_provider_comparisons` | Number of compared provider scopes and the oldest selected comparison time. |
+| `payment_differences` | Difference counts by code from the latest completed comparison for each funding order. |
+| `provider_differences` | Difference counts by code from the latest comparison for each provider scope. |
+| `posted_cents`, `reserved_cents` | Exact totals from the existing Ledger balance reader across billing accounts. |
+| `reconciliation_held_cents` | Total funds held for financial reconciliation. |
+| `unsettled_fraction_usd` | Exact sum of account charge remainders. |
+| `known_platform_exposure_usd` | Exact sum of retained provider costs above request authorization. |
+| `incomplete_provider_costs` | Number of exposure records whose provider cost remains incomplete. |
+
+A provider scope includes its connection, credential version, supplier account, period, model, operation, and currency.
+Comparison selection uses the observation or creation time, with the run identifier as a stable tie-breaker.
+Older differences remain in their audit records but do not replace the latest comparison for the same scope.
+Zero compared orders or scopes means comparison evidence is absent. It does not establish agreement with external records.
+Known exposure can remain after a customer waiver. An incomplete cost does not establish zero additional exposure.
+The sum of account remainders can exceed one cent. The report does not settle that sum across accounts.
+
+Compare queue timestamps with `observed_at` to measure age.
+Select alert thresholds in the deployment monitor according to the approved service policy.
+Keep active requests separate from uncertain attempts when evaluating these signals.
+Use the existing reconciliation procedures to investigate differences and unresolved work.
+Run `make test-hosted-signals` for CLI, financial snapshot, and comparison acceptance.
+
 ### Payment Event Inbox
 
 F069 adds `POST /api/payments/paddle/events` through the shared Paddle signature verifier from `github.com/tyemirov/utils/billing`.
