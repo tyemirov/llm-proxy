@@ -2068,6 +2068,157 @@ paths:
           $ref: '#/components/responses/HostedResourceError'
         '500':
           $ref: '#/components/responses/HostedResourceError'
+  /api/management/billing-accounts/{billing_account_id}/funding-offers:
+    get:
+      operationId: listFundingOffers
+      summary: List server funding offers
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/BillingAccountID'
+      responses:
+        '200':
+          description: The owned funding resource.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FundingOffers'
+        '400':
+          $ref: '#/components/responses/FundingError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/FundingError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+        '503':
+          $ref: '#/components/responses/FundingError'
+  /api/management/billing-accounts/{billing_account_id}/funding-orders:
+    get:
+      operationId: listFundingOrders
+      summary: List owned funding orders
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/BillingAccountID'
+        - $ref: '#/components/parameters/HostedPageLimit'
+        - name: cursor
+          in: query
+          schema: {type: string, pattern: '^funding-[a-f0-9]{32}$'}
+          description: Continue after this identifier in ascending identifier order.
+      responses:
+        '200':
+          description: The owned funding resource.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FundingOrders'
+        '400':
+          $ref: '#/components/responses/FundingError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/FundingError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+        '503':
+          $ref: '#/components/responses/FundingError'
+    post:
+      operationId: createFundingOrder
+      summary: Create an owned funding order
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      description: >-
+        Select one server offer. Commit its immutable price, USD funding amount,
+        processor identity, and checkout delivery intent in one transaction.
+        The account and creation key identify one order. A repeated key returns
+        that order. A changed offer or processor identity returns 409.
+        Order creation does not grant funds or confirm payment.
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: '#/components/parameters/BillingAccountID'
+        - $ref: '#/components/parameters/OptionalOrigin'
+        - $ref: '#/components/parameters/HostedCreationKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [offer_code]
+              properties:
+                offer_code: {type: string, minLength: 1, maxLength: 64}
+      responses:
+        '201':
+          description: The owned funding resource.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Location:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FundingOrder'
+        '400':
+          $ref: '#/components/responses/FundingError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/FundingError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+        '503':
+          $ref: '#/components/responses/FundingError'
+        '403':
+          $ref: '#/components/responses/ManagementForbidden'
+        '409':
+          $ref: '#/components/responses/FundingError'
+        '415':
+          $ref: '#/components/responses/ManagementUnsupportedMediaType'
+  /api/management/billing-accounts/{billing_account_id}/funding-orders/{order_id}:
+    get:
+      operationId: getFundingOrder
+      summary: Read an owned funding order
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/BillingAccountID'
+        - name: order_id
+          in: path
+          required: true
+          schema: {type: string, pattern: '^funding-[a-f0-9]{32}$'}
+      responses:
+        '200':
+          description: The owned funding resource.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FundingOrder'
+        '400':
+          $ref: '#/components/responses/FundingError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/FundingError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+        '503':
+          $ref: '#/components/responses/FundingError'
   /api/management/billing-accounts/{billing_account_id}/requests/{request_id}/charge-summary:
     get:
       operationId: getRequestChargeSummary
@@ -4668,6 +4819,26 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ProxyErrorEnvelope'
+    FundingError:
+      description: The funding request failed without a financial effect.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [error]
+            properties:
+              error:
+                type: object
+                additionalProperties: false
+                required: [code]
+                properties:
+                  code:
+                    type: string
+                    enum: [funding_invalid, funding_conflict, funding_not_found, funding_unavailable, billing_account_not_found]
     HostedResourceError:
       description: The hosted resource request failed.
       headers:
@@ -8875,6 +9046,48 @@ components:
       type: object
       additionalProperties: false
       properties: {}
+    FundingOffer:
+      type: object
+      additionalProperties: false
+      required: [code, funding_cents, currency]
+      properties:
+        code: {type: string, minLength: 1, maxLength: 64}
+        funding_cents:
+          type: string
+          pattern: '^[0-9]+$'
+          description: Server-selected customer credit in USD cents. The minimum is 500 cents.
+        currency: {type: string, enum: [USD]}
+    FundingOffers:
+      type: object
+      additionalProperties: false
+      required: [offers]
+      properties:
+        offers:
+          type: array
+          items: {$ref: '#/components/schemas/FundingOffer'}
+    FundingOrder:
+      type: object
+      additionalProperties: false
+      required: [id, offer_code, funding_cents, currency, environment, state, created_at]
+      properties:
+        id: {type: string, pattern: '^funding-[a-f0-9]{32}$'}
+        offer_code: {type: string, minLength: 1, maxLength: 64}
+        funding_cents: {type: string, pattern: '^[0-9]+$'}
+        currency: {type: string, enum: [USD]}
+        environment: {type: string, enum: [sandbox, production]}
+        state:
+          type: string
+          enum: [created, pending, paid, failed, partially_refunded, refunded, disputed]
+        created_at: {type: string, format: date-time}
+    FundingOrders:
+      type: object
+      additionalProperties: false
+      required: [orders, next_cursor]
+      properties:
+        orders:
+          type: array
+          items: {$ref: '#/components/schemas/FundingOrder'}
+        next_cursor: {type: string}
     BillingAccount:
       type: object
       additionalProperties: false

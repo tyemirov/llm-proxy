@@ -954,6 +954,28 @@ Malformed financial responses do not produce displayed balances.
 The usage journal accepts financial reconciliation reasons for unresolved usage, policy, and authorized limits.
 Browser acceptance covers desktop and narrow widths with the real local management stack and controlled financial responses.
 
+### Funding Orders
+
+The account owner can read `funding-offers` and create `funding-orders` under the billing account resource.
+The creation request contains one `offer_code` and an `Idempotency-Key` header.
+The server selects the Paddle price and USD funding amount from its configured offers.
+Each offer requires at least 500 cents. The browser cannot supply an amount, currency, account identity, or return URL.
+
+Order creation retains the offer, price, amount, supplier, processor account, and environment in one immutable snapshot.
+The order and its checkout delivery intent commit in one database transaction.
+A failed delivery write rolls back the order. Creation does not change the Ledger balance.
+The account and creation key identify one order across service instances and restarts.
+A repeated request retains the original snapshot when the offer changes or leaves the current catalog.
+A changed offer code, supplier, processor account, or environment returns `409` for that key.
+
+The owner can read one order or its paginated order history.
+The API orders history by ascending identifier and returns `next_cursor` for the next page.
+Order responses exclude private processor configuration and the creation key digest.
+Existing order reads remain available when new funding is disabled.
+
+Controlled HTTP tests configure funding offers explicitly. Normal runtime payment configuration and checkout delivery remain open.
+The snapshot fixture verifies restoration and replay of the funding order and its delivery intent.
+
 ### Payment Event Inbox
 
 F069 adds `POST /api/payments/paddle/events` through the shared Paddle signature verifier from `github.com/tyemirov/utils/billing`.

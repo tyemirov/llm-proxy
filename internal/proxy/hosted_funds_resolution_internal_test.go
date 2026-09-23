@@ -61,6 +61,11 @@ func newFundsManagementHTTPFixture(t *testing.T, database *gormManagedTenantData
 	t.Helper()
 	service := newInternalManagementService(t, newFakeManagedTenantDatabase(), internalManagementProviderRegistry())
 	service.store.database = database
+	return fundsManagementServiceHTTPFixture(t, service)
+}
+
+func fundsManagementServiceHTTPFixture(t *testing.T, service *managementService) (*httptest.Server, func(string) *http.Cookie) {
+	t.Helper()
 	service.sessionValidator.adminEmails = map[string]struct{}{"operator@example.com": {}}
 	router := gin.New()
 	service.registerRoutes(router)

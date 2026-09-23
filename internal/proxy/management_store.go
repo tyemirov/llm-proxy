@@ -223,6 +223,9 @@ func newManagedTenantName(value string) (managedTenantName, error) {
 type managedUsageEventVisitor func(managedUsageEventRecord) error
 
 type managedTenantDatabase interface {
+	createFundingOrder(context.Context, *fundingCatalog, string, string, string, time.Time) (managedFundingOrderRecord, error)
+	fundingOrder(context.Context, string, string) (managedFundingOrderRecord, error)
+	fundingOrders(context.Context, string, managedConnectionPage) ([]managedFundingOrderRecord, error)
 	billingFundsReservation(context.Context, string, string) (managementFundsReservationDetailResponse, error)
 	fundsResolution(context.Context, string, string, *fundsResolutionCommand) (managementFundsResolutionResponse, error)
 	fundsCorrection(context.Context, string, string, string, *fundsCorrectionCommand) (managementFundsCreditResponse, error)

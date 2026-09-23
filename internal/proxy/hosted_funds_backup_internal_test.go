@@ -125,6 +125,12 @@ func TestHostedFundsBackupRestoresFinancialEvidence(t *testing.T) {
 	if err := database.database.Find(&expectedEvents).Error; err != nil || len(expectedEvents) != 1 {
 		t.Fatalf("snapshot inbox=%v error=%v", expectedEvents, err)
 	}
+	_, fundingServer, fundingCookie := paymentOrdersFixture(t, database)
+	fundingOrder := paymentOrderHTTP(t, fundingServer, fundingCookie("owner"), http.MethodPost, paymentOrdersTestPath, "backup-order", `{"offer_code":"five"}`, http.StatusCreated)
+	var expectedDelivery managedPaymentDeliveryRecord
+	if err := database.database.First(&expectedDelivery).Error; err != nil {
+		t.Fatal(err)
+	}
 	copyFundsDatabase(t, source.File, backup)
 	laterEvent := strings.Replace(event, "evt_01hv8x2axb33yr5y238zfwcn5p", "evt_01hv8x2axb33yr5y238zfwcn5q", 1)
 	paymentInboxHTTP(t, processor, laterEvent, paymentInboxSignature(laterEvent, paymentInboxTestSecret, time.Now()), http.StatusOK)
@@ -165,6 +171,15 @@ func TestHostedFundsBackupRestoresFinancialEvidence(t *testing.T) {
 	var restoredEvents []managedPaymentInboxRecord
 	if err := restored.database.Find(&restoredEvents).Error; err != nil || !reflect.DeepEqual(restoredEvents, expectedEvents) {
 		t.Fatalf("restored inbox differs: got=%v want=%v error=%v", restoredEvents, expectedEvents, err)
+	}
+	_, restoredFundingServer, restoredFundingCookie := paymentOrdersFixture(t, restored)
+	replayedOrder := paymentOrderHTTP(t, restoredFundingServer, restoredFundingCookie("owner"), http.MethodPost, paymentOrdersTestPath, "backup-order", `{"offer_code":"five"}`, http.StatusCreated)
+	if !reflect.DeepEqual(fundingOrder, replayedOrder) {
+		t.Fatalf("restored funding order differs: %v", replayedOrder)
+	}
+	var restoredDeliveries []managedPaymentDeliveryRecord
+	if err := restored.database.Find(&restoredDeliveries).Error; err != nil || len(restoredDeliveries) != 1 || !reflect.DeepEqual(expectedDelivery, restoredDeliveries[0]) {
+		t.Fatalf("restored delivery differs: %v error=%v", restoredDeliveries, err)
 	}
 	var exposure managedFundsExposureRecord
 	if err := restored.database.First(&exposure).Error; err != nil {

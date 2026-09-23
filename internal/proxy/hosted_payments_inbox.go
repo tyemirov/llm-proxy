@@ -50,6 +50,9 @@ type managedPaymentInboxRecord struct {
 }
 
 func initializeHostedPaymentsSchema(database *gorm.DB) error {
+	if err := initializeFundingOrdersSchema(database); err != nil {
+		return err
+	}
 	model := &managedPaymentInboxRecord{}
 	if !database.Migrator().HasTable(model) {
 		if err := database.AutoMigrate(model); err != nil {

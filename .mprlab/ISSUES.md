@@ -2720,7 +2720,14 @@ retain satisfied historical dependencies.
   SQL diagnostics retain database failures without the private payment body.
   Inbox and restore acceptance passes in 3.657 seconds. Race checks pass in 15.969 seconds.
   Go lint, format checks, frontend lint, and generated API checks pass.
-  Runtime configuration, funding orders, checkout, financial processing, receipts, reconciliation, and browser acceptance remain open.
+  Authenticated funding orders retain a server offer of at least 500 cents and its supplier, processor, and environment identities.
+  Orders and checkout delivery intents commit together. Concurrent retries retain one order and preserve its original price.
+  HTTP tests verify ownership, invalid financial inputs, pagination, disabled funding, rollback, and processor isolation.
+  Payment and restore checks pass in 5.118 seconds. Payment race checks pass in 40.265 seconds.
+  The funds regression passes in 21.591 seconds.
+  The snapshot fixture preserves order and delivery records and verifies replay after restoration.
+  Go lint, formatting, frontend lint, and generated API checks pass.
+  Runtime configuration, checkout delivery, financial processing, receipts, reconciliation, and browser acceptance remain open.
   Goal:
   Convert verified customer payments into account funds and explain differences between local records and external financial evidence.
   Requirements:

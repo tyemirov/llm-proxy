@@ -43,6 +43,7 @@ var (
 )
 
 type managementService struct {
+	funding          *fundingCatalog
 	configuration    ManagementConfiguration
 	sessionValidator *managementSessionValidator
 	store            *managedTenantStore
@@ -326,6 +327,10 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	managementGroup.GET(managementBillingAccountsPath, service.listBillingAccountsHandler())
 	managementGroup.POST(managementBillingAccountsPath, service.createBillingAccountHandler())
 	managementGroup.GET(managementBillingAccountPath, service.getBillingAccountHandler())
+	managementGroup.GET(managementFundingOffersPath, service.fundingOffersHandler())
+	managementGroup.POST(managementFundingOrdersPath, service.createFundingOrderHandler())
+	managementGroup.GET(managementFundingOrdersPath, service.listFundingOrdersHandler())
+	managementGroup.GET(managementFundingOrderPath, service.getFundingOrderHandler())
 	managementGroup.GET(managementFundsBalancePath, service.getFundsBalanceHandler())
 	managementGroup.GET(managementFundsReservationsPath, service.listFundsReservationsHandler())
 	managementGroup.GET(managementFundsReservationPath, service.getFundsReservationHandler())
