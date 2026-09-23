@@ -187,6 +187,11 @@ func TestHostedFundsBackupRestoresFinancialEvidence(t *testing.T) {
 	if err := bindPaymentEnvironment(database.database, paymentEnvironmentSandbox); err != nil {
 		t.Fatal(err)
 	}
+	auditManagement, paymentConfiguration := paymentReconciliationConfiguration(t, database, checkoutProcessor)
+	expectedAudit, err := ReconcilePayments(t.Context(), auditManagement, paymentConfiguration, "backup-audit")
+	if err != nil {
+		t.Fatal(err)
+	}
 	copyFundsDatabase(t, source.File, backup)
 	laterEvent := strings.Replace(event, "evt_01hv8x2axb33yr5y238zfwcn5p", "evt_01hv8x2axb33yr5y238zfwcn5q", 1)
 	paymentInboxHTTP(t, processor, laterEvent, paymentInboxSignature(laterEvent, paymentInboxTestSecret, time.Now()), http.StatusOK)
@@ -250,6 +255,11 @@ func TestHostedFundsBackupRestoresFinancialEvidence(t *testing.T) {
 	var restoredDeliveries []managedPaymentDeliveryRecord
 	if err := restored.database.Find(&restoredDeliveries).Error; err != nil || len(restoredDeliveries) != 1 || !reflect.DeepEqual(expectedDelivery, restoredDeliveries[0]) {
 		t.Fatalf("restored delivery differs: %v error=%v", restoredDeliveries, err)
+	}
+	auditManagement.DatabaseDialector = restored.database.Dialector
+	restoredAudit, err := ReconcilePayments(t.Context(), auditManagement, paymentConfiguration, "backup-audit")
+	if err != nil || !reflect.DeepEqual(expectedAudit, restoredAudit) {
+		t.Fatalf("restored audit differs: %v", err)
 	}
 	var restoredStates []managedPaymentStateObservationRecord
 	if err := restored.database.Order("id").Find(&restoredStates).Error; err != nil || !reflect.DeepEqual(expectedStates, restoredStates) {

@@ -107,6 +107,12 @@ test-hosted-funds:
 test-hosted-payments:
 	$(GO) test ./internal/proxy ./cmd/cli -run '^Test(HostedPayments|RootCommandRunsConfiguredProxyFromConfigFile)' -count=1
 
+PAYMENT_RECONCILIATION_CONFIG ?= config.yml
+export PAYMENT_RECONCILIATION_CONFIG PAYMENT_RECONCILIATION_RUN_ID
+.PHONY: reconcile-payments
+reconcile-payments:
+	$(GO) run ./cmd/cli reconcile-payments --config "$$PAYMENT_RECONCILIATION_CONFIG" --run-id "$$PAYMENT_RECONCILIATION_RUN_ID"
+
 export SNAPSHOT_SOURCE SNAPSHOT_DESTINATION
 .PHONY: snapshot-managed-database test-managed-database-snapshot
 snapshot-managed-database:

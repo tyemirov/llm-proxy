@@ -2767,7 +2767,12 @@ retain satisfied historical dependencies.
   Older snapshots and conflicting evidence remain unresolved without a financial change.
   HTTP tests verify rollback, concurrency, restart, and restoration of retained observations.
   Payment, CLI, backup, race, browser, lint, format, and generated API checks pass.
-  Full reconciliation remains open.
+  The operator command retains payment reconciliation runs, fixed order sets, processor evidence, and atomic checkpoints.
+  Reports compare processor state, receipts, refund projections, and Ledger entries without monetary effects.
+  Completed runs return their retained report. Unfinished runs resume the same order set.
+  Public tests detect currency, discount, fee, receipt, Ledger, duplicate-credit, and pending-refund differences.
+  Payment, CLI, backup, race, funds, browser, lint, and format checks pass.
+  Provider comparisons and approved corrective operations remain open.
   Goal:
   Convert verified customer payments into account funds and explain differences between local records and external financial evidence.
   Requirements:

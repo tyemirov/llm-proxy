@@ -1168,6 +1168,40 @@ New funding and admission checks use available funds to complete retained refund
 Controlled tests cover refund approval, rejection, concurrent processing, chargeback replay, reversal, and failed financial writes.
 Full reconciliation and processor sandbox qualification remain open under F069.
 
+### Audited Payment Reconciliation
+
+The operator command compares processor transactions with funding orders, receipts, refund projections, and Ledger entries.
+The command uses the configured shared Paddle client and the current service database.
+It retains private processor evidence and its digest for each comparison.
+It does not grant funds, reverse funds, or change a payment state.
+
+```bash
+make reconcile-payments PAYMENT_RECONCILIATION_CONFIG=config.yml PAYMENT_RECONCILIATION_RUN_ID=payments-2026-09-23T20
+```
+
+The run identifier binds to one processor account, supplier, and environment.
+A new run retains its complete order set before it reads processor evidence.
+Each result and its checkpoint commit in one transaction.
+Concurrent workers use the same checkpoint. A failed write cannot leave a partial result.
+Processor transport failure stops the command and leaves unfinished orders available for another attempt.
+Retry the same command with the same run identifier after correction of the failure.
+
+A completed run returns its retained JSON report without another processor request.
+Use a new run identifier to compare newer records or include orders created after the previous run started.
+The report separates timing, currency, discount, fee, amount, adjustment, Ledger, and duplicate-effect differences.
+Each item identifies its funding order, billing account, observation time, and retained evidence digest.
+A completed report can contain differences. Command success does not establish financial agreement.
+
+For scheduled execution, use one new identifier for each UTC hourly interval.
+Retry an unfinished interval with its existing identifier before the next scheduled run.
+Keep the report with the run identifier. Review every nonempty `differences` collection.
+Do not create corrective monetary entries without explicit approval and a retained audit record.
+The scheduler contract does not activate a production schedule.
+
+The complete backup includes runs, order sets, checkpoints, private evidence, and reports.
+Controlled tests verify seeded differences, concurrent runs, failed checkpoints, processor outages, replay, and backup restoration.
+Provider invoice comparisons and approved corrective operations remain open under F069.
+
 ### Payment Event Inbox
 
 F069 adds `POST /api/payments/paddle/events` through the shared Paddle signature verifier from `github.com/tyemirov/utils/billing`.
