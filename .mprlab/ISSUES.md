@@ -2959,6 +2959,9 @@ retain satisfied historical dependencies.
   - The operational command reads queue ages, comparison differences, and exact financial totals without financial writes or external calls.
   - `make test-hosted-signals` passed CLI and financial snapshot checks. Go lint passed.
   - B262 added normal HTTP acceptance for dictionary service charges, exact balance exhaustion, replay, and receipt recovery.
+  - The text acceptance matrix passed every enabled catalog offering through all four public HTTP interfaces.
+  - It verified platform authority, native model selection, exact costs and charges, automatic settlement, and replay across interfaces.
+  - `make test-hosted-runtime` and Go lint passed after the matrix change.
   - Complete provider-operation qualification, final CI, and the F069 PR remain open.
   - The remaining commercial decisions and F065 through F069 implementation remain open.
   Goal:

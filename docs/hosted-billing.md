@@ -426,6 +426,25 @@ It also verifies zero provider calls for an image request with an unmatched qual
 Run `make test-hosted-runtime` for configuration and normal-runtime acceptance.
 The broader `make test-hosted-billing` target includes these tests.
 
+#### Complete Text Catalog Acceptance
+
+`TestHostedRuntimeTextCatalogFinancialAcceptance` derives its scope from every enabled text offering in the current catalog.
+It runs the normal server, provider adapters, financial worker, shared Ledger, and management charge resources.
+Controlled upstream responses supply native protocol quantities. Explicit fixture prices and ceilings keep actual supplier qualification separate.
+The fixture routes every selected transport to its local protocol server through the existing endpoint configuration.
+
+Each offering must reject unfunded requests through `/`, `/v2`, `/v1/chat/completions`, and `/v1/responses` without upstream work.
+Each interface then submits funded work. The same intent replays through all four interfaces without another provider call.
+The upstream fixture verifies the selected native model and platform credential.
+Public charge pages must show one exact provider cost and customer charge for each accepted request.
+The fixture covers cache reads, Anthropic cache lifetimes, and separate Google reasoning tokens.
+The final Ledger balance must equal verified funding minus all whole-cent charges, with the exact remaining fraction retained.
+All reservations must be released after automatic settlement.
+
+Run `make test-hosted-runtime` for this matrix and the normal text, image, dictionary, and CLI checks.
+This matrix does not establish actual supplier prices, account limits, connectivity, or invoice agreement.
+Other operations and separate live qualification remain subject to the complete F070 acceptance requirements.
+
 The rendered funded usage flow and complete provider-operation qualification remain open under F070.
 All existing providers and supported operations remain in scope.
 The tracked configuration omits `hosted`. Production activation still requires complete acceptance and explicit operator authorization.
