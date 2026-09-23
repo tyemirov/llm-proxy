@@ -76,14 +76,20 @@ type managedFundingOrderRecord struct {
 }
 
 type managedPaymentDeliveryRecord struct {
-	OrderID   string                    `gorm:"primaryKey"`
-	Order     managedFundingOrderRecord `gorm:"foreignKey:OrderID;references:ID;constraint:OnDelete:RESTRICT"`
-	State     string                    `gorm:"not null;index;check:state IN ('pending','dispatching','delivered','reconciliation_required')"`
-	CreatedAt time.Time                 `gorm:"not null"`
+	OwnerToken              string    `gorm:"not null"`
+	LeaseExpiresAt          time.Time `gorm:"not null"`
+	RetryAt                 time.Time `gorm:"not null"`
+	TransactionDispatchedAt *time.Time
+	CustomerID              string                    `gorm:"not null"`
+	Reason                  string                    `gorm:"not null"`
+	OrderID                 string                    `gorm:"primaryKey"`
+	Order                   managedFundingOrderRecord `gorm:"foreignKey:OrderID;references:ID;constraint:OnDelete:RESTRICT"`
+	State                   string                    `gorm:"not null;index;check:state IN ('pending','dispatching','delivered','reconciliation_required')"`
+	CreatedAt               time.Time                 `gorm:"not null"`
 }
 
 func initializeFundingOrdersSchema(database *gorm.DB) error {
-	models := []any{&managedFundingOrderRecord{}, &managedPaymentDeliveryRecord{}}
+	models := []any{&managedFundingOrderRecord{}, &managedPaymentDeliveryRecord{}, &managedPaymentCustomerRecord{}, &managedPaymentCheckoutRecord{}}
 	present := 0
 	for _, model := range models {
 		if database.Migrator().HasTable(model) {
@@ -154,7 +160,7 @@ func (database *gormManagedTenantDatabase) createFundingOrder(ctx context.Contex
 		if err := tx.Omit(clause.Associations).Create(&record).Error; err != nil {
 			return err
 		}
-		return tx.Omit(clause.Associations).Create(&managedPaymentDeliveryRecord{OrderID: identifier, State: paymentDeliveryPending, CreatedAt: now}).Error
+		return tx.Omit(clause.Associations).Create(&managedPaymentDeliveryRecord{OrderID: identifier, State: paymentDeliveryPending, CreatedAt: now, RetryAt: now}).Error
 	})
 	if err != nil {
 		return managedFundingOrderRecord{}, fmt.Errorf("create funding order %s: %w", identifier, err)

@@ -327,6 +327,7 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	managementGroup.GET(managementBillingAccountsPath, service.listBillingAccountsHandler())
 	managementGroup.POST(managementBillingAccountsPath, service.createBillingAccountHandler())
 	managementGroup.GET(managementBillingAccountPath, service.getBillingAccountHandler())
+	managementGroup.GET(managementPaymentCheckoutPath, service.paymentCheckoutHandler())
 	managementGroup.GET(managementFundingOffersPath, service.fundingOffersHandler())
 	managementGroup.POST(managementFundingOrdersPath, service.createFundingOrderHandler())
 	managementGroup.GET(managementFundingOrdersPath, service.listFundingOrdersHandler())

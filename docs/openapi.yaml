@@ -2219,6 +2219,39 @@ paths:
           $ref: '#/components/responses/HostedResourceError'
         '503':
           $ref: '#/components/responses/FundingError'
+  /api/management/billing-accounts/{billing_account_id}/funding-orders/{order_id}/checkout:
+    get:
+      operationId: getPaymentCheckout
+      summary: Read the checkout for an owned funding order
+      tags: [Management]
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: '#/components/parameters/BillingAccountID'
+        - name: order_id
+          in: path
+          required: true
+          schema: {type: string, pattern: '^funding-[a-f0-9]{32}$'}
+      responses:
+        '200':
+          description: The owned funding resource.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentCheckout'
+        '400':
+          $ref: '#/components/responses/FundingError'
+        '401':
+          $ref: '#/components/responses/ManagementUnauthorized'
+        '404':
+          $ref: '#/components/responses/FundingError'
+        '500':
+          $ref: '#/components/responses/HostedResourceError'
+        '503':
+          $ref: '#/components/responses/FundingError'
   /api/management/billing-accounts/{billing_account_id}/requests/{request_id}/charge-summary:
     get:
       operationId: getRequestChargeSummary
@@ -9065,6 +9098,14 @@ components:
         offers:
           type: array
           items: {$ref: '#/components/schemas/FundingOffer'}
+    PaymentCheckout:
+      type: object
+      additionalProperties: false
+      required: [provider, environment, transaction_id]
+      properties:
+        provider: {type: string, enum: [paddle]}
+        environment: {type: string, enum: [sandbox, production]}
+        transaction_id: {type: string, pattern: '^txn_[a-z0-9]{26}$'}
     FundingOrder:
       type: object
       additionalProperties: false

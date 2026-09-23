@@ -46,6 +46,8 @@ type managedPaymentInboxRecord struct {
 	Payload            string    `gorm:"not null"`
 	ContentDigest      string    `gorm:"not null"`
 	State              string    `gorm:"not null;index"`
+	Reason             string    `gorm:"not null"`
+	RetryAt            time.Time `gorm:"not null;index"`
 	ReceivedAt         time.Time `gorm:"not null"`
 }
 
@@ -53,15 +55,26 @@ func initializeHostedPaymentsSchema(database *gorm.DB) error {
 	if err := initializeFundingOrdersSchema(database); err != nil {
 		return err
 	}
-	model := &managedPaymentInboxRecord{}
-	if !database.Migrator().HasTable(model) {
-		if err := database.AutoMigrate(model); err != nil {
-			return fmt.Errorf("%w: create payment inbox: %w", errManagedTenantSchemaMigration, err)
+	models := []any{&managedPaymentInboxRecord{}, &managedPaymentReceiptRecord{}}
+	present := 0
+	for _, model := range models {
+		if database.Migrator().HasTable(model) {
+			present++
+		}
+	}
+	if present == 0 {
+		if err := database.AutoMigrate(models...); err != nil {
+			return fmt.Errorf("%w: create payment records: %w", errManagedTenantSchemaMigration, err)
 		}
 		return nil
 	}
-	if err := validateHostedTable(database, model); err != nil {
-		return fmt.Errorf("%w: validate payment inbox: %w", errManagedTenantSchemaMigration, err)
+	if present != len(models) {
+		return fmt.Errorf("%w: partial payment records", errManagedTenantSchemaMigration)
+	}
+	for _, model := range models {
+		if err := validateHostedTable(database, model); err != nil {
+			return fmt.Errorf("%w: validate payment records: %w", errManagedTenantSchemaMigration, err)
+		}
 	}
 	return nil
 }
@@ -121,7 +134,7 @@ func (inbox *paddlePaymentInbox) decodeEvent(payload []byte) (managedPaymentInbo
 	return managedPaymentInboxRecord{
 		ID:          "payment-event-" + sha256Hex(inbox.environment + "\x00" + inbox.accountID + "\x00" + envelope.EventID)[:32],
 		Environment: inbox.environment, ProcessorAccountID: inbox.accountID, EventID: envelope.EventID, EventType: envelope.EventType,
-		EntityID: entityID, OccurredAt: occurredAt.UTC(), Payload: string(payload), ContentDigest: sha256Hex(string(canonical)), State: paymentInboxPending, ReceivedAt: inbox.now().UTC(),
+		EntityID: entityID, OccurredAt: occurredAt.UTC(), Payload: string(payload), ContentDigest: sha256Hex(string(canonical)), State: paymentInboxPending, ReceivedAt: inbox.now().UTC(), RetryAt: inbox.now().UTC(),
 	}, nil
 }
 

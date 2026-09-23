@@ -223,6 +223,7 @@ func newManagedTenantName(value string) (managedTenantName, error) {
 type managedUsageEventVisitor func(managedUsageEventRecord) error
 
 type managedTenantDatabase interface {
+	paymentCheckout(context.Context, string, string) (managementPaymentCheckoutResponse, error)
 	createFundingOrder(context.Context, *fundingCatalog, string, string, string, time.Time) (managedFundingOrderRecord, error)
 	fundingOrder(context.Context, string, string) (managedFundingOrderRecord, error)
 	fundingOrders(context.Context, string, managedConnectionPage) ([]managedFundingOrderRecord, error)

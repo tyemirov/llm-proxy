@@ -125,8 +125,35 @@ func TestHostedFundsBackupRestoresFinancialEvidence(t *testing.T) {
 	if err := database.database.Find(&expectedEvents).Error; err != nil || len(expectedEvents) != 1 {
 		t.Fatalf("snapshot inbox=%v error=%v", expectedEvents, err)
 	}
-	_, fundingServer, fundingCookie := paymentOrdersFixture(t, database)
+	fundingService, fundingServer, fundingCookie := paymentOrdersFixture(t, database)
 	fundingOrder := paymentOrderHTTP(t, fundingServer, fundingCookie("owner"), http.MethodPost, paymentOrdersTestPath, "backup-order", `{"offer_code":"five"}`, http.StatusCreated)
+	checkoutProcessor := newCheckoutProtocolFixture(t)
+	checkoutWorker := checkoutWorkerFixture(t, database, fundingService.funding, checkoutProcessor, time.Now())
+	if err := checkoutWorker.reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	completed := completedPaymentFixture(t, checkoutProcessor)
+	sendPaymentEventFixture(t, database, completed, paymentTransactionCompleted, 1)
+	if err := paymentProcessorFixture(t, checkoutWorker, database).reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	var expectedReceipt managedPaymentReceiptRecord
+	if err := database.database.First(&expectedReceipt).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.database.Order("id").Find(&expectedEvents).Error; err != nil || len(expectedEvents) != 2 {
+		t.Fatalf("funded inbox=%v error=%v", expectedEvents, err)
+	}
+	for _, path := range paths {
+		before[path] = fundsBackupView(t, management, cookie("owner"), path)
+	}
+	fundingPath := paymentOrdersTestPath + "/" + fundingOrder["id"].(string)
+	fundingOrder = paymentOrderHTTP(t, fundingServer, fundingCookie("owner"), http.MethodGet, fundingPath, "", "", http.StatusOK)
+	expectedCheckout := paymentOrderHTTP(t, fundingServer, fundingCookie("owner"), http.MethodGet, fundingPath+"/checkout", "", "", http.StatusOK)
+	var expectedCustomer managedPaymentCustomerRecord
+	if err := database.database.First(&expectedCustomer).Error; err != nil {
+		t.Fatal(err)
+	}
 	var expectedDelivery managedPaymentDeliveryRecord
 	if err := database.database.First(&expectedDelivery).Error; err != nil {
 		t.Fatal(err)
@@ -137,7 +164,7 @@ func TestHostedFundsBackupRestoresFinancialEvidence(t *testing.T) {
 	if err := applyFundsFixtureCredit(t, database, fundsCreditCommand(t, charges[1], "after-backup-credit")); err != nil {
 		t.Fatal(err)
 	}
-	assertHostedFundsBalance(t, database, 4, 1)
+	assertHostedFundsBalance(t, database, 504, 501)
 	copyFundsDatabase(t, backup, restoredPath)
 	restored, err := newGORMManagedTenantDatabase(ManagementConfiguration{DatabasePath: restoredPath}, internalManagedProviderKeyCipher(), internalManagementProviderRegistry())
 	if err != nil {
@@ -164,12 +191,12 @@ func TestHostedFundsBackupRestoresFinancialEvidence(t *testing.T) {
 			t.Fatalf("restored %s differs: before=%v after=%v", path, before[path], actual)
 		}
 	}
-	assertHostedFundsBalance(t, restored, 3, 0)
+	assertHostedFundsBalance(t, restored, 503, 500)
 	assertFundsCreditRemainder(t, restored, "109", "50000")
 	restoredProcessor := paymentInboxTestServer(t, restored, "sandbox", "backup-processor")
 	paymentInboxHTTP(t, restoredProcessor, event, paymentInboxSignature(event, paymentInboxTestSecret, time.Now()), http.StatusOK)
 	var restoredEvents []managedPaymentInboxRecord
-	if err := restored.database.Find(&restoredEvents).Error; err != nil || !reflect.DeepEqual(restoredEvents, expectedEvents) {
+	if err := restored.database.Order("id").Find(&restoredEvents).Error; err != nil || !reflect.DeepEqual(restoredEvents, expectedEvents) {
 		t.Fatalf("restored inbox differs: got=%v want=%v error=%v", restoredEvents, expectedEvents, err)
 	}
 	_, restoredFundingServer, restoredFundingCookie := paymentOrdersFixture(t, restored)
@@ -177,10 +204,27 @@ func TestHostedFundsBackupRestoresFinancialEvidence(t *testing.T) {
 	if !reflect.DeepEqual(fundingOrder, replayedOrder) {
 		t.Fatalf("restored funding order differs: %v", replayedOrder)
 	}
+	restoredCheckout := paymentOrderHTTP(t, restoredFundingServer, restoredFundingCookie("owner"), http.MethodGet, fundingPath+"/checkout", "", "", http.StatusOK)
+	if !reflect.DeepEqual(expectedCheckout, restoredCheckout) {
+		t.Fatalf("restored checkout differs: %v", restoredCheckout)
+	}
+	var restoredCustomer managedPaymentCustomerRecord
+	if err := restored.database.First(&restoredCustomer).Error; err != nil || !reflect.DeepEqual(expectedCustomer, restoredCustomer) {
+		t.Fatalf("restored customer differs: %+v error=%v", restoredCustomer, err)
+	}
 	var restoredDeliveries []managedPaymentDeliveryRecord
 	if err := restored.database.Find(&restoredDeliveries).Error; err != nil || len(restoredDeliveries) != 1 || !reflect.DeepEqual(expectedDelivery, restoredDeliveries[0]) {
 		t.Fatalf("restored delivery differs: %v error=%v", restoredDeliveries, err)
 	}
+	var restoredReceipt managedPaymentReceiptRecord
+	if err := restored.database.First(&restoredReceipt).Error; err != nil || !reflect.DeepEqual(expectedReceipt, restoredReceipt) {
+		t.Fatalf("restored payment receipt differs: %+v error=%v", restoredReceipt, err)
+	}
+	sendPaymentEventFixture(t, restored, completed, paymentTransactionCompleted, 1)
+	if err := paymentProcessorFixture(t, checkoutWorker, restored).reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	assertHostedFundsBalance(t, restored, 503, 500)
 	var exposure managedFundsExposureRecord
 	if err := restored.database.First(&exposure).Error; err != nil {
 		t.Fatal(err)

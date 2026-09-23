@@ -66,10 +66,17 @@ func paymentOrderHTTP(t *testing.T, server *httptest.Server, cookie *http.Cookie
 	}
 	template := "/api/management/billing-accounts/{billing_account_id}/funding-orders"
 	resourcePath := strings.SplitN(path, "?", 2)[0]
-	if strings.HasSuffix(resourcePath, "/funding-offers") {
+	if strings.HasSuffix(resourcePath, "/balance") {
+		template = "/api/management/billing-accounts/{billing_account_id}/balance"
+	} else if strings.HasSuffix(resourcePath, "/ledger-entries") {
+		template = "/api/management/billing-accounts/{billing_account_id}/ledger-entries"
+	} else if strings.HasSuffix(resourcePath, "/funding-offers") {
 		template = "/api/management/billing-accounts/{billing_account_id}/funding-offers"
 	} else if strings.Contains(resourcePath, "/funding-orders/") {
 		template += "/{order_id}"
+		if strings.HasSuffix(resourcePath, "/checkout") {
+			template += "/checkout"
+		}
 	}
 	contract, err := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
 	if err != nil {

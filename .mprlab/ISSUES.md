@@ -2713,7 +2713,7 @@ retain satisfied historical dependencies.
   - F070 requires a USD 5 funding minimum. Customers can spend their balance down to USD 0.
   - The current payment and refund contract is in `docs/hosted-billing.md`.
   Evidence:
-  The HTTP inbox uses the published shared Paddle verifier from `utils/billing` v0.17.2, resolved through `@latest`.
+  The HTTP inbox uses the published shared Paddle verifier from `utils/billing` v0.18.0, resolved through `@latest`.
   It verifies raw bytes before JSON parsing and acknowledges only a committed inbox record.
   Processor account, environment, and event identity control deduplication across service instances and restarts.
   Conflicting content is rejected. Signed events do not grant funds before financial verification.
@@ -2727,7 +2727,17 @@ retain satisfied historical dependencies.
   The funds regression passes in 21.591 seconds.
   The snapshot fixture preserves order and delivery records and verifies replay after restoration.
   Go lint, formatting, frontend lint, and generated API checks pass.
-  Runtime configuration, checkout delivery, financial processing, receipts, reconciliation, and browser acceptance remain open.
+  Checkout delivery binds one processor transaction to the retained order through the released shared commerce client.
+  A lost response or local write failure requires processor reconciliation without another transaction creation request.
+  Completed events and current processor evidence must match before the service grants funds.
+  The receipt, Ledger credit, order state, and event state commit together.
+  Different events for one transaction and concurrent workers produce one credit.
+  Receipt, order, and event write failures roll back the complete financial change.
+  Payment and funds checks pass in 7.308 and 20.928 seconds against the released dependency.
+  The complete backup fixture retains payment receipts and verifies replay without another credit after restoration.
+  Receipt restoration passes in 5.012 seconds. Payment race checks pass in 103.389 seconds.
+  Go and frontend lint pass.
+  Runtime configuration, adjustments, receipt resources, reconciliation, and browser acceptance remain open.
   Goal:
   Convert verified customer payments into account funds and explain differences between local records and external financial evidence.
   Requirements:

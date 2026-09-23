@@ -973,13 +973,49 @@ The API orders history by ascending identifier and returns `next_cursor` for the
 Order responses exclude private processor configuration and the creation key digest.
 Existing order reads remain available when new funding is disabled.
 
-Controlled HTTP tests configure funding offers explicitly. Normal runtime payment configuration and checkout delivery remain open.
-The snapshot fixture verifies restoration and replay of the funding order and its delivery intent.
+Controlled HTTP tests configure funding offers explicitly. Normal runtime payment configuration remains open.
+The snapshot fixture verifies restoration and replay of orders, customer associations, checkout delivery, payment receipts, and Ledger credits.
+
+### Checkout Delivery
+
+The delivery worker uses the shared Paddle commerce client from `utils/billing` v0.18.0.
+A durable customer association binds the processor customer to one billing account and environment.
+The worker records its dispatch intent before it creates the processor transaction.
+It verifies the returned transaction against the retained order, customer, price, quantity, currency, and server metadata.
+The owner can read the verified transaction through the order's `checkout` resource.
+Checkout creation does not grant funds.
+
+A lost response or receipt write leaves the outcome unresolved.
+Recovery reads processor transactions for the retained customer and order reference.
+The worker requires one matching transaction before it completes delivery.
+It does not repeat transaction creation after an uncertain dispatch.
+Concurrent workers use durable claims and reject obsolete claim tokens.
+
+### Completed Payment Credits
+
+The processor worker reads signed events from the durable inbox.
+A funding credit requires a completed event and the current processor transaction for the retained checkout.
+Both sources must match the order's customer, price, quantity, amount, currency, and server metadata.
+Captured payment amounts must explain the transaction total.
+Conflicting, unavailable, or unmatched evidence remains unresolved with a reason and retry time.
+
+The receipt, Ledger credit, paid order state, and applied event state commit in one database transaction.
+The order identifies the financial effect independently of the event identifier.
+Duplicate events and concurrent workers produce one receipt and one credit.
+A failed receipt, order, or event write rolls back the Ledger credit.
+Restart recovery retries the retained event.
+A delayed payment collection event cannot repeat a credit or change a paid order to pending.
+
+The receipt retains gross payment, tax, processor fees, earnings, customer credit, and payout currency separately.
+Unknown processor fees remain null. Payout amounts retain their own currency.
+Controlled fixtures use the retained offer amount as the customer credit and keep processor fees separate.
+These fixtures do not decide the production fee allocation or tax policy.
+Financial adjustments, customer receipt resources, and normal runtime configuration remain open under F069.
 
 ### Payment Event Inbox
 
 F069 adds `POST /api/payments/paddle/events` through the shared Paddle signature verifier from `github.com/tyemirov/utils/billing`.
-The package resolves from `@latest` to v0.17.2.
+The package resolves from `@latest` to v0.18.0.
 The receiver verifies `Paddle-Signature` against the raw body before JSON parsing.
 The configured secret binds each receiver to one processor account and environment.
 The receiver rejects duplicate signature headers and bodies above one MiB.
@@ -993,14 +1029,14 @@ Different content for the same event produces `409`.
 
 The receiver returns `200` only after the inbox transaction commits. A database failure produces `503`.
 Inbox acceptance does not grant funds or establish that an event matches a funding order.
-The event remains `pending` for the payment processor worker.
+The event starts as `pending` for the payment processor worker.
 Paddle distinguishes completed transaction processing from initial payment collection.
 F069 funding requires verified `transaction.completed` evidence and a matching order.
 See [Paddle transaction completion](https://developer.paddle.com/webhooks/transactions/transaction-completed/).
 
 `make test-hosted-payments` tests the real HTTP receiver with the shared verifier and SQLite storage.
 The current component has controlled development integration only.
-Runtime configuration, checkout, financial processing, payment history, and processor sandbox qualification remain open under F069.
+Runtime configuration, financial adjustments, payment history, and processor sandbox qualification remain open under F069.
 Production payments remain disabled.
 
 ### Issue Responsibilities
