@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="60f08cdff3cf96e1cc013b6936ed28e1dfb6885c16474ce02d556290d729fd39">
+    <meta name="openapi-source-sha256" content="db33abd47fd0cc20caade636e8b5feb53e82939e66a67d1e0c2f7a0aef33847e">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="60f08cdff3cf96e1cc013b6936ed28e1dfb6885c16474ce02d556290d729fd39">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="db33abd47fd0cc20caade636e8b5feb53e82939e66a67d1e0c2f7a0aef33847e">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -50,7 +50,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>60f08cdff3cf96e1cc013b6936ed28e1dfb6885c16474ce02d556290d729fd39</code></span>
+          <span>Source SHA-256 <code>db33abd47fd0cc20caade636e8b5feb53e82939e66a67d1e0c2f7a0aef33847e</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -109,6 +109,62 @@ tags:
   - name: Management
     description: TAuth-session-authenticated tenant management operations.
 paths:
+  /api/payments/paddle/events:
+    post:
+      operationId: receivePaddlePaymentEvent
+      summary: Retain a verified Paddle event
+      description: &gt;-
+        Verifies the signature against raw bytes before JSON parsing. The configured
+        secret binds the event to one processor account and environment. A successful
+        response confirms durable inbox storage, not a funding credit. Identical
+        events have one inbox record. Changed content for the same event returns 409.
+        This receiver currently has controlled development integration only.
+      tags: [Payments]
+      security:
+        - PaddleSignature: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event_id, event_type, occurred_at, data]
+              properties:
+                event_id: {type: string, pattern: &#39;^evt_[a-z0-9]{26}$&#39;}
+                event_type: {type: string, maxLength: 128, pattern: &#39;^[a-z_]+\.[a-z_]+$&#39;}
+                occurred_at: {type: string, format: date-time}
+                data:
+                  type: object
+                  required: [id]
+                  properties:
+                    id: {type: string, pattern: &#39;^[a-z]{3}_[a-z0-9]{26}$&#39;}
+      responses:
+        &#39;200&#39;:
+          description: The verified event is in the durable inbox.
+          headers:
+            Cache-Control:
+              $ref: &#39;#/components/headers/NoStore&#39;
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [event_id, status]
+                properties:
+                  event_id: {type: string, pattern: &#39;^evt_[a-z0-9]{26}$&#39;}
+                  status: {type: string, enum: [accepted]}
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/PaymentEventError&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/PaymentEventError&#39;
+        &#39;409&#39;:
+          $ref: &#39;#/components/responses/PaymentEventError&#39;
+        &#39;413&#39;:
+          $ref: &#39;#/components/responses/PaymentEventError&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/PaymentEventError&#39;
+        &#39;503&#39;:
+          $ref: &#39;#/components/responses/PaymentEventError&#39;
   /.well-known/oauth-protected-resource/mcp:
     get:
       operationId: getMCPResourceMetadata
@@ -3791,6 +3847,11 @@ paths:
           $ref: &#39;#/components/responses/ManagementInternalError&#39;
 components:
   securitySchemes:
+    PaddleSignature:
+      type: apiKey
+      in: header
+      name: Paddle-Signature
+      description: Timestamp and HMAC signature of the raw request body, verified with the configured Paddle secret.
     MCPAccessToken:
       type: http
       scheme: bearer
@@ -4184,6 +4245,26 @@ components:
           schema:
             $ref: &#39;#/components/schemas/EmptyObject&#39;
   responses:
+    PaymentEventError:
+      description: The payment event was rejected or could not be retained.
+      headers:
+        Cache-Control:
+          $ref: &#39;#/components/headers/NoStore&#39;
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [error]
+            properties:
+              error:
+                type: object
+                additionalProperties: false
+                required: [code]
+                properties:
+                  code:
+                    type: string
+                    enum: [payment_event_invalid, payment_event_conflict, payment_content_type_invalid, payment_event_too_large, payment_signature_invalid, payment_inbox_unavailable]
     TextSuccess:
       description: &gt;-
         Complete generated text in the selected representation. Each provider
@@ -10595,6 +10676,7 @@ components:
 <a href="#operation-getManagementAccountUsage"><span class="api-method api-method-get">GET</span><code>/api/management/usage</code><span>Read interval-scoped usage across every owned tenant</span></a>
 <a href="#operation-getManagementAccountUsageFailures"><span class="api-method api-method-get">GET</span><code>/api/management/usage/failures</code><span>Read safe failure details across every owned tenant and interval</span></a>
 <a href="#operation-getManagementAccountUsageRejections"><span class="api-method api-method-get">GET</span><code>/api/management/usage/rejections</code><span>Read safe rejected-request details across every owned tenant and interval</span></a>
+<a href="#operation-receivePaddlePaymentEvent"><span class="api-method api-method-post">POST</span><code>/api/payments/paddle/events</code><span>Retain a verified Paddle event</span></a>
 <a href="#operation-getPublicCapabilities"><span class="api-method api-method-get">GET</span><code>/api/public/capabilities</code><span>Read the public normalized model capability catalog</span></a>
 <a href="#operation-getBrowserConfiguration"><span class="api-method api-method-get">GET</span><code>/config-ui.yaml</code><span>Read the browser runtime configuration</span></a>
 <a href="#operation-postDictation"><span class="api-method api-method-post">POST</span><code>/dictate</code><span>Transcribe an audio upload</span></a>
@@ -12983,6 +13065,48 @@ components:
 <tr><td><code>400</code></td><td>text/plain</td><td>none</td><td>Malformed or invalid management input.</td></tr>
 <tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
 <tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-receivePaddlePaymentEvent">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-post">POST</span>
+          <code>/api/payments/paddle/events</code>
+          <span class="api-operation-id">receivePaddlePaymentEvent</span>
+        </header>
+        <h2>Retain a verified Paddle event</h2>
+        <p>Verifies the signature against raw bytes before JSON parsing. The configured secret binds the event to one processor account and environment. A successful response confirms durable inbox storage, not a funding credit. Identical events have one inbox record. Changed content for the same event returns 409. This receiver currently has controlled development integration only.</p>
+        <p class="api-security"><strong>Authentication:</strong> PaddleSignature (header Paddle-Signature)</p>
+        <div class="api-contract-block"><h3>Parameters</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>event_id</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>event_type</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>occurred_at</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>data</code></td><td>Yes</td><td>object</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The verified event is in the durable inbox.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>Cache-Control</td><td>The payment event was rejected or could not be retained.</td></tr>
+<tr><td><code>401</code></td><td>application/json</td><td>Cache-Control</td><td>The payment event was rejected or could not be retained.</td></tr>
+<tr><td><code>409</code></td><td>application/json</td><td>Cache-Control</td><td>The payment event was rejected or could not be retained.</td></tr>
+<tr><td><code>413</code></td><td>application/json</td><td>Cache-Control</td><td>The payment event was rejected or could not be retained.</td></tr>
+<tr><td><code>415</code></td><td>application/json</td><td>Cache-Control</td><td>The payment event was rejected or could not be retained.</td></tr>
+<tr><td><code>503</code></td><td>application/json</td><td>Cache-Control</td><td>The payment event was rejected or could not be retained.</td></tr>
               </tbody>
             </table>
           </div>

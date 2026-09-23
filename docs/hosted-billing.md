@@ -835,7 +835,7 @@ These credits correct customer usage charges. F069 owns Paddle payment refunds a
 ### Financial Backup and Restore
 
 `make snapshot-managed-database` copies the complete managed SQLite database through the SQLite snapshot API.
-The copy includes journal records, price snapshots, charges, Ledger entries, reservations, credits, tenant totals, financial decisions, and exposure records.
+The copy includes journal records, price snapshots, charges, Ledger entries, reservations, credits, tenant totals, financial decisions, exposure records, and payment inbox records.
 It also includes all other tables in that database. The command does not select a subset of financial records.
 Committed WAL data forms part of the snapshot. Uncommitted writes do not.
 
@@ -884,7 +884,8 @@ Do not start old and restored instances against different financial copies for t
 
 `make test-managed-database-snapshot` verifies the CLI and restores financial fixtures through the management HTTP API.
 The test retains an uncertain hold and compares financial responses after two recovery runs.
-F069 acceptance must add payment receipts and processor events to this restore fixture.
+Restore acceptance includes verified processor events, their private bodies, and replay after restart.
+F069 acceptance must also add payment receipts and financial processor effects to this fixture.
 
 ### Tenant Spending Limits
 
@@ -947,6 +948,33 @@ A failed balance refresh removes prior financial values and provides an error wi
 Malformed financial responses do not produce displayed balances.
 The usage journal accepts financial reconciliation reasons for unresolved usage, policy, and authorized limits.
 Browser acceptance covers desktop and narrow widths with the real local management stack and controlled financial responses.
+
+### Payment Event Inbox
+
+F069 adds `POST /api/payments/paddle/events` through the shared Paddle signature verifier from `github.com/tyemirov/utils/billing`.
+The package resolves from `@latest` to v0.17.2.
+The receiver verifies `Paddle-Signature` against the raw body before JSON parsing.
+The configured secret binds each receiver to one processor account and environment.
+The receiver rejects duplicate signature headers and bodies above one MiB.
+
+The inbox retains the verified body, event identifier, entity identifier, event time, receipt time, and processor identity.
+These records are private financial evidence. They are not customer response fields or log messages.
+The database key includes the environment, processor account, and event identifier.
+An identical event has one record across service instances and restarts.
+Notification identifiers, JSON property order, and equivalent timestamp offsets do not change event identity.
+Different content for the same event produces `409`.
+
+The receiver returns `200` only after the inbox transaction commits. A database failure produces `503`.
+Inbox acceptance does not grant funds or establish that an event matches a funding order.
+The event remains `pending` for the payment processor worker.
+Paddle distinguishes completed transaction processing from initial payment collection.
+F069 funding requires verified `transaction.completed` evidence and a matching order.
+See [Paddle transaction completion](https://developer.paddle.com/webhooks/transactions/transaction-completed/).
+
+`make test-hosted-payments` tests the real HTTP receiver with the shared verifier and SQLite storage.
+The current component has controlled development integration only.
+Runtime configuration, checkout, financial processing, payment history, and processor sandbox qualification remain open under F069.
+Production payments remain disabled.
 
 ### Issue Responsibilities
 

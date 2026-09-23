@@ -103,6 +103,10 @@ test-hosted-rating:
 test-hosted-funds:
 	$(GO) test ./internal/proxy -run '^TestHostedFunds' -count=1
 
+.PHONY: test-hosted-payments
+test-hosted-payments:
+	$(GO) test ./internal/proxy -run '^TestHostedPayments' -count=1
+
 export SNAPSHOT_SOURCE SNAPSHOT_DESTINATION
 .PHONY: snapshot-managed-database test-managed-database-snapshot
 snapshot-managed-database:

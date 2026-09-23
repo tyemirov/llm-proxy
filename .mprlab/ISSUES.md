@@ -2710,6 +2710,15 @@ retain satisfied historical dependencies.
   - On 2026-09-22, the operator selected Paddle. The service must obey the applicable Paddle financial policies.
   - F070 requires a USD 5 funding minimum. Customers can spend their balance down to USD 0.
   - The current payment and refund contract is in `docs/hosted-billing.md`.
+  Evidence:
+  The HTTP inbox uses the published shared Paddle verifier from `utils/billing` v0.17.2, resolved through `@latest`.
+  It verifies raw bytes before JSON parsing and acknowledges only a committed inbox record.
+  Processor account, environment, and event identity control deduplication across service instances and restarts.
+  Conflicting content is rejected. Signed events do not grant funds before financial verification.
+  SQL diagnostics retain database failures without the private payment body.
+  Inbox and restore acceptance passes in 3.657 seconds. Race checks pass in 15.969 seconds.
+  Go lint, format checks, frontend lint, and generated API checks pass.
+  Runtime configuration, funding orders, checkout, financial processing, receipts, reconciliation, and browser acceptance remain open.
   Goal:
   Convert verified customer payments into account funds and explain differences between local records and external financial evidence.
   Requirements:

@@ -684,7 +684,10 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 		if err := initializeHostedRatingSchema(transaction); err != nil {
 			return err
 		}
-		return initializeHostedFundsSchema(transaction)
+		if err := initializeHostedFundsSchema(transaction); err != nil {
+			return err
+		}
+		return initializeHostedPaymentsSchema(transaction)
 	})
 }
 

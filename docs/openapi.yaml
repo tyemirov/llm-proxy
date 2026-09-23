@@ -46,6 +46,62 @@ tags:
   - name: Management
     description: TAuth-session-authenticated tenant management operations.
 paths:
+  /api/payments/paddle/events:
+    post:
+      operationId: receivePaddlePaymentEvent
+      summary: Retain a verified Paddle event
+      description: >-
+        Verifies the signature against raw bytes before JSON parsing. The configured
+        secret binds the event to one processor account and environment. A successful
+        response confirms durable inbox storage, not a funding credit. Identical
+        events have one inbox record. Changed content for the same event returns 409.
+        This receiver currently has controlled development integration only.
+      tags: [Payments]
+      security:
+        - PaddleSignature: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event_id, event_type, occurred_at, data]
+              properties:
+                event_id: {type: string, pattern: '^evt_[a-z0-9]{26}$'}
+                event_type: {type: string, maxLength: 128, pattern: '^[a-z_]+\.[a-z_]+$'}
+                occurred_at: {type: string, format: date-time}
+                data:
+                  type: object
+                  required: [id]
+                  properties:
+                    id: {type: string, pattern: '^[a-z]{3}_[a-z0-9]{26}$'}
+      responses:
+        '200':
+          description: The verified event is in the durable inbox.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [event_id, status]
+                properties:
+                  event_id: {type: string, pattern: '^evt_[a-z0-9]{26}$'}
+                  status: {type: string, enum: [accepted]}
+        '400':
+          $ref: '#/components/responses/PaymentEventError'
+        '401':
+          $ref: '#/components/responses/PaymentEventError'
+        '409':
+          $ref: '#/components/responses/PaymentEventError'
+        '413':
+          $ref: '#/components/responses/PaymentEventError'
+        '415':
+          $ref: '#/components/responses/PaymentEventError'
+        '503':
+          $ref: '#/components/responses/PaymentEventError'
   /.well-known/oauth-protected-resource/mcp:
     get:
       operationId: getMCPResourceMetadata
@@ -3728,6 +3784,11 @@ paths:
           $ref: '#/components/responses/ManagementInternalError'
 components:
   securitySchemes:
+    PaddleSignature:
+      type: apiKey
+      in: header
+      name: Paddle-Signature
+      description: Timestamp and HMAC signature of the raw request body, verified with the configured Paddle secret.
     MCPAccessToken:
       type: http
       scheme: bearer
@@ -4121,6 +4182,26 @@ components:
           schema:
             $ref: '#/components/schemas/EmptyObject'
   responses:
+    PaymentEventError:
+      description: The payment event was rejected or could not be retained.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [error]
+            properties:
+              error:
+                type: object
+                additionalProperties: false
+                required: [code]
+                properties:
+                  code:
+                    type: string
+                    enum: [payment_event_invalid, payment_event_conflict, payment_content_type_invalid, payment_event_too_large, payment_signature_invalid, payment_inbox_unavailable]
     TextSuccess:
       description: >-
         Complete generated text in the selected representation. Each provider

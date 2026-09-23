@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -117,7 +118,16 @@ func TestHostedFundsBackupRestoresFinancialEvidence(t *testing.T) {
 	}
 	root := t.TempDir()
 	backup, restoredPath := filepath.Join(root, "backup.db"), filepath.Join(root, "restored.db")
+	processor := paymentInboxTestServer(t, database, "sandbox", "backup-processor")
+	event := paymentInboxFixtureEvent()
+	paymentInboxHTTP(t, processor, event, paymentInboxSignature(event, paymentInboxTestSecret, time.Now()), http.StatusOK)
+	var expectedEvents []managedPaymentInboxRecord
+	if err := database.database.Find(&expectedEvents).Error; err != nil || len(expectedEvents) != 1 {
+		t.Fatalf("snapshot inbox=%v error=%v", expectedEvents, err)
+	}
 	copyFundsDatabase(t, source.File, backup)
+	laterEvent := strings.Replace(event, "evt_01hv8x2axb33yr5y238zfwcn5p", "evt_01hv8x2axb33yr5y238zfwcn5q", 1)
+	paymentInboxHTTP(t, processor, laterEvent, paymentInboxSignature(laterEvent, paymentInboxTestSecret, time.Now()), http.StatusOK)
 	if err := applyFundsFixtureCredit(t, database, fundsCreditCommand(t, charges[1], "after-backup-credit")); err != nil {
 		t.Fatal(err)
 	}
@@ -150,6 +160,12 @@ func TestHostedFundsBackupRestoresFinancialEvidence(t *testing.T) {
 	}
 	assertHostedFundsBalance(t, restored, 3, 0)
 	assertFundsCreditRemainder(t, restored, "109", "50000")
+	restoredProcessor := paymentInboxTestServer(t, restored, "sandbox", "backup-processor")
+	paymentInboxHTTP(t, restoredProcessor, event, paymentInboxSignature(event, paymentInboxTestSecret, time.Now()), http.StatusOK)
+	var restoredEvents []managedPaymentInboxRecord
+	if err := restored.database.Find(&restoredEvents).Error; err != nil || !reflect.DeepEqual(restoredEvents, expectedEvents) {
+		t.Fatalf("restored inbox differs: got=%v want=%v error=%v", restoredEvents, expectedEvents, err)
+	}
 	var exposure managedFundsExposureRecord
 	if err := restored.database.First(&exposure).Error; err != nil {
 		t.Fatal(err)
